@@ -1,0 +1,12 @@
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+pydantic==2.10.3
+numpy==2.1.3
+httpx==0.28.1
+python-dotenv==1.0.1
+
+# Heavy / optional CV stack. The worker runs without these (deterministic
+# synthetic pose fallback), but installs them for real video processing.
+# Pin separately per platform; mediapipe wheels lag new Python versions.
+opencv-python-headless==4.10.0.84
+mediapipe==0.10.18

@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(npx tsc --noEmit 2>&1)",
+      "PowerShell(node --experimental-strip-types --test lib/readiness.test.ts 2>$null | Select-Object -Last 10; \"EXIT: $LASTEXITCODE\")",
+      "PowerShell($p = \\(Get-Command psql -ErrorAction SilentlyContinue\\); if \\($p\\) { $p.Source } else { \"psql not found\" }; $sb = \\(Get-Command supabase -ErrorAction SilentlyContinue\\); if \\($sb\\) { \"supabase CLI: \" + $sb.Source } else { \"supabase CLI not found\" })",
+      "PowerShell($env:SUPABASE_DB_URL = \"postgresql://postgres:Fortn1tebattlepass@db.txqhstackgidjqkkrzyj.supabase.co:5432/postgres\"; node scripts/apply-migration.mjs 2>&1 | Select-Object -Last 15)",
+      "Skill(claude-api)",
+      "Skill(claude-api:*)",
+      "Bash(./.venv/Scripts/python.exe -c ' *)",
+      "PowerShell(\"--- parent dir markers ---\"; Get-ChildItem -LiteralPath \"G:\\\\\" -Force -ErrorAction SilentlyContinue | Where-Object { $_.Name -in @\\(\"package.json\",\"package-lock.json\",\"yarn.lock\",\"pnpm-lock.yaml\",\"node_modules\"\\) } | Select-Object Name; \"--- node existsSync from project ---\"; node -e \"process.chdir\\('G:/FOOTBALLCOACH'\\); const {existsSync}=require\\('fs'\\); console.log\\('app:', existsSync\\('app'\\), 'app/layout:', existsSync\\('app/layout.tsx'\\), 'pages:', existsSync\\('pages'\\)\\)\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/login)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(taskkill //F //PID 1340)",
+      "Bash(curl -s -o /dev/null -w \"home:%{http_code} \" http://localhost:3000/home/)",
+      "Bash(curl -s -o /dev/null -w \"login:%{http_code}\\\\n\" http://localhost:3000/login/)",
+      "PowerShell(Set-Location -LiteralPath \"G:\\\\FOOTBALLCOACH\"; $env:SUPABASE_PROJECT_REF=\"txqhstackgidjqkkrzyj\"; $env:SUPABASE_DB_PASSWORD=\"Fortn1tebattlepass\"; node scripts/db-deploy.mjs 2>&1 | Select-String -Pattern \"connected|applying|applied|Could not\" | Select-Object -First 6)",
+      "PowerShell(Set-Location -LiteralPath \"G:\\\\FOOTBALLCOACH\"; $env:SUPABASE_PROJECT_REF=\"txqhstackgidjqkkrzyj\"; $env:SUPABASE_DB_PASSWORD=\"Fortn1tebattlepass\"; node scripts/db-deploy.mjs 2>&1 | Select-String -Pattern \"connected|applying|applied|Could not\" | Select-Object -First 12)",
+      "Bash(node -e ' *)",
+      "PowerShell(Set-Location -LiteralPath \"G:\\\\FOOTBALLCOACH\"; npx tsc --noEmit 2>&1 | Select-Object -First 12; \"---TSC: $LASTEXITCODE---\"; npm test 2>$null | Select-String -Pattern \"# tests|# pass|# fail\")",
+      "PowerShell(Set-Location -LiteralPath \"G:\\\\FOOTBALLCOACH\"; git init -b main 2>&1 | Select-Object -Last 1; git add -A 2>&1 | Out-Null; \"staged files: $\\(\\(git diff --cached --name-only | Measure-Object\\).Count\\)\"; \"--- sanity: any env/venv/out staged? ---\"; git diff --cached --name-only | Select-String -Pattern \"\\\\.env\\\\.local|\\\\.venv|/out/|\\\\.next/|node_modules\" | Select-Object -First 5)"
+    ]
+  }
+}

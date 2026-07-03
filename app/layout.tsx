@@ -1,0 +1,25 @@
+import type { Metadata, Viewport } from "next";
+import { Sora } from "next/font/google";
+import "./globals.css";
+
+const sora = Sora({ subsets: ["latin"], variable: "--font-sans", display: "swap" });
+
+export const metadata: Metadata = {
+  title: "Apex — AI Football Coach",
+  description: "Your daily recovery, readiness and performance coach.",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  themeColor: "#080b12",
+};
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en" className={sora.variable}>
+      <body className="font-sans">{children}</body>
+    </html>
+  );
+}

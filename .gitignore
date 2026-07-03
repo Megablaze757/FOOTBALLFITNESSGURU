@@ -1,0 +1,30 @@
+# Secrets — NEVER commit these
+.env
+.env.*
+!.env.example
+!.env.local.example
+*.pem
+*.key
+
+# Dependencies
+node_modules/
+.pnp/
+.venv/
+__pycache__/
+*.pyc
+
+# Build output
+.next/
+dist/
+build/
+out/
+
+# Supabase
+supabase/.branches/
+supabase/.temp/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
