@@ -97,7 +97,14 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-3">
+      {resolved.focusBodyPart && (
+        <div className="card flex items-center gap-2 px-4 py-3 text-sm text-readiness-red">
+          ⚠️ <span className="font-medium text-slate-200">Risk zone:</span> {resolved.focusBodyPart}
+        </div>
+      )}
+
+      {/* KPI row */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <div className="card p-4">
           <div className="stat-label">Injury risk</div>
           <div className="mt-1 text-3xl font-extrabold" style={{ color: riskColor(resolved.riskScore) }}>{riskPct}%</div>
@@ -111,72 +118,69 @@ export default function DashboardPage() {
             <span>{trend.icon}</span><span>{trend.label}</span>
           </div>
         </div>
-      </div>
-
-      {resolved.focusBodyPart && (
-        <div className="card flex items-center gap-2 px-4 py-3 text-sm text-readiness-red">
-          ⚠️ <span className="font-medium text-slate-200">Risk zone:</span> {resolved.focusBodyPart}
-        </div>
-      )}
-
-      {/* Training-load management (ACWR) */}
-      <div className="card p-5">
-        <div className="mb-1 flex items-center justify-between">
-          <h2 className="field-label !mb-0">Training load</h2>
-          <span className="chip" style={{ color: zone.color }}>{zone.label}</span>
-        </div>
-        <div className="flex items-end gap-4">
-          <div>
-            <div className="text-3xl font-extrabold" style={{ color: zone.color }}>{acwr.ratio ?? "—"}</div>
-            <div className="stat-label">acute : chronic</div>
-          </div>
-          {acwr.ratio != null && (
-            <div className="flex-1 pb-1">
-              {/* sweet-spot band 0.8–1.5 with a marker */}
-              <div className="relative h-2 w-full overflow-hidden rounded-full bg-white/10">
-                <div className="absolute inset-y-0 rounded-full bg-readiness-green/30" style={{ left: "40%", width: "35%" }} />
-                <div className="absolute top-1/2 h-3 w-3 -translate-y-1/2 rounded-full ring-2 ring-ink-900" style={{ left: `calc(${Math.min(100, Math.max(0, acwr.ratio * 50))}% - 6px)`, background: zone.color }} />
-              </div>
-              <div className="mt-1 flex justify-between text-[10px] text-slate-500"><span>detrain</span><span>sweet spot</span><span>spike</span></div>
-            </div>
-          )}
-        </div>
-        <p className="mt-2 text-xs text-slate-400">{acwr.message}</p>
-      </div>
-
-      {/* Weekly report */}
-      <div className="card p-5">
-        <h2 className="field-label">This week</h2>
-        <div className="grid grid-cols-3 gap-3 text-center">
-          <Wk label="Sessions" value={`${report.sessions}`} />
-          <Wk label="Check-ins" value={`${report.checkIns}/7`} />
-          <Wk label="Load" value={report.loadTrend === "up" ? "↗" : report.loadTrend === "down" ? "↘" : "→"} />
-        </div>
-        <p className="mt-3 text-sm text-slate-200">🏆 {report.topWin}</p>
-        <p className="mt-1 text-sm text-pitch-400">🎯 {report.focus}</p>
-      </div>
-
-      <div className="card p-4">
-        <h2 className="field-label mb-2">Last {checkIns.length} days</h2>
-        <TrendChart series={summary.series} />
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
         <StatCard label="Avg sleep" value={summary.avgSleep != null ? `${summary.avgSleep}/10` : "–"} />
         <StatCard label="Weight change" value={summary.weightDeltaKg == null ? "–" : `${summary.weightDeltaKg > 0 ? "+" : ""}${summary.weightDeltaKg} kg`} />
       </div>
 
-      <Link href="/history" className="card card-hover flex items-center justify-between p-4">
-        <div>
-          <div className="stat-label">Progress</div>
-          <div className="mt-0.5 text-lg font-extrabold text-slate-100">Training &amp; nutrition history</div>
-        </div>
-        <span className="text-pitch-400">→</span>
-      </Link>
+      <div className="grid gap-5 lg:grid-cols-2">
+        <div className="space-y-5">
+          {/* Training-load management (ACWR) */}
+          <div className="card p-5">
+            <div className="mb-1 flex items-center justify-between">
+              <h2 className="field-label !mb-0">Training load</h2>
+              <span className="chip" style={{ color: zone.color }}>{zone.label}</span>
+            </div>
+            <div className="flex items-end gap-4">
+              <div>
+                <div className="text-3xl font-extrabold" style={{ color: zone.color }}>{acwr.ratio ?? "—"}</div>
+                <div className="stat-label">acute : chronic</div>
+              </div>
+              {acwr.ratio != null && (
+                <div className="flex-1 pb-1">
+                  {/* sweet-spot band 0.8–1.5 with a marker */}
+                  <div className="relative h-2 w-full overflow-hidden rounded-full bg-white/10">
+                    <div className="absolute inset-y-0 rounded-full bg-readiness-green/30" style={{ left: "40%", width: "35%" }} />
+                    <div className="absolute top-1/2 h-3 w-3 -translate-y-1/2 rounded-full ring-2 ring-ink-900" style={{ left: `calc(${Math.min(100, Math.max(0, acwr.ratio * 50))}% - 6px)`, background: zone.color }} />
+                  </div>
+                  <div className="mt-1 flex justify-between text-[10px] text-slate-500"><span>detrain</span><span>sweet spot</span><span>spike</span></div>
+                </div>
+              )}
+            </div>
+            <p className="mt-2 text-xs text-slate-400">{acwr.message}</p>
+          </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <BenchmarksLink />
-        <Link href="/nutrition" className="btn-ghost">🥗 Nutrition</Link>
+          <div className="card p-4">
+            <h2 className="field-label mb-2">Last {checkIns.length} days</h2>
+            <TrendChart series={summary.series} />
+          </div>
+        </div>
+
+        <div className="space-y-5">
+          {/* Weekly report */}
+          <div className="card p-5">
+            <h2 className="field-label">This week</h2>
+            <div className="grid grid-cols-3 gap-3 text-center">
+              <Wk label="Sessions" value={`${report.sessions}`} />
+              <Wk label="Check-ins" value={`${report.checkIns}/7`} />
+              <Wk label="Load" value={report.loadTrend === "up" ? "↗" : report.loadTrend === "down" ? "↘" : "→"} />
+            </div>
+            <p className="mt-3 text-sm text-slate-200">🏆 {report.topWin}</p>
+            <p className="mt-1 text-sm text-pitch-400">🎯 {report.focus}</p>
+          </div>
+
+          <Link href="/history" className="card card-hover flex items-center justify-between p-4">
+            <div>
+              <div className="stat-label">Progress</div>
+              <div className="mt-0.5 text-lg font-extrabold text-slate-100">Training &amp; nutrition history</div>
+            </div>
+            <span className="text-pitch-400">→</span>
+          </Link>
+
+          <div className="grid grid-cols-2 gap-3">
+            <BenchmarksLink />
+            <Link href="/nutrition" className="btn-ghost">🥗 Nutrition</Link>
+          </div>
+        </div>
       </div>
     </div>
   );

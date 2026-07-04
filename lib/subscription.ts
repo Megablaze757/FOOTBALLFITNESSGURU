@@ -33,8 +33,8 @@ export const PLANS: TierPlan[] = [
   {
     id: "silver",
     name: "Silver",
-    priceLabel: "$9/mo",
-    priceMonthly: 9,
+    priceLabel: "$49/mo",
+    priceMonthly: 49,
     tagline: "AI-powered recovery insights.",
     paid: true,
     features: [
@@ -47,15 +47,17 @@ export const PLANS: TierPlan[] = [
   {
     id: "gold",
     name: "Gold",
-    priceLabel: "$19/mo",
-    priceMonthly: 19,
-    tagline: "The full performance suite.",
+    priceLabel: "$150/mo",
+    priceMonthly: 150,
+    tagline: "The full performance team.",
     paid: true,
     features: [
       "Everything in Silver",
-      "Full benchmark history",
-      "Video biomechanics & heatmaps (Phase 3)",
-      "Personalised drill programs",
+      "AI coach — custom periodised programs",
+      "Video biomechanics & injury root-cause",
+      "Adaptive nutrition & hydration targets",
+      "Coach & squad sharing",
+      "Full benchmark & body-composition history",
     ],
   },
 ];

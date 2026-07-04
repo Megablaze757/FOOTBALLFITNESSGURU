@@ -44,26 +44,30 @@ function PricingInner() {
       {checkout === "success" && <div className="card px-4 py-3 text-sm text-pitch-400">🎉 Payment received. Your plan updates within a few seconds.</div>}
       {checkout === "cancelled" && <div className="card px-4 py-3 text-sm text-slate-400">Checkout cancelled — no charge was made.</div>}
 
-      <div className="space-y-4">
+      <div className="grid items-start gap-4 md:grid-cols-3">
         {PLANS.map((plan, i) => {
           const isCurrent = plan.id === currentTier;
           const isDowngrade = TIER_RANK[plan.id] < TIER_RANK[currentTier];
-          const accent = plan.id === "gold" ? "text-pitch-400" : plan.id === "silver" ? "text-sky-300" : "text-slate-200";
+          const isGold = plan.id === "gold";
+          const accent = isGold ? "text-pitch-400" : plan.id === "silver" ? "text-sky-300" : "text-slate-200";
           return (
             <div
               key={plan.id}
-              className={`card p-5 animate-fade-up ${isCurrent ? "ring-2 ring-pitch-400/60 shadow-glow" : ""}`}
+              className={`card animate-fade-up flex h-full flex-col p-6 ${
+                isCurrent ? "ring-2 ring-pitch-400/60 shadow-glow" : isGold ? "border-pitch-400/30 shadow-glow" : ""
+              }`}
               style={{ animationDelay: `${i * 60}ms` }}
             >
-              <div className="flex items-baseline justify-between">
+              <div className="flex items-center justify-between">
                 <h2 className={`text-lg font-extrabold ${accent}`}>{plan.name}</h2>
-                <span className="text-lg font-bold">{plan.priceLabel}</span>
+                {isGold && !isCurrent && <span className="chip text-pitch-400">Most popular</span>}
               </div>
-              <p className="mt-0.5 text-sm text-slate-400">{plan.tagline}</p>
+              <div className="mt-2 text-3xl font-extrabold">{plan.priceLabel}</div>
+              <p className="mt-1 text-sm text-slate-400">{plan.tagline}</p>
 
-              <ul className="my-4 space-y-1.5 text-sm text-slate-300">
+              <ul className="my-5 flex-1 space-y-2 text-sm text-slate-300">
                 {plan.features.map((f) => (
-                  <li key={f} className="flex gap-2"><span className="text-pitch-400">✓</span>{f}</li>
+                  <li key={f} className="flex gap-2"><span className={isGold ? "text-pitch-400" : "text-slate-500"}>✓</span>{f}</li>
                 ))}
               </ul>
 
