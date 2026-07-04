@@ -6,9 +6,9 @@ import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/lib/auth";
 import { useAsync } from "@/lib/use-async";
-import { HeatmapVideo } from "@/components/HeatmapVideo";
-import { DrillChecklist } from "@/components/DrillChecklist";
-import type { AiPlan, Subscription, Video } from "@/lib/types";
+import { VideoAnalysisView } from "@/components/VideoAnalysisView";
+import { InBrowserAnalysis } from "@/components/InBrowserAnalysis";
+import type { AiPlan, PainMap, Subscription, Video } from "@/lib/types";
 
 export default function VideoDetailPage() {
   return (
@@ -22,29 +22,36 @@ function VideoDetailInner() {
   const user = useCurrentUser();
   const id = useSearchParams().get("id") ?? "";
 
-  const { data, loading } = useAsync(async () => {
+  const { data, loading, reload } = useAsync(async () => {
     const supabase = createClient();
+    const empty = { video: null as Video | null, src: "", sub: null as Subscription | null, plan: null as AiPlan | null, painMap: {} as PainMap, inSeason: false };
     const { data: videoRow } = await supabase
       .from("videos").select("*").eq("id", id).eq("user_id", user.id).maybeSingle();
-    if (!videoRow) return { video: null as Video | null };
+    if (!videoRow) return empty;
     const video = videoRow as Video;
-    const [{ data: signed }, { data: subRow }, { data: planRow }] = await Promise.all([
+    const [{ data: signed }, { data: subRow }, { data: planRow }, { data: checkRow }, { data: progRow }] = await Promise.all([
       supabase.storage.from("videos").createSignedUrl(video.storage_path, 600),
       supabase.from("subscriptions").select("*").eq("user_id", user.id).maybeSingle(),
       supabase.from("ai_plans").select("*").eq("video_id", video.id).maybeSingle(),
+      supabase.from("daily_check_ins").select("pain_map").eq("user_id", user.id)
+        .order("check_in_date", { ascending: false }).limit(1).maybeSingle(),
+      supabase.from("programs").select("in_season").eq("user_id", user.id).eq("status", "active")
+        .order("created_at", { ascending: false }).limit(1).maybeSingle(),
     ]);
     return {
       video,
       src: signed?.signedUrl ?? "",
       sub: (subRow ?? null) as Subscription | null,
       plan: (planRow ?? null) as AiPlan | null,
+      painMap: ((checkRow as { pain_map: PainMap | null } | null)?.pain_map ?? {}) as PainMap,
+      inSeason: Boolean((progRow as { in_season: boolean } | null)?.in_season),
     };
   }, [user.id, id]);
 
   if (loading) return <div className="card h-64 animate-pulse" />;
   if (!data?.video) return <p className="card px-4 py-8 text-center text-sm text-slate-400">Video not found.</p>;
 
-  const { video, src, sub, plan } = data;
+  const { video, src, sub, plan, painMap, inSeason } = data;
   const isGold = sub?.status === "active" && sub.tier === "gold";
 
   return (
@@ -63,36 +70,18 @@ function VideoDetailInner() {
           <UpgradeLock />
         </>
       ) : plan ? (
-        <Analysis plan={plan} src={src} />
-      ) : video.status === "failed" ? (
-        <div className="card px-4 py-3 text-sm text-readiness-red">Analysis failed for this clip. Try a clearer, well-lit video.</div>
+        <VideoAnalysisView analysis={{ ...plan.analysis_json, drills: plan.drill_program ?? plan.analysis_json.drills ?? [] }} src={src} />
       ) : (
-        <>
-          <video src={src} controls playsInline className="w-full rounded-2xl bg-black" />
-          <div className="card px-4 py-3 text-sm text-amber-300">Analysing your movement… this can take up to a minute. Refresh shortly.</div>
-        </>
+        <InBrowserAnalysis
+          videoId={video.id}
+          userId={user.id}
+          src={src}
+          painMap={painMap}
+          sessionType={video.session_type}
+          isInSeason={inSeason}
+          onPersisted={reload}
+        />
       )}
-    </div>
-  );
-}
-
-function Analysis({ plan, src }: { plan: AiPlan; src: string }) {
-  const a = plan.analysis_json;
-  const drills = plan.drill_program ?? a.drills ?? [];
-  return (
-    <div className="space-y-5">
-      <HeatmapVideo src={src} points={a.heatmap_data ?? []} />
-      {a.root_cause_alert && <div className="card px-4 py-3 text-sm text-readiness-red">⚠️ {a.root_cause_alert}</div>}
-      <div className="grid grid-cols-2 gap-3">
-        <Stat label="Symmetry" value={`${a.symmetry_score}/100`} />
-        <Stat label="Focus" value={cap(a.focus_area)} />
-        <Stat label="Knee valgus L/R" value={`${a.biomechanics.knee_valgus_left}° / ${a.biomechanics.knee_valgus_right}°`} />
-        <Stat label="Ground contact" value={`${a.biomechanics.ground_contact_ms} ms`} />
-      </div>
-      {a.pose_source === "synthetic" && (
-        <p className="text-center text-xs text-slate-500">Demo analysis (CV worker not connected) — values are simulated.</p>
-      )}
-      <DrillChecklist drills={drills} />
     </div>
   );
 }
@@ -108,15 +97,3 @@ function UpgradeLock() {
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="card p-4">
-      <div className="stat-label">{label}</div>
-      <div className="mt-1 text-lg font-extrabold text-slate-100">{value}</div>
-    </div>
-  );
-}
-
-function cap(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
