@@ -118,5 +118,11 @@ export function getExercise(id: string): Exercise | null {
   return BY_ID[id] ?? null;
 }
 
+const BY_NAME: Record<string, Exercise> = Object.fromEntries(EXERCISES.map((e) => [e.name.toLowerCase(), e]));
+
+export function getExerciseByName(name: string): Exercise | null {
+  return BY_NAME[name.trim().toLowerCase()] ?? null;
+}
+
 export const EXERCISE_CATEGORIES: ExerciseCategory[] =
   ["Speed", "Agility", "Power", "Strength", "Recovery", "Endurance", "Skill"];

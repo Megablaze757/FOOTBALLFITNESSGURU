@@ -13,6 +13,7 @@ import { invokeAI } from "@/lib/api";
 import { METRIC_CATALOG, metricDef, benchmarkProgress } from "@/lib/benchmarks";
 import { RingProgress } from "@/components/RingProgress";
 import { CoachChat } from "@/components/CoachChat";
+import { ProgramCalendar } from "@/components/ProgramCalendar";
 import type { CheckInInput, DailyCheckIn, Program, StrengthBenchmark, TrainingLog, TrainingDrill } from "@/lib/types";
 
 /** Latest recorded value per benchmark metric, newest test first. */
@@ -278,7 +279,6 @@ function ActiveProgram({
     programDrills: nextSession ? nextSession.s.drills.map((d) => d.name) : recs.map((r) => r.name),
   };
 
-  const [openWeek, setOpenWeek] = useState(1);
   const [logged, setLogged] = useState(false);
   const [switching, setSwitching] = useState(false);
   const [advancing, setAdvancing] = useState(false);
@@ -505,49 +505,8 @@ function ActiveProgram({
         </section>
       )}
 
-      {/* The program */}
-      <section className="space-y-3">
-        <h2 className="field-label">Your {plan.weeks.length}-week program</h2>
-        {plan.weeks.map((w) => {
-          const open = openWeek === w.week;
-          return (
-            <div key={w.week} className="card overflow-hidden">
-              <button onClick={() => setOpenWeek(open ? -1 : w.week)} className="flex w-full items-center justify-between p-4 text-left">
-                <div>
-                  <div className="font-bold text-slate-100">Week {w.week} · {w.theme}</div>
-                  <div className="text-xs text-slate-400">{w.intensity} intensity · {w.sessions.length} sessions</div>
-                </div>
-                <span className="text-slate-400">{open ? "▾" : "▸"}</span>
-              </button>
-              {open && (
-                <div className="space-y-3 px-4 pb-4">
-                  {w.sessions.map((s) => {
-                    const sid = `w${w.week}d${s.day}`;
-                    const done = program.completed_sessions.includes(sid);
-                    return (
-                      <div key={sid} className={`rounded-2xl bg-white/[0.03] p-3 ${done ? "opacity-60" : ""}`}>
-                        <label className="flex items-center justify-between">
-                          <span className="text-sm font-semibold text-slate-100">{s.title}</span>
-                          <input type="checkbox" checked={done} onChange={() => toggleSession(sid)} className="h-5 w-5 accent-pitch-500" />
-                        </label>
-                        <ul className="mt-2 space-y-1.5">
-                          {s.drills.map((d, k) => (
-                            <li key={k} className="text-xs">
-                              <span className="text-slate-200">{d.name}</span>
-                              <span className="text-slate-500"> · {d.sets}×{d.reps}</span>
-                              <div className="text-slate-500">{d.reason}</div>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </section>
+      {/* The program — week-by-week calendar */}
+      <ProgramCalendar weeks={plan.weeks} completed={program.completed_sessions} onToggle={toggleSession} />
     </div>
   );
 }

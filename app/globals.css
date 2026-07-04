@@ -94,3 +94,11 @@ input[type="range"]::-webkit-slider-thumb {
 /* Hide scrollbars on the app shell for a cleaner look */
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Print / Save-as-PDF — strip the app chrome, keep just the report */
+@media print {
+  aside, nav.fixed, .no-print { display: none !important; }
+  body { background: #0a0a0b !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  main { padding: 0 !important; max-width: none !important; }
+  .card, .card-premium { break-inside: avoid; }
+}

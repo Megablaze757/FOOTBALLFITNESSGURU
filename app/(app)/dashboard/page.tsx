@@ -166,6 +166,7 @@ export default function DashboardPage() {
             </div>
             <p className="mt-3 text-sm text-slate-200">🏆 {report.topWin}</p>
             <p className="mt-1 text-sm text-pitch-400">🎯 {report.focus}</p>
+            <Link href="/report" className="btn-ghost mt-4">📄 Weekly report (PDF)</Link>
           </div>
 
           <Link href="/history" className="card card-hover flex items-center justify-between p-4">
