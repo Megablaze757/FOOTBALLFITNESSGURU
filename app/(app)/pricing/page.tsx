@@ -6,7 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/lib/auth";
 import { useAsync } from "@/lib/use-async";
-import { PLANS, TIER_RANK } from "@/lib/subscription";
+import { PLANS, TIER_RANK, TEAM_PLAN } from "@/lib/subscription";
 import { UpgradeButton } from "@/components/UpgradeButton";
 import type { Subscription, Tier } from "@/lib/types";
 
@@ -36,7 +36,7 @@ function PricingInner() {
       <header className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-extrabold tracking-tight">Plans</h1>
-          <p className="mt-1 text-sm text-slate-400">Unlock AI insights and the full suite.</p>
+          <p className="mt-1 text-sm text-slate-400">For individual athletes — plus a Team plan for clubs & coaches.</p>
         </div>
         <Link href="/profile" className="text-sm text-slate-400 hover:text-pitch-400">← Back</Link>
       </header>
@@ -81,6 +81,26 @@ function PricingInner() {
             </div>
           );
         })}
+      </div>
+
+      {/* Team plan */}
+      <div className="card-premium flex flex-col gap-5 p-6 sm:flex-row sm:items-center">
+        <div className="flex-1">
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-extrabold text-pitch-400">🏆 {TEAM_PLAN.name}</h2>
+            <span className="chip text-slate-300">for clubs</span>
+          </div>
+          <p className="mt-1 text-sm text-slate-400">{TEAM_PLAN.tagline}</p>
+          <ul className="mt-3 grid gap-x-4 gap-y-1.5 text-sm text-slate-300 sm:grid-cols-2">
+            {TEAM_PLAN.features.map((f) => (
+              <li key={f} className="flex gap-2"><span className="text-pitch-400">✓</span>{f}</li>
+            ))}
+          </ul>
+        </div>
+        <div className="shrink-0 text-center">
+          <div className="text-3xl font-extrabold">{TEAM_PLAN.priceLabel}</div>
+          <a href="mailto:sales@apex.app?subject=Apex%20Team%20plan" className="btn-primary mt-3 w-auto px-6">Contact us</a>
+        </div>
       </div>
 
       <p className="text-center text-xs text-slate-500">Secure payments by Stripe. Cancel anytime.</p>

@@ -1,30 +1,38 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { EXERCISES, EXERCISE_CATEGORIES, type Exercise, type ExerciseCategory } from "@/lib/exercises";
+import { EXERCISES, EXERCISE_CATEGORIES, SPORTS, getExercisesForSport, type Exercise, type ExerciseCategory, type SportId } from "@/lib/exercises";
 import { ExerciseDemo } from "@/components/ExerciseDemo";
 import { ExerciseModal } from "@/components/ExerciseDetail";
 
 export default function LibraryPage() {
+  const [sport, setSport] = useState<SportId | "all">("all");
   const [cat, setCat] = useState<ExerciseCategory | "All">("All");
   const [open, setOpen] = useState<Exercise | null>(null);
 
-  const list = useMemo(
-    () => (cat === "All" ? EXERCISES : EXERCISES.filter((e) => e.category === cat)),
-    [cat]
-  );
+  const list = useMemo(() => {
+    const bySport = getExercisesForSport(sport);
+    return cat === "All" ? bySport : bySport.filter((e) => e.category === cat);
+  }, [sport, cat]);
 
   return (
-    <div className="animate-fade-up space-y-6">
+    <div className="animate-fade-up space-y-5">
       <header>
         <h1 className="text-3xl font-extrabold tracking-tight">Exercise library</h1>
-        <p className="mt-1 text-sm text-slate-400">{EXERCISES.length} coached drills — demos, cues and why each one helps you.</p>
+        <p className="mt-1 text-sm text-slate-400">{EXERCISES.length} coached exercises across every sport — demos, cues and why each one helps you.</p>
       </header>
 
       <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
-        <Pill label="All" active={cat === "All"} onClick={() => setCat("All")} />
+        <Pill label="All sports" active={sport === "all"} onClick={() => setSport("all")} />
+        {SPORTS.map((s) => (
+          <Pill key={s.id} label={`${s.emoji} ${s.label}`} active={sport === s.id} onClick={() => setSport(s.id)} />
+        ))}
+      </div>
+
+      <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
+        <Pill label="All" active={cat === "All"} onClick={() => setCat("All")} small />
         {EXERCISE_CATEGORIES.map((c) => (
-          <Pill key={c} label={c} active={cat === c} onClick={() => setCat(c)} />
+          <Pill key={c} label={c} active={cat === c} onClick={() => setCat(c)} small />
         ))}
       </div>
 
@@ -52,11 +60,11 @@ export default function LibraryPage() {
   );
 }
 
-function Pill({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+function Pill({ label, active, onClick, small }: { label: string; active: boolean; onClick: () => void; small?: boolean }) {
   return (
     <button
       onClick={onClick}
-      className={`shrink-0 rounded-full border px-4 py-1.5 text-sm font-medium transition ${
+      className={`shrink-0 rounded-full border font-medium transition ${small ? "px-3 py-1 text-xs" : "px-4 py-1.5 text-sm"} ${
         active ? "border-pitch-400/40 bg-pitch-400/10 text-pitch-400" : "border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.06]"
       }`}
     >

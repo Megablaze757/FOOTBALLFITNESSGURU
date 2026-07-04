@@ -33,8 +33,8 @@ export const PLANS: TierPlan[] = [
   {
     id: "silver",
     name: "Silver",
-    priceLabel: "$49/mo",
-    priceMonthly: 49,
+    priceLabel: "$15/mo",
+    priceMonthly: 15,
     tagline: "AI-powered recovery insights.",
     paid: true,
     features: [
@@ -47,20 +47,45 @@ export const PLANS: TierPlan[] = [
   {
     id: "gold",
     name: "Gold",
-    priceLabel: "$150/mo",
-    priceMonthly: 150,
-    tagline: "The full performance team.",
+    priceLabel: "$20/mo",
+    priceMonthly: 20,
+    tagline: "The full performance team, for you.",
     paid: true,
     features: [
       "Everything in Silver",
       "AI coach — custom periodised programs",
       "Video biomechanics & injury root-cause",
       "Adaptive nutrition & hydration targets",
-      "Coach & squad sharing",
-      "Full benchmark & body-composition history",
+      "Full exercise library across every sport",
+      "Benchmark & body-composition history",
     ],
   },
 ];
+
+// Team plan — sold separately (not an individual tier). Maps to a coach account
+// with Gold features for the whole roster + the squad dashboard.
+export interface TeamPlan {
+  name: string;
+  priceLabel: string;
+  priceMonthly: number;
+  tagline: string;
+  features: string[];
+}
+
+export const TEAM_PLAN: TeamPlan = {
+  name: "Team",
+  priceLabel: "$150/mo",
+  priceMonthly: 150,
+  tagline: "For clubs, coaches & S&C staff.",
+  features: [
+    "Everything in Gold for up to 25 athletes",
+    "Coach dashboard with live squad readiness",
+    "Per-athlete programs & injury flags",
+    "Roster management & athlete invites",
+    "Team performance reports (PDF)",
+    "Priority support",
+  ],
+};
 
 export function planFor(tier: Tier): TierPlan {
   return PLANS.find((p) => p.id === tier) ?? PLANS[0];

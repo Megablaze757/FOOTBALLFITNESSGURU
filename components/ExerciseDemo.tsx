@@ -89,6 +89,20 @@ const POSES: Record<DemoPattern, { a: Joints; b: Joints; dur: number }> = {
       lKnee: [58, 92], rKnee: [44, 84], lAnkle: [62, 108], rAnkle: [40, 100] },
     dur: 0.9,
   },
+  press: {
+    a: { head: [50, 16], neck: [50, 30], hip: [50, 64], lHand: [39, 34], rHand: [61, 34],
+      lKnee: [45, 90], rKnee: [55, 90], lAnkle: [45, 118], rAnkle: [55, 118] },
+    b: { head: [50, 16], neck: [50, 30], hip: [50, 64], lHand: [44, 4], rHand: [56, 4],
+      lKnee: [45, 90], rKnee: [55, 90], lAnkle: [45, 118], rAnkle: [55, 118] },
+    dur: 1.8,
+  },
+  pull: {
+    a: { head: [50, 26], neck: [50, 40], hip: [50, 74], lHand: [42, 8], rHand: [58, 8],
+      lKnee: [48, 98], rKnee: [52, 98], lAnkle: [48, 120], rAnkle: [52, 120] },
+    b: { head: [50, 12], neck: [50, 26], hip: [50, 60], lHand: [42, 8], rHand: [58, 8],
+      lKnee: [48, 84], rKnee: [52, 84], lAnkle: [48, 106], rAnkle: [52, 106] },
+    dur: 2.0,
+  },
 };
 
 const SEGMENTS: [keyof Joints, keyof Joints][] = [
@@ -128,7 +142,11 @@ export function ExerciseDemo({ pattern, className = "" }: { pattern: DemoPattern
       role="img"
       aria-label={`${pattern} demonstration`}
     >
-      <line x1={10} y1={124} x2={90} y2={124} stroke="currentColor" strokeOpacity={0.15} strokeWidth={2} />
+      {pattern === "pull" ? (
+        <line x1={24} y1={8} x2={76} y2={8} stroke="currentColor" strokeOpacity={0.3} strokeWidth={3} strokeLinecap="round" />
+      ) : (
+        <line x1={10} y1={124} x2={90} y2={124} stroke="currentColor" strokeOpacity={0.15} strokeWidth={2} />
+      )}
 
       <g fill="none" stroke="currentColor" strokeWidth={4.5} strokeLinecap="round" strokeLinejoin="round">
         {SEGMENTS.map(([p, q], i) => {

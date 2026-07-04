@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { SPORTS } from "@/lib/exercises";
 import type { Profile } from "@/lib/types";
 
 export function ProfileForm({ profile, email }: { profile: Profile; email: string }) {
@@ -12,6 +13,7 @@ export function ProfileForm({ profile, email }: { profile: Profile; email: strin
   const [bio, setBio] = useState(profile.bio ?? "");
   const [experience, setExperience] = useState(profile.experience_years?.toString() ?? "");
   const [role, setRole] = useState<Profile["role"]>(profile.role);
+  const [sport, setSport] = useState<string>(profile.sport ?? "football");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -25,7 +27,7 @@ export function ProfileForm({ profile, email }: { profile: Profile; email: strin
 
     const { error } = await supabase
       .from("profiles")
-      .update({ full_name: fullName || null, bio: bio || null, experience_years: experience ? Number(experience) : null, role })
+      .update({ full_name: fullName || null, bio: bio || null, experience_years: experience ? Number(experience) : null, role, sport })
       .eq("id", profile.id);
 
     if (error) setError(error.message);
@@ -49,6 +51,15 @@ export function ProfileForm({ profile, email }: { profile: Profile; email: strin
       <label className="block">
         <span className="field-label">Full name</span>
         <input value={fullName} onChange={(e) => setFullName(e.target.value)} className="field" />
+      </label>
+
+      <label className="block">
+        <span className="field-label">Sport</span>
+        <select value={sport} onChange={(e) => setSport(e.target.value)} className="field [color-scheme:dark]">
+          {SPORTS.map((s) => (
+            <option key={s.id} value={s.id}>{s.emoji} {s.label}</option>
+          ))}
+        </select>
       </label>
 
       <label className="block">

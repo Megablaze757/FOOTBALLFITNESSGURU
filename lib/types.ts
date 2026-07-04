@@ -183,4 +183,5 @@ export interface Profile {
   role: "athlete" | "coach" | "admin";
   experience_years: number | null;
   bio: string | null;
+  sport?: string | null;
 }

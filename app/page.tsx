@@ -62,7 +62,7 @@ export default function Landing() {
           <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-slate-500 lg:justify-start">
             <span>✓ On-device video analysis</span>
             <span>✓ Cancel anytime</span>
-            <span>✓ Built for footballers</span>
+            <span>✓ Football · rugby · lifting & more</span>
           </div>
         </div>
 
@@ -72,11 +72,19 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* Logos / credibility strip */}
+      {/* Sports strip */}
       <section className="mt-20 border-y border-white/5 py-6">
-        <p className="text-center text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+        <p className="mb-4 text-center text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
           One system replacing your coach · physio · nutritionist · analyst
         </p>
+        <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-slate-400">
+          <span>⚽ Football</span>
+          <span>🏉 Rugby</span>
+          <span>🏋️ Weightlifting</span>
+          <span>💪 Gym & fitness</span>
+          <span>🏀 Basketball</span>
+          <span>🏃 Running</span>
+        </div>
       </section>
 
       {/* Features */}
@@ -115,15 +123,13 @@ export default function Landing() {
       {/* Pricing */}
       <section id="pricing" className="mt-24 scroll-mt-8">
         <div className="text-center">
-          <h2 className="text-3xl font-extrabold tracking-tight sm:text-4xl">One athlete. One price. Every system.</h2>
-          <p className="mx-auto mt-3 max-w-xl text-slate-400">A private performance coach runs $100+ an hour. Apex is the whole staff, every day, for less than two sessions a month.</p>
+          <h2 className="text-3xl font-extrabold tracking-tight sm:text-4xl">Simple pricing for athletes and teams.</h2>
+          <p className="mx-auto mt-3 max-w-xl text-slate-400">A private performance coach runs $100+ an hour. Apex is the whole staff, every day, from $15 a month.</p>
         </div>
-        <div className="mx-auto mt-12 grid max-w-4xl gap-5 md:grid-cols-2">
-          <div className="card p-8">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400">Starter</h3>
-            <div className="mt-3 flex items-baseline gap-1">
-              <span className="text-4xl font-extrabold">Free</span>
-            </div>
+        <div className="mx-auto mt-12 grid max-w-5xl gap-5 md:grid-cols-3">
+          <div className="card p-7">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400">Free</h3>
+            <div className="mt-3 text-4xl font-extrabold">$0</div>
             <p className="mt-2 text-sm text-slate-400">Build the habit.</p>
             <ul className="mt-6 space-y-3 text-sm text-slate-300">
               <Perk>Daily readiness score</Perk>
@@ -133,22 +139,37 @@ export default function Landing() {
             <Link href="/login" className="btn-ghost mt-8">Get started</Link>
           </div>
 
-          <div className="card-premium relative overflow-hidden p-8">
+          <div className="card-premium relative overflow-hidden p-7">
             <div className="absolute right-5 top-5 chip text-pitch-400">Most popular</div>
             <h3 className="text-sm font-bold uppercase tracking-wider text-pitch-400">Gold</h3>
+            <div className="mt-3 flex items-baseline gap-1">
+              <span className="text-4xl font-extrabold">$20</span>
+              <span className="text-slate-400">/month</span>
+            </div>
+            <p className="mt-2 text-sm text-slate-400">The full performance team, for you.</p>
+            <ul className="mt-6 space-y-3 text-sm text-slate-300">
+              <Perk gold>AI coach — custom programs</Perk>
+              <Perk gold>Video biomechanics &amp; root-cause</Perk>
+              <Perk gold>Adaptive nutrition targets</Perk>
+              <Perk gold>Full multi-sport exercise library</Perk>
+            </ul>
+            <Link href="/login" className="btn-primary mt-8">Start free trial</Link>
+          </div>
+
+          <div className="card p-7">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400">Team</h3>
             <div className="mt-3 flex items-baseline gap-1">
               <span className="text-4xl font-extrabold">$150</span>
               <span className="text-slate-400">/month</span>
             </div>
-            <p className="mt-2 text-sm text-slate-400">The full performance team.</p>
+            <p className="mt-2 text-sm text-slate-400">For clubs &amp; coaches.</p>
             <ul className="mt-6 space-y-3 text-sm text-slate-300">
-              <Perk gold>Everything in Starter, plus:</Perk>
-              <Perk gold>AI coach — custom periodised programs</Perk>
-              <Perk gold>Video biomechanics &amp; injury root-cause</Perk>
-              <Perk gold>Adaptive nutrition &amp; hydration targets</Perk>
-              <Perk gold>Coach / squad sharing</Perk>
+              <Perk>Gold for up to 25 athletes</Perk>
+              <Perk>Live squad readiness dashboard</Perk>
+              <Perk>Per-athlete programs &amp; flags</Perk>
+              <Perk>Team reports (PDF)</Perk>
             </ul>
-            <Link href="/login" className="btn-primary mt-8">Start free trial</Link>
+            <a href="mailto:sales@apex.app?subject=Apex%20Team%20plan" className="btn-ghost mt-8">Contact us</a>
           </div>
         </div>
       </section>
