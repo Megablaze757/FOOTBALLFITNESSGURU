@@ -28,3 +28,6 @@ supabase/.temp/
 Thumbs.db
 .vscode/
 .idea/
+
+# Local editor/tooling
+.claude/
