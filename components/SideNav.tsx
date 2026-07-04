@@ -25,7 +25,7 @@ export function SideNav() {
                   href={item.href}
                   className={`flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-medium transition ${
                     active
-                      ? "bg-pitch-400/10 text-pitch-400 shadow-[inset_0_0_0_1px_rgba(163,230,53,0.2)]"
+                      ? "bg-pitch-400/10 text-pitch-400 shadow-[inset_0_0_0_1px_rgba(227,181,63,0.25)]"
                       : "text-slate-400 hover:bg-white/[0.05] hover:text-slate-100"
                   }`}
                 >

@@ -372,7 +372,7 @@ function ActiveProgram({
       {/* Benchmark target progress */}
       {bench && (
         <div className="card flex items-center gap-4 p-5">
-          <RingProgress pct={bench.pct} color={bench.achieved ? "#34d399" : "#a3e635"} sub="to goal" />
+          <RingProgress pct={bench.pct} color={bench.achieved ? "#34d399" : "#e3b53f"} sub="to goal" />
           <div className="flex-1">
             <div className="stat-label">{metricDef(program.target_metric!).label}</div>
             <div className="mt-0.5 text-lg font-extrabold text-slate-100">{bench.label}</div>

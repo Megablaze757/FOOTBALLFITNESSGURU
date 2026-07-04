@@ -11,7 +11,7 @@ import type { GoalType } from "@/lib/coach";
 import type { Subscription, Tier, TrainingLog } from "@/lib/types";
 
 const MACROS = [
-  { key: "protein", label: "Protein", color: "#a3e635", kcal: 4 },
+  { key: "protein", label: "Protein", color: "#e3b53f", kcal: 4 },
   { key: "carbs", label: "Carbs", color: "#38bdf8", kcal: 4 },
   { key: "fats", label: "Fats", color: "#fbbf24", kcal: 9 },
 ] as const;
@@ -141,8 +141,8 @@ function NutritionTracker({ userId, today, initial, targets }: { userId: string;
           <p className="text-xs text-slate-400">{targets.rationale}</p>
           <div className="mt-3 grid grid-cols-4 gap-2 text-center">
             {[
-              { label: "kcal", val: targets.calories, logged: macroKcal, color: "#a3e635" },
-              { label: "Protein", val: targets.protein, logged: Number(macros.protein) || 0, color: "#a3e635" },
+              { label: "kcal", val: targets.calories, logged: macroKcal, color: "#e3b53f" },
+              { label: "Protein", val: targets.protein, logged: Number(macros.protein) || 0, color: "#e3b53f" },
               { label: "Carbs", val: targets.carbs, logged: Number(macros.carbs) || 0, color: "#38bdf8" },
               { label: "Fats", val: targets.fats, logged: Number(macros.fats) || 0, color: "#fbbf24" },
             ].map((t) => (

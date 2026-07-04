@@ -53,8 +53,8 @@ function PricingInner() {
           return (
             <div
               key={plan.id}
-              className={`card animate-fade-up flex h-full flex-col p-6 ${
-                isCurrent ? "ring-2 ring-pitch-400/60 shadow-glow" : isGold ? "border-pitch-400/30 shadow-glow" : ""
+              className={`${isGold ? "card-premium" : "card"} animate-fade-up flex h-full flex-col p-6 ${
+                isCurrent ? "ring-2 ring-pitch-400/60 shadow-glow" : ""
               }`}
               style={{ animationDelay: `${i * 60}ms` }}
             >

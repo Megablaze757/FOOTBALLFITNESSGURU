@@ -23,7 +23,7 @@ export const MOBILE_NAV = [
 ] as const;
 
 export function NavIcon({ name, active, size = 22 }: { name: string; active: boolean; size?: number }) {
-  const stroke = active ? "#a3e635" : "#94a3b8";
+  const stroke = active ? "#e3b53f" : "#94a3b8";
   const common = {
     width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke,
     strokeWidth: 2, strokeLinecap: "round" as const, strokeLinejoin: "round" as const,

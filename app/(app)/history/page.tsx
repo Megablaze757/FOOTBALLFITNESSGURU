@@ -54,7 +54,7 @@ export default function HistoryPage() {
           <h2 className="field-label !mb-0">Training volume</h2>
           <span className="text-xs text-slate-400">{t.totalSessions} sessions · {t.totalReps.toLocaleString()} reps</span>
         </div>
-        {hasTraining ? <MiniBars data={t.volume} color="#a3e635" unit=" reps" /> : <Empty label="Log training in your daily check-in." />}
+        {hasTraining ? <MiniBars data={t.volume} color="#e3b53f" unit=" reps" /> : <Empty label="Log training in your daily check-in." />}
       </section>
 
       {/* Drill frequency leaderboard */}
@@ -81,7 +81,7 @@ export default function HistoryPage() {
         </div>
         {hasNutrition ? (
           <div className="space-y-4">
-            <Labeled title="Calories"><MiniBars data={n.calories} color="#a3e635" unit=" kcal" height={72} /></Labeled>
+            <Labeled title="Calories"><MiniBars data={n.calories} color="#e3b53f" unit=" kcal" height={72} /></Labeled>
             <Labeled title="Protein"><MiniBars data={n.protein} color="#fb7185" unit="g" height={64} /></Labeled>
             <Labeled title="Water"><MiniBars data={n.water} color="#38bdf8" unit="L" height={64} /></Labeled>
           </div>

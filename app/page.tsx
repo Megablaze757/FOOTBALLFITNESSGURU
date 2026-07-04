@@ -49,7 +49,7 @@ export default function Landing() {
           <div className="chip mb-6 text-pitch-400">⚡ Your edge, quantified</div>
           <h1 className="text-4xl font-extrabold leading-[1.05] tracking-tight sm:text-6xl">
             Train like you have a{" "}
-            <span className="bg-gradient-to-br from-pitch-400 to-pitch-600 bg-clip-text text-transparent">full-time performance team.</span>
+            <span className="gold-text">full-time performance team.</span>
           </h1>
           <p className="mx-auto mt-5 max-w-lg text-lg text-slate-400 lg:mx-0">
             Readiness, AI coaching, video biomechanics, nutrition and progress —
@@ -133,7 +133,7 @@ export default function Landing() {
             <Link href="/login" className="btn-ghost mt-8">Get started</Link>
           </div>
 
-          <div className="card relative overflow-hidden border-pitch-400/30 p-8 shadow-glow">
+          <div className="card-premium relative overflow-hidden p-8">
             <div className="absolute right-5 top-5 chip text-pitch-400">Most popular</div>
             <h3 className="text-sm font-bold uppercase tracking-wider text-pitch-400">Gold</h3>
             <div className="mt-3 flex items-baseline gap-1">
@@ -156,7 +156,7 @@ export default function Landing() {
       {/* Final CTA */}
       <section className="mt-24">
         <div className="card relative overflow-hidden p-10 text-center sm:p-16">
-          <div className="absolute inset-0 -z-10 bg-[radial-gradient(600px_300px_at_50%_-20%,rgba(163,230,53,0.15),transparent)]" />
+          <div className="absolute inset-0 -z-10 bg-[radial-gradient(600px_300px_at_50%_-20%,rgba(227,181,63,0.18),transparent)]" />
           <h2 className="text-3xl font-extrabold tracking-tight sm:text-4xl">Your next season starts this morning.</h2>
           <p className="mx-auto mt-3 max-w-lg text-slate-400">Check in, get your plan, and let the system compound. Free to start.</p>
           <Link href="/login" className="btn-primary mx-auto mt-8 max-w-xs">Create your free account</Link>
@@ -223,7 +223,7 @@ function Ring({ value }: { value: number }) {
     <div className="relative h-[92px] w-[92px] shrink-0">
       <svg viewBox="0 0 80 80" className="h-full w-full -rotate-90">
         <circle cx="40" cy="40" r={r} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="8" />
-        <circle cx="40" cy="40" r={r} fill="none" stroke="#a3e635" strokeWidth="8" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={off} />
+        <circle cx="40" cy="40" r={r} fill="none" stroke="#e3b53f" strokeWidth="8" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={off} />
       </svg>
       <div className="absolute inset-0 grid place-items-center">
         <span className="text-2xl font-extrabold">{value}</span>

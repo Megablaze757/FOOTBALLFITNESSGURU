@@ -9,9 +9,9 @@
 body {
   @apply text-slate-100 antialiased;
   background:
-    radial-gradient(1200px 600px at 50% -10%, rgba(163, 230, 53, 0.10), transparent 60%),
-    radial-gradient(900px 500px at 100% 100%, rgba(56, 189, 248, 0.06), transparent 55%),
-    #080b12;
+    radial-gradient(1200px 600px at 50% -10%, rgba(227, 181, 63, 0.12), transparent 60%),
+    radial-gradient(900px 500px at 100% 100%, rgba(227, 181, 63, 0.05), transparent 55%),
+    #0a0a0b;
   background-attachment: fixed;
   min-height: 100vh;
 }
@@ -22,13 +22,29 @@ body {
     @apply rounded-3xl border border-white/10 bg-white/[0.04] shadow-card backdrop-blur-xl;
   }
   .card-hover {
-    @apply transition duration-300 hover:border-white/20 hover:bg-white/[0.06];
+    @apply transition duration-300 hover:-translate-y-0.5 hover:border-pitch-400/30 hover:bg-white/[0.06];
+  }
+
+  /* Premium surface — hairline gold top-edge for Gold-tier / hero cards */
+  .card-premium {
+    @apply relative rounded-3xl border border-pitch-400/25 bg-white/[0.04] shadow-glow backdrop-blur-xl;
+  }
+  .card-premium::before {
+    content: "";
+    @apply pointer-events-none absolute inset-x-0 top-0 h-px rounded-t-3xl;
+    background: linear-gradient(90deg, transparent, rgba(240, 214, 138, 0.7), transparent);
+  }
+
+  /* Gold gradient text */
+  .gold-text {
+    @apply bg-gradient-to-br from-pitch-300 to-pitch-500 bg-clip-text text-transparent;
   }
 
   .btn-primary {
-    @apply inline-flex w-full items-center justify-center rounded-2xl bg-gradient-to-br from-pitch-400 to-pitch-600
+    @apply inline-flex w-full items-center justify-center rounded-2xl
+           bg-gradient-to-b from-pitch-300 via-pitch-400 to-pitch-600
            px-4 py-3 font-semibold text-ink-900 shadow-glow transition
-           hover:brightness-110 active:scale-[0.98] disabled:opacity-50 disabled:shadow-none;
+           hover:brightness-105 active:scale-[0.98] disabled:opacity-50 disabled:shadow-none;
   }
   .btn-ghost {
     @apply inline-flex w-full items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03]
@@ -66,8 +82,8 @@ input[type="range"]::-webkit-slider-thumb {
   height: 20px;
   width: 20px;
   border-radius: 999px;
-  background: #a3e635;
-  box-shadow: 0 0 0 4px rgba(163, 230, 53, 0.18);
+  background: #e3b53f;
+  box-shadow: 0 0 0 4px rgba(227, 181, 63, 0.18);
   cursor: pointer;
 }
 

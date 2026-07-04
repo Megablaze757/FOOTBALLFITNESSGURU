@@ -6,7 +6,7 @@ import type { TrendPoint } from "@/lib/trends";
 const SERIES = [
   { key: "maxPain", label: "Pain", color: "#fb5d6b", scale: 10 },
   { key: "sleep", label: "Sleep", color: "#38bdf8", scale: 10 },
-  { key: "readinessScore", label: "Readiness", color: "#a3e635", scale: 100 },
+  { key: "readinessScore", label: "Readiness", color: "#e3b53f", scale: 100 },
 ] as const;
 
 const W = 320;

@@ -21,7 +21,7 @@ function esc(s: string): string {
 }
 
 export function buildShareSvg(s: ShareStats): string {
-  const accent = s.accent ?? "#a3e635";
+  const accent = s.accent ?? "#e3b53f";
   const stats = s.stats.slice(0, 3);
   const colW = 1080 / (stats.length || 1);
   const statCols = stats
@@ -36,13 +36,13 @@ export function buildShareSvg(s: ShareStats): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1080" viewBox="0 0 1080 1080">
     <defs>
       <radialGradient id="bg" cx="50%" cy="0%" r="90%">
-        <stop offset="0%" stop-color="#12213a"/>
-        <stop offset="55%" stop-color="#0a0e14"/>
-        <stop offset="100%" stop-color="#080b12"/>
+        <stop offset="0%" stop-color="#241d0b"/>
+        <stop offset="55%" stop-color="#111010"/>
+        <stop offset="100%" stop-color="#0a0a0b"/>
       </radialGradient>
       <linearGradient id="acc" x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0%" stop-color="${accent}"/>
-        <stop offset="100%" stop-color="#65a30d"/>
+        <stop offset="0%" stop-color="#f0d68a"/>
+        <stop offset="100%" stop-color="${accent}"/>
       </linearGradient>
     </defs>
     <rect width="1080" height="1080" fill="url(#bg)"/>

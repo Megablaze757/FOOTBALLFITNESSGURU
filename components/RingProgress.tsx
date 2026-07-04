@@ -1,7 +1,7 @@
 // Circular progress ring (SVG). Used for program completion / progress-to-target.
 export function RingProgress({
   pct,
-  color = "#a3e635",
+  color = "#e3b53f",
   size = 84,
   stroke = 8,
   label,

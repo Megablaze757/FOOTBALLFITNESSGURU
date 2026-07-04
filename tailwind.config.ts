@@ -8,19 +8,28 @@ const config: Config = {
         sans: ["var(--font-sans)", "system-ui", "sans-serif"],
       },
       colors: {
-        // Electric "pitch" accent
+        // Brand accent — metallic gold. (Token still named `pitch` since it's
+        // referenced app-wide; the palette is gold.)
         pitch: {
-          DEFAULT: "#a3e635",
-          50: "#f7fee7",
-          400: "#a3e635",
-          500: "#84cc16",
-          600: "#65a30d",
+          DEFAULT: "#e3b53f",
+          50: "#fbf3d9",
+          300: "#f0d68a",
+          400: "#e3b53f",
+          500: "#c99a2e",
+          600: "#a67c1f",
+        },
+        gold: {
+          DEFAULT: "#e3b53f",
+          300: "#f0d68a",
+          400: "#e3b53f",
+          500: "#c99a2e",
+          600: "#a67c1f",
         },
         ink: {
-          900: "#080b12",
-          800: "#0c111b",
-          700: "#121826",
-          600: "#1a2233",
+          900: "#0a0a0b",
+          800: "#101011",
+          700: "#18181b",
+          600: "#26262a",
         },
         readiness: {
           green: "#34d399",
@@ -29,8 +38,8 @@ const config: Config = {
         },
       },
       boxShadow: {
-        glow: "0 0 0 1px rgba(163,230,53,0.25), 0 8px 40px -8px rgba(163,230,53,0.35)",
-        card: "0 1px 0 0 rgba(255,255,255,0.06) inset, 0 20px 40px -24px rgba(0,0,0,0.8)",
+        glow: "0 0 0 1px rgba(227,181,63,0.30), 0 8px 40px -8px rgba(227,181,63,0.35)",
+        card: "0 1px 0 0 rgba(255,255,255,0.06) inset, 0 20px 40px -24px rgba(0,0,0,0.85)",
       },
       keyframes: {
         "fade-up": {

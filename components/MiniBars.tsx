@@ -3,7 +3,7 @@ import type { DayPoint } from "@/lib/history";
 // Compact SVG bar chart for a daily series. Dark theme, gradient fill.
 export function MiniBars({
   data,
-  color = "#a3e635",
+  color = "#e3b53f",
   unit = "",
   height = 96,
 }: {

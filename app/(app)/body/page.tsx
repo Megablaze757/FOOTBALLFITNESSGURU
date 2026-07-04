@@ -52,7 +52,7 @@ export default function BodyPage() {
           {weightSeries.length > 0 && (
             <div className="card p-5">
               <h2 className="field-label">Weight (kg)</h2>
-              <MiniBars data={weightSeries} color="#a3e635" unit=" kg" />
+              <MiniBars data={weightSeries} color="#e3b53f" unit=" kg" />
             </div>
           )}
           {bfSeries.length > 0 && (

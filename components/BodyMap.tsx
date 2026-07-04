@@ -66,7 +66,7 @@ export function BodyMap({
               cy={region.cy}
               r={region.r}
               fill={painColor(level)}
-              stroke={isSel ? "#a3e635" : "rgba(255,255,255,0.25)"}
+              stroke={isSel ? "#e3b53f" : "rgba(255,255,255,0.25)"}
               strokeWidth={isSel ? 2.5 : 1.5}
               className="cursor-pointer"
               onClick={() => setSelected(region.key)}
