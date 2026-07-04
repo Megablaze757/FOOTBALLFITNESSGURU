@@ -7,6 +7,7 @@ export const NAV_ITEMS = [
   { href: "/journal", label: "Journal", icon: "journal" },
   { href: "/dashboard", label: "Stats", icon: "stats" },
   { href: "/train", label: "Train", icon: "train" },
+  { href: "/library", label: "Library", icon: "library" },
   { href: "/nutrition", label: "Nutrition", icon: "nutrition" },
   { href: "/history", label: "Progress", icon: "history" },
   { href: "/profile", label: "Profile", icon: "profile" },
@@ -43,6 +44,8 @@ export function NavIcon({ name, active, size = 22 }: { name: string; active: boo
       return <svg {...common}><path d="M12 21c-3.5-2-6-5.5-6-9.5A6 6 0 0 1 12 5a6 6 0 0 1 6 6.5c0 4-2.5 7.5-6 9.5Z" /><path d="M12 5V2" /></svg>;
     case "history":
       return <svg {...common}><path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 4v4h4" /><path d="M12 8v4l3 2" /></svg>;
+    case "library":
+      return <svg {...common}><path d="M4 4v16" /><path d="M8 4v16" /><rect x="12" y="4" width="8" height="16" rx="1" transform="rotate(6 16 12)" /></svg>;
     case "profile":
       return <svg {...common}><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 4-6 8-6s8 2 8 6" /></svg>;
     default:

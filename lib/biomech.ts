@@ -68,16 +68,17 @@ function painByArea(painMap: PainMap): Partial<Record<Area, number>> {
 }
 
 // --- drills -----------------------------------------------------------------
+// ids match lib/exercises.ts so each prescribed drill opens its coached demo.
 const LIB: { id: string; name: string; tag: string; sets: number; reps: number; targets: string }[] = [
-  { id: "drill_14", name: "Single-leg RDL", tag: "valgus", sets: 3, reps: 12, targets: "knee stability" },
-  { id: "drill_22", name: "Band lateral walks", tag: "valgus", sets: 4, reps: 15, targets: "glute med / knee tracking" },
-  { id: "drill_31", name: "Copenhagen plank", tag: "symmetry", sets: 3, reps: 10, targets: "adductor balance" },
-  { id: "drill_07", name: "Bulgarian split squat", tag: "symmetry", sets: 3, reps: 10, targets: "unilateral strength" },
-  { id: "drill_18", name: "Box jumps", tag: "explosiveness", sets: 4, reps: 6, targets: "power" },
-  { id: "drill_05", name: "Depth-drop to sprint", tag: "explosiveness", sets: 3, reps: 5, targets: "reactive strength" },
-  { id: "drill_44", name: "Tempo runs 6x100m", tag: "endurance", sets: 1, reps: 6, targets: "aerobic base" },
-  { id: "drill_12", name: "Deep goblet squat hold", tag: "flexion", sets: 3, reps: 8, targets: "ankle/knee mobility" },
-  { id: "drill_27", name: "Tight-space dribbling", tag: "control", sets: 4, reps: 12, targets: "ball control" },
+  { id: "single_leg_rdl", name: "Single-leg RDL", tag: "valgus", sets: 3, reps: 12, targets: "knee stability" },
+  { id: "band_lateral_walk", name: "Band lateral walks", tag: "valgus", sets: 4, reps: 15, targets: "glute med / knee tracking" },
+  { id: "copenhagen", name: "Copenhagen plank", tag: "symmetry", sets: 3, reps: 10, targets: "adductor balance" },
+  { id: "bulgarian_split", name: "Bulgarian split squat", tag: "symmetry", sets: 3, reps: 10, targets: "unilateral strength" },
+  { id: "box_jumps", name: "Box jumps", tag: "explosiveness", sets: 4, reps: 6, targets: "power" },
+  { id: "depth_drop", name: "Depth-drop to sprint", tag: "explosiveness", sets: 3, reps: 5, targets: "reactive strength" },
+  { id: "tempo_runs", name: "Tempo runs 6x100m", tag: "endurance", sets: 1, reps: 6, targets: "aerobic base" },
+  { id: "spanish_squat", name: "Spanish squat iso-hold", tag: "flexion", sets: 3, reps: 8, targets: "knee mobility" },
+  { id: "dribbling_grid", name: "Tight-space dribbling", tag: "control", sets: 4, reps: 12, targets: "ball control" },
 ];
 function selectDrills(focus: string, weaknesses: string[], inSeason: boolean): DrillItem[] {
   const want = [...new Set([...weaknesses, focus])];
