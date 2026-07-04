@@ -77,4 +77,28 @@ test("empty frames degrade gracefully", () => {
   assert.equal(a.symmetry_score, 100);
   assert.equal(a.heatmap_data.length, 0);
   assert.equal(a.root_cause_alert, null);
+  assert.equal(a.rep_count, 0);
+});
+
+test("clean deep squats score high form and count reps", () => {
+  const a = analyzeFrames(cleanFrames(), 30, { painMap: {}, source: "mediapipe" });
+  assert.ok(a.form_score >= 80, `form ${a.form_score}`);
+  assert.ok(a.rep_count >= 1, `reps ${a.rep_count}`);
+});
+
+test("rep counting scales with the number of squat cycles", () => {
+  // stitch three squat cycles together
+  const one = cleanFrames();
+  const three = [...one, ...one, ...one];
+  const a = analyzeFrames(three, 30, { painMap: {}, source: "mediapipe" });
+  assert.ok(a.rep_count >= 3, `reps ${a.rep_count}`);
+});
+
+test("valgus drags the form score down", () => {
+  const clean = analyzeFrames(cleanFrames(), 30, { painMap: {}, source: "mediapipe" });
+  const caved = analyzeFrames(
+    cleanFrames().map((f) => ({ ...f, left_knee: { x: f.left_knee.x + 0.06, y: f.left_knee.y } })),
+    30, { painMap: {}, source: "mediapipe" }
+  );
+  assert.ok(caved.form_score < clean.form_score, `caved ${caved.form_score} !< clean ${clean.form_score}`);
 });

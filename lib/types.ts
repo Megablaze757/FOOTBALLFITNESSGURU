@@ -96,6 +96,8 @@ export interface DrillItem {
 
 export interface VideoAnalysis {
   symmetry_score: number;
+  form_score: number;   // 0–100 overall movement quality
+  rep_count: number;    // detected movement cycles
   biomechanics: {
     knee_valgus_left: number;
     knee_valgus_right: number;

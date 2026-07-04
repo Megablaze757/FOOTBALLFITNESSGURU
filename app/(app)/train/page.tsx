@@ -5,7 +5,8 @@ import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/lib/auth";
 import { useAsync } from "@/lib/use-async";
 import { VideoUploader } from "@/components/VideoUploader";
-import type { Video, VideoStatus } from "@/lib/types";
+import { FormProgress, type Clip } from "@/components/FormProgress";
+import type { Video, VideoStatus, VideoAnalysis } from "@/lib/types";
 
 const STATUS_META: Record<VideoStatus, { label: string; cls: string }> = {
   uploading: { label: "Uploading", cls: "bg-white/10 text-slate-400" },
@@ -19,12 +20,21 @@ export default function TrainPage() {
 
   const { data, loading, reload } = useAsync(async () => {
     const supabase = createClient();
-    const { data: rows } = await supabase
-      .from("videos").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(20);
-    return (rows ?? []) as Video[];
+    const [{ data: rows }, { data: plans }] = await Promise.all([
+      supabase.from("videos").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(20),
+      supabase.from("ai_plans").select("video_id, analysis_json").eq("user_id", user.id),
+    ]);
+    const videos = (rows ?? []) as Video[];
+    const byVideo = new Map((plans ?? []).map((p) => [p.video_id as string, p.analysis_json as VideoAnalysis]));
+    const clips: Clip[] = videos
+      .filter((v) => byVideo.has(v.id))
+      .map((v) => ({ id: v.id, date: v.created_at.slice(0, 10), label: v.session_type ?? "session", analysis: byVideo.get(v.id)! }))
+      .reverse(); // oldest → newest for the trend
+    return { videos, clips };
   }, [user.id]);
 
-  const videos = data ?? [];
+  const videos = data?.videos ?? [];
+  const clips = data?.clips ?? [];
 
   return (
     <div className="animate-fade-up space-y-5">
@@ -34,6 +44,8 @@ export default function TrainPage() {
       </header>
 
       <VideoUploader onUploaded={reload} />
+
+      {clips.length > 0 && <FormProgress clips={clips} />}
 
       <section>
         <h2 className="field-label mb-2">Your videos</h2>

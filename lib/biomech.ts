@@ -58,6 +58,40 @@ function groundContactMs(frames: Frame[], fps: number): number {
   return round1((stance / fps) * 1000);
 }
 
+// Count movement cycles from vertical hip/knee travel (a rep = one full
+// down-and-up). Works across camera angles; hysteresis rejects jitter.
+// Image y grows downward, so a deeper position = larger y.
+function countReps(frames: Frame[]): number {
+  const sig: number[] = [];
+  for (const fr of frames) {
+    const ys: number[] = [];
+    for (const p of ["left_hip", "right_hip", "left_knee", "right_knee"]) {
+      const pt = fr[p];
+      if (pt) ys.push(pt.y);
+    }
+    if (ys.length) sig.push(mean(ys));
+  }
+  if (sig.length < 4) return 0;
+  const lo = Math.min(...sig), hi = Math.max(...sig), range = hi - lo;
+  if (range < 0.03) return 0; // <3% of frame height — not a real rep
+  const enter = lo + range * 0.65; // "deep" threshold
+  const exit = lo + range * 0.35;  // "extended" threshold
+  let reps = 0, deep = false;
+  for (const v of sig) {
+    if (!deep && v >= enter) { deep = true; }
+    else if (deep && v <= exit) { deep = false; reps++; }
+  }
+  return reps;
+}
+
+// Overall movement-quality score (0–100): starts from symmetry, penalises knee
+// valgus and rewards good depth. Distinct from raw left/right symmetry.
+function formScore(sym: number, worstValgus: number, bestFlexion: number): number {
+  const valgusPenalty = Math.max(0, worstValgus - 6) * 1.6;   // caving in hurts
+  const depthPenalty = Math.max(0, bestFlexion - 140) * 0.4;  // too shallow hurts
+  return Math.max(0, Math.min(100, Math.round(sym - valgusPenalty - depthPenalty)));
+}
+
 function painByArea(painMap: PainMap): Partial<Record<Area, number>> {
   const out: Partial<Record<Area, number>> = {};
   for (const [k, v] of Object.entries(painMap ?? {})) {
@@ -137,8 +171,11 @@ export function analyzeFrames(
     if (fr["right_knee"]) points.push({ x: fr["right_knee"].x, y: fr["right_knee"].y, intensity: round2(ri) });
   }
 
+  const bestFlexion = Math.min(left.flexion, right.flexion);
   return {
     symmetry_score: sym,
+    form_score: formScore(sym, worseVal, bestFlexion),
+    rep_count: countReps(frames),
     biomechanics: {
       knee_valgus_left: left.valgus,
       knee_valgus_right: right.valgus,
