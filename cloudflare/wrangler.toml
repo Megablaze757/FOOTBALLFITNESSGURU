@@ -1,0 +1,24 @@
+name = "apex-api"
+main = "src/index.ts"
+compatibility_date = "2024-11-01"
+
+# Reminder emails: 08:00 UTC daily (daily + deadline reminders; weekly on Mondays).
+[triggers]
+crons = ["0 8 * * *"]
+
+# Non-secret defaults. Point these at your project.
+[vars]
+OPENROUTER_MODEL = "anthropic/claude-3.5-sonnet"
+SUPABASE_URL = "https://txqhstackgidjqkkrzyj.supabase.co"
+APP_URL = "https://megablaze757.github.io/FOOTBALLFITNESSGURU"
+REMINDER_FROM = "AI Coach <noreply@example.com>"
+
+# Secrets are NOT stored here — set them with `wrangler secret put NAME`:
+#   OPENROUTER_API_KEY            (your OpenRouter key — powers coach chat + programs)
+#   SUPABASE_ANON_KEY             (publishable key — used to verify caller sessions)
+#   SUPABASE_SERVICE_ROLE_KEY     (server-only — Stripe/email write to the DB)
+#   STRIPE_SECRET_KEY
+#   STRIPE_WEBHOOK_SECRET
+#   STRIPE_PRICE_SILVER
+#   STRIPE_PRICE_GOLD
+#   RESEND_API_KEY

@@ -18,7 +18,14 @@
       "PowerShell(Set-Location -LiteralPath \"G:\\\\FOOTBALLCOACH\"; $env:SUPABASE_PROJECT_REF=\"txqhstackgidjqkkrzyj\"; $env:SUPABASE_DB_PASSWORD=\"Fortn1tebattlepass\"; node scripts/db-deploy.mjs 2>&1 | Select-String -Pattern \"connected|applying|applied|Could not\" | Select-Object -First 12)",
       "Bash(node -e ' *)",
       "PowerShell(Set-Location -LiteralPath \"G:\\\\FOOTBALLCOACH\"; npx tsc --noEmit 2>&1 | Select-Object -First 12; \"---TSC: $LASTEXITCODE---\"; npm test 2>$null | Select-String -Pattern \"# tests|# pass|# fail\")",
-      "PowerShell(Set-Location -LiteralPath \"G:\\\\FOOTBALLCOACH\"; git init -b main 2>&1 | Select-Object -Last 1; git add -A 2>&1 | Out-Null; \"staged files: $\\(\\(git diff --cached --name-only | Measure-Object\\).Count\\)\"; \"--- sanity: any env/venv/out staged? ---\"; git diff --cached --name-only | Select-String -Pattern \"\\\\.env\\\\.local|\\\\.venv|/out/|\\\\.next/|node_modules\" | Select-Object -First 5)"
+      "PowerShell(Set-Location -LiteralPath \"G:\\\\FOOTBALLCOACH\"; git init -b main 2>&1 | Select-Object -Last 1; git add -A 2>&1 | Out-Null; \"staged files: $\\(\\(git diff --cached --name-only | Measure-Object\\).Count\\)\"; \"--- sanity: any env/venv/out staged? ---\"; git diff --cached --name-only | Select-String -Pattern \"\\\\.env\\\\.local|\\\\.venv|/out/|\\\\.next/|node_modules\" | Select-Object -First 5)",
+      "Bash(git remote *)",
+      "Bash(gh auth *)",
+      "PowerShell(Set-Location -LiteralPath \"G:\\\\FOOTBALLCOACH\"; npx tsc --noEmit 2>&1 | Select-Object -First 15; \"---TSC: $LASTEXITCODE---\"; npm test 2>$null | Select-String -Pattern \"# tests|# pass|# fail\")",
+      "PowerShell(Set-Location -LiteralPath \"G:\\\\FOOTBALLCOACH\"; npx tsc --noEmit 2>&1 | Select-Object -First 8; \"---TSC: $LASTEXITCODE---\"; npx next build 2>&1 | Select-String -Pattern \"Generating static|Compiled|error|Error|Failed\" | Select-Object -First 6)",
+      "Bash(git add *)",
+      "Bash(git commit -q -m ' *)",
+      "Bash(git push *)"
     ]
   }
 }

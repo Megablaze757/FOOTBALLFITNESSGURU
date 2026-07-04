@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { invokeAI } from "@/lib/api";
 import { localCoachAnswer, type ChatContext } from "@/lib/coach-chat";
 
 interface Msg { role: "you" | "coach"; text: string }
@@ -22,14 +22,11 @@ export function CoachChat({ context }: { context: ChatContext }) {
 
     let answer: string;
     try {
-      const supabase = createClient();
-      const { data, error } = await supabase.functions.invoke("coach-chat", {
-        body: { question, context },
-      });
-      if (error || !data?.answer) throw new Error("fallback");
-      answer = data.answer as string;
+      const data = await invokeAI<{ answer?: string }>("coach-chat", { question, context });
+      if (!data?.answer) throw new Error("fallback");
+      answer = data.answer;
     } catch {
-      // Works on GitHub Pages without the Edge Function deployed.
+      // Works on GitHub Pages without any AI backend configured.
       answer = localCoachAnswer(question, context);
     }
 

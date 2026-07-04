@@ -9,6 +9,7 @@ import {
   type GoalType, type ProgramPlan,
 } from "@/lib/coach";
 import { assessReadiness } from "@/lib/readiness";
+import { invokeAI } from "@/lib/api";
 import { METRIC_CATALOG, metricDef, benchmarkProgress } from "@/lib/benchmarks";
 import { RingProgress } from "@/components/RingProgress";
 import { CoachChat } from "@/components/CoachChat";
@@ -120,14 +121,13 @@ function GoalBuilder({ painMap, latestBench, userId, onCreated }: { painMap: Rec
     setError(null);
     const supabase = createClient();
 
-    // Prefer the AI Edge Function; fall back to the local engine (works offline / on Pages).
+    // Prefer the AI backend (Cloudflare Worker / Edge Function); fall back to the
+    // local engine (works offline / on Pages).
     let plan: ProgramPlan;
     try {
-      const { data, error } = await supabase.functions.invoke("generate-program", {
-        body: { goal, pain_map: painMap, notes, in_season: inSeason },
-      });
-      if (error || !data?.plan) throw new Error("fallback");
-      plan = data.plan as ProgramPlan;
+      const data = await invokeAI<{ plan?: ProgramPlan }>("generate-program", { goal, pain_map: painMap, notes, in_season: inSeason });
+      if (!data?.plan) throw new Error("fallback");
+      plan = data.plan;
     } catch {
       plan = buildProgram({ goal, painMap, isInSeason: inSeason });
     }

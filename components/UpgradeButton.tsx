@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { invokeAI } from "@/lib/api";
 import type { Tier } from "@/lib/types";
 
 // Kicks off Stripe Checkout via the create-checkout Edge Function, then redirects
@@ -21,38 +21,16 @@ export function UpgradeButton({
   async function handleClick() {
     setLoading(true);
     setError(null);
-
-    const supabase = createClient();
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    if (!session) {
-      setError("Please sign in again.");
-      setLoading(false);
-      return;
-    }
-
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/create-checkout`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({ tier }),
-        }
-      );
-      const json = await res.json();
-      if (!res.ok || !json.url) {
-        setError(json.error ?? "Could not start checkout.");
+      const json = await invokeAI<{ url?: string; error?: string }>("create-checkout", { tier });
+      if (!json.url) {
+        setError(json.error ?? "Could not start checkout — is payments configured?");
         setLoading(false);
         return;
       }
       window.location.href = json.url; // hand off to Stripe
     } catch {
-      setError("Network error. Try again.");
+      setError("Payments aren't configured yet. Add your Stripe keys to the API worker.");
       setLoading(false);
     }
   }

@@ -199,6 +199,17 @@ A goal-driven coaching engine — the flagship feature.
   `training_logs` + `nutrition_logs` to the AI worker, which folds a training-load
   trend into the coaching prompt.
 
+## Backend keys (AI / Stripe / email) — Cloudflare Worker
+
+The server-side bits live in one **Cloudflare Worker** (`cloudflare/`) so all your keys sit in one
+place: **OpenRouter** (AI coach chat + program generation — use any model with one key), **Stripe**
+(checkout + webhook), and **Resend** (reminder emails on a cron). Deploy with `wrangler deploy`,
+set secrets with `wrangler secret put …`, then point the app at it via the `NEXT_PUBLIC_API_URL`
+build variable. Full guide: [`cloudflare/README.md`](cloudflare/README.md).
+
+If `NEXT_PUBLIC_API_URL` is unset, the app falls back to Supabase Edge Functions / the local engine,
+so it runs fine on GitHub Pages without any of this configured.
+
 ## Deploying to GitHub Pages
 
 The frontend is a **fully static SPA** (`output: "export"`) — no server, no middleware,
