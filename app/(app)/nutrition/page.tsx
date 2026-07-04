@@ -126,7 +126,7 @@ function NutritionTracker({ userId, today, initial, targets }: { userId: string;
   }
 
   return (
-    <div className="animate-fade-up space-y-5">
+    <div className="animate-fade-up mx-auto max-w-2xl space-y-5">
       <Header />
 
       {/* Coach-set smart targets */}

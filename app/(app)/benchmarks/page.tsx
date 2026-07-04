@@ -26,7 +26,7 @@ export default function BenchmarksPage() {
   const latestByMetric = computeLatest(benchmarks);
 
   return (
-    <div className="animate-fade-up space-y-5">
+    <div className="animate-fade-up mx-auto max-w-3xl space-y-5">
       <header className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-extrabold tracking-tight">Benchmarks</h1>
@@ -38,7 +38,7 @@ export default function BenchmarksPage() {
       <BenchmarkForm onSaved={reload} />
 
       {Object.keys(latestByMetric).length > 0 && (
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {METRIC_CATALOG.filter((m) => latestByMetric[m.key]).map((m) => {
             const entry = latestByMetric[m.key];
             const def = metricDef(m.key);

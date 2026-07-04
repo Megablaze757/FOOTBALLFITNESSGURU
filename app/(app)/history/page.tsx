@@ -39,7 +39,7 @@ export default function HistoryPage() {
   const hasNutrition = (data?.nutrition?.length ?? 0) > 0;
 
   return (
-    <div className="animate-fade-up space-y-5">
+    <div className="animate-fade-up mx-auto max-w-3xl space-y-5">
       <header className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-extrabold tracking-tight">Progress</h1>

@@ -62,7 +62,7 @@ function Inner() {
   const total = prog ? prog.plan.weeks.reduce((n, w) => n + w.sessions.length, 0) : 0;
 
   return (
-    <div className="animate-fade-up space-y-5">
+    <div className="animate-fade-up mx-auto max-w-3xl space-y-5">
       <header className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight">{data.name}</h1>

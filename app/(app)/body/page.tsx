@@ -34,7 +34,7 @@ export default function BodyPage() {
   const photos = rows.filter((r) => r.photo_path && data?.signed[r.id]);
 
   return (
-    <div className="animate-fade-up space-y-5">
+    <div className="animate-fade-up mx-auto max-w-3xl space-y-5">
       <header className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-extrabold tracking-tight">Body</h1>

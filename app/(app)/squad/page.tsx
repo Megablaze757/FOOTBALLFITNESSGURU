@@ -85,7 +85,7 @@ export default function SquadPage() {
   }
 
   return (
-    <div className="animate-fade-up space-y-5">
+    <div className="animate-fade-up mx-auto max-w-4xl space-y-5">
       <Header />
       <AddAthlete onAdded={reload} />
       {(data.pending?.length ?? 0) > 0 && (
@@ -97,10 +97,10 @@ export default function SquadPage() {
       {!data.athletes.length ? (
         <p className="card px-4 py-8 text-center text-sm text-slate-500">No athletes yet — add one by email above.</p>
       ) : (
-        <ul className="space-y-2">
+        <ul className="grid gap-3 sm:grid-cols-2">
           {data.athletes.map((a) => (
             <li key={a.id}>
-              <Link href={`/squad/view?id=${a.id}`} className="card card-hover flex items-center justify-between p-4">
+              <Link href={`/squad/view?id=${a.id}`} className="card card-hover flex h-full items-center justify-between p-4">
                 <div>
                   <div className="font-bold text-slate-100">{a.name}</div>
                   <div className="text-xs text-slate-400">

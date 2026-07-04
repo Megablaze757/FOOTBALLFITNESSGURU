@@ -39,7 +39,7 @@ export default function ProfilePage() {
   };
 
   return (
-    <div className="animate-fade-up">
+    <div className="animate-fade-up mx-auto max-w-2xl">
       <header className="mb-5">
         <h1 className="text-3xl font-extrabold tracking-tight">Profile</h1>
       </header>
