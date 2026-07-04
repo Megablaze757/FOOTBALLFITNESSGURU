@@ -41,9 +41,10 @@ export default function HomePage() {
     return (
       <div className="animate-fade-up">
         <Greeting name={firstName} sub="Let's see how you're recovering." />
-        <div className="card mt-6 flex flex-col items-center p-8 text-center">
-          <div className="text-5xl">🌅</div>
-          <p className="mt-3 max-w-xs text-sm text-slate-400">No check-in yet today. Log how you feel to get your readiness score.</p>
+        <div className="mx-auto mt-6 flex max-w-xl flex-col items-center rounded-3xl border border-white/10 bg-white/[0.04] p-10 text-center shadow-card backdrop-blur-xl sm:p-14">
+          <div className="text-6xl">🌅</div>
+          <h2 className="mt-4 text-xl font-extrabold">Start your day with a check-in</h2>
+          <p className="mt-2 max-w-sm text-sm text-slate-400">Log how you slept and feel — Apex computes your readiness and today&apos;s session in under a minute.</p>
           <Link href="/journal" className="btn-primary mt-6 max-w-[16rem]">Start today&apos;s check-in</Link>
         </div>
       </div>
@@ -68,31 +69,44 @@ export default function HomePage() {
     <div className="animate-fade-up space-y-6">
       <Greeting name={firstName} sub="Here's your readiness for today." streak={streak} />
 
-      <div className="card p-6 pt-8">
-        <ReadinessGauge score={readiness.score} status={readiness.status} />
-      </div>
-
-      <Link href="/coach" className="card card-hover flex items-center justify-between p-4">
-        <div>
-          <div className="stat-label">AI Coach</div>
-          <div className="mt-0.5 text-sm font-bold text-slate-100">See today&apos;s session &amp; your program</div>
+      <div className="grid gap-5 lg:grid-cols-3">
+        <div className="card flex items-center justify-center p-6 pt-8 lg:col-span-1">
+          <ReadinessGauge score={readiness.score} status={readiness.status} />
         </div>
-        <span className="text-pitch-400">→</span>
-      </Link>
 
-      <div className="card overflow-hidden p-5">
-        <div className="mb-2 flex items-center justify-between">
-          <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-pitch-400">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-pitch-400" /> AI Coach
-          </span>
-          {actionTag && <span className="chip text-pitch-400">{actionTag}</span>}
+        <div className="space-y-5 lg:col-span-2">
+          <div className="card overflow-hidden p-5 sm:p-6">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-pitch-400">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-pitch-400" /> AI Coach
+              </span>
+              {actionTag && <span className="chip text-pitch-400">{actionTag}</span>}
+            </div>
+            <p className="text-sm leading-relaxed text-slate-200 sm:text-base">{coachText}</p>
+            {watchZone && <div className="chip mt-3 text-readiness-red">⚠️ Watch zone: {watchZone}</div>}
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <QuickLink href="/coach" title="Today's session" sub="Your program & drills" icon="🏋️" />
+            <QuickLink href="/train" title="Video analysis" sub="Upload & break down a clip" icon="🎥" />
+            <QuickLink href="/nutrition" title="Fuelling" sub="Targets for today's load" icon="🍽️" />
+            <QuickLink href="/journal" title="Edit check-in" sub="Update how you feel" icon="📝" />
+          </div>
         </div>
-        <p className="text-sm leading-relaxed text-slate-200">{coachText}</p>
-        {watchZone && <div className="chip mt-3 text-readiness-red">⚠️ Watch zone: {watchZone}</div>}
       </div>
-
-      <Link href="/journal" className="btn-ghost">Edit today&apos;s check-in</Link>
     </div>
+  );
+}
+
+function QuickLink({ href, title, sub, icon }: { href: string; title: string; sub: string; icon: string }) {
+  return (
+    <Link href={href} className="card card-hover flex items-center gap-3 p-4">
+      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white/[0.04] text-xl">{icon}</span>
+      <div className="min-w-0">
+        <div className="truncate text-sm font-bold text-slate-100">{title}</div>
+        <div className="truncate text-xs text-slate-400">{sub}</div>
+      </div>
+    </Link>
   );
 }
 

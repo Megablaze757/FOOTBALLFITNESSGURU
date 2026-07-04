@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSession, UserProvider } from "@/lib/auth";
 import { TabBar } from "@/components/TabBar";
+import { SideNav } from "@/components/SideNav";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useSession();
@@ -23,8 +24,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <UserProvider user={user}>
-      <div className="mx-auto flex min-h-screen max-w-md flex-col">
-        <main className="no-scrollbar flex-1 px-5 pb-28 pt-8">{children}</main>
+      <div className="flex min-h-screen">
+        <SideNav />
+        <div className="min-w-0 flex-1">
+          <main className="no-scrollbar mx-auto w-full max-w-5xl px-5 pb-28 pt-8 lg:px-10 lg:pb-14 lg:pt-12">
+            {children}
+          </main>
+        </div>
         <TabBar />
       </div>
     </UserProvider>
