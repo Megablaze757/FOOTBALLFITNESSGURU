@@ -8,7 +8,7 @@
 // =============================================================================
 
 import type { PainMap, TrainingLog } from "./types";
-import type { SportId } from "./exercises";
+import { progressionForName, type SportId } from "./exercises";
 
 export type GoalType = "speed" | "agility" | "strength" | "endurance" | "injury_recovery" | "skill";
 export type BodyArea = "knee" | "ankle" | "hamstring" | "hip" | "lower_back" | "shoulder";
@@ -426,7 +426,10 @@ export function analyzeProgress(
       const name = d.name?.trim();
       if (!name) continue;
       freq.set(name, (freq.get(name) ?? 0) + 1);
-      if (d.load_kg != null) {
+      // Only treat kg gains as "progression" for load-based lifts — you don't
+      // add weight to wall passes, sprints or dribbling.
+      const method = progressionForName(name);
+      if (d.load_kg != null && d.load_kg > 0 && (method === "load" || method === null)) {
         const cur = loadByDrill.get(name) ?? { first: d.load_kg, best: d.load_kg };
         cur.best = Math.max(cur.best, d.load_kg);
         loadByDrill.set(name, cur);

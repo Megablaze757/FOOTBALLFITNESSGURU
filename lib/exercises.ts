@@ -301,6 +301,31 @@ export function getExerciseByName(name: string): Exercise | null {
   return BY_NAME[name.trim().toLowerCase()] ?? null;
 }
 
+/** Progression method for a drill referenced by name (null if unknown). */
+export function progressionForName(name: string): ProgressionMethod | null {
+  const ex = getExerciseByName(name);
+  return ex ? exerciseProgression(ex) : null;
+}
+
+// How an exercise is progressively overloaded — you can't add weight to a wall
+// pass, so each type gets the right progression advice.
+export type ProgressionMethod = "load" | "reps" | "time" | "skill";
+
+export const PROGRESSION_NOTE: Record<ProgressionMethod, string> = {
+  load: "Add a small amount of weight (~2.5kg) once you can hit every rep with clean form.",
+  reps: "Add a rep or two each session; once it's easy across all sets, make the movement harder (tempo, range, or a harder variation).",
+  time: "Extend the work interval, add a round, or cover more distance as it gets easier.",
+  skill: "There's no weight to add — progress by difficulty: go faster, use less space, use your weaker side, or add a defender/decision.",
+};
+
+export function exerciseProgression(ex: Exercise): ProgressionMethod {
+  const eq = ex.equipment.toLowerCase();
+  if (/barbell|dumbbell|kettlebell|cable|weight/.test(eq)) return "load";
+  if (ex.category === "Skill" || ex.category === "Speed" || ex.category === "Agility" || /ball/.test(eq)) return "skill";
+  if (ex.category === "Endurance" || /bike/.test(eq)) return "time";
+  return "reps"; // bodyweight strength / plyometrics
+}
+
 export type Implement = "barbell_back" | "barbell_hands" | "dumbbells" | "box" | "none";
 
 // Which implement the animated demo should draw, so lifts read as lifts.

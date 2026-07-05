@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect } from "react";
-import { demoImplement, type Exercise } from "@/lib/exercises";
+import { demoImplement, exerciseProgression, PROGRESSION_NOTE, type Exercise } from "@/lib/exercises";
 import { ExerciseDemo } from "@/components/ExerciseDemo";
+
+const PROGRESSION_LABEL = { load: "Add weight", reps: "Add reps", time: "Add time", skill: "Add difficulty" } as const;
 
 // The coached content for one exercise: demo + how-to + cues + tempo + muscles.
 export function ExerciseDetailCard({ ex, sets, reps }: { ex: Exercise; sets?: number; reps?: number }) {
@@ -54,6 +56,19 @@ export function ExerciseDetailCard({ ex, sets, reps }: { ex: Exercise; sets?: nu
           ))}
         </div>
       </div>
+
+      {(() => {
+        const method = exerciseProgression(ex);
+        return (
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+            <div className="flex items-center gap-2">
+              <span className="stat-label !mb-0">How to progress</span>
+              <span className="chip text-pitch-400">{PROGRESSION_LABEL[method]}</span>
+            </div>
+            <p className="mt-1.5 text-sm text-slate-300">{PROGRESSION_NOTE[method]}</p>
+          </div>
+        );
+      })()}
     </div>
   );
 }
