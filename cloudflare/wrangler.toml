@@ -21,4 +21,6 @@ REMINDER_FROM = "AI Coach <noreply@example.com>"
 #   STRIPE_WEBHOOK_SECRET
 #   STRIPE_PRICE_SILVER
 #   STRIPE_PRICE_GOLD
-#   RESEND_API_KEY
+#   GAS_EMAIL_URL     (Google Apps Script web-app URL — preferred, free email via Gmail)
+#   GAS_EMAIL_SECRET  (shared secret that the Apps Script checks)
+#   RESEND_API_KEY    (optional fallback if you don't use Apps Script)

@@ -131,9 +131,13 @@ function Anim({ attr, a, b, dur }: { attr: string; a: number; b: number; dur: nu
   );
 }
 
-export function ExerciseDemo({ pattern, implement = "none", className = "" }: { pattern: DemoPattern; implement?: Implement; className?: string }) {
+export function ExerciseDemo({ pattern, implement = "none", animated = true, className = "" }: { pattern: DemoPattern; implement?: Implement; animated?: boolean; className?: string }) {
   const pose = POSES[pattern] ?? POSES.squat;
   const { a, b, dur } = pose;
+
+  // Static thumbnails omit the SMIL (cleaner, far lighter); the detail view animates.
+  const A = (attr: string, av: number, bv: number) =>
+    animated ? <Anim attr={attr} a={av} b={bv} dur={dur} /> : null;
 
   // Where the implement sits: on the back (squats) it tracks the neck; in the
   // hands it tracks the mid-point of the two hands.
@@ -167,23 +171,23 @@ export function ExerciseDemo({ pattern, implement = "none", className = "" }: { 
           const [bx1, by1] = b[p] as XY, [bx2, by2] = b[q] as XY;
           return (
             <line key={i} x1={ax1} y1={ay1} x2={ax2} y2={ay2}>
-              <Anim attr="x1" a={ax1} b={bx1} dur={dur} />
-              <Anim attr="y1" a={ay1} b={by1} dur={dur} />
-              <Anim attr="x2" a={ax2} b={bx2} dur={dur} />
-              <Anim attr="y2" a={ay2} b={by2} dur={dur} />
+              {A("x1", ax1, bx1)}
+              {A("y1", ay1, by1)}
+              {A("x2", ax2, bx2)}
+              {A("y2", ay2, by2)}
             </line>
           );
         })}
 
         <circle cx={a.head[0]} cy={a.head[1]} r={7} fill="currentColor" stroke="none">
-          <Anim attr="cx" a={a.head[0]} b={b.head[0]} dur={dur} />
-          <Anim attr="cy" a={a.head[1]} b={b.head[1]} dur={dur} />
+          {A("cx", a.head[0], b.head[0])}
+          {A("cy", a.head[1], b.head[1])}
         </circle>
 
         {a.ball && b.ball && (
           <circle cx={a.ball[0]} cy={a.ball[1]} r={6} fill="currentColor" stroke="none" opacity={0.85}>
-            <Anim attr="cx" a={a.ball[0]} b={b.ball[0]} dur={dur} />
-            <Anim attr="cy" a={a.ball[1]} b={b.ball[1]} dur={dur} />
+            {A("cx", a.ball[0], b.ball[0])}
+            {A("cy", a.ball[1], b.ball[1])}
           </circle>
         )}
 
@@ -191,15 +195,15 @@ export function ExerciseDemo({ pattern, implement = "none", className = "" }: { 
         {(implement === "barbell_back" || implement === "barbell_hands") && (
           <>
             <line x1={barA[0] - 16} y1={barA[1]} x2={barA[0] + 16} y2={barA[1]} strokeWidth={3}>
-              <Anim attr="x1" a={barA[0] - 16} b={barB[0] - 16} dur={dur} />
-              <Anim attr="y1" a={barA[1]} b={barB[1]} dur={dur} />
-              <Anim attr="x2" a={barA[0] + 16} b={barB[0] + 16} dur={dur} />
-              <Anim attr="y2" a={barA[1]} b={barB[1]} dur={dur} />
+              {A("x1", barA[0] - 16, barB[0] - 16)}
+              {A("y1", barA[1], barB[1])}
+              {A("x2", barA[0] + 16, barB[0] + 16)}
+              {A("y2", barA[1], barB[1])}
             </line>
             {[-16, 16].map((dx) => (
               <rect key={dx} x={barA[0] + dx - 2} y={barA[1] - 6} width={4} height={12} rx={1} fill="currentColor" stroke="none">
-                <Anim attr="x" a={barA[0] + dx - 2} b={barB[0] + dx - 2} dur={dur} />
-                <Anim attr="y" a={barA[1] - 6} b={barB[1] - 6} dur={dur} />
+                {A("x", barA[0] + dx - 2, barB[0] + dx - 2)}
+                {A("y", barA[1] - 6, barB[1] - 6)}
               </rect>
             ))}
           </>
@@ -208,8 +212,8 @@ export function ExerciseDemo({ pattern, implement = "none", className = "" }: { 
         {/* Dumbbells at each hand */}
         {implement === "dumbbells" && ([["lHand", a.lHand, b.lHand], ["rHand", a.rHand, b.rHand]] as const).map(([k, pa, pb]) => (
           <rect key={k} x={pa[0] - 4} y={pa[1] - 3} width={8} height={6} rx={1} fill="currentColor" stroke="none">
-            <Anim attr="x" a={pa[0] - 4} b={pb[0] - 4} dur={dur} />
-            <Anim attr="y" a={pa[1] - 3} b={pb[1] - 3} dur={dur} />
+            {A("x", pa[0] - 4, pb[0] - 4)}
+            {A("y", pa[1] - 3, pb[1] - 3)}
           </rect>
         ))}
       </g>

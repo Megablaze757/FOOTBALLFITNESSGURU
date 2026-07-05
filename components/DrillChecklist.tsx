@@ -47,7 +47,7 @@ export function DrillChecklist({ drills }: { drills: DrillItem[] }) {
               >
                 {ex && (
                   <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-white/10 bg-black/40">
-                    <ExerciseDemo pattern={ex.demo} implement={demoImplement(ex)} className="h-9 w-7" />
+                    <ExerciseDemo pattern={ex.demo} implement={demoImplement(ex)} animated={false} className="h-9 w-7" />
                   </span>
                 )}
                 <span className="min-w-0 flex-1">

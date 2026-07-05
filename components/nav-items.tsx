@@ -13,13 +13,20 @@ export const NAV_ITEMS = [
   { href: "/profile", label: "Profile", icon: "profile" },
 ] as const;
 
-// A trimmed set for the space-constrained mobile bar.
+// Primary tabs for the space-constrained mobile bar (+ a "More" sheet below).
 export const MOBILE_NAV = [
   { href: "/home", label: "Home", icon: "home" },
   { href: "/coach", label: "Coach", icon: "coach" },
   { href: "/journal", label: "Journal", icon: "journal" },
   { href: "/dashboard", label: "Stats", icon: "stats" },
   { href: "/train", label: "Train", icon: "train" },
+] as const;
+
+// Secondary destinations, reached from the mobile "More" sheet.
+export const MOBILE_MORE = [
+  { href: "/library", label: "Exercise library", icon: "library" },
+  { href: "/nutrition", label: "Nutrition", icon: "nutrition" },
+  { href: "/history", label: "Progress", icon: "history" },
   { href: "/profile", label: "Profile", icon: "profile" },
 ] as const;
 
@@ -48,6 +55,8 @@ export function NavIcon({ name, active, size = 22 }: { name: string; active: boo
       return <svg {...common}><path d="M4 4v16" /><path d="M8 4v16" /><rect x="12" y="4" width="8" height="16" rx="1" transform="rotate(6 16 12)" /></svg>;
     case "profile":
       return <svg {...common}><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 4-6 8-6s8 2 8 6" /></svg>;
+    case "more":
+      return <svg {...common}><circle cx="5" cy="12" r="1.6" fill={stroke} /><circle cx="12" cy="12" r="1.6" fill={stroke} /><circle cx="19" cy="12" r="1.6" fill={stroke} /></svg>;
     default:
       return null;
   }

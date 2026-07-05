@@ -26,6 +26,8 @@ export interface Env {
   // Email
   RESEND_API_KEY: string;
   REMINDER_FROM: string;
+  GAS_EMAIL_URL: string;     // Google Apps Script web-app URL (preferred email sender)
+  GAS_EMAIL_SECRET: string;  // shared secret the GAS script checks
   APP_URL: string;
 }
 
@@ -253,8 +255,18 @@ async function verifyStripe(payload: string, header: string, secret: string): Pr
   return diff === 0;
 }
 
-// --- Email reminders (Resend) ----------------------------------------------
+// --- Email reminders --------------------------------------------------------
+// Preferred sender is a Google Apps Script web app (free, uses your Gmail) when
+// GAS_EMAIL_URL is set; otherwise falls back to Resend if configured.
 async function email(env: Env, to: string, subject: string, html: string): Promise<void> {
+  if (env.GAS_EMAIL_URL) {
+    await fetch(env.GAS_EMAIL_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ secret: env.GAS_EMAIL_SECRET || "", to, subject, html, from: env.REMINDER_FROM || "" }),
+    });
+    return;
+  }
   if (!env.RESEND_API_KEY) return;
   await fetch("https://api.resend.com/emails", {
     method: "POST",

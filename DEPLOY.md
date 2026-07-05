@@ -117,6 +117,11 @@ npx wrangler secret put STRIPE_SECRET_KEY
 npx wrangler secret put STRIPE_WEBHOOK_SECRET
 npx wrangler secret put STRIPE_PRICE_SILVER       # Stripe price id for $15/mo
 npx wrangler secret put STRIPE_PRICE_GOLD         # Stripe price id for $20/mo
+
+# Email (pick ONE — see step 5)
+npx wrangler secret put GAS_EMAIL_URL             # Google Apps Script web-app URL (free, Gmail)
+npx wrangler secret put GAS_EMAIL_SECRET          # shared secret matching the Apps Script
+# or, instead of the two above:
 npx wrangler secret put RESEND_API_KEY            # from resend.com
 ```
 
@@ -156,12 +161,27 @@ resulting tier to `subscriptions` with the service_role key.
 
 ---
 
-## 5. Email reminders (optional — Resend)
+## 5. Email reminders (optional)
 
-1. Create a Resend account + verify a sending domain, create an API key →
-   `RESEND_API_KEY`, and set `REMINDER_FROM` to an address on that domain.
-2. The Worker's cron (`[triggers] crons = ["0 8 * * *"]` in `wrangler.toml`) sends
-   daily check-in nudges, deadline reminders, and a Monday weekly summary.
+The Worker's cron (`[triggers] crons = ["0 8 * * *"]`) sends daily check-in
+nudges, deadline reminders and a Monday weekly summary. Two ways to send:
+
+**Option A — Google Apps Script (free, uses your Gmail) — recommended**
+1. Open https://script.google.com → New project, paste in `google-apps-script/Code.gs`.
+2. Set `SHARED_SECRET` in the script to a value of your choice.
+3. Deploy → New deployment → **Web app**: *Execute as* Me, *Who has access* Anyone.
+   Copy the `/exec` URL. Run it once / send a test to authorize Gmail access.
+4. In the Worker: `npx wrangler secret put GAS_EMAIL_URL` (the /exec URL) and
+   `npx wrangler secret put GAS_EMAIL_SECRET` (same value as `SHARED_SECRET`).
+
+   Limits: Gmail free ~100 emails/day, Workspace ~1500/day — plenty for reminders.
+   `REMINDER_FROM` (in `wrangler.toml` vars) sets the display name.
+
+**Option B — Resend (custom sending domain)**
+1. Create a Resend account, verify a domain, create an API key → `RESEND_API_KEY`,
+   set `REMINDER_FROM` to an address on that domain.
+
+If `GAS_EMAIL_URL` is set it's used; otherwise the Worker falls back to Resend.
 
 ---
 
