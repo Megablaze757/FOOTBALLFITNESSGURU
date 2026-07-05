@@ -1,0 +1,198 @@
+# Deploying Apex — end-to-end
+
+This guide takes you from a fresh clone to a fully-functional live app: the
+static front-end on **GitHub Pages**, the database on **Supabase**, and the
+AI / Stripe / email backend on a **Cloudflare Worker**.
+
+Nothing here needs a paid plan to get started (Supabase free tier, Cloudflare
+Workers free tier, GitHub Pages free). Stripe and email are optional — the app
+works without them (the AI coach falls back to the on-device engine).
+
+---
+
+## 0. What talks to what
+
+```
+Browser (GitHub Pages, static export)
+   │  auth + data (RLS)         ┌───────────────────────────┐
+   ├───────────────────────────►│ Supabase (Postgres + Auth │
+   │                            │ + Storage + RLS)          │
+   │  AI / Stripe / email       └───────────────────────────┘
+   └───────────────────────────►┌───────────────────────────┐
+      (Bearer = user JWT)        │ Cloudflare Worker (apex-api)│
+                                 │  OpenRouter · Stripe · Resend│
+                                 └───────────────────────────┘
+```
+
+The front-end reaches the Worker only if you set the repo variable
+`NEXT_PUBLIC_API_URL`. Without it, the AI features use the built-in deterministic
+engine (still fully usable, just not LLM-written).
+
+---
+
+## 1. Supabase (database + auth + storage)
+
+1. **Create a project** at https://supabase.com → note the *Project ref*, the
+   *Project URL* (`https://<ref>.supabase.co`), the **publishable/anon key**, and
+   set a DB password.
+2. **Apply the migrations** (schema + RLS). From the repo root:
+   ```bash
+   SUPABASE_PROJECT_REF=<ref> SUPABASE_DB_PASSWORD='<db-password>' node scripts/db-deploy.mjs
+   ```
+   This applies `supabase/migrations/0001 … 0014` (tables, RLS policies,
+   SECURITY DEFINER functions with locked search_path). Re-runnable/idempotent.
+3. **Storage buckets** (Dashboard → Storage → New bucket), both **private**:
+   - `videos` — training clips
+   - `photos` — progress photos
+
+   RLS for own-object access is created by the migrations.
+4. **Auth redirect URLs** (Dashboard → Authentication → URL Configuration):
+   - *Site URL*: `https://<user>.github.io/<repo>/`
+   - *Redirect URLs*: add `https://<user>.github.io/<repo>/` **and**
+     `https://<user>.github.io/<repo>/reset-password/`
+   (Password-reset and magic links break without these.)
+5. **Before real users**: rotate the DB password, and delete the demo accounts:
+   ```bash
+   node scripts/cleanup-demo.mjs      # removes @example.com seed users
+   ```
+
+The **service_role key** (Dashboard → Settings → API) is server-only — it goes
+into the Worker (step 3), never into the front-end or git.
+
+---
+
+## 2. GitHub Pages (front-end)
+
+The workflow `.github/workflows/deploy.yml` builds the static export and
+publishes it. It auto-derives the base path from the repo name.
+
+1. **Enable Pages**: repo → Settings → Pages → *Source: GitHub Actions*.
+2. **Repo variables** (Settings → Secrets and variables → **Actions → Variables**):
+   | Name | Value |
+   |------|-------|
+   | `NEXT_PUBLIC_SUPABASE_URL` | `https://<ref>.supabase.co` |
+   | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | your publishable/anon key |
+   | `NEXT_PUBLIC_API_URL` | your Worker URL (from step 3) — set after deploying it |
+   These are **public** values (they ship in the bundle); that's expected. RLS is
+   the security boundary.
+3. Push to `main` (or run the workflow manually). The site goes live at
+   `https://<user>.github.io/<repo>/`.
+
+> Only the anon/publishable key is exposed client-side — never the service_role
+> key or any Stripe/OpenRouter secret.
+
+---
+
+## 3. Cloudflare Worker (AI + Stripe + email)
+
+The Worker (`cloudflare/`) is one endpoint that serves:
+`/coach-chat`, `/generate-program` (OpenRouter), `/create-checkout`,
+`/stripe-webhook` (Stripe), and a daily cron for reminder emails (Resend).
+
+```bash
+cd cloudflare
+npm install
+npx wrangler login            # opens a browser to authorize Cloudflare
+```
+
+Edit `wrangler.toml` `[vars]` to point at your project:
+```toml
+[vars]
+OPENROUTER_MODEL = "anthropic/claude-3.5-haiku"   # any OpenRouter model id
+SUPABASE_URL     = "https://<ref>.supabase.co"
+APP_URL          = "https://<user>.github.io/<repo>"
+REMINDER_FROM    = "Apex <noreply@yourdomain.com>"
+```
+
+Set the **secrets** (never commit these — `wrangler secret put` stores them
+encrypted in Cloudflare):
+```bash
+# Required for the AI coach
+npx wrangler secret put OPENROUTER_API_KEY        # from openrouter.ai/keys
+npx wrangler secret put SUPABASE_ANON_KEY         # publishable/anon key (verifies caller JWTs)
+
+# Required only for billing + emails (optional)
+npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY # server-only DB writes for webhooks/cron
+npx wrangler secret put STRIPE_SECRET_KEY
+npx wrangler secret put STRIPE_WEBHOOK_SECRET
+npx wrangler secret put STRIPE_PRICE_SILVER       # Stripe price id for $15/mo
+npx wrangler secret put STRIPE_PRICE_GOLD         # Stripe price id for $20/mo
+npx wrangler secret put RESEND_API_KEY            # from resend.com
+```
+
+Deploy:
+```bash
+npx wrangler deploy
+```
+Wrangler prints the URL, e.g. `https://apex-api.<subdomain>.workers.dev`.
+
+**Wire the front-end to it**: set the GitHub repo variable `NEXT_PUBLIC_API_URL`
+to that URL (step 2), then re-run the Pages workflow. Verify:
+```bash
+curl https://apex-api.<subdomain>.workers.dev/health   # → {"ok":true}
+```
+
+Minimum for a working **AI coach**: `OPENROUTER_API_KEY` + `SUPABASE_ANON_KEY`
++ `wrangler deploy` + the `NEXT_PUBLIC_API_URL` variable. Everything else is
+optional.
+
+---
+
+## 4. Stripe (optional — paid plans)
+
+1. Create three prices in the Stripe dashboard (Products):
+   - **Silver** — $15/month recurring → copy its `price_…` id → `STRIPE_PRICE_SILVER`
+   - **Gold** — $20/month recurring → `STRIPE_PRICE_GOLD`
+   - *(Team $150 is currently a "Contact us" mailto — no Stripe price needed
+     unless you want it self-serve.)*
+2. **Webhook**: Developers → Webhooks → Add endpoint →
+   `https://apex-api.<subdomain>.workers.dev/stripe-webhook`, subscribe to
+   `checkout.session.completed`, `customer.subscription.updated`,
+   `customer.subscription.deleted`. Copy the signing secret → `STRIPE_WEBHOOK_SECRET`.
+3. Put the account into live mode when ready and swap the test keys for live keys.
+
+The Worker verifies the webhook signature (Web Crypto HMAC-SHA256) and writes the
+resulting tier to `subscriptions` with the service_role key.
+
+---
+
+## 5. Email reminders (optional — Resend)
+
+1. Create a Resend account + verify a sending domain, create an API key →
+   `RESEND_API_KEY`, and set `REMINDER_FROM` to an address on that domain.
+2. The Worker's cron (`[triggers] crons = ["0 8 * * *"]` in `wrangler.toml`) sends
+   daily check-in nudges, deadline reminders, and a Monday weekly summary.
+
+---
+
+## 6. Post-deploy checklist
+
+- [ ] Migrations applied (`node scripts/db-deploy.mjs`)
+- [ ] Storage buckets `videos` + `photos` created (private)
+- [ ] Auth Site URL + reset-password redirect set
+- [ ] Pages enabled + repo variables set → site loads
+- [ ] Worker deployed → `/health` returns `{"ok":true}`
+- [ ] `NEXT_PUBLIC_API_URL` set → AI coach uses the LLM (not the fallback)
+- [ ] (billing) Stripe prices + webhook set
+- [ ] (email) Resend key + domain set
+- [ ] DB password rotated + demo accounts removed before real users
+
+---
+
+## Local development
+
+```bash
+npm install
+npm run dev            # front-end at http://localhost:3000
+npm test               # unit tests (node --test via tsx)
+# Worker:
+cd cloudflare && npx wrangler dev
+```
+
+Local env for the front-end goes in `.env.local` (gitignored):
+```
+NEXT_PUBLIC_SUPABASE_URL=https://<ref>.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<anon key>
+# optional, to hit a local/remote worker:
+NEXT_PUBLIC_API_URL=http://127.0.0.1:8787
+```

@@ -1,16 +1,20 @@
 "use client";
 
 import { useEffect } from "react";
-import type { Exercise } from "@/lib/exercises";
+import { demoImplement, type Exercise } from "@/lib/exercises";
 import { ExerciseDemo } from "@/components/ExerciseDemo";
 
-// The coached content for one exercise: animated demo + cues + tempo + muscles.
+// The coached content for one exercise: demo + how-to + cues + tempo + muscles.
 export function ExerciseDetailCard({ ex, sets, reps }: { ex: Exercise; sets?: number; reps?: number }) {
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-4 sm:flex-row">
         <div className="grid h-40 w-full shrink-0 place-items-center rounded-2xl border border-white/10 bg-black/40 sm:w-40">
-          <ExerciseDemo pattern={ex.demo} className="h-36 w-28" />
+          {ex.video_url ? (
+            <video src={ex.video_url} autoPlay muted loop playsInline className="h-full w-full rounded-2xl object-cover" />
+          ) : (
+            <ExerciseDemo pattern={ex.demo} implement={demoImplement(ex)} className="h-36 w-28" />
+          )}
         </div>
         <div className="min-w-0 flex-1">
           <span className="chip text-pitch-400">{ex.category}</span>
@@ -23,6 +27,13 @@ export function ExerciseDetailCard({ ex, sets, reps }: { ex: Exercise; sets?: nu
           </div>
         </div>
       </div>
+
+      {ex.description && (
+        <div>
+          <div className="stat-label mb-1.5">How to perform it</div>
+          <p className="text-sm leading-relaxed text-slate-300">{ex.description}</p>
+        </div>
+      )}
 
       <div>
         <div className="stat-label mb-2">Coaching cues</div>

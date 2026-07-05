@@ -1,4 +1,4 @@
-import type { DemoPattern } from "@/lib/exercises";
+import type { DemoPattern, Implement } from "@/lib/exercises";
 
 // Asset-free animated demonstration: ONE stick figure whose joints are tweened
 // (SVG SMIL) between the two key positions of a movement, on a loop — so the
@@ -131,9 +131,17 @@ function Anim({ attr, a, b, dur }: { attr: string; a: number; b: number; dur: nu
   );
 }
 
-export function ExerciseDemo({ pattern, className = "" }: { pattern: DemoPattern; className?: string }) {
+export function ExerciseDemo({ pattern, implement = "none", className = "" }: { pattern: DemoPattern; implement?: Implement; className?: string }) {
   const pose = POSES[pattern] ?? POSES.squat;
   const { a, b, dur } = pose;
+
+  // Where the implement sits: on the back (squats) it tracks the neck; in the
+  // hands it tracks the mid-point of the two hands.
+  const backA = a.neck, backB = b.neck;
+  const handMidA: XY = [(a.lHand[0] + a.rHand[0]) / 2, (a.lHand[1] + a.rHand[1]) / 2 - 2];
+  const handMidB: XY = [(b.lHand[0] + b.rHand[0]) / 2, (b.lHand[1] + b.rHand[1]) / 2 - 2];
+  const barA = implement === "barbell_back" ? backA : handMidA;
+  const barB = implement === "barbell_back" ? backB : handMidB;
 
   return (
     <svg
@@ -146,6 +154,11 @@ export function ExerciseDemo({ pattern, className = "" }: { pattern: DemoPattern
         <line x1={24} y1={8} x2={76} y2={8} stroke="currentColor" strokeOpacity={0.3} strokeWidth={3} strokeLinecap="round" />
       ) : (
         <line x1={10} y1={124} x2={90} y2={124} stroke="currentColor" strokeOpacity={0.15} strokeWidth={2} />
+      )}
+
+      {/* Box for box jumps / depth drops */}
+      {implement === "box" && (
+        <rect x={62} y={104} width={30} height={20} rx={2} fill="none" stroke="currentColor" strokeOpacity={0.4} strokeWidth={3} />
       )}
 
       <g fill="none" stroke="currentColor" strokeWidth={4.5} strokeLinecap="round" strokeLinejoin="round">
@@ -173,6 +186,32 @@ export function ExerciseDemo({ pattern, className = "" }: { pattern: DemoPattern
             <Anim attr="cy" a={a.ball[1]} b={b.ball[1]} dur={dur} />
           </circle>
         )}
+
+        {/* Barbell — a bar with plates, tracking the back or the hands */}
+        {(implement === "barbell_back" || implement === "barbell_hands") && (
+          <>
+            <line x1={barA[0] - 16} y1={barA[1]} x2={barA[0] + 16} y2={barA[1]} strokeWidth={3}>
+              <Anim attr="x1" a={barA[0] - 16} b={barB[0] - 16} dur={dur} />
+              <Anim attr="y1" a={barA[1]} b={barB[1]} dur={dur} />
+              <Anim attr="x2" a={barA[0] + 16} b={barB[0] + 16} dur={dur} />
+              <Anim attr="y2" a={barA[1]} b={barB[1]} dur={dur} />
+            </line>
+            {[-16, 16].map((dx) => (
+              <rect key={dx} x={barA[0] + dx - 2} y={barA[1] - 6} width={4} height={12} rx={1} fill="currentColor" stroke="none">
+                <Anim attr="x" a={barA[0] + dx - 2} b={barB[0] + dx - 2} dur={dur} />
+                <Anim attr="y" a={barA[1] - 6} b={barB[1] - 6} dur={dur} />
+              </rect>
+            ))}
+          </>
+        )}
+
+        {/* Dumbbells at each hand */}
+        {implement === "dumbbells" && ([["lHand", a.lHand, b.lHand], ["rHand", a.rHand, b.rHand]] as const).map(([k, pa, pb]) => (
+          <rect key={k} x={pa[0] - 4} y={pa[1] - 3} width={8} height={6} rx={1} fill="currentColor" stroke="none">
+            <Anim attr="x" a={pa[0] - 4} b={pb[0] - 4} dur={dur} />
+            <Anim attr="y" a={pa[1] - 3} b={pb[1] - 3} dur={dur} />
+          </rect>
+        ))}
       </g>
     </svg>
   );

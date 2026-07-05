@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/lib/auth";
-import { EXERCISES, EXERCISE_CATEGORIES, SPORTS, getExercisesForSport, type Exercise, type ExerciseCategory, type SportId } from "@/lib/exercises";
+import { EXERCISES, EXERCISE_CATEGORIES, SPORTS, getExercisesForSport, demoImplement, rowToExercise, type Exercise, type ExerciseCategory, type SportId } from "@/lib/exercises";
 import { ExerciseDemo } from "@/components/ExerciseDemo";
 import { ExerciseModal } from "@/components/ExerciseDetail";
 
@@ -12,21 +12,27 @@ export default function LibraryPage() {
   const [sport, setSport] = useState<SportId | "all">("all");
   const [cat, setCat] = useState<ExerciseCategory | "All">("All");
   const [open, setOpen] = useState<Exercise | null>(null);
+  const [custom, setCustom] = useState<Exercise[]>([]);
 
-  // Default the filter to the athlete's chosen sport on first load.
+  // Default to the athlete's sport, and pull in any coach-authored team exercises.
   useEffect(() => {
     let active = true;
-    createClient().from("profiles").select("sport").eq("id", user.id).maybeSingle().then(({ data }) => {
+    const supabase = createClient();
+    supabase.from("profiles").select("sport").eq("id", user.id).maybeSingle().then(({ data }) => {
       const s = (data as { sport?: string } | null)?.sport as SportId | undefined;
       if (active && s && SPORTS.some((sp) => sp.id === s)) setSport(s);
+    });
+    supabase.from("custom_exercises").select("*").then(({ data }) => {
+      if (active && data) setCustom(data.map(rowToExercise));
     });
     return () => { active = false; };
   }, [user.id]);
 
   const list = useMemo(() => {
-    const bySport = getExercisesForSport(sport);
+    const all = [...custom, ...getExercisesForSport(sport)];
+    const bySport = sport === "all" ? all : all.filter((e) => !e.sports || e.sports.includes(sport));
     return cat === "All" ? bySport : bySport.filter((e) => e.category === cat);
-  }, [sport, cat]);
+  }, [sport, cat, custom]);
 
   return (
     <div className="animate-fade-up space-y-5">
@@ -57,7 +63,7 @@ export default function LibraryPage() {
             className="card card-hover flex items-center gap-4 p-4 text-left"
           >
             <span className="grid h-20 w-16 shrink-0 place-items-center rounded-2xl border border-white/10 bg-black/40">
-              <ExerciseDemo pattern={ex.demo} className="h-16 w-12" />
+              <ExerciseDemo pattern={ex.demo} implement={demoImplement(ex)} className="h-16 w-12" />
             </span>
             <span className="min-w-0 flex-1">
               <span className="chip text-pitch-400">{ex.category}</span>

@@ -35,6 +35,9 @@ export interface Exercise {
   cues: string[];       // 2–3 concise coaching cues
   why: string;          // one line: why it helps the athlete
   sports?: SportId[];   // omitted = general (applies to every sport)
+  description?: string; // fuller how-to (merged from DESCRIPTIONS below)
+  custom?: boolean;     // true for coach-authored team exercises
+  video_url?: string;   // optional real demo clip (falls back to the animation)
 }
 
 export const EXERCISES: Exercise[] = [
@@ -237,6 +240,55 @@ export const EXERCISES: Exercise[] = [
     sports: ["running", "football"] },
 ];
 
+// Fuller "how to perform it" write-ups — setup, execution, what to feel and the
+// most common mistake. Merged onto EXERCISES below so components can show depth.
+const DESCRIPTIONS: Record<string, string> = {
+  ladder_quickfeet: "Set an agility ladder flat on the ground and work through patterns (one foot in each, two in each, lateral in-in-out) as fast as you can stay clean. Keep your weight on the balls of the feet, arms pumping in rhythm, and eyes up. It's a coordination and foot-speed drill, not a conditioning grind — quality of contact beats raw speed.",
+  reactive_mirror: "Face a partner a couple of metres away; one leads with short lateral and forward-back movements, the other mirrors as fast as possible. Stay in a low athletic stance and react — never pre-plan. This trains the unscripted change-of-direction you actually use in a game, where you respond to an opponent rather than a cone.",
+  lateral_shuffle: "Set two gates ~6–10m apart. Drop into a low stance, hips back and chest up, and shuffle sideways pushing hard off the outside foot without clicking your heels together. Stay square and low the whole way. The goal is a strong lateral push-off, which is exactly the position that protects the knee when you cut.",
+  cone_weave: "Weave a ball through a line of cones using small, frequent touches with both feet and the inside/outside of each foot. Keep the ball close and your head up to scan between cones. Build speed only as far as your control allows — the moment touches get loose, slow down.",
+  t_drill: "Sprint forward to the top cone, shuffle laterally to one side, back across to the other, back to the middle, then backpedal to the start — forming a T. It blends acceleration, lateral movement, and deceleration. Decelerate under control before each change of direction rather than crashing into the turn.",
+  a_skips: "A marching/skipping drill: drive one knee up to hip height, snap the foot down under your hip, and stay tall with the ribs down. It grooves the coordination and posture of good sprinting. Punch the ground beneath you — don't reach the foot out in front, which causes braking.",
+  resisted_sprint: "Sprint against a band, sled or partner resistance for the first 10–15m. The extra load forces a strong forward lean and powerful, deliberate leg drive. Keep an aggressive arm action and push the ground back and down. This overloads the acceleration phase — the first few steps that win races to the ball.",
+  flying_sprints: "Build up over ~20m, then hit near-maximal speed over a 'flying' 20m zone before easing off. The rolling start lets you reach top speed relaxed rather than straining from a standstill. Keep the face and shoulders loose and let the legs cycle underneath you. Take full recovery between reps — this is a quality speed session, not conditioning.",
+  pogo_hops: "Small, continuous vertical hops keeping the ankles stiff like a pogo stick, minimising ground-contact time. You're training tendon stiffness and reactivity, not jump height. Land and leave the ground quickly; if you sink into a squat between hops you've lost the point.",
+  box_jumps: "From an athletic stance, load the hips and explode up onto a box, landing soft and quiet in a quarter-squat with full hip extension at take-off. Step down (don't jump down) to save the joints. The box just protects the landing — the aim is maximal, controlled vertical power off the floor.",
+  depth_drop: "Step off a low box, land on the balls of the feet, and immediately explode into a sprint or jump with minimal ground time. This is a true plyometric that trains reactive strength — turning braking force into propulsion. Keep the pause between landing and take-off as short as possible. Advanced; build a base of strength first.",
+  bulgarian_split: "Rear foot elevated on a bench, drop straight down into a lunge keeping a vertical shin over the front foot, then drive up through the whole front foot. It builds single-leg strength and ruthlessly exposes left/right imbalances. Control the descent — don't just drop and bounce out of the bottom.",
+  single_leg_rdl: "Balancing on one leg, hinge at the hip and lower a weight toward the floor with a flat back, feeling the hamstring of the standing leg lengthen, then return under control. It builds hamstring strength through range plus single-leg balance. Move slowly — the balance challenge is part of the training.",
+  nordic_curl: "Kneel with your ankles anchored and lower your torso toward the floor as slowly as you can, resisting with the hamstrings, then catch yourself with your hands and push back up. It's the gold-standard eccentric hamstring exercise and one of the few proven to cut hamstring-strain risk. Only lower as far as you can control.",
+  copenhagen: "Side plank with the top leg supported on a bench, squeezing that leg down into the bench while holding the hips high in a straight line. It strengthens the adductors/groin — a very common footballer injury site. Start with the knee supported and progress to the ankle as you get stronger.",
+  band_lateral_walk: "Loop a band around the legs (above the knees or at the ankles), drop into a half-squat, and take small controlled steps sideways keeping constant tension on the band and the knees tracking out over the toes. It wakes up the glute medius so the knee stops collapsing inward — a direct fix for valgus.",
+  spanish_squat: "Loop a stout band behind the knees and anchor it in front; sit back against the band into a squat with the shins vertical and hold. It loads the quads and patellar tendon with almost no joint shear, so it's ideal for cranky or rehabbing knees. Hold the isometric and breathe through the burn.",
+  bike_intervals: "On a stationary bike, alternate hard efforts with easy spins (e.g. 30s hard / 60s easy). It builds aerobic and anaerobic capacity with zero impact, making it perfect for conditioning while managing sore joints or during return-to-play. Keep the torso quiet and drive the effort through the legs.",
+  tempo_runs: "Run repeats at a controlled ~75% effort with short recoveries, staying smooth and relaxed with a repeatable split every rep. Tempo work extends your aerobic base so you can repeat sprints late in games without impact-heavy volume. If you're straining or the splits fall off, you're going too hard.",
+  dribbling_grid: "In a small grid, keep a ball moving continuously using all surfaces of both feet, changing direction and manipulating the ball in tight space with your head up to scan. It builds ball mastery under mild fatigue and pressure. Prioritise clean, deliberate touches over flashy speed.",
+  passing_wall: "Pass a ball against a wall and control the return, working both feet and varying distance and weight. Take your first touch out of your feet into space and open your body to receive. It's an endlessly repeatable solo drill for a clean first touch and passing rhythm.",
+  back_squat: "With the bar racked on your upper back, brace your core, break at the hips and knees together, and descend to at least parallel keeping the knees tracking over the toes, then drive the floor away to stand. It's the foundational lower-body strength lift with carryover to every sport. Brace hard before each rep and don't let the chest cave forward.",
+  front_squat: "Rack the bar on the front of the shoulders with high elbows, then squat keeping the torso as upright as possible and elbows pointing forward the whole way. The front-loaded position hammers the quads and demands a strong, upright trunk. If your elbows drop, the bar rolls forward — keep them high.",
+  deadlift: "Set up with the bar over mid-foot, grip it, take the slack out of the bar, then push the floor away with hips and chest rising together and a neutral spine throughout. It's total-body pulling strength and posterior-chain power. Reset every rep — don't bounce it off the floor with a rounded back.",
+  hip_thrust: "Upper back on a bench, barbell across the hips, chin tucked and ribs down; drive through the heels to full hip extension and squeeze the glutes hard at the top, then lower under control. It directly builds the glute power behind sprinting and jumping. Don't hyperextend the lower back to fake more range — the movement is at the hips.",
+  bench_press: "Lying on a bench, retract and pin your shoulder blades, lower the bar under control to the mid-chest, then press up while driving your feet into the floor. It's the primary upper-body pressing lift — valuable for contact and throwing sports. Keep the shoulder blades tucked; letting them roll forward is where shoulders get cranky.",
+  overhead_press: "Standing tall with the bar at the shoulders, brace the core and squeeze the glutes, then press overhead in a path close to the face and finish with the biceps by the ears. It builds pressing power and shoulder stability. Don't lean back excessively — if you can't press it with a braced trunk, drop the weight.",
+  pull_up: "From a dead hang, pull until your chest approaches the bar, lead with the chest rather than the chin, then lower all the way under control. It's the best bodyweight builder of back and grip strength. Own the lower — no kipping or half-reps. Use a band or the lat pulldown to build up if you can't yet.",
+  lat_pulldown: "Seated at a cable, drive the elbows down and back to pull the bar to the upper chest with a tall chest and slight lean, then control the weight back up. It builds back width and pulling strength and is a great pull-up regression. Lead with the elbows, not the hands, and don't heave with the whole body.",
+  barbell_row: "Hinge to roughly 45° with a flat back, let the bar hang, then row it to the lower ribs squeezing the shoulder blades together, and lower under control. It balances all the pressing with heavy horizontal pulling. Keep the torso angle fixed — standing up to move the weight turns it into a shrug.",
+  power_clean: "From the floor, accelerate the bar with a violent hip extension, shrug and pull yourself under it fast, and catch it on the front of the shoulders in a strong quarter-squat. It trains rate of force development — raw explosive power. It's technical; learn it light with a coach before adding load.",
+  goblet_squat: "Hold a dumbbell or kettlebell at your chest and squat down until your elbows brush the inside of your knees, sitting tall and deep, then stand. The front load keeps you upright and teaches bracing and depth. It's a joint-friendly squat and a great place to build the pattern before barbell work.",
+  dumbbell_press: "Seated or standing, press two dumbbells overhead with neutral, stacked wrists and press without flaring the ribs, using a full range each rep. The independent dumbbells build shoulder size and stability with a friendlier joint path than a barbell. Control the lowering — don't let the weights crash down.",
+  calf_raise: "Standing (optionally loaded), lower into a full stretch at the bottom, then rise all the way onto the big toe and pause at the top before lowering slowly. Stronger, stiffer calves protect the Achilles and add spring to every stride and jump. Use a full range and a slow lower — bouncing wastes the set.",
+  farmers_carry: "Pick up a heavy dumbbell or kettlebell in each hand and walk with tall posture, ribs down, crushing the handles, taking small quick quiet steps. It's brutally simple full-body and grip strength that carries over everywhere. Don't let the shoulders shrug up or the torso lean — stay stacked and walk.",
+  tackle_technique: "Rehearse the tackle at controlled intensity on a bag or a compliant partner: track your man, get your head to the correct side (cheek-to-cheek, head behind), make contact with a low body height, drive through, and wrap and squeeze. Safe, dominant technique is the core rugby skill — grooving it slowly first is what makes it reliable and safe under fatigue.",
+  scrum_drive: "Against a scrum machine or sled, set a strong body position — flat back, hips below shoulders — bind tight, engage as a unit, and drive through the balls of the feet. It builds the low, powerful drive position for scrummaging. The position is everything: never drive with a rounded back or high hips.",
+  broad_jump: "From a standing start, load the hips and swing the arms back, then explode forward and up jumping for maximum distance and sticking the landing soft. It develops horizontal power that transfers directly to acceleration and contact. Reset fully between reps — it's a quality power drill, not conditioning.",
+  vertical_jump: "From an athletic stance, make a quick counter-movement dip and immediately explode straight up with full triple extension of the ankles, knees and hips, reaching at the peak. It directly trains your standing vertical leap. Keep the dip shallow and fast — a slow, deep dip leaks power.",
+  defensive_slides: "In a low, wide defensive stance, slide laterally by pushing off the trailing foot without ever crossing your feet, staying square to an imaginary attacker. It builds the lateral quickness and stance endurance for on-ball defence. Stay low the whole time — standing up between slides is the most common fault.",
+  hill_sprints: "Sprint up a moderate hill for 8–12 seconds with aggressive arm drive and short, powerful ground contacts, then walk down to recover. The incline naturally builds a forward lean and reduces impact versus flat sprinting, making it a safer way to develop sprint power. Keep the efforts short and the recovery full.",
+  stride_outs: "Over 60–80m, gradually build to about 90% effort with long, relaxed strides, then ease off — you should feel like you're floating, not straining. Stride-outs prime fast running mechanics and are ideal as a pre-session primer or a gentle speed day that avoids the strain of all-out sprints.",
+};
+
+for (const e of EXERCISES) e.description = DESCRIPTIONS[e.id] ?? e.why;
+
 const BY_ID: Record<string, Exercise> = Object.fromEntries(EXERCISES.map((e) => [e.id, e]));
 
 export function getExercise(id: string): Exercise | null {
@@ -249,6 +301,20 @@ export function getExerciseByName(name: string): Exercise | null {
   return BY_NAME[name.trim().toLowerCase()] ?? null;
 }
 
+export type Implement = "barbell_back" | "barbell_hands" | "dumbbells" | "box" | "none";
+
+// Which implement the animated demo should draw, so lifts read as lifts.
+export function demoImplement(ex: Exercise): Implement {
+  switch (ex.id) {
+    case "back_squat": case "front_squat": return "barbell_back";
+    case "deadlift": case "barbell_row": case "bench_press":
+    case "overhead_press": case "power_clean": return "barbell_hands";
+    case "dumbbell_press": case "farmers_carry": return "dumbbells";
+    case "box_jumps": case "depth_drop": return "box";
+    default: return "none";
+  }
+}
+
 // Exercises for a sport = its sport-specific drills (first) plus all general ones.
 export function getExercisesForSport(sport: SportId | "all"): Exercise[] {
   if (sport === "all") return EXERCISES;
@@ -259,3 +325,35 @@ export function getExercisesForSport(sport: SportId | "all"): Exercise[] {
 
 export const EXERCISE_CATEGORIES: ExerciseCategory[] =
   ["Speed", "Agility", "Power", "Strength", "Recovery", "Endurance", "Skill"];
+
+// Movement patterns a coach can pick when authoring a team exercise.
+export const DEMO_PATTERNS: { id: DemoPattern; label: string }[] = [
+  { id: "squat", label: "Squat" }, { id: "hinge", label: "Hinge / deadlift" },
+  { id: "lunge", label: "Lunge / split" }, { id: "jump", label: "Jump / plyometric" },
+  { id: "press", label: "Press (overhead)" }, { id: "pull", label: "Pull / pull-up" },
+  { id: "plank", label: "Plank / core" }, { id: "run", label: "Run / sprint" },
+  { id: "lateral", label: "Lateral / shuffle" }, { id: "ball", label: "Ball skill" },
+  { id: "bike", label: "Bike / cardio" },
+];
+
+// Convert a coach's custom_exercises row into the shared Exercise shape.
+export function rowToExercise(r: {
+  id: string; name: string; category?: string; sport?: string | null; demo?: string;
+  equipment?: string | null; muscles?: string[] | null; cues?: string[] | null;
+  why?: string | null; description?: string | null;
+}): Exercise {
+  return {
+    id: `custom_${r.id}`,
+    name: r.name,
+    category: (r.category as ExerciseCategory) ?? "Strength",
+    demo: (r.demo as DemoPattern) ?? "squat",
+    equipment: r.equipment || "—",
+    muscles: r.muscles ?? [],
+    tempo: "Coach-set",
+    cues: r.cues ?? [],
+    why: r.why || "Added by your coach.",
+    description: r.description || undefined,
+    sports: r.sport ? [r.sport as SportId] : undefined,
+    custom: true,
+  };
+}
