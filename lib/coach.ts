@@ -21,6 +21,61 @@ export const GOALS: { id: GoalType; label: string; blurb: string }[] = [
   { id: "skill", label: "Ball skill", blurb: "Control, dribbling, passing" },
 ];
 
+// Sport-aware goal presentation: which goals to surface (and in what order),
+// with sport-specific labels. The underlying GoalType ids are unchanged so the
+// program engine works identically — only the copy/ordering adapts.
+type GoalOverride = { order: GoalType[]; labels?: Partial<Record<GoalType, { label: string; blurb: string }>> };
+
+const SPORT_GOALS: Record<string, GoalOverride> = {
+  football: { order: ["speed", "agility", "strength", "endurance", "skill", "injury_recovery"] },
+  rugby: {
+    order: ["strength", "speed", "endurance", "agility", "skill", "injury_recovery"],
+    labels: {
+      strength: { label: "Strength & collision power", blurb: "Force for contact, scrums & tackles" },
+      skill: { label: "Contact & handling", blurb: "Tackling, rucking, ball handling" },
+    },
+  },
+  weightlifting: {
+    order: ["strength", "skill", "endurance", "injury_recovery"],
+    labels: {
+      strength: { label: "Maximal strength", blurb: "Build your squat, bench & deadlift 1RM" },
+      skill: { label: "Lifting technique", blurb: "Groove the main-lift patterns" },
+      endurance: { label: "Work capacity", blurb: "Conditioning between heavy sessions" },
+    },
+  },
+  gym: {
+    order: ["strength", "endurance", "injury_recovery"],
+    labels: {
+      strength: { label: "Strength & muscle", blurb: "Get stronger and build muscle" },
+      endurance: { label: "Conditioning", blurb: "Fat loss & aerobic fitness" },
+    },
+  },
+  basketball: {
+    order: ["strength", "speed", "agility", "endurance", "skill", "injury_recovery"],
+    labels: {
+      strength: { label: "Vertical & power", blurb: "Jump higher, explode off the floor" },
+      skill: { label: "Handling & finishing", blurb: "Ball control and court skills" },
+    },
+  },
+  running: {
+    order: ["endurance", "speed", "injury_recovery", "strength"],
+    labels: {
+      strength: { label: "Runner's strength", blurb: "Durability & economy for the legs" },
+    },
+  },
+};
+
+/** Goals to show for a sport, ordered and relabelled. Falls back to all GOALS. */
+export function goalsForSport(sport: string | null | undefined): { id: GoalType; label: string; blurb: string }[] {
+  const base = new Map(GOALS.map((g) => [g.id, g]));
+  const cfg = SPORT_GOALS[sport ?? "football"] ?? SPORT_GOALS.football;
+  return cfg.order.map((id) => {
+    const o = cfg.labels?.[id];
+    const b = base.get(id)!;
+    return { id, label: o?.label ?? b.label, blurb: o?.blurb ?? b.blurb };
+  });
+}
+
 interface DrillDef {
   id: string;
   name: string;

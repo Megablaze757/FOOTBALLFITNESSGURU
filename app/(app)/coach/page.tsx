@@ -5,9 +5,10 @@ import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/lib/auth";
 import { useAsync } from "@/lib/use-async";
 import {
-  GOALS, buildProgram, recommendDrills, analyzeProgress, painByArea,
+  GOALS, goalsForSport, buildProgram, recommendDrills, analyzeProgress, painByArea,
   type GoalType, type ProgramPlan,
 } from "@/lib/coach";
+import type { SportId } from "@/lib/exercises";
 import { assessReadiness } from "@/lib/readiness";
 import { invokeAI } from "@/lib/api";
 import { METRIC_CATALOG, metricDef, benchmarkProgress } from "@/lib/benchmarks";
@@ -66,12 +67,13 @@ export default function CoachPage() {
   const { data, loading, reload } = useAsync(async () => {
     const supabase = createClient();
     const since = new Date(Date.now() - 30 * 86400_000).toISOString().slice(0, 10);
-    const [{ data: program }, { data: checkIn }, { data: training }, { data: checkHist }, { data: benches }] = await Promise.all([
+    const [{ data: program }, { data: checkIn }, { data: training }, { data: checkHist }, { data: benches }, { data: profile }] = await Promise.all([
       supabase.from("programs").select("*").eq("user_id", user.id).eq("status", "active").order("created_at", { ascending: false }).limit(1).maybeSingle(),
       supabase.from("daily_check_ins").select("*").eq("user_id", user.id).eq("check_in_date", today).maybeSingle(),
       supabase.from("training_logs").select("*").eq("user_id", user.id).gte("log_date", since).order("log_date", { ascending: true }),
       supabase.from("daily_check_ins").select("check_in_date, pain_map").eq("user_id", user.id).gte("check_in_date", since).order("check_in_date", { ascending: true }),
       supabase.from("strength_benchmarks").select("*").eq("user_id", user.id).order("test_date", { ascending: false }).limit(20),
+      supabase.from("profiles").select("sport").eq("id", user.id).maybeSingle(),
     ]);
     return {
       program: (program ?? null) as Program | null,
@@ -79,13 +81,14 @@ export default function CoachPage() {
       training: (training ?? []) as TrainingLog[],
       checkHist: (checkHist ?? []) as { check_in_date: string; pain_map: Record<string, number> | null }[],
       latestBench: latestBenchmarks((benches ?? []) as StrengthBenchmark[]),
+      sport: ((profile as { sport?: string } | null)?.sport ?? "football") as SportId,
     };
   }, [user.id]);
 
   if (loading) return <div className="card mt-6 h-80 animate-pulse" />;
 
   if (!data?.program) {
-    return <GoalBuilder painMap={data?.checkIn?.pain_map ?? {}} latestBench={data?.latestBench ?? {}} userId={user.id} onCreated={reload} />;
+    return <GoalBuilder painMap={data?.checkIn?.pain_map ?? {}} latestBench={data?.latestBench ?? {}} sport={data?.sport ?? "football"} userId={user.id} onCreated={reload} />;
   }
 
   return (
@@ -104,7 +107,8 @@ export default function CoachPage() {
 
 // --- Goal builder -----------------------------------------------------------
 
-function GoalBuilder({ painMap, latestBench, userId, onCreated }: { painMap: Record<string, number>; latestBench: Record<string, number>; userId: string; onCreated: () => void }) {
+function GoalBuilder({ painMap, latestBench, sport, userId, onCreated }: { painMap: Record<string, number>; latestBench: Record<string, number>; sport: SportId; userId: string; onCreated: () => void }) {
+  const goals = goalsForSport(sport);
   const [goal, setGoal] = useState<GoalType | null>(null);
   const [inSeason, setInSeason] = useState(false);
   const [targetDate, setTargetDate] = useState("");
@@ -163,7 +167,7 @@ function GoalBuilder({ painMap, latestBench, userId, onCreated }: { painMap: Rec
       )}
 
       <div className="grid grid-cols-2 gap-3">
-        {GOALS.map((g) => (
+        {goals.map((g) => (
           <button
             key={g.id}
             onClick={() => setGoal(g.id)}

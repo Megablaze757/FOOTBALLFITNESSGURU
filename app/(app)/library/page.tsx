@@ -1,14 +1,27 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { useCurrentUser } from "@/lib/auth";
 import { EXERCISES, EXERCISE_CATEGORIES, SPORTS, getExercisesForSport, type Exercise, type ExerciseCategory, type SportId } from "@/lib/exercises";
 import { ExerciseDemo } from "@/components/ExerciseDemo";
 import { ExerciseModal } from "@/components/ExerciseDetail";
 
 export default function LibraryPage() {
+  const user = useCurrentUser();
   const [sport, setSport] = useState<SportId | "all">("all");
   const [cat, setCat] = useState<ExerciseCategory | "All">("All");
   const [open, setOpen] = useState<Exercise | null>(null);
+
+  // Default the filter to the athlete's chosen sport on first load.
+  useEffect(() => {
+    let active = true;
+    createClient().from("profiles").select("sport").eq("id", user.id).maybeSingle().then(({ data }) => {
+      const s = (data as { sport?: string } | null)?.sport as SportId | undefined;
+      if (active && s && SPORTS.some((sp) => sp.id === s)) setSport(s);
+    });
+    return () => { active = false; };
+  }, [user.id]);
 
   const list = useMemo(() => {
     const bySport = getExercisesForSport(sport);

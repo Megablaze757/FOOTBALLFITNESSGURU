@@ -1,7 +1,23 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { recommendDrills, buildProgram, analyzeProgress, painByArea } from "./coach";
+import { recommendDrills, buildProgram, analyzeProgress, painByArea, goalsForSport } from "./coach";
 import type { TrainingLog } from "./types";
+
+test("goalsForSport tailors goals per sport", () => {
+  const football = goalsForSport("football");
+  assert.equal(football[0].id, "speed");
+
+  const wl = goalsForSport("weightlifting");
+  assert.equal(wl[0].id, "strength");
+  assert.match(wl[0].label, /Maximal strength/);
+  assert.ok(!wl.some((g) => g.id === "agility")); // weightlifting hides agility
+
+  const rugby = goalsForSport("rugby");
+  assert.equal(rugby[0].id, "strength");
+  assert.match(rugby.find((g) => g.id === "skill")!.label, /Contact/);
+
+  assert.equal(goalsForSport(null).length, 6); // unknown → full football set
+});
 
 test("painByArea takes the worst per area, ignoring side", () => {
   const p = painByArea({ knee_left: 7, knee_right: 3, ankle: 2 });
