@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/lib/auth";
 import { useAsync } from "@/lib/use-async";
 import { assessReadiness } from "@/lib/readiness";
+import { TeamExercises } from "@/components/TeamExercises";
 import type { DailyCheckIn, Profile, Program } from "@/lib/types";
 
 interface AthleteRow {
@@ -119,6 +120,8 @@ export default function SquadPage() {
           ))}
         </ul>
       )}
+
+      <TeamExercises coachId={user.id} />
     </div>
   );
 }

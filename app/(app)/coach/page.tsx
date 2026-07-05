@@ -6,7 +6,8 @@ import { useCurrentUser } from "@/lib/auth";
 import { useAsync } from "@/lib/use-async";
 import {
   GOALS, goalsForSport, buildProgram, recommendDrills, analyzeProgress, painByArea,
-  type GoalType, type ProgramPlan,
+  FOCI, positionsForSport,
+  type GoalType, type ProgramPlan, type TrainingFocus,
 } from "@/lib/coach";
 import type { SportId } from "@/lib/exercises";
 import { assessReadiness } from "@/lib/readiness";
@@ -73,22 +74,35 @@ export default function CoachPage() {
       supabase.from("training_logs").select("*").eq("user_id", user.id).gte("log_date", since).order("log_date", { ascending: true }),
       supabase.from("daily_check_ins").select("check_in_date, pain_map").eq("user_id", user.id).gte("check_in_date", since).order("check_in_date", { ascending: true }),
       supabase.from("strength_benchmarks").select("*").eq("user_id", user.id).order("test_date", { ascending: false }).limit(20),
-      supabase.from("profiles").select("sport").eq("id", user.id).maybeSingle(),
+      supabase.from("profiles").select("sport, position, training_focus").eq("id", user.id).maybeSingle(),
     ]);
+    const p = profile as { sport?: string; position?: string; training_focus?: string } | null;
     return {
       program: (program ?? null) as Program | null,
       checkIn: (checkIn ?? null) as DailyCheckIn | null,
       training: (training ?? []) as TrainingLog[],
       checkHist: (checkHist ?? []) as { check_in_date: string; pain_map: Record<string, number> | null }[],
       latestBench: latestBenchmarks((benches ?? []) as StrengthBenchmark[]),
-      sport: ((profile as { sport?: string } | null)?.sport ?? "football") as SportId,
+      sport: (p?.sport ?? "football") as SportId,
+      position: p?.position ?? "",
+      focus: (p?.training_focus ?? "performance") as TrainingFocus,
     };
   }, [user.id]);
 
   if (loading) return <div className="card mt-6 h-80 animate-pulse" />;
 
   if (!data?.program) {
-    return <GoalBuilder painMap={data?.checkIn?.pain_map ?? {}} latestBench={data?.latestBench ?? {}} sport={data?.sport ?? "football"} userId={user.id} onCreated={reload} />;
+    return (
+      <GoalBuilder
+        painMap={data?.checkIn?.pain_map ?? {}}
+        latestBench={data?.latestBench ?? {}}
+        sport={data?.sport ?? "football"}
+        initialPosition={data?.position ?? ""}
+        initialFocus={data?.focus ?? "performance"}
+        userId={user.id}
+        onCreated={reload}
+      />
+    );
   }
 
   return (
@@ -100,6 +114,9 @@ export default function CoachPage() {
       userId={user.id}
       today={today}
       latestBench={data.latestBench}
+      sport={data.sport}
+      focus={data.focus}
+      position={data.position}
       onChange={reload}
     />
   );
@@ -107,9 +124,12 @@ export default function CoachPage() {
 
 // --- Goal builder -----------------------------------------------------------
 
-function GoalBuilder({ painMap, latestBench, sport, userId, onCreated }: { painMap: Record<string, number>; latestBench: Record<string, number>; sport: SportId; userId: string; onCreated: () => void }) {
+function GoalBuilder({ painMap, latestBench, sport, initialPosition, initialFocus, userId, onCreated }: { painMap: Record<string, number>; latestBench: Record<string, number>; sport: SportId; initialPosition: string; initialFocus: TrainingFocus; userId: string; onCreated: () => void }) {
   const goals = goalsForSport(sport);
+  const positions = positionsForSport(sport);
   const [goal, setGoal] = useState<GoalType | null>(null);
+  const [position, setPosition] = useState(initialPosition);
+  const [focus, setFocus] = useState<TrainingFocus>(initialFocus);
   const [inSeason, setInSeason] = useState(false);
   const [targetDate, setTargetDate] = useState("");
   const [metric, setMetric] = useState("");
@@ -130,13 +150,15 @@ function GoalBuilder({ painMap, latestBench, sport, userId, onCreated }: { painM
     // local engine (works offline / on Pages).
     let plan: ProgramPlan;
     try {
-      const data = await invokeAI<{ plan?: ProgramPlan }>("generate-program", { goal, pain_map: painMap, notes, in_season: inSeason });
+      const data = await invokeAI<{ plan?: ProgramPlan }>("generate-program", { goal, pain_map: painMap, notes, in_season: inSeason, sport, position, focus });
       if (!data?.plan) throw new Error("fallback");
       plan = data.plan;
     } catch {
-      plan = buildProgram({ goal, painMap, isInSeason: inSeason });
+      plan = buildProgram({ goal, painMap, isInSeason: inSeason, sport, position, focus });
     }
 
+    // Remember the athlete's position + focus for next time.
+    await supabase.from("profiles").update({ position: position || null, training_focus: focus }).eq("id", userId);
     // One active program at a time.
     await supabase.from("programs").update({ status: "archived" }).eq("user_id", userId).eq("status", "active");
     const baseline = metric ? latestBench[metric] ?? null : null;
@@ -157,7 +179,7 @@ function GoalBuilder({ painMap, latestBench, sport, userId, onCreated }: { painM
     <div className="animate-fade-up space-y-5">
       <header>
         <h1 className="text-3xl font-extrabold tracking-tight">AI Coach</h1>
-        <p className="mt-1 text-sm text-slate-400">Pick a goal — I&apos;ll build a program around your body.</p>
+        <p className="mt-1 text-sm text-slate-400">A few quick questions and I&apos;ll build a program around you.</p>
       </header>
 
       {sore.length > 0 && (
@@ -166,8 +188,45 @@ function GoalBuilder({ painMap, latestBench, sport, userId, onCreated }: { painM
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-3">
-        {goals.map((g) => (
+      {/* Position / event */}
+      {positions.length > 0 && (
+        <div>
+          <span className="field-label">Your position / event</span>
+          <div className="flex flex-wrap gap-2">
+            {positions.map((p) => (
+              <button
+                key={p}
+                onClick={() => setPosition(p)}
+                className={`rounded-full border px-3 py-1.5 text-sm transition ${position === p ? "border-pitch-400/50 bg-pitch-400/10 text-pitch-400" : "border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.06]"}`}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Training focus */}
+      <div>
+        <span className="field-label">What are you training for?</span>
+        <div className="grid grid-cols-2 gap-2">
+          {FOCI.map((f) => (
+            <button
+              key={f.id}
+              onClick={() => setFocus(f.id)}
+              className={`card p-3 text-left transition ${focus === f.id ? "ring-2 ring-pitch-400/70 shadow-glow" : "card-hover"}`}
+            >
+              <div className="text-sm font-bold text-slate-100">{f.label}</div>
+              <div className="mt-0.5 text-xs text-slate-400">{f.blurb}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <span className="field-label">Your main goal</span>
+        <div className="grid grid-cols-2 gap-3">
+          {goals.map((g) => (
           <button
             key={g.id}
             onClick={() => setGoal(g.id)}
@@ -177,6 +236,7 @@ function GoalBuilder({ painMap, latestBench, sport, userId, onCreated }: { painM
             <div className="mt-0.5 text-xs text-slate-400">{g.blurb}</div>
           </button>
         ))}
+        </div>
       </div>
 
       <SeasonToggle inSeason={inSeason} onChange={setInSeason} />
@@ -247,11 +307,12 @@ function SeasonToggle({ inSeason, onChange }: { inSeason: boolean; onChange: (v:
 // --- Active program ---------------------------------------------------------
 
 function ActiveProgram({
-  program, checkIn, training, checkHist, userId, today, latestBench, onChange,
+  program, checkIn, training, checkHist, userId, today, latestBench, sport, focus, position, onChange,
 }: {
   program: Program; checkIn: DailyCheckIn | null; training: TrainingLog[];
   checkHist: { check_in_date: string; pain_map: Record<string, number> | null }[];
-  userId: string; today: string; latestBench: Record<string, number>; onChange: () => void;
+  userId: string; today: string; latestBench: Record<string, number>;
+  sport: SportId; focus: TrainingFocus; position: string; onChange: () => void;
 }) {
   const plan = program.plan;
   const goal = program.goal_type as GoalType;
@@ -291,7 +352,7 @@ function ActiveProgram({
     setSwitching(true);
     const supabase = createClient();
     const nextSeason = !program.in_season;
-    const newPlan = buildProgram({ goal, painMap, isInSeason: nextSeason });
+    const newPlan = buildProgram({ goal, painMap, isInSeason: nextSeason, sport, focus, position });
     await supabase.from("programs").update({ plan: newPlan, in_season: nextSeason }).eq("id", program.id);
     setSwitching(false);
     onChange();
@@ -328,7 +389,7 @@ function ActiveProgram({
     setAdvancing(true);
     const supabase = createClient();
     const nextBlock = program.block + 1;
-    const newPlan = buildProgram({ goal, painMap, isInSeason: program.in_season, block: nextBlock });
+    const newPlan = buildProgram({ goal, painMap, isInSeason: program.in_season, block: nextBlock, sport, focus, position });
     await supabase.from("programs").update({ status: "archived" }).eq("id", program.id);
     await supabase.from("programs").insert({
       user_id: userId, goal_type: program.goal_type, goal_notes: program.goal_notes, plan: newPlan,

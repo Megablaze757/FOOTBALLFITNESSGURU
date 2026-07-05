@@ -8,9 +8,11 @@
 // =============================================================================
 
 import type { PainMap, TrainingLog } from "./types";
+import type { SportId } from "./exercises";
 
 export type GoalType = "speed" | "agility" | "strength" | "endurance" | "injury_recovery" | "skill";
 export type BodyArea = "knee" | "ankle" | "hamstring" | "hip" | "lower_back" | "shoulder";
+export type TrainingFocus = "performance" | "fitness" | "aesthetics" | "rehab";
 
 export const GOALS: { id: GoalType; label: string; blurb: string }[] = [
   { id: "speed", label: "Speed", blurb: "Top-end sprint speed & acceleration" },
@@ -65,6 +67,28 @@ const SPORT_GOALS: Record<string, GoalOverride> = {
   },
 };
 
+// Training-focus options for the onboarding quiz.
+export const FOCI: { id: TrainingFocus; label: string; blurb: string }[] = [
+  { id: "performance", label: "Sport performance", blurb: "Faster, stronger, more explosive for your sport" },
+  { id: "fitness", label: "General fitness", blurb: "Conditioning, health and staying in shape" },
+  { id: "aesthetics", label: "Muscle & aesthetics", blurb: "Build muscle and look the part" },
+  { id: "rehab", label: "Rehab & return", blurb: "Recover from injury and rebuild safely" },
+];
+
+// Position / event suggestions per sport (free text still allowed).
+export const POSITIONS_BY_SPORT: Record<string, string[]> = {
+  football: ["Goalkeeper", "Centre back", "Full back", "Defensive mid", "Central mid", "Winger", "Striker"],
+  rugby: ["Prop", "Hooker", "Lock", "Flanker", "No. 8", "Scrum-half", "Fly-half", "Centre", "Wing", "Full-back"],
+  basketball: ["Point guard", "Shooting guard", "Small forward", "Power forward", "Centre"],
+  running: ["Sprinter", "800m/1500m", "5k/10k", "Half marathon", "Marathon"],
+  weightlifting: ["Powerlifting", "Olympic lifting", "General strength"],
+  gym: ["Hypertrophy", "Strength", "General fitness"],
+};
+
+export function positionsForSport(sport: string | null | undefined): string[] {
+  return POSITIONS_BY_SPORT[sport ?? "football"] ?? [];
+}
+
 /** Goals to show for a sport, ordered and relabelled. Falls back to all GOALS. */
 export function goalsForSport(sport: string | null | undefined): { id: GoalType; label: string; blurb: string }[] {
   const base = new Map(GOALS.map((g) => [g.id, g]));
@@ -84,6 +108,7 @@ interface DrillDef {
   equipment: "none" | "band" | "weights" | "box" | "ball" | "cones" | "bike";
   level: 1 | 2 | 3;
   cue: string;
+  sports?: SportId[]; // omitted = general (fits any sport)
 }
 
 // Library spans low- and high-impact options so the engine can substitute around
@@ -108,8 +133,33 @@ const LIBRARY: DrillDef[] = [
   { id: "spanish_squat", name: "Spanish squat iso-hold", targets: ["injury_recovery"], load: { knee: 1 }, equipment: "band", level: 1, cue: "Knees forward, hold the burn — great for sore knees" },
   { id: "bike_intervals", name: "Bike intervals", targets: ["endurance", "injury_recovery"], load: {}, equipment: "bike", level: 2, cue: "Hard efforts, easy spins — zero impact" },
   { id: "tempo_runs", name: "Tempo runs", targets: ["endurance"], load: { hamstring: 1, knee: 1 }, equipment: "none", level: 2, cue: "~75% effort, smooth and repeatable" },
-  { id: "dribbling_grid", name: "Tight-space dribbling", targets: ["skill", "agility"], load: { ankle: 1 }, equipment: "ball", level: 1, cue: "Both feet, manipulate the ball in small spaces" },
-  { id: "passing_wall", name: "Wall passing reps", targets: ["skill"], load: {}, equipment: "ball", level: 1, cue: "First touch out of your feet, weight the pass" },
+  { id: "dribbling_grid", name: "Tight-space dribbling", targets: ["skill", "agility"], load: { ankle: 1 }, equipment: "ball", level: 1, cue: "Both feet, manipulate the ball in small spaces", sports: ["football", "basketball"] },
+  { id: "passing_wall", name: "Wall passing reps", targets: ["skill"], load: {}, equipment: "ball", level: 1, cue: "First touch out of your feet, weight the pass", sports: ["football"] },
+
+  // Weightlifting / gym (ids match lib/exercises.ts so demos + descriptions resolve)
+  { id: "back_squat", name: "Barbell back squat", targets: ["strength"], load: { knee: 2, hip: 1 }, equipment: "weights", level: 2, cue: "Brace, knees track the toes, drive the floor away", sports: ["weightlifting", "gym", "rugby"] },
+  { id: "front_squat", name: "Front squat", targets: ["strength"], load: { knee: 2 }, equipment: "weights", level: 2, cue: "Elbows high, stay upright", sports: ["weightlifting", "gym"] },
+  { id: "deadlift", name: "Conventional deadlift", targets: ["strength"], load: { hamstring: 2, lower_back: 2 }, equipment: "weights", level: 3, cue: "Take the slack out, push the floor away", sports: ["weightlifting", "gym", "rugby"] },
+  { id: "hip_thrust", name: "Barbell hip thrust", targets: ["strength"], load: { hamstring: 1 }, equipment: "weights", level: 1, cue: "Drive through the heels, full lockout", sports: ["weightlifting", "gym", "running"] },
+  { id: "bench_press", name: "Barbell bench press", targets: ["strength"], load: { shoulder: 1 }, equipment: "weights", level: 2, cue: "Shoulder blades pinned, bar to mid-chest", sports: ["weightlifting", "gym", "rugby"] },
+  { id: "overhead_press", name: "Overhead press", targets: ["strength"], load: { shoulder: 2 }, equipment: "weights", level: 2, cue: "Brace, bar path close to the face", sports: ["weightlifting", "gym", "rugby"] },
+  { id: "pull_up", name: "Pull-up", targets: ["strength"], load: { shoulder: 1 }, equipment: "none", level: 2, cue: "Dead hang to chest, own the lower", sports: ["gym", "weightlifting", "rugby"] },
+  { id: "lat_pulldown", name: "Lat pulldown", targets: ["strength"], load: {}, equipment: "weights", level: 1, cue: "Drive the elbows down and back", sports: ["gym"] },
+  { id: "barbell_row", name: "Bent-over barbell row", targets: ["strength"], load: { lower_back: 1 }, equipment: "weights", level: 2, cue: "Flat back, row to the lower ribs", sports: ["weightlifting", "gym", "rugby"] },
+  { id: "power_clean", name: "Power clean", targets: ["strength", "speed"], load: { knee: 2 }, equipment: "weights", level: 3, cue: "Explode through the hips, pull under fast", sports: ["weightlifting", "rugby"] },
+  { id: "goblet_squat", name: "Goblet squat", targets: ["strength"], load: { knee: 1 }, equipment: "weights", level: 1, cue: "Elbows inside the knees, sit tall", sports: ["gym", "weightlifting"] },
+  { id: "dumbbell_press", name: "Dumbbell shoulder press", targets: ["strength"], load: { shoulder: 1 }, equipment: "weights", level: 1, cue: "Neutral wrists, full range", sports: ["gym"] },
+  { id: "calf_raise", name: "Standing calf raise", targets: ["strength"], load: { ankle: 1 }, equipment: "none", level: 1, cue: "Full stretch, rise onto the big toe", sports: ["gym", "running", "basketball"] },
+  { id: "farmers_carry", name: "Farmer's carry", targets: ["strength", "endurance"], load: {}, equipment: "weights", level: 1, cue: "Tall posture, crush the handles", sports: ["gym", "weightlifting", "rugby"] },
+
+  // Rugby / court / running
+  { id: "tackle_technique", name: "Tackle technique", targets: ["skill"], load: { shoulder: 1 }, equipment: "none", level: 2, cue: "Cheek to cheek, head behind, drive and wrap", sports: ["rugby"] },
+  { id: "scrum_drive", name: "Scrum engage & drive", targets: ["strength"], load: { lower_back: 1 }, equipment: "none", level: 2, cue: "Flat back, hips below shoulders, drive as one", sports: ["rugby"] },
+  { id: "broad_jump", name: "Standing broad jump", targets: ["strength", "speed"], load: { knee: 2, ankle: 1 }, equipment: "none", level: 2, cue: "Load the hips, explode out, stick it", sports: ["rugby", "basketball", "running"] },
+  { id: "vertical_jump", name: "Vertical jump", targets: ["strength", "speed"], load: { knee: 2, ankle: 1 }, equipment: "none", level: 2, cue: "Quick dip, full triple extension, reach", sports: ["basketball", "rugby"] },
+  { id: "defensive_slides", name: "Defensive slides", targets: ["agility"], load: { knee: 1 }, equipment: "none", level: 1, cue: "Low and wide, push don't cross the feet", sports: ["basketball"] },
+  { id: "hill_sprints", name: "Hill sprints", targets: ["speed"], load: { hamstring: 1 }, equipment: "none", level: 2, cue: "Aggressive arms, short powerful contacts", sports: ["running", "football", "rugby"] },
+  { id: "stride_outs", name: "Stride-outs", targets: ["speed"], load: { hamstring: 1 }, equipment: "none", level: 1, cue: "Build to ~90%, long relaxed strides", sports: ["running", "football"] },
 ];
 
 /** Look up a drill's coaching info by (fuzzy) name — used by the coach chat. */
@@ -155,6 +205,8 @@ export interface RecommendInput {
   painMap: PainMap;
   recentDrillNames?: string[];
   count?: number;
+  sport?: SportId;
+  focus?: TrainingFocus;
 }
 
 /**
@@ -182,6 +234,16 @@ export function recommendDrills(input: RecommendInput): Recommendation[] {
     score -= painCost;
     if (recent.has(d.name.toLowerCase())) score -= 2; // encourage variety
 
+    // Sport preference: strongly favour drills for this sport, exclude drills
+    // that only belong to *other* sports (a runner shouldn't get scrum drives).
+    if (input.sport && d.sports) {
+      if (d.sports.includes(input.sport)) score += 5;
+      else score -= 8;
+    }
+    // Aesthetics (hypertrophy) leans on gym/weights work; fitness on conditioning.
+    if (input.focus === "aesthetics" && d.equipment === "weights") score += 3;
+    if (input.focus === "fitness" && (d.targets.includes("endurance") || d.equipment === "bike")) score += 3;
+
     const sparesSore = soreAreas.length > 0 && soreAreas.every((a) => (d.load[a] ?? 0) <= 1);
     if (soreAreas.length && sparesSore && onGoal) score += 3; // reward smart substitutions
 
@@ -195,7 +257,7 @@ export function recommendDrills(input: RecommendInput): Recommendation[] {
     name: d.name,
     cue: d.cue,
     reason: buildReason(d, input.goal, soreAreas, sparesSore),
-    ...prescription(d, input.goal),
+    ...prescription(d, input.goal, input.focus),
     flagged: sparesSore && soreAreas.length > 0,
   }));
 }
@@ -221,7 +283,10 @@ function buildReason(d: DrillDef, goal: GoalType, soreAreas: BodyArea[], spares:
   return `Supports ${goalLabel} as a complement.`;
 }
 
-function prescription(d: DrillDef, goal: GoalType): { sets: number; reps: number } {
+function prescription(d: DrillDef, goal: GoalType, focus?: TrainingFocus): { sets: number; reps: number } {
+  // Aesthetics → hypertrophy rep ranges on resistance work; fitness → higher reps.
+  if (focus === "aesthetics" && d.equipment === "weights") return { sets: 4, reps: 10 };
+  if (focus === "fitness" && goal !== "strength") return { sets: 3, reps: d.equipment === "bike" ? 10 : 8 };
   if (goal === "endurance") return { sets: 1, reps: d.equipment === "bike" ? 8 : 6 };
   if (goal === "strength") return { sets: 4, reps: d.level >= 2 ? 6 : 8 };
   if (goal === "injury_recovery") return { sets: 3, reps: 12 };
@@ -250,6 +315,9 @@ export interface BuildProgramInput {
   isInSeason?: boolean;
   daysPerWeek?: number;
   block?: number; // 1-based; each block progresses volume slightly
+  sport?: SportId;
+  focus?: TrainingFocus;
+  position?: string;
 }
 
 /** A 4-week block tailored to the goal, with pain-aware drill selection and a taper. */
@@ -263,8 +331,12 @@ export function buildProgram(input: BuildProgramInput): ProgramPlan {
   const themes = rehab ? REHAB_THEMES : THEMES;
 
   // Session focuses rotate the primary goal with a complementary stimulus.
+  // Training focus reshapes the rotation: aesthetics → strength-led (hypertrophy),
+  // fitness → conditioning-led.
   const focusRotation: GoalType[] =
-    rehab ? ["injury_recovery", "injury_recovery", "endurance"]
+    rehab || input.focus === "rehab" ? ["injury_recovery", "injury_recovery", "endurance"]
+    : input.focus === "aesthetics" ? ["strength", "strength", "endurance"]
+    : input.focus === "fitness" ? ["endurance", "strength", "endurance"]
     : input.goal === "endurance" ? ["endurance", "endurance", "strength", "endurance"]
     : [input.goal, "strength", input.goal === "speed" ? "agility" : "speed"];
 
@@ -276,7 +348,7 @@ export function buildProgram(input: BuildProgramInput): ProgramPlan {
 
     const sessions: ProgramSession[] = Array.from({ length: days }, (_, di) => {
       const focus = focusRotation[di % focusRotation.length];
-      const recs = recommendDrills({ goal: focus, painMap: input.painMap, count: 3 });
+      const recs = recommendDrills({ goal: focus, painMap: input.painMap, count: 3, sport: input.sport, focus: input.focus });
       const drills: ProgramDrill[] = recs.map((r) => ({
         name: r.name,
         sets: Math.max(1, Math.round(r.sets * volScale * weekScale)),
@@ -292,7 +364,7 @@ export function buildProgram(input: BuildProgramInput): ProgramPlan {
 
   return {
     goal: input.goal,
-    summary: programSummary(input.goal, sore, input.isInSeason ?? false, block),
+    summary: programSummary(input.goal, sore, input.isInSeason ?? false, block, input.sport, input.position, input.focus),
     constraints: sore.length ? [`Protecting your ${sore.map(prettyArea).join(", ")} — high-impact loading on these is dialled back.`] : [],
     weeks,
     block,
@@ -311,12 +383,19 @@ function sessionTitle(focus: GoalType, day: number): string {
   return `Day ${day + 1} · ${map[focus]}`;
 }
 
-function programSummary(goal: GoalType, sore: BodyArea[], inSeason: boolean, block: number): string {
+const FOCUS_LABEL: Record<TrainingFocus, string> = {
+  performance: "performance", fitness: "general fitness", aesthetics: "muscle & aesthetics", rehab: "rehab",
+};
+
+function programSummary(goal: GoalType, sore: BodyArea[], inSeason: boolean, block: number, sport?: SportId, position?: string, focus?: TrainingFocus): string {
   const g = GOALS.find((x) => x.id === goal)?.label ?? goal;
   const season = inSeason ? "in-season (recovery-weighted)" : "off-season (higher volume)";
+  const who = [position?.trim(), sport].filter(Boolean).join(" · ");
+  const forWhom = who ? ` Tailored for a ${who}.` : "";
+  const focusNote = focus && focus !== "performance" ? ` Weighted toward ${FOCUS_LABEL[focus]}.` : "";
   const blockNote = block > 1 ? ` Block ${block} — volume stepped up ${Math.round((block - 1) * 8)}% from your last block.` : "";
   const note = sore.length ? ` Built around your sore ${sore.map(prettyArea).join(" & ")}, swapping in lower-impact options.` : "";
-  return `A 4-week ${g.toLowerCase()} block, ${season}, progressing Base → Build → Peak → Deload.${blockNote}${note}`;
+  return `A 4-week ${g.toLowerCase()} block, ${season}, progressing Base → Build → Peak → Deload.${forWhom}${focusNote}${blockNote}${note}`;
 }
 
 // --- "What's working" analysis ----------------------------------------------

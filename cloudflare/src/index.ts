@@ -115,17 +115,20 @@ async function coachChat(req: Request, env: Env): Promise<Response> {
 
 async function generateProgram(req: Request, env: Env): Promise<Response> {
   if (!(await authUser(req, env))) return json({ error: "unauthorized" }, 401);
-  const { goal, pain_map, notes, in_season } = (await req.json()) as {
+  const { goal, pain_map, notes, in_season, sport, position, focus } = (await req.json()) as {
     goal: string; pain_map: Record<string, number>; notes?: string; in_season?: boolean;
+    sport?: string; position?: string; focus?: string;
   };
   if (!goal) return json({ error: "goal required" }, 400);
   const sore = Object.entries(pain_map ?? {}).filter(([, v]) => Number(v) >= 4).map(([k, v]) => `${k} (${v})`).join(", ") || "none";
   const season = in_season ? "in-season (taper ~30%, recovery-weighted)" : "out-of-season (build, higher volume)";
   const sys =
-    "You are an elite football S&C coach & physio. Output ONLY valid minified JSON matching this TypeScript type: " +
+    "You are an elite strength & conditioning coach & physio working across sports (football, rugby, weightlifting, gym, basketball, running). " +
+    "Choose exercises appropriate to the athlete's SPORT, POSITION and FOCUS (e.g. a weightlifter gets barbell squat/bench/deadlift; a rugby prop gets contact & scrum power; 'muscle & aesthetics' uses hypertrophy rep ranges 8-12; 'general fitness' is conditioning-led). " +
+    "Output ONLY valid minified JSON matching this TypeScript type: " +
     "{goal:string;summary:string;constraints:string[];weeks:{week:number;theme:string;intensity:string;sessions:{day:number;title:string;focus:string;drills:{name:string;sets:number;reps:number;cue:string;reason:string}[]}[]}[]}. " +
     "4 periodised weeks (Base→Build→Peak→Deload), 3 sessions/week. Work around sore areas with lower-impact drills. No prose outside the JSON.";
-  const raw = await openRouter(env, sys, `Goal: ${goal}\nSeason: ${season}\nSore: ${sore}\nNotes: ${notes || "none"}`, 4000);
+  const raw = await openRouter(env, sys, `Sport: ${sport || "football"}\nPosition/event: ${position || "unspecified"}\nTraining focus: ${focus || "performance"}\nGoal: ${goal}\nSeason: ${season}\nSore: ${sore}\nNotes: ${notes || "none"}`, 4000);
   const match = raw.match(/\{[\s\S]*\}/);
   if (!match) return json({ error: "bad ai output" }, 422);
   return json({ plan: JSON.parse(match[0]) });

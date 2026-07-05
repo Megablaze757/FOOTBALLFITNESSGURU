@@ -184,4 +184,6 @@ export interface Profile {
   experience_years: number | null;
   bio: string | null;
   sport?: string | null;
+  position?: string | null;
+  training_focus?: string | null;
 }
