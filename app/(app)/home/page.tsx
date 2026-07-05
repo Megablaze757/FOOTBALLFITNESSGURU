@@ -7,6 +7,7 @@ import { useAsync } from "@/lib/use-async";
 import { assessReadiness } from "@/lib/readiness";
 import { actionLabel } from "@/lib/insights";
 import { checkInStreak } from "@/lib/load";
+import { dailyQuests } from "@/lib/gamification";
 import { ReadinessGauge } from "@/components/ReadinessGauge";
 import type { CheckInInput, DailyInsight } from "@/lib/types";
 
@@ -17,10 +18,12 @@ export default function HomePage() {
   const { data, loading } = useAsync(async () => {
     const supabase = createClient();
     const since = new Date(Date.now() - 40 * 86400_000).toISOString().slice(0, 10);
-    const [{ data: profile }, { data: checkIn }, { data: streakRows }] = await Promise.all([
+    const [{ data: profile }, { data: checkIn }, { data: streakRows }, { data: trainToday }, { data: nutriToday }] = await Promise.all([
       supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle(),
       supabase.from("daily_check_ins").select("*").eq("user_id", user.id).eq("check_in_date", today).maybeSingle(),
       supabase.from("daily_check_ins").select("check_in_date").eq("user_id", user.id).gte("check_in_date", since),
+      supabase.from("training_logs").select("log_date").eq("user_id", user.id).eq("log_date", today).maybeSingle(),
+      supabase.from("nutrition_logs").select("log_date").eq("user_id", user.id).eq("log_date", today).maybeSingle(),
     ]);
     let insight: DailyInsight | null = null;
     if (checkIn) {
@@ -29,7 +32,8 @@ export default function HomePage() {
       insight = (ins ?? null) as DailyInsight | null;
     }
     const streak = checkInStreak((streakRows ?? []).map((r) => r.check_in_date));
-    return { profile, checkIn, insight, streak };
+    const quests = dailyQuests({ checkedInToday: !!checkIn, trainedToday: !!trainToday, nutritionToday: !!nutriToday });
+    return { profile, checkIn, insight, streak, quests };
   }, [user.id]);
 
   const firstName = data?.profile?.full_name?.split(" ")[0] ?? "athlete";
@@ -93,6 +97,29 @@ export default function HomePage() {
             <QuickLink href="/journal" title="Edit check-in" sub="Update how you feel" icon="📝" />
           </div>
         </div>
+      </div>
+
+      <DailyQuests quests={data!.quests} />
+    </div>
+  );
+}
+
+function DailyQuests({ quests }: { quests: { id: string; label: string; xp: number; done: boolean; href: string }[] }) {
+  const done = quests.filter((q) => q.done).length;
+  return (
+    <div className="card p-5">
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="field-label !mb-0">Daily quests</h2>
+        <Link href="/rewards" className="text-xs font-semibold text-pitch-400 hover:underline">{done}/{quests.length} · Rewards →</Link>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        {quests.map((q) => (
+          <Link key={q.id} href={q.href} className={`flex items-center gap-2 rounded-2xl border p-3 transition ${q.done ? "border-pitch-400/30 bg-pitch-400/[0.06]" : "border-white/10 bg-white/[0.03] hover:bg-white/[0.06]"}`}>
+            <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-full border text-xs ${q.done ? "border-pitch-400 bg-pitch-400 text-ink-900" : "border-white/20 text-transparent"}`}>✓</span>
+            <span className={`flex-1 text-xs font-medium ${q.done ? "text-slate-400 line-through" : "text-slate-100"}`}>{q.label}</span>
+            <span className="text-[10px] font-bold text-pitch-400">+{q.xp}</span>
+          </Link>
+        ))}
       </div>
     </div>
   );
