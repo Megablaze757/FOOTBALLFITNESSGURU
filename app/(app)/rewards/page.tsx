@@ -1,15 +1,17 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/lib/auth";
 import { useAsync } from "@/lib/use-async";
 import { checkInStreak } from "@/lib/load";
 import {
-  computeXp, levelFor, evaluateAchievements, dailyQuests,
+  computeXp, levelFor, rankFor, evaluateAchievements, dailyQuests,
   type ActivityStats, type DailyState,
 } from "@/lib/gamification";
 import { Confetti } from "@/components/Confetti";
+import { LevelUpModal } from "@/components/LevelUpModal";
 
 export default function RewardsPage() {
   const user = useCurrentUser();
@@ -52,6 +54,17 @@ export default function RewardsPage() {
     return { stats, state };
   }, [user.id]);
 
+  // Detect crossing a level threshold since the last visit → celebrate.
+  const [leveledUpTo, setLeveledUpTo] = useState<number | null>(null);
+  useEffect(() => {
+    if (!data) return;
+    const lvl = levelFor(computeXp(data.stats)).level;
+    const key = `apex-level-${user.id}`;
+    const prev = Number(localStorage.getItem(key) || "0");
+    if (prev && lvl > prev) setLeveledUpTo(lvl);
+    localStorage.setItem(key, String(lvl));
+  }, [data, user.id]);
+
   if (loading || !data) return <div className="card mx-auto max-w-2xl h-96 animate-pulse" />;
 
   const xp = computeXp(data.stats);
@@ -63,6 +76,14 @@ export default function RewardsPage() {
 
   return (
     <div className="animate-fade-up mx-auto max-w-3xl space-y-5">
+      {leveledUpTo && (
+        <LevelUpModal
+          level={leveledUpTo}
+          rank={rankFor(leveledUpTo).rank}
+          emoji={rankFor(leveledUpTo).emoji}
+          onClose={() => setLeveledUpTo(null)}
+        />
+      )}
       <header>
         <h1 className="text-3xl font-extrabold tracking-tight">Rewards</h1>
         <p className="mt-1 text-sm text-slate-400">Earn XP for everything you do. Level up, unlock badges, keep the streak alive.</p>
