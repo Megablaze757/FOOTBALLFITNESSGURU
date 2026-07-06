@@ -1,6 +1,8 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/lib/auth";
 import { useAsync } from "@/lib/use-async";
@@ -13,13 +15,14 @@ import type { CheckInInput, DailyInsight } from "@/lib/types";
 
 export default function HomePage() {
   const user = useCurrentUser();
+  const router = useRouter();
   const today = new Date().toISOString().slice(0, 10);
 
   const { data, loading } = useAsync(async () => {
     const supabase = createClient();
     const since = new Date(Date.now() - 40 * 86400_000).toISOString().slice(0, 10);
     const [{ data: profile }, { data: checkIn }, { data: streakRows }, { data: trainToday }, { data: nutriToday }] = await Promise.all([
-      supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle(),
+      supabase.from("profiles").select("full_name, onboarded").eq("id", user.id).maybeSingle(),
       supabase.from("daily_check_ins").select("*").eq("user_id", user.id).eq("check_in_date", today).maybeSingle(),
       supabase.from("daily_check_ins").select("check_in_date").eq("user_id", user.id).gte("check_in_date", since),
       supabase.from("training_logs").select("log_date").eq("user_id", user.id).eq("log_date", today).maybeSingle(),
@@ -39,7 +42,13 @@ export default function HomePage() {
   const firstName = data?.profile?.full_name?.split(" ")[0] ?? "athlete";
   const streak = data?.streak ?? 0;
 
-  if (loading) return <Skeleton />;
+  // First-run: send brand-new athletes through onboarding.
+  const needsOnboarding = data?.profile != null && (data.profile as { onboarded?: boolean }).onboarded === false;
+  useEffect(() => {
+    if (needsOnboarding) router.replace("/onboarding");
+  }, [needsOnboarding, router]);
+
+  if (loading || needsOnboarding) return <Skeleton />;
 
   if (!data?.checkIn) {
     return (

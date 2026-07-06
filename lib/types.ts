@@ -186,4 +186,5 @@ export interface Profile {
   sport?: string | null;
   position?: string | null;
   training_focus?: string | null;
+  onboarded?: boolean | null;
 }
