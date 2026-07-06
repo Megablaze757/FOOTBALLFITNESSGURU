@@ -8,6 +8,7 @@ export const NAV_ITEMS = [
   { href: "/dashboard", label: "Stats", icon: "stats" },
   { href: "/train", label: "Train", icon: "train" },
   { href: "/library", label: "Library", icon: "library" },
+  { href: "/essentials", label: "Playbook", icon: "playbook" },
   { href: "/rewards", label: "Rewards", icon: "trophy" },
   { href: "/nutrition", label: "Nutrition", icon: "nutrition" },
   { href: "/history", label: "Progress", icon: "history" },
@@ -25,6 +26,7 @@ export const MOBILE_NAV = [
 
 // Secondary destinations, reached from the mobile "More" sheet.
 export const MOBILE_MORE = [
+  { href: "/essentials", label: "Playbook", icon: "playbook" },
   { href: "/rewards", label: "Rewards", icon: "trophy" },
   { href: "/library", label: "Exercise library", icon: "library" },
   { href: "/nutrition", label: "Nutrition", icon: "nutrition" },
@@ -61,6 +63,8 @@ export function NavIcon({ name, active, size = 22 }: { name: string; active: boo
       return <svg {...common}><circle cx="5" cy="12" r="1.6" fill={stroke} /><circle cx="12" cy="12" r="1.6" fill={stroke} /><circle cx="19" cy="12" r="1.6" fill={stroke} /></svg>;
     case "trophy":
       return <svg {...common}><path d="M8 4h8v4a4 4 0 0 1-8 0V4z" /><path d="M8 5H5v2a3 3 0 0 0 3 3M16 5h3v2a3 3 0 0 1-3 3" /><path d="M12 12v4M9 20h6M10 20l.5-4M14 20l-.5-4" /></svg>;
+    case "playbook":
+      return <svg {...common}><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2V5z" /><path d="M9 7h6M9 11h6" /></svg>;
     default:
       return null;
   }
