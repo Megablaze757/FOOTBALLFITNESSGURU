@@ -4,20 +4,23 @@ import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/lib/auth";
 import { useAsync } from "@/lib/use-async";
 import { JournalForm } from "@/components/JournalForm";
+import { WearableImport } from "@/components/WearableImport";
 import type { TrainingState } from "@/components/TrainingLogInput";
+import type { Biometric } from "@/lib/biometrics";
 import type { CheckInInput, TrainingLog } from "@/lib/types";
 
 export default function JournalPage() {
   const user = useCurrentUser();
   const today = new Date().toISOString().slice(0, 10);
 
-  const { data, loading } = useAsync(async () => {
+  const { data, loading, reload } = useAsync(async () => {
     const supabase = createClient();
-    const [{ data: existing }, { data: training }] = await Promise.all([
+    const [{ data: existing }, { data: training }, { data: bio }] = await Promise.all([
       supabase.from("daily_check_ins").select("*").eq("user_id", user.id).eq("check_in_date", today).maybeSingle(),
       supabase.from("training_logs").select("*").eq("user_id", user.id).eq("log_date", today).maybeSingle(),
+      supabase.from("biometrics").select("*").eq("user_id", user.id).eq("metric_date", today).maybeSingle(),
     ]);
-    return { existing, training: (training ?? null) as TrainingLog | null };
+    return { existing, training: (training ?? null) as TrainingLog | null, bio: (bio ?? null) as Biometric | null };
   }, [user.id]);
 
   if (loading) {
@@ -55,6 +58,15 @@ export default function JournalPage() {
         </p>
       </header>
       <JournalForm initial={initial} initialTraining={initialTraining} />
+
+      <div className="mt-5">
+        <WearableImport
+          userId={user.id}
+          today={today}
+          initial={data?.bio ? { hrv_ms: data.bio.hrv_ms, resting_hr: data.bio.resting_hr, sleep_hours: data.bio.sleep_hours } : undefined}
+          onSaved={reload}
+        />
+      </div>
     </div>
   );
 }

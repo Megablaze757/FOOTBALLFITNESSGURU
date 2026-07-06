@@ -10,7 +10,9 @@ import { assessReadiness } from "@/lib/readiness";
 import { actionLabel } from "@/lib/insights";
 import { checkInStreak } from "@/lib/load";
 import { dailyQuests } from "@/lib/gamification";
+import { biometricSignal, type Biometric } from "@/lib/biometrics";
 import { ReadinessGauge } from "@/components/ReadinessGauge";
+import { BiometricSignalCard } from "@/components/BiometricSignalCard";
 import type { CheckInInput, DailyInsight } from "@/lib/types";
 
 export default function HomePage() {
@@ -28,6 +30,10 @@ export default function HomePage() {
       supabase.from("training_logs").select("log_date").eq("user_id", user.id).eq("log_date", today).maybeSingle(),
       supabase.from("nutrition_logs").select("log_date").eq("user_id", user.id).eq("log_date", today).maybeSingle(),
     ]);
+    const { data: bio } = await supabase.from("biometrics").select("*").eq("user_id", user.id)
+      .gte("metric_date", new Date(Date.now() - 28 * 86400_000).toISOString().slice(0, 10)).order("metric_date", { ascending: true });
+    const bioHistory = (bio ?? []) as Biometric[];
+    const bioSignal = biometricSignal(bioHistory.find((b) => b.metric_date === today) ?? null, bioHistory);
     let insight: DailyInsight | null = null;
     if (checkIn) {
       const { data: ins } = await supabase
@@ -36,7 +42,7 @@ export default function HomePage() {
     }
     const streak = checkInStreak((streakRows ?? []).map((r) => r.check_in_date));
     const quests = dailyQuests({ checkedInToday: !!checkIn, trainedToday: !!trainToday, nutritionToday: !!nutriToday });
-    return { profile, checkIn, insight, streak, quests };
+    return { profile, checkIn, insight, streak, quests, bioSignal };
   }, [user.id]);
 
   const firstName = data?.profile?.full_name?.split(" ")[0] ?? "athlete";
@@ -107,6 +113,8 @@ export default function HomePage() {
           </div>
         </div>
       </div>
+
+      <BiometricSignalCard signal={data!.bioSignal} />
 
       <DailyQuests quests={data!.quests} />
     </div>
