@@ -87,11 +87,12 @@ function NutritionTracker({ userId, today, initial, targets }: { userId: string;
     fats: initial?.macros?.fats?.toString() ?? "",
   });
   const [water, setWater] = useState<number>(initial?.daily_water_intake_ml ?? 0);
+  const [eaten, setEaten] = useState<number>(initial?.calories_eaten ?? 0);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => { setSaved(false); }, [calories, macros, water]);
+  useEffect(() => { setSaved(false); }, [calories, macros, water, eaten]);
 
   const macroKcal = MACROS.reduce((sum, m) => sum + (Number(macros[m.key]) || 0) * m.kcal, 0);
   const waterGoal = targets?.water_ml ?? 3000;
@@ -111,6 +112,7 @@ function NutritionTracker({ userId, today, initial, targets }: { userId: string;
         user_id: userId,
         log_date: today,
         daily_calorie_target: calories ? Number(calories) : null,
+        calories_eaten: eaten || null,
         macros: {
           protein: Number(macros.protein) || 0,
           carbs: Number(macros.carbs) || 0,
@@ -158,9 +160,33 @@ function NutritionTracker({ userId, today, initial, targets }: { userId: string;
         </div>
       )}
 
+      {/* Direct calorie logging */}
+      <div className="card p-5">
+        <div className="flex items-baseline justify-between">
+          <span className="field-label !mb-0">🍽️ Calories eaten today</span>
+          {calories && <span className="text-xs text-slate-400">target {Number(calories).toLocaleString()}</span>}
+        </div>
+        <div className="mt-2 text-center text-4xl font-extrabold text-pitch-400">{eaten.toLocaleString()}<span className="ml-1 text-base font-normal text-slate-500">kcal</span></div>
+        {calories ? (
+          <div className="mt-3 h-2.5 w-full overflow-hidden rounded-full bg-white/10">
+            <div className="h-full rounded-full bg-gradient-to-r from-pitch-400 to-pitch-600 transition-all" style={{ width: `${Math.min(100, (eaten / Number(calories)) * 100)}%` }} />
+          </div>
+        ) : null}
+        <div className="mt-3 flex flex-wrap gap-2">
+          {[200, 400, 600].map((kc) => (
+            <button key={kc} onClick={() => setEaten((c) => c + kc)} className="btn-ghost flex-1 py-2">+{kc}</button>
+          ))}
+          <input type="number" inputMode="numeric" value={eaten || ""} onChange={(e) => setEaten(Number(e.target.value) || 0)} className="field w-24 text-center" placeholder="edit" />
+          <button onClick={() => setEaten(0)} className="btn-ghost w-auto px-4 py-2 text-slate-400">Reset</button>
+        </div>
+        {calories && eaten > 0 && (
+          <p className="mt-2 text-xs text-slate-400">{Number(calories) - eaten > 0 ? `${(Number(calories) - eaten).toLocaleString()} kcal left today` : `${(eaten - Number(calories)).toLocaleString()} kcal over target`}</p>
+        )}
+      </div>
+
       {/* Calories from macros */}
       <div className="card p-5 text-center">
-        <div className="stat-label">Energy from macros</div>
+        <div className="stat-label">Or track by macros</div>
         <div className="mt-1 text-4xl font-extrabold text-pitch-400">{macroKcal.toLocaleString()}<span className="ml-1 text-base font-normal text-slate-500">kcal</span></div>
         {calories && (
           <div className="mt-1 text-xs text-slate-400">Target {Number(calories).toLocaleString()} kcal · {Math.round((macroKcal / Number(calories)) * 100) || 0}%</div>

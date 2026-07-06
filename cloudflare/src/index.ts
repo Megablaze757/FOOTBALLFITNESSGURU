@@ -49,6 +49,7 @@ export default {
       if (pathname.endsWith("/generate-program")) return await generateProgram(req, env);
       if (pathname.endsWith("/create-checkout")) return await createCheckout(req, env);
       if (pathname.endsWith("/stripe-webhook")) return await stripeWebhook(req, env);
+      if (pathname.endsWith("/admin-create-user")) return await adminCreateUser(req, env);
       if (pathname.endsWith("/health")) return json({ ok: true });
       return json({ error: "not found" }, 404);
     } catch (e) {
@@ -75,6 +76,43 @@ async function authUser(req: Request, env: Env): Promise<{ id: string; email: st
   if (!r.ok) return null;
   const u = (await r.json()) as { id: string; email: string };
   return u?.id ? { id: u.id, email: u.email } : null;
+}
+
+// --- Admin: create beta accounts -------------------------------------------
+async function isAdmin(env: Env, userId: string): Promise<boolean> {
+  if (!env.SUPABASE_SERVICE_ROLE_KEY) return false;
+  const r = await fetch(`${env.SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}&select=role`, {
+    headers: { apikey: env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}` },
+  });
+  const rows = (await r.json()) as { role?: string }[];
+  return rows?.[0]?.role === "admin";
+}
+
+async function adminCreateUser(req: Request, env: Env): Promise<Response> {
+  const u = await authUser(req, env);
+  if (!u) return json({ error: "unauthorized" }, 401);
+  if (!(await isAdmin(env, u.id))) return json({ error: "admins only" }, 403);
+  const { email, password, full_name, role } = (await req.json()) as {
+    email?: string; password?: string; full_name?: string; role?: string;
+  };
+  if (!email || !password || password.length < 6) return json({ error: "email and a 6+ char password are required" }, 400);
+
+  const svc = { apikey: env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`, "Content-Type": "application/json" };
+  const cr = await fetch(`${env.SUPABASE_URL}/auth/v1/admin/users`, {
+    method: "POST",
+    headers: svc,
+    body: JSON.stringify({ email, password, email_confirm: true, user_metadata: { full_name: full_name || null } }),
+  });
+  const created = (await cr.json()) as { id?: string; msg?: string; error_description?: string; message?: string };
+  if (!cr.ok || !created.id) return json({ error: created.msg || created.error_description || created.message || "could not create user" }, 400);
+
+  // The signup trigger creates the profile row; set role + fresh-onboarding.
+  await fetch(`${env.SUPABASE_URL}/rest/v1/profiles?id=eq.${created.id}`, {
+    method: "PATCH",
+    headers: { ...svc, Prefer: "return=minimal" },
+    body: JSON.stringify({ role: role === "coach" || role === "admin" ? role : "athlete", onboarded: false }),
+  });
+  return json({ ok: true, id: created.id, email });
 }
 
 // --- Rate limiting ---------------------------------------------------------

@@ -32,6 +32,8 @@ export function WorkoutPlayer({ title, drills, onComplete, onClose }: {
   const [rest, setRest] = useState(REST_SECONDS);
   const [done, setDone] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [actual, setActual] = useState(0);   // reps actually completed this set
+  const [guidance, setGuidance] = useState<string | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -50,7 +52,18 @@ export function WorkoutPlayer({ title, drills, onComplete, onClose }: {
   const step = steps[i];
   const progress = steps.length ? Math.round((i / steps.length) * 100) : 0;
 
+  // Reset the rep counter to the target whenever a new set starts.
+  useEffect(() => { if (step) setActual(step.drill.reps); }, [i]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function guidanceFor(reps: number, target: number): string {
+    if (reps <= 0) return "😴 Skipped — rest and come back to it fresh.";
+    if (reps >= target) return "💪 All reps clean — hold the load or nudge it up.";
+    if (reps >= target - 2) return "👍 So close — keep this weight and chase all reps.";
+    return "🔻 That was tough — drop the load ~10% next set to keep quality.";
+  }
+
   function completeSet() {
+    if (step) setGuidance(guidanceFor(actual, step.drill.reps));
     if (i >= steps.length - 1) {
       setDone(true);
       onComplete();
@@ -89,6 +102,9 @@ export function WorkoutPlayer({ title, drills, onComplete, onClose }: {
           </div>
         ) : resting ? (
           <div className="animate-fade-up">
+            {guidance && (
+              <div className="mx-auto mb-6 max-w-xs rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-sm text-slate-200">{guidance}</div>
+            )}
             <div className="stat-label">Rest</div>
             <div className="my-4 text-7xl font-extrabold tabular-nums text-pitch-400">{rest}s</div>
             <p className="text-slate-400">Next: <b className="text-slate-200">{steps[i + 1]?.drill.name}</b> · set {steps[i + 1]?.setNum}/{steps[i + 1]?.totalSets}</p>
@@ -106,10 +122,21 @@ export function WorkoutPlayer({ title, drills, onComplete, onClose }: {
             )}
             <div className="chip mx-auto text-pitch-400">Set {step.setNum} of {step.totalSets}</div>
             <h2 className="mt-3 text-3xl font-extrabold">{step.drill.name}</h2>
-            <p className="mt-1 text-lg text-slate-300">{step.drill.reps} reps</p>
-            {ex && <p className="mx-auto mt-3 max-w-xs text-xs text-slate-500">{ex.cues[0]}</p>}
-            <button onClick={completeSet} className="btn-primary mx-auto mt-8 max-w-[16rem]">
-              {i >= steps.length - 1 ? "Finish session ✓" : "Set done ✓"}
+            <p className="mt-1 text-sm text-slate-400">Target {step.drill.reps} reps · log what you actually got</p>
+
+            {/* Reps stepper — record the reps you completed (fewer is fine) */}
+            <div className="mt-4 flex items-center justify-center gap-4">
+              <button onClick={() => setActual((r) => Math.max(0, r - 1))} className="grid h-11 w-11 place-items-center rounded-full border border-white/15 text-xl text-slate-200 hover:bg-white/5" aria-label="one fewer rep">−</button>
+              <div className="w-20">
+                <div className="text-5xl font-extrabold tabular-nums">{actual}</div>
+                <div className="stat-label">reps</div>
+              </div>
+              <button onClick={() => setActual((r) => r + 1)} className="grid h-11 w-11 place-items-center rounded-full border border-white/15 text-xl text-slate-200 hover:bg-white/5" aria-label="one more rep">+</button>
+            </div>
+
+            {ex && <p className="mx-auto mt-4 max-w-xs text-xs text-slate-500">{ex.cues[0]}</p>}
+            <button onClick={completeSet} className="btn-primary mx-auto mt-6 max-w-[16rem]">
+              {i >= steps.length - 1 ? "Finish session ✓" : "Log set ✓"}
             </button>
             <div className="mt-3 text-xs text-slate-500">Exercise {step.drillIndex + 1} of {drills.length}</div>
           </div>
