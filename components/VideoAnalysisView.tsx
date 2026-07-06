@@ -4,6 +4,7 @@ import { HeatmapVideo } from "@/components/HeatmapVideo";
 import { DrillChecklist } from "@/components/DrillChecklist";
 import { RingProgress } from "@/components/RingProgress";
 import { KneeCompare } from "@/components/KneeCompare";
+import { VideoCoachFeedback } from "@/components/VideoCoachFeedback";
 import type { VideoAnalysis } from "@/lib/types";
 
 // Shared renderer for a biomechanics analysis — used both for stored AI plans
@@ -17,6 +18,8 @@ export function VideoAnalysisView({ analysis, src }: { analysis: VideoAnalysis; 
     <div className="space-y-5">
       <HeatmapVideo src={src} points={a.heatmap_data ?? []} />
       {a.root_cause_alert && <div className="card px-4 py-3 text-sm text-readiness-red">⚠️ {a.root_cause_alert}</div>}
+
+      <VideoCoachFeedback analysis={a} />
 
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="card flex items-center gap-4 p-5 sm:col-span-1">
