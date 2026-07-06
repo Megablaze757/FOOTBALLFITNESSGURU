@@ -6,6 +6,7 @@ import { useCurrentUser } from "@/lib/auth";
 import { useAsync } from "@/lib/use-async";
 import { ProfileForm } from "@/components/ProfileForm";
 import { CoachRequests } from "@/components/CoachRequests";
+import { CoachMessages } from "@/components/CoachMessages";
 import { planFor } from "@/lib/subscription";
 import type { Profile, Subscription, Tier } from "@/lib/types";
 
@@ -45,6 +46,7 @@ export default function ProfilePage() {
       </header>
 
       <CoachRequests />
+      <CoachMessages athleteId={user.id} />
 
       <Link href="/pricing" className="card card-hover mb-4 flex items-center justify-between p-4">
         <div>

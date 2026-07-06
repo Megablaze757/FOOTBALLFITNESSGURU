@@ -9,6 +9,7 @@ import { useAsync } from "@/lib/use-async";
 import { assessReadiness } from "@/lib/readiness";
 import { computeACWR, type LoadZone } from "@/lib/load";
 import { ReadinessGauge } from "@/components/ReadinessGauge";
+import { MessageThread } from "@/components/MessageThread";
 import type { DailyCheckIn, Program, TrainingLog } from "@/lib/types";
 
 const ZONE: Record<LoadZone, { label: string; color: string }> = {
@@ -28,7 +29,7 @@ export default function SquadAthletePage() {
 }
 
 function Inner() {
-  useCurrentUser();
+  const user = useCurrentUser();
   const athleteId = useSearchParams().get("id") ?? "";
   const today = new Date().toISOString().slice(0, 10);
 
@@ -97,6 +98,8 @@ function Inner() {
           {readiness.focus_body_part && <div className="chip mt-2 text-readiness-red">⚠️ Watch zone: {readiness.focus_body_part}</div>}
         </div>
       )}
+
+      <MessageThread coachId={user.id} athleteId={athleteId} meId={user.id} otherName={data.name.split(" ")[0]} />
     </div>
   );
 }
