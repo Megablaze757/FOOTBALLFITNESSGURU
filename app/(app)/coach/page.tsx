@@ -17,6 +17,7 @@ import { METRIC_CATALOG, metricDef, benchmarkProgress } from "@/lib/benchmarks";
 import { RingProgress } from "@/components/RingProgress";
 import { CoachChat } from "@/components/CoachChat";
 import { ProgramCalendar } from "@/components/ProgramCalendar";
+import { WorkoutPlayer } from "@/components/WorkoutPlayer";
 import type { CheckInInput, DailyCheckIn, Program, StrengthBenchmark, TrainingLog, TrainingDrill } from "@/lib/types";
 
 /** Latest recorded value per benchmark metric, newest test first. */
@@ -375,6 +376,7 @@ function ActiveProgram({
   const [logged, setLogged] = useState(false);
   const [switching, setSwitching] = useState(false);
   const [advancing, setAdvancing] = useState(false);
+  const [playing, setPlaying] = useState(false);
 
   async function switchSeason() {
     setSwitching(true);
@@ -548,9 +550,19 @@ function ActiveProgram({
                   <li key={k}>{d.name} · <span className="text-slate-500">{d.sets}×{d.reps}</span></li>
                 ))}
               </ul>
+              <button onClick={() => setPlaying(true)} className="btn-primary mt-4">▶ Start guided session</button>
             </div>
           )}
         </section>
+      )}
+
+      {playing && nextSession && (
+        <WorkoutPlayer
+          title={`Week ${nextSession.w} · ${nextSession.s.title}`}
+          drills={nextSession.s.drills}
+          onComplete={() => { if (!program.completed_sessions.includes(`w${nextSession.w}d${nextSession.s.day}`)) void toggleSession(`w${nextSession.w}d${nextSession.s.day}`); }}
+          onClose={() => setPlaying(false)}
+        />
       )}
 
       {/* Today's tailored drills */}
