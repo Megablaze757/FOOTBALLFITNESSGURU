@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { SPORTS } from "@/lib/exercises";
+import { SPORTS, DIFFICULTIES } from "@/lib/exercises";
 import { positionsForSport } from "@/lib/coach";
 import type { Profile } from "@/lib/types";
 
@@ -16,6 +16,7 @@ export function ProfileForm({ profile, email }: { profile: Profile; email: strin
   const [role, setRole] = useState<Profile["role"]>(profile.role);
   const [sport, setSport] = useState<string>(profile.sport ?? "football");
   const [position, setPosition] = useState<string>(profile.position ?? "");
+  const [level, setLevel] = useState<string>(profile.level ?? "advanced");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -29,7 +30,7 @@ export function ProfileForm({ profile, email }: { profile: Profile; email: strin
 
     const { error } = await supabase
       .from("profiles")
-      .update({ full_name: fullName || null, bio: bio || null, experience_years: experience ? Number(experience) : null, role, sport, position: position || null })
+      .update({ full_name: fullName || null, bio: bio || null, experience_years: experience ? Number(experience) : null, role, sport, position: position || null, level })
       .eq("id", profile.id);
 
     if (error) setError(error.message);
@@ -70,6 +71,15 @@ export function ProfileForm({ profile, email }: { profile: Profile; email: strin
           <option value="">— none —</option>
           {[...new Set([position, ...positionsForSport(sport)].filter(Boolean))].map((p) => (
             <option key={p} value={p}>{p}</option>
+          ))}
+        </select>
+      </label>
+
+      <label className="block">
+        <span className="field-label">Training level</span>
+        <select value={level} onChange={(e) => setLevel(e.target.value)} className="field [color-scheme:dark]">
+          {DIFFICULTIES.map((d) => (
+            <option key={d.id} value={d.id}>{d.label}</option>
           ))}
         </select>
       </label>

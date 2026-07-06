@@ -6,12 +6,22 @@
 // Pure data (no deps) — safe on the static site.
 // =============================================================================
 
+import { IMPORTED_EXERCISES, difficultyOf, equipBucket } from "./exercise-catalog";
+
 export type DemoPattern =
   | "squat" | "hinge" | "lunge" | "jump" | "plank"
   | "run" | "lateral" | "ball" | "bike" | "press" | "pull";
 
 export type ExerciseCategory =
   | "Speed" | "Agility" | "Power" | "Strength" | "Recovery" | "Endurance" | "Skill";
+
+export type Difficulty = "easy" | "medium" | "advanced";
+export const DIFFICULTIES: { id: Difficulty; label: string }[] = [
+  { id: "easy", label: "Beginner" },
+  { id: "medium", label: "Intermediate" },
+  { id: "advanced", label: "Advanced" },
+];
+const DIFF_RANK: Record<Difficulty, number> = { easy: 0, medium: 1, advanced: 2 };
 
 export type SportId = "football" | "rugby" | "weightlifting" | "gym" | "basketball" | "running";
 
@@ -37,6 +47,8 @@ export interface Exercise {
   sports?: SportId[];   // omitted = general (applies to every sport)
   description?: string; // fuller how-to (merged from DESCRIPTIONS below)
   custom?: boolean;     // true for coach-authored team exercises
+  imported?: boolean;   // true for the bulk gym-database entries
+  difficulty?: Difficulty;
   video_url?: string;   // optional real demo clip (falls back to the animation)
 }
 
@@ -289,6 +301,14 @@ const DESCRIPTIONS: Record<string, string> = {
 
 for (const e of EXERCISES) e.description = DESCRIPTIONS[e.id] ?? e.why;
 
+// Merge the bulk gym database — skip any whose name already has a rich entry.
+const richNames = new Set(EXERCISES.map((e) => e.name.toLowerCase()));
+for (const e of IMPORTED_EXERCISES) {
+  if (!richNames.has(e.name.toLowerCase())) EXERCISES.push(e);
+}
+// Every exercise gets a difficulty (rich ones inferred from the name).
+for (const e of EXERCISES) e.difficulty ??= difficultyOf(e.name);
+
 const BY_ID: Record<string, Exercise> = Object.fromEntries(EXERCISES.map((e) => [e.id, e]));
 
 export function getExercise(id: string): Exercise | null {
@@ -299,6 +319,18 @@ const BY_NAME: Record<string, Exercise> = Object.fromEntries(EXERCISES.map((e) =
 
 export function getExerciseByName(name: string): Exercise | null {
   return BY_NAME[name.trim().toLowerCase()] ?? null;
+}
+
+// --- level + equipment filtering (for the library) --------------------------
+export const EQUIPMENT_BUCKETS = ["Barbell", "Dumbbell", "Machine", "Cable", "Bodyweight", "Kettlebell", "Other"] as const;
+
+export function exerciseEquip(ex: Exercise): string {
+  return equipBucket(ex.equipment);
+}
+
+/** True if the exercise is at or below the athlete's chosen level (a ceiling). */
+export function withinLevel(ex: Exercise, maxLevel: Difficulty): boolean {
+  return DIFF_RANK[ex.difficulty ?? "medium"] <= DIFF_RANK[maxLevel];
 }
 
 /** Progression method for a drill referenced by name (null if unknown). */

@@ -187,4 +187,5 @@ export interface Profile {
   position?: string | null;
   training_focus?: string | null;
   onboarded?: boolean | null;
+  level?: string | null;
 }
