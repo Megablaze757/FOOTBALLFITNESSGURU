@@ -28,6 +28,7 @@ export interface Env {
   REMINDER_FROM: string;
   GAS_EMAIL_URL: string;     // Google Apps Script web-app URL (preferred email sender)
   GAS_EMAIL_SECRET: string;  // shared secret the GAS script checks
+  AI_DAILY_LIMIT: string;    // max LLM calls per user per day (default 40)
   APP_URL: string;
 }
 
@@ -76,6 +77,29 @@ async function authUser(req: Request, env: Env): Promise<{ id: string; email: st
   return u?.id ? { id: u.id, email: u.email } : null;
 }
 
+// --- Rate limiting ---------------------------------------------------------
+// Per-user daily cap on LLM calls (default 40). Fail-open so a hiccup in usage
+// tracking never blocks the coach; requires SUPABASE_SERVICE_ROLE_KEY to enforce.
+async function allowAiCall(env: Env, userId: string): Promise<boolean> {
+  const limit = Number(env.AI_DAILY_LIMIT || "40");
+  if (!env.SUPABASE_SERVICE_ROLE_KEY) return true;
+  try {
+    const r = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/bump_ai_usage`, {
+      method: "POST",
+      headers: {
+        apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ p_user: userId, p_limit: limit }),
+    });
+    if (!r.ok) return true;
+    return (await r.json()) === true;
+  } catch {
+    return true;
+  }
+}
+
 // --- AI via OpenRouter -----------------------------------------------------
 async function openRouter(env: Env, system: string, user: string, maxTokens = 800): Promise<string> {
   const r = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -101,8 +125,12 @@ async function openRouter(env: Env, system: string, user: string, maxTokens = 80
 }
 
 async function coachChat(req: Request, env: Env): Promise<Response> {
-  if (!(await authUser(req, env))) return json({ error: "unauthorized" }, 401);
-  const { question, context } = (await req.json()) as { question: string; context: Record<string, unknown> };
+  const u = await authUser(req, env);
+  if (!u) return json({ error: "unauthorized" }, 401);
+  if (!(await allowAiCall(env, u.id))) return json({ error: "daily AI limit reached" }, 429);
+  const body = (await req.json()) as { question: string; context: Record<string, unknown> };
+  const question = (body.question ?? "").slice(0, 600); // cap input for speed + abuse control
+  const context = body.context;
   if (!question) return json({ error: "question required" }, 400);
   const sys =
     "You are the athlete's personal football S&C coach and physio. Answer directly and practically " +
@@ -111,12 +139,14 @@ async function coachChat(req: Request, env: Env): Promise<Response> {
   const ctx =
     `Goal: ${context?.goal ?? "general"}\nSore areas: ${(context?.soreAreas as string[])?.join(", ") || "none"}\n` +
     `Readiness: ${context?.readinessStatus ?? "unknown"}\nPlan drills: ${(context?.programDrills as string[])?.join(", ") || "none"}`;
-  const answer = await openRouter(env, sys, `Context:\n${ctx}\n\nQuestion: ${question}`, 600);
+  const answer = await openRouter(env, sys, `Context:\n${ctx}\n\nQuestion: ${question}`, 320);
   return json({ answer });
 }
 
 async function generateProgram(req: Request, env: Env): Promise<Response> {
-  if (!(await authUser(req, env))) return json({ error: "unauthorized" }, 401);
+  const u = await authUser(req, env);
+  if (!u) return json({ error: "unauthorized" }, 401);
+  if (!(await allowAiCall(env, u.id))) return json({ error: "daily AI limit reached" }, 429);
   const { goal, pain_map, notes, in_season, sport, position, focus } = (await req.json()) as {
     goal: string; pain_map: Record<string, number>; notes?: string; in_season?: boolean;
     sport?: string; position?: string; focus?: string;

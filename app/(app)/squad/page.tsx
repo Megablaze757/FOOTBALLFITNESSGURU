@@ -6,6 +6,8 @@ import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/lib/auth";
 import { useAsync } from "@/lib/use-async";
 import { assessReadiness } from "@/lib/readiness";
+import { checkInStreak } from "@/lib/load";
+import { computeXp, levelFor } from "@/lib/gamification";
 import { TeamExercises } from "@/components/TeamExercises";
 import type { DailyCheckIn, Profile, Program } from "@/lib/types";
 
@@ -16,6 +18,9 @@ interface AthleteRow {
   lastCheckIn: string | null;
   goal: string | null;
   adherence: number | null;
+  xp: number;
+  level: number;
+  streak: number;
 }
 
 export default function SquadPage() {
@@ -39,21 +44,53 @@ export default function SquadPage() {
     if (!acceptedIds.length) return { isCoach: true, athletes: [] as AthleteRow[], pending };
     const ids = acceptedIds;
 
-    const [{ data: profiles }, { data: checkIns }, { data: programs }] = await Promise.all([
+    const since7 = new Date(Date.now() - 6 * 86400_000).toISOString().slice(0, 10);
+    const [{ data: profiles }, { data: checkIns }, { data: programs }, { data: training }, { data: nutrition }, { data: benches }] = await Promise.all([
       supabase.from("profiles").select("id, full_name").in("id", ids),
       supabase.from("daily_check_ins").select("*").in("user_id", ids).order("check_in_date", { ascending: false }),
-      supabase.from("programs").select("*").in("user_id", ids).eq("status", "active"),
+      supabase.from("programs").select("*").in("user_id", ids),
+      supabase.from("training_logs").select("user_id, log_date").in("user_id", ids),
+      supabase.from("nutrition_logs").select("user_id").in("user_id", ids),
+      supabase.from("strength_benchmarks").select("user_id").in("user_id", ids),
     ]);
 
+    const checkDatesByUser = new Map<string, string[]>();
     const latestCheck = new Map<string, DailyCheckIn>();
-    for (const c of (checkIns ?? []) as DailyCheckIn[]) if (!latestCheck.has(c.user_id)) latestCheck.set(c.user_id, c);
-    const progByUser = new Map<string, Program>();
-    for (const p of (programs ?? []) as Program[]) progByUser.set(p.user_id, p);
+    for (const c of (checkIns ?? []) as DailyCheckIn[]) {
+      if (!latestCheck.has(c.user_id)) latestCheck.set(c.user_id, c);
+      (checkDatesByUser.get(c.user_id) ?? checkDatesByUser.set(c.user_id, []).get(c.user_id)!).push(c.check_in_date);
+    }
+    const activeProg = new Map<string, Program>();
+    const blocksByUser = new Map<string, number>();
+    for (const p of (programs ?? []) as Program[]) {
+      if (p.status === "active") activeProg.set(p.user_id, p);
+      if (p.status === "archived") blocksByUser.set(p.user_id, (blocksByUser.get(p.user_id) ?? 0) + 1);
+    }
+    const countBy = (rows: { user_id: string }[] | null) => {
+      const m = new Map<string, number>();
+      for (const r of rows ?? []) m.set(r.user_id, (m.get(r.user_id) ?? 0) + 1);
+      return m;
+    };
+    const trainCount = countBy(training as { user_id: string }[] | null);
+    const nutriCount = countBy(nutrition as { user_id: string }[] | null);
+    const benchCount = countBy(benches as { user_id: string }[] | null);
 
     const athletes: AthleteRow[] = ((profiles ?? []) as Pick<Profile, "id" | "full_name">[]).map((p) => {
       const c = latestCheck.get(p.id);
-      const prog = progByUser.get(p.id);
+      const prog = activeProg.get(p.id);
       const total = prog ? prog.plan.weeks.reduce((n, w) => n + w.sessions.length, 0) : 0;
+      const dates = checkDatesByUser.get(p.id) ?? [];
+      const xp = computeXp({
+        checkIns: dates.length,
+        streak: checkInStreak(dates),
+        trainingSessions: trainCount.get(p.id) ?? 0,
+        completedSessions: prog?.completed_sessions.length ?? 0,
+        completedBlocks: blocksByUser.get(p.id) ?? 0,
+        benchmarks: benchCount.get(p.id) ?? 0,
+        videos: 0,
+        nutritionLogs: nutriCount.get(p.id) ?? 0,
+        checkInsLast7: dates.filter((d) => d >= since7).length,
+      });
       return {
         id: p.id,
         name: p.full_name ?? "Athlete",
@@ -64,8 +101,12 @@ export default function SquadPage() {
         lastCheckIn: c?.check_in_date ?? null,
         goal: prog?.goal_type ?? null,
         adherence: prog && total ? Math.round((prog.completed_sessions.length / total) * 100) : null,
+        xp,
+        level: levelFor(xp).level,
+        streak: checkInStreak(dates),
       };
     });
+    athletes.sort((a, b) => b.xp - a.xp);
     return { isCoach: true, athletes, pending };
   }, [user.id, today]);
 
@@ -98,27 +139,36 @@ export default function SquadPage() {
       {!data.athletes.length ? (
         <p className="card px-4 py-8 text-center text-sm text-slate-500">No athletes yet — add one by email above.</p>
       ) : (
-        <ul className="grid gap-3 sm:grid-cols-2">
-          {data.athletes.map((a) => (
+        <>
+        <h2 className="field-label">🏆 Squad leaderboard</h2>
+        <ul className="space-y-2">
+          {data.athletes.map((a, i) => (
             <li key={a.id}>
-              <Link href={`/squad/view?id=${a.id}`} className="card card-hover flex h-full items-center justify-between p-4">
-                <div>
-                  <div className="font-bold text-slate-100">{a.name}</div>
-                  <div className="text-xs text-slate-400">
-                    {a.goal ? `${a.goal} · ${a.adherence ?? 0}% adherence` : "no active program"} · {a.lastCheckIn ? `checked in ${a.lastCheckIn.slice(5)}` : "no check-in"}
+              <Link href={`/squad/view?id=${a.id}`} className="card card-hover flex items-center gap-3 p-3 sm:p-4">
+                <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl text-sm font-extrabold ${i < 3 ? "bg-pitch-400/15 text-pitch-400" : "bg-white/[0.04] text-slate-400"}`}>
+                  {["🥇", "🥈", "🥉"][i] ?? i + 1}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="truncate font-bold text-slate-100">{a.name}</span>
+                    <span className="chip shrink-0 text-pitch-400">Lv {a.level}</span>
+                  </div>
+                  <div className="truncate text-xs text-slate-400">
+                    {a.xp.toLocaleString()} XP · 🔥 {a.streak}d{a.goal ? ` · ${a.adherence ?? 0}% adherence` : ""}
                   </div>
                 </div>
                 {a.readiness ? (
-                  <span className="rounded-full px-3 py-1 text-sm font-bold" style={{ color: color(a.readiness.status), background: `${color(a.readiness.status)}22` }}>
+                  <span className="shrink-0 rounded-full px-3 py-1 text-sm font-bold" style={{ color: color(a.readiness.status), background: `${color(a.readiness.status)}22` }}>
                     {a.readiness.score}
                   </span>
                 ) : (
-                  <span className="text-xs text-slate-500">—</span>
+                  <span className="shrink-0 text-xs text-slate-500">—</span>
                 )}
               </Link>
             </li>
           ))}
         </ul>
+        </>
       )}
 
       <TeamExercises coachId={user.id} />

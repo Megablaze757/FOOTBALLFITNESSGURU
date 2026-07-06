@@ -10,6 +10,7 @@ import {
   type GoalType, type ProgramPlan, type TrainingFocus,
 } from "@/lib/coach";
 import type { SportId } from "@/lib/exercises";
+import { templatesForSport } from "@/lib/programs";
 import { assessReadiness } from "@/lib/readiness";
 import { invokeAI } from "@/lib/api";
 import { METRIC_CATALOG, metricDef, benchmarkProgress } from "@/lib/benchmarks";
@@ -140,8 +141,8 @@ function GoalBuilder({ painMap, latestBench, sport, initialPosition, initialFocu
 
   const sore = Object.entries(painByArea(painMap)).filter(([, v]) => (v ?? 0) >= 4).map(([a]) => a.replace("_", " "));
 
-  async function generate() {
-    if (!goal) return;
+  async function createProgram(g: GoalType, f: TrainingFocus, pos: string) {
+    setGoal(g); setFocus(f); setPosition(pos);
     setCreating(true);
     setError(null);
     const supabase = createClient();
@@ -150,20 +151,20 @@ function GoalBuilder({ painMap, latestBench, sport, initialPosition, initialFocu
     // local engine (works offline / on Pages).
     let plan: ProgramPlan;
     try {
-      const data = await invokeAI<{ plan?: ProgramPlan }>("generate-program", { goal, pain_map: painMap, notes, in_season: inSeason, sport, position, focus });
+      const data = await invokeAI<{ plan?: ProgramPlan }>("generate-program", { goal: g, pain_map: painMap, notes, in_season: inSeason, sport, position: pos, focus: f });
       if (!data?.plan) throw new Error("fallback");
       plan = data.plan;
     } catch {
-      plan = buildProgram({ goal, painMap, isInSeason: inSeason, sport, position, focus });
+      plan = buildProgram({ goal: g, painMap, isInSeason: inSeason, sport, position: pos, focus: f });
     }
 
     // Remember the athlete's position + focus for next time.
-    await supabase.from("profiles").update({ position: position || null, training_focus: focus }).eq("id", userId);
+    await supabase.from("profiles").update({ position: pos || null, training_focus: f }).eq("id", userId);
     // One active program at a time.
     await supabase.from("programs").update({ status: "archived" }).eq("user_id", userId).eq("status", "active");
     const baseline = metric ? latestBench[metric] ?? null : null;
     const { error: insErr } = await supabase.from("programs").insert({
-      user_id: userId, goal_type: goal, goal_notes: notes || null, plan, status: "active",
+      user_id: userId, goal_type: g, goal_notes: notes || null, plan, status: "active",
       in_season: inSeason, target_date: targetDate || null, block: 1,
       target_metric: metric || null, target_value: targetValue ? Number(targetValue) : null, baseline_value: baseline,
     });
@@ -187,6 +188,33 @@ function GoalBuilder({ painMap, latestBench, sport, initialPosition, initialFocu
           ⚠️ I see soreness in your <b>{sore.join(" & ")}</b> — I&apos;ll work around it with lower-impact options.
         </div>
       )}
+
+      {/* One-tap templates */}
+      <div>
+        <div className="mb-2 flex items-center justify-between">
+          <span className="field-label !mb-0">Quick-start programs</span>
+          <span className="text-xs text-slate-500">tap to build instantly</span>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {templatesForSport(sport).map((t) => (
+            <button
+              key={t.id}
+              onClick={() => createProgram(t.goal, t.focus, t.position ?? position)}
+              disabled={creating}
+              className="card card-hover flex items-center gap-3 p-4 text-left disabled:opacity-50"
+            >
+              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white/[0.04] text-xl">{t.icon}</span>
+              <span className="min-w-0">
+                <span className="block text-sm font-bold text-slate-100">{t.name}</span>
+                <span className="block text-xs text-slate-400">{t.blurb}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+        <div className="mt-4 flex items-center gap-3 text-xs text-slate-500">
+          <span className="h-px flex-1 bg-white/10" /> or build your own <span className="h-px flex-1 bg-white/10" />
+        </div>
+      </div>
 
       {/* Position / event */}
       {positions.length > 0 && (
@@ -274,7 +302,7 @@ function GoalBuilder({ painMap, latestBench, sport, initialPosition, initialFocu
       </label>
 
       {error && <p className="text-sm text-readiness-red">{error}</p>}
-      <button onClick={generate} disabled={!goal || creating} className="btn-primary">
+      <button onClick={() => goal && createProgram(goal, focus, position)} disabled={!goal || creating} className="btn-primary">
         {creating ? "Building your program…" : "Generate my program"}
       </button>
     </div>
