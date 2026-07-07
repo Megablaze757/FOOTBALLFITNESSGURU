@@ -68,10 +68,65 @@ function slug(name: string): string {
   return "x_" + name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
 }
 
+// Hand-written coaching for the most-used gym lifts (keyed by lowercased name).
+// Anything not here still gets a sensible auto-generated entry.
+const COACHING: Record<string, { cues: string[]; why: string }> = {
+  "shoulder press": { cues: ["Brace the core, glutes tight", "Press in a path close to your face", "Full lockout, biceps by the ears"], why: "The primary overhead pressing lift for shoulder strength and stability." },
+  "military press": { cues: ["Strict — no leg drive", "Ribs down, don't lean back", "Bar over the mid-foot at lockout"], why: "A strict standing press that builds honest overhead strength." },
+  "dumbbell bench press": { cues: ["Shoulder blades pinned back", "Lower to a deep stretch", "Press the dumbbells together at the top"], why: "Builds the chest through a bigger range than a barbell, evening out left/right." },
+  "incline bench press": { cues: ["Bench at ~30°", "Bar to the upper chest", "Drive the feet into the floor"], why: "Emphasises the upper chest and front delts." },
+  "incline dumbbell bench press": { cues: ["Bench ~30°, blades retracted", "Deep stretch at the bottom", "Control the negative"], why: "Upper-chest builder with a friendly, free range of motion." },
+  "decline bench press": { cues: ["Slight decline", "Bar to the lower chest", "Keep the elbows tucked ~45°"], why: "Targets the lower chest with a strong pressing angle." },
+  "dumbbell fly": { cues: ["Soft elbows, don't bend them", "Open until you feel the stretch", "Hug the weights back up"], why: "Isolates the chest with a big stretch — great for hypertrophy." },
+  "machine chest fly": { cues: ["Chest tall, slight arch", "Squeeze at the middle", "Slow, controlled return"], why: "A stable, joint-friendly way to isolate and pump the chest." },
+  "cable fly": { cues: ["Slight forward lean", "Meet in front of the chest", "Constant tension throughout"], why: "Constant-tension chest isolation from the cables." },
+  "push ups": { cues: ["Body in a straight line, glutes tight", "Chest to the floor", "Elbows ~45°, not flared"], why: "The foundational bodyweight press — endlessly scalable." },
+  "dips": { cues: ["Slight forward lean for chest", "Lower to a comfortable stretch", "Lock out strong at the top"], why: "Big compound builder for chest and triceps." },
+  "bent over row": { cues: ["Hinge to ~45°, flat back", "Row to the lower ribs", "Squeeze the shoulder blades"], why: "Heavy horizontal pulling to balance all your pressing." },
+  "dumbbell row": { cues: ["Flat back, brace on a bench", "Drive the elbow past the ribs", "Control the lower"], why: "Unilateral back builder that irons out left/right imbalances." },
+  "seated cable row": { cues: ["Tall chest, don't round", "Pull to the belly button", "Squeeze then control back"], why: "Mid-back thickness with constant cable tension." },
+  "lat pulldown": { cues: ["Drive the elbows down and back", "Chest tall, slight lean", "No heaving with the torso"], why: "Builds back width — a scalable pull-up alternative." },
+  "chin ups": { cues: ["Full dead hang", "Lead with the chest", "Own the lower — no kipping"], why: "Biceps-and-back bodyweight builder; slightly easier than pull-ups." },
+  "t bar row": { cues: ["Flat back, chest supported if possible", "Row to the sternum", "Big squeeze at the top"], why: "Loads the mid-back heavy and safe." },
+  "barbell shrug": { cues: ["Shrug straight up to the ears", "Pause at the top", "No rolling the shoulders"], why: "Directly builds the traps." },
+  "face pull": { cues: ["Pull to the forehead/eyes", "Elbows high, rotate out", "Squeeze the rear delts"], why: "Bulletproofs the shoulders and rear delts — great for posture." },
+  "dumbbell lateral raise": { cues: ["Lead with the elbows", "Raise to shoulder height", "Slow negative, no swinging"], why: "The key exercise for wider, capped side delts." },
+  "cable lateral raise": { cues: ["Constant tension from the cable", "Lead with the elbow", "Controlled all the way down"], why: "Side-delt isolation with tension through the whole range." },
+  "dumbbell front raise": { cues: ["Raise to eye level", "No momentum", "Lower slowly"], why: "Isolates the front delts." },
+  "arnold press": { cues: ["Start palms facing you", "Rotate as you press", "Full lockout overhead"], why: "Hits all three delt heads through a rotating press." },
+  "upright row": { cues: ["Lead with the elbows", "Pull to mid-chest, not the chin", "Keep it slow"], why: "Builds side delts and traps (stop at chest height to spare the shoulder)." },
+  "dumbbell curl": { cues: ["Elbows pinned to your sides", "Full squeeze at the top", "Slow the lower for 2-3s"], why: "The classic biceps builder." },
+  "barbell curl": { cues: ["Elbows fixed, no swinging", "Curl to a full contraction", "Control the negative"], why: "Lets you load the biceps heavier than dumbbells." },
+  "hammer curl": { cues: ["Neutral grip, thumbs up", "Elbows tight to the body", "Squeeze at the top"], why: "Hits the biceps and the brachialis/forearm for thicker arms." },
+  "preacher curl": { cues: ["Armpits on the pad", "Don't fully lock out at the bottom", "Full squeeze at the top"], why: "Strict biceps isolation with no cheating." },
+  "cable bicep curl": { cues: ["Elbows fixed", "Constant cable tension", "Squeeze hard at the top"], why: "Keeps tension on the biceps through the whole rep." },
+  "tricep pushdown": { cues: ["Elbows glued to your sides", "Full lockout at the bottom", "Control back up"], why: "The go-to triceps isolation for the outer head." },
+  "tricep rope pushdown": { cues: ["Split the rope at the bottom", "Elbows pinned", "Full extension and squeeze"], why: "Extra contraction at the bottom for the triceps." },
+  "lying tricep extension": { cues: ["Lower to the forehead/behind the head", "Elbows pointing up, fixed", "Control the stretch"], why: "Builds the long head of the triceps for bigger arms." },
+  "close grip bench press": { cues: ["Hands ~shoulder width", "Elbows tucked", "Bar to the lower chest"], why: "A pressing movement that overloads the triceps." },
+  "leg extension": { cues: ["Squeeze the quads at the top", "Pause briefly", "Slow the lower"], why: "Isolates the quads — great for a knee-friendly quad pump." },
+  "seated leg curl": { cues: ["Drive the heels down and under", "Squeeze the hamstrings", "Slow return"], why: "Isolates the hamstrings for size and knee health." },
+  "lying leg curl": { cues: ["Hips pinned to the pad", "Curl fully, squeeze", "Control the negative"], why: "Direct hamstring isolation." },
+  "sled leg press": { cues: ["Feet mid-platform, knees track toes", "Don't lock out hard", "Full controlled range"], why: "Loads the legs heavy with the back supported." },
+  "hack squat": { cues: ["Full-foot pressure", "Knees track over the toes", "Deep but controlled"], why: "Quad-dominant squat pattern with a fixed, supported path." },
+  "bodyweight squat": { cues: ["Sit back and down", "Chest up, heels down", "Full depth"], why: "The base squat pattern — master this before loading." },
+  "dumbbell lunge": { cues: ["Long step, vertical front shin", "Drop the back knee straight down", "Drive through the front heel"], why: "Single-leg strength and balance that carries to sport." },
+  "walking lunge": { cues: ["Big controlled steps", "Torso tall", "Push through the front foot"], why: "Builds legs and stability under continuous tension." },
+  "crunches": { cues: ["Curl the ribs to the hips", "Don't yank the neck", "Slow and controlled"], why: "Targets the upper abs." },
+  "hanging leg raise": { cues: ["No swinging", "Curl the pelvis up", "Lower under control"], why: "Strong lower-ab and hip-flexor builder." },
+  "russian twist": { cues: ["Rotate from the ribs", "Keep the chest tall", "Controlled side to side"], why: "Trains the obliques and rotational core." },
+  "cable crunch": { cues: ["Round the spine down", "Crunch with the abs, not the arms", "Squeeze at the bottom"], why: "Loadable ab work for real progression." },
+  "goblet squat": { cues: ["Hold the bell at the chest", "Elbows inside the knees at the bottom", "Sit tall and deep"], why: "A joint-friendly squat that teaches depth and bracing." },
+  "push press": { cues: ["Small dip from the legs", "Explode the bar up", "Punch the head through at lockout"], why: "Lets you move more overhead by adding leg drive — builds power." },
+  "dumbbell shoulder press": { cues: ["Neutral, stacked wrists", "Press without flaring the ribs", "Full range each rep"], why: "Shoulder size and stability with a friendly joint path." },
+  "romanian deadlift": { cues: ["Soft knees, push the hips back", "Bar close to the legs", "Feel the hamstring stretch, then stand"], why: "The best hamstring and glute builder through a big hip hinge." },
+};
+
 function build(raw: string): Exercise[] {
   return raw.trim().split("\n").map((line) => {
     const [name, muscle] = line.split("|").map((s) => s.trim());
     const equipment = equipmentOf(name);
+    const coach = COACHING[name.toLowerCase()];
     return {
       id: slug(name),
       name,
@@ -80,8 +135,8 @@ function build(raw: string): Exercise[] {
       equipment,
       muscles: [muscle],
       tempo: "Controlled",
-      cues: [],
-      why: `Builds the ${muscle.toLowerCase()}.`,
+      cues: coach?.cues ?? [],
+      why: coach?.why ?? `Builds the ${muscle.toLowerCase()}.`,
       difficulty: difficultyOf(name),
       imported: true,
     } as Exercise;
