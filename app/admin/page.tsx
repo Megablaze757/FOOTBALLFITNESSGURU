@@ -125,7 +125,12 @@ function CreateBetaAccount() {
       setResult(`✅ Created ${email} — password: ${password} (share these, they can change it later).`);
       setEmail(""); setName(""); setPassword(randomPassword());
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed. Is the Worker deployed with the service-role key?");
+      const m = e instanceof Error ? e.message : "";
+      setError(
+        /admins only|403/.test(m)
+          ? "Rejected. Set SUPABASE_SERVICE_ROLE_KEY on the Cloudflare Worker (wrangler secret put) and redeploy — it's needed to verify your admin role and create users."
+          : m || "Failed to create the account."
+      );
     } finally {
       setBusy(false);
     }

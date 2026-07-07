@@ -20,7 +20,14 @@ export async function invokeAI<T = unknown>(fn: string, body: unknown): Promise<
       },
       body: JSON.stringify(body),
     });
-    if (!res.ok) throw new Error(`api ${res.status}`);
+    if (!res.ok) {
+      let msg = `api ${res.status}`;
+      try {
+        const body = (await res.json()) as { error?: string };
+        if (body?.error) msg = body.error;
+      } catch { /* non-JSON body */ }
+      throw new Error(msg);
+    }
     return (await res.json()) as T;
   }
 
