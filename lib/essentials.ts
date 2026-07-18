@@ -248,8 +248,26 @@ export interface RecoveryProtocol {
   when: string;
   icon: string;
   steps: string[];
-  areas?: string[]; // body areas this protocol targets (for injury-specific ones)
+  areas?: string[];       // body areas this protocol targets (for injury-specific ones)
+  stages?: RehabStage[];  // staged return-to-play plan
+  redFlags?: string[];    // signs to stop and get assessed by a professional
+  exerciseIds?: string[]; // ids in lib/exercises.ts to load the rehab work from
 }
+
+// One phase of a return-to-play progression. `criteria` is what must be true
+// before moving on — progressing on symptoms rather than dates is what stops
+// the re-injury cycle.
+export interface RehabStage {
+  phase: string;    // "Phase 1 — Protect"
+  window: string;   // rough timeframe
+  focus: string;
+  criteria: string; // gate to the next phase
+}
+
+// Shown wherever rehab content appears. This is coaching guidance, not a
+// diagnosis — anything significant needs a real clinician.
+export const REHAB_DISCLAIMER =
+  "General guidance only — not a medical diagnosis. If pain is severe, you heard a pop, you can't bear weight, or it isn't improving after a week or two, get assessed by a physio or doctor.";
 
 export const RECOVERY_GENERAL: RecoveryProtocol[] = [
   {
@@ -269,23 +287,170 @@ export const RECOVERY_GENERAL: RecoveryProtocol[] = [
 export const RECOVERY_INJURY: RecoveryProtocol[] = [
   {
     id: "ankle", title: "Sore / rolled ankle", when: "First 48h", icon: "🦶", areas: ["ankle"],
-    steps: ["Rest — offload it and avoid aggravating movements", "Ice 15–20 min every 2–3 hours", "Compress with a wrap", "Elevate above heart level to control swelling", "Once pain settles, gentle range-of-motion (ankle circles, alphabet)"],
+    steps: [
+      "First 48h follow PEACE: Protect, Elevate, Avoid anti-inflammatories, Compress, Educate",
+      "Elevate above heart level — this does more for swelling than ice does",
+      "Compress with a wrap; ice 15–20 min for comfort if you want it",
+      "Keep weight-bearing within comfort — total rest stiffens it up",
+      "Then LOVE: Load, Optimism, Vascularisation, Exercise",
+    ],
+    stages: [
+      { phase: "Phase 1 — Settle", window: "Day 0–3", focus: "Protect, elevate, compress. Ankle alphabet and gentle pain-free motion.", criteria: "Swelling down and you can walk without a limp." },
+      { phase: "Phase 2 — Restore", window: "Day 3–10", focus: "Full range of motion, calf raises, and single-leg balance work.", criteria: "Full pain-free range and 20 single-leg calf raises." },
+      { phase: "Phase 3 — Rebuild", window: "Week 2–4", focus: "Balance on unstable surfaces, hopping, lateral loading, band work.", criteria: "30s eyes-closed single-leg balance and pain-free hopping." },
+      { phase: "Phase 4 — Return", window: "Week 3–6", focus: "Running, then cutting and changing direction, then contact/match play.", criteria: "Full-speed cutting with no pain, swelling or hesitation." },
+    ],
+    redFlags: ["Can't put weight through it for four steps", "Bony tenderness on the ankle knobs", "Obvious deformity", "Numbness or pins and needles in the foot"],
+    exerciseIds: ["ankle_alphabet", "single_leg_balance", "calf_raise_eccentric", "band_lateral_walk", "ankle_rocks"],
   },
   {
     id: "knee", title: "Achy knee", when: "Ongoing", icon: "🦵", areas: ["knee"],
-    steps: ["Ice after activity if it swells", "Avoid deep loaded knee bends while irritated", "Isometrics — Spanish squat or wall-sit holds load the tendon safely", "Strengthen the glutes/quads around it (band walks, step-ups)", "Build load back gradually — see a physio if it persists"],
+    steps: [
+      "Don't rest completely — tendons need load to heal, they just need the right amount",
+      "Use pain as your dial: up to about 3/10 during and settled by the next morning is acceptable",
+      "Isometrics first — wall sits and Spanish squats reduce tendon pain within minutes",
+      "Cut jumping and deep loaded knee bends while it's irritated, keep everything else",
+      "Strengthen upstream: glutes and quads control what the knee actually does",
+    ],
+    stages: [
+      { phase: "Phase 1 — Calm", window: "Week 1–2", focus: "Daily isometric holds, remove the aggravating jumping/deep-squat volume.", criteria: "Pain under 3/10 during daily activity." },
+      { phase: "Phase 2 — Load", window: "Week 2–6", focus: "Slow heavy strength — leg press, split squats, terminal knee extensions.", criteria: "Full pain-free range and comfortable loaded squatting." },
+      { phase: "Phase 3 — Spring", window: "Week 6–10", focus: "Reintroduce jumping and landing, starting low and building height.", criteria: "Pain-free repeated hopping and landing." },
+      { phase: "Phase 4 — Return", window: "Week 8+", focus: "Sport-specific cutting, sprinting and full training load.", criteria: "Symmetric strength and no morning-after stiffness." },
+    ],
+    redFlags: ["Knee gave way or locked", "Rapid swelling within an hour of the injury", "You heard or felt a pop", "Can't fully straighten it"],
+    exerciseIds: ["isometric_wall_sit", "spanish_squat", "terminal_knee_ext", "band_lateral_walk", "bulgarian_split"],
   },
   {
     id: "hamstring", title: "Tight / tweaked hamstring", when: "Early stage", icon: "🦿", areas: ["hamstring"],
-    steps: ["Don't aggressively stretch a strain early — it can set healing back", "Gentle pain-free isometrics (holds)", "Ice early if acute; keep walking within comfort", "Rebuild with slow eccentrics (Nordic curls, RDLs) as it settles", "Return to sprinting gradually"],
+    steps: [
+      "Don't aggressively stretch a fresh strain — it can set healing back",
+      "Start pain-free isometric holds within the first few days",
+      "Keep walking within comfort; keep training everything that doesn't hurt",
+      "Progress to slow eccentrics (sliders, then Nordics and RDLs) as it settles",
+      "Reintroduce sprinting gradually — most re-injuries happen from rushing this",
+    ],
+    stages: [
+      { phase: "Phase 1 — Protect", window: "Day 0–5", focus: "Pain-free isometric holds, walking, upper-body and other-leg training.", criteria: "Pain-free walking and gentle isometrics." },
+      { phase: "Phase 2 — Lengthen", window: "Week 1–3", focus: "Eccentric loading through range — sliders, then RDLs.", criteria: "Full range with no more than mild pulling sensation." },
+      { phase: "Phase 3 — Strengthen", window: "Week 3–5", focus: "Nordic curls and heavy hinging; start build-up runs.", criteria: "Strength within 10% of the other leg." },
+      { phase: "Phase 4 — Sprint", window: "Week 4–8", focus: "Progressive sprinting — 60%, 75%, 90%, then max over sessions.", criteria: "Max-speed sprinting with total confidence and no grabbing." },
+    ],
+    redFlags: ["You heard a pop and couldn't continue", "Big bruising down the back of the leg", "A visible gap or lump in the muscle", "Pain sitting on the bone at the top of the hamstring"],
+    exerciseIds: ["hamstring_slider", "nordic_curl", "single_leg_rdl", "glute_bridge", "tempo_runs"],
+  },
+  {
+    id: "groin", title: "Groin / adductor strain", when: "Early stage", icon: "🩹", areas: ["groin", "adductor", "hip"],
+    steps: [
+      "Very common in footballers — usually from kicking, lunging or a stretched tackle",
+      "Start adductor isometric squeezes early; they settle pain and preserve strength",
+      "Avoid long-range stretching and hard kicking while it's acute",
+      "Build to the Copenhagen plank — the best-evidenced groin-injury preventer",
+      "Kicking is the last thing to return, not the first",
+    ],
+    stages: [
+      { phase: "Phase 1 — Settle", window: "Day 0–7", focus: "Ball squeezes at submaximal effort, pain-free walking.", criteria: "Pain-free squeeze at full effort." },
+      { phase: "Phase 2 — Load", window: "Week 1–3", focus: "Side-lying adductor work, short-lever Copenhagen planks.", criteria: "Comfortable short-lever Copenhagen holds." },
+      { phase: "Phase 3 — Build", window: "Week 3–5", focus: "Full Copenhagen planks, lateral movement, change of direction.", criteria: "Pain-free cutting and shuffling at speed." },
+      { phase: "Phase 4 — Kick", window: "Week 4–8", focus: "Graded return to passing, then striking, then crossing at full power.", criteria: "Full-power striking with no pain next morning." },
+    ],
+    redFlags: ["Pain that wraps into the lower abdomen", "A visible bulge in the groin", "Pain that wakes you at night", "No improvement after three weeks"],
+    exerciseIds: ["adductor_iso_squeeze", "copenhagen", "band_lateral_walk", "world_greatest_stretch"],
+  },
+  {
+    id: "calf", title: "Calf strain / Achilles pain", when: "Ongoing", icon: "🦵", areas: ["calf", "achilles"],
+    steps: [
+      "Distinguish the two: a calf strain is a sudden muscle tear, Achilles pain builds gradually",
+      "For Achilles tendinopathy, heavy slow eccentric calf raises are the proven treatment",
+      "Morning stiffness in the tendon is the key marker — track whether it's improving week to week",
+      "Keep fitness with bike or pool work while loading tolerance rebuilds",
+      "Progress load, not just reps — the tendon needs weight, and it takes 8–12 weeks",
+    ],
+    stages: [
+      { phase: "Phase 1 — Settle", window: "Week 1–2", focus: "Isometric calf holds, reduce running volume, keep walking.", criteria: "Morning stiffness lasting under 10 minutes." },
+      { phase: "Phase 2 — Load", window: "Week 2–6", focus: "Daily eccentric calf raises, adding load as tolerated.", criteria: "20 single-leg calf raises with load, low pain." },
+      { phase: "Phase 3 — Spring", window: "Week 6–10", focus: "Pogo hops, skipping, and returning to easy running.", criteria: "Pain-free hopping and 20 minutes of easy running." },
+      { phase: "Phase 4 — Return", window: "Week 8–12", focus: "Sprinting and full training load rebuilt gradually.", criteria: "Full-speed sprinting with no next-day flare." },
+    ],
+    redFlags: ["Sudden pain like being kicked in the calf plus weakness pushing off", "Can't rise onto your toes on that leg", "A gap felt in the tendon", "Calf that is hot, swollen and painful at rest — get this checked urgently"],
+    exerciseIds: ["calf_raise_eccentric", "calf_raise", "ankle_rocks", "pogo_hops", "bike_intervals"],
   },
   {
     id: "lower_back", title: "Stiff lower back", when: "Ongoing", icon: "🧎", areas: ["lower_back"],
-    steps: ["Keep moving gently — avoid bed rest", "Cat-camel and hip-hinge mobility", "Brace properly under any load; avoid rounded lifting while sore", "Build core/glute strength (dead bugs, hip thrusts)", "See a professional if pain radiates down a leg"],
+    steps: [
+      "Keep moving gently — bed rest makes back pain worse, not better",
+      "Most back pain settles within a few weeks and is not structural damage",
+      "Cat-camel and hip-hinge mobility to restore comfortable movement",
+      "Brace properly under load; avoid rounded heavy lifting while sore",
+      "Build endurance with the McGill big three — curl-up, side plank, bird dog",
+    ],
+    stages: [
+      { phase: "Phase 1 — Move", window: "Day 0–7", focus: "Walking, gentle mobility, avoid the specific positions that spike pain.", criteria: "Comfortable walking and sitting." },
+      { phase: "Phase 2 — Control", window: "Week 1–3", focus: "McGill big three daily, hip hinge pattern with no load.", criteria: "Can hinge and brace without pain." },
+      { phase: "Phase 3 — Load", window: "Week 3–6", focus: "Reintroduce loaded hinging light and build; add glute strength.", criteria: "Comfortable moderate deadlifting and squatting." },
+      { phase: "Phase 4 — Return", window: "Week 4–8", focus: "Full lifting and sport load rebuilt progressively.", criteria: "Full training with no flare-ups." },
+    ],
+    redFlags: ["Pain radiating below the knee, or numbness/weakness in the leg", "Numbness in the saddle area or loss of bladder/bowel control — this is an emergency", "Unexplained weight loss or fever with back pain", "Pain following a significant fall or impact"],
+    exerciseIds: ["bird_dog", "mcgill_curl_up", "dead_bug", "glute_bridge", "hip_thrust"],
   },
   {
     id: "shoulder", title: "Niggly shoulder", when: "Ongoing", icon: "💪", areas: ["shoulder"],
-    steps: ["Reduce overhead loading while irritated", "Ice after aggravating sessions", "Band external rotations & scapular work", "Keep range of motion with gentle mobility", "Progress pressing volume slowly"],
+    steps: [
+      "Reduce overhead and heavy pressing volume while it's irritated — don't stop training entirely",
+      "Keep pain-free range daily so it doesn't stiffen up",
+      "Band external rotations and scapular control work are the backbone of shoulder rehab",
+      "Rebuild pressing from the friendliest angles first: neutral-grip and landmine before strict overhead",
+      "Progress volume slowly — shoulders punish sudden jumps in load",
+    ],
+    stages: [
+      { phase: "Phase 1 — Calm", window: "Week 1–2", focus: "Cut aggravating overhead work, daily pain-free range and isometrics.", criteria: "Pain-free daily use and sleeping through the night." },
+      { phase: "Phase 2 — Control", window: "Week 2–5", focus: "Cuff and scapular strengthening, rows, scap pull-ups.", criteria: "Full pain-free range with good scapular control." },
+      { phase: "Phase 3 — Press", window: "Week 4–8", focus: "Rebuild pressing from neutral grip toward full overhead.", criteria: "Comfortable overhead pressing at moderate load." },
+      { phase: "Phase 4 — Return", window: "Week 6+", focus: "Contact, throwing or full overhead sport load.", criteria: "Full load with no next-day pain." },
+    ],
+    redFlags: ["The shoulder dislocated or felt like it came out", "Can't lift the arm at all", "Pain with pins and needles down the arm", "Obvious deformity or major weakness after an impact"],
+    exerciseIds: ["shoulder_external_rotation", "scap_pull_up", "thoracic_openers", "barbell_row"],
+  },
+  {
+    id: "hip", title: "Tight hips / hip flexor", when: "Ongoing", icon: "🕺", areas: ["hip", "hip_flexor", "quad"],
+    steps: [
+      "Usually an overload issue from sprinting and kicking volume, or from long hours sitting",
+      "Stretching alone rarely fixes it — the muscle usually needs strengthening too",
+      "Couch stretch plus 90/90 work to restore range",
+      "Strengthen the hip flexor directly through range with banded marches",
+      "Get the glutes working so they share the load with the hip flexors",
+    ],
+    stages: [
+      { phase: "Phase 1 — Settle", window: "Week 1", focus: "Reduce sprint and kicking volume, daily gentle mobility.", criteria: "Pain-free walking and sitting." },
+      { phase: "Phase 2 — Restore", window: "Week 1–3", focus: "Couch stretch, 90/90 switches, glute bridges.", criteria: "Full pain-free hip extension." },
+      { phase: "Phase 3 — Strengthen", window: "Week 3–5", focus: "Loaded hip flexion, split squats, hinge strength.", criteria: "Strong and symmetric through full range." },
+      { phase: "Phase 4 — Return", window: "Week 4–6", focus: "Graded return to sprinting and striking.", criteria: "Full-speed running and kicking with no grab." },
+    ],
+    redFlags: ["Deep groin pain with clicking or catching", "Pain that refers into the knee", "Marked loss of hip rotation", "Night pain"],
+    exerciseIds: ["couch_stretch", "hip_90_90", "world_greatest_stretch", "glute_bridge", "bulgarian_split"],
+  },
+  {
+    id: "concussion", title: "Head knock / suspected concussion", when: "Immediately", icon: "🧠", areas: ["head", "neck"],
+    steps: [
+      "If in doubt, sit them out — no same-day return to play after a suspected concussion, ever",
+      "You do not need to lose consciousness to have a concussion",
+      "See a doctor for assessment before starting any return-to-play progression",
+      "Rest 24–48 hours, then gradually reintroduce light activity as symptoms allow",
+      "Each stage below takes a minimum of 24 hours; any return of symptoms means dropping back a stage",
+    ],
+    stages: [
+      { phase: "Stage 1 — Rest", window: "24–48h", focus: "Relative rest. Limit screens and mentally demanding work.", criteria: "Symptoms clearly improving." },
+      { phase: "Stage 2 — Light aerobic", window: "24h min", focus: "Walking or stationary bike at light intensity. No resistance training.", criteria: "No return of symptoms." },
+      { phase: "Stage 3 — Sport-specific", window: "24h min", focus: "Running drills. Still no head-impact activity of any kind.", criteria: "No return of symptoms." },
+      { phase: "Stage 4 — Non-contact training", window: "24h min", focus: "Full non-contact training and resistance work. No heading.", criteria: "No symptoms, and medical clearance obtained." },
+      { phase: "Stage 5 — Full contact", window: "After clearance", focus: "Normal training including contact and heading.", criteria: "Symptom-free through a full contact session." },
+    ],
+    redFlags: [
+      "Loss of consciousness, seizure, or repeated vomiting — call emergency services",
+      "Worsening headache, increasing confusion, or unusual drowsiness",
+      "Weakness, numbness, slurred speech or double vision",
+      "Neck pain or tenderness after the impact — do not move them, call for help",
+    ],
   },
 ];
 

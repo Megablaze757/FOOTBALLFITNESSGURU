@@ -67,7 +67,9 @@ export interface StrengthBenchmark {
   created_at: string;
 }
 
-export type VideoStatus = "uploading" | "processing" | "ready" | "failed";
+// "ready" = uploaded, waiting for you to open it (analysis runs in the browser).
+// "analyzed" = in-browser biomechanics done and saved.
+export type VideoStatus = "uploading" | "processing" | "ready" | "analyzed" | "failed";
 
 export interface Video {
   id: string;

@@ -35,6 +35,7 @@ export function InBrowserAnalysis({ videoId, userId, src, painMap, sessionType, 
   const [status, setStatus] = useState<"loading" | "done" | "error">("loading");
   const [progress, setProgress] = useState("Loading pose model…");
   const [analysis, setAnalysis] = useState<VideoAnalysis | null>(null);
+  const [fallbackReason, setFallbackReason] = useState<string | null>(null);
   const ran = useRef(false);
 
   useEffect(() => {
@@ -51,7 +52,9 @@ export function InBrowserAnalysis({ videoId, userId, src, painMap, sessionType, 
         result = analyzeFrames(frames, 10, { painMap, sessionType, isInSeason, source: "mediapipe" });
       } catch (err) {
         // Any failure (CORS, no pose, unsupported codec) → deterministic estimate.
+        // Surface *why* rather than silently pretending we tracked the athlete.
         console.warn("In-browser pose failed, using estimate:", err);
+        if (!cancelled) setFallbackReason(err instanceof Error ? err.message : String(err));
         result = analyzeFrames(syntheticFrames(videoId), 10, { painMap, sessionType, isInSeason, source: "synthetic" });
       }
       if (cancelled) return;
@@ -77,7 +80,18 @@ export function InBrowserAnalysis({ videoId, userId, src, painMap, sessionType, 
     );
   }
   if (!analysis) return <div className="card px-4 py-3 text-sm text-readiness-red">Couldn’t analyse this clip.</div>;
-  return <VideoAnalysisView analysis={analysis} src={src} />;
+  return (
+    <div className="space-y-4">
+      {fallbackReason && (
+        <div className="card border-amber-400/30 bg-amber-400/[0.06] px-4 py-3 text-sm text-amber-200">
+          <span className="font-semibold">Estimated, not tracked.</span> We couldn’t read poses from this clip
+          ({fallbackReason}), so the numbers below are a baseline estimate. For real tracking, film in landscape
+          with your whole body in frame, in good light, and upload an MP4 (H.264) a few seconds long.
+        </div>
+      )}
+      <VideoAnalysisView analysis={analysis} src={src} />
+    </div>
+  );
 }
 
 // --- pose extraction --------------------------------------------------------
@@ -85,11 +99,21 @@ async function extractFrames(src: string, setProgress: (s: string) => void): Pro
   setProgress("Loading pose model…");
   const vision = await import(/* webpackIgnore: true */ MP_MODULE);
   const fileset = await vision.FilesetResolver.forVisionTasks(MP_WASM);
-  const landmarker = await vision.PoseLandmarker.createFromOptions(fileset, {
-    baseOptions: { modelAssetPath: MP_MODEL, delegate: "GPU" },
-    runningMode: "VIDEO",
-    numPoses: 1,
-  });
+  // GPU delegate is unavailable on plenty of phones/browsers — fall back to CPU
+  // rather than losing pose tracking entirely.
+  const create = (delegate: "GPU" | "CPU") =>
+    vision.PoseLandmarker.createFromOptions(fileset, {
+      baseOptions: { modelAssetPath: MP_MODEL, delegate },
+      runningMode: "VIDEO",
+      numPoses: 1,
+    });
+  let landmarker;
+  try {
+    landmarker = await create("GPU");
+  } catch (e) {
+    console.warn("GPU delegate unavailable, retrying on CPU:", e);
+    landmarker = await create("CPU");
+  }
 
   // Fetch as blob first so the <video> isn't CORS-tainted (detect needs pixels).
   setProgress("Loading your clip…");
@@ -100,8 +124,9 @@ async function extractFrames(src: string, setProgress: (s: string) => void): Pro
   video.crossOrigin = "anonymous";
   video.src = blobUrl;
   await new Promise<void>((res, rej) => {
-    video.onloadedmetadata = () => res();
-    video.onerror = () => rej(new Error("video load error"));
+    const timer = setTimeout(() => rej(new Error("video metadata timed out")), 15_000);
+    video.onloadedmetadata = () => { clearTimeout(timer); res(); };
+    video.onerror = () => { clearTimeout(timer); rej(new Error("unsupported video format")); };
   });
 
   const duration = Math.min(video.duration || 6, 8);
@@ -139,10 +164,20 @@ function toBlobUrl(src: string): Promise<string> {
   }).then((b) => URL.createObjectURL(b));
 }
 
+// Some codecs never fire "seeked" for a given timestamp — without a timeout the
+// whole analysis hangs on the spinner forever. Skip the frame instead.
 function seek(video: HTMLVideoElement, t: number): Promise<void> {
   return new Promise((res) => {
-    const done = () => { video.removeEventListener("seeked", done); res(); };
-    video.addEventListener("seeked", done);
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      video.removeEventListener("seeked", finish);
+      res();
+    };
+    const timer = setTimeout(finish, 2_000);
+    video.addEventListener("seeked", finish);
     video.currentTime = t;
   });
 }

@@ -10,8 +10,9 @@ import type { Video, VideoStatus, VideoAnalysis } from "@/lib/types";
 
 const STATUS_META: Record<VideoStatus, { label: string; cls: string }> = {
   uploading: { label: "Uploading", cls: "bg-white/10 text-slate-400" },
-  processing: { label: "Analysing…", cls: "bg-amber-400/15 text-amber-300" },
-  ready: { label: "Ready", cls: "bg-pitch-400/15 text-pitch-400" },
+  processing: { label: "Tap to analyse", cls: "bg-pitch-400/15 text-pitch-400" },
+  ready: { label: "Tap to analyse", cls: "bg-pitch-400/15 text-pitch-400" },
+  analyzed: { label: "Analysed ✓", cls: "bg-readiness-green/15 text-readiness-green" },
   failed: { label: "Failed", cls: "bg-red-500/15 text-readiness-red" },
 };
 
@@ -68,7 +69,11 @@ export default function TrainPage() {
               );
               return (
                 <li key={v.id}>
-                  {v.status === "ready" ? <Link href={`/train/view?id=${v.id}`}>{inner}</Link> : inner}
+                  {/* Anything that finished uploading is openable — the analysis
+                      runs client-side the moment you open it. */}
+                  {v.status === "uploading" || v.status === "failed"
+                    ? inner
+                    : <Link href={`/train/view?id=${v.id}`}>{inner}</Link>}
                 </li>
               );
             })}

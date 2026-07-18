@@ -7,11 +7,18 @@ import { useCurrentUser } from "@/lib/auth";
 import { useAsync } from "@/lib/use-async";
 import {
   positionGuide, gamedayLabel, relevantInjuryProtocols,
-  GAMEDAY_NUTRITION, RECOVERY_GENERAL,
+  GAMEDAY_NUTRITION, RECOVERY_GENERAL, RECOVERY_INJURY, REHAB_DISCLAIMER,
   type RecoveryProtocol,
 } from "@/lib/essentials";
 import { getExercise, SPORTS, type Exercise, type SportId } from "@/lib/exercises";
 import { ExerciseModal } from "@/components/ExerciseDetail";
+
+// The pre-training sequence, in the order it should be performed.
+const MOBILITY_IDS = [
+  "leg_swings", "world_greatest_stretch", "hip_90_90", "ankle_rocks",
+  "glute_bridge", "monster_walk", "dead_bug", "thoracic_openers",
+  "scap_pull_up", "couch_stretch",
+];
 
 export default function EssentialsPage() {
   const user = useCurrentUser();
@@ -84,9 +91,37 @@ export default function EssentialsPage() {
       {injuryProtocols.length > 0 && (
         <section className="space-y-3">
           <h2 className="field-label">Recover your sore areas</h2>
-          {injuryProtocols.map((p) => <ProtocolCard key={p.id} p={p} highlight />)}
+          {injuryProtocols.map((p) => <ProtocolCard key={p.id} p={p} highlight onOpenExercise={setOpen} />)}
         </section>
       )}
+
+      {/* Full rehab library — browsable whether or not you logged pain today. */}
+      <section className="space-y-3">
+        <div>
+          <h2 className="field-label">Injury rehab guides</h2>
+          <p className="mt-1 text-xs text-slate-500">{REHAB_DISCLAIMER}</p>
+        </div>
+        {RECOVERY_INJURY.filter((p) => !injuryProtocols.some((i) => i.id === p.id)).map((p) => (
+          <ProtocolCard key={p.id} p={p} onOpenExercise={setOpen} />
+        ))}
+      </section>
+
+      {/* Mobility & activation — the warm-up that prevents most of the above. */}
+      <section>
+        <h2 className="field-label mb-1">Mobility &amp; activation</h2>
+        <p className="mb-3 text-xs text-slate-500">Run through these before training — the cheapest injury prevention there is.</p>
+        <div className="flex flex-wrap gap-2">
+          {MOBILITY_IDS.map((id) => {
+            const ex = getExercise(id);
+            if (!ex) return null;
+            return (
+              <button key={id} onClick={() => setOpen(ex)} className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-sm text-slate-200 transition hover:border-pitch-400/40 hover:bg-pitch-400/[0.06]">
+                {ex.name} ›
+              </button>
+            );
+          })}
+        </div>
+      </section>
 
       {/* Gameday nutrition timeline */}
       <section>
@@ -133,7 +168,11 @@ function Col({ title, items, icon }: { title: string; items: string[]; icon: str
   );
 }
 
-function ProtocolCard({ p, highlight }: { p: RecoveryProtocol; highlight?: boolean }) {
+function ProtocolCard({ p, highlight, onOpenExercise }: {
+  p: RecoveryProtocol;
+  highlight?: boolean;
+  onOpenExercise?: (ex: Exercise) => void;
+}) {
   return (
     <div className={`card p-4 ${highlight ? "border-readiness-red/25" : ""}`}>
       <div className="flex items-center gap-2">
@@ -146,6 +185,55 @@ function ProtocolCard({ p, highlight }: { p: RecoveryProtocol; highlight?: boole
       <ul className="mt-3 space-y-1.5 text-sm text-slate-300">
         {p.steps.map((s) => <li key={s} className="flex gap-2"><span className="text-pitch-400">✓</span>{s}</li>)}
       </ul>
+
+      {/* Staged return-to-play — progress on criteria, not on dates. */}
+      {p.stages && (
+        <details className="mt-3 rounded-xl border border-white/10 bg-white/[0.02] p-3">
+          <summary className="cursor-pointer text-sm font-semibold text-pitch-400">
+            Return-to-play plan ({p.stages.length} stages)
+          </summary>
+          <ol className="mt-3 space-y-3">
+            {p.stages.map((st) => (
+              <li key={st.phase} className="border-l-2 border-pitch-500/40 pl-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-bold text-slate-100">{st.phase}</span>
+                  <span className="chip text-slate-400">{st.window}</span>
+                </div>
+                <p className="mt-1 text-sm text-slate-300">{st.focus}</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  <span className="font-semibold text-slate-400">Move on when:</span> {st.criteria}
+                </p>
+              </li>
+            ))}
+          </ol>
+        </details>
+      )}
+
+      {p.redFlags && (
+        <div className="mt-3 rounded-xl border border-readiness-red/30 bg-readiness-red/[0.06] p-3">
+          <div className="text-xs font-bold uppercase tracking-wide text-readiness-red">🚩 Stop and get assessed if</div>
+          <ul className="mt-1.5 space-y-1 text-sm text-slate-300">
+            {p.redFlags.map((f) => <li key={f} className="flex gap-2"><span className="text-readiness-red">•</span>{f}</li>)}
+          </ul>
+        </div>
+      )}
+
+      {p.exerciseIds && (
+        <div className="mt-3">
+          <div className="stat-label mb-1.5">Rehab exercises</div>
+          <div className="flex flex-wrap gap-1.5">
+            {p.exerciseIds.map((id) => {
+              const ex = getExercise(id);
+              if (!ex) return null;
+              return (
+                <button key={id} onClick={() => onOpenExercise?.(ex)} className="chip hover:border-pitch-500/50 hover:text-pitch-400">
+                  {ex.name}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -46,7 +46,9 @@ export function VideoUploader({ onUploaded }: { onUploaded?: () => void }) {
       storage_path: path,
       session_type: sessionType,
       is_in_season: isInSeason,
-      status: "processing",
+      // Analysis happens in the browser when the clip is opened, so an uploaded
+      // clip is immediately ready to view/analyse.
+      status: "ready",
     });
     if (rowErr) {
       setError(rowErr.message);
