@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/auth";
+import { captureRef } from "@/lib/referral";
 
 const FEATURES = [
   { icon: "🩺", title: "Readiness engine", body: "A daily Green / Yellow / Red score built from sleep, fatigue, soreness and a full-body pain map — so you know when to push and when to back off." },
@@ -24,6 +25,8 @@ const STEPS = [
 export default function Landing() {
   const { user, loading } = useSession();
   const router = useRouter();
+
+  useEffect(() => { captureRef(); }, []); // remember ?ref=CODE for signup attribution
 
   useEffect(() => {
     if (!loading && user) router.replace("/home");

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useSession } from "@/lib/auth";
+import { captureRef, getRef, clearRef } from "@/lib/referral";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -16,6 +17,8 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => { captureRef(); }, []); // in case they land straight on /login?ref=
 
   useEffect(() => {
     if (user) router.replace("/home");
@@ -46,8 +49,16 @@ export default function LoginPage() {
         options: { data: { full_name: fullName } },
       });
       if (error) setError(error.message);
-      else if (data.session) router.push("/home");
-      else setInfo("Check your email to confirm your account, then sign in.");
+      else {
+        // Attribute the signup to the affiliate whose link they arrived on.
+        const ref = getRef();
+        if (ref && data.user) {
+          await supabase.from("profiles").update({ referral_code: ref }).eq("id", data.user.id);
+          clearRef();
+        }
+        if (data.session) router.push("/home");
+        else setInfo("Check your email to confirm your account, then sign in.");
+      }
     }
     setLoading(false);
   }
