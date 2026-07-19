@@ -78,6 +78,7 @@ function VideoDetailInner() {
           src={src}
           painMap={painMap}
           sessionType={video.session_type}
+          movement={video.movement ?? "general"}
           isInSeason={inSeason}
           onPersisted={reload}
         />

@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { analyzeFrames, syntheticFrames, type Frame } from "@/lib/biomech";
 import { VideoAnalysisView } from "@/components/VideoAnalysisView";
 import type { PainMap, VideoAnalysis } from "@/lib/types";
+import type { MovementType } from "@/lib/movement";
 
 // MediaPipe Tasks Vision (pinned). Loaded from CDN at runtime so nothing is
 // bundled and it works on a static GitHub Pages host.
@@ -27,11 +28,12 @@ interface Props {
   src: string;
   painMap: PainMap;
   sessionType?: string | null;
+  movement?: MovementType;
   isInSeason?: boolean;
   onPersisted?: () => void;
 }
 
-export function InBrowserAnalysis({ videoId, userId, src, painMap, sessionType, isInSeason, onPersisted }: Props) {
+export function InBrowserAnalysis({ videoId, userId, src, painMap, sessionType, movement, isInSeason, onPersisted }: Props) {
   const [status, setStatus] = useState<"loading" | "done" | "error">("loading");
   const [progress, setProgress] = useState("Loading pose model…");
   const [analysis, setAnalysis] = useState<VideoAnalysis | null>(null);
@@ -54,13 +56,13 @@ export function InBrowserAnalysis({ videoId, userId, src, painMap, sessionType, 
         const frames = await extractFrames(src, setProgress);
         if (frames.length < 5) throw new Error("too few readable frames");
         setProgress("Computing biomechanics…");
-        result = analyzeFrames(frames, 10, { painMap, sessionType, isInSeason, source: "mediapipe" });
+        result = analyzeFrames(frames, 10, { painMap, sessionType, movement, isInSeason, source: "mediapipe" });
       } catch (err) {
         // Any failure (CORS, no pose, unsupported codec) → deterministic estimate.
         // Surface *why* rather than silently pretending we tracked the athlete.
         console.warn("In-browser pose failed, using estimate:", err);
         if (!cancelled()) setFallbackReason(err instanceof Error ? err.message : String(err));
-        result = analyzeFrames(syntheticFrames(videoId), 10, { painMap, sessionType, isInSeason, source: "synthetic" });
+        result = analyzeFrames(syntheticFrames(videoId), 10, { painMap, sessionType, movement, isInSeason, source: "synthetic" });
       }
       if (cancelled()) return;
       setAnalysis(result);

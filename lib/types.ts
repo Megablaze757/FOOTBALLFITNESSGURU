@@ -77,6 +77,7 @@ export interface Video {
   check_in_id: string | null;
   storage_path: string;
   session_type: "match" | "training" | "recovery" | null;
+  movement?: import("./movement").MovementType | null;
   is_in_season: boolean;
   status: VideoStatus;
   created_at: string;
@@ -106,6 +107,8 @@ export interface VideoAnalysis {
   rep_count: number;    // detected movement cycles
   view?: CameraView;    // optional: older saved analyses predate this
   confidence?: number;  // 0..1 — how much to trust these numbers
+  movement?: import("./movement").MovementType;
+  findings?: import("./movement").Finding[]; // drill-specific "what to improve"
   biomechanics: {
     knee_valgus_left: number;
     knee_valgus_right: number;

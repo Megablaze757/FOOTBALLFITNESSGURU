@@ -5,6 +5,7 @@
 // =============================================================================
 
 import type { PainMap, VideoAnalysis, DrillItem, CameraView } from "./types";
+import { movementFindings, type MovementType } from "./movement";
 
 export interface Pt { x: number; y: number }
 export type Frame = Record<string, Pt>; // "left_knee" -> {x,y} normalised 0..1
@@ -208,7 +209,10 @@ function selectDrills(focus: string, weaknesses: string[], inSeason: boolean): D
 export function analyzeFrames(
   frames: Frame[],
   fps: number,
-  opts: { painMap: PainMap; sessionType?: string | null; isInSeason?: boolean; source: "mediapipe" | "synthetic" }
+  opts: {
+    painMap: PainMap; sessionType?: string | null; isInSeason?: boolean;
+    source: "mediapipe" | "synthetic"; movement?: MovementType;
+  }
 ): VideoAnalysis {
   const left = sideMetrics(frames, "left") ?? { valgus: 0, flexion: 180 };
   const right = sideMetrics(frames, "right") ?? { valgus: 0, flexion: 180 };
@@ -262,6 +266,8 @@ export function analyzeFrames(
     rep_count: countReps(frames),
     view,
     confidence,
+    movement: opts.movement ?? "general",
+    findings: movementFindings(frames, opts.movement ?? "general", view),
     biomechanics: {
       knee_valgus_left: valgusReadable ? left.valgus : 0,
       knee_valgus_right: valgusReadable ? right.valgus : 0,

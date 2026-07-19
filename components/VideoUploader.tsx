@@ -2,12 +2,14 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { MOVEMENTS, type MovementType } from "@/lib/movement";
 
 type SessionType = "training" | "match" | "recovery";
 
 export function VideoUploader({ onUploaded }: { onUploaded?: () => void }) {
   const [file, setFile] = useState<File | null>(null);
   const [sessionType, setSessionType] = useState<SessionType>("training");
+  const [movement, setMovement] = useState<MovementType>("general");
   const [isInSeason, setIsInSeason] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,6 +47,7 @@ export function VideoUploader({ onUploaded }: { onUploaded?: () => void }) {
       check_in_id: checkIn?.id ?? null,
       storage_path: path,
       session_type: sessionType,
+      movement,
       is_in_season: isInSeason,
       // Analysis happens in the browser when the clip is opened, so an uploaded
       // clip is immediately ready to view/analyse.
@@ -68,6 +71,14 @@ export function VideoUploader({ onUploaded }: { onUploaded?: () => void }) {
         <span className="mt-2 text-sm font-medium text-slate-200">{file ? file.name : "Choose or drop a video"}</span>
         <span className="mt-1 text-xs text-slate-500">MP4 / MOV — a few seconds of a drill or sprint</span>
         <input type="file" accept="video/*" className="hidden" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+      </label>
+
+      {/* What the clip shows drives which checks we can actually run. */}
+      <label className="block">
+        <span className="field-label">What&apos;s in this clip?</span>
+        <select value={movement} onChange={(e) => setMovement(e.target.value as MovementType)} className="field [color-scheme:dark]">
+          {MOVEMENTS.map((m) => <option key={m.id} value={m.id}>{m.icon} {m.label} — {m.blurb}</option>)}
+        </select>
       </label>
 
       <div className="grid grid-cols-2 gap-3">

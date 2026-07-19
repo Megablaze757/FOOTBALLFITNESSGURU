@@ -225,7 +225,7 @@ function GoalBuilder({ painMap, latestBench, sport, initialPosition, initialFocu
             {positions.map((p) => (
               <button
                 key={p}
-                onClick={() => setPosition(p)}
+                onClick={() => setPosition(position === p ? "" : p)}
                 className={`rounded-full border px-3 py-1.5 text-sm transition ${position === p ? "border-pitch-400/50 bg-pitch-400/10 text-pitch-400" : "border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.06]"}`}
               >
                 {p}
@@ -242,7 +242,7 @@ function GoalBuilder({ painMap, latestBench, sport, initialPosition, initialFocu
           {FOCI.map((f) => (
             <button
               key={f.id}
-              onClick={() => setFocus(f.id)}
+              onClick={() => setFocus(focus === f.id ? initialFocus : f.id)}
               className={`card p-3 text-left transition ${focus === f.id ? "ring-2 ring-pitch-400/70 shadow-glow" : "card-hover"}`}
             >
               <div className="text-sm font-bold text-slate-100">{f.label}</div>
@@ -258,7 +258,7 @@ function GoalBuilder({ painMap, latestBench, sport, initialPosition, initialFocu
           {goals.map((g) => (
           <button
             key={g.id}
-            onClick={() => setGoal(g.id)}
+            onClick={() => setGoal(goal === g.id ? null : g.id)}
             className={`card p-4 text-left transition ${goal === g.id ? "ring-2 ring-pitch-400/70 shadow-glow" : "card-hover"}`}
           >
             <div className="font-bold text-slate-100">{g.label}</div>

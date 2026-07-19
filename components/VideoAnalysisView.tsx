@@ -5,7 +5,19 @@ import { DrillChecklist } from "@/components/DrillChecklist";
 import { RingProgress } from "@/components/RingProgress";
 import { KneeCompare } from "@/components/KneeCompare";
 import { VideoCoachFeedback } from "@/components/VideoCoachFeedback";
+import { getExercise } from "@/lib/exercises";
+import { MOVEMENTS, type Severity } from "@/lib/movement";
 import type { VideoAnalysis } from "@/lib/types";
+
+const SEV_ICON: Record<Severity, string> = { fix: "🔴", watch: "🟡", good: "🟢" };
+const SEV_TEXT: Record<Severity, string> = {
+  fix: "text-readiness-red",
+  watch: "text-amber-300",
+  good: "text-readiness-green",
+};
+function movementLabel(id: string): string {
+  return MOVEMENTS.find((m) => m.id === id)?.label ?? id;
+}
 
 // Shared renderer for a biomechanics analysis — used both for stored AI plans
 // and for freshly-computed in-browser analyses.
@@ -18,6 +30,7 @@ export function VideoAnalysisView({ analysis, src }: { analysis: VideoAnalysis; 
   // retroactively hiding their numbers.
   const kneeReadable = a.view == null || a.view === "front" || a.view === "angled";
   const conf = a.confidence;
+  const findings = a.findings ?? [];
   return (
     <div className="space-y-5">
       <HeatmapVideo src={src} points={a.heatmap_data ?? []} />
@@ -51,6 +64,35 @@ export function VideoAnalysisView({ analysis, src }: { analysis: VideoAnalysis; 
         <div className="card p-5">
           <div className="stat-label mb-3">You vs ideal — knee tracking</div>
           <KneeCompare valgusLeft={a.biomechanics.knee_valgus_left} valgusRight={a.biomechanics.knee_valgus_right} />
+        </div>
+      )}
+
+      {/* Drill-specific coaching — what to actually fix in this movement. */}
+      {findings.length > 0 && (
+        <div className="card p-5">
+          <div className="stat-label mb-3">
+            What to improve{a.movement && a.movement !== "general" ? ` — ${movementLabel(a.movement)}` : ""}
+          </div>
+          <ul className="space-y-3">
+            {findings.map((f) => (
+              <li key={f.id} className="flex gap-3">
+                <span className="text-lg leading-none">{SEV_ICON[f.severity]}</span>
+                <div className="min-w-0">
+                  <div className={`text-sm font-bold ${SEV_TEXT[f.severity]}`}>{f.title}</div>
+                  <p className="mt-0.5 text-sm text-slate-300">{f.detail}</p>
+                  {f.drillIds.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {f.drillIds.map((id) => {
+                        const ex = getExercise(id);
+                        if (!ex) return null;
+                        return <span key={id} className="chip">{ex.name}</span>;
+                      })}
+                    </div>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 

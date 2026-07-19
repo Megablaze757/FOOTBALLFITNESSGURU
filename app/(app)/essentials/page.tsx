@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/lib/auth";
@@ -8,6 +8,7 @@ import { useAsync } from "@/lib/use-async";
 import {
   positionGuide, gamedayLabel, relevantInjuryProtocols,
   GAMEDAY_NUTRITION, RECOVERY_GENERAL, RECOVERY_INJURY, REHAB_DISCLAIMER,
+  INJURY_AREAS, protocolsForAreas, matchInjuryText,
   type RecoveryProtocol,
 } from "@/lib/essentials";
 import { getExercise, SPORTS, type Exercise, type SportId } from "@/lib/exercises";
@@ -23,6 +24,15 @@ const MOBILITY_IDS = [
 export default function EssentialsPage() {
   const user = useCurrentUser();
   const [open, setOpen] = useState<Exercise | null>(null);
+  const [picked, setPicked] = useState<string[]>([]);
+  const [desc, setDesc] = useState("");
+
+  // Tapped areas and free text both feed the same protocol lookup; de-duped so
+  // describing an ankle after tapping "ankle" doesn't show it twice.
+  const matched = useMemo(() => {
+    const out = [...protocolsForAreas(picked), ...matchInjuryText(desc)];
+    return out.filter((p, i) => out.findIndex((q) => q.id === p.id) === i);
+  }, [picked, desc]);
 
   const { data, loading } = useAsync(async () => {
     const supabase = createClient();
@@ -95,14 +105,54 @@ export default function EssentialsPage() {
         </section>
       )}
 
+      {/* Tell us directly what hurts, rather than waiting on a check-in. */}
+      <section className="card-premium space-y-4 p-6">
+        <div>
+          <h2 className="text-xl font-extrabold">What&apos;s bothering you?</h2>
+          <p className="mt-1 text-sm text-slate-400">Tap where it hurts, or describe it — we&apos;ll pull up the right rehab plan.</p>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          {INJURY_AREAS.map((a) => {
+            const on = picked.includes(a.id);
+            return (
+              <button
+                key={a.id}
+                onClick={() => setPicked(on ? picked.filter((x) => x !== a.id) : [...picked, a.id])}
+                className={`rounded-full border px-3 py-1.5 text-sm transition ${on ? "border-pitch-400/50 bg-pitch-400/10 text-pitch-400" : "border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.06]"}`}
+              >
+                {a.icon} {a.label}
+              </button>
+            );
+          })}
+        </div>
+
+        <label className="block">
+          <span className="field-label">Or describe it in your own words</span>
+          <textarea
+            value={desc}
+            onChange={(e) => setDesc(e.target.value)}
+            rows={2}
+            placeholder="e.g. rolled my ankle at training, sore behind the knee when I sprint…"
+            className="field resize-none"
+          />
+        </label>
+
+        {picked.length + desc.trim().length > 0 && (
+          matched.length > 0
+            ? <p className="text-xs text-slate-500">Showing {matched.length} matching plan{matched.length === 1 ? "" : "s"} below.</p>
+            : <p className="text-xs text-slate-500">No match yet — try tapping an area above, or see all the guides below.</p>
+        )}
+      </section>
+
       {/* Full rehab library — browsable whether or not you logged pain today. */}
       <section className="space-y-3">
         <div>
-          <h2 className="field-label">Injury rehab guides</h2>
+          <h2 className="field-label">{matched.length > 0 ? "Your rehab plan" : "Injury rehab guides"}</h2>
           <p className="mt-1 text-xs text-slate-500">{REHAB_DISCLAIMER}</p>
         </div>
-        {RECOVERY_INJURY.filter((p) => !injuryProtocols.some((i) => i.id === p.id)).map((p) => (
-          <ProtocolCard key={p.id} p={p} onOpenExercise={setOpen} />
+        {(matched.length > 0 ? matched : RECOVERY_INJURY.filter((p) => !injuryProtocols.some((i) => i.id === p.id))).map((p) => (
+          <ProtocolCard key={p.id} p={p} highlight={matched.length > 0} onOpenExercise={setOpen} />
         ))}
       </section>
 

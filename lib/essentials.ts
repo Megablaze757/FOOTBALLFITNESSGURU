@@ -466,3 +466,47 @@ export function relevantInjuryProtocols(painMap: Record<string, number> | null |
   );
   return RECOVERY_INJURY.filter((p) => p.areas?.some((a) => sore.has(a)));
 }
+
+// Body areas an athlete can point at directly, rather than waiting for a daily
+// check-in to infer it.
+export const INJURY_AREAS: { id: string; label: string; icon: string }[] = [
+  { id: "ankle", label: "Ankle / foot", icon: "🦶" },
+  { id: "calf", label: "Calf / Achilles", icon: "🦵" },
+  { id: "knee", label: "Knee", icon: "🦵" },
+  { id: "hamstring", label: "Hamstring", icon: "🦿" },
+  { id: "groin", label: "Groin / adductor", icon: "🩹" },
+  { id: "hip", label: "Hip / quad", icon: "🕺" },
+  { id: "lower_back", label: "Lower back", icon: "🧎" },
+  { id: "shoulder", label: "Shoulder", icon: "💪" },
+  { id: "head", label: "Head / neck", icon: "🧠" },
+];
+
+export function protocolsForAreas(areas: string[]): RecoveryProtocol[] {
+  const want = new Set(areas);
+  return RECOVERY_INJURY.filter((p) => p.areas?.some((a) => want.has(a)));
+}
+
+// Free-text → protocols. Athletes describe injuries in their own words
+// ("rolled my ankle", "pain behind my knee", "tight groin when I kick"), so
+// match on the vocabulary they actually use rather than clinical terms.
+const TEXT_HINTS: { id: string; words: string[] }[] = [
+  { id: "ankle", words: ["ankle", "rolled", "twisted", "foot", "sprain"] },
+  { id: "calf", words: ["calf", "achilles", "heel", "shin", "toe off", "pushing off"] },
+  { id: "knee", words: ["knee", "patella", "kneecap", "acl", "meniscus", "jumper"] },
+  { id: "hamstring", words: ["hamstring", "back of my leg", "back of the leg", "pulled", "sprinting"] },
+  { id: "groin", words: ["groin", "adductor", "inner thigh", "kicking"] },
+  { id: "hip", words: ["hip", "quad", "thigh", "flexor", "hip flexor"] },
+  { id: "lower_back", words: ["back", "lower back", "spine", "lumbar", "disc"] },
+  { id: "shoulder", words: ["shoulder", "rotator", "cuff", "collarbone", "arm"] },
+  { id: "head", words: ["head", "concussion", "neck", "dizzy", "headache", "knocked"] },
+];
+
+export function matchInjuryText(text: string): RecoveryProtocol[] {
+  const t = (text ?? "").toLowerCase();
+  if (t.trim().length < 3) return [];
+  const hit = new Set<string>();
+  for (const h of TEXT_HINTS) {
+    if (h.words.some((w) => t.includes(w))) hit.add(h.id);
+  }
+  return protocolsForAreas([...hit]);
+}
