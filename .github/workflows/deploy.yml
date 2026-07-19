@@ -29,11 +29,12 @@ jobs:
 
       - name: Build static export
         env:
-          # Base path must be empty when the site is served from the root of a
-          # domain — that's true both for <user>.github.io repos and for any repo
-          # with a CNAME (custom domain). Leaving it as /<repo> on a custom
-          # domain 404s every script, stylesheet and link on the site.
-          NEXT_PUBLIC_BASE_PATH: ${{ (hashFiles('CNAME') != '' || endsWith(github.repository, '.github.io')) && '' || format('/{0}', github.event.repository.name) }}
+          # Empty, because the site is served from the root of pocketathlete.com.
+          # A non-empty base path here 404s every stylesheet and script on the
+          # site — that is what broke the first custom-domain deploy. Only set
+          # the NEXT_PUBLIC_BASE_PATH repo Variable if you ever go back to
+          # serving from https://<user>.github.io/<repo>/.
+          NEXT_PUBLIC_BASE_PATH: ${{ vars.NEXT_PUBLIC_BASE_PATH }}
           # Public client values — override by setting repo Variables of the same name.
           NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL || 'https://txqhstackgidjqkkrzyj.supabase.co' }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_kr26XwyR0HZxS3HR3UJI2Q_YLLT7Sfl' }}
