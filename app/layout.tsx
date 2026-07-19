@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Sora } from "next/font/google";
 import "./globals.css";
+import { ChunkReloader } from "@/components/ChunkReloader";
 
 const sora = Sora({ subsets: ["latin"], variable: "--font-sans", display: "swap" });
 
@@ -19,7 +20,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={sora.variable}>
-      <body className="font-sans">{children}</body>
+      <body className="font-sans">
+        <ChunkReloader />
+        {children}
+      </body>
     </html>
   );
 }

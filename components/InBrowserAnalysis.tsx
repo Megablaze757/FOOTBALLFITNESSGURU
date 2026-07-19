@@ -37,11 +37,16 @@ export function InBrowserAnalysis({ videoId, userId, src, painMap, sessionType, 
   const [analysis, setAnalysis] = useState<VideoAnalysis | null>(null);
   const [fallbackReason, setFallbackReason] = useState<string | null>(null);
   const ran = useRef(false);
+  const alive = useRef(true);
 
   useEffect(() => {
-    if (ran.current) return;
+    // StrictMode mounts, unmounts, then remounts. `ran` keeps us from starting
+    // a second analysis, but the first mount's cleanup must not orphan the
+    // in-flight one — so `alive` is restored on every mount, before that guard.
+    alive.current = true;
+    if (ran.current) return () => { alive.current = false; };
     ran.current = true;
-    let cancelled = false;
+    const cancelled = () => !alive.current;
 
     (async () => {
       let result: VideoAnalysis;
@@ -54,17 +59,17 @@ export function InBrowserAnalysis({ videoId, userId, src, painMap, sessionType, 
         // Any failure (CORS, no pose, unsupported codec) → deterministic estimate.
         // Surface *why* rather than silently pretending we tracked the athlete.
         console.warn("In-browser pose failed, using estimate:", err);
-        if (!cancelled) setFallbackReason(err instanceof Error ? err.message : String(err));
+        if (!cancelled()) setFallbackReason(err instanceof Error ? err.message : String(err));
         result = analyzeFrames(syntheticFrames(videoId), 10, { painMap, sessionType, isInSeason, source: "synthetic" });
       }
-      if (cancelled) return;
+      if (cancelled()) return;
       setAnalysis(result);
       setStatus("done");
       // Best-effort persist so a refresh is instant and the coach can see it.
       void persist(userId, videoId, result).then((ok) => ok && onPersisted?.());
     })();
 
-    return () => { cancelled = true; };
+    return () => { alive.current = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -197,7 +202,11 @@ async function persist(userId: string, videoId: string, a: VideoAnalysis): Promi
       { onConflict: "video_id" }
     );
     if (error) { console.warn("persist ai_plan:", error.message); return false; }
-    await supabase.from("videos").update({ status: "analyzed" }).eq("id", videoId).eq("user_id", userId);
+    // Check this too — a rejected status update used to fail silently and leave
+    // every analysed clip stuck showing as un-analysed.
+    const { error: statusErr } = await supabase
+      .from("videos").update({ status: "analyzed" }).eq("id", videoId).eq("user_id", userId);
+    if (statusErr) console.warn("persist video status:", statusErr.message);
     return true;
   } catch (e) {
     console.warn("persist ai_plan threw:", e);
