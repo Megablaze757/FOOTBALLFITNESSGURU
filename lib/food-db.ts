@@ -28,7 +28,14 @@ export interface Food {
   packSize: number;   // grams / ml / count in one pack
   packPrice: number;  // £ for that pack
   packLabel: string;  // how it appears on the shelf
+  // Canonical product page, when we have a verified one. Product IDs can only
+  // come from a real lookup — inventing them would 404 or, worse, land the
+  // athlete on the wrong item — so this stays empty until a URL is confirmed,
+  // and we fall back to a tightly-scoped search.
+  productUrls?: Partial<Record<StoreId, string>>;
 }
+
+export type StoreId = "tesco" | "sainsburys" | "asda" | "aldi";
 
 export const FOODS: Food[] = [
   // --- Meat & fish ---------------------------------------------------------
@@ -76,11 +83,23 @@ export const FOOD_BY_ID: Record<string, Food> = Object.fromEntries(FOODS.map((f)
 
 // Search deep links — no API needed, and they can't go stale the way a scraped
 // price would. The athlete taps through and their own basket does the rest.
-export const SUPERMARKETS: { id: string; name: string; search: (q: string) => string }[] = [
+export const SUPERMARKETS: { id: StoreId; name: string; search: (q: string) => string }[] = [
   { id: "tesco", name: "Tesco", search: (q) => `https://www.tesco.com/groceries/en-GB/search?query=${encodeURIComponent(q)}` },
   { id: "sainsburys", name: "Sainsbury's", search: (q) => `https://www.sainsburys.co.uk/gol-ui/SearchResults/${encodeURIComponent(q)}` },
   { id: "asda", name: "Asda", search: (q) => `https://groceries.asda.com/search/${encodeURIComponent(q)}` },
   { id: "aldi", name: "Aldi", search: (q) => `https://groceries.aldi.co.uk/en-GB/Search?keywords=${encodeURIComponent(q)}` },
 ];
+
+/**
+ * Where tapping an item should send the athlete. A verified product page when
+ * we have one, otherwise a search narrowed by pack size so the right item is
+ * the first result rather than the twentieth.
+ */
+export function productLink(food: Food, store: { id: StoreId; search: (q: string) => string }): string {
+  const direct = food.productUrls?.[store.id];
+  if (direct) return direct;
+  // "Basmati rice 1kg bag" beats "Basmati rice" for landing on the right pack.
+  return store.search(`${food.name} ${food.packLabel}`.trim());
+}
 
 export const PRICES_REVIEWED = "July 2026";

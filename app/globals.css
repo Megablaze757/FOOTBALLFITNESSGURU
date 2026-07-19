@@ -56,6 +56,27 @@ body {
            outline-none transition placeholder:text-slate-500
            focus:border-pitch-400/60 focus:bg-white/[0.06] focus:ring-2 focus:ring-pitch-400/20;
   }
+  /* On phones the generous desktop spacing makes every page feel like a scroll
+     marathon — the Coach page ran to nearly five screens. Tighten padding,
+     headings and section gaps below sm without touching the desktop look. */
+  @media (max-width: 639px) {
+    .card, .card-premium { border-radius: 1.25rem; }
+    .card > .p-6, .card-premium > .p-6 { padding: 1rem; }
+
+    main h1.text-3xl { font-size: 1.5rem; line-height: 2rem; }
+    main h2.text-xl { font-size: 1.0625rem; line-height: 1.5rem; }
+
+    /* Section rhythm */
+    main .space-y-6 > :not([hidden]) ~ :not([hidden]) { margin-top: 1rem; }
+    main .space-y-5 > :not([hidden]) ~ :not([hidden]) { margin-top: 0.875rem; }
+    main .space-y-4 > :not([hidden]) ~ :not([hidden]) { margin-top: 0.75rem; }
+
+    /* Card interiors */
+    main .p-6 { padding: 1rem; }
+    main .p-5 { padding: 0.875rem; }
+    main .px-4 { padding-left: 0.875rem; padding-right: 0.875rem; }
+  }
+
   .field-label {
     @apply mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-400;
   }

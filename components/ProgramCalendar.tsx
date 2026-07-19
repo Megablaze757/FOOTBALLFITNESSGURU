@@ -16,21 +16,32 @@ export function ProgramCalendar({
 }) {
   const [open, setOpen] = useState<Exercise | null>(null);
 
+  // The first week with unfinished sessions is the one you're on.
+  const currentWeek =
+    weeks.find((w) => w.sessions.some((s) => !completed.includes(`w${w.week}d${s.day}`)))?.week
+    ?? weeks[weeks.length - 1]?.week;
+
   return (
     <section className="space-y-4">
       <h2 className="field-label">Your {weeks.length}-week program</h2>
 
       {weeks.map((w) => {
         const wDone = w.sessions.filter((s) => completed.includes(`w${w.week}d${s.day}`)).length;
+        // Rendering every week expanded made this block over half the page on a
+        // phone. Open the week you're actually working through; fold the rest.
+        const isCurrent = w.week === currentWeek;
         return (
-          <div key={w.week} className="card p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <div>
-                <div className="font-bold text-slate-100">Week {w.week} · {w.theme}</div>
-                <div className="text-xs text-slate-400">{w.intensity} intensity</div>
-              </div>
-              <span className="text-xs text-slate-400">{wDone}/{w.sessions.length}</span>
-            </div>
+          <details key={w.week} open={isCurrent} className="card p-4">
+            <summary className="mb-3 flex cursor-pointer list-none items-center justify-between">
+              <span>
+                <span className="block font-bold text-slate-100">Week {w.week} · {w.theme}</span>
+                <span className="block text-xs text-slate-400">{w.intensity} intensity</span>
+              </span>
+              <span className="flex items-center gap-2 text-xs text-slate-400">
+                {wDone}/{w.sessions.length}
+                {!isCurrent && <span className="text-pitch-400">Open</span>}
+              </span>
+            </summary>
 
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {w.sessions.map((s) => {
@@ -79,7 +90,7 @@ export function ProgramCalendar({
                 );
               })}
             </div>
-          </div>
+          </details>
         );
       })}
 

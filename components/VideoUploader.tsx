@@ -156,7 +156,7 @@ export function VideoUploader({ onUploaded }: { onUploaded?: () => void }) {
         <label className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-white/15 px-4 py-8 text-center transition hover:border-pitch-400/50 hover:bg-white/[0.03]">
           <span className="text-3xl">🎬</span>
           <span className="mt-2 text-sm font-medium text-slate-200">{file ? `Reading ${file.name}…` : "Choose or drop a video"}</span>
-          <span className="mt-1 text-xs text-slate-500">MP4 / MOV — a few seconds of a drill or sprint</span>
+          <span className="mt-1 text-xs text-slate-500">MP4 / MOV — up to 30s. Short clips of one or two reps read best.</span>
           <input type="file" accept="video/*" className="hidden" onChange={(e) => { setDone(false); setFile(e.target.files?.[0] ?? null); }} />
         </label>
       )}

@@ -17,6 +17,11 @@ const MP_MODEL = "https://storage.googleapis.com/mediapipe-models/pose_landmarke
 // Below this, MediaPipe is guessing at an occluded joint rather than seeing it.
 const MIN_VISIBILITY = 0.5;
 
+// How much footage we'll analyse, and the hard ceiling on frames so the seek
+// loop can't run away on a slow phone.
+export const MAX_CLIP_SECONDS = 30;
+const MAX_FRAMES = 200;
+
 // BlazePose landmark indices → our named joints.
 const IDX: Record<string, number> = {
   left_shoulder: 11, right_shoulder: 12,
@@ -144,12 +149,13 @@ async function extractFrames(src: string, setProgress: (s: string) => void): Pro
   });
 
   // A jump takes well under a second, so 10fps gives about five usable frames —
-  // not enough to see a countermovement or a takeoff. Sample short clips harder,
-  // and cap the total so the seek loop stays bounded on slow devices.
-  const duration = Math.min(video.duration || 6, 8);
-  const fps = duration <= 3 ? 30 : duration <= 5 ? 20 : 12;
+  // not enough to see a countermovement or a takeoff. Sample short clips hard
+  // for technique detail, and step down on longer ones so a 30s clip still
+  // finishes: every frame costs a seek, and the whole loop runs on the phone.
+  const duration = Math.min(video.duration || 6, MAX_CLIP_SECONDS);
+  const fps = duration <= 3 ? 30 : duration <= 6 ? 20 : duration <= 12 ? 12 : 8;
   const times: number[] = [];
-  for (let t = 0; t < duration && times.length < 140; t += 1 / fps) times.push(t);
+  for (let t = 0; t < duration && times.length < MAX_FRAMES; t += 1 / fps) times.push(t);
 
   const frames: Frame[] = [];
   let ts = 0;

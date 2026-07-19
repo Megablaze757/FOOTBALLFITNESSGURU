@@ -7,7 +7,7 @@ import {
   ACTIVITY_LEVELS, DIET_GOALS,
   type BodyStats, type Sex, type ActivityLevel, type DietGoal, type PlannedDay,
 } from "@/lib/meal-plan";
-import { SUPERMARKETS, PRICES_REVIEWED, FOOD_BY_ID as FOOD_LOOKUP } from "@/lib/food-db";
+import { SUPERMARKETS, PRICES_REVIEWED, productLink, FOOD_BY_ID as FOOD_LOOKUP } from "@/lib/food-db";
 
 interface Props {
   userId: string;
@@ -197,7 +197,7 @@ export function MealPlanner({ userId, initial }: Props) {
                             {/* Each item searches the chosen store directly — no
                                 API needed, and it can't go stale. */}
                             <a
-                              href={store.search(l.food.name)}
+                              href={productLink(l.food, store)}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-slate-200 underline-offset-2 hover:text-pitch-400 hover:underline"

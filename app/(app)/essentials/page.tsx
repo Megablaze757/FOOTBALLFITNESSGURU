@@ -15,6 +15,15 @@ import { getExercise, SPORTS, type Exercise, type SportId } from "@/lib/exercise
 import { ExerciseModal } from "@/components/ExerciseDetail";
 import { BodyMap } from "@/components/BodyMap";
 
+// The Playbook covers four unrelated topics. Stacked, that ran to six and a
+// half screens on a phone; split into tabs each view is about two.
+type TabId = "position" | "injury" | "fuel";
+const TABS: { id: TabId; label: string; icon: string }[] = [
+  { id: "position", label: "Your position", icon: "🎯" },
+  { id: "injury", label: "Injury & rehab", icon: "🩹" },
+  { id: "fuel", label: "Fuel & recovery", icon: "🍝" },
+];
+
 // The pre-training sequence, in the order it should be performed.
 const MOBILITY_IDS = [
   "leg_swings", "world_greatest_stretch", "hip_90_90", "ankle_rocks",
@@ -25,6 +34,7 @@ const MOBILITY_IDS = [
 export default function EssentialsPage() {
   const user = useCurrentUser();
   const [open, setOpen] = useState<Exercise | null>(null);
+  const [tab, setTab] = useState<TabId>("position");
   const [hurt, setHurt] = useState<Record<string, number>>({});
   const [desc, setDesc] = useState("");
   // "knee_left" -> "knee" so a tapped region maps to its rehab protocol.
@@ -67,7 +77,24 @@ export default function EssentialsPage() {
         <p className="mt-1 text-sm text-slate-400">Position essentials, {gameday.toLowerCase()} nutrition and recovery — tailored to you.</p>
       </header>
 
+      <div className="no-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={`shrink-0 rounded-full border px-3.5 py-2 text-sm font-medium transition ${
+              tab === t.id
+                ? "border-pitch-400/50 bg-pitch-400/10 text-pitch-400"
+                : "border-white/10 bg-white/[0.03] text-slate-300"
+            }`}
+          >
+            {t.icon} {t.label}
+          </button>
+        ))}
+      </div>
+
       {/* Position essentials */}
+      {tab === "position" && (
       <section className="card-premium p-6">
         <div className="flex items-center gap-2">
           <span className="chip text-pitch-400">{sportLabel}</span>
@@ -100,8 +127,10 @@ export default function EssentialsPage() {
         )}
       </section>
 
+      )}
+
       {/* Injury-specific recovery (only if sore) */}
-      {injuryProtocols.length > 0 && (
+      {tab === "injury" && injuryProtocols.length > 0 && (
         <section className="space-y-3">
           <h2 className="field-label">Recover your sore areas</h2>
           {injuryProtocols.map((p) => <ProtocolCard key={p.id} p={p} highlight onOpenExercise={setOpen} />)}
@@ -109,6 +138,7 @@ export default function EssentialsPage() {
       )}
 
       {/* Tell us directly what hurts, rather than waiting on a check-in. */}
+      {tab === "injury" && (
       <section className="card-premium space-y-4 p-6">
         <div>
           <h2 className="text-xl font-extrabold">What&apos;s bothering you?</h2>
@@ -136,7 +166,10 @@ export default function EssentialsPage() {
         )}
       </section>
 
+      )}
+
       {/* Full rehab library — browsable whether or not you logged pain today. */}
+      {tab === "injury" && (
       <section className="space-y-3">
         <div>
           <h2 className="field-label">{matched.length > 0 ? "Your rehab plan" : "Injury rehab guides"}</h2>
@@ -148,7 +181,10 @@ export default function EssentialsPage() {
               .map((p) => <ProtocolCard key={p.id} p={p} collapsed onOpenExercise={setOpen} />)}
       </section>
 
+      )}
+
       {/* Mobility & activation — the warm-up that prevents most of the above. */}
+      {tab === "position" && (
       <section>
         <h2 className="field-label mb-1">Mobility &amp; activation</h2>
         <p className="mb-3 text-xs text-slate-500">Run through these before training — the cheapest injury prevention there is.</p>
@@ -165,7 +201,10 @@ export default function EssentialsPage() {
         </div>
       </section>
 
+      )}
+
       {/* Gameday nutrition timeline */}
+      {tab === "fuel" && (
       <section>
         <h2 className="field-label mb-3">{gameday} nutrition</h2>
         <ol className="relative space-y-3 border-l border-white/10 pl-5">
@@ -186,13 +225,18 @@ export default function EssentialsPage() {
         </ol>
       </section>
 
+      )}
+
       {/* General recovery protocols */}
+      {tab === "fuel" && (
       <section>
         <h2 className="field-label mb-3">Recovery protocols</h2>
         <div className="grid gap-3 sm:grid-cols-3">
           {RECOVERY_GENERAL.map((p) => <ProtocolCard key={p.id} p={p} />)}
         </div>
       </section>
+
+      )}
 
       {open && <ExerciseModal ex={open} onClose={() => setOpen(null)} />}
     </div>

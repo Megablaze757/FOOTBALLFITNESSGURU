@@ -14,7 +14,11 @@
 import type { CameraView } from "./types";
 import type { Frame, Pt } from "./biomech";
 
-export type MovementType = "general" | "squat" | "landing" | "sprint" | "kick" | "lunge";
+export type MovementType =
+  | "general" | "squat" | "landing" | "sprint" | "kick" | "lunge"
+  | "hinge"   // deadlift / RDL / clean — the pull off the floor
+  | "press"   // overhead or bench pressing
+  | "tackle"; // rugby or football tackling
 
 export const MOVEMENTS: { id: MovementType; label: string; blurb: string; icon: string }[] = [
   { id: "general", label: "General movement", blurb: "Overall quality & symmetry", icon: "🎥" },
@@ -23,6 +27,9 @@ export const MOVEMENTS: { id: MovementType; label: string; blurb: string; icon: 
   { id: "sprint", label: "Sprint / run", blurb: "Knee drive, stride, posture", icon: "🏃" },
   { id: "kick", label: "Shooting / kicking", blurb: "Follow-through & plant foot", icon: "⚽" },
   { id: "lunge", label: "Lunge / single leg", blurb: "Depth, control, side-to-side gap", icon: "🦵" },
+  { id: "hinge", label: "Deadlift / hinge", blurb: "Hip timing, back angle, lockout", icon: "🏋️" },
+  { id: "press", label: "Press / bench", blurb: "Bar path, lockout, evenness", icon: "💪" },
+  { id: "tackle", label: "Tackle / contact", blurb: "Body height and drive", icon: "🏉" },
 ];
 
 export type Severity = "good" | "watch" | "fix";
@@ -472,6 +479,190 @@ function plantFootFinding(frames: Frame[]): Finding | null {
   };
 }
 
+
+// Deadlift: the hips shooting up ahead of the shoulders turns a leg drive into
+// a back lift. Comparing how far each rises over the first half of the pull is
+// the clearest 2D read on it.
+function hipShootFinding(frames: Frame[]): Finding | null {
+  const hips = hipSeries(frames);
+  const shoulders = frames.map((fr) => {
+    const l = fr["left_shoulder"], r = fr["right_shoulder"];
+    if (l && r) return (l.y + r.y) / 2;
+    return l?.y ?? r?.y ?? NaN;
+  });
+  const ok = (v: number) => !Number.isNaN(v);
+  if (hips.filter(ok).length < 6 || shoulders.filter(ok).length < 6) return null;
+
+  // Start of the pull = hips lowest (largest y); end = hips highest.
+  let startIdx = 0, endIdx = 0;
+  for (let i = 0; i < hips.length; i++) {
+    if (ok(hips[i]) && hips[i] > hips[startIdx]) startIdx = i;
+  }
+  for (let i = startIdx; i < hips.length; i++) {
+    if (ok(hips[i]) && hips[i] < hips[endIdx] || endIdx < startIdx) endIdx = i;
+  }
+  if (endIdx - startIdx < 3) return null;
+
+  const mid = Math.floor((startIdx + endIdx) / 2);
+  const hipRise = hips[startIdx] - hips[mid];
+  const shoulderRise = shoulders[startIdx] - shoulders[mid];
+  if (!ok(hipRise) || !ok(shoulderRise) || hipRise <= 0) return null;
+
+  const ratio = shoulderRise / hipRise; // 1.0 = rising together
+  if (ratio < 0.55) {
+    return {
+      id: "hip_shoot",
+      title: "Your hips are shooting up first",
+      detail: "Your hips rose noticeably faster than your shoulders off the floor, which leaves the bar to your lower back instead of your legs. Push the floor away and make your chest and hips rise together - if you cannot, the weight is too heavy for the position you are holding.",
+      severity: ratio < 0.35 ? "fix" : "watch",
+      drillIds: ["deadlift", "single_leg_rdl", "bird_dog", "hip_thrust"],
+    };
+  }
+  return {
+    id: "hip_timing",
+    title: "Hips and chest rising together",
+    detail: "Your shoulders and hips came up at a similar rate, so the lift is staying in your legs and hips rather than turning into a back lift.",
+    severity: "good",
+    drillIds: [],
+  };
+}
+
+// Pressing: the hands should travel a straight vertical line. Drift forward is
+// what turns a press into a shoulder problem.
+function barPathFinding(frames: Frame[]): Finding | null {
+  const xs: number[] = [], shoulderXs: number[] = [];
+  for (const fr of frames) {
+    const lw = fr["left_wrist"], rw = fr["right_wrist"];
+    const ls = fr["left_shoulder"], rs = fr["right_shoulder"];
+    if (lw && rw) xs.push((lw.x + rw.x) / 2);
+    if (ls && rs) shoulderXs.push((ls.x + rs.x) / 2);
+  }
+  if (xs.length < 6 || !shoulderXs.length) return null;
+  let torso: number | null = null;
+  for (const fr of frames) {
+    const sh = fr["left_shoulder"] ?? fr["right_shoulder"];
+    const hp = fr["left_hip"] ?? fr["right_hip"];
+    if (sh && hp) { torso = Math.abs(hp.y - sh.y); break; }
+  }
+  if (!torso || torso < 0.03) return null;
+
+  const drift = range(xs) / torso;
+  if (drift > 0.55) {
+    return {
+      id: "bar_path_drift",
+      title: "The bar is drifting, not going straight up",
+      detail: "Your hands wandered horizontally through the press instead of tracking a straight line. That usually means the ribs are flaring or the shoulder blades are not set. Brace, squeeze the glutes, and press the bar past your face rather than out in front of it.",
+      severity: drift > 0.8 ? "fix" : "watch",
+      drillIds: ["overhead_press", "scap_pull_up", "dead_bug", "thoracic_openers"],
+    };
+  }
+  return {
+    id: "bar_path",
+    title: "Straight bar path",
+    detail: "Your hands tracked a tidy vertical line through the press - that is the position that keeps shoulders healthy under load.",
+    severity: "good",
+    drillIds: [],
+  };
+}
+
+// Pressing: one arm finishing ahead of the other, at lockout.
+function pressEvennessFinding(frames: Frame[]): Finding | null {
+  let worst = 0, samples = 0;
+  let torso: number | null = null;
+  for (const fr of frames) {
+    const sh = fr["left_shoulder"] ?? fr["right_shoulder"];
+    const hp = fr["left_hip"] ?? fr["right_hip"];
+    if (sh && hp) { torso = Math.abs(hp.y - sh.y); break; }
+  }
+  if (!torso || torso < 0.03) return null;
+  for (const fr of frames) {
+    const lw = fr["left_wrist"], rw = fr["right_wrist"];
+    if (!lw || !rw) continue;
+    samples++;
+    worst = Math.max(worst, Math.abs(lw.y - rw.y) / torso);
+  }
+  if (samples < 5) return null;
+  if (worst > 0.35) {
+    return {
+      id: "press_uneven",
+      title: "One arm is finishing ahead of the other",
+      detail: "Your hands were noticeably out of level during the press. A consistent gap points to a strength difference or a shoulder that is not moving freely on one side. Add single-arm pressing so the weak side cannot hide.",
+      severity: worst > 0.55 ? "fix" : "watch",
+      drillIds: ["dumbbell_press", "shoulder_external_rotation", "scap_pull_up"],
+    };
+  }
+  return {
+    id: "press_even",
+    title: "Both arms locking out together",
+    detail: "Your hands stayed level through the press - no side is doing more than its share.",
+    severity: "good",
+    drillIds: [],
+  };
+}
+
+// Tackling: contact height is the whole thing, for effectiveness and for safety.
+function tackleHeightFinding(frames: Frame[]): Finding | null {
+  const hips = hipSeries(frames);
+  const leg = legLength(frames);
+  const ok = (v: number) => !Number.isNaN(v);
+  if (!leg || leg < 0.05 || hips.filter(ok).length < 5) return null;
+  const stand = hips.find(ok);
+  if (stand == null) return null;
+  const lowest = Math.max(...hips.filter(ok)); // largest y = lowest hips
+  const drop = (lowest - stand) / leg;
+
+  if (drop < 0.12) {
+    return {
+      id: "tackle_high",
+      title: "You are staying too tall into contact",
+      detail: "Your hips barely dropped before contact. Tackling upright loses every collision and is how head and neck injuries happen. Sink the hips, get your shoulder below theirs, and drive up through the contact.",
+      severity: "fix",
+      drillIds: ["tackle_technique", "back_squat", "scrum_drive", "farmers_carry"],
+    };
+  }
+  return {
+    id: "tackle_height",
+    title: "Good body height into contact",
+    detail: "You dropped your hips before contact, which is what lets you drive up and through rather than getting stood up.",
+    severity: "good",
+    drillIds: [],
+  };
+}
+
+// Shooting: leaning back through the strike is why shots balloon over the bar.
+function strikeLeanFinding(frames: Frame[]): Finding | null {
+  let worst = 0, samples = 0;
+  for (const fr of frames) {
+    const sh = fr["left_shoulder"] ?? fr["right_shoulder"];
+    const hp = fr["left_hip"] ?? fr["right_hip"];
+    const an = fr["left_ankle"] ?? fr["right_ankle"];
+    if (!sh || !hp || !an) continue;
+    const dy = Math.abs(hp.y - sh.y);
+    if (dy < 0.02) continue;
+    samples++;
+    // Shoulders behind the hips, away from the direction of travel.
+    const behind = (hp.x - sh.x) * Math.sign(an.x - hp.x || 1);
+    worst = Math.max(worst, behind / dy);
+  }
+  if (samples < 4) return null;
+  if (worst > 0.45) {
+    return {
+      id: "strike_lean_back",
+      title: "Leaning back through the strike",
+      detail: "Your upper body was behind your hips at contact, which opens the face of the foot and sends the ball up. Get your head and chest over the ball and strike through the middle of it - that is the difference between the top corner and the stands.",
+      severity: worst > 0.7 ? "fix" : "watch",
+      drillIds: ["finishing_drill", "set_piece_practice", "dead_bug", "hip_90_90"],
+    };
+  }
+  return {
+    id: "strike_lean",
+    title: "Body over the ball",
+    detail: "Your chest stayed over the ball through contact, which keeps the strike down and on target.",
+    severity: "good",
+    drillIds: [],
+  };
+}
+
 // --- entry point ------------------------------------------------------------
 export function movementFindings(
   frames: Frame[],
@@ -496,7 +687,19 @@ export function movementFindings(
       out.push(kneeDriveFinding(frames), strideFinding(frames, view), postureFinding(frames));
       break;
     case "kick":
-      out.push(followThroughFinding(frames), plantFootFinding(frames), postureFinding(frames));
+      out.push(
+        followThroughFinding(frames), plantFootFinding(frames),
+        strikeLeanFinding(frames), postureFinding(frames)
+      );
+      break;
+    case "hinge":
+      out.push(hipShootFinding(frames), torsoAngleFinding(frames), asymmetryFinding(frames));
+      break;
+    case "press":
+      out.push(barPathFinding(frames), pressEvennessFinding(frames), postureFinding(frames));
+      break;
+    case "tackle":
+      out.push(tackleHeightFinding(frames), torsoAngleFinding(frames), asymmetryFinding(frames));
       break;
     case "lunge":
       out.push(asymmetryFinding(frames), depthFinding(frames), torsoAngleFinding(frames));
