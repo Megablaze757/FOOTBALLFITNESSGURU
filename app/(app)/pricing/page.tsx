@@ -99,7 +99,7 @@ function PricingInner() {
         </div>
         <div className="shrink-0 text-center">
           <div className="text-3xl font-extrabold">{TEAM_PLAN.priceLabel}</div>
-          <a href="mailto:sales@apex.app?subject=Apex%20Team%20plan" className="btn-primary mt-3 w-auto px-6">Contact us</a>
+          <a href="mailto:sales@fitnessguru.app?subject=Fitness%20Guru%20Team%20plan" className="btn-primary mt-3 w-auto px-6">Contact us</a>
         </div>
       </div>
 

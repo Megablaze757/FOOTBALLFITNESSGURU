@@ -455,6 +455,10 @@ export const RECOVERY_INJURY: RecoveryProtocol[] = [
 ];
 
 // Base area from a pain-map key ("knee_left" -> "knee").
+export function baseAreaOf(key: string): string {
+  return baseArea(key);
+}
+
 function baseArea(key: string): string {
   return key.split("_").filter((t) => t !== "left" && t !== "right").join("_");
 }

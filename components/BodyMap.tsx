@@ -8,14 +8,18 @@ const REGIONS: { key: string; label: string; cx: number; cy: number; r: number }
   { key: "shoulder_left", label: "L shoulder", cx: 58, cy: 70, r: 9 },
   { key: "shoulder_right", label: "R shoulder", cx: 102, cy: 70, r: 9 },
   { key: "lower_back", label: "Lower back", cx: 80, cy: 120, r: 10 },
-  { key: "hip_left", label: "L hip", cx: 68, cy: 150, r: 9 },
-  { key: "hip_right", label: "R hip", cx: 92, cy: 150, r: 9 },
+  { key: "hip_left", label: "L hip", cx: 66, cy: 148, r: 9 },
+  { key: "hip_right", label: "R hip", cx: 94, cy: 148, r: 9 },
+  { key: "groin", label: "Groin", cx: 80, cy: 158, r: 9 },
   { key: "hamstring_left", label: "L hamstring", cx: 68, cy: 195, r: 9 },
   { key: "hamstring_right", label: "R hamstring", cx: 92, cy: 195, r: 9 },
   { key: "knee_left", label: "L knee", cx: 68, cy: 235, r: 9 },
   { key: "knee_right", label: "R knee", cx: 92, cy: 235, r: 9 },
+  { key: "calf_left", label: "L calf", cx: 68, cy: 262, r: 8 },
+  { key: "calf_right", label: "R calf", cx: 92, cy: 262, r: 8 },
   { key: "ankle_left", label: "L ankle", cx: 68, cy: 285, r: 8 },
   { key: "ankle_right", label: "R ankle", cx: 92, cy: 285, r: 8 },
+  { key: "head", label: "Head / neck", cx: 80, cy: 36, r: 10 },
 ];
 
 function painColor(level: number): string {
@@ -28,9 +32,13 @@ function painColor(level: number): string {
 export function BodyMap({
   value,
   onChange,
+  mode = "pain",
 }: {
   value: PainMap;
   onChange: (next: PainMap) => void;
+  // "pain" logs a 0-10 severity (daily check-in). "select" is a simple
+  // tap-to-toggle for picking an injured area.
+  mode?: "pain" | "select";
 }) {
   const [selected, setSelected] = useState<string | null>(null);
   const selectedLabel = REGIONS.find((r) => r.key === selected)?.label;
@@ -69,7 +77,15 @@ export function BodyMap({
               stroke={isSel ? "#e3b53f" : "rgba(255,255,255,0.25)"}
               strokeWidth={isSel ? 2.5 : 1.5}
               className="cursor-pointer"
-              onClick={() => setSelected(region.key)}
+              onClick={() => {
+                setSelected(region.key);
+                if (mode === "select") {
+                  const next = { ...value };
+                  if (next[region.key]) delete next[region.key];
+                  else next[region.key] = 5;
+                  onChange(next);
+                }
+              }}
             >
               <title>{`${region.label}: ${level}/10`}</title>
             </circle>
@@ -78,7 +94,13 @@ export function BodyMap({
       </svg>
 
       <div className="mt-3 rounded-2xl bg-white/[0.04] p-3">
-        {selected ? (
+        {mode === "select" ? (
+          <p className="text-center text-sm text-slate-400">
+            {Object.keys(value).length
+              ? `Selected: ${Object.keys(value).map((k) => REGIONS.find((r) => r.key === k)?.label ?? k).join(", ")}`
+              : "Tap where it hurts."}
+          </p>
+        ) : selected ? (
           <>
             <div className="mb-2 flex items-center justify-between text-sm">
               <span className="font-medium text-slate-200">{selectedLabel}</span>

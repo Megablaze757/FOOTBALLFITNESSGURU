@@ -6,7 +6,7 @@ import { ChunkReloader } from "@/components/ChunkReloader";
 const sora = Sora({ subsets: ["latin"], variable: "--font-sans", display: "swap" });
 
 export const metadata: Metadata = {
-  title: "Apex — AI Football Coach",
+  title: "Fitness Guru — AI Athlete Coach",
   description: "Your daily recovery, readiness and performance coach.",
 };
 

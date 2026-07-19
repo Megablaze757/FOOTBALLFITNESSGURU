@@ -78,6 +78,8 @@ export interface Video {
   storage_path: string;
   session_type: "match" | "training" | "recovery" | null;
   movement?: import("./movement").MovementType | null;
+  title?: string | null;
+  thumb_data_url?: string | null;
   is_in_season: boolean;
   status: VideoStatus;
   created_at: string;

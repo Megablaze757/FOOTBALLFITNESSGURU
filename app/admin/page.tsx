@@ -111,7 +111,7 @@ export default function AdminPage() {
 }
 
 function randomPassword() {
-  return "Apex-" + Math.random().toString(36).slice(2, 8);
+  return "GURU-" + Math.random().toString(36).slice(2, 8);
 }
 
 interface AffiliateStat { code: string; name: string; email: string | null; signups: number; paid: number }

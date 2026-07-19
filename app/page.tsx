@@ -16,7 +16,7 @@ const FEATURES = [
 ];
 
 const STEPS = [
-  { n: "01", title: "Check in", body: "60 seconds each morning: sleep, soreness, a tap on the pain map. Apex computes your readiness." },
+  { n: "01", title: "Check in", body: "60 seconds each morning: sleep, soreness, a tap on the pain map. Fitness Guru computes your readiness." },
   { n: "02", title: "Get your plan", body: "The AI coach builds a periodised program around your goals, your season and today's readiness." },
   { n: "03", title: "Log & analyse", body: "Tick off sessions, log drills and nutrition, upload video. Everything feeds the next recommendation." },
   { n: "04", title: "Peak on the day", body: "Watch benchmarks climb and injuries fall as the system learns what works for your body." },
@@ -38,7 +38,7 @@ export default function Landing() {
       <header className="flex items-center justify-between py-6">
         <div className="flex items-center gap-2">
           <span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-pitch-400 to-pitch-600 text-lg font-black text-ink-900 shadow-glow">A</span>
-          <span className="text-lg font-extrabold tracking-tight">Apex</span>
+          <span className="text-lg font-extrabold tracking-tight">Fitness Guru</span>
         </div>
         <div className="flex items-center gap-2">
           <Link href="/login" className="hidden rounded-2xl px-4 py-2 text-sm font-medium text-slate-300 transition hover:text-white sm:inline-block">Sign in</Link>
@@ -127,7 +127,7 @@ export default function Landing() {
       <section id="pricing" className="mt-24 scroll-mt-8">
         <div className="text-center">
           <h2 className="text-3xl font-extrabold tracking-tight sm:text-4xl">Simple pricing for athletes and teams.</h2>
-          <p className="mx-auto mt-3 max-w-xl text-slate-400">A private performance coach runs $100+ an hour. Apex is the whole staff, every day, from $15 a month.</p>
+          <p className="mx-auto mt-3 max-w-xl text-slate-400">A private performance coach runs $100+ an hour. Fitness Guru is the whole staff, every day, from $15 a month.</p>
         </div>
         <div className="mx-auto mt-12 grid max-w-5xl gap-5 md:grid-cols-3">
           <div className="card p-7">
@@ -172,7 +172,7 @@ export default function Landing() {
               <Perk>Per-athlete programs &amp; flags</Perk>
               <Perk>Team reports (PDF)</Perk>
             </ul>
-            <a href="mailto:sales@apex.app?subject=Apex%20Team%20plan" className="btn-ghost mt-8">Contact us</a>
+            <a href="mailto:sales@fitnessguru.app?subject=Fitness%20Guru%20Team%20plan" className="btn-ghost mt-8">Contact us</a>
           </div>
         </div>
       </section>
@@ -189,7 +189,7 @@ export default function Landing() {
 
       <footer className="mt-20 flex flex-col items-center gap-2 text-center">
         <div className="text-xl font-extrabold">
-          <span className="bg-gradient-to-br from-pitch-400 to-pitch-600 bg-clip-text text-transparent">Apex</span>
+          <span className="bg-gradient-to-br from-pitch-400 to-pitch-600 bg-clip-text text-transparent">Fitness Guru</span>
         </div>
         <p className="text-xs text-slate-500">Train smarter. Recover faster. Peak on match day.</p>
       </footer>

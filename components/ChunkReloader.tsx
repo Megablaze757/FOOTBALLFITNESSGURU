@@ -9,7 +9,7 @@ import { useEffect } from "react";
 //
 // A single hard reload pulls the fresh HTML and fixes it. Guarded with
 // sessionStorage so a genuinely missing chunk can't cause a reload loop.
-const KEY = "apex_chunk_reload";
+const KEY = "guru_chunk_reload";
 
 function isChunkError(msg: unknown): boolean {
   const s = String(msg ?? "");

@@ -47,7 +47,7 @@ export default function OnboardingPage() {
         {step === 0 && (
           <div className="text-center">
             <div className="mx-auto grid h-20 w-20 place-items-center rounded-3xl bg-gradient-to-br from-pitch-400 to-pitch-600 text-4xl shadow-glow">A</div>
-            <h1 className="mt-6 text-3xl font-extrabold tracking-tight">Welcome to Apex</h1>
+            <h1 className="mt-6 text-3xl font-extrabold tracking-tight">Welcome to Fitness Guru</h1>
             <p className="mx-auto mt-3 max-w-sm text-slate-400">Your AI performance coach, physio, nutritionist and analyst — in one app. Let&apos;s set it up around you in 30 seconds.</p>
           </div>
         )}

@@ -8,11 +8,12 @@ import { useAsync } from "@/lib/use-async";
 import {
   positionGuide, gamedayLabel, relevantInjuryProtocols,
   GAMEDAY_NUTRITION, RECOVERY_GENERAL, RECOVERY_INJURY, REHAB_DISCLAIMER,
-  INJURY_AREAS, protocolsForAreas, matchInjuryText,
+  protocolsForAreas, matchInjuryText, baseAreaOf,
   type RecoveryProtocol,
 } from "@/lib/essentials";
 import { getExercise, SPORTS, type Exercise, type SportId } from "@/lib/exercises";
 import { ExerciseModal } from "@/components/ExerciseDetail";
+import { BodyMap } from "@/components/BodyMap";
 
 // The pre-training sequence, in the order it should be performed.
 const MOBILITY_IDS = [
@@ -24,8 +25,10 @@ const MOBILITY_IDS = [
 export default function EssentialsPage() {
   const user = useCurrentUser();
   const [open, setOpen] = useState<Exercise | null>(null);
-  const [picked, setPicked] = useState<string[]>([]);
+  const [hurt, setHurt] = useState<Record<string, number>>({});
   const [desc, setDesc] = useState("");
+  // "knee_left" -> "knee" so a tapped region maps to its rehab protocol.
+  const picked = useMemo(() => [...new Set(Object.keys(hurt).map(baseAreaOf))], [hurt]);
 
   // Tapped areas and free text both feed the same protocol lookup; de-duped so
   // describing an ankle after tapping "ankle" doesn't show it twice.
@@ -112,20 +115,8 @@ export default function EssentialsPage() {
           <p className="mt-1 text-sm text-slate-400">Tap where it hurts, or describe it — we&apos;ll pull up the right rehab plan.</p>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          {INJURY_AREAS.map((a) => {
-            const on = picked.includes(a.id);
-            return (
-              <button
-                key={a.id}
-                onClick={() => setPicked(on ? picked.filter((x) => x !== a.id) : [...picked, a.id])}
-                className={`rounded-full border px-3 py-1.5 text-sm transition ${on ? "border-pitch-400/50 bg-pitch-400/10 text-pitch-400" : "border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.06]"}`}
-              >
-                {a.icon} {a.label}
-              </button>
-            );
-          })}
-        </div>
+        {/* Same body map as the daily check-in, in tap-to-select mode. */}
+        <BodyMap value={hurt} onChange={setHurt} mode="select" />
 
         <label className="block">
           <span className="field-label">Or describe it in your own words</span>
@@ -151,9 +142,10 @@ export default function EssentialsPage() {
           <h2 className="field-label">{matched.length > 0 ? "Your rehab plan" : "Injury rehab guides"}</h2>
           <p className="mt-1 text-xs text-slate-500">{REHAB_DISCLAIMER}</p>
         </div>
-        {(matched.length > 0 ? matched : RECOVERY_INJURY.filter((p) => !injuryProtocols.some((i) => i.id === p.id))).map((p) => (
-          <ProtocolCard key={p.id} p={p} highlight={matched.length > 0} onOpenExercise={setOpen} />
-        ))}
+        {matched.length > 0
+          ? matched.map((p) => <ProtocolCard key={p.id} p={p} highlight onOpenExercise={setOpen} />)
+          : RECOVERY_INJURY.filter((p) => !injuryProtocols.some((i) => i.id === p.id))
+              .map((p) => <ProtocolCard key={p.id} p={p} collapsed onOpenExercise={setOpen} />)}
       </section>
 
       {/* Mobility & activation — the warm-up that prevents most of the above. */}
@@ -218,11 +210,29 @@ function Col({ title, items, icon }: { title: string; items: string[]; icon: str
   );
 }
 
-function ProtocolCard({ p, highlight, onOpenExercise }: {
+function ProtocolCard({ p, highlight, collapsed, onOpenExercise }: {
   p: RecoveryProtocol;
   highlight?: boolean;
+  // Browsing the full library: show a one-line summary until asked for detail.
+  collapsed?: boolean;
   onOpenExercise?: (ex: Exercise) => void;
 }) {
+  const body = <ProtocolBody p={p} onOpenExercise={onOpenExercise} />;
+  if (collapsed) {
+    return (
+      <details className="card p-4">
+        <summary className="flex cursor-pointer items-center gap-2 list-none">
+          <span className="text-xl">{p.icon}</span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-bold text-slate-100">{p.title}</span>
+            <span className="block text-[11px] uppercase tracking-wide text-slate-500">{p.when}</span>
+          </span>
+          <span className="shrink-0 text-xs text-pitch-400">View plan ›</span>
+        </summary>
+        <div className="mt-3">{body}</div>
+      </details>
+    );
+  }
   return (
     <div className={`card p-4 ${highlight ? "border-readiness-red/25" : ""}`}>
       <div className="flex items-center gap-2">
@@ -232,6 +242,17 @@ function ProtocolCard({ p, highlight, onOpenExercise }: {
           <div className="text-[11px] uppercase tracking-wide text-slate-500">{p.when}</div>
         </div>
       </div>
+      {body}
+    </div>
+  );
+}
+
+function ProtocolBody({ p, onOpenExercise }: {
+  p: RecoveryProtocol;
+  onOpenExercise?: (ex: Exercise) => void;
+}) {
+  return (
+    <>
       <ul className="mt-3 space-y-1.5 text-sm text-slate-300">
         {p.steps.map((s) => <li key={s} className="flex gap-2"><span className="text-pitch-400">✓</span>{s}</li>)}
       </ul>
@@ -284,6 +305,6 @@ function ProtocolCard({ p, highlight, onOpenExercise }: {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }

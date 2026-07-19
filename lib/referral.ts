@@ -2,7 +2,10 @@
 // in the browser on arrival and write it onto the profile at signup, so the
 // admin panel can attribute each new client to whoever brought them in.
 
-const REF_KEY = "apex_ref";
+const REF_KEY = "guru_ref";
+// Pre-rebrand key. Anyone who clicked a referral link before the rename still
+// has their code stored under this, so keep honouring it on read.
+const LEGACY_REF_KEY = "apex_ref";
 
 /** Call on page load — persists ?ref=CODE so it survives the signup journey. */
 export function captureRef(): void {
@@ -13,12 +16,13 @@ export function captureRef(): void {
 
 export function getRef(): string | null {
   if (typeof window === "undefined") return null;
-  return localStorage.getItem(REF_KEY);
+  return localStorage.getItem(REF_KEY) ?? localStorage.getItem(LEGACY_REF_KEY);
 }
 
 export function clearRef(): void {
   if (typeof window === "undefined") return;
   localStorage.removeItem(REF_KEY);
+  localStorage.removeItem(LEGACY_REF_KEY);
 }
 
 /** The shareable link for an affiliate code. */

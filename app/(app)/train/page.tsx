@@ -6,6 +6,7 @@ import { useCurrentUser } from "@/lib/auth";
 import { useAsync } from "@/lib/use-async";
 import { VideoUploader } from "@/components/VideoUploader";
 import { FormProgress, type Clip } from "@/components/FormProgress";
+import { MOVEMENTS } from "@/lib/movement";
 import type { Video, VideoStatus, VideoAnalysis } from "@/lib/types";
 
 const STATUS_META: Record<VideoStatus, { label: string; cls: string }> = {
@@ -29,7 +30,7 @@ export default function TrainPage() {
     const byVideo = new Map((plans ?? []).map((p) => [p.video_id as string, p.analysis_json as VideoAnalysis]));
     const clips: Clip[] = videos
       .filter((v) => byVideo.has(v.id))
-      .map((v) => ({ id: v.id, date: v.created_at.slice(0, 10), label: v.session_type ?? "session", analysis: byVideo.get(v.id)! }))
+      .map((v) => ({ id: v.id, date: v.created_at.slice(0, 10), label: v.title || v.session_type || "session", analysis: byVideo.get(v.id)! }))
       .reverse(); // oldest → newest for the trend
     return { videos, clips };
   }, [user.id]);
@@ -58,13 +59,27 @@ export default function TrainPage() {
           <ul className="space-y-2">
             {videos.map((v) => {
               const meta = STATUS_META[v.status];
+              const mv = MOVEMENTS.find((m) => m.id === (v.movement ?? "general"));
               const inner = (
-                <div className="card card-hover flex items-center justify-between p-4">
-                  <div>
-                    <div className="text-sm font-semibold capitalize text-slate-100">{v.session_type ?? "session"}</div>
-                    <div className="text-xs text-slate-500">{v.created_at.slice(0, 10)}</div>
+                <div className="card card-hover flex items-center gap-3 p-3">
+                  {v.thumb_data_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={v.thumb_data_url} alt="" className="h-14 w-20 shrink-0 rounded-xl object-cover" />
+                  ) : (
+                    <div className="grid h-14 w-20 shrink-0 place-items-center rounded-xl bg-white/[0.04] text-xl">
+                      {mv?.icon ?? "🎬"}
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-semibold text-slate-100">
+                      {v.title || `${cap(v.session_type ?? "session")} — ${v.created_at.slice(0, 10)}`}
+                    </div>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-slate-500">
+                      <span>{v.created_at.slice(0, 10)}</span>
+                      {mv && mv.id !== "general" && <span className="text-slate-400">· {mv.label}</span>}
+                    </div>
                   </div>
-                  <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${meta.cls}`}>{meta.label}</span>
+                  <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${meta.cls}`}>{meta.label}</span>
                 </div>
               );
               return (
@@ -82,4 +97,8 @@ export default function TrainPage() {
       </section>
     </div>
   );
+}
+
+function cap(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }

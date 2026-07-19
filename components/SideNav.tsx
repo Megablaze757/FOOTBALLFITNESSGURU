@@ -12,7 +12,7 @@ export function SideNav() {
     <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-white/10 bg-white/[0.02] px-4 py-6 backdrop-blur-xl lg:flex">
       <Link href="/home" className="mb-8 flex items-center gap-2 px-2">
         <span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-pitch-400 to-pitch-600 text-lg font-black text-ink-900 shadow-glow">A</span>
-        <span className="text-lg font-extrabold tracking-tight">Apex</span>
+        <span className="text-lg font-extrabold tracking-tight">Fitness Guru</span>
       </Link>
 
       <nav className="flex-1">
@@ -42,7 +42,7 @@ export function SideNav() {
         href="/pricing"
         className="mt-4 rounded-2xl border border-pitch-400/25 bg-pitch-400/[0.06] p-4 transition hover:bg-pitch-400/10"
       >
-        <div className="text-xs font-semibold uppercase tracking-wider text-pitch-400">Apex Gold</div>
+        <div className="text-xs font-semibold uppercase tracking-wider text-pitch-400">Guru Gold</div>
         <p className="mt-1 text-xs text-slate-400">Unlock AI programs, video biomechanics &amp; coaching.</p>
         <span className="mt-2 inline-block text-xs font-bold text-pitch-400">Upgrade →</span>
       </Link>
