@@ -96,16 +96,23 @@ export interface DrillItem {
   targets: string;
 }
 
+// Which way the athlete faces the camera. Knee valgus is a frontal-plane
+// measurement — it is only meaningful from a front or back view.
+export type CameraView = "front" | "side" | "angled" | "unknown";
+
 export interface VideoAnalysis {
   symmetry_score: number;
   form_score: number;   // 0–100 overall movement quality
   rep_count: number;    // detected movement cycles
+  view?: CameraView;    // optional: older saved analyses predate this
+  confidence?: number;  // 0..1 — how much to trust these numbers
   biomechanics: {
     knee_valgus_left: number;
     knee_valgus_right: number;
     knee_flexion_left: number;
     knee_flexion_right: number;
-    ground_contact_ms: number;
+    // null when the sample rate is too low to resolve it (needs ≥60fps).
+    ground_contact_ms: number | null;
   };
   heatmap_data: HeatPoint[];
   root_cause_alert: string | null;

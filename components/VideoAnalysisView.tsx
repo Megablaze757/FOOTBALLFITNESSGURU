@@ -14,6 +14,10 @@ export function VideoAnalysisView({ analysis, src }: { analysis: VideoAnalysis; 
   const form = Number.isFinite(a.form_score) ? a.form_score : a.symmetry_score;
   const reps = a.rep_count ?? 0;
   const formColor = form >= 80 ? "#34d399" : form >= 60 ? "#e3b53f" : "#fb5d6b";
+  // Older saved analyses have no `view` — treat them as before rather than
+  // retroactively hiding their numbers.
+  const kneeReadable = a.view == null || a.view === "front" || a.view === "angled";
+  const conf = a.confidence;
   return (
     <div className="space-y-5">
       <HeatmapVideo src={src} points={a.heatmap_data ?? []} />
@@ -33,15 +37,29 @@ export function VideoAnalysisView({ analysis, src }: { analysis: VideoAnalysis; 
         <div className="grid grid-cols-2 gap-3 sm:col-span-2">
           <Stat label="Symmetry" value={`${a.symmetry_score}/100`} />
           <Stat label="Focus" value={cap(a.focus_area)} />
-          <Stat label="Knee valgus L/R" value={`${a.biomechanics.knee_valgus_left}° / ${a.biomechanics.knee_valgus_right}°`} />
-          <Stat label="Ground contact" value={`${a.biomechanics.ground_contact_ms} ms`} />
+          {kneeReadable
+            ? <Stat label="Knee valgus L/R" value={`${a.biomechanics.knee_valgus_left}° / ${a.biomechanics.knee_valgus_right}°`} />
+            : <Stat label="Knee valgus L/R" value="Needs front-on" />}
+          {/* Only shown when the frame rate could actually resolve it. */}
+          {a.biomechanics.ground_contact_ms != null
+            ? <Stat label="Ground contact" value={`${a.biomechanics.ground_contact_ms} ms`} />
+            : <Stat label="Camera view" value={cap(a.view ?? "unknown")} />}
         </div>
       </div>
 
-      <div className="card p-5">
-        <div className="stat-label mb-3">You vs ideal — knee tracking</div>
-        <KneeCompare valgusLeft={a.biomechanics.knee_valgus_left} valgusRight={a.biomechanics.knee_valgus_right} />
-      </div>
+      {kneeReadable && (
+        <div className="card p-5">
+          <div className="stat-label mb-3">You vs ideal — knee tracking</div>
+          <KneeCompare valgusLeft={a.biomechanics.knee_valgus_left} valgusRight={a.biomechanics.knee_valgus_right} />
+        </div>
+      )}
+
+      {conf != null && conf < 0.6 && (
+        <div className="card border-amber-400/30 bg-amber-400/[0.06] px-4 py-3 text-sm text-amber-200">
+          <span className="font-semibold">Low confidence ({Math.round(conf * 100)}%).</span> This clip was hard to read
+          — treat the numbers as rough. Best results: film front-on, whole body in frame, good light, 5–8 seconds.
+        </div>
+      )}
 
       {a.pose_source === "mediapipe" ? (
         <p className="text-center text-xs text-slate-500">Analysed in your browser with on-device pose estimation.</p>

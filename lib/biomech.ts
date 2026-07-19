@@ -4,7 +4,7 @@
 // feature works on GitHub Pages. Pure + tested; MediaPipe feeds it landmarks.
 // =============================================================================
 
-import type { PainMap, VideoAnalysis, DrillItem } from "./types";
+import type { PainMap, VideoAnalysis, DrillItem, CameraView } from "./types";
 
 export interface Pt { x: number; y: number }
 export type Frame = Record<string, Pt>; // "left_knee" -> {x,y} normalised 0..1
@@ -19,39 +19,113 @@ function angle3(a: Pt, b: Pt, c: Pt): number {
   const cos = Math.max(-1, Math.min(1, (bax * bcx + bay * bcy) / (na * nc)));
   return (Math.acos(cos) * 180) / Math.PI;
 }
-function valgus(hip: Pt, knee: Pt, ankle: Pt): number {
-  const hax = ankle.x - hip.x, hay = ankle.y - hip.y, hkx = knee.x - hip.x, hky = knee.y - hip.y;
-  const nha = Math.hypot(hax, hay), nhk = Math.hypot(hkx, hky);
-  if (!nha || !nhk) return 0;
-  const cos = Math.max(-1, Math.min(1, (hax * hkx + hay * hky) / (nha * nhk)));
-  return (Math.acos(cos) * 180) / Math.PI;
+// Knee valgus in the FRONTAL plane: how far the knee deviates horizontally from
+// the straight hip→ankle line, as an angle. Positive = medial (caving inward,
+// the injury-relevant direction); negative = varus (bowing outward).
+//
+// The old version took the hip→knee vs hip→ankle angle in the image plane,
+// which is really just knee flexion viewed obliquely — a side-on sprint clip
+// reported large "valgus" simply because the knee was bent. This only means
+// anything from a front/back view, which is why callers gate it on the view.
+function frontalValgus(hip: Pt, knee: Pt, ankle: Pt, midX: number): number {
+  const dy = ankle.y - hip.y;
+  if (Math.abs(dy) < 1e-6) return 0;
+  // Where the knee would sit if the leg were a straight line hip→ankle.
+  const t = (knee.y - hip.y) / dy;
+  const expectedX = hip.x + (ankle.x - hip.x) * t;
+  const dx = knee.x - expectedX;
+  const limb = Math.hypot(knee.x - hip.x, knee.y - hip.y);
+  if (limb < 1e-6) return 0;
+  const deg = (Math.atan2(Math.abs(dx), limb) * 180) / Math.PI;
+  // Medial = deviating toward the body's midline.
+  const inward = (midX - expectedX) * dx > 0;
+  return round1(inward ? deg : -deg);
+}
+
+// Estimate how the athlete is oriented. Facing the camera, the shoulders span a
+// wide fraction of body height; side-on they nearly collapse to a point.
+export function detectView(frames: Frame[]): CameraView {
+  const ratios: number[] = [];
+  for (const fr of frames) {
+    const ls = fr["left_shoulder"], rs = fr["right_shoulder"];
+    const la = fr["left_ankle"], ra = fr["right_ankle"];
+    if (!ls || !rs || (!la && !ra)) continue;
+    const ankleY = Math.max(la?.y ?? 0, ra?.y ?? 0);
+    const height = Math.abs(ankleY - (ls.y + rs.y) / 2);
+    if (height < 0.05) continue;
+    ratios.push(Math.abs(ls.x - rs.x) / height);
+  }
+  if (ratios.length < 3) return "unknown";
+  const r = mean(ratios);
+  if (r >= 0.18) return "front";
+  if (r <= 0.09) return "side";
+  return "angled";
 }
 
 interface Side { valgus: number; flexion: number }
+
+// Metrics are taken at the most-flexed frames (the loaded portion of the rep or
+// stride) rather than averaged over the whole clip, where flight phases and
+// standing around drag the numbers toward meaningless middles.
 function sideMetrics(frames: Frame[], side: string): Side | null {
-  const hip = `${side}_hip`, knee = `${side}_knee`, ankle = `${side}_ankle`;
-  const v: number[] = [], f: number[] = [];
+  const hipK = `${side}_hip`, kneeK = `${side}_knee`, ankleK = `${side}_ankle`;
+  const rows: { valgus: number; flexion: number }[] = [];
   for (const fr of frames) {
-    if (fr[hip] && fr[knee] && fr[ankle]) {
-      v.push(valgus(fr[hip], fr[knee], fr[ankle]));
-      f.push(angle3(fr[hip], fr[knee], fr[ankle]));
-    }
+    const hip = fr[hipK], knee = fr[kneeK], ankle = fr[ankleK];
+    if (!hip || !knee || !ankle) continue;
+    const lh = fr["left_hip"], rh = fr["right_hip"];
+    const midX = lh && rh ? (lh.x + rh.x) / 2 : hip.x;
+    rows.push({ valgus: frontalValgus(hip, knee, ankle, midX), flexion: angle3(hip, knee, ankle) });
   }
-  if (!v.length) return null;
-  return { valgus: round1(mean(v)), flexion: round1(Math.min(...f)) };
+  if (!rows.length) return null;
+
+  const byFlexion = [...rows].sort((a, b) => a.flexion - b.flexion);
+  const take = Math.max(3, Math.round(byFlexion.length * 0.3));
+  const loaded = byFlexion.slice(0, Math.min(take, byFlexion.length));
+  return {
+    valgus: round1(mean(loaded.map((r) => r.valgus))),
+    flexion: round1(byFlexion[0].flexion),
+  };
 }
-function symmetry(l: Side, r: Side): number {
-  const penalty = Math.abs(l.valgus - r.valgus) * 1 + Math.abs(l.flexion - r.flexion) * 0.5;
-  return Math.max(0, Math.min(100, Math.round(100 - penalty)));
+// Left/right comparison. Because both sides are sampled at their own most-flexed
+// frames, this compares like with like even when the legs are out of phase — the
+// old whole-clip averaging reported phase differences as asymmetry.
+//
+// Flexion depth is the reliable half of this; the valgus term only counts when
+// the camera angle can actually see the frontal plane.
+function symmetry(l: Side, r: Side, valgusReadable: boolean): number {
+  const flexionPenalty = Math.min(30, Math.abs(l.flexion - r.flexion) * 0.5);
+  const valgusPenalty = valgusReadable ? Math.min(30, Math.abs(l.valgus - r.valgus) * 1.5) : 0;
+  return Math.max(0, Math.min(100, Math.round(100 - flexionPenalty - valgusPenalty)));
 }
-function groundContactMs(frames: Frame[], fps: number): number {
-  if (!frames.length || fps <= 0) return 0;
+
+// How much the athlete should trust these numbers: enough usable frames, and a
+// camera angle that supports what we measured.
+function confidenceOf(frames: Frame[], view: CameraView): number {
+  const needed = ["left_hip", "right_hip", "left_knee", "right_knee", "left_ankle", "right_ankle"];
+  let complete = 0;
+  for (const fr of frames) if (needed.every((k) => fr[k])) complete++;
+  const coverage = frames.length ? complete / frames.length : 0;
+  const sample = Math.min(1, frames.length / 30); // ~3s at 10fps before full marks
+  // View dominates: a pin-sharp side-on clip still can't answer the main
+  // question we're asked (is the knee caving?), so it must not read as certain.
+  const viewFactor = view === "front" ? 1 : view === "angled" ? 0.7 : view === "side" ? 0.5 : 0.35;
+  return round2(Math.max(0, Math.min(1, coverage * 0.3 + sample * 0.2 + viewFactor * 0.5)));
+}
+// Ground-contact time in sprinting is ~80–120ms. At the sample rates a browser
+// can realistically seek through, a single frame is longer than the thing being
+// measured, so any number here would be quantisation noise dressed up as data.
+const MIN_GCT_FPS = 60;
+
+function groundContactMs(frames: Frame[], fps: number): number | null {
+  if (fps < MIN_GCT_FPS) return null;
+  if (!frames.length || fps <= 0) return null;
   const ys: number[] = [];
   for (const fr of frames) {
     const a = [fr["left_ankle"]?.y, fr["right_ankle"]?.y].filter((y): y is number => y != null);
     if (a.length) ys.push(Math.max(...a));
   }
-  if (!ys.length) return 0;
+  if (!ys.length) return null;
   const max = Math.max(...ys), min = Math.min(...ys);
   const thr = max - 0.05 * (max - min + 1e-9);
   const stance = ys.filter((y) => y >= thr).length;
@@ -138,11 +212,17 @@ export function analyzeFrames(
 ): VideoAnalysis {
   const left = sideMetrics(frames, "left") ?? { valgus: 0, flexion: 180 };
   const right = sideMetrics(frames, "right") ?? { valgus: 0, flexion: 180 };
-  const sym = symmetry(left, right);
+  const view = detectView(frames);
+  // Valgus is a frontal-plane measure. From the side we simply cannot see it,
+  // so we must not report a number — that was the source of phantom "inward
+  // collapse" readings on side-on running clips.
+  const valgusReadable = view === "front" || view === "angled";
+  const sym = symmetry(left, right, valgusReadable);
   const gct = groundContactMs(frames, fps);
+  const confidence = confidenceOf(frames, view);
 
   const weaknesses: string[] = [];
-  if (Math.max(left.valgus, right.valgus) >= 10) weaknesses.push("valgus");
+  if (valgusReadable && Math.max(left.valgus, right.valgus) >= 10) weaknesses.push("valgus");
   if (sym < 85) weaknesses.push("symmetry");
   if (Math.min(left.flexion, right.flexion) >= 150) weaknesses.push("flexion");
 
@@ -156,7 +236,11 @@ export function analyzeFrames(
   const pain = painByArea(opts.painMap);
   const kneePain = opts.painMap[`knee_${worseSide}`] ?? pain.knee ?? 0;
   let alert: string | null = null;
-  if (worseVal >= 10 && kneePain >= 7)
+  if (!valgusReadable)
+    alert = view === "side"
+      ? "This clip is filmed side-on, so knee tracking can't be measured. Film front-on to get knee-collapse analysis."
+      : "Couldn't establish the camera angle — film front-on, full body in frame, for knee-collapse analysis.";
+  else if (worseVal >= 10 && kneePain >= 7)
     alert = `Your ${worseSide} knee is caving inwards during landing (${worseVal.toFixed(0)}° valgus), matching your journal's knee pain (${kneePain}/10). Likely the root cause — prioritise stability work.`;
   else if (worseVal >= 10)
     alert = `Noticeable inward collapse in the ${worseSide} knee (${worseVal.toFixed(0)}° valgus). Address it before it becomes painful.`;
@@ -174,11 +258,13 @@ export function analyzeFrames(
   const bestFlexion = Math.min(left.flexion, right.flexion);
   return {
     symmetry_score: sym,
-    form_score: formScore(sym, worseVal, bestFlexion),
+    form_score: formScore(sym, valgusReadable ? worseVal : 0, bestFlexion),
     rep_count: countReps(frames),
+    view,
+    confidence,
     biomechanics: {
-      knee_valgus_left: left.valgus,
-      knee_valgus_right: right.valgus,
+      knee_valgus_left: valgusReadable ? left.valgus : 0,
+      knee_valgus_right: valgusReadable ? right.valgus : 0,
       knee_flexion_left: left.flexion,
       knee_flexion_right: right.flexion,
       ground_contact_ms: gct,
