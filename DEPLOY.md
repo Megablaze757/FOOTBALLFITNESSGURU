@@ -210,7 +210,7 @@ above exists.
 ### 5a. Set up the Spacemail mailbox (do this first)
 
 1. In Spaceship → **Spacemail**, create a mailbox on `pocketathlete.com`, e.g.
-   `hello@pocketathlete.com`. Use a strong password and save it in a password
+   `info@pocketathlete.com`. Use a strong password and save it in a password
    manager — you'll paste it into Supabase in 5b.
 2. Spaceship should add the required **MX**, **SPF** and **DKIM** records for you
    automatically if the domain is registered there. Confirm they exist under the
@@ -232,9 +232,9 @@ at launch** — new signups simply won't get their confirmation link.
    |---|---|
    | Host | `mail.spacemail.com` |
    | Port | `465` |
-   | Username | the full mailbox address, e.g. `hello@pocketathlete.com` |
+   | Username | the full mailbox address, e.g. `info@pocketathlete.com` |
    | Password | that mailbox's password |
-   | Sender email | `hello@pocketathlete.com` |
+   | Sender email | `info@pocketathlete.com` |
    | Sender name | `PocketAthlete` |
 
    Port `465` is implicit SSL and is the one to use. `587` (STARTTLS) also

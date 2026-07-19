@@ -82,8 +82,8 @@ export default function NotFound() {
 
         <p className="mt-8 text-xs text-slate-500">
           Still stuck? Email{" "}
-          <a href="mailto:hello@pocketathlete.com" className="text-pitch-400 hover:underline">
-            hello@pocketathlete.com
+          <a href="mailto:info@pocketathlete.com" className="text-pitch-400 hover:underline">
+            info@pocketathlete.com
           </a>
         </p>
       </div>

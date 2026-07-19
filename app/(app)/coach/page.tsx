@@ -63,6 +63,13 @@ function readinessOf(checkIn: DailyCheckIn | null) {
   return assessReadiness(input);
 }
 
+type CoachTab = "today" | "program" | "ask";
+const COACH_TABS: { id: CoachTab; label: string; icon: string }[] = [
+  { id: "today", label: "Today", icon: "⚡" },
+  { id: "program", label: "Program", icon: "📅" },
+  { id: "ask", label: "Ask coach", icon: "💬" },
+];
+
 export default function CoachPage() {
   const user = useCurrentUser();
   const today = new Date().toISOString().slice(0, 10);
@@ -377,6 +384,7 @@ function ActiveProgram({
   const [switching, setSwitching] = useState(false);
   const [advancing, setAdvancing] = useState(false);
   const [playing, setPlaying] = useState(false);
+  const [tab, setTab] = useState<CoachTab>("today");
 
   async function switchSeason() {
     setSwitching(true);
@@ -457,15 +465,34 @@ function ActiveProgram({
         <button onClick={newProgram} className="text-xs text-slate-400 hover:text-pitch-400">New goal</button>
       </header>
 
+      {/* Today's session and today's recommended drills used to sit stacked with
+          the calendar and the chat below, which left the athlete deciding which
+          of two "today" blocks to actually do. Grouped into tabs instead. */}
+      <div className="no-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+        {COACH_TABS.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={`shrink-0 rounded-full border px-3.5 py-2 text-sm font-medium transition ${
+              tab === t.id
+                ? "border-pitch-400/50 bg-pitch-400/10 text-pitch-400"
+                : "border-white/10 bg-white/[0.03] text-slate-300"
+            }`}
+          >
+            {t.icon} {t.label}
+          </button>
+        ))}
+      </div>
+
       {/* Deadline-near nudge */}
-      {deadline && deadline.daysLeft >= 0 && deadline.daysLeft <= 7 && (
+      {tab === "today" && deadline && deadline.daysLeft >= 0 && deadline.daysLeft <= 7 && (
         <div className="card px-4 py-3 text-sm" style={{ color: deadline.onTrack ? "#34d399" : "#fbbf24" }}>
           ⏳ {deadline.daysLeft === 0 ? "Target date is today" : `${deadline.daysLeft} day(s) to your target`} — {deadline.onTrack ? "you're on pace, finish strong." : "you're behind pace, get a session in."}
         </div>
       )}
 
       {/* Benchmark target progress */}
-      {bench && (
+      {tab === "program" && bench && (
         <div className="card flex items-center gap-4 p-5">
           <RingProgress pct={bench.pct} color={bench.achieved ? "#34d399" : "#e3b53f"} sub="to goal" />
           <div className="flex-1">
@@ -527,7 +554,7 @@ function ActiveProgram({
       </div>
 
       {/* Readiness-aware: what to do today */}
-      {nextSession && (
+      {tab === "today" && nextSession && (
         <section className="card p-5">
           <div className="mb-2 flex items-center justify-between">
             <h2 className="field-label !mb-0">Today&apos;s session</h2>
@@ -566,6 +593,7 @@ function ActiveProgram({
       )}
 
       {/* Today's tailored drills */}
+      {tab === "today" && (
       <section className="card p-5">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="field-label !mb-0">Today&apos;s recommended drills</h2>
@@ -588,11 +616,13 @@ function ActiveProgram({
         </button>
       </section>
 
+      )}
+
       {/* Ask the coach */}
-      <CoachChat context={chatContext} />
+      {tab === "ask" && <CoachChat context={chatContext} />}
 
       {/* What's working */}
-      {(insights.insights.length > 0 || insights.progressions.length > 0) && (
+      {tab === "program" && (insights.insights.length > 0 || insights.progressions.length > 0) && (
         <section className="card p-5">
           <h2 className="field-label">What&apos;s working</h2>
           <ul className="space-y-2 text-sm text-slate-200">
@@ -611,7 +641,9 @@ function ActiveProgram({
       )}
 
       {/* The program — week-by-week calendar */}
-      <ProgramCalendar weeks={plan.weeks} completed={program.completed_sessions} onToggle={toggleSession} />
+      {tab === "program" && (
+        <ProgramCalendar weeks={plan.weeks} completed={program.completed_sessions} onToggle={toggleSession} />
+      )}
     </div>
   );
 }
