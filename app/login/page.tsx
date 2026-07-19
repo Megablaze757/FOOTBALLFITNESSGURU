@@ -49,7 +49,13 @@ export default function LoginPage() {
         options: { data: { full_name: fullName } },
       });
       if (error) setError(error.message);
-      else {
+      else if (data.user && (data.user.identities?.length ?? 0) === 0) {
+        // Supabase returns a session-less success for an email that already has
+        // an account, so attackers can't probe which addresses are registered.
+        // Without this branch we tell the person to check their email for a
+        // confirmation that will never arrive, because nothing was sent.
+        setInfo("That email already has an account. Try signing in, or use “Forgot password?” below.");
+      } else {
         // Attribute the signup to the affiliate whose link they arrived on.
         const ref = getRef();
         if (ref && data.user) {
