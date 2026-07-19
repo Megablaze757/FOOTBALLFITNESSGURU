@@ -29,8 +29,11 @@ jobs:
 
       - name: Build static export
         env:
-          # Empty base path for <user>.github.io repos; /<repo> for project sites.
-          NEXT_PUBLIC_BASE_PATH: ${{ endsWith(github.repository, '.github.io') && '' || format('/{0}', github.event.repository.name) }}
+          # Base path must be empty when the site is served from the root of a
+          # domain — that's true both for <user>.github.io repos and for any repo
+          # with a CNAME (custom domain). Leaving it as /<repo> on a custom
+          # domain 404s every script, stylesheet and link on the site.
+          NEXT_PUBLIC_BASE_PATH: ${{ (hashFiles('CNAME') != '' || endsWith(github.repository, '.github.io')) && '' || format('/{0}', github.event.repository.name) }}
           # Public client values — override by setting repo Variables of the same name.
           NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL || 'https://txqhstackgidjqkkrzyj.supabase.co' }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_kr26XwyR0HZxS3HR3UJI2Q_YLLT7Sfl' }}
@@ -39,6 +42,10 @@ jobs:
         run: |
           npm run build
           touch out/.nojekyll
+          # The Pages artifact is `out/`, so a CNAME sitting in the repo root
+          # never reaches the deployment and the custom domain gets dropped on
+          # the next deploy. Copy it in.
+          if [ -f CNAME ]; then cp CNAME out/CNAME; fi
 
       - uses: actions/upload-pages-artifact@v3
         with:

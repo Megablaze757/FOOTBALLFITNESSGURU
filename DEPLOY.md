@@ -161,6 +161,34 @@ resulting tier to `subscriptions` with the service_role key.
 
 ---
 
+## 4b. Custom domain (pocketathlete.com)
+
+The repo has a `CNAME` file containing `pocketathlete.com`. Two things follow
+from that, and both are already handled in `.github/workflows/deploy.yml` — but
+know why, because getting either wrong takes the whole site down:
+
+1. **Base path must be empty.** On a project site the app is served from
+   `/<repo>/`, so assets are built with that prefix. On a custom domain it's
+   served from the root, and that prefix 404s every script and stylesheet. The
+   workflow now sets `NEXT_PUBLIC_BASE_PATH` to empty whenever a `CNAME` exists.
+2. **The CNAME has to be inside the build output.** Pages deploys the `out/`
+   directory, so a `CNAME` in the repo root never reaches the deployment and the
+   custom domain silently unsets on the next deploy. The workflow copies it in.
+
+Also update, or the app will misbehave in ways that look unrelated:
+
+- **Supabase → Authentication → URL Configuration**: set **Site URL** to
+  `https://pocketathlete.com` and add it to Redirect URLs, otherwise
+  password-reset and confirmation links point at the old github.io host.
+- **Stripe**: success/cancel URLs and the webhook endpoint.
+- **Cloudflare Worker**: `APP_URL` var, used in email links.
+- DNS: an apex domain needs A records pointing at GitHub Pages' IPs (or ALIAS
+  /ANAME if Spaceship supports it); `www` should be a CNAME to
+  `<user>.github.io`. Enable **Enforce HTTPS** in repo Settings → Pages once the
+  certificate is issued.
+
+---
+
 ## 5. Email — Spacemail + pocketathlete.com
 
 There are **two separate email jobs**, and they need different tools. This trips
@@ -259,6 +287,8 @@ If `GAS_EMAIL_URL` is set it's used; otherwise the Worker falls back to Resend.
 - [ ] (billing) Stripe prices + webhook set
 - [ ] (email) Supabase custom SMTP via Spacemail — test email received
 - [ ] (email) Resend verified on a subdomain for Worker reminders
+- [ ] Custom domain: `CNAME` present, base path empty, HTTPS enforced
+- [ ] Supabase Site URL + Stripe URLs + Worker `APP_URL` point at pocketathlete.com
 - [ ] DB password rotated + demo accounts removed before real users
 
 ---
