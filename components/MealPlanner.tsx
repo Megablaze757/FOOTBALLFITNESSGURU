@@ -3,18 +3,20 @@
 import { useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import {
-  planTargets, buildWeek, shoppingList, shoppingListText,
-  ACTIVITY_LEVELS, DIET_GOALS,
+  planTargets, buildWeek, shoppingList, shoppingListText, unmetSlots,
+  ACTIVITY_LEVELS, DIET_GOALS, DIET_PATTERNS, AVOIDANCES, DEFAULT_PREFS,
   type BodyStats, type Sex, type ActivityLevel, type DietGoal, type PlannedDay,
+  type MealPrefs, type DietPattern, type Avoidance,
 } from "@/lib/meal-plan";
 import { SUPERMARKETS, PRICES_REVIEWED, productLink, FOOD_BY_ID as FOOD_LOOKUP } from "@/lib/food-db";
 
 interface Props {
   userId: string;
   initial?: Partial<BodyStats> | null;
+  initialPrefs?: Partial<MealPrefs> | null;
 }
 
-export function MealPlanner({ userId, initial }: Props) {
+export function MealPlanner({ userId, initial, initialPrefs }: Props) {
   const [sex, setSex] = useState<Sex>(initial?.sex ?? "male");
   const [age, setAge] = useState(String(initial?.age ?? 20));
   const [heightCm, setHeightCm] = useState(String(initial?.heightCm ?? 178));
@@ -26,6 +28,7 @@ export function MealPlanner({ userId, initial }: Props) {
   const [copied, setCopied] = useState(false);
   const [saved, setSaved] = useState(false);
   const [store, setStore] = useState(SUPERMARKETS[0]);
+  const [prefs, setPrefs] = useState<MealPrefs>({ ...DEFAULT_PREFS, ...(initialPrefs ?? {}) });
 
   const stats: BodyStats = {
     sex, goal, activity,
@@ -35,9 +38,12 @@ export function MealPlanner({ userId, initial }: Props) {
   };
   const targets = useMemo(() => planTargets(stats), [sex, age, heightCm, weightKg, activity, goal]);
   const list = useMemo(() => (week ? shoppingList(week) : null), [week]);
+  // If someone excludes enough, a meal slot can end up with nothing in it —
+  // better to say so than to quietly hand back a short day.
+  const gaps = useMemo(() => unmetSlots(prefs), [prefs]);
 
   async function generate() {
-    setWeek(buildWeek(targets, Math.floor(Math.random() * 3)));
+    setWeek(buildWeek(targets, Math.floor(Math.random() * 3), prefs));
     setOpenDay(0);
     // Remember the stats so the plan doesn't have to be re-entered next time.
     const supabase = createClient();
@@ -45,6 +51,9 @@ export function MealPlanner({ userId, initial }: Props) {
       height_cm: stats.heightCm,
       birth_year: new Date().getFullYear() - stats.age,
       sex, activity_level: activity, diet_goal: goal,
+      diet_pattern: prefs.pattern,
+      diet_avoid: prefs.avoid,
+      meals_per_day: prefs.mealsPerDay,
     }).eq("id", userId);
     if (!error) { setSaved(true); setTimeout(() => setSaved(false), 2500); }
   }
@@ -103,6 +112,82 @@ export function MealPlanner({ userId, initial }: Props) {
             ))}
           </div>
         </div>
+
+        <div>
+          <span className="field-label">How you eat</span>
+          <div className="flex flex-wrap gap-2">
+            {DIET_PATTERNS.map((d) => (
+              <button
+                key={d.id}
+                onClick={() => setPrefs((p) => ({ ...p, pattern: d.id }))}
+                className={`rounded-full border px-3 py-1.5 text-sm transition ${
+                  prefs.pattern === d.id
+                    ? "border-pitch-400/50 bg-pitch-400/10 text-pitch-400"
+                    : "border-white/10 bg-white/[0.03] text-slate-300"
+                }`}
+              >
+                {d.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <span className="field-label">Anything to avoid</span>
+          <div className="flex flex-wrap gap-2">
+            {AVOIDANCES.map((a) => {
+              const on = prefs.avoid.includes(a.id);
+              return (
+                <button
+                  key={a.id}
+                  onClick={() => setPrefs((p) => ({
+                    ...p,
+                    avoid: p.avoid.includes(a.id)
+                      ? p.avoid.filter((x) => x !== a.id)
+                      : [...p.avoid, a.id],
+                  }))}
+                  className={`rounded-full border px-3 py-1.5 text-sm transition ${
+                    on ? "border-readiness-red/50 bg-readiness-red/10 text-readiness-red"
+                       : "border-white/10 bg-white/[0.03] text-slate-300"
+                  }`}
+                >
+                  {on ? "✕ " : ""}{a.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <label className="block">
+            <span className="field-label">Meals a day</span>
+            <select
+              value={prefs.mealsPerDay}
+              onChange={(e) => setPrefs((p) => ({ ...p, mealsPerDay: Number(e.target.value) as 3 | 4 | 5 }))}
+              className="field [color-scheme:dark]"
+            >
+              <option value={3}>3 — no snacks</option>
+              <option value={4}>4 — one snack</option>
+              <option value={5}>5 — two snacks</option>
+            </select>
+          </label>
+          <label className="flex items-end gap-2 pb-3">
+            <input
+              type="checkbox"
+              checked={prefs.budget}
+              onChange={(e) => setPrefs((p) => ({ ...p, budget: e.target.checked }))}
+              className="h-5 w-5 accent-pitch-500"
+            />
+            <span className="text-sm text-slate-300">Keep it cheap</span>
+          </label>
+        </div>
+
+        {gaps.length > 0 && (
+          <div className="rounded-xl border border-amber-400/30 bg-amber-400/[0.06] px-3 py-2 text-sm text-amber-200">
+            Nothing left for {gaps.join(" or ").toLowerCase()} with those rules — we&apos;ll build the rest of the
+            day and skip {gaps.length > 1 ? "those meals" : "that meal"}. Try lifting one restriction.
+          </div>
+        )}
 
         <div className="rounded-2xl border border-pitch-400/25 bg-pitch-400/[0.05] p-4">
           <div className="grid grid-cols-4 gap-2 text-center">
@@ -172,6 +257,16 @@ export function MealPlanner({ userId, initial }: Props) {
               <span className="text-slate-400"> · {Math.round(week[openDay].macros.protein)}g protein</span>
               <span className="text-slate-500"> (target {targets.calories} / {targets.protein}g)</span>
             </div>
+
+            {/* Plant-based days in particular tend to land on calories but fall
+                short on protein. Saying so beats quietly missing the target. */}
+            {week[openDay].macros.protein < targets.protein * 0.85 && (
+              <div className="mt-2 rounded-xl border border-amber-400/30 bg-amber-400/[0.06] px-3 py-2 text-sm text-amber-200">
+                This day is about {Math.round(targets.protein - week[openDay].macros.protein)}g short on protein.
+                Add a shake or an extra portion of your main protein — hitting calories but missing protein is the
+                one thing that will hold your results back.
+              </div>
+            )}
           </div>
 
           {list && (

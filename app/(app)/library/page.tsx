@@ -7,6 +7,10 @@ import { EXERCISES, EXERCISE_CATEGORIES, SPORTS, DIFFICULTIES, EQUIPMENT_BUCKETS
 import { ExerciseDemo } from "@/components/ExerciseDemo";
 import { ExerciseModal } from "@/components/ExerciseDetail";
 
+// How many cards to render at once. Every card carries an animated SVG demo, so
+// showing all 300+ was both a 44-screen page and a scrolling performance issue.
+const PAGE = 24;
+
 const DIFF_COLOR: Record<Difficulty, string> = { easy: "#34d399", medium: "#e3b53f", advanced: "#fb5d6b" };
 const DIFF_LABEL: Record<Difficulty, string> = { easy: "Beginner", medium: "Intermediate", advanced: "Advanced" };
 
@@ -19,6 +23,7 @@ export default function LibraryPage() {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState<Exercise | null>(null);
   const [custom, setCustom] = useState<Exercise[]>([]);
+  const [shown, setShown] = useState(PAGE);
 
   // Default to the athlete's sport + level, and pull in coach-authored exercises.
   useEffect(() => {
@@ -46,6 +51,9 @@ export default function LibraryPage() {
       (!query || e.name.toLowerCase().includes(query) || e.muscles.some((m) => m.toLowerCase().includes(query)))
     );
   }, [sport, cat, level, equip, q, custom]);
+
+  // Narrowing the filters shouldn't leave you deep in a previous page.
+  useEffect(() => { setShown(PAGE); }, [sport, cat, level, equip, q]);
 
   return (
     <div className="animate-fade-up space-y-4">
@@ -84,10 +92,12 @@ export default function LibraryPage() {
         ))}
       </div>
 
-      <p className="text-xs text-slate-500">{list.length} exercises</p>
+      <p className="text-xs text-slate-500">
+        {list.length} exercises{list.length > shown ? ` · showing ${shown}` : ""}
+      </p>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {list.map((ex) => (
+        {list.slice(0, shown).map((ex) => (
           <button
             key={ex.id}
             onClick={() => setOpen(ex)}
@@ -107,6 +117,12 @@ export default function LibraryPage() {
         ))}
       </div>
       {list.length === 0 && <p className="card px-4 py-8 text-center text-sm text-slate-500">No exercises match those filters.</p>}
+
+      {list.length > shown && (
+        <button onClick={() => setShown((n) => n + PAGE)} className="btn-ghost">
+          Show {Math.min(PAGE, list.length - shown)} more
+        </button>
+      )}
 
       {open && <ExerciseModal ex={open} onClose={() => setOpen(null)} />}
     </div>

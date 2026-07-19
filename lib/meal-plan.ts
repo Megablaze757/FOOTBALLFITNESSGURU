@@ -7,7 +7,7 @@
 // for why live supermarket pricing isn't available. Pure + tested.
 // =============================================================================
 
-import { FOODS, FOOD_BY_ID, type Aisle, type Food } from "./food-db";
+import { FOODS, FOOD_BY_ID, type Aisle, type Food, type FoodTag } from "./food-db";
 
 export type Sex = "male" | "female";
 export type ActivityLevel = "sedentary" | "light" | "moderate" | "high" | "athlete";
@@ -26,6 +26,58 @@ export const DIET_GOALS: { id: DietGoal; label: string; blurb: string; adjust: n
   { id: "maintain", label: "Maintain", blurb: "Fuel performance", adjust: 0 },
   { id: "build", label: "Build muscle", blurb: "Gain size and strength", adjust: 0.12 },
 ];
+
+export type DietPattern = "omnivore" | "pescatarian" | "vegetarian" | "vegan";
+
+export const DIET_PATTERNS: { id: DietPattern; label: string; excludes: FoodTag[] }[] = [
+  { id: "omnivore", label: "Everything", excludes: [] },
+  { id: "pescatarian", label: "Pescatarian", excludes: ["meat", "pork"] },
+  { id: "vegetarian", label: "Vegetarian", excludes: ["meat", "pork", "fish"] },
+  { id: "vegan", label: "Vegan", excludes: ["meat", "pork", "fish", "dairy", "egg"] },
+];
+
+// Things people avoid for allergy or preference reasons, separate from the
+// overall pattern.
+export type Avoidance = "dairy" | "gluten" | "nuts" | "egg" | "soy" | "pork";
+export const AVOIDANCES: { id: Avoidance; label: string }[] = [
+  { id: "dairy", label: "Dairy" },
+  { id: "gluten", label: "Gluten" },
+  { id: "nuts", label: "Nuts" },
+  { id: "egg", label: "Egg" },
+  { id: "soy", label: "Soy" },
+  { id: "pork", label: "Pork" },
+];
+
+export interface MealPrefs {
+  pattern: DietPattern;
+  avoid: Avoidance[];
+  mealsPerDay: 3 | 4 | 5;
+  budget: boolean;      // prefer cheaper staples
+  dislikes: string[];   // food ids the athlete never wants to see
+}
+
+export const DEFAULT_PREFS: MealPrefs = {
+  pattern: "omnivore", avoid: [], mealsPerDay: 4, budget: false, dislikes: [],
+};
+
+/** Every tag a meal carries, via its ingredients. */
+export function mealTags(meal: Meal): FoodTag[] {
+  const out = new Set<FoodTag>();
+  for (const it of meal.items) {
+    for (const t of FOOD_BY_ID[it.foodId]?.tags ?? []) out.add(t);
+  }
+  return [...out];
+}
+
+/** Does this meal fit the athlete's diet, allergies and dislikes? */
+export function mealAllowed(meal: Meal, prefs: MealPrefs): boolean {
+  const banned = new Set<string>([
+    ...(DIET_PATTERNS.find((d) => d.id === prefs.pattern)?.excludes ?? []),
+    ...prefs.avoid,
+  ]);
+  if (mealTags(meal).some((t) => banned.has(t))) return false;
+  return !meal.items.some((it) => prefs.dislikes.includes(it.foodId));
+}
 
 export interface BodyStats {
   sex: Sex;
@@ -135,6 +187,38 @@ export const MEALS: Meal[] = [
   { id: "apple_pb", name: "Apple & peanut butter", slot: "Snack",
     items: [{ foodId: "apple", qty: 1 }, { foodId: "peanut_butter", qty: 25 }],
     method: "Slice the apple, dip. Easy carbs before a session." },
+
+  // --- Plant-based, so vegetarian and vegan plans aren't empty --------------
+  { id: "oats_soy", name: "Oats with soya milk & seeds", slot: "Breakfast",
+    items: [{ foodId: "oats", qty: 80 }, { foodId: "soy_milk", qty: 300 }, { foodId: "seeds_mixed", qty: 20 }, { foodId: "banana", qty: 1 }],
+    method: "Simmer the oats in soya milk, top with seeds and sliced banana." },
+  { id: "tofu_scramble", name: "Tofu scramble on toast", slot: "Breakfast",
+    items: [{ foodId: "tofu", qty: 150 }, { foodId: "wholemeal_bread", qty: 80 }, { foodId: "spinach", qty: 50 }, { foodId: "olive_oil", qty: 8 }],
+    method: "Crumble the tofu into a hot pan with turmeric and black pepper, wilt the spinach in, serve on toast." },
+  { id: "coconut_bowl", name: "Coconut yoghurt & seed bowl", slot: "Breakfast",
+    items: [{ foodId: "coconut_yoghurt", qty: 200 }, { foodId: "oats", qty: 40 }, { foodId: "berries_frozen", qty: 80 }, { foodId: "seeds_mixed", qty: 20 }],
+    method: "Layer it all up the night before and it's ready when you are." },
+  { id: "lentil_dhal", name: "Red lentil dhal & rice", slot: "Lunch",
+    items: [{ foodId: "red_lentils", qty: 100 }, { foodId: "tomatoes_tin", qty: 200 }, { foodId: "onion", qty: 80 }, { foodId: "rice", qty: 80 }],
+    method: "Soften the onion, add lentils, tomatoes and spices, simmer 25 minutes until thick. Cheap, high protein and it freezes." },
+  { id: "chickpea_wrap", name: "Chickpea & spinach wraps", slot: "Lunch",
+    items: [{ foodId: "chickpeas", qty: 200 }, { foodId: "tortilla_wrap", qty: 2 }, { foodId: "spinach", qty: 50 }, { foodId: "olive_oil", qty: 8 }],
+    method: "Crush the chickpeas roughly with oil and lemon, load into wraps with spinach." },
+  { id: "quinoa_beans", name: "Black bean & quinoa bowl", slot: "Dinner",
+    items: [{ foodId: "black_beans", qty: 200 }, { foodId: "quinoa", qty: 90 }, { foodId: "mixed_veg_frozen", qty: 150 }, { foodId: "olive_oil", qty: 10 }],
+    method: "Cook the quinoa, warm the beans with cumin and paprika, roast or steam the veg and combine." },
+  { id: "tofu_stirfry", name: "Tofu & veg stir-fry with rice", slot: "Dinner",
+    items: [{ foodId: "tofu", qty: 200 }, { foodId: "mixed_veg_frozen", qty: 200 }, { foodId: "rice", qty: 90 }, { foodId: "olive_oil", qty: 10 }],
+    method: "Press and cube the tofu, fry until golden, throw in the veg for the last few minutes, serve over rice." },
+  { id: "lentil_bolognese", name: "Lentil bolognese", slot: "Dinner",
+    items: [{ foodId: "red_lentils", qty: 100 }, { foodId: "tomatoes_tin", qty: 200 }, { foodId: "onion", qty: 80 }, { foodId: "pasta", qty: 100 }],
+    method: "Same method as a meat bolognese - soften the onion, add lentils and tomatoes, simmer until thick." },
+  { id: "pea_shake", name: "Plant protein shake", slot: "Snack",
+    items: [{ foodId: "pea_protein", qty: 30 }, { foodId: "soy_milk", qty: 300 }, { foodId: "banana", qty: 1 }],
+    method: "Blend. Straightforward post-training protein without dairy." },
+  { id: "seed_snack", name: "Seeds & apple", slot: "Snack",
+    items: [{ foodId: "seeds_mixed", qty: 30 }, { foodId: "apple", qty: 1 }],
+    method: "No prep, no allergens beyond seeds, travels anywhere." },
 ];
 
 // --- macros ------------------------------------------------------------------
@@ -169,24 +253,52 @@ export interface PlannedMeal { meal: Meal; scale: number; macros: Macros }
 export interface PlannedDay { day: string; meals: PlannedMeal[]; macros: Macros }
 
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-const bySlot = (s: Slot) => MEALS.filter((m) => m.slot === s);
+
+const cheapest = (a: Meal, b: Meal) => mealCost(a) - mealCost(b);
+function mealCost(meal: Meal): number {
+  let c = 0;
+  for (const it of meal.items) {
+    const f = FOOD_BY_ID[it.foodId];
+    if (f) c += (it.qty / f.packSize) * f.packPrice;
+  }
+  return c;
+}
+
+function bySlot(slot: Slot, prefs: MealPrefs): Meal[] {
+  const ok = MEALS.filter((m) => m.slot === slot && mealAllowed(m, prefs));
+  return prefs.budget ? [...ok].sort(cheapest) : ok;
+}
+
+/** Slots that have nothing left once the athlete's rules are applied. */
+export function unmetSlots(prefs: MealPrefs): Slot[] {
+  return (["Breakfast", "Lunch", "Dinner", "Snack"] as Slot[])
+    .filter((slot) => bySlot(slot, prefs).length === 0);
+}
 
 /**
  * Build a week. Meals rotate so nobody eats the same thing seven days running,
  * then each day is scaled to land on the calorie target. Portions are clamped
  * so we never prescribe a comically small or huge plate.
  */
-export function buildWeek(targets: PlanTargets, seed = 0): PlannedDay[] {
-  const breakfasts = bySlot("Breakfast"), lunches = bySlot("Lunch");
-  const dinners = bySlot("Dinner"), snacks = bySlot("Snack");
+export function buildWeek(
+  targets: PlanTargets,
+  seed = 0,
+  prefs: MealPrefs = DEFAULT_PREFS
+): PlannedDay[] {
+  const breakfasts = bySlot("Breakfast", prefs), lunches = bySlot("Lunch", prefs);
+  const dinners = bySlot("Dinner", prefs), snacks = bySlot("Snack", prefs);
+
+  const pick = (list: Meal[], i: number) => (list.length ? list[(i + seed) % list.length] : undefined);
 
   return DAYS.map((day, i) => {
+    // Three meals means no snack; five means a second one, offset so it differs.
     const picks = [
-      breakfasts[(i + seed) % breakfasts.length],
-      lunches[(i + seed) % lunches.length],
-      dinners[(i + seed) % dinners.length],
-      snacks[(i + seed) % snacks.length],
-    ].filter(Boolean);
+      pick(breakfasts, i),
+      pick(lunches, i),
+      pick(dinners, i),
+      ...(prefs.mealsPerDay >= 4 ? [pick(snacks, i)] : []),
+      ...(prefs.mealsPerDay >= 5 ? [pick(snacks, i + 1)] : []),
+    ].filter((m): m is Meal => Boolean(m));
 
     const base = picks.reduce((s, m) => s + mealMacros(m).kcal, 0);
     const raw = base > 0 ? targets.calories / base : 1;
