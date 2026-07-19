@@ -28,8 +28,8 @@ test("every movement type has a label and blurb", () => {
 });
 
 test("a side doing less work is named, with single-leg drills", () => {
-  // Left knee barely bends compared to the right.
-  const f = movementFindings(squatFrames({ leftBendScale: 0.15 }), "squat", "front");
+  // Left knee bends noticeably less than the right — a realistic imbalance.
+  const f = movementFindings(squatFrames({ leftBendScale: 0.62 }), "squat", "front");
   const asym = f.find((x) => x.id === "asymmetry");
   assert.ok(asym, `no asymmetry finding in ${JSON.stringify(f.map((x) => x.id))}`);
   assert.equal(asym!.side, "left");
@@ -57,6 +57,17 @@ test("a short swing is flagged as no follow-through on a shot", () => {
   const ft = f.find((x) => x.id === "follow_through_short");
   assert.ok(ft, `expected short follow-through, got ${JSON.stringify(f.map((x) => x.id))}`);
   assert.ok(ft!.drillIds.includes("finishing_drill"));
+});
+
+test("an implausible left/right gap is reported as unreadable, not an imbalance", () => {
+  // One leg effectively not moving means it was occluded or mistracked. Telling
+  // an athlete they have a massive imbalance on that basis would be worse than
+  // admitting we couldn't see it.
+  const f = movementFindings(squatFrames({ leftBendScale: 0.05 }), "squat", "front");
+  const a = f.find((x) => x.id === "asymmetry_unreadable");
+  assert.ok(a, `expected an unreadable finding, got ${f.map((x) => x.id).join(" ")}`);
+  assert.equal(f.filter((x) => x.id === "asymmetry").length, 0, "must not also claim an imbalance");
+  assert.match(a!.detail, /front-on/i);
 });
 
 test("findings are ordered most-actionable first", () => {

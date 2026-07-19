@@ -14,9 +14,16 @@ const MP_WASM = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VER}/
 const MP_MODULE = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VER}/vision_bundle.mjs`;
 const MP_MODEL = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task";
 
+// Below this, MediaPipe is guessing at an occluded joint rather than seeing it.
+const MIN_VISIBILITY = 0.5;
+
 // BlazePose landmark indices → our named joints.
 const IDX: Record<string, number> = {
   left_shoulder: 11, right_shoulder: 12,
+  // Arms matter: the swing contributes meaningfully to jump height, and arm
+  // action is a real coaching point in sprinting too.
+  left_elbow: 13, right_elbow: 14,
+  left_wrist: 15, right_wrist: 16,
   left_hip: 23, right_hip: 24,
   left_knee: 25, right_knee: 26,
   left_ankle: 27, right_ankle: 28,
@@ -53,16 +60,16 @@ export function InBrowserAnalysis({ videoId, userId, src, painMap, sessionType, 
     (async () => {
       let result: VideoAnalysis;
       try {
-        const frames = await extractFrames(src, setProgress);
+        const { frames, fps } = await extractFrames(src, setProgress);
         if (frames.length < 5) throw new Error("too few readable frames");
         setProgress("Computing biomechanics…");
-        result = analyzeFrames(frames, 10, { painMap, sessionType, movement, isInSeason, source: "mediapipe" });
+        result = analyzeFrames(frames, fps, { painMap, sessionType, movement, isInSeason, source: "mediapipe" });
       } catch (err) {
         // Any failure (CORS, no pose, unsupported codec) → deterministic estimate.
         // Surface *why* rather than silently pretending we tracked the athlete.
         console.warn("In-browser pose failed, using estimate:", err);
         if (!cancelled()) setFallbackReason(err instanceof Error ? err.message : String(err));
-        result = analyzeFrames(syntheticFrames(videoId), 10, { painMap, sessionType, movement, isInSeason, source: "synthetic" });
+        result = analyzeFrames(syntheticFrames(videoId), 12, { painMap, sessionType, movement, isInSeason, source: "synthetic" });
       }
       if (cancelled()) return;
       setAnalysis(result);
@@ -102,7 +109,7 @@ export function InBrowserAnalysis({ videoId, userId, src, painMap, sessionType, 
 }
 
 // --- pose extraction --------------------------------------------------------
-async function extractFrames(src: string, setProgress: (s: string) => void): Promise<Frame[]> {
+async function extractFrames(src: string, setProgress: (s: string) => void): Promise<{ frames: Frame[]; fps: number }> {
   setProgress("Loading pose model…");
   const vision = await import(/* webpackIgnore: true */ MP_MODULE);
   const fileset = await vision.FilesetResolver.forVisionTasks(MP_WASM);
@@ -136,23 +143,31 @@ async function extractFrames(src: string, setProgress: (s: string) => void): Pro
     video.onerror = () => { clearTimeout(timer); rej(new Error("unsupported video format")); };
   });
 
+  // A jump takes well under a second, so 10fps gives about five usable frames —
+  // not enough to see a countermovement or a takeoff. Sample short clips harder,
+  // and cap the total so the seek loop stays bounded on slow devices.
   const duration = Math.min(video.duration || 6, 8);
-  const fps = 10;
+  const fps = duration <= 3 ? 30 : duration <= 5 ? 20 : 12;
   const times: number[] = [];
-  for (let t = 0; t < duration; t += 1 / fps) times.push(t);
+  for (let t = 0; t < duration && times.length < 140; t += 1 / fps) times.push(t);
 
   const frames: Frame[] = [];
   let ts = 0;
   for (let i = 0; i < times.length; i++) {
     await seek(video, times[i]);
-    ts += 100; // monotonic ms for detectForVideo
+    ts += Math.round(1000 / fps); // monotonic ms for detectForVideo
     const out = landmarker.detectForVideo(video, ts);
     const lm = out?.landmarks?.[0];
     if (lm) {
       const frame: Frame = {};
       for (const [name, idx] of Object.entries(IDX)) {
         const p = lm[idx];
-        if (p) frame[name] = { x: p.x, y: p.y };
+        // A limb hidden behind the body still gets a guessed position, and
+        // trusting those produced nonsense like "84 degrees less bend on the
+        // right". Drop anything the model isn't confident it can see.
+        if (p && (p.visibility == null || p.visibility >= MIN_VISIBILITY)) {
+          frame[name] = { x: p.x, y: p.y };
+        }
       }
       frames.push(frame);
     }
@@ -161,7 +176,7 @@ async function extractFrames(src: string, setProgress: (s: string) => void): Pro
 
   landmarker.close();
   URL.revokeObjectURL(blobUrl);
-  return frames;
+  return { frames, fps };
 }
 
 function toBlobUrl(src: string): Promise<string> {
