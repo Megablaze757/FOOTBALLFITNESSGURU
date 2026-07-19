@@ -224,15 +224,23 @@ at launch** — new signups simply won't get their confirmation link.
 
 1. Supabase dashboard → **Project Settings → Authentication → SMTP Settings** →
    enable custom SMTP.
-2. Fill in the Spacemail SMTP details. Get the exact host from the Spacemail
-   dashboard rather than guessing — it's shown under the mailbox's setup or
-   IMAP/SMTP instructions. You'll need:
-   - **Host**: Spacemail's outgoing server
-   - **Port**: `465` (SSL) or `587` (STARTTLS) — try 465 first
-   - **Username**: the full address, `hello@pocketathlete.com`
-   - **Password**: that mailbox's password
-   - **Sender email**: `hello@pocketathlete.com`
-   - **Sender name**: `PocketAthlete`
+2. Fill in the Spacemail SMTP details:
+
+   | Field | Value |
+   |---|---|
+   | Host | `mail.spacemail.com` |
+   | Port | `465` |
+   | Username | the full mailbox address, e.g. `hello@pocketathlete.com` |
+   | Password | that mailbox's password |
+   | Sender email | `hello@pocketathlete.com` |
+   | Sender name | `PocketAthlete` |
+
+   Port `465` is implicit SSL and is the one to use. `587` (STARTTLS) also
+   works if Supabase rejects 465 — try it as the fallback, not the default.
+
+   Do **not** use the incoming ports here: `993` is IMAP and `995` is POP3.
+   Putting either in the SMTP field produces a connection timeout that looks
+   like a firewall problem and isn't.
 3. Save, then use **Send test email**. Don't move on until it arrives.
 4. Update the auth email templates (Authentication → Email Templates) so they say
    PocketAthlete rather than the Supabase default.
@@ -285,7 +293,7 @@ If `GAS_EMAIL_URL` is set it's used; otherwise the Worker falls back to Resend.
 - [ ] Worker deployed → `/health` returns `{"ok":true}`
 - [ ] `NEXT_PUBLIC_API_URL` set → AI coach uses the LLM (not the fallback)
 - [ ] (billing) Stripe prices + webhook set
-- [ ] (email) Supabase custom SMTP via Spacemail — test email received
+- [ ] (email) Supabase custom SMTP: `mail.spacemail.com:465` — test email received
 - [ ] (email) Resend verified on a subdomain for Worker reminders
 - [ ] Custom domain: `CNAME` present, base path empty, HTTPS enforced
 - [ ] Supabase Site URL + Stripe URLs + Worker `APP_URL` point at pocketathlete.com
