@@ -20,7 +20,7 @@ Browser (GitHub Pages, static export)
    │  AI / Stripe / email       └───────────────────────────┘
    └───────────────────────────►┌───────────────────────────┐
       (Bearer = user JWT)        │ Cloudflare Worker (apex-api)│
-                                 │  OpenRouter · Stripe · Resend│
+                                 │ OpenRouter · Stripe · Resend │
                                  └───────────────────────────┘
 ```
 
@@ -161,27 +161,90 @@ resulting tier to `subscriptions` with the service_role key.
 
 ---
 
-## 5. Email reminders (optional)
+## 5. Email — Spacemail + pocketathlete.com
+
+There are **two separate email jobs**, and they need different tools. This trips
+people up, so be clear which is which:
+
+| Job | Who sends it | What to use |
+|---|---|---|
+| Signup confirmation, password reset | Supabase Auth | Spacemail SMTP |
+| Daily nudges, weekly summary | Cloudflare Worker cron | Resend (or Apps Script) |
+| Replies from real humans | You, in a mail client | Spacemail mailbox |
+
+**Why not just use Spacemail for everything?** Cloudflare Workers can't open a
+normal SMTP connection, so the Worker cannot send through Spacemail directly. It
+needs an HTTP email API. Supabase Auth *can* use SMTP, which is why the split
+above exists.
+
+### 5a. Set up the Spacemail mailbox (do this first)
+
+1. In Spaceship → **Spacemail**, create a mailbox on `pocketathlete.com`, e.g.
+   `hello@pocketathlete.com`. Use a strong password and save it in a password
+   manager — you'll paste it into Supabase in 5b.
+2. Spaceship should add the required **MX**, **SPF** and **DKIM** records for you
+   automatically if the domain is registered there. Confirm they exist under the
+   domain's DNS before continuing.
+3. Send yourself a test message both ways (in and out) before wiring anything up.
+   If mail doesn't flow here, nothing downstream will work either.
+
+### 5b. Point Supabase Auth at Spacemail (most important step)
+
+Out of the box, Supabase sends auth emails from its own shared domain, with a
+hard rate limit of a few per hour. That is fine for testing and **will fail you
+at launch** — new signups simply won't get their confirmation link.
+
+1. Supabase dashboard → **Project Settings → Authentication → SMTP Settings** →
+   enable custom SMTP.
+2. Fill in the Spacemail SMTP details. Get the exact host from the Spacemail
+   dashboard rather than guessing — it's shown under the mailbox's setup or
+   IMAP/SMTP instructions. You'll need:
+   - **Host**: Spacemail's outgoing server
+   - **Port**: `465` (SSL) or `587` (STARTTLS) — try 465 first
+   - **Username**: the full address, `hello@pocketathlete.com`
+   - **Password**: that mailbox's password
+   - **Sender email**: `hello@pocketathlete.com`
+   - **Sender name**: `PocketAthlete`
+3. Save, then use **Send test email**. Don't move on until it arrives.
+4. Update the auth email templates (Authentication → Email Templates) so they say
+   PocketAthlete rather than the Supabase default.
+
+### 5c. Worker reminder emails
 
 The Worker's cron (`[triggers] crons = ["0 8 * * *"]`) sends daily check-in
-nudges, deadline reminders and a Monday weekly summary. Two ways to send:
+nudges, deadline reminders and a Monday weekly summary. Pick one:
 
-**Option A — Google Apps Script (free, uses your Gmail) — recommended**
+**Option A — Resend (recommended now you own a domain)**
+1. Create a Resend account and add a **subdomain**, e.g. `send.pocketathlete.com`
+   — not the root domain. Sending from the root alongside Spacemail means two
+   services competing over the same SPF record, which is the usual cause of
+   "why is my mail going to spam". A subdomain keeps the two independent.
+2. Add the DKIM/SPF records Resend gives you to that subdomain in Spaceship DNS.
+3. `npx wrangler secret put RESEND_API_KEY`, and set `REMINDER_FROM` in
+   `wrangler.toml` vars to e.g. `PocketAthlete <coach@send.pocketathlete.com>`.
+
+**Option B — Google Apps Script (free, uses your Gmail)**
 1. Open https://script.google.com → New project, paste in `google-apps-script/Code.gs`.
 2. Set `SHARED_SECRET` in the script to a value of your choice.
 3. Deploy → New deployment → **Web app**: *Execute as* Me, *Who has access* Anyone.
-   Copy the `/exec` URL. Run it once / send a test to authorize Gmail access.
-4. In the Worker: `npx wrangler secret put GAS_EMAIL_URL` (the /exec URL) and
-   `npx wrangler secret put GAS_EMAIL_SECRET` (same value as `SHARED_SECRET`).
+   Copy the `/exec` URL. Run it once to authorize Gmail access.
+4. `npx wrangler secret put GAS_EMAIL_URL` (the /exec URL) and
+   `npx wrangler secret put GAS_EMAIL_SECRET` (matching `SHARED_SECRET`).
 
-   Limits: Gmail free ~100 emails/day, Workspace ~1500/day — plenty for reminders.
-   `REMINDER_FROM` (in `wrangler.toml` vars) sets the display name.
-
-**Option B — Resend (custom sending domain)**
-1. Create a Resend account, verify a domain, create an API key → `RESEND_API_KEY`,
-   set `REMINDER_FROM` to an address on that domain.
+   Limits: Gmail free ~100/day, Workspace ~1500/day. Fine for reminders, but it
+   sends from your Gmail address, not your domain.
 
 If `GAS_EMAIL_URL` is set it's used; otherwise the Worker falls back to Resend.
+
+### 5d. Domain checklist
+
+- [ ] Spacemail mailbox receives and sends
+- [ ] MX + SPF + DKIM present on `pocketathlete.com`
+- [ ] Supabase custom SMTP set and **test email received**
+- [ ] Auth templates say PocketAthlete
+- [ ] Resend verified on a *subdomain*, not the root
+- [ ] `NEXT_PUBLIC_SITE_URL` / Supabase **Site URL** point at the live domain, or
+      password-reset links will send people to the wrong host
 
 ---
 
@@ -194,7 +257,8 @@ If `GAS_EMAIL_URL` is set it's used; otherwise the Worker falls back to Resend.
 - [ ] Worker deployed → `/health` returns `{"ok":true}`
 - [ ] `NEXT_PUBLIC_API_URL` set → AI coach uses the LLM (not the fallback)
 - [ ] (billing) Stripe prices + webhook set
-- [ ] (email) Resend key + domain set
+- [ ] (email) Supabase custom SMTP via Spacemail — test email received
+- [ ] (email) Resend verified on a subdomain for Worker reminders
 - [ ] DB password rotated + demo accounts removed before real users
 
 ---

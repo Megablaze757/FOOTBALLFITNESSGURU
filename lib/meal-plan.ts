@@ -365,7 +365,7 @@ export function shoppingList(week: PlannedDay[]): ShoppingList {
 
 /** Plain-text list, for pasting into a supermarket app or messaging it to someone. */
 export function shoppingListText(list: ShoppingList): string {
-  const out: string[] = ["Shopping list — Fitness Guru", ""];
+  const out: string[] = ["Shopping list — PocketAthlete", ""];
   for (const group of list.byAisle) {
     out.push(`${group.aisle}`);
     for (const l of group.lines) {

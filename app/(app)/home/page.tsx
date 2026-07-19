@@ -63,7 +63,7 @@ export default function HomePage() {
         <div className="mx-auto mt-6 flex max-w-xl flex-col items-center rounded-3xl border border-white/10 bg-white/[0.04] p-10 text-center shadow-card backdrop-blur-xl sm:p-14">
           <div className="text-6xl">🌅</div>
           <h2 className="mt-4 text-xl font-extrabold">Start your day with a check-in</h2>
-          <p className="mt-2 max-w-sm text-sm text-slate-400">Log how you slept and feel — Fitness Guru computes your readiness and today&apos;s session in under a minute.</p>
+          <p className="mt-2 max-w-sm text-sm text-slate-400">Log how you slept and feel — PocketAthlete computes your readiness and today&apos;s session in under a minute.</p>
           <Link href="/journal" className="btn-primary mt-6 max-w-[16rem]">Start today&apos;s check-in</Link>
         </div>
       </div>

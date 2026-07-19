@@ -68,7 +68,7 @@ export default function LoginPage() {
       <div className="w-full max-w-sm animate-scale-in">
         <div className="mb-8 text-center">
           <div className="text-4xl font-extrabold tracking-tight">
-            <span className="bg-gradient-to-br from-pitch-400 to-pitch-600 bg-clip-text text-transparent">Fitness Guru</span>
+            <span className="bg-gradient-to-br from-pitch-400 to-pitch-600 bg-clip-text text-transparent">PocketAthlete</span>
           </div>
           <p className="mt-2 text-sm text-slate-400">
             {mode === "sign_in" ? "Welcome back, athlete." : mode === "sign_up" ? "Create your athlete account." : "Reset your password."}

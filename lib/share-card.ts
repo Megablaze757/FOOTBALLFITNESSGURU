@@ -47,7 +47,7 @@ export function buildShareSvg(s: ShareStats): string {
     </defs>
     <rect width="1080" height="1080" fill="url(#bg)"/>
     <rect x="40" y="40" width="1000" height="1000" rx="48" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="2"/>
-    <text x="80" y="150" fill="url(#acc)" font-size="52" font-weight="800" font-family="Arial, sans-serif">FITNESS GURU</text>
+    <text x="80" y="150" fill="url(#acc)" font-size="52" font-weight="800" font-family="Arial, sans-serif">POCKETATHLETE</text>
     <text x="1000" y="150" text-anchor="end" fill="#8a94a6" font-size="34" font-weight="600" font-family="Arial, sans-serif">${esc(s.name)}</text>
 
     <text x="540" y="470" text-anchor="middle" fill="url(#acc)" font-size="300" font-weight="800" font-family="Arial, sans-serif">${esc(s.headlineValue)}</text>

@@ -1,5 +1,5 @@
 // =============================================================================
-// Fitness Guru API — a single Cloudflare Worker for the app's server-side needs:
+// PocketAthlete API — a single Cloudflare Worker for the app's server-side needs:
 //   • AI (coach chat + program generation) via OpenRouter
 //   • Stripe checkout + webhook
 //   • Scheduled reminder emails via Resend
@@ -146,7 +146,7 @@ async function openRouter(env: Env, system: string, user: string, maxTokens = 80
       Authorization: `Bearer ${env.OPENROUTER_API_KEY}`,
       "Content-Type": "application/json",
       "HTTP-Referer": env.APP_URL,
-      "X-Title": "Fitness Guru",
+      "X-Title": "PocketAthlete",
     },
     body: JSON.stringify({
       model: env.OPENROUTER_MODEL || "anthropic/claude-3.5-sonnet",

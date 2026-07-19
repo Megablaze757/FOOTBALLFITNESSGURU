@@ -2,9 +2,11 @@
 // in the browser on arrival and write it onto the profile at signup, so the
 // admin panel can attribute each new client to whoever brought them in.
 
+// Deliberately NOT renamed with the brand. This key lives in real browsers with
+// real pending attributions in it; renaming it on every rebrand would silently
+// drop affiliate credit for anyone mid-signup. The value is internal and never
+// shown to a user.
 const REF_KEY = "guru_ref";
-// Pre-rebrand key. Anyone who clicked a referral link before the rename still
-// has their code stored under this, so keep honouring it on read.
 const LEGACY_REF_KEY = "apex_ref";
 
 /** Call on page load — persists ?ref=CODE so it survives the signup journey. */
