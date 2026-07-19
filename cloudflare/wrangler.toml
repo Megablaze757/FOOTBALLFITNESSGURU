@@ -11,7 +11,7 @@ crons = ["0 8 * * *"]
 OPENROUTER_MODEL = "deepseek/deepseek-v4-flash"
 AI_DAILY_LIMIT = "40"   # max AI coach calls per user per day; over this, the on-device engine is used
 SUPABASE_URL = "https://txqhstackgidjqkkrzyj.supabase.co"
-APP_URL = "https://megablaze757.github.io/FOOTBALLFITNESSGURU"
+APP_URL = "https://pocketathlete.com"
 REMINDER_FROM = "AI Coach <noreply@example.com>"
 
 # Secrets are NOT stored here — set them with `wrangler secret put NAME`:

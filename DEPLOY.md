@@ -47,9 +47,11 @@ engine (still fully usable, just not LLM-written).
 
    RLS for own-object access is created by the migrations.
 4. **Auth redirect URLs** (Dashboard → Authentication → URL Configuration):
-   - *Site URL*: `https://<user>.github.io/<repo>/`
-   - *Redirect URLs*: add `https://<user>.github.io/<repo>/` **and**
-     `https://<user>.github.io/<repo>/reset-password/`
+   - *Site URL*: `https://pocketathlete.com`
+   - *Redirect URLs*: add `https://pocketathlete.com/**` and
+     `http://localhost:3000/**` for local development.
+     Supabase wildcards are `**`, so those two cover `/reset-password/` and
+     anything added later.
    (Password-reset and magic links break without these.)
 5. **Before real users**: rotate the DB password, and delete the demo accounts:
    ```bash
@@ -76,7 +78,7 @@ publishes it. It auto-derives the base path from the repo name.
    These are **public** values (they ship in the bundle); that's expected. RLS is
    the security boundary.
 3. Push to `main` (or run the workflow manually). The site goes live at
-   `https://<user>.github.io/<repo>/`.
+   `https://pocketathlete.com`.
 
 > Only the anon/publishable key is exposed client-side — never the service_role
 > key or any Stripe/OpenRouter secret.
@@ -100,7 +102,7 @@ Edit `wrangler.toml` `[vars]` to point at your project:
 [vars]
 OPENROUTER_MODEL = "anthropic/claude-3.5-haiku"   # any OpenRouter model id
 SUPABASE_URL     = "https://<ref>.supabase.co"
-APP_URL          = "https://<user>.github.io/<repo>"
+APP_URL          = "https://pocketathlete.com"
 REMINDER_FROM    = "Apex <noreply@yourdomain.com>"
 ```
 
