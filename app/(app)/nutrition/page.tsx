@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/lib/auth";
 import { useAsync } from "@/lib/use-async";
 import { tierMeets } from "@/lib/subscription";
+import { MealPlanner } from "@/components/MealPlanner";
 import { nutritionTargets, type NutritionTargets } from "@/lib/nutrition";
 import type { GoalType } from "@/lib/coach";
 import type { Subscription, Tier, TrainingLog } from "@/lib/types";
@@ -23,19 +24,33 @@ export default function NutritionPage() {
   const { data, loading } = useAsync(async () => {
     const supabase = createClient();
     const since = new Date(Date.now() - 14 * 86400_000).toISOString().slice(0, 10);
-    const [{ data: sub }, { data: log }, { data: weightRow }, { data: program }, { data: training }] = await Promise.all([
+    const [{ data: sub }, { data: log }, { data: weightRow }, { data: program }, { data: training }, { data: profile }] = await Promise.all([
       supabase.from("subscriptions").select("*").eq("user_id", user.id).maybeSingle(),
       supabase.from("nutrition_logs").select("*").eq("user_id", user.id).eq("log_date", today).maybeSingle(),
       supabase.from("daily_check_ins").select("weight_kg").eq("user_id", user.id).not("weight_kg", "is", null).order("check_in_date", { ascending: false }).limit(1).maybeSingle(),
       supabase.from("programs").select("goal_type").eq("user_id", user.id).eq("status", "active").maybeSingle(),
       supabase.from("training_logs").select("log_date, total_minutes").eq("user_id", user.id).gte("log_date", since),
+      supabase.from("profiles").select("height_cm, birth_year, sex, activity_level, diet_goal").eq("id", user.id).maybeSingle(),
     ]);
+    const pr = profile as {
+      height_cm?: number; birth_year?: number; sex?: string;
+      activity_level?: string; diet_goal?: string;
+    } | null;
     return {
       sub: (sub ?? null) as Subscription | null,
       log,
       weightKg: (weightRow?.weight_kg ?? null) as number | null,
       goal: (program?.goal_type ?? null) as GoalType | null,
       avgMinutes: avgDailyMinutes((training ?? []) as Pick<TrainingLog, "total_minutes">[]),
+      // Seed the planner from the profile so stats survive between visits.
+      stats: {
+        heightCm: pr?.height_cm ?? undefined,
+        age: pr?.birth_year ? new Date().getFullYear() - pr.birth_year : undefined,
+        sex: (pr?.sex as "male" | "female" | undefined) ?? undefined,
+        activity: (pr?.activity_level as never) ?? undefined,
+        goal: (pr?.diet_goal as never) ?? undefined,
+        weightKg: (weightRow?.weight_kg ?? undefined) as number | undefined,
+      },
     };
   }, [user.id]);
 
@@ -58,7 +73,12 @@ export default function NutritionPage() {
   }
 
   const targets = nutritionTargets({ weightKg: data?.weightKg ?? null, goal: data?.goal ?? null, avgTrainingMinutes: data?.avgMinutes ?? 0 });
-  return <NutritionTracker userId={user.id} today={today} initial={data?.log} targets={targets} />;
+  return (
+    <div className="space-y-6">
+      <NutritionTracker userId={user.id} today={today} initial={data?.log} targets={targets} />
+      <MealPlanner userId={user.id} initial={data?.stats ?? null} />
+    </div>
+  );
 }
 
 function avgDailyMinutes(rows: Pick<TrainingLog, "total_minutes">[]): number {

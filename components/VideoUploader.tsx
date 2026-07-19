@@ -101,21 +101,32 @@ export function VideoUploader({ onUploaded }: { onUploaded?: () => void }) {
       return;
     }
 
-    const { error: rowErr } = await supabase.from("videos").insert({
+    // Analysis happens in the browser when the clip is opened, so an uploaded
+    // clip is immediately ready to view/analyse.
+    const core = {
       user_id: user.id,
       check_in_id: checkIn?.id ?? null,
       storage_path: path,
+      session_type: sessionType,
+      is_in_season: isInSeason,
+      status: "ready" as const,
+    };
+    const extras = {
       title: title.trim() || defaultTitle(),
       thumb_data_url: preview?.url ?? null,
-      session_type: sessionType,
       movement,
-      is_in_season: isInSeason,
-      // Analysis happens in the browser when the clip is opened, so an uploaded
-      // clip is immediately ready to view/analyse.
-      status: "ready",
-    });
+    };
+
+    let { error: rowErr } = await supabase.from("videos").insert({ ...core, ...extras });
+    // PostgREST caches the table schema, so a freshly-added column can be
+    // rejected until it reloads. Losing the poster and name beats losing the
+    // upload entirely — save the clip and let the analysis proceed.
+    if (rowErr && /schema cache|column/i.test(rowErr.message)) {
+      console.warn("videos insert rejected extras, retrying core:", rowErr.message);
+      ({ error: rowErr } = await supabase.from("videos").insert(core));
+    }
     if (rowErr) {
-      setError(rowErr.message);
+      setError(`Upload failed: ${rowErr.message}`);
       setBusy(false);
       return;
     }
