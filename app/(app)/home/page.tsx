@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -40,9 +40,20 @@ export default function HomePage() {
         .from("daily_insights").select("*").eq("user_id", user.id).eq("check_in_id", checkIn.id).maybeSingle();
       insight = (ins ?? null) as DailyInsight | null;
     }
+    // Cheap existence checks so "Getting started" can show real progress.
+    const [{ count: programCount }, { count: videoCount }] = await Promise.all([
+      supabase.from("programs").select("id", { count: "exact", head: true }).eq("user_id", user.id).eq("status", "active"),
+      supabase.from("videos").select("id", { count: "exact", head: true }).eq("user_id", user.id),
+    ]);
+    const setup = {
+      checkedIn: !!checkIn,
+      hasProgram: (programCount ?? 0) > 0,
+      hasVideo: (videoCount ?? 0) > 0,
+      loggedNutrition: !!nutriToday,
+    };
     const streak = checkInStreak((streakRows ?? []).map((r) => r.check_in_date));
     const quests = dailyQuests({ checkedInToday: !!checkIn, trainedToday: !!trainToday, nutritionToday: !!nutriToday });
-    return { profile, checkIn, insight, streak, quests, bioSignal };
+    return { profile, checkIn, insight, streak, quests, bioSignal, setup };
   }, [user.id], `home:${user.id}`);
 
   const firstName = data?.profile?.full_name?.split(" ")[0] ?? "athlete";
@@ -87,6 +98,8 @@ export default function HomePage() {
   return (
     <div className="animate-fade-up space-y-6">
       <Greeting name={firstName} sub="Here's your readiness for today." streak={streak} />
+
+      <GettingStarted setup={data!.setup} />
 
       <div className="grid gap-5 lg:grid-cols-3">
         <div className="card flex items-center justify-center p-6 pt-8 lg:col-span-1">
@@ -141,6 +154,57 @@ function DailyQuests({ quests }: { quests: { id: string; label: string; xp: numb
         ))}
       </div>
     </div>
+  );
+}
+
+function GettingStarted({ setup }: { setup: { checkedIn: boolean; hasProgram: boolean; hasVideo: boolean; loggedNutrition: boolean } }) {
+  const steps = [
+    { done: setup.checkedIn, href: "/journal", title: "Log today's check-in", sub: "60 seconds — sleep, soreness, how you feel" },
+    { done: setup.hasProgram, href: "/coach", title: "Build your training program", sub: "The AI coach periodises it to your goal" },
+    { done: setup.hasVideo, href: "/train", title: "Analyse a video", sub: "Upload a clip for a technique breakdown" },
+    { done: setup.loggedNutrition, href: "/nutrition", title: "Set your nutrition", sub: "Calorie & macro targets, meal plan" },
+  ];
+  const doneCount = steps.filter((s) => s.done).length;
+  const [hidden, setHidden] = useState(false);
+
+  // Once the core loop is set up, this disappears for good.
+  if (doneCount === steps.length || hidden) return null;
+  const next = steps.find((s) => !s.done);
+
+  return (
+    <section className="card-premium p-5 sm:p-6">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <span className="eyebrow">Getting started · {doneCount}/{steps.length}</span>
+          <h2 className="mt-1 text-lg font-extrabold">New here? Here&apos;s your first few minutes</h2>
+        </div>
+        <button onClick={() => setHidden(true)} className="shrink-0 text-xs text-slate-500 hover:text-slate-300">Hide</button>
+      </div>
+
+      <ol className="mt-4 space-y-1.5">
+        {steps.map((st) => (
+          <li key={st.href}>
+            <Link
+              href={st.href}
+              className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 transition ${
+                st.done
+                  ? "border-white/5 bg-white/[0.02] opacity-60"
+                  : st === next
+                    ? "border-pitch-400/40 bg-pitch-400/[0.06] hover:bg-pitch-400/10"
+                    : "border-white/10 bg-white/[0.03] hover:bg-white/[0.05]"
+              }`}
+            >
+              <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-full border text-xs ${st.done ? "border-pitch-400 bg-pitch-400 text-ink-900" : "border-white/25 text-transparent"}`}>✓</span>
+              <span className="min-w-0 flex-1">
+                <span className={`block text-sm font-semibold ${st.done ? "text-slate-400 line-through" : "text-slate-100"}`}>{st.title}</span>
+                {!st.done && <span className="block text-xs text-slate-400">{st.sub}</span>}
+              </span>
+              {st === next && <span className="shrink-0 text-xs font-bold text-pitch-400">Start →</span>}
+            </Link>
+          </li>
+        ))}
+      </ol>
+    </section>
   );
 }
 
