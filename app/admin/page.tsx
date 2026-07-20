@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { useLaunched, setLaunched } from "@/lib/launch";
 import { useSession } from "@/lib/auth";
 import { useAsync } from "@/lib/use-async";
 import { invokeAI } from "@/lib/api";
@@ -29,11 +30,16 @@ export default function AdminPage() {
     const supabase = createClient();
     const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle();
     if (profile?.role !== "admin") return { forbidden: true as const };
-    const [{ data: metrics }, { data: failed }] = await Promise.all([
+    const [{ data: metrics }, { data: failed }, { data: waitlist }] = await Promise.all([
       supabase.rpc("admin_metrics"),
       supabase.from("videos").select("*").eq("status", "failed").order("created_at", { ascending: false }).limit(10),
+      supabase.from("waitlist").select("email, source, created_at").order("created_at", { ascending: false }),
     ]);
-    return { metrics: metrics as Metrics | null, failed: (failed ?? []) as Video[] };
+    return {
+      metrics: metrics as Metrics | null,
+      failed: (failed ?? []) as Video[],
+      waitlist: (waitlist ?? []) as { email: string; source: string | null; created_at: string }[],
+    };
   }, [user?.id]);
 
   useEffect(() => {
@@ -75,12 +81,20 @@ export default function AdminPage() {
         <Metric label="Videos failed" value={`${m?.videos_failed ?? 0}`} />
       </section>
 
+      <section className="mt-8">
+        <LaunchToggle />
+      </section>
+
       <section className="mt-10">
         <CreateBetaAccount />
       </section>
 
       <section className="mt-10">
         <Affiliates />
+      </section>
+
+      <section className="mt-10">
+        <Waitlist rows={data.waitlist} />
       </section>
 
       <section className="mt-10">
@@ -110,11 +124,97 @@ export default function AdminPage() {
   );
 }
 
+function LaunchToggle() {
+  const launched = useLaunched();
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  // Optimistic local view so the button reflects the click immediately.
+  const [local, setLocal] = useState<boolean | null>(null);
+  const isLaunched = local ?? launched;
+
+  async function toggle() {
+    setBusy(true); setErr(null);
+    const next = !isLaunched;
+    const error = await setLaunched(next);
+    setBusy(false);
+    if (error) { setErr(error); return; }
+    setLocal(next);
+  }
+
+  return (
+    <div className="card p-5">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 className="field-label !mb-0">🚀 Launch status</h2>
+          <p className="mt-1 text-sm text-slate-300">
+            {isLaunched
+              ? "Live — the beta badge is hidden across the app."
+              : "In beta — a “Beta” badge shows next to the logo for everyone."}
+          </p>
+        </div>
+        <span className={`chip ${isLaunched ? "text-readiness-green" : "text-pitch-400"}`}>
+          {isLaunched ? "Launched" : "Beta"}
+        </span>
+      </div>
+      <button
+        onClick={toggle}
+        disabled={busy}
+        className={`mt-4 ${isLaunched ? "btn-ghost" : "btn-primary"}`}
+      >
+        {busy ? "Saving…" : isLaunched ? "Put back into beta" : "Mark app as fully launched"}
+      </button>
+      {err && <p className="mt-2 text-sm text-readiness-red">{err}</p>}
+    </div>
+  );
+}
+
+function Waitlist({ rows }: { rows: { email: string; source: string | null; created_at: string }[] }) {
+  const [copied, setCopied] = useState(false);
+  async function copyEmails() {
+    try {
+      await navigator.clipboard.writeText(rows.map((r) => r.email).join(", "));
+      setCopied(true); setTimeout(() => setCopied(false), 1500);
+    } catch { /* clipboard blocked */ }
+  }
+  return (
+    <div>
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="field-label !mb-0">📧 Email waitlist · {rows.length}</h2>
+        {rows.length > 0 && (
+          <button onClick={copyEmails} className="text-xs font-semibold text-pitch-400 hover:underline">
+            {copied ? "Copied ✓" : "Copy all emails"}
+          </button>
+        )}
+      </div>
+      {!rows.length ? (
+        <p className="card px-4 py-6 text-center text-sm text-slate-500">No signups yet. Share pocketathlete.com/waitlist.</p>
+      ) : (
+        <div className="card max-h-96 overflow-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="sticky top-0 bg-ink-800/95 text-xs uppercase tracking-wide text-slate-500">
+              <tr><th className="px-4 pt-3 pb-2">Email</th><th className="px-4 pt-3 pb-2">Via</th><th className="px-4 pt-3 pb-2">Joined</th></tr>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {rows.map((r) => (
+                <tr key={r.email}>
+                  <td className="px-4 py-2 text-slate-200">{r.email}</td>
+                  <td className="px-4 py-2 text-xs text-slate-400">{r.source || "—"}</td>
+                  <td className="px-4 py-2 text-slate-400">{r.created_at.slice(0, 10)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function randomPassword() {
   return "GURU-" + Math.random().toString(36).slice(2, 8);
 }
 
-interface AffiliateStat { code: string; name: string; email: string | null; signups: number; paid: number }
+interface AffiliateStat { code: string; name: string; email: string | null; signups: number; paid: number; waitlist: number }
 
 function Affiliates() {
   const [name, setName] = useState("");
@@ -156,12 +256,13 @@ function Affiliates() {
   const rows = data ?? [];
   const totalSignups = rows.reduce((n, r) => n + Number(r.signups), 0);
   const totalPaid = rows.reduce((n, r) => n + Number(r.paid), 0);
+  const totalWaitlist = rows.reduce((n, r) => n + Number(r.waitlist ?? 0), 0);
 
   return (
     <div className="card p-5">
       <div className="mb-1 flex items-center justify-between">
         <h2 className="field-label !mb-0">🤝 Affiliates</h2>
-        <span className="text-xs text-slate-400">{totalSignups} signups · {totalPaid} paid</span>
+        <span className="text-xs text-slate-400">{totalWaitlist} waitlist · {totalSignups} signups · {totalPaid} paid</span>
       </div>
       <p className="mb-3 text-xs text-slate-400">Give each partner a link — signups through it are attributed to them.</p>
 
@@ -181,7 +282,7 @@ function Affiliates() {
         ) : (
           <table className="w-full text-left text-sm">
             <thead className="text-xs uppercase tracking-wide text-slate-500">
-              <tr><th className="pb-2">Affiliate</th><th className="pb-2">Code</th><th className="pb-2 text-right">Signups</th><th className="pb-2 text-right">Paid</th><th className="pb-2" /></tr>
+              <tr><th className="pb-2">Affiliate</th><th className="pb-2">Code</th><th className="pb-2 text-right">Waitlist</th><th className="pb-2 text-right">Signups</th><th className="pb-2 text-right">Paid</th><th className="pb-2" /></tr>
             </thead>
             <tbody className="divide-y divide-white/5">
               {rows.map((r) => (
@@ -191,6 +292,7 @@ function Affiliates() {
                     {r.email && <div className="text-xs text-slate-500">{r.email}</div>}
                   </td>
                   <td className="py-2 font-mono text-xs text-slate-300">{r.code}</td>
+                  <td className="py-2 text-right text-slate-300">{r.waitlist}</td>
                   <td className="py-2 text-right font-bold text-slate-100">{r.signups}</td>
                   <td className="py-2 text-right font-bold text-pitch-400">{r.paid}</td>
                   <td className="py-2 text-right">

@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { captureRef, getRef } from "@/lib/referral";
 
 const PERKS = [
   { icon: "🎟️", label: "First access when we open the doors" },
@@ -15,6 +16,10 @@ export default function WaitlistPage() {
   const [state, setState] = useState<"idle" | "saving" | "done" | "already" | "error">("idle");
   const [msg, setMsg] = useState("");
 
+  // Persist ?ref= so an affiliate still gets credit if the visitor navigates
+  // before joining.
+  useEffect(() => { captureRef(); }, []);
+
   async function join(e: React.FormEvent) {
     e.preventDefault();
     const clean = email.trim().toLowerCase();
@@ -24,7 +29,9 @@ export default function WaitlistPage() {
     }
     setState("saving"); setMsg("");
     const supabase = createClient();
-    const source = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("ref") : null;
+    // The affiliate code may be in the URL now, or stored from an earlier click
+    // on the landing page — either way it attributes this signup to them.
+    const source = getRef();
     const { error } = await supabase.from("waitlist").insert({ email: clean, source });
     if (!error) { setState("done"); return; }
     // A unique-violation means they're already on the list — treat as success.
