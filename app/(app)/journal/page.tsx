@@ -21,7 +21,7 @@ export default function JournalPage() {
       supabase.from("biometrics").select("*").eq("user_id", user.id).eq("metric_date", today).maybeSingle(),
     ]);
     return { existing, training: (training ?? null) as TrainingLog | null, bio: (bio ?? null) as Biometric | null };
-  }, [user.id]);
+  }, [user.id], `journal:${user.id}`);
 
   if (loading) {
     return (

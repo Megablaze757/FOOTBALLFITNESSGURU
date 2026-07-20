@@ -32,7 +32,7 @@ export default function ReportPage() {
       nutrition: (nutrition ?? []) as NutritionLog[],
       program: (prog ?? null) as Program | null,
     };
-  }, [user.id]);
+  }, [user.id], `report:${user.id}`);
 
   if (loading) return <div className="card h-96 animate-pulse" />;
   if (!data || !data.checkIns.length) {

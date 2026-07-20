@@ -20,7 +20,7 @@ export default function ProfilePage() {
       supabase.from("subscriptions").select("*").eq("user_id", user.id).maybeSingle(),
     ]);
     return { profile: profile as Profile | null, sub: (sub ?? null) as Subscription | null };
-  }, [user.id]);
+  }, [user.id], `profile:${user.id}`);
 
   if (loading) {
     return (

@@ -96,7 +96,7 @@ export default function CoachPage() {
       position: p?.position ?? "",
       focus: (p?.training_focus ?? "performance") as TrainingFocus,
     };
-  }, [user.id]);
+  }, [user.id], `coach:${user.id}`);
 
   if (loading) return <div className="card mt-6 h-80 animate-pulse" />;
 

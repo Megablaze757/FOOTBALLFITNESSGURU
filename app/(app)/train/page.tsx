@@ -33,7 +33,7 @@ export default function TrainPage() {
       .map((v) => ({ id: v.id, date: v.created_at.slice(0, 10), label: v.title || v.session_type || "session", analysis: byVideo.get(v.id)! }))
       .reverse(); // oldest → newest for the trend
     return { videos, clips };
-  }, [user.id]);
+  }, [user.id], `train:${user.id}`);
 
   const videos = data?.videos ?? [];
   const clips = data?.clips ?? [];

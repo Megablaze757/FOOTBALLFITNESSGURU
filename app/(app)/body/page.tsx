@@ -26,7 +26,7 @@ export default function BodyPage() {
       if (s) signed[r.id] = s.signedUrl;
     }
     return { rows, signed };
-  }, [user.id]);
+  }, [user.id], `body:${user.id}`);
 
   const rows = data?.rows ?? [];
   const weightSeries = rows.filter((r) => r.weight_kg != null).map((r) => ({ date: r.log_date, value: Number(r.weight_kg) }));

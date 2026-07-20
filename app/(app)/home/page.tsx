@@ -109,12 +109,14 @@ export default function HomePage() {
             <QuickLink href="/coach" title="Today's session" sub="Your program & drills" icon="🏋️" />
             <QuickLink href="/train" title="Video analysis" sub="Upload & break down a clip" icon="🎥" />
             <QuickLink href="/nutrition" title="Fuelling" sub="Targets for today's load" icon="🍽️" />
-            <QuickLink href="/journal" title="Edit check-in" sub="Update how you feel" icon="📝" />
+            <QuickLink href="/essentials" title="Playbook" sub="Position, rehab & gameday" icon="🎯" />
           </div>
         </div>
       </div>
 
       <BiometricSignalCard signal={data!.bioSignal} />
+
+      <PlaybookCard />
 
       <DailyQuests quests={data!.quests} />
     </div>
@@ -139,6 +141,31 @@ function DailyQuests({ quests }: { quests: { id: string; label: string; xp: numb
         ))}
       </div>
     </div>
+  );
+}
+
+function PlaybookCard() {
+  const inside = [
+    { icon: "🎯", label: "Position essentials" },
+    { icon: "🩹", label: "Injury rehab & mobility" },
+    { icon: "🍝", label: "Gameday nutrition" },
+  ];
+  return (
+    <Link href="/essentials" className="card-premium card-hover block overflow-hidden p-5 sm:p-6">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <span className="eyebrow">Your Playbook</span>
+          <h2 className="mt-1 text-xl font-extrabold">The knowledge a full-time staff would give you</h2>
+        </div>
+        <span className="hidden text-3xl sm:block">📖</span>
+      </div>
+      <div className="mt-4 flex flex-wrap gap-2">
+        {inside.map((i) => (
+          <span key={i.label} className="chip text-slate-200">{i.icon} {i.label}</span>
+        ))}
+      </div>
+      <span className="mt-4 inline-block text-sm font-semibold text-pitch-400">Open your Playbook →</span>
+    </Link>
   );
 }
 

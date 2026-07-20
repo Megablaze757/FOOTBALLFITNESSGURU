@@ -312,7 +312,10 @@ async function upsertSub(env: Env, sub: any): Promise<void> {
       stripe_customer_id: sub.customer,
       stripe_subscription_id: sub.id,
       stripe_price_id: item?.price?.id ?? null,
-      current_period_end: item?.current_period_end ? new Date(item.current_period_end * 1000).toISOString() : null,
+      current_period_end: (() => {
+        const cpe = sub.current_period_end ?? item?.current_period_end;
+        return cpe ? new Date(cpe * 1000).toISOString() : null;
+      })(),
       cancel_at_period_end: !!sub.cancel_at_period_end,
     }]),
   });

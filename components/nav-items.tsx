@@ -20,13 +20,13 @@ export const MOBILE_NAV = [
   { href: "/home", label: "Home", icon: "home" },
   { href: "/coach", label: "Coach", icon: "coach" },
   { href: "/journal", label: "Journal", icon: "journal" },
-  { href: "/dashboard", label: "Stats", icon: "stats" },
+  { href: "/essentials", label: "Playbook", icon: "playbook" },
   { href: "/train", label: "Train", icon: "train" },
 ] as const;
 
 // Secondary destinations, reached from the mobile "More" sheet.
 export const MOBILE_MORE = [
-  { href: "/essentials", label: "Playbook", icon: "playbook" },
+  { href: "/dashboard", label: "Stats", icon: "stats" },
   { href: "/rewards", label: "Rewards", icon: "trophy" },
   { href: "/library", label: "Exercise library", icon: "library" },
   { href: "/nutrition", label: "Nutrition", icon: "nutrition" },

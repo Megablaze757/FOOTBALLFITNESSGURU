@@ -52,7 +52,7 @@ export default function RewardsPage() {
       nutritionToday: nutriDates.includes(today),
     };
     return { stats, state };
-  }, [user.id]);
+  }, [user.id], `rewards:${user.id}`);
 
   // Detect crossing a level threshold since the last visit → celebrate.
   const [leveledUpTo, setLeveledUpTo] = useState<number | null>(null);

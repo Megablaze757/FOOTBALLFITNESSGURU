@@ -20,7 +20,7 @@ export default function BenchmarksPage() {
       .order("test_date", { ascending: false })
       .limit(20);
     return (rows ?? []) as StrengthBenchmark[];
-  }, [user.id]);
+  }, [user.id], `benchmarks:${user.id}`);
 
   const benchmarks = data ?? [];
   const latestByMetric = computeLatest(benchmarks);

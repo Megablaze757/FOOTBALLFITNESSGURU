@@ -1,5 +1,7 @@
 "use client";
 
+import { invalidate } from "@/lib/use-async";
+
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -76,6 +78,9 @@ export function JournalForm({ initial, initialTraining }: { initial?: Partial<Ch
       );
     }
 
+    // A check-in changes readiness on Home, Stats and Coach — drop the cached
+    // page data so they refetch fresh rather than showing pre-check-in values.
+    invalidate();
     // Readiness is computed client-side from the pure engine (also feeds Home).
     setResult(assessReadiness(input));
     setSaving(false);
