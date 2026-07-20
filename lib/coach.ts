@@ -295,9 +295,9 @@ function prescription(d: DrillDef, goal: GoalType, focus?: TrainingFocus): { set
 
 // --- Program generation -----------------------------------------------------
 
-export interface ProgramDrill { name: string; sets: number; reps: number; cue: string; reason: string }
+export interface ProgramDrill { name: string; sets: number; reps: number; cue: string; reason: string; progression?: string }
 export interface ProgramSession { day: number; title: string; focus: GoalType; drills: ProgramDrill[] }
-export interface ProgramWeek { week: number; theme: string; intensity: string; sessions: ProgramSession[] }
+export interface ProgramWeek { week: number; theme: string; intensity: string; focusNote: string; sessions: ProgramSession[] }
 export interface ProgramPlan {
   goal: GoalType;
   summary: string;
@@ -319,6 +319,50 @@ export interface BuildProgramInput {
   focus?: TrainingFocus;
   position?: string;
 }
+
+// How each week loads, per progression type. A drill you add weight to (load)
+// climbs in intensity as reps come DOWN; a drill you add reps/time to climbs in
+// volume as reps go UP; a skill drill holds its numbers and progresses by
+// difficulty. This is what makes week 3 genuinely different from week 1 rather
+// than the same session with a different label.
+type Prog = "load" | "reps" | "time" | "skill";
+interface WeekShape { setsDelta: number; repFactor: number }
+const WEEK_SHAPE: Record<Prog, WeekShape[]> = {
+  // index 0..3 = weeks 1..4 (week 4 is the deload)
+  load:  [{ setsDelta: 0, repFactor: 1.0 }, { setsDelta: 1, repFactor: 0.85 }, { setsDelta: 1, repFactor: 0.7 }, { setsDelta: -1, repFactor: 1.0 }],
+  reps:  [{ setsDelta: 0, repFactor: 1.0 }, { setsDelta: 0, repFactor: 1.2 },  { setsDelta: 1, repFactor: 1.35 }, { setsDelta: -1, repFactor: 0.9 }],
+  time:  [{ setsDelta: 0, repFactor: 1.0 }, { setsDelta: 0, repFactor: 1.2 },  { setsDelta: 1, repFactor: 1.4 },  { setsDelta: -1, repFactor: 0.8 }],
+  skill: [{ setsDelta: 0, repFactor: 1.0 }, { setsDelta: 0, repFactor: 1.0 },  { setsDelta: 1, repFactor: 1.0 },  { setsDelta: -1, repFactor: 1.0 }],
+};
+
+// What the athlete should actually do differently this week, per progression type.
+const WEEK_PROGRESSION: Record<Prog, string[]> = {
+  load:  ["Groove the movement at a weight you could do 2-3 more reps with.",
+          "Add a little weight and a set — reps drop slightly, that's the point.",
+          "Heaviest week: push the load, stop 1 rep short of failure.",
+          "Deload: same movements, ~60% of the weight, stay snappy."],
+  reps:  ["Establish clean reps you fully control.",
+          "Same movement, more reps per set than last week.",
+          "Peak volume: extra set and the highest reps of the block.",
+          "Deload: cut the volume right back and recover."],
+  time:  ["Settle into the work intervals at a repeatable effort.",
+          "Extend each interval versus last week.",
+          "Longest, hardest intervals of the block.",
+          "Deload: short and easy, just keep ticking over."],
+  skill: ["Prioritise clean technique over speed.",
+          "Same drill, do it faster or in tighter space.",
+          "Add a decision, a defender, or your weaker side.",
+          "Deload: light, sharp reps to stay grooved."],
+};
+
+// Per-week intensity label and the block's job that week.
+const WEEK_INTENSITY = ["Moderate", "Higher", "Peak", "Deload"];
+const WEEK_FOCUS = [
+  "Build a base and nail technique.",
+  "Turn the dial up — more load and volume than week 1.",
+  "Peak week: the hardest sessions of the block.",
+  "Recover and absorb the work so you come back stronger.",
+];
 
 /** A 4-week block tailored to the goal, with pain-aware drill selection and a taper. */
 export function buildProgram(input: BuildProgramInput): ProgramPlan {
@@ -342,24 +386,31 @@ export function buildProgram(input: BuildProgramInput): ProgramPlan {
 
   const weeks: ProgramWeek[] = THEMES.map((_, wi) => {
     const week = wi + 1;
-    const isDeload = week === 4;
-    const volScale = (input.isInSeason ? 0.7 : 1) * blockScale;
-    const weekScale = isDeload ? 0.6 : 0.85 + week * 0.05;
+    const inSeasonScale = (input.isInSeason ? 0.75 : 1) * blockScale;
 
     const sessions: ProgramSession[] = Array.from({ length: days }, (_, di) => {
       const focus = focusRotation[di % focusRotation.length];
       const recs = recommendDrills({ goal: focus, painMap: input.painMap, count: 3, sport: input.sport, focus: input.focus });
-      const drills: ProgramDrill[] = recs.map((r) => ({
-        name: r.name,
-        sets: Math.max(1, Math.round(r.sets * volScale * weekScale)),
-        reps: r.reps,
-        cue: r.cue,
-        reason: r.reason,
-      }));
+      const drills: ProgramDrill[] = recs.map((r) => {
+        const prog = (progressionForName(r.name) ?? "reps") as Prog;
+        const shape = WEEK_SHAPE[prog][wi];
+        // Sets move by the week's delta (min 2, or 1 on a deload); reps move by
+        // the week's factor. Together these make each week genuinely different.
+        const sets = Math.max(week === 4 ? 1 : 2, Math.round(r.sets * inSeasonScale) + shape.setsDelta);
+        const reps = Math.max(3, Math.round(r.reps * shape.repFactor));
+        return {
+          name: r.name,
+          sets,
+          reps,
+          cue: r.cue,
+          reason: r.reason,
+          progression: WEEK_PROGRESSION[prog][wi],
+        };
+      });
       return { day: di + 1, title: sessionTitle(focus, di), focus, drills };
     });
 
-    return { week, theme: themes[wi], intensity: isDeload ? "Light" : week >= 3 ? "High" : "Moderate", sessions };
+    return { week, theme: themes[wi], intensity: WEEK_INTENSITY[wi], focusNote: WEEK_FOCUS[wi], sessions };
   });
 
   return {

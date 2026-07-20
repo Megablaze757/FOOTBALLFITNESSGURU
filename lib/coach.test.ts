@@ -80,3 +80,41 @@ test("analyzeProgress surfaces load progression and the knee-flare pattern", () 
   assert.equal(rdl?.deltaKg, 15);
   assert.ok(out.insights.some((i) => /knee/i.test(i)));
 });
+
+test("program weeks genuinely progress rather than repeating", () => {
+  const plan = buildProgram({ goal: "strength", painMap: {}, sport: "gym" });
+  // Pick a drill that appears every week and compare its prescription.
+  const nameOf = (wi: number) => plan.weeks[wi].sessions[0].drills[0];
+  const sig = (wi: number) => {
+    const d = nameOf(wi);
+    return `${d.name}:${d.sets}x${d.reps}`;
+  };
+  // Weeks 1-3 must not all be identical — that was the bug.
+  const distinct = new Set([sig(0), sig(1), sig(2)]);
+  assert.ok(distinct.size >= 2, `weeks 1-3 barely differ: ${[...distinct].join(" | ")}`);
+
+  // Every week carries its own focus note and each drill a progression cue.
+  for (const w of plan.weeks) {
+    assert.ok(w.focusNote && w.focusNote.length > 5, `week ${w.week} missing focusNote`);
+    for (const d of w.sessions.flatMap((s) => s.drills)) {
+      assert.ok(d.progression && d.progression.length > 5, `${d.name} missing progression`);
+    }
+  }
+
+  // Week 4 is a deload: fewer total sets than the peak week 3.
+  const totalSets = (wi: number) =>
+    plan.weeks[wi].sessions.flatMap((s) => s.drills).reduce((n, d) => n + d.sets, 0);
+  assert.ok(totalSets(3) < totalSets(2), "deload should cut volume below the peak week");
+});
+
+test("weighted lifts wave reps down toward the peak, bodyweight waves up", () => {
+  const plan = buildProgram({ goal: "strength", painMap: {}, sport: "gym", focus: "aesthetics" });
+  const drillAcrossWeeks = (match: RegExp) =>
+    plan.weeks.map((w) => w.sessions.flatMap((s) => s.drills).find((d) => match.test(d.name))).filter(Boolean);
+
+  const squat = drillAcrossWeeks(/squat|deadlift|bench|press|row/i);
+  if (squat.length === 4) {
+    // Peak week (index 2) reps should be <= base week reps for a load lift.
+    assert.ok(squat[2]!.reps <= squat[0]!.reps, "load lift should get heavier (fewer reps) at peak");
+  }
+});

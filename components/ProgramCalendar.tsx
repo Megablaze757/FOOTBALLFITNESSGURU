@@ -43,6 +43,12 @@ export function ProgramCalendar({
               </span>
             </summary>
 
+            {w.focusNote && (
+              <p className="mb-3 rounded-lg border border-pitch-400/20 bg-pitch-400/[0.05] px-3 py-2 text-xs text-pitch-200">
+                {w.focusNote}
+              </p>
+            )}
+
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {w.sessions.map((s) => {
                 const sid = `w${w.week}d${s.day}`;

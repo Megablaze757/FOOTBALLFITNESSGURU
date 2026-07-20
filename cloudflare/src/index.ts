@@ -196,9 +196,16 @@ async function generateProgram(req: Request, env: Env): Promise<Response> {
     "You are an elite strength & conditioning coach & physio working across sports (football, rugby, weightlifting, gym, basketball, running). " +
     "Choose exercises appropriate to the athlete's SPORT, POSITION and FOCUS (e.g. a weightlifter gets barbell squat/bench/deadlift; a rugby prop gets contact & scrum power; 'muscle & aesthetics' uses hypertrophy rep ranges 8-12; 'general fitness' is conditioning-led). " +
     "Output ONLY valid minified JSON matching this TypeScript type: " +
-    "{goal:string;summary:string;constraints:string[];weeks:{week:number;theme:string;intensity:string;sessions:{day:number;title:string;focus:string;drills:{name:string;sets:number;reps:number;cue:string;reason:string}[]}[]}[]}. " +
-    "4 periodised weeks (Base→Build→Peak→Deload), 3 sessions/week. Work around sore areas with lower-impact drills. No prose outside the JSON.";
-  const raw = await openRouter(env, sys, `Sport: ${sport || "football"}\nPosition/event: ${position || "unspecified"}\nTraining focus: ${focus || "performance"}\nGoal: ${goal}\nSeason: ${season}\nSore: ${sore}\nNotes: ${notes || "none"}`, 4000);
+    "{goal:string;summary:string;constraints:string[];weeks:{week:number;theme:string;intensity:string;focusNote:string;sessions:{day:number;title:string;focus:string;drills:{name:string;sets:number;reps:number;cue:string;reason:string;progression:string}[]}[]}[]}. " +
+    "4 weeks, 3 sessions/week. CRITICAL: the weeks must be genuinely DIFFERENT, not the same session relabelled. Apply real periodisation: " +
+    "Week 1 Base — moderate sets/reps, groove technique. " +
+    "Week 2 Build — more than week 1: for weighted lifts add a set and a little load while reps drop 1-2; for bodyweight/conditioning add reps or time. " +
+    "Week 3 Peak — the hardest week: heaviest loads (lowest reps) on lifts, highest volume on everything else, usually one extra set. " +
+    "Week 4 Deload — cut volume ~40%, lighter, to recover. " +
+    "So a barbell lift might read 4x8 (w1) -> 5x6 (w2) -> 5x5 (w3) -> 3x8 (w4), and a bodyweight drill 3x10 -> 3x12 -> 4x14 -> 2x10. Vary the actual numbers every week. " +
+    "Set each week's focusNote to its one-line job, and each drill's progression to what to change that week (add weight, add reps, go faster). " +
+    "Work around sore areas with lower-impact drills. No prose outside the JSON.";
+  const raw = await openRouter(env, sys, `Sport: ${sport || "football"}\nPosition/event: ${position || "unspecified"}\nTraining focus: ${focus || "performance"}\nGoal: ${goal}\nSeason: ${season}\nSore: ${sore}\nNotes: ${notes || "none"}`, 5000);
   const match = raw.match(/\{[\s\S]*\}/);
   if (!match) return json({ error: "bad ai output" }, 422);
   return json({ plan: JSON.parse(match[0]) });
