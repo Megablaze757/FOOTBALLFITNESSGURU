@@ -189,7 +189,7 @@ export default function Landing() {
 
       <footer className="mt-20 flex flex-col items-center gap-2 text-center">
         <div className="text-xl font-extrabold">
-          <span className="bg-gradient-to-br from-pitch-400 to-pitch-600 bg-clip-text text-transparent">PocketAthlete</span>
+          <span className="text-pitch-400">PocketAthlete</span>
         </div>
         <p className="text-xs text-slate-500">Train smarter. Recover faster. Peak on match day.</p>
       </footer>

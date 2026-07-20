@@ -145,13 +145,15 @@ function GoalBuilder({ painMap, latestBench, sport, initialPosition, initialFocu
   const [targetValue, setTargetValue] = useState("");
   const [notes, setNotes] = useState("");
   const [creating, setCreating] = useState(false);
+  const [buildingId, setBuildingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const sore = Object.entries(painByArea(painMap)).filter(([, v]) => (v ?? 0) >= 4).map(([a]) => a.replace("_", " "));
 
-  async function createProgram(g: GoalType, f: TrainingFocus, pos: string) {
+  async function createProgram(g: GoalType, f: TrainingFocus, pos: string, tileId?: string) {
     setGoal(g); setFocus(f); setPosition(pos);
     setCreating(true);
+    setBuildingId(tileId ?? null);
     setError(null);
     const supabase = createClient();
 
@@ -179,6 +181,7 @@ function GoalBuilder({ painMap, latestBench, sport, initialPosition, initialFocu
     if (insErr) {
       setError(insErr.message);
       setCreating(false);
+      setBuildingId(null);
       return;
     }
     onCreated();
@@ -204,20 +207,27 @@ function GoalBuilder({ painMap, latestBench, sport, initialPosition, initialFocu
           <span className="text-xs text-slate-500">tap to build instantly</span>
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
-          {templatesForSport(sport).map((t) => (
-            <button
-              key={t.id}
-              onClick={() => createProgram(t.goal, t.focus, t.position ?? position)}
-              disabled={creating}
-              className="card card-hover flex items-center gap-3 p-4 text-left disabled:opacity-50"
-            >
-              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white/[0.04] text-xl">{t.icon}</span>
-              <span className="min-w-0">
-                <span className="block text-sm font-bold text-slate-100">{t.name}</span>
-                <span className="block text-xs text-slate-400">{t.blurb}</span>
-              </span>
-            </button>
-          ))}
+          {templatesForSport(sport).map((t) => {
+            const isBuilding = buildingId === t.id;
+            return (
+              <button
+                key={t.id}
+                onClick={() => createProgram(t.goal, t.focus, t.position ?? position, t.id)}
+                disabled={creating}
+                className={`card flex items-center gap-3 p-4 text-left transition disabled:opacity-50 ${isBuilding ? "ring-2 ring-pitch-400/70" : "card-hover"}`}
+              >
+                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white/[0.04] text-xl">
+                  {isBuilding
+                    ? <span className="h-5 w-5 animate-spin rounded-full border-2 border-pitch-500 border-t-transparent" />
+                    : t.icon}
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-bold text-slate-100">{isBuilding ? "Building your program…" : t.name}</span>
+                  <span className="block text-xs text-slate-400">{isBuilding ? "A few seconds" : t.blurb}</span>
+                </span>
+              </button>
+            );
+          })}
         </div>
         <div className="mt-4 flex items-center gap-3 text-xs text-slate-500">
           <span className="h-px flex-1 bg-white/10" /> or build your own <span className="h-px flex-1 bg-white/10" />

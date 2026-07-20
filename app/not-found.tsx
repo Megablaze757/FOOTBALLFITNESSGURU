@@ -49,7 +49,7 @@ export default function NotFound() {
     <main className="flex min-h-screen items-center justify-center px-5 py-10">
       <div className="w-full max-w-md text-center">
         <div className="text-6xl font-extrabold leading-none">
-          <span className="bg-gradient-to-br from-pitch-400 to-pitch-600 bg-clip-text text-transparent">404</span>
+          <span className="text-pitch-400">404</span>
         </div>
 
         <h1 className="mt-4 text-2xl font-extrabold tracking-tight">This page doesn&apos;t exist</h1>

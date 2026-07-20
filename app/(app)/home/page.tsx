@@ -43,7 +43,7 @@ export default function HomePage() {
     const streak = checkInStreak((streakRows ?? []).map((r) => r.check_in_date));
     const quests = dailyQuests({ checkedInToday: !!checkIn, trainedToday: !!trainToday, nutritionToday: !!nutriToday });
     return { profile, checkIn, insight, streak, quests, bioSignal };
-  }, [user.id]);
+  }, [user.id], `home:${user.id}`);
 
   const firstName = data?.profile?.full_name?.split(" ")[0] ?? "athlete";
   const streak = data?.streak ?? 0;

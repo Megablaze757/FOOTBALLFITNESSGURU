@@ -6,6 +6,7 @@ const config: Config = {
     extend: {
       fontFamily: {
         sans: ["var(--font-sans)", "system-ui", "sans-serif"],
+        display: ["var(--font-display)", "var(--font-sans)", "sans-serif"],
       },
       colors: {
         // Brand accent — metallic gold. (Token still named `pitch` since it's

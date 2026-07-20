@@ -50,7 +50,7 @@ export default function DashboardPage() {
       nutrition: (nutrition ?? []) as NutritionLog[],
       weekCheck: (weekCheck ?? []) as DailyCheckIn[],
     };
-  }, [user.id]);
+  }, [user.id], `dashboard:${user.id}`);
 
   if (loading) {
     return (

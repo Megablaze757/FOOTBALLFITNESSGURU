@@ -21,7 +21,7 @@ export default function HistoryPage() {
       supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle(),
     ]);
     return { training: (training ?? []) as TrainingLog[], nutrition: (nutrition ?? []) as NutritionLog[], name: profile?.full_name ?? "Athlete" };
-  }, [user.id]);
+  }, [user.id], `history:${user.id}`);
 
   if (loading) {
     return (

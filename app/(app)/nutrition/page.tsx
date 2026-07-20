@@ -58,7 +58,7 @@ export default function NutritionPage() {
         mealsPerDay: (pr?.meals_per_day as never) ?? undefined,
       },
     };
-  }, [user.id]);
+  }, [user.id], `nutrition:${user.id}`);
 
   const tier: Tier = data?.sub?.status === "active" ? data.sub.tier : "bronze";
 

@@ -9,50 +9,65 @@
 body {
   @apply text-slate-100 antialiased;
   background:
-    radial-gradient(1200px 600px at 50% -10%, rgba(227, 181, 63, 0.12), transparent 60%),
-    radial-gradient(900px 500px at 100% 100%, rgba(227, 181, 63, 0.05), transparent 55%),
-    #0a0a0b;
+    radial-gradient(1100px 520px at 50% -12%, rgba(227, 181, 63, 0.10), transparent 62%),
+    #09090a;
   background-attachment: fixed;
   min-height: 100vh;
 }
 
+/* Athletic display type on headings — condensed, tight, a little larger. The
+   generic gradient-text look was the biggest "AI template" tell; solid, bold
+   condensed type reads like a performance brand instead. */
+h1, h2, h3, .font-display {
+  font-family: var(--font-display), var(--font-sans), sans-serif;
+  letter-spacing: -0.01em;
+}
+h1 { letter-spacing: -0.02em; }
+
+/* Small uppercase eyebrow — a sports-brand staple for section labels. */
+.eyebrow {
+  @apply text-[11px] font-bold uppercase tracking-[0.14em] text-pitch-400;
+}
+
 @layer components {
-  /* Frosted glass surface */
+  /* Surface — a solid ink panel with a hairline top highlight. Sharper and
+     more grounded than the frosted-glass look. */
   .card {
-    @apply rounded-3xl border border-white/10 bg-white/[0.04] shadow-card backdrop-blur-xl;
+    @apply rounded-2xl border border-white/[0.08] bg-ink-800/70 shadow-card backdrop-blur-sm;
   }
   .card-hover {
-    @apply transition duration-300 hover:-translate-y-0.5 hover:border-pitch-400/30 hover:bg-white/[0.06];
+    @apply transition duration-200 hover:-translate-y-0.5 hover:border-pitch-400/40 hover:bg-ink-700/70;
   }
 
-  /* Premium surface — hairline gold top-edge for Gold-tier / hero cards */
+  /* Premium surface — gold hairline top-edge for Gold-tier / hero cards */
   .card-premium {
-    @apply relative rounded-3xl border border-pitch-400/25 bg-white/[0.04] shadow-glow backdrop-blur-xl;
+    @apply relative rounded-2xl border border-pitch-400/25 bg-ink-800/80 shadow-glow;
   }
   .card-premium::before {
     content: "";
-    @apply pointer-events-none absolute inset-x-0 top-0 h-px rounded-t-3xl;
+    @apply pointer-events-none absolute inset-x-0 top-0 h-px rounded-t-2xl;
     background: linear-gradient(90deg, transparent, rgba(240, 214, 138, 0.7), transparent);
   }
 
-  /* Gold gradient text */
+  /* Brand wordmark: solid gold, not a gradient. Gradient text was the biggest
+     tell that read as an AI-generated template. */
   .gold-text {
-    @apply bg-gradient-to-br from-pitch-300 to-pitch-500 bg-clip-text text-transparent;
+    @apply text-pitch-400;
   }
 
   .btn-primary {
-    @apply inline-flex w-full items-center justify-center rounded-2xl
-           bg-gradient-to-b from-pitch-300 via-pitch-400 to-pitch-600
-           px-4 py-3 font-semibold text-ink-900 shadow-glow transition
-           hover:brightness-105 active:scale-[0.98] disabled:opacity-50 disabled:shadow-none;
+    @apply inline-flex w-full items-center justify-center rounded-xl
+           bg-pitch-400 px-4 py-3 font-bold uppercase tracking-wide text-ink-900
+           shadow-glow transition hover:bg-pitch-300
+           active:scale-[0.98] disabled:opacity-50 disabled:shadow-none;
   }
   .btn-ghost {
-    @apply inline-flex w-full items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03]
+    @apply inline-flex w-full items-center justify-center rounded-xl border border-white/10 bg-white/[0.03]
            px-4 py-3 font-medium text-slate-200 transition hover:bg-white/[0.07] active:scale-[0.98];
   }
 
   .field {
-    @apply w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-slate-100
+    @apply w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-slate-100
            outline-none transition placeholder:text-slate-500
            focus:border-pitch-400/60 focus:bg-white/[0.06] focus:ring-2 focus:ring-pitch-400/20;
   }
@@ -60,7 +75,7 @@ body {
      marathon — the Coach page ran to nearly five screens. Tighten padding,
      headings and section gaps below sm without touching the desktop look. */
   @media (max-width: 639px) {
-    .card, .card-premium { border-radius: 1.25rem; }
+    .card, .card-premium { border-radius: 0.875rem; }
     .card > .p-6, .card-premium > .p-6 { padding: 1rem; }
 
     main h1.text-3xl { font-size: 1.5rem; line-height: 2rem; }

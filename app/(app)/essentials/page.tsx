@@ -60,7 +60,7 @@ export default function EssentialsPage() {
       position: p?.position ?? "",
       painMap: (checkIn as { pain_map?: Record<string, number> } | null)?.pain_map ?? {},
     };
-  }, [user.id]);
+  }, [user.id], `essentials:${user.id}`);
 
   if (loading || !data) return <div className="card mx-auto max-w-3xl h-96 animate-pulse" />;
 
