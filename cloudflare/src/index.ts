@@ -241,8 +241,11 @@ async function createCheckout(req: Request, env: Env): Promise<Response> {
   const user = await authUser(req, env);
   if (!user) return json({ error: "unauthorized" }, 401);
   const { tier } = (await req.json()) as { tier: string };
-  const priceId = tier === "gold" ? env.STRIPE_PRICE_GOLD : tier === "silver" ? env.STRIPE_PRICE_SILVER : null;
-  if (!priceId) return json({ error: "unknown tier" }, 400);
+  if (tier !== "gold" && tier !== "silver") return json({ error: "unknown tier" }, 400);
+  const priceId = tier === "gold" ? env.STRIPE_PRICE_GOLD : env.STRIPE_PRICE_SILVER;
+  // Distinguish "no such tier" from "price id not set yet" — the latter is a
+  // config gap, and saying so plainly beats a confusing Stripe error later.
+  if (!priceId) return json({ error: `${tier} price not configured — set STRIPE_PRICE_${tier.toUpperCase()} and redeploy` }, 503);
 
   // Reuse an existing Stripe customer if we have one.
   const existing = await (await supa(env, `subscriptions?user_id=eq.${user.id}&select=stripe_customer_id`)).json();
