@@ -19,8 +19,8 @@ REMINDER_FROM = "PocketAthlete <info@pocketathlete.com>"
 # wrangler secrets. Paste your live IDs from the Stripe dashboard (Products → the
 # product → Pricing → the price_... id). Test-mode and live-mode ids differ; use
 # the pair that matches whichever STRIPE_SECRET_KEY you set.
-STRIPE_PRICE_SILVER = ""   # £15/mo individual — paste price_... here
-STRIPE_PRICE_GOLD = ""     # £20/mo individual — paste price_... here
+STRIPE_PRICE_SILVER = "price_1TvCAyG0ICmhMX6mAvegjzCb"   # £15/mo individual
+STRIPE_PRICE_GOLD   = "price_1TvCBcG0ICmhMX6mLuUwY3Qe"   # £20/mo individual
 
 # Secrets are NOT stored here — set them with `wrangler secret put NAME`:
 #   OPENROUTER_API_KEY            (your OpenRouter key — powers coach chat + programs)
