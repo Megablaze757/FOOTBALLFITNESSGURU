@@ -30,12 +30,12 @@ export default function NutritionPage() {
       supabase.from("daily_check_ins").select("weight_kg").eq("user_id", user.id).not("weight_kg", "is", null).order("check_in_date", { ascending: false }).limit(1).maybeSingle(),
       supabase.from("programs").select("goal_type").eq("user_id", user.id).eq("status", "active").maybeSingle(),
       supabase.from("training_logs").select("log_date, total_minutes").eq("user_id", user.id).gte("log_date", since),
-      supabase.from("profiles").select("height_cm, birth_year, sex, activity_level, diet_goal, diet_pattern, diet_avoid, meals_per_day").eq("id", user.id).maybeSingle(),
+      supabase.from("profiles").select("height_cm, birth_year, sex, activity_level, diet_goal, diet_pattern, diet_avoid, meals_per_day, diet_notes").eq("id", user.id).maybeSingle(),
     ]);
     const pr = profile as {
       height_cm?: number; birth_year?: number; sex?: string;
       activity_level?: string; diet_goal?: string;
-      diet_pattern?: string; diet_avoid?: string[]; meals_per_day?: number;
+      diet_pattern?: string; diet_avoid?: string[]; meals_per_day?: number; diet_notes?: string;
     } | null;
     return {
       sub: (sub ?? null) as Subscription | null,
@@ -57,6 +57,7 @@ export default function NutritionPage() {
         avoid: (pr?.diet_avoid as never) ?? undefined,
         mealsPerDay: (pr?.meals_per_day as never) ?? undefined,
       },
+      dietNotes: pr?.diet_notes ?? "",
     };
   }, [user.id], `nutrition:${user.id}`);
 
@@ -82,7 +83,7 @@ export default function NutritionPage() {
   return (
     <div className="space-y-6">
       <NutritionTracker userId={user.id} today={today} initial={data?.log} targets={targets} />
-      <MealPlanner userId={user.id} initial={data?.stats ?? null} initialPrefs={data?.prefs ?? null} />
+      <MealPlanner userId={user.id} initial={data?.stats ?? null} initialPrefs={data?.prefs ?? null} initialNotes={data?.dietNotes ?? null} />
     </div>
   );
 }

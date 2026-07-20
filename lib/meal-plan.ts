@@ -56,6 +56,73 @@ export interface MealPrefs {
   dislikes: string[];   // food ids the athlete never wants to see
 }
 
+
+// Food keywords for parsing free-text dietary notes ("I don't like yogurt").
+// Hand-mapped rather than derived from names, so matching is reliable — this
+// decides what's excluded from someone's plan, so a wrong guess is worse than
+// a miss. British and American spellings both included.
+const FOOD_KEYWORDS: Record<string, string[]> = {
+  chicken_breast: ["chicken"],
+  beef_mince_5: ["beef", "mince"],
+  salmon_fillet: ["salmon", "fish"],
+  tuna_tin: ["tuna", "fish"],
+  turkey_mince: ["turkey"],
+  eggs: ["egg", "eggs"],
+  greek_yoghurt: ["greek yoghurt", "greek yogurt", "yoghurt", "yogurt"],
+  milk: ["cow milk", "cows milk", "dairy milk", "semi-skimmed", "regular milk"],
+  cheddar: ["cheddar", "cheese"],
+  oats: ["oats", "oat", "porridge"],
+  rice: ["rice"],
+  pasta: ["pasta"],
+  potatoes: ["potato", "potatoes"],
+  sweet_potato: ["sweet potato"],
+  wholemeal_bread: ["bread", "wholemeal", "toast"],
+  tortilla_wrap: ["wrap", "wraps", "tortilla"],
+  banana: ["banana", "bananas"],
+  berries_frozen: ["berries", "berry"],
+  broccoli: ["broccoli"],
+  mixed_veg_frozen: ["mixed veg", "mixed vegetables"],
+  spinach: ["spinach"],
+  apple: ["apple", "apples"],
+  onion: ["onion", "onions"],
+  tomatoes_tin: ["tomato", "tomatoes"],
+  olive_oil: ["olive oil"],
+  peanut_butter: ["peanut butter", "peanut"],
+  almonds: ["almond", "almonds"],
+  whey_protein: ["whey"],
+  beans_baked: ["baked beans"],
+  chickpeas: ["chickpea", "chickpeas", "garbanzo"],
+  tofu: ["tofu"],
+  red_lentils: ["lentil", "lentils", "dhal", "dahl"],
+  black_beans: ["black bean", "black beans"],
+  soy_milk: ["soya milk", "soy milk", "soya"],
+  pea_protein: ["pea protein"],
+  quinoa: ["quinoa"],
+  coconut_yoghurt: ["coconut yoghurt", "coconut yogurt", "yoghurt", "yogurt"],
+  seeds_mixed: ["seeds", "seed"],
+};
+
+const NEGATION = /(don'?t|do not|dont|\bno\b|\bnot\b|hate|avoid|without|can'?t|cant|dislike|allerg|rather not|no more)/;
+
+/**
+ * Food ids to exclude, inferred from a free-text note. Only foods named inside a
+ * NEGATED phrase are excluded — the note is split on conjunctions and
+ * punctuation, so "I love chicken but no fish" drops fish, not chicken.
+ */
+export function dislikedFoodIds(notes: string): string[] {
+  const text = (notes ?? "").toLowerCase();
+  if (text.trim().length < 3) return [];
+  // Split into clauses; keep only the ones expressing a dislike.
+  const clauses = text.split(/[,.;\n]|\band\b|\bbut\b|\balso\b|\bplus\b/);
+  const negated = clauses.filter((c) => NEGATION.test(c)).join(" | ");
+  if (!negated.trim()) return [];
+  const out = new Set<string>();
+  for (const [id, words] of Object.entries(FOOD_KEYWORDS)) {
+    if (words.some((w) => negated.includes(w))) out.add(id);
+  }
+  return [...out];
+}
+
 export const DEFAULT_PREFS: MealPrefs = {
   pattern: "omnivore", avoid: [], mealsPerDay: 4, budget: false, dislikes: [],
 };

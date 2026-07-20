@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   planTargets, buildWeek, shoppingList, mealAllowed, mealTags, unmetSlots,
-  MEALS, DEFAULT_PREFS, DIET_PATTERNS,
+  MEALS, DEFAULT_PREFS, DIET_PATTERNS, dislikedFoodIds,
   type BodyStats, type MealPrefs,
 } from "./meal-plan";
 import { FOOD_BY_ID } from "./food-db";
@@ -105,4 +105,17 @@ test("each diet pattern has something to eat in every main slot", () => {
     const gaps = unmetSlots(prefs({ pattern: d.id })).filter((g) => g !== "Snack");
     assert.deepEqual(gaps, [], `${d.id} has no options for ${gaps.join(", ")}`);
   }
+});
+
+test("free-text notes exclude the foods named in a dislike", () => {
+  const week = buildWeek(planTargets(ATHLETE), 0,
+    { ...DEFAULT_PREFS, dislikes: dislikedFoodIds("I don't like yoghurt and no fish") });
+  const foods = new Set(week.flatMap((d) => d.meals.flatMap((m) => m.meal.items.map((i) => i.foodId))));
+  assert.ok(!foods.has("greek_yoghurt") && !foods.has("coconut_yoghurt"), "yoghurt should be excluded");
+  assert.ok(!foods.has("salmon_fillet") && !foods.has("tuna_tin"), "fish should be excluded");
+});
+
+test("notes only exclude foods inside a negated clause", () => {
+  assert.deepEqual(dislikedFoodIds("I love chicken but no fish").sort(), ["salmon_fillet", "tuna_tin"]);
+  assert.deepEqual(dislikedFoodIds("chicken and rice are great"), []);
 });

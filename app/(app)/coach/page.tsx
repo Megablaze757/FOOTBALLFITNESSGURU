@@ -140,6 +140,7 @@ function GoalBuilder({ painMap, latestBench, sport, initialPosition, initialFocu
   const [position, setPosition] = useState(initialPosition);
   const [focus, setFocus] = useState<TrainingFocus>(initialFocus);
   const [inSeason, setInSeason] = useState(false);
+  const [daysPerWeek, setDaysPerWeek] = useState(3);
   const [targetDate, setTargetDate] = useState("");
   const [metric, setMetric] = useState("");
   const [targetValue, setTargetValue] = useState("");
@@ -161,11 +162,11 @@ function GoalBuilder({ painMap, latestBench, sport, initialPosition, initialFocu
     // local engine (works offline / on Pages).
     let plan: ProgramPlan;
     try {
-      const data = await invokeAI<{ plan?: ProgramPlan }>("generate-program", { goal: g, pain_map: painMap, notes, in_season: inSeason, sport, position: pos, focus: f });
+      const data = await invokeAI<{ plan?: ProgramPlan }>("generate-program", { goal: g, pain_map: painMap, notes, in_season: inSeason, sport, position: pos, focus: f, days_per_week: daysPerWeek });
       if (!data?.plan) throw new Error("fallback");
       plan = data.plan;
     } catch {
-      plan = buildProgram({ goal: g, painMap, isInSeason: inSeason, sport, position: pos, focus: f });
+      plan = buildProgram({ goal: g, painMap, isInSeason: inSeason, sport, position: pos, focus: f, daysPerWeek });
     }
 
     // Remember the athlete's position + focus for next time.
@@ -283,6 +284,26 @@ function GoalBuilder({ painMap, latestBench, sport, initialPosition, initialFocu
           </button>
         ))}
         </div>
+      </div>
+
+      <div>
+        <span className="field-label">Days per week</span>
+        <div className="flex gap-2">
+          {[2, 3, 4, 5].map((n) => (
+            <button
+              key={n}
+              onClick={() => setDaysPerWeek(n)}
+              className={`flex-1 rounded-xl border py-2.5 text-sm font-bold transition ${
+                daysPerWeek === n
+                  ? "border-pitch-400/50 bg-pitch-400/10 text-pitch-400"
+                  : "border-white/10 bg-white/[0.03] text-slate-300"
+              }`}
+            >
+              {n}
+            </button>
+          ))}
+        </div>
+        <p className="mt-1 text-xs text-slate-500">How many sessions we&apos;ll schedule each week.</p>
       </div>
 
       <SeasonToggle inSeason={inSeason} onChange={setInSeason} />

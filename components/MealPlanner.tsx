@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import {
-  planTargets, buildWeek, shoppingList, shoppingListText, unmetSlots,
+  planTargets, buildWeek, shoppingList, shoppingListText, unmetSlots, dislikedFoodIds,
   ACTIVITY_LEVELS, DIET_GOALS, DIET_PATTERNS, AVOIDANCES, DEFAULT_PREFS,
   type BodyStats, type Sex, type ActivityLevel, type DietGoal, type PlannedDay,
   type MealPrefs, type DietPattern, type Avoidance,
@@ -14,9 +14,10 @@ interface Props {
   userId: string;
   initial?: Partial<BodyStats> | null;
   initialPrefs?: Partial<MealPrefs> | null;
+  initialNotes?: string | null;
 }
 
-export function MealPlanner({ userId, initial, initialPrefs }: Props) {
+export function MealPlanner({ userId, initial, initialPrefs, initialNotes }: Props) {
   const [sex, setSex] = useState<Sex>(initial?.sex ?? "male");
   const [age, setAge] = useState(String(initial?.age ?? 20));
   const [heightCm, setHeightCm] = useState(String(initial?.heightCm ?? 178));
@@ -29,6 +30,8 @@ export function MealPlanner({ userId, initial, initialPrefs }: Props) {
   const [saved, setSaved] = useState(false);
   const [store, setStore] = useState(SUPERMARKETS[0]);
   const [prefs, setPrefs] = useState<MealPrefs>({ ...DEFAULT_PREFS, ...(initialPrefs ?? {}) });
+  const [notes, setNotes] = useState(initialNotes ?? "");
+  const noteDislikes = useMemo(() => dislikedFoodIds(notes), [notes]);
 
   const stats: BodyStats = {
     sex, goal, activity,
@@ -40,10 +43,15 @@ export function MealPlanner({ userId, initial, initialPrefs }: Props) {
   const list = useMemo(() => (week ? shoppingList(week) : null), [week]);
   // If someone excludes enough, a meal slot can end up with nothing in it —
   // better to say so than to quietly hand back a short day.
-  const gaps = useMemo(() => unmetSlots(prefs), [prefs]);
+  // Foods named in the notes are excluded on top of the tapped preferences.
+  const effectivePrefs = useMemo(
+    () => ({ ...prefs, dislikes: [...prefs.dislikes, ...noteDislikes] }),
+    [prefs, noteDislikes]
+  );
+  const gaps = useMemo(() => unmetSlots(effectivePrefs), [effectivePrefs]);
 
   async function generate() {
-    setWeek(buildWeek(targets, Math.floor(Math.random() * 3), prefs));
+    setWeek(buildWeek(targets, Math.floor(Math.random() * 3), effectivePrefs));
     setOpenDay(0);
     // Remember the stats so the plan doesn't have to be re-entered next time.
     const supabase = createClient();
@@ -54,6 +62,7 @@ export function MealPlanner({ userId, initial, initialPrefs }: Props) {
       diet_pattern: prefs.pattern,
       diet_avoid: prefs.avoid,
       meals_per_day: prefs.mealsPerDay,
+      diet_notes: notes.trim() || null,
     }).eq("id", userId);
     if (!error) { setSaved(true); setTimeout(() => setSaved(false), 2500); }
   }
@@ -181,6 +190,22 @@ export function MealPlanner({ userId, initial, initialPrefs }: Props) {
             <span className="text-sm text-slate-300">Keep it cheap</span>
           </label>
         </div>
+
+        <label className="block">
+          <span className="field-label">Notes — anything else?</span>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={2}
+            placeholder="e.g. I don't like yoghurt, no fish, allergic to peanuts"
+            className="field resize-none"
+          />
+          {noteDislikes.length > 0 && (
+            <p className="mt-1 text-xs text-pitch-400">
+              Leaving out: {noteDislikes.map((id) => FOOD_LOOKUP[id]?.name ?? id).join(", ")}.
+            </p>
+          )}
+        </label>
 
         {gaps.length > 0 && (
           <div className="rounded-xl border border-amber-400/30 bg-amber-400/[0.06] px-3 py-2 text-sm text-amber-200">

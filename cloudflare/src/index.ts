@@ -185,11 +185,12 @@ async function generateProgram(req: Request, env: Env): Promise<Response> {
   const u = await authUser(req, env);
   if (!u) return json({ error: "unauthorized" }, 401);
   if (!(await allowAiCall(env, u.id))) return json({ error: "daily AI limit reached" }, 429);
-  const { goal, pain_map, notes, in_season, sport, position, focus } = (await req.json()) as {
+  const { goal, pain_map, notes, in_season, sport, position, focus, days_per_week } = (await req.json()) as {
     goal: string; pain_map: Record<string, number>; notes?: string; in_season?: boolean;
-    sport?: string; position?: string; focus?: string;
+    sport?: string; position?: string; focus?: string; days_per_week?: number;
   };
   if (!goal) return json({ error: "goal required" }, 400);
+  const days = Math.max(2, Math.min(5, Number(days_per_week) || 3));
   const sore = Object.entries(pain_map ?? {}).filter(([, v]) => Number(v) >= 4).map(([k, v]) => `${k} (${v})`).join(", ") || "none";
   const season = in_season ? "in-season (taper ~30%, recovery-weighted)" : "out-of-season (build, higher volume)";
   const sys =
@@ -197,7 +198,7 @@ async function generateProgram(req: Request, env: Env): Promise<Response> {
     "Choose exercises appropriate to the athlete's SPORT, POSITION and FOCUS (e.g. a weightlifter gets barbell squat/bench/deadlift; a rugby prop gets contact & scrum power; 'muscle & aesthetics' uses hypertrophy rep ranges 8-12; 'general fitness' is conditioning-led). " +
     "Output ONLY valid minified JSON matching this TypeScript type: " +
     "{goal:string;summary:string;constraints:string[];weeks:{week:number;theme:string;intensity:string;focusNote:string;sessions:{day:number;title:string;focus:string;drills:{name:string;sets:number;reps:number;cue:string;reason:string;progression:string}[]}[]}[]}. " +
-    "4 weeks, 3 sessions/week. CRITICAL: the weeks must be genuinely DIFFERENT, not the same session relabelled. Apply real periodisation: " +
+    `4 weeks, ${days} sessions/week (exactly ${days} sessions in every week). CRITICAL: the weeks must be genuinely DIFFERENT, not the same session relabelled. Apply real periodisation: ` +
     "Week 1 Base — moderate sets/reps, groove technique. " +
     "Week 2 Build — more than week 1: for weighted lifts add a set and a little load while reps drop 1-2; for bodyweight/conditioning add reps or time. " +
     "Week 3 Peak — the hardest week: heaviest loads (lowest reps) on lifts, highest volume on everything else, usually one extra set. " +
