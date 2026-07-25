@@ -23,7 +23,7 @@ export function ExerciseDetailCard({ ex, sets, reps }: { ex: Exercise; sets?: nu
         </div>
         <div className="min-w-0 flex-1">
           <span className="chip text-pitch-400">{ex.category}</span>
-          <h3 className="mt-2 text-xl font-extrabold text-slate-100">{ex.name}</h3>
+          <h3 className="mt-2 break-words text-xl font-extrabold text-slate-100">{ex.name}</h3>
           <p className="mt-1 text-sm text-slate-400">{ex.why}</p>
           <div className="mt-3 flex flex-wrap gap-2 text-xs">
             {(sets && reps) ? <Tag label={`${sets} × ${reps}`} /> : null}

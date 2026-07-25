@@ -558,6 +558,10 @@ function ActiveProgram({
         </div>
       )}
 
+      {/* Adherence, the goal deadline and the season switch are facts about the
+          PROGRAM, but they rendered on every tab — so "Today", which should be
+          one session and a few drills, opened with a wall of block metadata. */}
+      {tab === "program" && (
       <div className="card p-5">
         <div className="flex items-center gap-4">
           <RingProgress pct={adherence} label={`${doneCount}/${totalSessions}`} sub="sessions" />
@@ -593,6 +597,7 @@ function ActiveProgram({
           </button>
         </div>
       </div>
+      )}
 
       {/* Readiness-aware: what to do today */}
       {tab === "today" && nextSession && (
@@ -615,7 +620,7 @@ function ActiveProgram({
               {readiness?.status === "Yellow" && <p className="mt-1 text-xs text-amber-300">Readiness is moderate — keep it crisp, cut the last set if you fade.</p>}
               <ul className="mt-2 space-y-1 text-xs text-slate-300">
                 {nextSession.s.drills.map((d, k) => (
-                  <li key={k}>{d.name} · <span className="text-slate-500">{d.sets}×{d.reps}</span></li>
+                  <li key={k} className="flex items-baseline justify-between gap-2"><span className="min-w-0 break-words">{d.name}</span><span className="shrink-0 text-slate-500">{d.sets}×{d.reps}</span></li>
                 ))}
               </ul>
               <button onClick={() => setPlaying(true)} className="btn-primary mt-4">▶ Start guided session</button>

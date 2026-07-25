@@ -8,6 +8,7 @@ import { useAsync } from "@/lib/use-async";
 import { tierMeets } from "@/lib/subscription";
 import { MealPlanner } from "@/components/MealPlanner";
 import { MealCheckIn } from "@/components/MealCheckIn";
+import { Tabs } from "@/components/Tabs";
 import { nutritionTargets, type NutritionTargets } from "@/lib/nutrition";
 import type { BodyStats, MealPrefs } from "@/lib/meal-plan";
 import type { GoalType } from "@/lib/coach";
@@ -83,18 +84,15 @@ export default function NutritionPage() {
 
   const targets = nutritionTargets({ weightKg: data?.weightKg ?? null, goal: data?.goal ?? null, avgTrainingMinutes: data?.avgMinutes ?? 0 });
   return (
-    <div className="space-y-6">
-      <NutritionTracker
-        userId={user.id}
-        today={today}
-        initial={data?.log}
-        targets={targets}
-        stats={data?.stats ?? null}
-        prefs={data?.prefs ?? null}
-        dietNotes={data?.dietNotes ?? null}
-      />
-      <MealPlanner userId={user.id} initial={data?.stats ?? null} initialPrefs={data?.prefs ?? null} initialNotes={data?.dietNotes ?? null} />
-    </div>
+    <NutritionTabs
+      userId={user.id}
+      today={today}
+      log={data?.log}
+      targets={targets}
+      stats={data?.stats ?? null}
+      prefs={data?.prefs ?? null}
+      dietNotes={data?.dietNotes ?? null}
+    />
   );
 }
 
@@ -102,6 +100,43 @@ function avgDailyMinutes(rows: Pick<TrainingLog, "total_minutes">[]): number {
   if (!rows.length) return 0;
   const total = rows.reduce((s, r) => s + (r.total_minutes ?? 0), 0);
   return Math.round(total / 14); // spread across the 14-day window
+}
+
+/**
+ * Two different visits, split in two. "What have I eaten today" and "plan next
+ * week's shop" were stacked on one page — the tracker, the check-in card, the
+ * macro form AND the whole meal planner with its week accordion and shopping
+ * list. Nobody needs both at once, and together they made the page endless.
+ */
+const NUTRITION_TABS = [
+  { id: "today" as const, label: "Today", icon: "🍽️" },
+  { id: "plan" as const, label: "Meal plan", icon: "🛒" },
+];
+
+function NutritionTabs({ userId, today, log, targets, stats, prefs, dietNotes }: {
+  userId: string; today: string; log: any; targets: NutritionTargets | null;
+  stats: Partial<BodyStats> | null; prefs: Partial<MealPrefs> | null; dietNotes: string | null;
+}) {
+  const [tab, setTab] = useState<"today" | "plan">("today");
+  return (
+    <div className="mx-auto max-w-2xl space-y-5">
+      <Header />
+      <Tabs tabs={NUTRITION_TABS} active={tab} onChange={setTab} />
+      {tab === "today" ? (
+        <NutritionTracker
+          userId={userId}
+          today={today}
+          initial={log}
+          targets={targets}
+          stats={stats}
+          prefs={prefs}
+          dietNotes={dietNotes}
+        />
+      ) : (
+        <MealPlanner userId={userId} initial={stats} initialPrefs={prefs} initialNotes={dietNotes} />
+      )}
+    </div>
+  );
 }
 
 function Header() {
@@ -182,9 +217,8 @@ function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietN
   }
 
   return (
-    <div className="animate-fade-up mx-auto max-w-2xl space-y-5">
-      <Header />
-
+    // Header and width live on the tab shell now, so they don't render twice.
+    <div className="animate-fade-up space-y-5">
       <MealCheckIn stats={stats} prefs={prefs} dietNotes={dietNotes} onAdd={addEaten} />
 
       {/* Coach-set smart targets */}

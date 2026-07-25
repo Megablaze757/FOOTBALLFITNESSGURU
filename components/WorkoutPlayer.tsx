@@ -121,7 +121,7 @@ export function WorkoutPlayer({ title, drills, onComplete, onClose }: {
               </div>
             )}
             <div className="chip mx-auto text-pitch-400">Set {step.setNum} of {step.totalSets}</div>
-            <h2 className="mt-3 text-3xl font-extrabold">{step.drill.name}</h2>
+            <h2 className="mt-3 break-words text-2xl font-extrabold sm:text-3xl">{step.drill.name}</h2>
             <p className="mt-1 text-sm text-slate-400">Target {step.drill.reps} reps · log what you actually got</p>
 
             {/* Reps stepper — record the reps you completed (fewer is fine) */}
