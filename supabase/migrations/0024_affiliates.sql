@@ -30,6 +30,12 @@ create policy "affiliates: admin all" on public.affiliates for all to authentica
 
 -- Per-affiliate signup + paid-conversion counts. SECURITY DEFINER so it can
 -- aggregate across users, but refuses to run for non-admins.
+-- Dropped first so this file stays re-runnable. 0033 widens the return type to
+-- include a waitlist count, and `create or replace` cannot change a function's
+-- return type — so on a replay of the full migration set this failed with
+-- "cannot change return type of existing function" and halted everything after
+-- it.
+drop function if exists public.affiliate_stats();
 create or replace function public.affiliate_stats()
 returns table (code text, name text, email text, signups bigint, paid bigint)
 language plpgsql
