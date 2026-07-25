@@ -10,7 +10,9 @@ name: Tests
 
 on:
   push:
-    branches: [main]
+    # Every branch, not just main — the point of the tests is to catch a broken
+    # engine before it reaches main, which means running them where the work is.
+    branches: ["**"]
   pull_request:
   workflow_dispatch:
 
