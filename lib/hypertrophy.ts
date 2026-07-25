@@ -306,7 +306,10 @@ export function buildHypertrophyProgram(input: HypertrophyInput): ProgramPlan {
   const pain = painAreas(input.painMap);
 
   const weeks: ProgramWeek[] = WEEK_THEMES.map((theme, wi) => {
-    const sessions: ProgramSession[] = split.map((day, di) => {
+    // Annotated on the callback, not just the variable: without it the returned
+    // object literal widens `focus: "strength"` to `string`, which no longer
+    // satisfies GoalType.
+    const sessions: ProgramSession[] = split.map((day, di): ProgramSession => {
       // Offset shifts per day AND per week, so week 2's Push day varies the
       // accessories rather than repeating week 1 exactly.
       const movements = pickForSession(day.groups, di + wi, pain, input.constraints);
