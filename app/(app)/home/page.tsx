@@ -109,7 +109,7 @@ export default function HomePage() {
     return (
       <div className="animate-fade-up space-y-6">
         <Greeting name={firstName} sub="Let's see how you're recovering." streak={streak} />
-        <RankStrip level={level} />
+        <RankStrip level={level} week={data!.week} />
 
         <Link href="/journal" className="card-premium card-hover flex items-center gap-4 p-5 sm:p-6">
           <span className="text-4xl">🌅</span>
@@ -120,10 +120,8 @@ export default function HomePage() {
           <span className="hidden shrink-0 text-sm font-bold text-pitch-400 sm:block">Start →</span>
         </Link>
 
-        <WeekStats week={data!.week} level={level} />
         <GettingStarted setup={data!.setup} />
         <DailyQuests quests={data!.quests} />
-        <PlaybookCard />
       </div>
     );
   }
@@ -146,7 +144,7 @@ export default function HomePage() {
     <div className="animate-fade-up space-y-6">
       <Greeting name={firstName} sub="Here's your readiness for today." streak={streak} />
 
-      <RankStrip level={level} />
+      <RankStrip level={level} week={data!.week} />
 
       <GettingStarted setup={data!.setup} />
 
@@ -176,63 +174,60 @@ export default function HomePage() {
         </div>
       </div>
 
-      <WeekStats week={data!.week} level={level} />
-
       <BiometricSignalCard signal={data!.bioSignal} />
-
-      <PlaybookCard />
 
       <DailyQuests quests={data!.quests} />
     </div>
   );
 }
 
-/** Rank, tier colour and progress to the next level — the "keep climbing" bar. */
-function RankStrip({ level }: { level: LevelInfo }) {
+/**
+ * Rank, progress to the next level, and the week at a glance — one card.
+ *
+ * These were three separate blocks (a rank strip, a four-tile stat row, and a
+ * Playbook card that pointed at the same place as one of the quick links).
+ * Home had ten stacked sections and read as a dashboard of dashboards; level
+ * appeared twice, and Playbook twice. Same information, a third of the height.
+ */
+function RankStrip({ level, week }: { level: LevelInfo; week: { sessions: number; minutes: number; checkIns: number } }) {
   const toNext = level.xpForNext - level.xpIntoLevel;
-  return (
-    <Link href="/rewards" className="card card-hover flex items-center gap-4 p-4">
-      <span
-        className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl text-2xl shadow-glow"
-        style={{ background: `linear-gradient(135deg, ${level.color}, ${level.color}88)` }}
-      >
-        {level.emoji}
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="flex items-baseline justify-between gap-2">
-          <span className="truncate text-lg font-extrabold" style={{ color: level.color }}>{level.rank}</span>
-          <span className="shrink-0 text-xs text-slate-500">{level.xp.toLocaleString()} XP</span>
-        </span>
-        <span className="mt-1.5 block h-2 w-full overflow-hidden rounded-full bg-white/10">
-          <span
-            className="block h-full rounded-full transition-all"
-            style={{ width: `${Math.round(level.progress * 100)}%`, background: `linear-gradient(90deg, ${level.color}, ${level.color}aa)` }}
-          />
-        </span>
-        <span className="mt-1 block text-xs text-slate-400">{toNext} XP to level {level.level + 1}</span>
-      </span>
-    </Link>
-  );
-}
-
-/** The last seven days at a glance. */
-function WeekStats({ week, level }: { week: { sessions: number; minutes: number; checkIns: number }; level: LevelInfo }) {
-  const tiles = [
-    { label: "Sessions", value: String(week.sessions), sub: "last 7 days", href: "/history" },
-    { label: "Minutes", value: week.minutes >= 60 ? `${Math.round(week.minutes / 60)}h` : String(week.minutes), sub: "trained", href: "/history" },
-    { label: "Check-ins", value: `${week.checkIns}/7`, sub: "this week", href: "/journal" },
-    { label: "Level", value: String(level.level), sub: level.tier, href: "/rewards" },
+  const stats = [
+    { label: "Sessions", value: String(week.sessions) },
+    { label: "Trained", value: week.minutes >= 60 ? `${Math.round(week.minutes / 60)}h` : `${week.minutes}m` },
+    { label: "Check-ins", value: `${week.checkIns}/7` },
   ];
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-      {tiles.map((t) => (
-        <Link key={t.label} href={t.href} className="card card-hover p-4">
-          <div className="stat-label">{t.label}</div>
-          <div className="mt-1 text-2xl font-extrabold text-slate-100">{t.value}</div>
-          <div className="text-xs text-slate-500">{t.sub}</div>
-        </Link>
-      ))}
-    </div>
+    <Link href="/rewards" className="card card-hover block p-4">
+      <div className="flex items-center gap-4">
+        <span
+          className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl text-2xl shadow-glow"
+          style={{ background: `linear-gradient(135deg, ${level.color}, ${level.color}88)` }}
+        >
+          {level.emoji}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="flex items-baseline justify-between gap-2">
+            <span className="truncate text-lg font-extrabold" style={{ color: level.color }}>{level.rank}</span>
+            <span className="shrink-0 text-xs text-slate-500">{toNext} XP to go</span>
+          </span>
+          <span className="mt-1.5 block h-2 w-full overflow-hidden rounded-full bg-white/10">
+            <span
+              className="block h-full rounded-full transition-all"
+              style={{ width: `${Math.round(level.progress * 100)}%`, background: `linear-gradient(90deg, ${level.color}, ${level.color}aa)` }}
+            />
+          </span>
+        </span>
+      </div>
+
+      <div className="mt-4 grid grid-cols-3 gap-2 border-t border-white/5 pt-3 text-center">
+        {stats.map((s) => (
+          <div key={s.label}>
+            <div className="text-lg font-extrabold text-slate-100">{s.value}</div>
+            <div className="text-[11px] text-slate-500">{s.label} · 7d</div>
+          </div>
+        ))}
+      </div>
+    </Link>
   );
 }
 
@@ -308,30 +303,6 @@ function GettingStarted({ setup }: { setup: { checkedIn: boolean; hasProgram: bo
   );
 }
 
-function PlaybookCard() {
-  const inside = [
-    { icon: "🎯", label: "Position essentials" },
-    { icon: "🩹", label: "Injury rehab & mobility" },
-    { icon: "🍝", label: "Gameday nutrition" },
-  ];
-  return (
-    <Link href="/essentials" className="card-premium card-hover block overflow-hidden p-5 sm:p-6">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <span className="eyebrow">Your Playbook</span>
-          <h2 className="mt-1 text-xl font-extrabold">The knowledge a full-time staff would give you</h2>
-        </div>
-        <span className="hidden text-3xl sm:block">📖</span>
-      </div>
-      <div className="mt-4 flex flex-wrap gap-2">
-        {inside.map((i) => (
-          <span key={i.label} className="chip text-slate-200">{i.icon} {i.label}</span>
-        ))}
-      </div>
-      <span className="mt-4 inline-block text-sm font-semibold text-pitch-400">Open your Playbook →</span>
-    </Link>
-  );
-}
 
 function QuickLink({ href, title, sub, icon }: { href: string; title: string; sub: string; icon: string }) {
   return (

@@ -5,13 +5,18 @@ import { invalidate } from "@/lib/use-async";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { sportTerms } from "@/lib/sport-terms";
 import { assessReadiness } from "@/lib/readiness";
 import { BodyMap } from "@/components/BodyMap";
 import { ReadinessGauge } from "@/components/ReadinessGauge";
 import { TrainingLogInput, type TrainingState } from "@/components/TrainingLogInput";
 import type { CheckInInput, PainMap, ReadinessResult } from "@/lib/types";
 
-export function JournalForm({ initial, initialTraining }: { initial?: Partial<CheckInInput>; initialTraining?: TrainingState }) {
+export function JournalForm({ initial, initialTraining, sport }: { initial?: Partial<CheckInInput>; initialTraining?: TrainingState; sport?: string }) {
+  // A basketball player being asked "Match today?" is the tell that a product
+  // wasn't built for them. The column is still is_match_day — only the wording
+  // changes, so no data migration is involved.
+  const terms = sportTerms(sport);
   const router = useRouter();
 
   const [painMap, setPainMap] = useState<PainMap>(initial?.pain_map ?? {});
@@ -119,12 +124,12 @@ export function JournalForm({ initial, initialTraining }: { initial?: Partial<Ch
 
         <div className="rounded-2xl bg-white/[0.03] p-4">
           <label className="flex items-center justify-between">
-            <span className="text-sm font-medium text-slate-200">Match today?</span>
+            <span className="text-sm font-medium text-slate-200">{terms.eventToday}</span>
             <input type="checkbox" checked={isMatchDay} onChange={(e) => setIsMatchDay(e.target.checked)} className="h-5 w-5 accent-pitch-500" />
           </label>
           {isMatchDay && (
             <label className="mt-3 block">
-              <span className="field-label">Minutes played</span>
+              <span className="field-label">{terms.minutes}</span>
               <input type="number" min={0} max={120} value={minutes} onChange={(e) => setMinutes(e.target.value)} className="field" />
             </label>
           )}

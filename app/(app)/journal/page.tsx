@@ -15,12 +15,18 @@ export default function JournalPage() {
 
   const { data, loading, reload } = useAsync(async () => {
     const supabase = createClient();
-    const [{ data: existing }, { data: training }, { data: bio }] = await Promise.all([
+    const [{ data: existing }, { data: training }, { data: bio }, { data: profile }] = await Promise.all([
       supabase.from("daily_check_ins").select("*").eq("user_id", user.id).eq("check_in_date", today).maybeSingle(),
       supabase.from("training_logs").select("*").eq("user_id", user.id).eq("log_date", today).maybeSingle(),
       supabase.from("biometrics").select("*").eq("user_id", user.id).eq("metric_date", today).maybeSingle(),
+      supabase.from("profiles").select("sport").eq("id", user.id).maybeSingle(),
     ]);
-    return { existing, training: (training ?? null) as TrainingLog | null, bio: (bio ?? null) as Biometric | null };
+    return {
+      existing,
+      training: (training ?? null) as TrainingLog | null,
+      bio: (bio ?? null) as Biometric | null,
+      sport: (profile as { sport?: string } | null)?.sport ?? "football",
+    };
   }, [user.id], `journal:${user.id}`);
 
   if (loading) {
@@ -57,7 +63,7 @@ export default function JournalPage() {
           {checkIn ? "Already logged today — edit and resubmit anytime." : "Log how your body feels today."}
         </p>
       </header>
-      <JournalForm initial={initial} initialTraining={initialTraining} />
+      <JournalForm initial={initial} initialTraining={initialTraining} sport={data?.sport} />
 
       <div className="mt-5">
         <WearableImport
