@@ -7,7 +7,9 @@ import { useCurrentUser } from "@/lib/auth";
 import { useAsync } from "@/lib/use-async";
 import { tierMeets } from "@/lib/subscription";
 import { MealPlanner } from "@/components/MealPlanner";
+import { MealCheckIn } from "@/components/MealCheckIn";
 import { nutritionTargets, type NutritionTargets } from "@/lib/nutrition";
+import type { BodyStats, MealPrefs } from "@/lib/meal-plan";
 import type { GoalType } from "@/lib/coach";
 import type { Subscription, Tier, TrainingLog } from "@/lib/types";
 
@@ -82,7 +84,15 @@ export default function NutritionPage() {
   const targets = nutritionTargets({ weightKg: data?.weightKg ?? null, goal: data?.goal ?? null, avgTrainingMinutes: data?.avgMinutes ?? 0 });
   return (
     <div className="space-y-6">
-      <NutritionTracker userId={user.id} today={today} initial={data?.log} targets={targets} />
+      <NutritionTracker
+        userId={user.id}
+        today={today}
+        initial={data?.log}
+        targets={targets}
+        stats={data?.stats ?? null}
+        prefs={data?.prefs ?? null}
+        dietNotes={data?.dietNotes ?? null}
+      />
       <MealPlanner userId={user.id} initial={data?.stats ?? null} initialPrefs={data?.prefs ?? null} initialNotes={data?.dietNotes ?? null} />
     </div>
   );
@@ -106,7 +116,10 @@ function Header() {
   );
 }
 
-function NutritionTracker({ userId, today, initial, targets }: { userId: string; today: string; initial: any; targets: NutritionTargets | null }) {
+function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietNotes }: {
+  userId: string; today: string; initial: any; targets: NutritionTargets | null;
+  stats: Partial<BodyStats> | null; prefs: Partial<MealPrefs> | null; dietNotes: string | null;
+}) {
   const [calories, setCalories] = useState<string>(initial?.daily_calorie_target?.toString() ?? "");
   const [macros, setMacros] = useState<Record<string, string>>({
     protein: initial?.macros?.protein?.toString() ?? "",
@@ -128,6 +141,20 @@ function NutritionTracker({ userId, today, initial, targets }: { userId: string;
     if (!targets) return;
     setCalories(String(targets.calories));
     setMacros({ protein: String(targets.protein), carbs: String(targets.carbs), fats: String(targets.fats) });
+  }
+
+  /**
+   * Fold a logged meal into today's running totals. Negative values arrive when
+   * a ticked meal is un-ticked, so everything clamps at zero rather than going
+   * negative on a double-tap.
+   */
+  function addEaten(m: { kcal: number; protein: number; carbs: number; fats: number }) {
+    setEaten((n) => Math.max(0, n + m.kcal));
+    setMacros((prev) => ({
+      protein: String(Math.max(0, (Number(prev.protein) || 0) + m.protein)),
+      carbs: String(Math.max(0, (Number(prev.carbs) || 0) + m.carbs)),
+      fats: String(Math.max(0, (Number(prev.fats) || 0) + m.fats)),
+    }));
   }
 
   async function save() {
@@ -157,6 +184,8 @@ function NutritionTracker({ userId, today, initial, targets }: { userId: string;
   return (
     <div className="animate-fade-up mx-auto max-w-2xl space-y-5">
       <Header />
+
+      <MealCheckIn stats={stats} prefs={prefs} dietNotes={dietNotes} onAdd={addEaten} />
 
       {/* Coach-set smart targets */}
       {targets && (

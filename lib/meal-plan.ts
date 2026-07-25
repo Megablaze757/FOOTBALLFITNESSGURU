@@ -62,7 +62,7 @@ export interface MealPrefs {
 // Hand-mapped rather than derived from names, so matching is reliable — this
 // decides what's excluded from someone's plan, so a wrong guess is worse than
 // a miss. British and American spellings both included.
-const FOOD_KEYWORDS: Record<string, string[]> = {
+export const FOOD_KEYWORDS: Record<string, string[]> = {
   chicken_breast: ["chicken"],
   beef_mince_5: ["beef", "mince"],
   salmon_fillet: ["salmon", "fish"],

@@ -48,6 +48,7 @@ export default {
     try {
       if (pathname.endsWith("/coach-chat")) return await coachChat(req, env);
       if (pathname.endsWith("/generate-program")) return await generateProgram(req, env);
+      if (pathname.endsWith("/estimate-food")) return await estimateFood(req, env);
       if (pathname.endsWith("/create-checkout")) return await createCheckout(req, env);
       if (pathname.endsWith("/stripe-webhook")) return await stripeWebhook(req, env);
       if (pathname.endsWith("/admin-create-user")) return await adminCreateUser(req, env);
@@ -326,6 +327,68 @@ async function generateProgram(req: Request, env: Env): Promise<Response> {
   const plan = parseProgram(text);
   if (!plan) return json({ error: "bad ai output" }, 422); // validate passed, so unreachable
   return json({ plan, model });
+}
+
+// --- Food estimation --------------------------------------------------------
+
+/**
+ * Extracts the food items from a completion. Same defensive parse as the
+ * program: a model that wraps its JSON in prose, or returns items with no
+ * calories, is treated as a failed rung so the chain tries the next model.
+ */
+function parseFoodItems(raw: string): { name: string; qty: number; unit: string; kcal: number; protein: number; carbs: number; fats: number }[] | null {
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) return null;
+  try {
+    const parsed = JSON.parse(match[0]) as { items?: unknown };
+    const items = parsed.items;
+    if (!Array.isArray(items) || items.length === 0) return null;
+    const out = items
+      .map((i) => i as Record<string, unknown>)
+      .filter((i) => typeof i.name === "string" && Number(i.kcal) > 0)
+      .map((i) => ({
+        name: String(i.name).slice(0, 60),
+        qty: Math.max(1, Math.round(Number(i.qty) || 1)),
+        unit: i.unit === "ml" ? "ml" : i.unit === "each" ? "each" : "g",
+        kcal: Math.round(Number(i.kcal) || 0),
+        protein: Math.round(Number(i.protein) || 0),
+        carbs: Math.round(Number(i.carbs) || 0),
+        fats: Math.round(Number(i.fats) || 0),
+      }));
+    return out.length ? out : null;
+  } catch {
+    return null;
+  }
+}
+
+async function estimateFood(req: Request, env: Env): Promise<Response> {
+  const u = await authUser(req, env);
+  if (!u) return json({ error: "unauthorized" }, 401);
+  if (!(await allowAiCall(env, u.id))) return json({ error: "daily AI limit reached" }, 429);
+  const { text } = (await req.json()) as { text?: string };
+  const meal = (text ?? "").trim().slice(0, 300);
+  if (meal.length < 2) return json({ error: "text required" }, 400);
+
+  const sys =
+    "You estimate the nutrition of a meal an athlete describes in plain language. " +
+    "Output ONLY valid minified JSON: {items:[{name:string,qty:number,unit:\"g\"|\"ml\"|\"each\",kcal:number,protein:number,carbs:number,fats:number}]}. " +
+    "One entry per distinct food. If no portion is stated, assume a normal adult serving and say so in the name " +
+    "(e.g. \"Chicken breast (medium portion)\"). Use UK supermarket foods and typical home cooking. " +
+    // Weights of cooked grains vary hugely with water; the app's own database is
+    // dry-weight, so mixing the two silently doubles someone's carbs.
+    "For rice, pasta and oats give the DRY weight. " +
+    "kcal must be the total for the stated qty, not per 100g, and must be greater than zero. " +
+    "No prose outside the JSON.";
+
+  const { text: raw, model } = await complete(env, {
+    system: sys,
+    user: `The athlete ate: ${meal}`,
+    maxTokens: 700,
+    validate: (t) => parseFoodItems(t) !== null,
+  });
+  const items = parseFoodItems(raw);
+  if (!items) return json({ error: "could not read that meal" }, 422); // validate passed, so unreachable
+  return json({ items, model });
 }
 
 // --- Stripe ----------------------------------------------------------------
