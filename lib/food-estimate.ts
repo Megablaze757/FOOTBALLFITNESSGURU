@@ -86,10 +86,27 @@ function phrases(text: string): string[] {
     .filter((p) => p.length > 1);
 }
 
+// FOOD_KEYWORDS is tuned for dislike detection, where EVERY match is applied.
+// Ambiguous words are therefore qualified there on purpose — milk only matches
+// as "cow milk" or "dairy milk", because otherwise "no soya milk" would ban
+// dairy milk too. Estimation resolves ambiguity the other way, by taking the
+// longest match, so bare words are safe here and necessary: "1l milk" is what
+// people actually type, and it matched nothing at all.
+const EXTRA_KEYWORDS: Record<string, string[]> = {
+  milk: ["milk"],
+};
+
+const KEYWORDS: Record<string, string[]> = (() => {
+  const out: Record<string, string[]> = {};
+  for (const [id, words] of Object.entries(FOOD_KEYWORDS)) out[id] = [...words];
+  for (const [id, words] of Object.entries(EXTRA_KEYWORDS)) out[id] = [...(out[id] ?? []), ...words];
+  return out;
+})();
+
 /** Which food (if any) a phrase names. Longest keyword wins, so "sweet potato" beats "potato". */
 function matchFood(phrase: string): string | null {
   let best: { id: string; len: number } | null = null;
-  for (const [id, words] of Object.entries(FOOD_KEYWORDS)) {
+  for (const [id, words] of Object.entries(KEYWORDS)) {
     for (const w of words) {
       if (phrase.includes(w) && (!best || w.length > best.len)) best = { id, len: w.length };
     }

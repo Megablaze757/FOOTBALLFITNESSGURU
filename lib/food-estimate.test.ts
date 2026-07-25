@@ -34,6 +34,21 @@ test("kg and litres are converted", () => {
   assert.equal(estimateMeal("1l milk").items[0].qty, 1000);
 });
 
+test("plain everyday words are recognised, not just qualified ones", () => {
+  // "milk" alone matched nothing, because the shared keyword list only carried
+  // "cow milk" / "dairy milk" — deliberate for dislike detection, wrong here.
+  const e = estimateMeal("milk");
+  assert.equal(e.items.length, 1, "plain milk should be recognised");
+  assert.match(e.items[0].name.toLowerCase(), /milk/);
+});
+
+test("a qualified name still beats the bare one", () => {
+  // Adding bare "milk" must not make "soy milk" resolve to dairy.
+  const e = estimateMeal("300ml soy milk");
+  assert.equal(e.items.length, 1);
+  assert.equal(e.items[0].foodId, "soy_milk", `got ${e.items[0].foodId}`);
+});
+
 test("a missing portion is assumed, and flagged as assumed", () => {
   const e = estimateMeal("chicken");
   assert.ok(e.items[0].qty > 0);
