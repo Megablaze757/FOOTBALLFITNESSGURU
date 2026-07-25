@@ -62,12 +62,20 @@ export default {
     }
   },
 
-  // Cron triggers (configured in wrangler.toml) → reminder emails.
+  // Cron triggers (configured in wrangler.toml) → reminder emails + storage cleanup.
   async scheduled(event: ScheduledController, env: Env): Promise<void> {
     const isMonday = new Date().getUTCDay() === 1;
-    await sendDailyReminders(env);
-    await sendDeadlineReminders(env);
-    if (isMonday) await sendWeeklySummaries(env);
+    // Each job is isolated: a failure in one must not stop the others. Before
+    // this, one bad email address could abort the whole run, and the retention
+    // sweep would simply never happen.
+    for (const job of [
+      () => sendDailyReminders(env),
+      () => sendDeadlineReminders(env),
+      () => purgeExpiredVideos(env),
+      ...(isMonday ? [() => sendWeeklySummaries(env)] : []),
+    ]) {
+      try { await job(); } catch (e) { console.error("cron job failed:", String(e)); }
+    }
   },
 };
 
@@ -853,6 +861,66 @@ async function verifyStripe(payload: string, header: string, secret: string): Pr
   let diff = 0;
   for (let i = 0; i < hex.length; i++) diff |= hex.charCodeAt(i) ^ v1.charCodeAt(i);
   return diff === 0;
+}
+
+// --- Video retention ---------------------------------------------------------
+//
+// Clips expire per tier (14 / 60 / 180 days — see migration 0036). Deleting the
+// `videos` row alone is not enough: the file in the bucket is what costs money,
+// and a row-only delete orphans it where nothing will ever find it again. So
+// the object goes first and the row only follows once storage confirms.
+//
+// Deliberately runs through the Storage API rather than deleting
+// storage.objects rows directly, which leaves the underlying file behind and
+// still billed.
+
+/** Delete objects from a bucket. Returns true when storage accepted it. */
+async function removeObjects(env: Env, bucket: string, paths: string[]): Promise<boolean> {
+  if (!paths.length) return true;
+  const r = await fetch(`${env.SUPABASE_URL}/storage/v1/object/${bucket}`, {
+    method: "DELETE",
+    headers: {
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ prefixes: paths }),
+  });
+  return r.ok;
+}
+
+async function purgeExpiredVideos(env: Env): Promise<void> {
+  if (!env.SUPABASE_SERVICE_ROLE_KEY) return;
+
+  const r = await svcRpc(env, "expired_video_paths", {});
+  if (!r.ok) {
+    // Most likely the migration hasn't been applied. Say so rather than
+    // failing silently every night for months.
+    console.error(`expired_video_paths unavailable (${r.status}) — is migration 0036 applied?`);
+    return;
+  }
+  const rows = (await r.json()) as { id: string; storage_path: string }[];
+  if (!Array.isArray(rows) || rows.length === 0) return;
+
+  let removed = 0;
+  // Chunked so one oversized request can't fail the whole sweep, and so a
+  // partial failure still makes progress.
+  const CHUNK = 50;
+  for (let i = 0; i < rows.length; i += CHUNK) {
+    const batch = rows.slice(i, i + CHUNK);
+    const ok = await removeObjects(env, "videos", batch.map((v) => v.storage_path));
+    if (!ok) {
+      // Leave the rows alone: they'll be picked up again tomorrow, whereas
+      // deleting them now would strand the files permanently.
+      console.error(`storage delete failed for ${batch.length} clips — rows kept for retry`);
+      continue;
+    }
+    const ids = batch.map((v) => v.id).join(",");
+    const del = await supa(env, `videos?id=in.(${ids})`, { method: "DELETE", headers: { Prefer: "return=minimal" } });
+    if (del.ok) removed += batch.length;
+    else console.error(`row delete failed after storage delete for ${batch.length} clips`);
+  }
+  console.log(`retention: removed ${removed} expired clip(s) of ${rows.length} due`);
 }
 
 // --- Email reminders --------------------------------------------------------
