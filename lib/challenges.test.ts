@@ -49,6 +49,7 @@ test("a garbage target becomes a usable one rather than NaN", () => {
 test("harder challenges are worth more XP", () => {
   const easy = parseChallenge({ title: "a", metric: "check_ins", target: 2 }, 0);
   const hard = parseChallenge({ title: "b", metric: "check_ins", target: 6 }, 1);
+  assert.ok(easy && hard, "both should parse");
   assert.ok(hard.xp > easy.xp);
 });
 

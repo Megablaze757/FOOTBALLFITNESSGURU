@@ -492,8 +492,9 @@ async function createCheckout(req: Request, env: Env): Promise<Response> {
   if (!priceId) return json({ error: `${tier} price not configured — set STRIPE_PRICE_${tier.toUpperCase()} and redeploy` }, 503);
 
   // Reuse an existing Stripe customer if we have one.
-  const existing = await (await supa(env, `subscriptions?user_id=eq.${user.id}&select=stripe_customer_id`)).json();
-  let customerId: string = existing?.[0]?.stripe_customer_id;
+  const existing = (await (await supa(env, `subscriptions?user_id=eq.${user.id}&select=stripe_customer_id`)).json()) as
+    { stripe_customer_id: string | null }[] | null;
+  let customerId = existing?.[0]?.stripe_customer_id ?? "";
   if (!customerId) {
     const cust = await stripe(env, "customers", { email: user.email, "metadata[user_id]": user.id });
     customerId = cust.id;
@@ -608,8 +609,9 @@ async function listUsers(env: Env): Promise<Map<string, string>> {
 }
 async function sendDailyReminders(env: Env): Promise<void> {
   const today = new Date().toISOString().slice(0, 10);
-  const done = await (await supa(env, `daily_check_ins?check_in_date=eq.${today}&select=user_id`)).json();
-  const checked = new Set((done ?? []).map((r: { user_id: string }) => r.user_id));
+  const done = (await (await supa(env, `daily_check_ins?check_in_date=eq.${today}&select=user_id`)).json()) as
+    { user_id: string }[] | null;
+  const checked = new Set((done ?? []).map((r) => r.user_id));
   const emails = await listUsers(env);
   for (const [id, addr] of emails) {
     if (checked.has(id) || !addr) continue;
@@ -619,7 +621,8 @@ async function sendDailyReminders(env: Env): Promise<void> {
 async function sendDeadlineReminders(env: Env): Promise<void> {
   const today = new Date().toISOString().slice(0, 10);
   const in7 = new Date(Date.now() + 7 * 86400_000).toISOString().slice(0, 10);
-  const progs = await (await supa(env, `programs?status=eq.active&target_date=gte.${today}&target_date=lte.${in7}&select=user_id,goal_type,target_date`)).json();
+  const progs = (await (await supa(env, `programs?status=eq.active&target_date=gte.${today}&target_date=lte.${in7}&select=user_id,goal_type,target_date`)).json()) as
+    { user_id: string; goal_type: string; target_date: string }[] | null;
   const emails = await listUsers(env);
   for (const p of progs ?? []) {
     const addr = emails.get(p.user_id);
@@ -630,7 +633,8 @@ async function sendDeadlineReminders(env: Env): Promise<void> {
 }
 async function sendWeeklySummaries(env: Env): Promise<void> {
   const weekAgo = new Date(Date.now() - 7 * 86400_000).toISOString().slice(0, 10);
-  const rows = await (await supa(env, `daily_check_ins?check_in_date=gte.${weekAgo}&select=user_id`)).json();
+  const rows = (await (await supa(env, `daily_check_ins?check_in_date=gte.${weekAgo}&select=user_id`)).json()) as
+    { user_id: string }[] | null;
   const counts = new Map<string, number>();
   for (const r of rows ?? []) counts.set(r.user_id, (counts.get(r.user_id) ?? 0) + 1);
   const emails = await listUsers(env);
