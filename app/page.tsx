@@ -195,6 +195,14 @@ export default function Landing() {
         <Link href="/waitlist" className="mt-2 text-xs font-semibold text-pitch-400 hover:underline">
           Not ready to sign up? Join the waitlist →
         </Link>
+        <div className="mt-4 flex gap-4 text-xs text-slate-500">
+          <Link href="/privacy" className="hover:text-pitch-400">Privacy</Link>
+          <Link href="/terms" className="hover:text-pitch-400">Terms</Link>
+        </div>
+        <p className="mt-3 max-w-md text-[11px] leading-relaxed text-slate-600">
+          Training guidance, not medical advice. Speak to a qualified professional before
+          starting a programme, and stop if something hurts.
+        </p>
       </footer>
     </main>
   );
