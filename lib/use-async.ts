@@ -24,6 +24,7 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[] = [], cacheKey
   const cached = cacheKey ? (cache.get(cacheKey) as T | undefined) : undefined;
   const [data, setData] = useState<T | null>(cached ?? null);
   const [loading, setLoading] = useState(cached === undefined);
+  const [error, setError] = useState<Error | null>(null);
   const [tick, setTick] = useState(0);
   const fnRef = useRef(fn);
   fnRef.current = fn;
@@ -35,6 +36,7 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[] = [], cacheKey
     if (seeded !== undefined) setData(seeded as T);
     else setLoading(true);
 
+    setError(null);
     fnRef.current()
       .then((d) => {
         if (!active) return;
@@ -42,7 +44,14 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[] = [], cacheKey
         setData(d);
         setLoading(false);
       })
-      .catch(() => active && setLoading(false));
+      // A swallowed error looked exactly like "there's no data" — an empty
+      // table where the real answer was "the query was rejected". Surface it
+      // so callers can say which happened.
+      .catch((e: unknown) => {
+        if (!active) return;
+        setError(e instanceof Error ? e : new Error(String(e)));
+        setLoading(false);
+      });
     return () => { active = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [...deps, tick]);
@@ -50,6 +59,7 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[] = [], cacheKey
   return {
     data,
     loading,
+    error,
     reload: () => { if (cacheKey) cache.delete(cacheKey); setTick((t) => t + 1); },
   };
 }

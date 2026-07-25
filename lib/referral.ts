@@ -27,9 +27,23 @@ export function clearRef(): void {
   localStorage.removeItem(LEGACY_REF_KEY);
 }
 
-/** The shareable link for an affiliate code. */
-export function referralLink(code: string): string {
+function linkTo(page: string, code: string): string {
   const base = typeof window === "undefined" ? "" : window.location.origin;
   const path = process.env.NEXT_PUBLIC_BASE_PATH || "";
-  return `${base}${path}/?ref=${encodeURIComponent(code)}`;
+  return `${base}${path}${page}?ref=${encodeURIComponent(code)}`;
+}
+
+/** The shareable link for an affiliate code — lands on the marketing page. */
+export function referralLink(code: string): string {
+  return linkTo("/", code);
+}
+
+/**
+ * Straight to the waitlist, for sharing before launch. The landing link works
+ * too — the code is stashed on arrival and survives the walk to /waitlist — but
+ * only if the visitor makes that walk. Pre-launch, sending them to the form
+ * they're meant to fill in converts far better than hoping they navigate.
+ */
+export function waitlistLink(code: string): string {
+  return linkTo("/waitlist", code);
 }

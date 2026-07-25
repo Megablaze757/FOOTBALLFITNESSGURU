@@ -8,7 +8,7 @@ import { useLaunched, setLaunched } from "@/lib/launch";
 import { useSession } from "@/lib/auth";
 import { useAsync } from "@/lib/use-async";
 import { invokeAI } from "@/lib/api";
-import { referralLink } from "@/lib/referral";
+import { referralLink, waitlistLink } from "@/lib/referral";
 import { planFor } from "@/lib/subscription";
 import type { Video } from "@/lib/types";
 
@@ -91,6 +91,10 @@ export default function AdminPage() {
 
       <section className="mt-10">
         <Affiliates />
+      </section>
+
+      <section className="mt-10">
+        <Users />
       </section>
 
       <section className="mt-10">
@@ -210,6 +214,127 @@ function Waitlist({ rows }: { rows: { email: string; source: string | null; crea
   );
 }
 
+interface AdminUser {
+  user_id: string;
+  email: string;
+  full_name: string | null;
+  role: string;
+  beta: boolean;
+  tier: string;
+  status: string;
+  referral_code: string | null;
+  affiliate_name: string | null;
+  created_at: string;
+  last_sign_in_at: string | null;
+}
+
+const TIER_STYLE: Record<string, string> = {
+  gold: "text-pitch-400",
+  silver: "text-slate-200",
+  bronze: "text-slate-500",
+};
+
+/** Everyone on the app: plan, beta status, and who referred them. */
+function Users() {
+  const [filter, setFilter] = useState<"all" | "beta" | "paid" | "free">("all");
+
+  const { data, loading, error } = useAsync(async () => {
+    const { data, error } = await createClient().rpc("admin_users");
+    if (error) throw error;
+    return (data ?? []) as AdminUser[];
+  }, []);
+
+  const rows = data ?? [];
+  const paid = rows.filter((r) => r.tier !== "bronze");
+  const shown = rows.filter((r) =>
+    filter === "all" ? true
+      : filter === "beta" ? r.beta
+      : filter === "paid" ? r.tier !== "bronze"
+      : r.tier === "bronze" && !r.beta
+  );
+
+  return (
+    <div>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="field-label !mb-0">👥 Users · {rows.length}</h2>
+        <span className="text-xs text-slate-400">
+          {rows.filter((r) => r.beta).length} beta · {paid.length} paid
+        </span>
+      </div>
+
+      <div className="mb-3 flex flex-wrap gap-2">
+        {(["all", "beta", "paid", "free"] as const).map((f) => (
+          <button
+            key={f}
+            onClick={() => setFilter(f)}
+            className={`rounded-full border px-3 py-1 text-xs font-medium capitalize transition ${
+              filter === f ? "border-pitch-400/40 bg-pitch-400/10 text-pitch-400" : "border-white/10 bg-white/[0.03] text-slate-300"
+            }`}
+          >
+            {f}
+          </button>
+        ))}
+      </div>
+
+      {error ? (
+        <p className="card px-4 py-6 text-center text-sm text-readiness-red">
+          Couldn&apos;t load users — has migration 0034 been applied?
+        </p>
+      ) : loading ? (
+        <div className="card h-24 animate-pulse" />
+      ) : !shown.length ? (
+        <p className="card px-4 py-6 text-center text-sm text-slate-500">No users match that filter.</p>
+      ) : (
+        <div className="card max-h-[28rem] overflow-auto">
+          {/* Six columns don't fit a phone; scroll the table, not the page. */}
+          <table className="w-full min-w-[38rem] text-left text-sm">
+            <thead className="sticky top-0 bg-ink-800/95 text-xs uppercase tracking-wide text-slate-500">
+              <tr>
+                <th className="px-4 pt-3 pb-2">User</th>
+                <th className="px-4 pt-3 pb-2">Plan</th>
+                <th className="px-4 pt-3 pb-2">Referred by</th>
+                <th className="px-4 pt-3 pb-2">Joined</th>
+                <th className="px-4 pt-3 pb-2">Last seen</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {shown.map((u) => (
+                <tr key={u.user_id}>
+                  <td className="px-4 py-2">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate text-slate-200">{u.email}</span>
+                      {u.beta && <span className="chip shrink-0 text-pitch-400">beta</span>}
+                      {u.role !== "athlete" && <span className="chip shrink-0 text-slate-400">{u.role}</span>}
+                    </div>
+                    {u.full_name && <div className="text-xs text-slate-500">{u.full_name}</div>}
+                  </td>
+                  <td className="px-4 py-2">
+                    <span className={`font-semibold capitalize ${TIER_STYLE[u.tier] ?? "text-slate-400"}`}>{u.tier}</span>
+                    {/* past_due and cancelled both still read as their tier in
+                        the DB, so the status is what tells you it's not money. */}
+                    {u.tier !== "bronze" && u.status !== "active" && (
+                      <span className="block text-xs text-readiness-red">{u.status}</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-2">
+                    {u.affiliate_name
+                      ? <span className="text-slate-300">{u.affiliate_name}</span>
+                      : u.referral_code
+                        ? <span className="text-slate-400" title="Code has no matching affiliate">{u.referral_code}</span>
+                        : <span className="text-slate-600">—</span>}
+                  </td>
+                  <td className="px-4 py-2 text-slate-400">{u.created_at.slice(0, 10)}</td>
+                  <td className="px-4 py-2 text-slate-400">{u.last_sign_in_at?.slice(0, 10) ?? "never"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function randomPassword() {
   return "GURU-" + Math.random().toString(36).slice(2, 8);
 }
@@ -245,10 +370,12 @@ function Affiliates() {
     reload();
   }
 
-  async function copy(c: string) {
+  // Two links per affiliate: the landing page, and straight to the waitlist for
+  // pre-launch sharing. Both carry the same ?ref=, so attribution is identical.
+  async function copy(c: string, kind: "site" | "waitlist") {
     try {
-      await navigator.clipboard.writeText(referralLink(c));
-      setCopied(c);
+      await navigator.clipboard.writeText(kind === "waitlist" ? waitlistLink(c) : referralLink(c));
+      setCopied(`${c}:${kind}`);
       setTimeout(() => setCopied(null), 1800);
     } catch { /* clipboard blocked */ }
   }
@@ -299,9 +426,14 @@ function Affiliates() {
                   <td className="py-2 text-right font-bold text-slate-100">{r.signups}</td>
                   <td className="py-2 text-right font-bold text-pitch-400">{r.paid}</td>
                   <td className="py-2 text-right">
-                    <button onClick={() => copy(r.code)} className="text-xs text-slate-400 hover:text-pitch-400">
-                      {copied === r.code ? "Copied ✓" : "Copy link"}
-                    </button>
+                    <div className="flex justify-end gap-3">
+                      <button onClick={() => copy(r.code, "waitlist")} className="whitespace-nowrap text-xs text-slate-400 hover:text-pitch-400">
+                        {copied === `${r.code}:waitlist` ? "Copied ✓" : "Waitlist link"}
+                      </button>
+                      <button onClick={() => copy(r.code, "site")} className="whitespace-nowrap text-xs text-slate-400 hover:text-pitch-400">
+                        {copied === `${r.code}:site` ? "Copied ✓" : "Site link"}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
