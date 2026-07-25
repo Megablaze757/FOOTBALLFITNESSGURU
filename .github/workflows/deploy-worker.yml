@@ -22,6 +22,10 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # Job-level so the steps below can branch on whether the token exists — the
+    # `secrets` context isn't available in a step's own `if`.
+    env:
+      CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
     defaults:
       run:
         working-directory: cloudflare
@@ -30,7 +34,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: cloudflare/package-lock.json
 
@@ -43,6 +47,17 @@ jobs:
         run: npx tsc --noEmit
 
       - uses: cloudflare/wrangler-action@v3
+        if: env.CF_TOKEN != ''
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           workingDirectory: cloudflare
+
+      # Without the token there's nothing to deploy to, and failing the run
+      # would put a permanent red X on main — which teaches you to ignore red,
+      # the one habit that makes CI worthless. Typecheck still ran above.
+      - name: No deploy token — skipped
+        if: env.CF_TOKEN == ''
+        run: |
+          echo "CLOUDFLARE_API_TOKEN is not set, so the Worker was not deployed."
+          echo "The code was typechecked. Add the secret to deploy automatically,"
+          echo "or keep pasting cloudflare/src/index.ts into the dashboard by hand."
