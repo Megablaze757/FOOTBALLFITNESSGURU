@@ -278,7 +278,9 @@ function costOf(
 
 interface Attempt { text: string; cost: number }
 
-async function openRouterOnce(env: Env, model: string, system: string, user: string, maxTokens: number): Promise<Attempt> {
+async function openRouterOnce(
+  env: Env, model: string, system: string, user: string, maxTokens: number, json_mode = false
+): Promise<Attempt> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), ATTEMPT_TIMEOUT_MS);
   try {
@@ -296,6 +298,10 @@ async function openRouterOnce(env: Env, model: string, system: string, user: str
         // Ask OpenRouter to report what it charged, so accounting uses their
         // number rather than our reconstruction of it.
         usage: { include: true },
+        // Constrains the decoder to valid JSON. Without it the cheap models
+        // wrap their answer in prose or a ``` fence often enough that a rung
+        // fails validation and we pay the latency of trying another one.
+        ...(json_mode ? { response_format: { type: "json_object" } } : {}),
         messages: [
           { role: "system", content: system },
           { role: "user", content: user },
@@ -330,7 +336,7 @@ async function openRouterOnce(env: Env, model: string, system: string, user: str
  */
 async function complete(
   env: Env,
-  opts: { system: string; user: string; maxTokens: number; validate?: (text: string) => boolean }
+  opts: { system: string; user: string; maxTokens: number; validate?: (text: string) => boolean; json?: boolean }
 ): Promise<{ text: string; model: string; cost: number }> {
   const started = Date.now();
   const trail: string[] = [];
@@ -339,16 +345,43 @@ async function complete(
   // model that reliably returns junk run up an invisible tab.
   let spent = 0;
 
-  for (const model of modelChain(env)) {
+  const attempt = async (model: string) => {
+    const { text, cost } = await openRouterOnce(env, model, opts.system, opts.user, opts.maxTokens, opts.json);
+    spent += cost;
+    if (opts.validate && !opts.validate(text)) throw new Error("unusable output");
+    return { text, model, cost: 0 };
+  };
+
+  const chain = modelChain(env);
+  const free = chain.filter((m) => m.endsWith(":free"));
+  const paid = chain.filter((m) => !m.endsWith(":free"));
+
+  // The free rungs are RACED, not queued. Trying them one after another means
+  // the athlete waits for each slow model to finish being wrong before the next
+  // one starts, and three sequential timeouts is the whole budget gone. They
+  // cost nothing, so there is no reason to be polite about it: fire them
+  // together and take the first answer that validates.
+  if (free.length) {
+    try {
+      const winner = await Promise.any(free.map(attempt));
+      return { ...winner, cost: spent };
+    } catch (e) {
+      const errs = (e as AggregateError)?.errors ?? [];
+      free.forEach((m, i) => trail.push(`${m}: ${errs[i]?.message ?? "failed"}`));
+      spent += errs.reduce((n: number, err: { cost?: number }) => n + (typeof err?.cost === "number" ? err.cost : 0), 0);
+    }
+  }
+
+  // Paid rungs stay sequential — each one is real money, so we only reach for
+  // the next if the previous actually failed.
+  for (const model of paid) {
     if (Date.now() - started > CHAIN_BUDGET_MS) {
       trail.push(`${model}: skipped (budget spent)`);
       break;
     }
     try {
-      const { text, cost } = await openRouterOnce(env, model, opts.system, opts.user, opts.maxTokens);
-      spent += cost;
-      if (opts.validate && !opts.validate(text)) throw new Error("unusable output");
-      return { text, model, cost: spent };
+      const winner = await attempt(model);
+      return { ...winner, cost: spent };
     } catch (e) {
       spent += typeof (e as { cost?: number })?.cost === "number" ? (e as { cost: number }).cost : 0;
       trail.push(`${model}: ${e instanceof Error ? e.message : String(e)}`);
@@ -365,7 +398,7 @@ async function complete(
 async function meteredComplete(
   env: Env,
   userId: string,
-  opts: { system: string; user: string; maxTokens: number; validate?: (text: string) => boolean }
+  opts: { system: string; user: string; maxTokens: number; validate?: (text: string) => boolean; json?: boolean }
 ): Promise<{ text: string; model: string }> {
   try {
     const { text, model, cost } = await complete(env, opts);
@@ -402,30 +435,6 @@ async function coachChat(req: Request, env: Env): Promise<Response> {
   return json({ answer: text, model });
 }
 
-/**
- * Pulls the program JSON out of a completion. Free models like to wrap JSON in
- * prose or a ```json fence, so we take the outermost braces and parse those.
- * Returns null when the result isn't a usable plan — which tells the chain to
- * try the next model rather than failing the request.
- */
-function parseProgram(raw: string): unknown | null {
-  const match = raw.match(/\{[\s\S]*\}/);
-  if (!match) return null;
-  try {
-    const plan = JSON.parse(match[0]) as { weeks?: unknown };
-    // A plan with no weeks, or weeks with no sessions, renders as an empty
-    // calendar — worse than falling through to the on-device engine.
-    const weeks = plan.weeks;
-    if (!Array.isArray(weeks) || weeks.length === 0) return null;
-    for (const w of weeks) {
-      const sessions = (w as { sessions?: unknown })?.sessions;
-      if (!Array.isArray(sessions) || sessions.length === 0) return null;
-    }
-    return plan;
-  } catch {
-    return null;
-  }
-}
 
 async function generateProgram(req: Request, env: Env): Promise<Response> {
   const u = await authUser(req, env);
@@ -452,15 +461,20 @@ async function generateProgram(req: Request, env: Env): Promise<Response> {
     "Keep every rep count between 6 and 15 for the whole block: compounds 6-10, isolation 10-15. Progress by adding reps within the range, then a set, then load — do NOT drop into 3-5 rep powerlifting territory. " +
     "Never prescribe sprints, ladder drills, cone work, burpees or sport skills to this athlete. " +
     "For this athlete the 6-15 rep rule OVERRIDES the rep-drop guidance in the periodisation notes below — peak week means more sets and more load, not fewer reps. " +
+    // ONE week, not four. Weeks 2-4 are Base -> Build -> Peak -> Deload applied
+    // to week 1, which is arithmetic — and output tokens are what LLM latency is
+    // actually made of. Asking for the full block meant ~4,000 tokens generated
+    // one at a time, which routinely ran past the browser's 18s timeout, so the
+    // athlete waited the full 18 seconds and then got the on-device plan anyway.
+    // Generating a quarter as much lands in a few seconds, and the progression
+    // is more reliable besides: cheap models are poor at making week 3 genuinely
+    // harder than week 1, and expandWeeks() never gets it wrong.
     "Output ONLY valid minified JSON matching this TypeScript type: " +
-    "{goal:string;summary:string;constraints:string[];weeks:{week:number;theme:string;intensity:string;focusNote:string;sessions:{day:number;title:string;focus:string;drills:{name:string;sets:number;reps:number;cue:string;reason:string;progression:string}[]}[]}[]}. " +
-    `4 weeks, ${days} sessions/week (exactly ${days} sessions in every week). CRITICAL: the weeks must be genuinely DIFFERENT, not the same session relabelled. Apply real periodisation: ` +
-    "Week 1 Base — moderate sets/reps, groove technique. " +
-    "Week 2 Build — more than week 1: for weighted lifts add a set and a little load while reps drop 1-2; for bodyweight/conditioning add reps or time. " +
-    "Week 3 Peak — the hardest week: heaviest loads (lowest reps) on lifts, highest volume on everything else, usually one extra set. " +
-    "Week 4 Deload — cut volume ~40%, lighter, to recover. " +
-    "So a barbell lift might read 4x8 (w1) -> 5x6 (w2) -> 5x5 (w3) -> 3x8 (w4), and a bodyweight drill 3x10 -> 3x12 -> 4x14 -> 2x10. Vary the actual numbers every week. " +
-    "Set each week's focusNote to its one-line job, and each drill's progression to what to change that week (add weight, add reps, go faster). " +
+    "{goal:string;summary:string;constraints:string[];sessions:{day:number;title:string;focus:string;drills:{name:string;sets:number;reps:number;cue:string;prog:\"load\"|\"reps\"|\"hold\"}[]}[]}. " +
+    `Give exactly ONE week of ${days} sessions — the first week of a 4-week block. Do NOT output weeks 2-4; they are derived automatically. ` +
+    "Set sets/reps as the STARTING week: moderate, technique-first, a couple of reps in reserve. " +
+    "prog says how that drill gets harder over the block: \"load\" for anything you add weight to, \"reps\" for bodyweight and conditioning, \"hold\" for skill work that progresses by difficulty. " +
+    "cue is one short coaching sentence. " +
     "Work around sore areas with lower-impact drills. " +
     // Without this the model treated the athlete's note as flavour text: someone
     // who wrote "I don't train legs" still got squats in week 1.
@@ -473,12 +487,95 @@ async function generateProgram(req: Request, env: Env): Promise<Response> {
   const { text, model } = await meteredComplete(env, u.id, {
     system: sys,
     user: `Sport: ${sport || "football"}\nPosition/event: ${position || "unspecified"}\nTraining focus: ${focus || "performance"}\nGoal: ${goal}\nSeason: ${season}\nSore: ${sore}\nNotes: ${notes || "none"}`,
-    maxTokens: 5000,
-    validate: (t) => parseProgram(t) !== null,
+    maxTokens: 1600,
+    json: true,
+    validate: (t) => parseSeedWeek(t) !== null,
   });
-  const plan = parseProgram(text);
-  if (!plan) return json({ error: "bad ai output" }, 422); // validate passed, so unreachable
-  return json({ plan, model });
+  const seed = parseSeedWeek(text);
+  if (!seed) return json({ error: "bad ai output" }, 422); // validate passed, so unreachable
+  return json({ plan: expandWeeks(seed, goal), model });
+}
+
+// --- Turning one week into a block ------------------------------------------
+
+interface SeedDrill { name: string; sets: number; reps: number; cue?: string; prog?: string }
+interface SeedSession { day: number; title: string; focus?: string; drills: SeedDrill[] }
+interface SeedPlan { goal?: string; summary?: string; constraints?: string[]; sessions: SeedSession[] }
+
+/** The AI's single week, validated. Returns null so the chain tries another model. */
+function parseSeedWeek(raw: string): SeedPlan | null {
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) return null;
+  try {
+    const p = JSON.parse(match[0]) as SeedPlan;
+    if (!Array.isArray(p.sessions) || p.sessions.length === 0) return null;
+    for (const s of p.sessions) {
+      if (!Array.isArray(s?.drills) || s.drills.length === 0) return null;
+      if (!s.drills.every((d) => typeof d?.name === "string" && d.name.trim())) return null;
+    }
+    return p;
+  } catch {
+    return null;
+  }
+}
+
+// How each week differs, per progression type. Mirrors lib/coach.ts so the AI
+// and on-device paths shape a block the same way — an athlete who falls back
+// mid-block shouldn't see the periodisation change under them.
+const SHAPE: Record<string, { sets: number; reps: number }[]> = {
+  load: [{ sets: 0, reps: 1 }, { sets: 1, reps: 0.85 }, { sets: 1, reps: 0.7 }, { sets: -1, reps: 1 }],
+  reps: [{ sets: 0, reps: 1 }, { sets: 0, reps: 1.2 }, { sets: 1, reps: 1.35 }, { sets: -1, reps: 0.9 }],
+  hold: [{ sets: 0, reps: 1 }, { sets: 0, reps: 1 }, { sets: 1, reps: 1 }, { sets: -1, reps: 1 }],
+};
+const THEMES = ["Base", "Build", "Peak", "Deload"];
+const INTENSITY = ["Moderate", "Higher", "Peak", "Deload"];
+const FOCUS_NOTE = [
+  "Build a base and nail technique.",
+  "Turn the dial up — more than week 1.",
+  "Peak week: the hardest sessions of the block.",
+  "Recover and absorb the work.",
+];
+const PROGRESSION: Record<string, string[]> = {
+  load: ["Pick a weight you could do 2-3 more reps with.", "Add a little weight and a set; reps drop, that's the point.", "Heaviest week — stop one rep short of failure.", "Deload: same lifts, ~60% of the weight."],
+  reps: ["Establish clean reps you fully control.", "Same movement, more reps than last week.", "Peak volume: an extra set and the highest reps.", "Deload: cut the volume right back."],
+  hold: ["Prioritise clean technique over speed.", "Same drill, faster or in tighter space.", "Add a decision, a defender, or your weaker side.", "Deload: light, sharp reps to stay grooved."],
+};
+
+/** Expand the AI's first week into the full Base → Build → Peak → Deload block. */
+function expandWeeks(seed: SeedPlan, goal: string) {
+  const weeks = THEMES.map((theme, wi) => ({
+    week: wi + 1,
+    theme,
+    intensity: INTENSITY[wi],
+    focusNote: FOCUS_NOTE[wi],
+    sessions: seed.sessions.map((s, di) => ({
+      day: Number(s.day) || di + 1,
+      title: s.title || `Day ${di + 1}`,
+      focus: s.focus || goal,
+      drills: s.drills.map((d) => {
+        const prog = SHAPE[d.prog ?? ""] ? (d.prog as string) : "reps";
+        const shape = SHAPE[prog][wi];
+        const baseSets = Math.max(1, Math.round(Number(d.sets) || 3));
+        const baseReps = Math.max(1, Math.round(Number(d.reps) || 10));
+        return {
+          name: d.name,
+          // Week 4 may drop to a single set; every other week keeps at least two.
+          sets: Math.max(wi === 3 ? 1 : 2, baseSets + shape.sets),
+          reps: Math.max(3, Math.round(baseReps * shape.reps)),
+          cue: d.cue ?? "",
+          reason: `${theme} week — ${FOCUS_NOTE[wi].toLowerCase()}`,
+          progression: PROGRESSION[prog][wi],
+        };
+      }),
+    })),
+  }));
+
+  return {
+    goal: seed.goal || goal,
+    summary: seed.summary || "A 4-week block progressing Base → Build → Peak → Deload.",
+    constraints: Array.isArray(seed.constraints) ? seed.constraints : [],
+    weeks,
+  };
 }
 
 // --- Food estimation --------------------------------------------------------
@@ -537,6 +634,7 @@ async function estimateFood(req: Request, env: Env): Promise<Response> {
     system: sys,
     user: `The athlete ate: ${meal}`,
     maxTokens: 700,
+    json: true,
     validate: (t) => parseFoodItems(t) !== null,
   });
   const items = parseFoodItems(raw);
@@ -601,6 +699,7 @@ async function generateChallenges(req: Request, env: Env): Promise<Response> {
     system: sys,
     user: ctx,
     maxTokens: 600,
+    json: true,
     validate: (t) => parseChallengeList(t) !== null,
   });
   const challenges = parseChallengeList(text);

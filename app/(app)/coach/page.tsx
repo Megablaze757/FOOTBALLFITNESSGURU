@@ -418,6 +418,9 @@ function ActiveProgram({
   const [advancing, setAdvancing] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [tab, setTab] = useState<CoachTab>("today");
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   async function switchSeason() {
     setSwitching(true);
@@ -494,6 +497,20 @@ function ActiveProgram({
     onChange();
   }
 
+  /**
+   * Actually removes it, rather than archiving. "New goal" keeps the old block
+   * around so its completed sessions stay in your history; this is for a
+   * program you never wanted — built by mistake, or abandoned — which
+   * otherwise sits in the table forever with no way to be rid of it.
+   */
+  async function deleteProgram() {
+    setDeleting(true);
+    const { error } = await createClient().from("programs").delete().eq("id", program.id);
+    setDeleting(false);
+    if (error) { setDeleteError(error.message); return; }
+    onChange();
+  }
+
   return (
     <div className="animate-fade-up space-y-5">
       <header className="flex items-start justify-between">
@@ -503,7 +520,22 @@ function ActiveProgram({
             {GOALS.find((g) => g.id === goal)?.label} program · Block {program.block}
           </p>
         </div>
-        <button onClick={newProgram} className="text-xs text-slate-400 hover:text-pitch-400">New goal</button>
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          <button onClick={newProgram} className="text-xs text-slate-400 hover:text-pitch-400">New goal</button>
+          {!confirmDelete ? (
+            <button onClick={() => setConfirmDelete(true)} className="text-xs text-slate-600 hover:text-readiness-red">
+              Delete
+            </button>
+          ) : (
+            <div className="flex items-center gap-2">
+              <button onClick={deleteProgram} disabled={deleting} className="text-xs font-semibold text-readiness-red disabled:opacity-50">
+                {deleting ? "…" : "Delete for good"}
+              </button>
+              <button onClick={() => setConfirmDelete(false)} className="text-xs text-slate-500">Cancel</button>
+            </div>
+          )}
+          {deleteError && <span className="max-w-[12rem] text-right text-[10px] text-readiness-red">{deleteError}</span>}
+        </div>
       </header>
 
       {/* Today's session and today's recommended drills used to sit stacked with
