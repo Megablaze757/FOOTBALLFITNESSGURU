@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/lib/auth";
 import { useAsync } from "@/lib/use-async";
@@ -16,6 +17,61 @@ const STATUS_META: Record<VideoStatus, { label: string; cls: string }> = {
   analyzed: { label: "Analysed ✓", cls: "bg-readiness-green/15 text-readiness-green" },
   failed: { label: "Failed", cls: "bg-red-500/15 text-readiness-red" },
 };
+
+/**
+ * Removes a clip and the file behind it. The storage object goes first: if the
+ * row went first and the delete then failed, the file would be orphaned in the
+ * bucket — still billed, and no longer reachable to try again.
+ */
+function DeleteVideo({ video, onDeleted }: { video: Video; onDeleted: () => void }) {
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function remove() {
+    setBusy(true);
+    setError(null);
+    const supabase = createClient();
+    const { error: storageErr } = await supabase.storage.from("videos").remove([video.storage_path]);
+    // A missing object isn't a failure — the row should still go.
+    if (storageErr && !/not found/i.test(storageErr.message)) {
+      setError(storageErr.message);
+      setBusy(false);
+      return;
+    }
+    const { error: rowErr } = await supabase.from("videos").delete().eq("id", video.id);
+    setBusy(false);
+    if (rowErr) { setError(rowErr.message); return; }
+    onDeleted();
+  }
+
+  if (!confirming) {
+    return (
+      <button
+        onClick={() => setConfirming(true)}
+        aria-label="Delete clip"
+        title="Delete clip"
+        className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-white/10 text-slate-500 transition hover:border-readiness-red/40 hover:text-readiness-red"
+      >
+        🗑
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex shrink-0 flex-col items-end gap-1">
+      <div className="flex gap-1">
+        <button onClick={remove} disabled={busy} className="rounded-xl bg-readiness-red/15 px-2.5 py-1.5 text-xs font-semibold text-readiness-red disabled:opacity-50">
+          {busy ? "…" : "Delete"}
+        </button>
+        <button onClick={() => setConfirming(false)} disabled={busy} className="rounded-xl border border-white/10 px-2.5 py-1.5 text-xs text-slate-400">
+          Cancel
+        </button>
+      </div>
+      {error && <span className="max-w-[10rem] text-right text-[10px] text-readiness-red">{error}</span>}
+    </div>
+  );
+}
 
 export default function TrainPage() {
   const user = useCurrentUser();
@@ -83,12 +139,15 @@ export default function TrainPage() {
                 </div>
               );
               return (
-                <li key={v.id}>
-                  {/* Anything that finished uploading is openable — the analysis
-                      runs client-side the moment you open it. */}
-                  {v.status === "uploading" || v.status === "failed"
-                    ? inner
-                    : <Link href={`/train/view?id=${v.id}`}>{inner}</Link>}
+                <li key={v.id} className="flex items-center gap-2">
+                  <div className="min-w-0 flex-1">
+                    {/* Anything that finished uploading is openable — the analysis
+                        runs client-side the moment you open it. */}
+                    {v.status === "uploading" || v.status === "failed"
+                      ? inner
+                      : <Link href={`/train/view?id=${v.id}`}>{inner}</Link>}
+                  </div>
+                  <DeleteVideo video={v} onDeleted={reload} />
                 </li>
               );
             })}

@@ -3,6 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { MOVEMENTS, type MovementType } from "@/lib/movement";
+import { MAX_CLIP_SECONDS } from "@/components/InBrowserAnalysis";
+
+// Must match the bucket's file_size_limit in migration 0036 — this copy exists
+// only to give a useful message before the upload starts.
+export const MAX_UPLOAD_MB = 60;
+const MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024;
 
 type SessionType = "training" | "match" | "recovery";
 
@@ -91,6 +97,14 @@ export function VideoUploader({ onUploaded }: { onUploaded?: () => void }) {
     const { data: checkIn } = await supabase
       .from("daily_check_ins").select("id").eq("user_id", user.id).eq("check_in_date", today).maybeSingle();
 
+    // The bucket enforces this too, but its rejection is an opaque 413 — say
+    // what's wrong while the athlete still has the file in front of them.
+    if (file.size > MAX_UPLOAD_BYTES) {
+      setError(`That clip is ${(file.size / 1048576).toFixed(0)}MB — the limit is ${MAX_UPLOAD_MB}MB. Only the first ${MAX_CLIP_SECONDS}s is analysed, so a short clip of the movement works better anyway.`);
+      setBusy(false);
+      return;
+    }
+
     const ext = file.name.split(".").pop() || "mp4";
     const path = `${user.id}/${crypto.randomUUID()}.${ext}`;
 
@@ -111,7 +125,10 @@ export function VideoUploader({ onUploaded }: { onUploaded?: () => void }) {
       is_in_season: isInSeason,
       status: "ready" as const,
     };
+    // Recorded so storage cost is attributable per user, and so the admin panel
+    // can see who is actually consuming the bucket.
     const extras = {
+      size_bytes: file.size,
       title: title.trim() || defaultTitle(),
       thumb_data_url: preview?.url ?? null,
       movement,
