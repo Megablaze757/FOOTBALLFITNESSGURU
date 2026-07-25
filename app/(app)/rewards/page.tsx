@@ -92,14 +92,24 @@ export default function RewardsPage() {
       {/* Level card */}
       <div className="card-premium relative overflow-hidden p-6">
         <div className="flex items-center gap-4">
-          <div className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-pitch-400 to-pitch-600 text-3xl shadow-glow">{level.emoji}</div>
+          {/* The badge takes the tier's own colour — the point of a ladder is
+              that Emerald looks different from Bronze at a glance. */}
+          <div
+            className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl text-3xl shadow-glow"
+            style={{ background: `linear-gradient(135deg, ${level.color}, ${level.color}88)` }}
+          >
+            {level.emoji}
+          </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-extrabold">Level {level.level}</span>
-              <span className="chip text-pitch-400">{level.rank}</span>
+              <span className="text-2xl font-extrabold" style={{ color: level.color }}>{level.rank}</span>
+              <span className="chip text-slate-300">Level {level.level}</span>
             </div>
             <div className="mt-2 h-2.5 w-full overflow-hidden rounded-full bg-white/10">
-              <div className="h-full rounded-full bg-gradient-to-r from-pitch-400 to-pitch-600 transition-all" style={{ width: `${Math.round(level.progress * 100)}%` }} />
+              <div
+                className="h-full rounded-full transition-all"
+                style={{ width: `${Math.round(level.progress * 100)}%`, background: `linear-gradient(90deg, ${level.color}, ${level.color}aa)` }}
+              />
             </div>
             <div className="mt-1 flex justify-between text-xs text-slate-400">
               <span>{level.xp.toLocaleString()} XP</span>

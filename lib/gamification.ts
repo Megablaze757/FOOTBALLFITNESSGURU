@@ -48,12 +48,15 @@ export function computeXp(s: ActivityStats): number {
 
 export interface LevelInfo {
   level: number;
-  rank: string;
+  rank: string;       // full label, e.g. "Gold II"
   emoji: string;
+  tier: TierName;     // e.g. "Gold"
+  division: string;   // "III" | "II" | "I", or "" at the apex
+  color: string;      // tier colour for badges/rings
   xp: number;
   xpIntoLevel: number;
   xpForNext: number;
-  progress: number; // 0..1 toward next level
+  progress: number;   // 0..1 toward next level
 }
 
 // Each level costs a bit more than the last: 100, 150, 200, …
@@ -61,17 +64,73 @@ function costForLevel(level: number): number {
   return 100 + (level - 1) * 50;
 }
 
-const RANKS: { min: number; rank: string; emoji: string }[] = [
-  { min: 25, rank: "World Class", emoji: "👑" },
-  { min: 15, rank: "Elite", emoji: "🏆" },
-  { min: 10, rank: "Pro", emoji: "⭐" },
-  { min: 6, rank: "Semi-Pro", emoji: "🔥" },
-  { min: 3, rank: "Amateur", emoji: "💪" },
-  { min: 1, rank: "Rookie", emoji: "🌱" },
+// A competitive ladder in the shape people already know from games — tiers with
+// divisions inside them. "Rookie → Amateur → Semi-Pro" only moved six times in a
+// career, so most weeks showed no visible progress at all. Divisions mean a
+// promotion every three levels, which is what actually keeps people climbing.
+//
+// NOTE: Silver and Gold are also the names of the paid subscription plans. The
+// two are unrelated — this is earned, that is bought. If they're ever shown side
+// by side, rename the plans (lib/subscription.ts) rather than the ladder; the
+// plan names are display copy, while a rank is the thing people screenshot.
+export type TierName =
+  | "Iron" | "Bronze" | "Silver" | "Gold" | "Platinum"
+  | "Emerald" | "Diamond" | "Champion" | "Legend";
+
+interface TierDef { name: TierName; emoji: string; color: string; span: number }
+
+// Ordered lowest first. `span` is how many levels the tier covers; the last
+// tier is open-ended.
+const TIERS: TierDef[] = [
+  { name: "Iron", emoji: "⛓️", color: "#8d9299", span: 3 },
+  { name: "Bronze", emoji: "🥉", color: "#c07a44", span: 3 },
+  { name: "Silver", emoji: "🥈", color: "#c3ccd8", span: 3 },
+  { name: "Gold", emoji: "🥇", color: "#e3b53f", span: 3 },
+  { name: "Platinum", emoji: "💠", color: "#5fd3c4", span: 3 },
+  { name: "Emerald", emoji: "🟢", color: "#34d399", span: 3 },
+  { name: "Diamond", emoji: "💎", color: "#7cc6ff", span: 3 },
+  { name: "Champion", emoji: "🏆", color: "#c084fc", span: 4 },
+  { name: "Legend", emoji: "👑", color: "#fb7185", span: Infinity },
 ];
 
-export function rankFor(level: number): { rank: string; emoji: string } {
-  return RANKS.find((r) => level >= r.min) ?? RANKS[RANKS.length - 1];
+// Divisions count DOWN as you improve, as in every game that uses them: you
+// enter a tier at III and promote out of I.
+const DIVISIONS = ["III", "II", "I"];
+
+export interface RankInfo {
+  rank: string;      // "Gold II"
+  tier: TierName;
+  division: string;
+  emoji: string;
+  color: string;
+}
+
+export function rankFor(level: number): RankInfo {
+  let remaining = Math.max(1, Math.floor(level)) - 1; // levels above level 1
+  for (const t of TIERS) {
+    if (remaining < t.span) {
+      // Tiers wider than the division list (or the open-ended top) just show the
+      // tier name — better a clean "Legend" than an invented "Legend IV".
+      const division = t.span <= DIVISIONS.length ? DIVISIONS[remaining] ?? "" : "";
+      return {
+        rank: division ? `${t.name} ${division}` : t.name,
+        tier: t.name, division, emoji: t.emoji, color: t.color,
+      };
+    }
+    remaining -= t.span;
+  }
+  const top = TIERS[TIERS.length - 1];
+  return { rank: top.name, tier: top.name, division: "", emoji: top.emoji, color: top.color };
+}
+
+/** The whole ladder, for a "how do I climb?" view. */
+export function rankLadder(): { tier: TierName; emoji: string; color: string; fromLevel: number }[] {
+  let level = 1;
+  return TIERS.map((t) => {
+    const entry = { tier: t.name, emoji: t.emoji, color: t.color, fromLevel: level };
+    level += Number.isFinite(t.span) ? t.span : 0;
+    return entry;
+  });
 }
 
 export function levelFor(xp: number): LevelInfo {
@@ -83,9 +142,12 @@ export function levelFor(xp: number): LevelInfo {
     level++;
     need = costForLevel(level);
   }
-  const { rank, emoji } = rankFor(level);
+  const { rank, emoji, tier, division, color } = rankFor(level);
   const xpIntoLevel = xp - acc;
-  return { level, rank, emoji, xp, xpIntoLevel, xpForNext: need, progress: need ? xpIntoLevel / need : 0 };
+  return {
+    level, rank, emoji, tier, division, color,
+    xp, xpIntoLevel, xpForNext: need, progress: need ? xpIntoLevel / need : 0,
+  };
 }
 
 // --- Achievements -----------------------------------------------------------
