@@ -8,6 +8,7 @@ import {
   type BodyStats, type Sex, type ActivityLevel, type DietGoal, type PlannedDay,
   type MealPrefs, type DietPattern, type Avoidance,
 } from "@/lib/meal-plan";
+import { parseSchedule } from "@/lib/meal-schedule";
 import { SUPERMARKETS, PRICES_REVIEWED, productLink, FOOD_BY_ID as FOOD_LOOKUP } from "@/lib/food-db";
 
 interface Props {
@@ -32,6 +33,9 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes }: Pro
   const [prefs, setPrefs] = useState<MealPrefs>({ ...DEFAULT_PREFS, ...(initialPrefs ?? {}) });
   const [notes, setNotes] = useState(initialNotes ?? "");
   const noteDislikes = useMemo(() => dislikedFoodIds(notes), [notes]);
+  // The same note also says WHEN they eat — "I eat out on Tuesdays" has to stop
+  // us planning (and shopping for) a Tuesday dinner.
+  const schedule = useMemo(() => parseSchedule(notes), [notes]);
 
   const stats: BodyStats = {
     sex, goal, activity,
@@ -51,7 +55,7 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes }: Pro
   const gaps = useMemo(() => unmetSlots(effectivePrefs), [effectivePrefs]);
 
   async function generate() {
-    setWeek(buildWeek(targets, Math.floor(Math.random() * 3), effectivePrefs));
+    setWeek(buildWeek(targets, Math.floor(Math.random() * 3), effectivePrefs, schedule));
     setOpenDay(0);
     // Remember the stats so the plan doesn't have to be re-entered next time.
     const supabase = createClient();
@@ -197,7 +201,7 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes }: Pro
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={2}
-            placeholder="e.g. I don't like yoghurt, no fish, allergic to peanuts"
+            placeholder="e.g. I don't like yoghurt, no fish, I eat out on Tuesdays, I skip breakfast"
             className="field resize-none"
           />
           {noteDislikes.length > 0 && (
@@ -205,6 +209,11 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes }: Pro
               Leaving out: {noteDislikes.map((id) => FOOD_LOOKUP[id]?.name ?? id).join(", ")}.
             </p>
           )}
+          {/* Echo the schedule back as it's typed, so a note that wasn't
+              understood is obvious before the week is built. */}
+          {schedule.summary.map((s) => (
+            <p key={s} className="mt-1 text-xs text-pitch-400">{s}</p>
+          ))}
         </label>
 
         {gaps.length > 0 && (
@@ -247,6 +256,14 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes }: Pro
             </div>
 
             <div className="space-y-3">
+              {/* Meals we're deliberately not planning. Shown rather than
+                  silently missing, so the day doesn't just look incomplete. */}
+              {week[openDay].skipped.map((s) => (
+                <div key={s.slot} className="rounded-xl border border-dashed border-white/15 bg-white/[0.01] p-3">
+                  <span className="block text-[11px] uppercase tracking-wide text-slate-500">{s.slot}</span>
+                  <span className="block text-sm font-semibold text-slate-400">{s.reason} — nothing to cook or buy</span>
+                </div>
+              ))}
               {week[openDay].meals.map((pm) => (
                 <details key={pm.meal.id} className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
                   <summary className="flex cursor-pointer items-center gap-2 list-none">
@@ -325,6 +342,12 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes }: Pro
                               {l.food.name}
                             </a>
                             <span className="text-slate-500"> × {l.packs} <span className="text-slate-600">({l.food.packLabel})</span></span>
+                            {/* One bag across six meals is the whole point of
+                                buying the bag — say so, or it reads as £1.45
+                                spent on a single dinner. */}
+                            {l.meals > 1 && (
+                              <span className="block text-[11px] text-slate-500">covers {l.meals} meals this week</span>
+                            )}
                           </span>
                           <span className="shrink-0 tabular-nums text-slate-400">~£{l.cost.toFixed(2)}</span>
                         </li>
@@ -335,7 +358,12 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes }: Pro
               </div>
 
               <div className="mt-4 flex items-center justify-between border-t border-white/10 pt-3">
-                <span className="text-sm font-bold text-slate-100">Estimated weekly shop</span>
+                <span>
+                  <span className="block text-sm font-bold text-slate-100">Estimated weekly shop</span>
+                  <span className="block text-xs text-slate-500">
+                    ~£{list.costPerMeal.toFixed(2)} a meal across {list.mealsPlanned} planned meals
+                  </span>
+                </span>
                 <span className="text-lg font-extrabold text-pitch-400">~£{list.total.toFixed(2)}</span>
               </div>
 

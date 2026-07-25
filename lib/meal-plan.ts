@@ -8,6 +8,7 @@
 // =============================================================================
 
 import { FOODS, FOOD_BY_ID, type Aisle, type Food, type FoodTag } from "./food-db";
+import { skipReason, EMPTY_SCHEDULE, type DietSchedule } from "./meal-schedule";
 
 export type Sex = "male" | "female";
 export type ActivityLevel = "sedentary" | "light" | "moderate" | "high" | "athlete";
@@ -317,7 +318,14 @@ export function mealMacros(meal: Meal, scale = 1): Macros {
 // --- plan --------------------------------------------------------------------
 
 export interface PlannedMeal { meal: Meal; scale: number; macros: Macros }
-export interface PlannedDay { day: string; meals: PlannedMeal[]; macros: Macros }
+export interface SkippedMeal { slot: Slot; reason: string }
+export interface PlannedDay {
+  day: string;
+  meals: PlannedMeal[];
+  macros: Macros;
+  /** Slots deliberately left unplanned — eating out, fasting, skipped. */
+  skipped: SkippedMeal[];
+}
 
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
@@ -336,6 +344,50 @@ function bySlot(slot: Slot, prefs: MealPrefs): Meal[] {
   return prefs.budget ? [...ok].sort(cheapest) : ok;
 }
 
+// --- bulk buying -------------------------------------------------------------
+//
+// You don't buy 90g of rice — you buy a 1kg bag, and it covers a lot of meals.
+// Costing a meal pro-rata therefore flatters anything with a one-off ingredient:
+// a bowl using 90g of quinoa looked cheap while actually forcing a whole bag
+// into the trolley for one meal. Planning meal-by-meal on that number is how a
+// week ends up with a dozen part-used packets.
+//
+// So meals are chosen on MARGINAL pack cost instead: given everything already
+// in the basket, how much more does the trolley cost if we add this meal? A
+// second rice dish is nearly free once the bag is in; a lone quinoa bowl is not.
+
+type Basket = Map<string, number>;
+
+/** Cost of the whole packs needed to cover `qty` of a food. */
+function packCost(foodId: string, qty: number): number {
+  const f = FOOD_BY_ID[foodId];
+  if (!f || qty <= 0) return 0;
+  return Math.ceil(qty / f.packSize) * f.packPrice;
+}
+
+/** What adding this meal would add to the shopping bill, given the basket so far. */
+export function marginalCost(meal: Meal, basket: Basket, scale = 1): number {
+  let delta = 0;
+  const after = new Map(basket);
+  for (const it of meal.items) {
+    const have = after.get(it.foodId) ?? 0;
+    const want = have + it.qty * scale;
+    delta += packCost(it.foodId, want) - packCost(it.foodId, have);
+    after.set(it.foodId, want);
+  }
+  return delta;
+}
+
+function addToBasket(meal: Meal, basket: Basket, scale = 1): void {
+  for (const it of meal.items) basket.set(it.foodId, (basket.get(it.foodId) ?? 0) + it.qty * scale);
+}
+
+// Eating the same thing all week is cheap and miserable. Each prior use of a
+// meal adds this much to its effective cost, so reuse has to genuinely save
+// money to win, and no meal may appear more than MAX_REPEATS times.
+const REPEAT_PENALTY = 0.85; // £
+const MAX_REPEATS = 3;
+
 /** Slots that have nothing left once the athlete's rules are applied. */
 export function unmetSlots(prefs: MealPrefs): Slot[] {
   return (["Breakfast", "Lunch", "Dinner", "Snack"] as Slot[])
@@ -350,25 +402,82 @@ export function unmetSlots(prefs: MealPrefs): Slot[] {
 export function buildWeek(
   targets: PlanTargets,
   seed = 0,
-  prefs: MealPrefs = DEFAULT_PREFS
+  prefs: MealPrefs = DEFAULT_PREFS,
+  schedule: DietSchedule = EMPTY_SCHEDULE
 ): PlannedDay[] {
-  const breakfasts = bySlot("Breakfast", prefs), lunches = bySlot("Lunch", prefs);
-  const dinners = bySlot("Dinner", prefs), snacks = bySlot("Snack", prefs);
+  const pools: Record<Slot, Meal[]> = {
+    Breakfast: bySlot("Breakfast", prefs), Lunch: bySlot("Lunch", prefs),
+    Dinner: bySlot("Dinner", prefs), Snack: bySlot("Snack", prefs),
+  };
 
-  const pick = (list: Meal[], i: number) => (list.length ? list[(i + seed) % list.length] : undefined);
+  const basket: Basket = new Map();
+  const uses = new Map<string, number>();
+
+  /**
+   * Cheapest addition to the trolley that isn't already on repeat. `nth`
+   * separates the two snack slots so a 5-meal day doesn't pick the same snack
+   * twice, and `seed` lets the UI reshuffle for someone who wants a different
+   * week without changing any of their settings.
+   */
+  // Budget mode leans harder on repetition: reusing what's already bought is the
+  // single biggest lever on the bill, and someone who ticked "cheap staples" has
+  // told us they'd rather eat the same thing than pay more.
+  const repeatPenalty = prefs.budget ? REPEAT_PENALTY * 0.35 : REPEAT_PENALTY;
+
+  const choose = (slot: Slot, nth = 0, avoid: Set<string> = new Set()): Meal | undefined => {
+    const list = pools[slot].filter((m) => !avoid.has(m.id));
+    if (!list.length) return undefined;
+    const ranked = list
+      .map((meal, idx) => ({
+        meal,
+        // The seed/nth term is a fraction of a penny — it only breaks ties
+        // between meals that cost the same, never overrides a real saving.
+        score: marginalCost(meal, basket)
+          + (uses.get(meal.id) ?? 0) * repeatPenalty
+          + ((idx + seed + nth) % list.length) * 0.001,
+        capped: (uses.get(meal.id) ?? 0) >= MAX_REPEATS,
+      }))
+      .sort((a, b) => a.score - b.score);
+    // If everything is capped (a narrow diet with few options), take the best
+    // anyway rather than leaving the slot empty.
+    const pick = ranked.find((r) => !r.capped) ?? ranked[0];
+    uses.set(pick.meal.id, (uses.get(pick.meal.id) ?? 0) + 1);
+    addToBasket(pick.meal, basket);
+    return pick.meal;
+  };
 
   return DAYS.map((day, i) => {
-    // Three meals means no snack; five means a second one, offset so it differs.
-    const picks = [
-      pick(breakfasts, i),
-      pick(lunches, i),
-      pick(dinners, i),
-      ...(prefs.mealsPerDay >= 4 ? [pick(snacks, i)] : []),
-      ...(prefs.mealsPerDay >= 5 ? [pick(snacks, i + 1)] : []),
-    ].filter((m): m is Meal => Boolean(m));
+    // Three meals means no snack; five means a second one.
+    const wanted: { slot: Slot; nth: number }[] = [
+      { slot: "Breakfast", nth: 0 }, { slot: "Lunch", nth: 0 }, { slot: "Dinner", nth: 0 },
+      ...(prefs.mealsPerDay >= 4 ? [{ slot: "Snack" as Slot, nth: 0 }] : []),
+      ...(prefs.mealsPerDay >= 5 ? [{ slot: "Snack" as Slot, nth: 1 }] : []),
+    ];
 
-    const base = picks.reduce((s, m) => s + mealMacros(m).kcal, 0);
-    const raw = base > 0 ? targets.calories / base : 1;
+    const skipped: SkippedMeal[] = [];
+    const picks: Meal[] = [];
+    // A 5-meal day has two snack slots; without this they'd both resolve to the
+    // cheapest snack and the day would list the same thing twice.
+    const usedToday = new Set<string>();
+    for (const { slot, nth } of wanted) {
+      const reason = skipReason(schedule, i, slot);
+      if (reason) {
+        // Record it and move on — no meal chosen, so nothing lands on the
+        // shopping list for a meal the athlete was never going to cook.
+        if (!skipped.some((s) => s.slot === slot)) skipped.push({ slot, reason });
+        continue;
+      }
+      const m = choose(slot, nth, usedToday);
+      if (m) { picks.push(m); usedToday.add(m.id); }
+    }
+
+    // Portion sizes are set from the athlete's FULL day, including any meal
+    // they're eating out. Scaling only the remaining meals would inflate
+    // breakfast to cover a restaurant dinner, which is not what anyone wants.
+    const fullDay = wanted.length;
+    const perMealTarget = fullDay > 0 ? targets.calories / fullDay : targets.calories;
+    const base = picks.length ? picks.reduce((s, m) => s + mealMacros(m).kcal, 0) / picks.length : 0;
+    const raw = base > 0 ? perMealTarget / base : 1;
     const scale = Math.round(Math.min(1.6, Math.max(0.6, raw)) * 20) / 20; // 0.05 steps
 
     const meals = picks.map((meal) => ({ meal, scale, macros: mealMacros(meal, scale) }));
@@ -379,7 +488,7 @@ export function buildWeek(
       }),
       { kcal: 0, protein: 0, carbs: 0, fats: 0 }
     );
-    return { day, meals, macros };
+    return { day, meals, macros, skipped };
   });
 }
 
@@ -390,20 +499,30 @@ export interface ShoppingLine {
   needed: number;   // total grams/ml/count across the week
   packs: number;    // whole packs to buy
   cost: number;     // £ estimate
+  /** How many meals in the week this pack is spread across. */
+  meals: number;
+  /** Fraction of the packs actually eaten — the rest is left over. */
+  used: number;     // 0..1
 }
 
 export interface ShoppingList {
   lines: ShoppingLine[];
   byAisle: { aisle: Aisle; lines: ShoppingLine[]; cost: number }[];
   total: number;
+  /** Meals the list actually feeds — excludes anything eaten out. */
+  mealsPlanned: number;
+  /** Total ÷ meals planned. The number that tells you if a plan is affordable. */
+  costPerMeal: number;
 }
 
 export function shoppingList(week: PlannedDay[]): ShoppingList {
   const needed = new Map<string, number>();
+  const mealCount = new Map<string, number>();
   for (const day of week) {
     for (const pm of day.meals) {
       for (const it of pm.meal.items) {
         needed.set(it.foodId, (needed.get(it.foodId) ?? 0) + it.qty * pm.scale);
+        mealCount.set(it.foodId, (mealCount.get(it.foodId) ?? 0) + 1);
       }
     }
   }
@@ -413,7 +532,14 @@ export function shoppingList(week: PlannedDay[]): ShoppingList {
     const food = FOOD_BY_ID[foodId];
     if (!food) continue;
     const packs = Math.max(1, Math.ceil(qty / food.packSize));
-    lines.push({ food, needed: Math.round(qty), packs, cost: Math.round(packs * food.packPrice * 100) / 100 });
+    lines.push({
+      food,
+      needed: Math.round(qty),
+      packs,
+      cost: Math.round(packs * food.packPrice * 100) / 100,
+      meals: mealCount.get(foodId) ?? 0,
+      used: Math.min(1, qty / (packs * food.packSize)),
+    });
   }
   lines.sort((a, b) => a.food.name.localeCompare(b.food.name));
 
@@ -423,10 +549,14 @@ export function shoppingList(week: PlannedDay[]): ShoppingList {
     return { aisle, lines: ls, cost: Math.round(ls.reduce((s, l) => s + l.cost, 0) * 100) / 100 };
   });
 
+  const total = Math.round(lines.reduce((s, l) => s + l.cost, 0) * 100) / 100;
+  const mealsPlanned = week.reduce((n, d) => n + d.meals.length, 0);
   return {
     lines,
     byAisle,
-    total: Math.round(lines.reduce((s, l) => s + l.cost, 0) * 100) / 100,
+    total,
+    mealsPlanned,
+    costPerMeal: mealsPlanned > 0 ? Math.round((total / mealsPlanned) * 100) / 100 : 0,
   };
 }
 
@@ -436,11 +566,16 @@ export function shoppingListText(list: ShoppingList): string {
   for (const group of list.byAisle) {
     out.push(`${group.aisle}`);
     for (const l of group.lines) {
-      out.push(`  - ${l.food.name} x${l.packs} (${l.food.packLabel}) ~£${l.cost.toFixed(2)}`);
+      // Saying a pack covers 6 meals is the difference between "£1.45 of rice"
+      // and "£1.45 for the week's rice" — it's why the plan buys the big bag.
+      const spread = l.meals > 1 ? ` — covers ${l.meals} meals` : "";
+      out.push(`  - ${l.food.name} x${l.packs} (${l.food.packLabel}) ~£${l.cost.toFixed(2)}${spread}`);
     }
     out.push("");
   }
   out.push(`Estimated total: ~£${list.total.toFixed(2)}`);
+  const perMeal = list.mealsPlanned > 0 ? list.total / list.mealsPlanned : 0;
+  if (perMeal > 0) out.push(`That's about £${perMeal.toFixed(2)} a meal across ${list.mealsPlanned} planned meals.`);
   out.push("(estimates from typical UK supermarket prices, not live pricing)");
   return out.join("\n");
 }
