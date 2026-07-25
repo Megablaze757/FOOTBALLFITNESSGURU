@@ -81,6 +81,7 @@ export default function RewardsPage() {
           level={leveledUpTo}
           rank={rankFor(leveledUpTo).rank}
           emoji={rankFor(leveledUpTo).emoji}
+          color={rankFor(leveledUpTo).color}
           onClose={() => setLeveledUpTo(null)}
         />
       )}

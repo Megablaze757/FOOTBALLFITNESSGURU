@@ -9,7 +9,7 @@ import { useAsync } from "@/lib/use-async";
 import { assessReadiness } from "@/lib/readiness";
 import { actionLabel } from "@/lib/insights";
 import { checkInStreak } from "@/lib/load";
-import { dailyQuests } from "@/lib/gamification";
+import { dailyQuests, computeXp, levelFor, type ActivityStats, type LevelInfo } from "@/lib/gamification";
 import { biometricSignal, type Biometric } from "@/lib/biometrics";
 import { ReadinessGauge } from "@/components/ReadinessGauge";
 import { BiometricSignalCard } from "@/components/BiometricSignalCard";
@@ -53,7 +53,40 @@ export default function HomePage() {
     };
     const streak = checkInStreak((streakRows ?? []).map((r) => r.check_in_date));
     const quests = dailyQuests({ checkedInToday: !!checkIn, trainedToday: !!trainToday, nutritionToday: !!nutriToday });
-    return { profile, checkIn, insight, streak, quests, bioSignal, setup };
+
+    // Rank + week-at-a-glance. Home used to show none of this, so an athlete
+    // who hadn't checked in yet landed on a single empty-state card with
+    // nothing to look at and no reason to stay.
+    const head = { count: "exact" as const, head: true };
+    const [allChecks, allTraining, progs, benchC, videoC, allNutrition] = await Promise.all([
+      supabase.from("daily_check_ins").select("check_in_date").eq("user_id", user.id),
+      supabase.from("training_logs").select("log_date, total_minutes").eq("user_id", user.id),
+      supabase.from("programs").select("completed_sessions, status").eq("user_id", user.id),
+      supabase.from("strength_benchmarks").select("id", head).eq("user_id", user.id),
+      supabase.from("ai_plans").select("id", head).eq("user_id", user.id),
+      supabase.from("nutrition_logs").select("log_date").eq("user_id", user.id),
+    ]);
+    const since7 = new Date(Date.now() - 6 * 86400_000).toISOString().slice(0, 10);
+    const checkDates = (allChecks.data ?? []).map((r) => r.check_in_date as string);
+    const trainRows = (allTraining.data ?? []) as { log_date: string; total_minutes: number | null }[];
+    const programs = (progs.data ?? []) as { completed_sessions: string[] | null; status: string }[];
+    const stats: ActivityStats = {
+      checkIns: checkDates.length,
+      streak,
+      trainingSessions: trainRows.length,
+      completedSessions: programs.reduce((n, p) => n + (p.completed_sessions?.length ?? 0), 0),
+      completedBlocks: programs.filter((p) => p.status === "archived").length,
+      benchmarks: benchC.count ?? 0,
+      videos: videoC.count ?? 0,
+      nutritionLogs: (allNutrition.data ?? []).length,
+      checkInsLast7: checkDates.filter((d) => d >= since7).length,
+    };
+    const week = {
+      sessions: trainRows.filter((r) => r.log_date >= since7).length,
+      minutes: trainRows.filter((r) => r.log_date >= since7).reduce((n, r) => n + (r.total_minutes ?? 0), 0),
+      checkIns: stats.checkInsLast7,
+    };
+    return { profile, checkIn, insight, streak, quests, bioSignal, setup, stats, week };
   }, [user.id], `home:${user.id}`);
 
   const firstName = data?.profile?.full_name?.split(" ")[0] ?? "athlete";
@@ -67,16 +100,30 @@ export default function HomePage() {
 
   if (loading || needsOnboarding) return <Skeleton />;
 
+  const level = levelFor(computeXp(data!.stats));
+
+  // Before the check-in, home used to be a single empty-state card and nothing
+  // else — no rank, no stats, no quests. The prompt to check in is now one card
+  // among the rest rather than a wall in front of them.
   if (!data?.checkIn) {
     return (
-      <div className="animate-fade-up">
-        <Greeting name={firstName} sub="Let's see how you're recovering." />
-        <div className="mx-auto mt-6 flex max-w-xl flex-col items-center rounded-3xl border border-white/10 bg-white/[0.04] p-10 text-center shadow-card backdrop-blur-xl sm:p-14">
-          <div className="text-6xl">🌅</div>
-          <h2 className="mt-4 text-xl font-extrabold">Start your day with a check-in</h2>
-          <p className="mt-2 max-w-sm text-sm text-slate-400">Log how you slept and feel — PocketAthlete computes your readiness and today&apos;s session in under a minute.</p>
-          <Link href="/journal" className="btn-primary mt-6 max-w-[16rem]">Start today&apos;s check-in</Link>
-        </div>
+      <div className="animate-fade-up space-y-6">
+        <Greeting name={firstName} sub="Let's see how you're recovering." streak={streak} />
+        <RankStrip level={level} />
+
+        <Link href="/journal" className="card-premium card-hover flex items-center gap-4 p-5 sm:p-6">
+          <span className="text-4xl">🌅</span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-lg font-extrabold">Start today&apos;s check-in</span>
+            <span className="block text-sm text-slate-400">A minute of sleep, soreness and how you feel — it sets your readiness and today&apos;s session.</span>
+          </span>
+          <span className="hidden shrink-0 text-sm font-bold text-pitch-400 sm:block">Start →</span>
+        </Link>
+
+        <WeekStats week={data!.week} level={level} />
+        <GettingStarted setup={data!.setup} />
+        <DailyQuests quests={data!.quests} />
+        <PlaybookCard />
       </div>
     );
   }
@@ -98,6 +145,8 @@ export default function HomePage() {
   return (
     <div className="animate-fade-up space-y-6">
       <Greeting name={firstName} sub="Here's your readiness for today." streak={streak} />
+
+      <RankStrip level={level} />
 
       <GettingStarted setup={data!.setup} />
 
@@ -127,11 +176,62 @@ export default function HomePage() {
         </div>
       </div>
 
+      <WeekStats week={data!.week} level={level} />
+
       <BiometricSignalCard signal={data!.bioSignal} />
 
       <PlaybookCard />
 
       <DailyQuests quests={data!.quests} />
+    </div>
+  );
+}
+
+/** Rank, tier colour and progress to the next level — the "keep climbing" bar. */
+function RankStrip({ level }: { level: LevelInfo }) {
+  const toNext = level.xpForNext - level.xpIntoLevel;
+  return (
+    <Link href="/rewards" className="card card-hover flex items-center gap-4 p-4">
+      <span
+        className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl text-2xl shadow-glow"
+        style={{ background: `linear-gradient(135deg, ${level.color}, ${level.color}88)` }}
+      >
+        {level.emoji}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="flex items-baseline justify-between gap-2">
+          <span className="truncate text-lg font-extrabold" style={{ color: level.color }}>{level.rank}</span>
+          <span className="shrink-0 text-xs text-slate-500">{level.xp.toLocaleString()} XP</span>
+        </span>
+        <span className="mt-1.5 block h-2 w-full overflow-hidden rounded-full bg-white/10">
+          <span
+            className="block h-full rounded-full transition-all"
+            style={{ width: `${Math.round(level.progress * 100)}%`, background: `linear-gradient(90deg, ${level.color}, ${level.color}aa)` }}
+          />
+        </span>
+        <span className="mt-1 block text-xs text-slate-400">{toNext} XP to level {level.level + 1}</span>
+      </span>
+    </Link>
+  );
+}
+
+/** The last seven days at a glance. */
+function WeekStats({ week, level }: { week: { sessions: number; minutes: number; checkIns: number }; level: LevelInfo }) {
+  const tiles = [
+    { label: "Sessions", value: String(week.sessions), sub: "last 7 days", href: "/history" },
+    { label: "Minutes", value: week.minutes >= 60 ? `${Math.round(week.minutes / 60)}h` : String(week.minutes), sub: "trained", href: "/history" },
+    { label: "Check-ins", value: `${week.checkIns}/7`, sub: "this week", href: "/journal" },
+    { label: "Level", value: String(level.level), sub: level.tier, href: "/rewards" },
+  ];
+  return (
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      {tiles.map((t) => (
+        <Link key={t.label} href={t.href} className="card card-hover p-4">
+          <div className="stat-label">{t.label}</div>
+          <div className="mt-1 text-2xl font-extrabold text-slate-100">{t.value}</div>
+          <div className="text-xs text-slate-500">{t.sub}</div>
+        </Link>
+      ))}
     </div>
   );
 }

@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { demoImplement, exerciseProgression, PROGRESSION_NOTE, type Exercise } from "@/lib/exercises";
 import { ExerciseSteps } from "@/components/ExerciseDemo";
+import { Portal } from "@/components/Portal";
 
 const PROGRESSION_LABEL = { load: "Add weight", reps: "Add reps", time: "Add time", skill: "Add difficulty" } as const;
 
@@ -88,16 +89,20 @@ export function ExerciseModal({ ex, sets, reps, onClose }: { ex: Exercise; sets?
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/70 p-0 backdrop-blur-sm sm:items-center sm:p-4" onClick={onClose}>
-      <div
-        className="animate-scale-in max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-3xl border border-white/10 bg-ink-800 p-6 shadow-card sm:rounded-3xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="mb-4 flex justify-end">
-          <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-full bg-white/[0.06] text-slate-300 transition hover:bg-white/10" aria-label="Close">✕</button>
+    <Portal>
+      <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/70 p-0 backdrop-blur-sm sm:items-center sm:p-4" onClick={onClose}>
+        <div
+          // pb-28 keeps the bottom of the sheet clear of the floating mobile
+          // tab bar, which otherwise sits on top of the last section.
+          className="animate-scale-in max-h-[88vh] w-full max-w-lg overflow-y-auto rounded-t-3xl border border-white/10 bg-ink-800 p-6 pb-28 shadow-card sm:rounded-3xl sm:pb-6"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="mb-4 flex justify-end">
+            <button onClick={onClose} className="grid h-9 w-9 place-items-center rounded-full bg-white/[0.06] text-slate-300 transition hover:bg-white/10" aria-label="Close">✕</button>
+          </div>
+          <ExerciseDetailCard ex={ex} sets={sets} reps={reps} />
         </div>
-        <ExerciseDetailCard ex={ex} sets={sets} reps={reps} />
       </div>
-    </div>
+    </Portal>
   );
 }
