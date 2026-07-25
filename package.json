@@ -9,6 +9,10 @@
     "lint": "next lint",
     "test": "node --import tsx --test \"lib/**/*.test.ts\""
   },
+  "engines": {
+    "//": "Node 22+: `node --test` only learned to expand globs in 22, and the test script relies on it.",
+    "node": ">=22"
+  },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.45.4",

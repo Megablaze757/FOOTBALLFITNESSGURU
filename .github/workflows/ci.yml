@@ -21,9 +21,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Node 22, not 20: the test script passes a glob to `node --test`, and
+      # expanding globs there only arrived in Node 22. On 20 it looks for a file
+      # literally called "lib/**/*.test.ts" and exits 1 without running anything
+      # — which is what the first CI run did.
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
       - run: npm ci
       - run: npm test
