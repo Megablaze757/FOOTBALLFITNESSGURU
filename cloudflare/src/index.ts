@@ -441,9 +441,18 @@ async function generateProgram(req: Request, env: Env): Promise<Response> {
   if (!u) return json({ error: "unauthorized" }, 401);
   const budget = await checkBudget(env, u.id);
   if (!budget.allowed) return overBudget(budget);
-  const { goal, pain_map, notes, in_season, sport, position, focus, days_per_week } = (await req.json()) as {
+  const { goal, pain_map, notes, in_season, sport, position, focus, days_per_week, split } = (await req.json()) as {
     goal: string; pain_map: Record<string, number>; notes?: string; in_season?: boolean;
-    sport?: string; position?: string; focus?: string; days_per_week?: number;
+    sport?: string; position?: string; focus?: string; days_per_week?: number; split?: string;
+  };
+  // The athlete picked a named split on the tile; the AI must build that one,
+  // or the plan they get is not the plan they chose.
+  const SPLIT_BRIEF: Record<string, string> = {
+    ppl: "push/pull/legs — chest+shoulders+triceps, back+biceps, then legs",
+    upper_lower: "upper/lower — alternating whole-upper and whole-lower days",
+    arnold: "an Arnold-style split — chest & back together, shoulders & arms together, then legs",
+    bro: "a body-part split — one muscle group per session (chest day, back day, shoulders, arms, legs)",
+    full_body: "full body every session, rotating which lifts lead",
   };
   if (!goal) return json({ error: "goal required" }, 400);
   const days = Math.max(2, Math.min(5, Number(days_per_week) || 3));
@@ -486,7 +495,10 @@ async function generateProgram(req: Request, env: Env): Promise<Response> {
     "No prose outside the JSON.";
   const { text, model } = await meteredComplete(env, u.id, {
     system: sys,
-    user: `Sport: ${sport || "football"}\nPosition/event: ${position || "unspecified"}\nTraining focus: ${focus || "performance"}\nGoal: ${goal}\nSeason: ${season}\nSore: ${sore}\nNotes: ${notes || "none"}`,
+    user:
+      `Sport: ${sport || "football"}\nPosition/event: ${position || "unspecified"}\nTraining focus: ${focus || "performance"}\n` +
+      `Goal: ${goal}\nSeason: ${season}\nSore: ${sore}\nNotes: ${notes || "none"}` +
+      (split && SPLIT_BRIEF[split] ? `\nREQUIRED SPLIT: ${SPLIT_BRIEF[split]}. Name each session accordingly.` : ""),
     maxTokens: 1600,
     json: true,
     validate: (t) => parseSeedWeek(t) !== null,

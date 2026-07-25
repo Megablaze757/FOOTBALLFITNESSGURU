@@ -10,6 +10,7 @@ import {
   type GoalType, type ProgramPlan, type TrainingFocus,
 } from "@/lib/coach";
 import type { SportId } from "@/lib/exercises";
+import type { SplitStyle } from "@/lib/hypertrophy";
 import { templatesForSport } from "@/lib/programs";
 import { assessReadiness } from "@/lib/readiness";
 import { invokeAI } from "@/lib/api";
@@ -151,7 +152,7 @@ function GoalBuilder({ painMap, latestBench, sport, initialPosition, initialFocu
 
   const sore = Object.entries(painByArea(painMap)).filter(([, v]) => (v ?? 0) >= 4).map(([a]) => a.replace("_", " "));
 
-  async function createProgram(g: GoalType, f: TrainingFocus, pos: string, tileId?: string) {
+  async function createProgram(g: GoalType, f: TrainingFocus, pos: string, tileId?: string, style?: SplitStyle, days?: number) {
     setGoal(g); setFocus(f); setPosition(pos);
     setCreating(true);
     setBuildingId(tileId ?? null);
@@ -162,13 +163,13 @@ function GoalBuilder({ painMap, latestBench, sport, initialPosition, initialFocu
     // local engine (works offline / on Pages).
     let plan: ProgramPlan;
     try {
-      const data = await invokeAI<{ plan?: ProgramPlan }>("generate-program", { goal: g, pain_map: painMap, notes, in_season: inSeason, sport, position: pos, focus: f, days_per_week: daysPerWeek });
+      const data = await invokeAI<{ plan?: ProgramPlan }>("generate-program", { goal: g, pain_map: painMap, notes, in_season: inSeason, sport, position: pos, focus: f, days_per_week: days ?? daysPerWeek, split: style });
       if (!data?.plan) throw new Error("fallback");
       plan = data.plan;
     } catch {
       // `notes` matters as much here as on the AI path — without it the local
       // engine ignored "I don't train legs" and prescribed squats anyway.
-      plan = buildProgram({ goal: g, painMap, isInSeason: inSeason, sport, position: pos, focus: f, daysPerWeek, notes });
+      plan = buildProgram({ goal: g, painMap, isInSeason: inSeason, sport, position: pos, focus: f, daysPerWeek: days ?? daysPerWeek, notes, style });
     }
 
     // Remember the athlete's position + focus for next time.
@@ -215,7 +216,7 @@ function GoalBuilder({ painMap, latestBench, sport, initialPosition, initialFocu
             return (
               <button
                 key={t.id}
-                onClick={() => createProgram(t.goal, t.focus, t.position ?? position, t.id)}
+                onClick={() => createProgram(t.goal, t.focus, t.position ?? position, t.id, t.style, t.daysPerWeek)}
                 disabled={creating}
                 className={`card flex items-center gap-3 p-4 text-left transition disabled:opacity-50 ${isBuilding ? "ring-2 ring-pitch-400/70" : "card-hover"}`}
               >

@@ -10,7 +10,7 @@
 import type { PainMap, TrainingLog } from "./types";
 import { progressionForName, type SportId } from "./exercises";
 import { parseConstraints, isExcluded, EMPTY_CONSTRAINTS, type Constraints, type Region } from "./constraints";
-import { buildHypertrophyProgram } from "./hypertrophy";
+import { buildHypertrophyProgram, type SplitStyle } from "./hypertrophy";
 
 export type GoalType = "speed" | "agility" | "strength" | "endurance" | "injury_recovery" | "skill";
 export type BodyArea = "knee" | "ankle" | "hamstring" | "hip" | "lower_back" | "shoulder";
@@ -365,6 +365,8 @@ export interface BuildProgramInput {
   position?: string;
   /** The athlete's free-text notes, e.g. "I don't train legs". */
   notes?: string | null;
+  /** Gym split to follow — push/pull/legs, upper/lower, body-part and so on. */
+  style?: SplitStyle;
 }
 
 // How each week loads, per progression type. A drill you add weight to (load)
@@ -444,6 +446,7 @@ export function buildProgram(input: BuildProgramInput): ProgramPlan {
       block,
       constraints,
       isInSeason: input.isInSeason,
+      style: input.style,
     });
   }
 

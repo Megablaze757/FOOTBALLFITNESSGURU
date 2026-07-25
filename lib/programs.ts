@@ -2,6 +2,7 @@
 // don't have to fill in the quiz. Each maps to buildProgram() params.
 
 import type { GoalType, TrainingFocus } from "./coach";
+import type { SplitStyle } from "./hypertrophy";
 import type { SportId } from "./exercises";
 
 export interface ProgramTemplate {
@@ -12,6 +13,10 @@ export interface ProgramTemplate {
   goal: GoalType;
   focus: TrainingFocus;
   position?: string;
+  /** Gym split to build. Omitted means "pick one from the training days". */
+  style?: SplitStyle;
+  /** The frequency this split assumes, so the tile sets it rather than the user. */
+  daysPerWeek?: number;
 }
 
 const TEMPLATES: Record<SportId, ProgramTemplate[]> = {
@@ -40,10 +45,18 @@ const TEMPLATES: Record<SportId, ProgramTemplate[]> = {
     { id: "wl_power", name: "Powerlifting strength", blurb: "Squat, bench & deadlift 1RM", icon: "🏋️", goal: "strength", focus: "performance", position: "Powerlifting" },
     { id: "wl_oly", name: "Olympic power", blurb: "Explosive strength-speed", icon: "💪", goal: "strength", focus: "performance", position: "Olympic lifting" },
   ],
+  // The splits people already know from the gym, named by method. "5/3/1",
+  // "Starting Strength" and the like belong to the coaches who published them —
+  // putting those names on a program we generate would be claiming someone
+  // else's work. The structures are common property and are what's being asked
+  // for anyway.
   gym: [
-    { id: "gym_muscle", name: "Build muscle", blurb: "Hypertrophy — volume & progressive overload", icon: "💪", goal: "strength", focus: "aesthetics", position: "Hypertrophy" },
+    { id: "gym_ppl", name: "Push / Pull / Legs", blurb: "The classic. Chest-shoulders-triceps, back-biceps, legs", icon: "💪", goal: "strength", focus: "aesthetics", position: "Hypertrophy", style: "ppl", daysPerWeek: 3 },
+    { id: "gym_ul", name: "Upper / Lower", blurb: "Four days, each muscle twice a week", icon: "⚖️", goal: "strength", focus: "aesthetics", position: "Hypertrophy", style: "upper_lower", daysPerWeek: 4 },
+    { id: "gym_arnold", name: "Arnold-style split", blurb: "Chest & back, shoulders & arms, legs — golden-era pairing", icon: "🏆", goal: "strength", focus: "aesthetics", position: "Hypertrophy", style: "arnold", daysPerWeek: 3 },
+    { id: "gym_bro", name: "Body-part split", blurb: "One muscle a day, high volume — chest day, back day…", icon: "🗓️", goal: "strength", focus: "aesthetics", position: "Hypertrophy", style: "bro", daysPerWeek: 5 },
+    { id: "gym_full", name: "Full body", blurb: "Everything each session — best return on three days", icon: "🔁", goal: "strength", focus: "aesthetics", position: "Hypertrophy", style: "full_body", daysPerWeek: 3 },
     { id: "gym_lean", name: "Get fit & lean", blurb: "Conditioning + strength for general fitness", icon: "🔥", goal: "endurance", focus: "fitness", position: "General fitness" },
-    { id: "gym_strong", name: "Full-body strength", blurb: "Get strong across the main lifts", icon: "🏋️", goal: "strength", focus: "performance", position: "Strength" },
   ],
 };
 

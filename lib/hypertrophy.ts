@@ -132,13 +132,66 @@ interface SplitDay {
  * split (each muscle would be trained once a week), so those get full-body;
  * push/pull/legs only earns its place at 3+.
  */
-export function splitFor(daysPerWeek: number): SplitDay[] {
+/**
+ * The training splits people actually recognise from the gym.
+ *
+ * Named by method rather than after the coaches and brands that popularised
+ * them: "5/3/1", "Starting Strength" and the like are specific published
+ * programmes belonging to specific authors, and putting those names on output
+ * we generate would be claiming something that isn't ours. The structures
+ * themselves — push/pull/legs, upper/lower, a body-part split — are common
+ * property, and they're what someone is actually asking for.
+ */
+export type SplitStyle = "auto" | "ppl" | "upper_lower" | "full_body" | "arnold" | "bro";
+
+export const SPLIT_STYLES: { id: SplitStyle; label: string; blurb: string; days: number }[] = [
+  { id: "ppl", label: "Push / Pull / Legs", blurb: "The default for a reason — each muscle twice a week at 6 days", days: 3 },
+  { id: "upper_lower", label: "Upper / Lower", blurb: "Four days, high frequency, easy to recover from", days: 4 },
+  { id: "arnold", label: "Arnold-style", blurb: "Chest & back, shoulders & arms, legs — classic golden-era pairing", days: 3 },
+  { id: "bro", label: "Body-part split", blurb: "One muscle a day, high volume — the classic bodybuilding week", days: 5 },
+  { id: "full_body", label: "Full body", blurb: "Everything each session — best return on three days a week", days: 3 },
+];
+
+export function splitFor(daysPerWeek: number, style: SplitStyle = "auto"): SplitDay[] {
   const days = Math.max(2, Math.min(5, Math.round(daysPerWeek) || 3));
   const PUSH: MuscleGroup[] = ["chest", "shoulders", "triceps"];
   const PULL: MuscleGroup[] = ["back", "biceps"];
   const LEGS: MuscleGroup[] = ["quads", "hamstrings", "glutes", "calves"];
   const UPPER: MuscleGroup[] = ["chest", "back", "shoulders", "biceps", "triceps"];
   const LOWER: MuscleGroup[] = ["quads", "hamstrings", "glutes", "core"];
+
+  // A chosen style wins over the day count, then repeats or truncates to fit
+  // the week — someone who picked push/pull/legs and trains 5 days wants PPL
+  // twice over, not to be silently moved onto upper/lower.
+  if (style !== "auto") {
+    const cycle: SplitDay[] =
+      style === "ppl" ? [{ name: "Push", groups: PUSH }, { name: "Pull", groups: PULL }, { name: "Legs", groups: LEGS }]
+      : style === "upper_lower" ? [{ name: "Upper", groups: UPPER }, { name: "Lower", groups: LOWER }]
+      : style === "arnold" ? [
+          { name: "Chest & back", groups: ["chest", "back"] },
+          { name: "Shoulders & arms", groups: ["shoulders", "biceps", "triceps"] },
+          { name: "Legs", groups: LEGS },
+        ]
+      : style === "bro" ? [
+          { name: "Chest", groups: ["chest"] },
+          { name: "Back", groups: ["back"] },
+          { name: "Shoulders", groups: ["shoulders"] },
+          { name: "Arms", groups: ["biceps", "triceps"] },
+          { name: "Legs", groups: LEGS },
+        ]
+      : [
+          { name: "Full body A", groups: ["quads", "chest", "back", "shoulders"] },
+          { name: "Full body B", groups: ["hamstrings", "back", "chest", "biceps", "triceps"] },
+          { name: "Full body C", groups: ["glutes", "chest", "back", "shoulders", "core"] },
+        ];
+    return Array.from({ length: days }, (_, i) => {
+      const base = cycle[i % cycle.length];
+      // Second time through the cycle, label it so the two aren't identical
+      // names in the calendar.
+      const round = Math.floor(i / cycle.length);
+      return round === 0 ? base : { ...base, name: `${base.name} B` };
+    });
+  }
 
   switch (days) {
     case 2:
@@ -210,6 +263,8 @@ export interface HypertrophyInput {
   block?: number;
   constraints: Constraints;
   isInSeason?: boolean;
+  /** Which recognised split to build; "auto" picks one from the day count. */
+  style?: SplitStyle;
 }
 
 /** How many exercises a session should contain, given how many groups it covers. */
@@ -302,7 +357,7 @@ export function buildHypertrophyProgram(input: HypertrophyInput): ProgramPlan {
   const block = Math.max(1, input.block ?? 1);
   const blockScale = 1 + (block - 1) * 0.08;
   const seasonScale = input.isInSeason ? 0.75 : 1;
-  const split = splitFor(input.daysPerWeek ?? 3);
+  const split = splitFor(input.daysPerWeek ?? 3, input.style ?? "auto");
   const pain = painAreas(input.painMap);
 
   const weeks: ProgramWeek[] = WEEK_THEMES.map((theme, wi) => {
