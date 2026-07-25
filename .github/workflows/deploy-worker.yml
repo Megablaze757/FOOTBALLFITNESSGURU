@@ -1,0 +1,48 @@
+name: Deploy API Worker
+
+# Deploys cloudflare/ to Cloudflare Workers from CI, so the Worker can ship
+# without Node or wrangler installed locally.
+#
+# Secrets already set with `wrangler secret put` (OPENROUTER_API_KEY,
+# SUPABASE_ANON_KEY, Stripe, email…) are stored on Cloudflare's side and SURVIVE
+# a redeploy — this workflow never sees them and cannot overwrite them. The
+# `[vars]` block in wrangler.toml is the part each deploy replaces.
+#
+# One-time setup: add a repo secret CLOUDFLARE_API_TOKEN (Cloudflare dashboard →
+# My Profile → API Tokens → Create Token → "Edit Cloudflare Workers" template).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "cloudflare/**"
+      - ".github/workflows/deploy-worker.yml"
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cloudflare
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: cloudflare/package-lock.json
+
+      - run: npm ci
+
+      # Catch type errors here rather than discovering them as a 500 in the
+      # athlete's browser — a broken Worker degrades silently to the on-device
+      # engine, which is exactly the failure you don't notice.
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          workingDirectory: cloudflare

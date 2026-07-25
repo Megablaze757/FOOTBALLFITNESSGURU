@@ -100,7 +100,9 @@ npx wrangler login            # opens a browser to authorize Cloudflare
 Edit `wrangler.toml` `[vars]` to point at your project:
 ```toml
 [vars]
-OPENROUTER_MODEL = "anthropic/claude-3.5-haiku"   # any OpenRouter model id
+# Tried in order: the free tiers first, then the paid model as the safety net.
+OPENROUTER_FREE_MODELS = "nvidia/nemotron-3-super-120b-a12b:free,openai/gpt-oss-20b:free"
+OPENROUTER_MODEL = "deepseek/deepseek-chat"        # any OpenRouter model id
 SUPABASE_URL     = "https://<ref>.supabase.co"
 APP_URL          = "https://pocketathlete.com"
 REMINDER_FROM    = "Apex <noreply@yourdomain.com>"

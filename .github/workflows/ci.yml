@@ -1,0 +1,27 @@
+name: Tests
+
+# Runs the pure-engine unit tests (readiness, trends, coach, constraints…) on
+# every push. These engines decide what an athlete is told to do, so a red run
+# here matters more than it looks: the app degrades to them whenever the AI
+# backend is unavailable, and a wrong plan fails quietly rather than loudly.
+#
+# Deploys are NOT gated on this yet — wire `needs: test` into deploy.yml if you
+# want a failing test to stop the site shipping.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm test

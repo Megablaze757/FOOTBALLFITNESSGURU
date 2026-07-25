@@ -9,6 +9,8 @@
 
 import type { PainMap, TrainingLog } from "./types";
 import { progressionForName, type SportId } from "./exercises";
+import { parseConstraints, isExcluded, EMPTY_CONSTRAINTS, type Constraints, type Region } from "./constraints";
+import { buildHypertrophyProgram } from "./hypertrophy";
 
 export type GoalType = "speed" | "agility" | "strength" | "endurance" | "injury_recovery" | "skill";
 export type BodyArea = "knee" | "ankle" | "hamstring" | "hip" | "lower_back" | "shoulder";
@@ -162,6 +164,38 @@ const LIBRARY: DrillDef[] = [
   { id: "stride_outs", name: "Stride-outs", targets: ["speed"], load: { hamstring: 1 }, equipment: "none", level: 1, cue: "Build to ~90%, long relaxed strides", sports: ["running", "football"] },
 ];
 
+// Which training region each drill belongs to, so "I don't train legs" can
+// actually remove the leg work. Kept as one map rather than a field on every
+// LIBRARY entry so the drill list above stays readable and this stays auditable
+// in one place. Anything unmapped is treated as unrestricted.
+const REGION_BY_DRILL: Record<string, Region> = {
+  // Field / court conditioning and footwork
+  ladder_quickfeet: "conditioning", reactive_mirror: "conditioning", lateral_shuffle: "conditioning",
+  t_drill: "conditioning", a_skips: "conditioning", resisted_sprint: "conditioning",
+  flying_sprints: "conditioning", bike_intervals: "conditioning", tempo_runs: "conditioning",
+  defensive_slides: "conditioning", hill_sprints: "conditioning", stride_outs: "conditioning",
+  // Plyometric / high-impact
+  pogo_hops: "impact", box_jumps: "impact", depth_drop: "impact",
+  broad_jump: "impact", vertical_jump: "impact",
+  // Lower body
+  bulgarian_split: "legs", single_leg_rdl: "legs", nordic_curl: "legs", copenhagen: "legs",
+  band_lateral_walk: "legs", spanish_squat: "legs", back_squat: "legs", front_squat: "legs",
+  deadlift: "legs", hip_thrust: "legs", power_clean: "legs", goblet_squat: "legs", calf_raise: "legs",
+  // Upper body
+  bench_press: "chest", overhead_press: "shoulders", dumbbell_press: "shoulders",
+  pull_up: "back", lat_pulldown: "back", barbell_row: "back",
+  // Trunk / carries
+  farmers_carry: "core",
+  // Sport skill
+  cone_weave: "skill", dribbling_grid: "skill", passing_wall: "skill",
+  tackle_technique: "skill", scrum_drive: "skill",
+};
+
+/** The training region a drill belongs to, if we've classified it. */
+export function regionOfDrill(id: string): Region | undefined {
+  return REGION_BY_DRILL[id];
+}
+
 /** Look up a drill's coaching info by (fuzzy) name — used by the coach chat. */
 export function drillInfo(name: string): { name: string; cue: string; targets: GoalType[]; loadAreas: string[] } | null {
   const q = name.toLowerCase().trim();
@@ -207,6 +241,8 @@ export interface RecommendInput {
   count?: number;
   sport?: SportId;
   focus?: TrainingFocus;
+  /** Athlete's stated exclusions ("I don't train legs"). */
+  constraints?: Constraints;
 }
 
 /**
@@ -217,8 +253,13 @@ export function recommendDrills(input: RecommendInput): Recommendation[] {
   const pain = painByArea(input.painMap);
   const recent = new Set((input.recentDrillNames ?? []).map((n) => n.toLowerCase()));
   const soreAreas = (Object.keys(pain) as BodyArea[]).filter((a) => (pain[a] ?? 0) >= 4);
+  const constraints = input.constraints ?? EMPTY_CONSTRAINTS;
 
-  const scored = LIBRARY.map((d) => {
+  // An exclusion the athlete typed is a hard filter, not a scoring penalty —
+  // "I don't train legs" must mean zero leg work, not less of it.
+  const allowed = LIBRARY.filter((d) => !isExcluded(constraints, REGION_BY_DRILL[d.id], d.name));
+
+  const scored = allowed.map((d) => {
     const onGoal = d.targets.includes(input.goal);
     let score = onGoal ? 10 : d.targets.some((t) => adjacent(input.goal, t)) ? 4 : 0;
 
@@ -248,11 +289,15 @@ export function recommendDrills(input: RecommendInput): Recommendation[] {
     if (soreAreas.length && sparesSore && onGoal) score += 3; // reward smart substitutions
 
     return { d, score, hardAvoid, sparesSore };
-  })
-    .filter((s) => !s.hardAvoid && s.score > 0)
-    .sort((a, b) => b.score - a.score);
+  }).sort((a, b) => b.score - a.score);
 
-  return scored.slice(0, input.count ?? 5).map(({ d, sparesSore }) => ({
+  const viable = scored.filter((s) => !s.hardAvoid && s.score > 0);
+  // Heavy exclusions (say, no legs AND no cardio for a speed goal) can empty the
+  // pool. Rather than hand back a session with nothing in it, relax the score
+  // floor — but never the exclusions themselves, which the athlete chose.
+  const pool = viable.length > 0 ? viable : scored.filter((s) => !s.hardAvoid);
+
+  return pool.slice(0, input.count ?? 5).map(({ d, sparesSore }) => ({
     id: d.id,
     name: d.name,
     cue: d.cue,
@@ -318,6 +363,8 @@ export interface BuildProgramInput {
   sport?: SportId;
   focus?: TrainingFocus;
   position?: string;
+  /** The athlete's free-text notes, e.g. "I don't train legs". */
+  notes?: string | null;
 }
 
 // How each week loads, per progression type. A drill you add weight to (load)
@@ -364,6 +411,17 @@ const WEEK_FOCUS = [
   "Recover and absorb the work so you come back stronger.",
 ];
 
+/**
+ * Whether this athlete should get a bodybuilding split rather than an S&C block.
+ * Rehab always wins — someone coming back from injury needs the rehab
+ * progression regardless of what they'd like to look like.
+ */
+function wantsHypertrophy(input: BuildProgramInput): boolean {
+  if (input.goal === "injury_recovery" || input.focus === "rehab") return false;
+  if (input.focus === "aesthetics") return true;              // "muscle & aesthetics", any sport
+  return input.sport === "gym" && input.goal === "strength";  // "strength & muscle" in the gym
+}
+
 /** A 4-week block tailored to the goal, with pain-aware drill selection and a taper. */
 export function buildProgram(input: BuildProgramInput): ProgramPlan {
   const block = Math.max(1, input.block ?? 1);
@@ -373,6 +431,21 @@ export function buildProgram(input: BuildProgramInput): ProgramPlan {
   const sore = (Object.keys(pain) as BodyArea[]).filter((a) => (pain[a] ?? 0) >= 4);
   const rehab = input.goal === "injury_recovery";
   const themes = rehab ? REHAB_THEMES : THEMES;
+  const constraints = parseConstraints(input.notes);
+
+  // Training for muscle is a different sport to training for a sport. The
+  // rotation below is built around speed/agility/conditioning and shapes weeks
+  // like a strength block; a bodybuilder needs a split, isolation work and reps
+  // that stay in range. Hand those athletes to the hypertrophy engine.
+  if (wantsHypertrophy(input)) {
+    return buildHypertrophyProgram({
+      painMap: input.painMap,
+      daysPerWeek: input.daysPerWeek,
+      block,
+      constraints,
+      isInSeason: input.isInSeason,
+    });
+  }
 
   // Session focuses rotate the primary goal with a complementary stimulus.
   // Training focus reshapes the rotation: aesthetics → strength-led (hypertrophy),
@@ -390,7 +463,7 @@ export function buildProgram(input: BuildProgramInput): ProgramPlan {
 
     const sessions: ProgramSession[] = Array.from({ length: days }, (_, di) => {
       const focus = focusRotation[di % focusRotation.length];
-      const recs = recommendDrills({ goal: focus, painMap: input.painMap, count: 3, sport: input.sport, focus: input.focus });
+      const recs = recommendDrills({ goal: focus, painMap: input.painMap, count: 3, sport: input.sport, focus: input.focus, constraints });
       const drills: ProgramDrill[] = recs.map((r) => {
         const prog = (progressionForName(r.name) ?? "reps") as Prog;
         const shape = WEEK_SHAPE[prog][wi];
@@ -416,7 +489,12 @@ export function buildProgram(input: BuildProgramInput): ProgramPlan {
   return {
     goal: input.goal,
     summary: programSummary(input.goal, sore, input.isInSeason ?? false, block, input.sport, input.position, input.focus),
-    constraints: sore.length ? [`Protecting your ${sore.map(prettyArea).join(", ")} — high-impact loading on these is dialled back.`] : [],
+    // Show the athlete their own exclusions back, so it's visible that the note
+    // was read rather than silently swallowed.
+    constraints: [
+      ...(sore.length ? [`Protecting your ${sore.map(prettyArea).join(", ")} — high-impact loading on these is dialled back.`] : []),
+      ...constraints.summary,
+    ],
     weeks,
     block,
   };

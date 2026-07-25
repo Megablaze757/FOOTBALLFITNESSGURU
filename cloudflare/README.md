@@ -44,8 +44,19 @@ Deploy prints your Worker URL, e.g. `https://apex-api.<you>.workers.dev`.
    via `wrangler secret put STRIPE_WEBHOOK_SECRET`.
 3. **Stripe products**: create Silver/Gold recurring **prices**, put their `price_…` ids in
    `STRIPE_PRICE_SILVER` / `STRIPE_PRICE_GOLD`.
-4. **OpenRouter model**: pick any model at openrouter.ai/models and set `OPENROUTER_MODEL`
-   (default `anthropic/claude-3.5-sonnet`).
+4. **OpenRouter models**: AI requests walk a chain — every slug in
+   `OPENROUTER_FREE_MODELS` (`:free` tiers, no token cost) in order, then
+   `OPENROUTER_MODEL` (paid, the rung that makes the feature dependable). A rung
+   is skipped when it rate-limits, errors, times out, or returns output the
+   endpoint can't use — a program that isn't parseable JSON, say. If the whole
+   chain fails the browser falls back to the on-device engine, so the athlete
+   still gets a program either way.
+
+   All of it runs on your single OpenRouter key. Free slugs get retired often;
+   re-check <https://openrouter.ai/models?max_price=0> now and then, because a
+   dead slug costs one wasted attempt on every request. Responses carry a
+   `model` field naming the rung that served them — handy for checking whether
+   the free tier is actually carrying the load.
 5. **Email**: verify your sending domain in Resend and set `REMINDER_FROM` to an address on it.
 
 ## Notes

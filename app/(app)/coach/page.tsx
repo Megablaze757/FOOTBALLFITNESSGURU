@@ -166,7 +166,9 @@ function GoalBuilder({ painMap, latestBench, sport, initialPosition, initialFocu
       if (!data?.plan) throw new Error("fallback");
       plan = data.plan;
     } catch {
-      plan = buildProgram({ goal: g, painMap, isInSeason: inSeason, sport, position: pos, focus: f, daysPerWeek });
+      // `notes` matters as much here as on the AI path — without it the local
+      // engine ignored "I don't train legs" and prescribed squats anyway.
+      plan = buildProgram({ goal: g, painMap, isInSeason: inSeason, sport, position: pos, focus: f, daysPerWeek, notes });
     }
 
     // Remember the athlete's position + focus for next time.
@@ -421,7 +423,12 @@ function ActiveProgram({
     setSwitching(true);
     const supabase = createClient();
     const nextSeason = !program.in_season;
-    const newPlan = buildProgram({ goal, painMap, isInSeason: nextSeason, sport, focus, position });
+    // Days-per-week isn't stored on the program, so read it back off the plan —
+    // rebuilding without it silently reset a 5-day athlete to the 3-day default.
+    const newPlan = buildProgram({
+      goal, painMap, isInSeason: nextSeason, sport, focus, position,
+      daysPerWeek: plan.weeks[0]?.sessions.length, notes: program.goal_notes,
+    });
     await supabase.from("programs").update({ plan: newPlan, in_season: nextSeason }).eq("id", program.id);
     setSwitching(false);
     onChange();
@@ -458,7 +465,10 @@ function ActiveProgram({
     setAdvancing(true);
     const supabase = createClient();
     const nextBlock = program.block + 1;
-    const newPlan = buildProgram({ goal, painMap, isInSeason: program.in_season, block: nextBlock, sport, focus, position });
+    const newPlan = buildProgram({
+      goal, painMap, isInSeason: program.in_season, block: nextBlock, sport, focus, position,
+      daysPerWeek: plan.weeks[0]?.sessions.length, notes: program.goal_notes,
+    });
     await supabase.from("programs").update({ status: "archived" }).eq("id", program.id);
     await supabase.from("programs").insert({
       user_id: userId, goal_type: program.goal_type, goal_notes: program.goal_notes, plan: newPlan,

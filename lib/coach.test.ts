@@ -82,7 +82,7 @@ test("analyzeProgress surfaces load progression and the knee-flare pattern", () 
 });
 
 test("program weeks genuinely progress rather than repeating", () => {
-  const plan = buildProgram({ goal: "strength", painMap: {}, sport: "gym" });
+  const plan = buildProgram({ goal: "strength", painMap: {}, sport: "rugby" });
   // Pick a drill that appears every week and compare its prescription.
   const nameOf = (wi: number) => plan.weeks[wi].sessions[0].drills[0];
   const sig = (wi: number) => {
@@ -108,7 +108,10 @@ test("program weeks genuinely progress rather than repeating", () => {
 });
 
 test("weighted lifts wave reps down toward the peak, bodyweight waves up", () => {
-  const plan = buildProgram({ goal: "strength", painMap: {}, sport: "gym", focus: "aesthetics" });
+  // Weightlifting, not gym+aesthetics: that combination now routes to the
+  // hypertrophy engine, which deliberately holds reps in range instead of
+  // waving them down (see hypertrophy.test.ts).
+  const plan = buildProgram({ goal: "strength", painMap: {}, sport: "weightlifting", focus: "performance" });
   const drillAcrossWeeks = (match: RegExp) =>
     plan.weeks.map((w) => w.sessions.flatMap((s) => s.drills).find((d) => match.test(d.name))).filter(Boolean);
 

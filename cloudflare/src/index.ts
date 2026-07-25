@@ -13,7 +13,8 @@
 export interface Env {
   // AI
   OPENROUTER_API_KEY: string;
-  OPENROUTER_MODEL: string; // e.g. "anthropic/claude-3.5-sonnet"
+  OPENROUTER_MODEL: string; // paid model — the last rung before the on-device engine
+  OPENROUTER_FREE_MODELS: string; // comma-separated ":free" slugs, tried first
   // Auth (verify the caller's Supabase session)
   SUPABASE_URL: string;
   SUPABASE_ANON_KEY: string;
@@ -139,27 +140,91 @@ async function allowAiCall(env: Env, userId: string): Promise<boolean> {
 }
 
 // --- AI via OpenRouter -----------------------------------------------------
-async function openRouter(env: Env, system: string, user: string, maxTokens = 800): Promise<string> {
-  const r = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${env.OPENROUTER_API_KEY}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": env.APP_URL,
-      "X-Title": "PocketAthlete",
-    },
-    body: JSON.stringify({
-      model: env.OPENROUTER_MODEL || "anthropic/claude-3.5-sonnet",
-      max_tokens: maxTokens,
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: user },
-      ],
-    }),
-  });
-  if (!r.ok) throw new Error(`openrouter ${r.status}: ${await r.text()}`);
-  const data = (await r.json()) as { choices: { message: { content: string } }[] };
-  return data.choices?.[0]?.message?.content ?? "";
+// Requests walk a chain of models: OpenRouter's ":free" tiers first, then the
+// paid model. Same key, same account, same provider — so this stays inside
+// OpenRouter's terms, unlike stacking other vendors' free tiers behind a proxy.
+//
+// A rung is abandoned and the next tried when it 429s (free quota spent), 5xxs,
+// times out, or hands back something the caller can't use (see `validate`) —
+// free models are the ones most likely to ignore "reply with JSON only".
+//
+// If every rung fails, the endpoint returns an error and the browser drops to
+// the on-device engine in lib/coach.ts, which is the real final rung.
+
+// The client (lib/api.ts) aborts at 18s. Stay inside that or the fallback chain
+// just burns time the athlete spends watching a spinner: no new attempt starts
+// after CHAIN_BUDGET_MS, and no single attempt may run past ATTEMPT_TIMEOUT_MS.
+const CHAIN_BUDGET_MS = 15_000;
+const ATTEMPT_TIMEOUT_MS = 9_000;
+
+/** Free rungs first, paid last, de-duplicated. */
+function modelChain(env: Env): string[] {
+  const free = (env.OPENROUTER_FREE_MODELS || "").split(",").map((s) => s.trim()).filter(Boolean);
+  const paid = (env.OPENROUTER_MODEL || "deepseek/deepseek-chat").trim();
+  return [...free, paid].filter((m, i, all) => m && all.indexOf(m) === i);
+}
+
+async function openRouterOnce(env: Env, model: string, system: string, user: string, maxTokens: number): Promise<string> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ATTEMPT_TIMEOUT_MS);
+  try {
+    const r = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${env.OPENROUTER_API_KEY}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": env.APP_URL,
+        "X-Title": "PocketAthlete",
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: maxTokens,
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: user },
+        ],
+      }),
+      signal: ctrl.signal,
+    });
+    if (!r.ok) throw new Error(`${r.status} ${(await r.text()).slice(0, 200)}`);
+    const data = (await r.json()) as { choices?: { message?: { content?: string } }[]; error?: { message?: string } };
+    // OpenRouter can answer 200 with an error body, or with no choices at all
+    // when an upstream provider drops the request.
+    if (data.error?.message) throw new Error(data.error.message.slice(0, 200));
+    const text = data.choices?.[0]?.message?.content ?? "";
+    if (!text.trim()) throw new Error("empty completion");
+    return text;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Walks the model chain until one returns output that passes `validate`.
+ * Throws with the full attempt trail if none do, so a failure is diagnosable
+ * from the browser's network tab rather than a silent drop to the local engine.
+ */
+async function complete(
+  env: Env,
+  opts: { system: string; user: string; maxTokens: number; validate?: (text: string) => boolean }
+): Promise<{ text: string; model: string }> {
+  const started = Date.now();
+  const trail: string[] = [];
+
+  for (const model of modelChain(env)) {
+    if (Date.now() - started > CHAIN_BUDGET_MS) {
+      trail.push(`${model}: skipped (budget spent)`);
+      break;
+    }
+    try {
+      const text = await openRouterOnce(env, model, opts.system, opts.user, opts.maxTokens);
+      if (opts.validate && !opts.validate(text)) throw new Error("unusable output");
+      return { text, model };
+    } catch (e) {
+      trail.push(`${model}: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+  throw new Error(`all models failed — ${trail.join(" | ")}`);
 }
 
 async function coachChat(req: Request, env: Env): Promise<Response> {
@@ -177,8 +242,37 @@ async function coachChat(req: Request, env: Env): Promise<Response> {
   const ctx =
     `Goal: ${context?.goal ?? "general"}\nSore areas: ${(context?.soreAreas as string[])?.join(", ") || "none"}\n` +
     `Readiness: ${context?.readinessStatus ?? "unknown"}\nPlan drills: ${(context?.programDrills as string[])?.join(", ") || "none"}`;
-  const answer = await openRouter(env, sys, `Context:\n${ctx}\n\nQuestion: ${question}`, 320);
-  return json({ answer });
+  const { text, model } = await complete(env, {
+    system: sys,
+    user: `Context:\n${ctx}\n\nQuestion: ${question}`,
+    maxTokens: 320,
+  });
+  return json({ answer: text, model });
+}
+
+/**
+ * Pulls the program JSON out of a completion. Free models like to wrap JSON in
+ * prose or a ```json fence, so we take the outermost braces and parse those.
+ * Returns null when the result isn't a usable plan — which tells the chain to
+ * try the next model rather than failing the request.
+ */
+function parseProgram(raw: string): unknown | null {
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) return null;
+  try {
+    const plan = JSON.parse(match[0]) as { weeks?: unknown };
+    // A plan with no weeks, or weeks with no sessions, renders as an empty
+    // calendar — worse than falling through to the on-device engine.
+    const weeks = plan.weeks;
+    if (!Array.isArray(weeks) || weeks.length === 0) return null;
+    for (const w of weeks) {
+      const sessions = (w as { sessions?: unknown })?.sessions;
+      if (!Array.isArray(sessions) || sessions.length === 0) return null;
+    }
+    return plan;
+  } catch {
+    return null;
+  }
 }
 
 async function generateProgram(req: Request, env: Env): Promise<Response> {
@@ -195,7 +289,16 @@ async function generateProgram(req: Request, env: Env): Promise<Response> {
   const season = in_season ? "in-season (taper ~30%, recovery-weighted)" : "out-of-season (build, higher volume)";
   const sys =
     "You are an elite strength & conditioning coach & physio working across sports (football, rugby, weightlifting, gym, basketball, running). " +
-    "Choose exercises appropriate to the athlete's SPORT, POSITION and FOCUS (e.g. a weightlifter gets barbell squat/bench/deadlift; a rugby prop gets contact & scrum power; 'muscle & aesthetics' uses hypertrophy rep ranges 8-12; 'general fitness' is conditioning-led). " +
+    "Choose exercises appropriate to the athlete's SPORT, POSITION and FOCUS (e.g. a weightlifter gets barbell squat/bench/deadlift; a rugby prop gets contact & scrum power; 'general fitness' is conditioning-led). " +
+    // The local engine builds bodybuilders a real split (see lib/hypertrophy.ts).
+    // Without the same instruction here, the two paths disagreed and the AI one
+    // returned field-sport circuits to people who asked for muscle.
+    "BODYBUILDING RULE — if the focus is 'muscle & aesthetics' or the sport is 'gym', build a HYPERTROPHY program, not a conditioning circuit: " +
+    "use a proper split sized to the training days (2 days full-body A/B, 3 days push/pull/legs, 4 days upper/lower, 5 days push/pull/legs/upper/lower) and NAME each session that way ('Push — chest, shoulders & triceps'). " +
+    "Open each session with 1-2 compound lifts, then 3-4 ISOLATION exercises (curls, lateral raises, leg extensions, leg curls, flyes, pushdowns, calf raises) — isolation work is most of a bodybuilding program and must be present. " +
+    "Keep every rep count between 6 and 15 for the whole block: compounds 6-10, isolation 10-15. Progress by adding reps within the range, then a set, then load — do NOT drop into 3-5 rep powerlifting territory. " +
+    "Never prescribe sprints, ladder drills, cone work, burpees or sport skills to this athlete. " +
+    "For this athlete the 6-15 rep rule OVERRIDES the rep-drop guidance in the periodisation notes below — peak week means more sets and more load, not fewer reps. " +
     "Output ONLY valid minified JSON matching this TypeScript type: " +
     "{goal:string;summary:string;constraints:string[];weeks:{week:number;theme:string;intensity:string;focusNote:string;sessions:{day:number;title:string;focus:string;drills:{name:string;sets:number;reps:number;cue:string;reason:string;progression:string}[]}[]}[]}. " +
     `4 weeks, ${days} sessions/week (exactly ${days} sessions in every week). CRITICAL: the weeks must be genuinely DIFFERENT, not the same session relabelled. Apply real periodisation: ` +
@@ -205,11 +308,24 @@ async function generateProgram(req: Request, env: Env): Promise<Response> {
     "Week 4 Deload — cut volume ~40%, lighter, to recover. " +
     "So a barbell lift might read 4x8 (w1) -> 5x6 (w2) -> 5x5 (w3) -> 3x8 (w4), and a bodyweight drill 3x10 -> 3x12 -> 4x14 -> 2x10. Vary the actual numbers every week. " +
     "Set each week's focusNote to its one-line job, and each drill's progression to what to change that week (add weight, add reps, go faster). " +
-    "Work around sore areas with lower-impact drills. No prose outside the JSON.";
-  const raw = await openRouter(env, sys, `Sport: ${sport || "football"}\nPosition/event: ${position || "unspecified"}\nTraining focus: ${focus || "performance"}\nGoal: ${goal}\nSeason: ${season}\nSore: ${sore}\nNotes: ${notes || "none"}`, 5000);
-  const match = raw.match(/\{[\s\S]*\}/);
-  if (!match) return json({ error: "bad ai output" }, 422);
-  return json({ plan: JSON.parse(match[0]) });
+    "Work around sore areas with lower-impact drills. " +
+    // Without this the model treated the athlete's note as flavour text: someone
+    // who wrote "I don't train legs" still got squats in week 1.
+    "ATHLETE NOTES ARE BINDING. If the notes rule out a body part, movement or " +
+    "equipment ('I don't train legs', 'no running', 'no barbell'), that thing must " +
+    "not appear ANYWHERE in the program — not once, not lightened, not as a warm-up. " +
+    "Fill the freed volume with work they do want, and state the exclusion in " +
+    "`constraints` so they can see you followed it. " +
+    "No prose outside the JSON.";
+  const { text, model } = await complete(env, {
+    system: sys,
+    user: `Sport: ${sport || "football"}\nPosition/event: ${position || "unspecified"}\nTraining focus: ${focus || "performance"}\nGoal: ${goal}\nSeason: ${season}\nSore: ${sore}\nNotes: ${notes || "none"}`,
+    maxTokens: 5000,
+    validate: (t) => parseProgram(t) !== null,
+  });
+  const plan = parseProgram(text);
+  if (!plan) return json({ error: "bad ai output" }, 422); // validate passed, so unreachable
+  return json({ plan, model });
 }
 
 // --- Stripe ----------------------------------------------------------------
