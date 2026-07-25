@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { getExerciseByName, demoImplement } from "@/lib/exercises";
-import { ExerciseDemo } from "@/components/ExerciseDemo";
+import { ExerciseSteps } from "@/components/ExerciseDemo";
 import { Confetti } from "@/components/Confetti";
 
 interface Drill { name: string; sets: number; reps: number }
@@ -116,8 +116,8 @@ export function WorkoutPlayer({ title, drills, onComplete, onClose }: {
         ) : step ? (
           <div className="animate-fade-up w-full max-w-sm">
             {ex && (
-              <div className="mx-auto mb-5 grid h-40 w-32 place-items-center rounded-3xl border border-white/10 bg-black/40">
-                <ExerciseDemo pattern={ex.demo} implement={demoImplement(ex)} className="h-36 w-28" />
+              <div className="mx-auto mb-5 grid h-40 w-full max-w-[15rem] place-items-center rounded-3xl border border-white/10 bg-black/40 p-2">
+                <ExerciseSteps pattern={ex.demo} implement={demoImplement(ex)} className="h-full w-full" />
               </div>
             )}
             <div className="chip mx-auto text-pitch-400">Set {step.setNum} of {step.totalSets}</div>

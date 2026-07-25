@@ -55,6 +55,10 @@ export default function LibraryPage() {
   // Narrowing the filters shouldn't leave you deep in a previous page.
   useEffect(() => { setShown(PAGE); }, [sport, cat, level, equip, q]);
 
+  // "advanced" is the level ceiling, i.e. show everything — so it isn't a
+  // filter being applied and shouldn't be counted as one.
+  const activeFilters = (level !== "advanced" ? 1 : 0) + (equip !== "all" ? 1 : 0) + (cat !== "All" ? 1 : 0);
+
   return (
     <div className="animate-fade-up space-y-4">
       <header>
@@ -64,6 +68,11 @@ export default function LibraryPage() {
 
       <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search exercises or muscles…" className="field" />
 
+      {/* Sport stays visible — it's the filter people change most. The other
+          three used to sit under it as three more horizontal scrollers, which
+          on a phone meant four rows of chrome before a single exercise. They're
+          behind a disclosure now, with a count so it's obvious when filters are
+          on and hidden. */}
       <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
         <Pill label="All sports" active={sport === "all"} onClick={() => setSport("all")} small />
         {SPORTS.map((s) => (
@@ -71,26 +80,55 @@ export default function LibraryPage() {
         ))}
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <span className="self-center text-xs text-slate-500">Level ≤</span>
-        {DIFFICULTIES.map((d) => (
-          <Pill key={d.id} label={d.label} active={level === d.id} onClick={() => setLevel(d.id)} small />
-        ))}
-      </div>
+      <details className="group rounded-2xl border border-white/10 bg-white/[0.02] px-3 py-2 open:pb-3">
+        <summary className="flex cursor-pointer list-none items-center justify-between text-sm font-semibold text-slate-200">
+          <span>
+            Filters
+            {activeFilters > 0 && <span className="ml-2 chip text-pitch-400">{activeFilters} on</span>}
+          </span>
+          <span className="text-xs text-slate-500 transition group-open:rotate-180">▾</span>
+        </summary>
 
-      <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
-        <Pill label="Any kit" active={equip === "all"} onClick={() => setEquip("all")} small />
-        {EQUIPMENT_BUCKETS.map((eq) => (
-          <Pill key={eq} label={eq} active={equip === eq} onClick={() => setEquip(eq)} small />
-        ))}
-      </div>
+        <div className="mt-3 space-y-3">
+          <div>
+            <span className="mb-1.5 block text-xs text-slate-500">Level at most</span>
+            <div className="flex flex-wrap gap-2">
+              {DIFFICULTIES.map((d) => (
+                <Pill key={d.id} label={d.label} active={level === d.id} onClick={() => setLevel(d.id)} small />
+              ))}
+            </div>
+          </div>
 
-      <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
-        <Pill label="All" active={cat === "All"} onClick={() => setCat("All")} small />
-        {EXERCISE_CATEGORIES.map((c) => (
-          <Pill key={c} label={c} active={cat === c} onClick={() => setCat(c)} small />
-        ))}
-      </div>
+          <div>
+            <span className="mb-1.5 block text-xs text-slate-500">Equipment</span>
+            <div className="flex flex-wrap gap-2">
+              <Pill label="Any kit" active={equip === "all"} onClick={() => setEquip("all")} small />
+              {EQUIPMENT_BUCKETS.map((eq) => (
+                <Pill key={eq} label={eq} active={equip === eq} onClick={() => setEquip(eq)} small />
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <span className="mb-1.5 block text-xs text-slate-500">Type</span>
+            <div className="flex flex-wrap gap-2">
+              <Pill label="All" active={cat === "All"} onClick={() => setCat("All")} small />
+              {EXERCISE_CATEGORIES.map((c) => (
+                <Pill key={c} label={c} active={cat === c} onClick={() => setCat(c)} small />
+              ))}
+            </div>
+          </div>
+
+          {activeFilters > 0 && (
+            <button
+              onClick={() => { setLevel("advanced"); setEquip("all"); setCat("All"); }}
+              className="text-xs font-semibold text-pitch-400 hover:underline"
+            >
+              Clear filters
+            </button>
+          )}
+        </div>
+      </details>
 
       <p className="text-xs text-slate-500">
         {list.length} exercises{list.length > shown ? ` · showing ${shown}` : ""}
@@ -104,7 +142,7 @@ export default function LibraryPage() {
             className="card card-hover flex items-center gap-4 p-4 text-left"
           >
             <span className="grid h-20 w-16 shrink-0 place-items-center rounded-2xl border border-white/10 bg-black/40">
-              <ExerciseDemo pattern={ex.demo} implement={demoImplement(ex)} animated={false} className="h-16 w-12" />
+              <ExerciseDemo pattern={ex.demo} implement={demoImplement(ex)} className="h-16 w-12" />
             </span>
             <span className="min-w-0 flex-1">
               <span className="flex items-center gap-1.5">

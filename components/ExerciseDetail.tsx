@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { demoImplement, exerciseProgression, PROGRESSION_NOTE, type Exercise } from "@/lib/exercises";
-import { ExerciseDemo } from "@/components/ExerciseDemo";
+import { ExerciseSteps } from "@/components/ExerciseDemo";
 
 const PROGRESSION_LABEL = { load: "Add weight", reps: "Add reps", time: "Add time", skill: "Add difficulty" } as const;
 
@@ -11,11 +11,13 @@ export function ExerciseDetailCard({ ex, sets, reps }: { ex: Exercise; sets?: nu
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-4 sm:flex-row">
-        <div className="grid h-40 w-full shrink-0 place-items-center rounded-2xl border border-white/10 bg-black/40 sm:w-40">
+        {/* Wider than it is tall on mobile: two frames side by side need the
+            room, and a 40-unit square would squeeze each figure to nothing. */}
+        <div className="grid h-44 w-full shrink-0 place-items-center rounded-2xl border border-white/10 bg-black/40 p-2 sm:w-56">
           {ex.video_url ? (
             <video src={ex.video_url} autoPlay muted loop playsInline className="h-full w-full rounded-2xl object-cover" />
           ) : (
-            <ExerciseDemo pattern={ex.demo} implement={demoImplement(ex)} className="h-36 w-28" />
+            <ExerciseSteps pattern={ex.demo} implement={demoImplement(ex)} className="h-full w-full" />
           )}
         </div>
         <div className="min-w-0 flex-1">

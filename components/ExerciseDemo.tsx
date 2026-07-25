@@ -1,8 +1,17 @@
 import type { DemoPattern, Implement } from "@/lib/exercises";
 
-// Asset-free animated demonstration: ONE stick figure whose joints are tweened
-// (SVG SMIL) between the two key positions of a movement, on a loop — so the
-// limbs actually move rather than crossfading. viewBox is 100×130.
+// Asset-free demonstration: a stick figure in the two key positions of a
+// movement, shown as START and FINISH side by side — the way a coaching book
+// does it.
+//
+// This used to tween the joints between those positions with SVG SMIL. Linear
+// interpolation between two poses has no notion of a limb having a fixed
+// length, so mid-tween the legs stretched and the figure squirmed; every card
+// also ran its own infinite animation, which is a lot to ask of a phone
+// scrolling a 24-card grid. Two honest still frames read better than a bad
+// moving one, and cost nothing to render.
+//
+// viewBox is 100×130.
 type XY = [number, number];
 interface Joints {
   head: XY; neck: XY; hip: XY;
@@ -30,78 +39,67 @@ function shift(j: Joints, dx: number): Joints {
   };
 }
 
-const POSES: Record<DemoPattern, { a: Joints; b: Joints; dur: number }> = {
+const POSES: Record<DemoPattern, { a: Joints; b: Joints }> = {
   squat: {
     a: STAND,
     b: { head: [50, 30], neck: [50, 44], hip: [50, 78], lHand: [43, 52], rHand: [57, 52],
       lKnee: [37, 90], rKnee: [63, 90], lAnkle: [45, 118], rAnkle: [55, 118] },
-    dur: 2.4,
   },
   hinge: {
     a: STAND,
     b: { head: [30, 46], neck: [40, 48], hip: [56, 60], lHand: [26, 82], rHand: [30, 84],
       lKnee: [52, 90], rKnee: [60, 90], lAnkle: [52, 118], rAnkle: [60, 118] },
-    dur: 2.6,
   },
   lunge: {
     a: STAND,
     b: { head: [50, 22], neck: [50, 34], hip: [50, 70], lHand: [45, 66], rHand: [55, 66],
       lKnee: [38, 96], rKnee: [66, 100], lAnkle: [38, 120], rAnkle: [80, 118] },
-    dur: 2.4,
   },
   jump: {
     a: { head: [50, 34], neck: [50, 47], hip: [50, 78], lHand: [38, 74], rHand: [62, 74],
       lKnee: [40, 96], rKnee: [60, 96], lAnkle: [44, 118], rAnkle: [56, 118] },
     b: { head: [50, 4], neck: [50, 18], hip: [50, 50], lHand: [40, 2], rHand: [60, 2],
       lKnee: [47, 76], rKnee: [53, 76], lAnkle: [47, 100], rAnkle: [53, 100] },
-    dur: 1.4,
   },
   plank: {
     a: { head: [20, 76], neck: [30, 76], hip: [62, 74], lHand: [30, 100], rHand: [30, 100],
       lKnee: [80, 73], rKnee: [80, 73], lAnkle: [96, 72], rAnkle: [96, 72] },
     b: { head: [20, 72], neck: [30, 72], hip: [62, 70], lHand: [30, 100], rHand: [30, 100],
       lKnee: [80, 69], rKnee: [80, 69], lAnkle: [96, 68], rAnkle: [96, 68] },
-    dur: 3.2,
   },
   run: {
     a: { head: [50, 15], neck: [50, 30], hip: [50, 62], lHand: [64, 50], rHand: [38, 70],
       lKnee: [48, 80], rKnee: [56, 96], lAnkle: [46, 96], rAnkle: [66, 114] },
     b: { head: [50, 15], neck: [50, 30], hip: [50, 62], lHand: [38, 70], rHand: [64, 50],
       lKnee: [44, 96], rKnee: [52, 80], lAnkle: [34, 114], rAnkle: [54, 96] },
-    dur: 0.8,
   },
   lateral: {
     a: shift({ head: [50, 16], neck: [50, 30], hip: [50, 64], lHand: [38, 58], rHand: [62, 58],
       lKnee: [42, 90], rKnee: [60, 90], lAnkle: [38, 116], rAnkle: [64, 116] }, -12),
     b: shift({ head: [50, 16], neck: [50, 30], hip: [50, 64], lHand: [38, 58], rHand: [62, 58],
       lKnee: [42, 90], rKnee: [60, 90], lAnkle: [38, 116], rAnkle: [64, 116] }, 12),
-    dur: 1.5,
   },
   ball: {
     a: { ...STAND, hip: [50, 66], lKnee: [44, 92], rKnee: [56, 92], lHand: [40, 58], rHand: [62, 56], ball: [38, 122] },
     b: { ...STAND, hip: [50, 66], lKnee: [44, 92], rKnee: [56, 92], lHand: [38, 56], rHand: [60, 58], ball: [62, 122] },
-    dur: 1.3,
   },
   bike: {
     a: { head: [44, 28], neck: [50, 40], hip: [52, 72], lHand: [62, 64], rHand: [64, 66],
       lKnee: [44, 84], rKnee: [58, 92], lAnkle: [40, 100], rAnkle: [62, 108] },
     b: { head: [44, 28], neck: [50, 40], hip: [52, 72], lHand: [62, 64], rHand: [64, 66],
       lKnee: [58, 92], rKnee: [44, 84], lAnkle: [62, 108], rAnkle: [40, 100] },
-    dur: 0.9,
   },
   press: {
     a: { head: [50, 16], neck: [50, 30], hip: [50, 64], lHand: [39, 34], rHand: [61, 34],
       lKnee: [45, 90], rKnee: [55, 90], lAnkle: [45, 118], rAnkle: [55, 118] },
     b: { head: [50, 16], neck: [50, 30], hip: [50, 64], lHand: [44, 4], rHand: [56, 4],
       lKnee: [45, 90], rKnee: [55, 90], lAnkle: [45, 118], rAnkle: [55, 118] },
-    dur: 1.8,
   },
   pull: {
     a: { head: [50, 26], neck: [50, 40], hip: [50, 74], lHand: [42, 8], rHand: [58, 8],
       lKnee: [48, 98], rKnee: [52, 98], lAnkle: [48, 120], rAnkle: [52, 120] },
     b: { head: [50, 12], neck: [50, 26], hip: [50, 60], lHand: [42, 8], rHand: [58, 8],
       lKnee: [48, 84], rKnee: [52, 84], lAnkle: [48, 106], rAnkle: [52, 106] },
-    dur: 2.0,
   },
 };
 
@@ -112,48 +110,17 @@ const SEGMENTS: [keyof Joints, keyof Joints][] = [
   ["hip", "rKnee"], ["rKnee", "rAnkle"],
 ];
 
-const EASE = "0.42 0 0.58 1";
-
-// values string that goes a -> b -> a so the loop returns to the start smoothly
-const cyc = (a: number, b: number) => `${a};${b};${a}`;
-
-function Anim({ attr, a, b, dur }: { attr: string; a: number; b: number; dur: number }) {
-  return (
-    <animate
-      attributeName={attr}
-      values={cyc(a, b)}
-      keyTimes="0;0.5;1"
-      calcMode="spline"
-      keySplines={`${EASE};${EASE}`}
-      dur={`${dur}s`}
-      repeatCount="indefinite"
-    />
-  );
-}
-
-export function ExerciseDemo({ pattern, implement = "none", animated = true, className = "" }: { pattern: DemoPattern; implement?: Implement; animated?: boolean; className?: string }) {
-  const pose = POSES[pattern] ?? POSES.squat;
-  const { a, b, dur } = pose;
-
-  // Static thumbnails omit the SMIL (cleaner, far lighter); the detail view animates.
-  const A = (attr: string, av: number, bv: number) =>
-    animated ? <Anim attr={attr} a={av} b={bv} dur={dur} /> : null;
-
-  // Where the implement sits: on the back (squats) it tracks the neck; in the
-  // hands it tracks the mid-point of the two hands.
-  const backA = a.neck, backB = b.neck;
-  const handMidA: XY = [(a.lHand[0] + a.rHand[0]) / 2, (a.lHand[1] + a.rHand[1]) / 2 - 2];
-  const handMidB: XY = [(b.lHand[0] + b.rHand[0]) / 2, (b.lHand[1] + b.rHand[1]) / 2 - 2];
-  const barA = implement === "barbell_back" ? backA : handMidA;
-  const barB = implement === "barbell_back" ? backB : handMidB;
+/** One still frame of a movement. */
+function Figure({ j, pattern, implement, className, label }: {
+  j: Joints; pattern: DemoPattern; implement: Implement; className: string; label: string;
+}) {
+  // Where the implement sits: on the back (squats) it rests at the neck; in the
+  // hands it sits at the mid-point of the two hands.
+  const handMid: XY = [(j.lHand[0] + j.rHand[0]) / 2, (j.lHand[1] + j.rHand[1]) / 2 - 2];
+  const bar: XY = implement === "barbell_back" ? j.neck : handMid;
 
   return (
-    <svg
-      viewBox="0 0 100 130"
-      className={`text-pitch-400 ${className}`}
-      role="img"
-      aria-label={`${pattern} demonstration`}
-    >
+    <svg viewBox="0 0 100 130" className={`text-pitch-400 ${className}`} role="img" aria-label={label}>
       {pattern === "pull" ? (
         <line x1={24} y1={8} x2={76} y2={8} stroke="currentColor" strokeOpacity={0.3} strokeWidth={3} strokeLinecap="round" />
       ) : (
@@ -167,56 +134,74 @@ export function ExerciseDemo({ pattern, implement = "none", animated = true, cla
 
       <g fill="none" stroke="currentColor" strokeWidth={4.5} strokeLinecap="round" strokeLinejoin="round">
         {SEGMENTS.map(([p, q], i) => {
-          const [ax1, ay1] = a[p] as XY, [ax2, ay2] = a[q] as XY;
-          const [bx1, by1] = b[p] as XY, [bx2, by2] = b[q] as XY;
-          return (
-            <line key={i} x1={ax1} y1={ay1} x2={ax2} y2={ay2}>
-              {A("x1", ax1, bx1)}
-              {A("y1", ay1, by1)}
-              {A("x2", ax2, bx2)}
-              {A("y2", ay2, by2)}
-            </line>
-          );
+          const [x1, y1] = j[p] as XY, [x2, y2] = j[q] as XY;
+          return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} />;
         })}
 
-        <circle cx={a.head[0]} cy={a.head[1]} r={7} fill="currentColor" stroke="none">
-          {A("cx", a.head[0], b.head[0])}
-          {A("cy", a.head[1], b.head[1])}
-        </circle>
+        <circle cx={j.head[0]} cy={j.head[1]} r={7} fill="currentColor" stroke="none" />
 
-        {a.ball && b.ball && (
-          <circle cx={a.ball[0]} cy={a.ball[1]} r={6} fill="currentColor" stroke="none" opacity={0.85}>
-            {A("cx", a.ball[0], b.ball[0])}
-            {A("cy", a.ball[1], b.ball[1])}
-          </circle>
-        )}
+        {j.ball && <circle cx={j.ball[0]} cy={j.ball[1]} r={6} fill="currentColor" stroke="none" opacity={0.85} />}
 
-        {/* Barbell — a bar with plates, tracking the back or the hands */}
+        {/* Barbell — a bar with plates */}
         {(implement === "barbell_back" || implement === "barbell_hands") && (
           <>
-            <line x1={barA[0] - 16} y1={barA[1]} x2={barA[0] + 16} y2={barA[1]} strokeWidth={3}>
-              {A("x1", barA[0] - 16, barB[0] - 16)}
-              {A("y1", barA[1], barB[1])}
-              {A("x2", barA[0] + 16, barB[0] + 16)}
-              {A("y2", barA[1], barB[1])}
-            </line>
+            <line x1={bar[0] - 16} y1={bar[1]} x2={bar[0] + 16} y2={bar[1]} strokeWidth={3} />
             {[-16, 16].map((dx) => (
-              <rect key={dx} x={barA[0] + dx - 2} y={barA[1] - 6} width={4} height={12} rx={1} fill="currentColor" stroke="none">
-                {A("x", barA[0] + dx - 2, barB[0] + dx - 2)}
-                {A("y", barA[1] - 6, barB[1] - 6)}
-              </rect>
+              <rect key={dx} x={bar[0] + dx - 2} y={bar[1] - 6} width={4} height={12} rx={1} fill="currentColor" stroke="none" />
             ))}
           </>
         )}
 
         {/* Dumbbells at each hand */}
-        {implement === "dumbbells" && ([["lHand", a.lHand, b.lHand], ["rHand", a.rHand, b.rHand]] as const).map(([k, pa, pb]) => (
-          <rect key={k} x={pa[0] - 4} y={pa[1] - 3} width={8} height={6} rx={1} fill="currentColor" stroke="none">
-            {A("x", pa[0] - 4, pb[0] - 4)}
-            {A("y", pa[1] - 3, pb[1] - 3)}
-          </rect>
+        {implement === "dumbbells" && ([j.lHand, j.rHand] as const).map((p, i) => (
+          <rect key={i} x={p[0] - 4} y={p[1] - 3} width={8} height={6} rx={1} fill="currentColor" stroke="none" />
         ))}
       </g>
     </svg>
+  );
+}
+
+/**
+ * A single frame — the start position. Used for list thumbnails, where the
+ * movement is identified by name and the picture only has to be recognisable.
+ */
+export function ExerciseDemo({ pattern, implement = "none", className = "" }: {
+  pattern: DemoPattern; implement?: Implement; className?: string;
+}) {
+  const pose = POSES[pattern] ?? POSES.squat;
+  return <Figure j={pose.a} pattern={pattern} implement={implement} className={className} label={`${pattern} start position`} />;
+}
+
+/**
+ * Both key positions, labelled. This is what someone learning the movement
+ * needs: where you begin, where you finish, and nothing invented in between.
+ */
+export function ExerciseSteps({ pattern, implement = "none", className = "" }: {
+  pattern: DemoPattern; implement?: Implement; className?: string;
+}) {
+  const pose = POSES[pattern] ?? POSES.squat;
+  const frames: { j: Joints; label: string }[] = [
+    { j: pose.a, label: "Start" },
+    { j: pose.b, label: "Finish" },
+  ];
+  return (
+    <div className={`flex items-stretch justify-center gap-2 ${className}`}>
+      {frames.map(({ j, label }, i) => (
+        <div key={label} className="flex min-w-0 flex-1 flex-col items-center gap-1">
+          <Figure
+            j={j}
+            pattern={pattern}
+            implement={implement}
+            className="h-full w-full flex-1"
+            label={`${pattern} ${label.toLowerCase()} position`}
+          />
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+            {/* An arrow on the second frame reads as "and then this", which is
+                the one thing a pair of stills can't say on its own. */}
+            {i === 1 ? `→ ${label}` : label}
+          </span>
+        </div>
+      ))}
+    </div>
   );
 }

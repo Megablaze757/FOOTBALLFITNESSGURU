@@ -224,7 +224,9 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes }: Pro
         )}
 
         <div className="rounded-2xl border border-pitch-400/25 bg-pitch-400/[0.05] p-4">
-          <div className="grid grid-cols-4 gap-2 text-center">
+          {/* Four macro tiles across a 375px phone leaves ~80px each, which
+              wraps "Protein" onto two lines and clips the numbers. */}
+          <div className="grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
             <Metric label="kcal" value={targets.calories} accent />
             <Metric label="Protein" value={`${targets.protein}g`} />
             <Metric label="Carbs" value={`${targets.carbs}g`} />

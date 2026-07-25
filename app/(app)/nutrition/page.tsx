@@ -168,7 +168,8 @@ function NutritionTracker({ userId, today, initial, targets }: { userId: string;
             <button onClick={applyTargets} className="text-xs font-medium text-pitch-400 hover:underline">Apply to today</button>
           </div>
           <p className="text-xs text-slate-400">{targets.rationale}</p>
-          <div className="mt-3 grid grid-cols-4 gap-2 text-center">
+          {/* Two up on a phone — four across 375px clips the numbers. */}
+          <div className="mt-3 grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
             {[
               { label: "kcal", val: targets.calories, logged: macroKcal, color: "#e3b53f" },
               { label: "Protein", val: targets.protein, logged: Number(macros.protein) || 0, color: "#e3b53f" },

@@ -280,7 +280,10 @@ function Affiliates() {
         ) : rows.length === 0 ? (
           <p className="py-4 text-center text-sm text-slate-500">No affiliates yet.</p>
         ) : (
-          <table className="w-full text-left text-sm">
+          // Six columns will not fit a phone. Scroll the table, not the page —
+          // a body-level horizontal scroll breaks every other screen too.
+          <div className="-mx-1 overflow-x-auto px-1">
+          <table className="w-full min-w-[34rem] text-left text-sm">
             <thead className="text-xs uppercase tracking-wide text-slate-500">
               <tr><th className="pb-2">Affiliate</th><th className="pb-2">Code</th><th className="pb-2 text-right">Waitlist</th><th className="pb-2 text-right">Signups</th><th className="pb-2 text-right">Paid</th><th className="pb-2" /></tr>
             </thead>
@@ -304,6 +307,7 @@ function Affiliates() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
     </div>
