@@ -211,10 +211,13 @@ async function recordSpend(env: Env, userId: string, costUsd: number): Promise<v
 }
 
 function overBudget(state: BudgetState): Response {
+  // Deliberately no figures: the budget is denominated in what the models cost
+  // us, and showing an athlete "$0.40 of $0.40" both confuses (the app is priced
+  // in pounds) and publishes our margins.
   const reason = state.spent >= state.budget
-    ? `You've used this month's AI allowance ($${state.spent.toFixed(3)} of $${state.budget.toFixed(2)}).`
-    : "Daily AI limit reached.";
-  return json({ error: `${reason} The on-device coach still works — upgrade for a bigger allowance.` }, 429);
+    ? "You've used this month's AI coaching allowance."
+    : "You've hit today's AI coaching limit.";
+  return json({ error: `${reason} The on-device coach still works, and your allowance resets — upgrade for more.` }, 429);
 }
 
 // --- AI via OpenRouter -----------------------------------------------------

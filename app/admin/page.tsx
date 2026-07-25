@@ -71,7 +71,7 @@ export default function AdminPage() {
       </header>
 
       <section className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        <Metric label="MRR" value={`$${mrr}`} accent />
+        <Metric label="MRR" value={`£${mrr}`} accent />
         <Metric label="Paid subs" value={`${silver + gold}`} />
         <Metric label="DAU" value={`${m?.dau ?? 0}`} />
         <Metric label="Total users" value={`${m?.total_users ?? 0}`} />

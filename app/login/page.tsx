@@ -17,8 +17,17 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [awaitingConfirm, setAwaitingConfirm] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
 
   useEffect(() => { captureRef(); }, []); // in case they land straight on /login?ref=
+
+  // Tick the resend cooldown down to zero.
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const t = setTimeout(() => setCooldown((n) => n - 1), 1000);
+    return () => clearTimeout(t);
+  }, [cooldown]);
 
   useEffect(() => {
     if (user) router.replace("/home");
@@ -40,8 +49,13 @@ export default function LoginPage() {
       else setInfo("If that email has an account, a reset link is on its way.");
     } else if (mode === "sign_in") {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) setError(error.message);
-      else router.push("/home");
+      if (error) {
+        setError(error.message);
+        // The likeliest reason a correct password is refused: they never got
+        // the confirmation mail. Offer the resend rather than leaving them
+        // stuck on an error they can't act on.
+        if (/confirm/i.test(error.message)) setAwaitingConfirm(true);
+      } else router.push("/home");
     } else {
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -63,10 +77,38 @@ export default function LoginPage() {
           clearRef();
         }
         if (data.session) router.push("/home");
-        else setInfo("Check your email to confirm your account, then sign in.");
+        else {
+          setInfo("Check your email to confirm your account, then sign in.");
+          setAwaitingConfirm(true);
+        }
       }
     }
     setLoading(false);
+  }
+
+  /**
+   * Send the confirmation email again. Auth mail genuinely does go missing —
+   * greylisting, spam folders, a typo'd address — and without this the only
+   * recovery was signing up again, which fails because the account exists.
+   *
+   * Supabase rate-limits this server-side; the local cooldown just stops people
+   * hammering the button into that error.
+   */
+  async function resendConfirmation() {
+    if (cooldown > 0 || !email) return;
+    setError(null);
+    setInfo(null);
+    const { error } = await createClient().auth.resend({ type: "signup", email });
+    if (error) {
+      setError(
+        /rate|limit|seconds/i.test(error.message)
+          ? "Too many requests just now — wait a minute and try again."
+          : error.message
+      );
+      return;
+    }
+    setInfo(`Sent again to ${email}. It can take a minute — check your spam folder too.`);
+    setCooldown(60);
   }
 
   return (
@@ -107,6 +149,23 @@ export default function LoginPage() {
 
           {error && <p className="text-sm text-readiness-red">{error}</p>}
           {info && <p className="text-sm text-pitch-400">{info}</p>}
+
+          {/* Confirmation mail goes missing often enough that "sign up again"
+              being the only recovery is a real dead end — the second attempt
+              fails because the account already exists. */}
+          {awaitingConfirm && (
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+              <p className="text-xs text-slate-400">Didn&apos;t get the email? Check spam, then:</p>
+              <button
+                type="button"
+                onClick={resendConfirmation}
+                disabled={cooldown > 0}
+                className="mt-2 text-sm font-semibold text-pitch-400 hover:underline disabled:text-slate-500 disabled:no-underline"
+              >
+                {cooldown > 0 ? `Resend in ${cooldown}s` : "Resend confirmation email"}
+              </button>
+            </div>
+          )}
 
           <button type="submit" disabled={loading} className="btn-primary">
             {loading ? "…" : mode === "sign_in" ? "Sign in" : mode === "sign_up" ? "Create account" : "Send reset link"}

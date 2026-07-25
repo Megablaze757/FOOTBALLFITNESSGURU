@@ -127,12 +127,12 @@ export default function Landing() {
       <section id="pricing" className="mt-24 scroll-mt-8">
         <div className="text-center">
           <h2 className="text-3xl font-extrabold tracking-tight sm:text-4xl">Simple pricing for athletes and teams.</h2>
-          <p className="mx-auto mt-3 max-w-xl text-slate-400">A private performance coach runs $100+ an hour. PocketAthlete is the whole staff, every day, from $15 a month.</p>
+          <p className="mx-auto mt-3 max-w-xl text-slate-400">A private performance coach runs £100+ an hour. PocketAthlete is the whole staff, every day, from £15 a month.</p>
         </div>
         <div className="mx-auto mt-12 grid max-w-5xl gap-5 md:grid-cols-3">
           <div className="card p-7">
             <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400">Free</h3>
-            <div className="mt-3 text-4xl font-extrabold">$0</div>
+            <div className="mt-3 text-4xl font-extrabold">£0</div>
             <p className="mt-2 text-sm text-slate-400">Build the habit.</p>
             <ul className="mt-6 space-y-3 text-sm text-slate-300">
               <Perk>Daily readiness score</Perk>
@@ -146,7 +146,7 @@ export default function Landing() {
             <div className="absolute right-5 top-5 chip text-pitch-400">Most popular</div>
             <h3 className="text-sm font-bold uppercase tracking-wider text-pitch-400">Gold</h3>
             <div className="mt-3 flex items-baseline gap-1">
-              <span className="text-4xl font-extrabold">$20</span>
+              <span className="text-4xl font-extrabold">£20</span>
               <span className="text-slate-400">/month</span>
             </div>
             <p className="mt-2 text-sm text-slate-400">The full performance team, for you.</p>
@@ -162,7 +162,7 @@ export default function Landing() {
           <div className="card p-7">
             <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400">Team</h3>
             <div className="mt-3 flex items-baseline gap-1">
-              <span className="text-4xl font-extrabold">$150</span>
+              <span className="text-4xl font-extrabold">£150</span>
               <span className="text-slate-400">/month</span>
             </div>
             <p className="mt-2 text-sm text-slate-400">For clubs &amp; coaches.</p>

@@ -33,7 +33,7 @@ export const PLANS: TierPlan[] = [
   {
     id: "silver",
     name: "Silver",
-    priceLabel: "$15/mo",
+    priceLabel: "£15/mo",
     priceMonthly: 15,
     tagline: "AI-powered recovery insights.",
     paid: true,
@@ -47,7 +47,7 @@ export const PLANS: TierPlan[] = [
   {
     id: "gold",
     name: "Gold",
-    priceLabel: "$20/mo",
+    priceLabel: "£20/mo",
     priceMonthly: 20,
     tagline: "The full performance team, for you.",
     paid: true,
@@ -74,7 +74,7 @@ export interface TeamPlan {
 
 export const TEAM_PLAN: TeamPlan = {
   name: "Team",
-  priceLabel: "$150/mo",
+  priceLabel: "£150/mo",
   priceMonthly: 150,
   tagline: "For clubs, coaches & S&C staff.",
   features: [
