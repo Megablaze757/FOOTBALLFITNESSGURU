@@ -26,6 +26,14 @@ OPENROUTER_FREE_MODELS = "nvidia/nemotron-3-super-120b-a12b:free,openai/gpt-oss-
 # https://openrouter.ai/models if you swap it.
 OPENROUTER_MODEL = "deepseek/deepseek-chat"
 AI_DAILY_LIMIT = "40"   # max AI coach calls per user per day; over this, the on-device engine is used
+
+# Price of the PAID model, USD per million tokens. Used to cost every request
+# against the user's monthly budget when OpenRouter doesn't report a figure
+# itself. These match deepseek/deepseek-chat as of 2026-07-25 — if you change
+# OPENROUTER_MODEL you MUST change these, or spend is silently under-counted and
+# the cap stops capping. Check the model's pricing at https://openrouter.ai/models
+PAID_PROMPT_PER_M     = "0.2002"
+PAID_COMPLETION_PER_M = "0.8001"
 SUPABASE_URL = "https://txqhstackgidjqkkrzyj.supabase.co"
 APP_URL = "https://pocketathlete.com"
 REMINDER_FROM = "PocketAthlete <info@pocketathlete.com>"

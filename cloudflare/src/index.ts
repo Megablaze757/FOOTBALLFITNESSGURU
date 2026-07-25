@@ -29,7 +29,9 @@ export interface Env {
   REMINDER_FROM: string;
   GAS_EMAIL_URL: string;     // Google Apps Script web-app URL (preferred email sender)
   GAS_EMAIL_SECRET: string;  // shared secret the GAS script checks
-  AI_DAILY_LIMIT: string;    // max LLM calls per user per day (default 40)
+  AI_DAILY_LIMIT: string;       // max LLM calls per user per day (default 40)
+  PAID_PROMPT_PER_M: string;    // USD per million prompt tokens on the paid model
+  PAID_COMPLETION_PER_M: string; // USD per million completion tokens
   APP_URL: string;
 }
 
@@ -118,27 +120,101 @@ async function adminCreateUser(req: Request, env: Env): Promise<Response> {
   return json({ ok: true, id: created.id, email });
 }
 
-// --- Rate limiting ---------------------------------------------------------
-// Per-user daily cap on LLM calls (default 40). Fail-open so a hiccup in usage
-// tracking never blocks the coach; requires SUPABASE_SERVICE_ROLE_KEY to enforce.
-async function allowAiCall(env: Env, userId: string): Promise<boolean> {
-  const limit = Number(env.AI_DAILY_LIMIT || "40");
-  if (!env.SUPABASE_SERVICE_ROLE_KEY) return true;
+// --- Spend limiting --------------------------------------------------------
+//
+// Capped in MONEY, per user per month, with the allowance scaled to what the
+// user pays. A call cap alone can't do this: it treats a 5,000-token program
+// the same as a 300-token chat, and swapping OPENROUTER_MODEL for a pricier
+// model multiplies the bill without touching the limit.
+//
+// The daily call cap survives alongside it, because a spend cap on its own
+// still permits tens of thousands of tiny requests — that's a denial of service
+// on your OpenRouter account rather than a bill.
+
+/** Monthly USD budget per tier. Well under the revenue each tier brings in. */
+const TIER_BUDGET: Record<string, number> = {
+  bronze: 0.40, // free users: enough to try the coach, not enough to cost real money
+  silver: 3.00, // of £15
+  gold: 5.00,   // of £20
+};
+// Belt and braces: whatever a tier lookup says, nobody gets past this.
+const HARD_CEILING_USD = 10;
+
+interface BudgetState { allowed: boolean; spent: number; callsToday: number; budget: number }
+
+async function svcRpc(env: Env, fn: string, body: unknown): Promise<Response> {
+  return fetch(`${env.SUPABASE_URL}/rest/v1/rpc/${fn}`, {
+    method: "POST",
+    headers: {
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+}
+
+/** The user's paid tier, or bronze when there's no active subscription. */
+async function tierOf(env: Env, userId: string): Promise<string> {
   try {
-    const r = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/bump_ai_usage`, {
-      method: "POST",
-      headers: {
-        apikey: env.SUPABASE_SERVICE_ROLE_KEY,
-        Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ p_user: userId, p_limit: limit }),
-    });
-    if (!r.ok) return true;
-    return (await r.json()) === true;
+    const r = await supa(env, `subscriptions?user_id=eq.${userId}&select=tier,status`);
+    if (!r.ok) return "bronze";
+    const rows = (await r.json()) as { tier?: string; status?: string }[];
+    const row = rows?.[0];
+    return row?.status === "active" && row.tier ? row.tier : "bronze";
   } catch {
-    return true;
+    return "bronze";
   }
+}
+
+/**
+ * Whether this user may make an AI call right now.
+ *
+ * FAILS CLOSED. The old version returned true whenever anything went wrong —
+ * missing service key, RPC error, network blip — which meant the one thing
+ * standing between a user and an unbounded bill was also the first thing to
+ * give way under load. Denying here is safe precisely because the browser falls
+ * back to the on-device engine, so the athlete still gets a program.
+ */
+async function checkBudget(env: Env, userId: string): Promise<BudgetState> {
+  const dailyLimit = Number(env.AI_DAILY_LIMIT || "40");
+  if (!env.SUPABASE_SERVICE_ROLE_KEY) {
+    return { allowed: false, spent: 0, callsToday: 0, budget: 0 };
+  }
+  const tier = await tierOf(env, userId);
+  const budget = Math.min(TIER_BUDGET[tier] ?? TIER_BUDGET.bronze, HARD_CEILING_USD);
+  try {
+    const r = await svcRpc(env, "check_ai_budget", {
+      p_user: userId, p_budget: budget, p_daily_limit: dailyLimit,
+    });
+    if (!r.ok) return { allowed: false, spent: 0, callsToday: 0, budget };
+    const rows = (await r.json()) as { allowed: boolean; spent: number; calls_today: number }[];
+    const row = rows?.[0];
+    if (!row) return { allowed: false, spent: 0, callsToday: 0, budget };
+    return {
+      allowed: row.allowed === true,
+      spent: Number(row.spent) || 0,
+      callsToday: Number(row.calls_today) || 0,
+      budget,
+    };
+  } catch {
+    return { allowed: false, spent: 0, callsToday: 0, budget };
+  }
+}
+
+/** Record what a call actually cost. Never throws — accounting must not 500. */
+async function recordSpend(env: Env, userId: string, costUsd: number): Promise<void> {
+  if (!env.SUPABASE_SERVICE_ROLE_KEY) return;
+  try {
+    await svcRpc(env, "record_ai_spend", { p_user: userId, p_cost: costUsd });
+  } catch { /* the pre-call check is the enforcement point */ }
+}
+
+function overBudget(state: BudgetState): Response {
+  const reason = state.spent >= state.budget
+    ? `You've used this month's AI allowance ($${state.spent.toFixed(3)} of $${state.budget.toFixed(2)}).`
+    : "Daily AI limit reached.";
+  return json({ error: `${reason} The on-device coach still works — upgrade for a bigger allowance.` }, 429);
 }
 
 // --- AI via OpenRouter -----------------------------------------------------
@@ -166,7 +242,40 @@ function modelChain(env: Env): string[] {
   return [...free, paid].filter((m, i, all) => m && all.indexOf(m) === i);
 }
 
-async function openRouterOnce(env: Env, model: string, system: string, user: string, maxTokens: number): Promise<string> {
+// Price of the paid rung, in USD per MILLION tokens. Defaults match
+// deepseek/deepseek-chat; override in wrangler.toml if you change the model,
+// because getting these wrong silently under-counts every bill.
+function modelPrice(env: Env, model: string): { prompt: number; completion: number } {
+  if (model.endsWith(":free")) return { prompt: 0, completion: 0 };
+  return {
+    prompt: Number(env.PAID_PROMPT_PER_M || "0.2002"),
+    completion: Number(env.PAID_COMPLETION_PER_M || "0.8001"),
+  };
+}
+
+/**
+ * What a completion cost. Prefers the provider's own figure when it sends one,
+ * falls back to tokens x price, and if usage is missing entirely assumes the
+ * request hit `maxTokens` — an overestimate on purpose, because a cost we
+ * can't see must never read as free.
+ */
+function costOf(
+  env: Env,
+  model: string,
+  usage: { prompt_tokens?: number; completion_tokens?: number; cost?: number } | undefined,
+  maxTokens: number
+): number {
+  if (typeof usage?.cost === "number" && usage.cost >= 0) return usage.cost;
+  const price = modelPrice(env, model);
+  if (price.prompt === 0 && price.completion === 0) return 0;
+  const promptTokens = usage?.prompt_tokens ?? 2000;
+  const completionTokens = usage?.completion_tokens ?? maxTokens;
+  return (promptTokens * price.prompt + completionTokens * price.completion) / 1_000_000;
+}
+
+interface Attempt { text: string; cost: number }
+
+async function openRouterOnce(env: Env, model: string, system: string, user: string, maxTokens: number): Promise<Attempt> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), ATTEMPT_TIMEOUT_MS);
   try {
@@ -181,6 +290,9 @@ async function openRouterOnce(env: Env, model: string, system: string, user: str
       body: JSON.stringify({
         model,
         max_tokens: maxTokens,
+        // Ask OpenRouter to report what it charged, so accounting uses their
+        // number rather than our reconstruction of it.
+        usage: { include: true },
         messages: [
           { role: "system", content: system },
           { role: "user", content: user },
@@ -189,13 +301,20 @@ async function openRouterOnce(env: Env, model: string, system: string, user: str
       signal: ctrl.signal,
     });
     if (!r.ok) throw new Error(`${r.status} ${(await r.text()).slice(0, 200)}`);
-    const data = (await r.json()) as { choices?: { message?: { content?: string } }[]; error?: { message?: string } };
+    const data = (await r.json()) as {
+      choices?: { message?: { content?: string } }[];
+      error?: { message?: string };
+      usage?: { prompt_tokens?: number; completion_tokens?: number; cost?: number };
+    };
     // OpenRouter can answer 200 with an error body, or with no choices at all
     // when an upstream provider drops the request.
     if (data.error?.message) throw new Error(data.error.message.slice(0, 200));
     const text = data.choices?.[0]?.message?.content ?? "";
-    if (!text.trim()) throw new Error("empty completion");
-    return text;
+    const cost = costOf(env, model, data.usage, maxTokens);
+    // An empty completion still consumed tokens, so it is thrown AFTER the cost
+    // is known — the caller adds it to the running total either way.
+    if (!text.trim()) throw Object.assign(new Error("empty completion"), { cost });
+    return { text, cost };
   } finally {
     clearTimeout(timer);
   }
@@ -209,9 +328,13 @@ async function openRouterOnce(env: Env, model: string, system: string, user: str
 async function complete(
   env: Env,
   opts: { system: string; user: string; maxTokens: number; validate?: (text: string) => boolean }
-): Promise<{ text: string; model: string }> {
+): Promise<{ text: string; model: string; cost: number }> {
   const started = Date.now();
   const trail: string[] = [];
+  // Every rung that answered cost something, including ones whose output we
+  // rejected. Billing the user only for the rung that succeeded would let a
+  // model that reliably returns junk run up an invisible tab.
+  let spent = 0;
 
   for (const model of modelChain(env)) {
     if (Date.now() - started > CHAIN_BUDGET_MS) {
@@ -219,20 +342,44 @@ async function complete(
       break;
     }
     try {
-      const text = await openRouterOnce(env, model, opts.system, opts.user, opts.maxTokens);
+      const { text, cost } = await openRouterOnce(env, model, opts.system, opts.user, opts.maxTokens);
+      spent += cost;
       if (opts.validate && !opts.validate(text)) throw new Error("unusable output");
-      return { text, model };
+      return { text, model, cost: spent };
     } catch (e) {
+      spent += typeof (e as { cost?: number })?.cost === "number" ? (e as { cost: number }).cost : 0;
       trail.push(`${model}: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
-  throw new Error(`all models failed — ${trail.join(" | ")}`);
+  throw Object.assign(new Error(`all models failed — ${trail.join(" | ")}`), { cost: spent });
+}
+
+/**
+ * complete() plus accounting. Records the cost whether the chain succeeded or
+ * not — a failed request still burned tokens, and not charging for failures is
+ * how a broken model becomes an unmetered one.
+ */
+async function meteredComplete(
+  env: Env,
+  userId: string,
+  opts: { system: string; user: string; maxTokens: number; validate?: (text: string) => boolean }
+): Promise<{ text: string; model: string }> {
+  try {
+    const { text, model, cost } = await complete(env, opts);
+    await recordSpend(env, userId, cost);
+    return { text, model };
+  } catch (e) {
+    const cost = (e as { cost?: number })?.cost;
+    await recordSpend(env, userId, typeof cost === "number" ? cost : 0);
+    throw e;
+  }
 }
 
 async function coachChat(req: Request, env: Env): Promise<Response> {
   const u = await authUser(req, env);
   if (!u) return json({ error: "unauthorized" }, 401);
-  if (!(await allowAiCall(env, u.id))) return json({ error: "daily AI limit reached" }, 429);
+  const budget = await checkBudget(env, u.id);
+  if (!budget.allowed) return overBudget(budget);
   const body = (await req.json()) as { question: string; context: Record<string, unknown> };
   const question = (body.question ?? "").slice(0, 600); // cap input for speed + abuse control
   const context = body.context;
@@ -244,7 +391,7 @@ async function coachChat(req: Request, env: Env): Promise<Response> {
   const ctx =
     `Goal: ${context?.goal ?? "general"}\nSore areas: ${(context?.soreAreas as string[])?.join(", ") || "none"}\n` +
     `Readiness: ${context?.readinessStatus ?? "unknown"}\nPlan drills: ${(context?.programDrills as string[])?.join(", ") || "none"}`;
-  const { text, model } = await complete(env, {
+  const { text, model } = await meteredComplete(env, u.id, {
     system: sys,
     user: `Context:\n${ctx}\n\nQuestion: ${question}`,
     maxTokens: 320,
@@ -280,7 +427,8 @@ function parseProgram(raw: string): unknown | null {
 async function generateProgram(req: Request, env: Env): Promise<Response> {
   const u = await authUser(req, env);
   if (!u) return json({ error: "unauthorized" }, 401);
-  if (!(await allowAiCall(env, u.id))) return json({ error: "daily AI limit reached" }, 429);
+  const budget = await checkBudget(env, u.id);
+  if (!budget.allowed) return overBudget(budget);
   const { goal, pain_map, notes, in_season, sport, position, focus, days_per_week } = (await req.json()) as {
     goal: string; pain_map: Record<string, number>; notes?: string; in_season?: boolean;
     sport?: string; position?: string; focus?: string; days_per_week?: number;
@@ -319,7 +467,7 @@ async function generateProgram(req: Request, env: Env): Promise<Response> {
     "Fill the freed volume with work they do want, and state the exclusion in " +
     "`constraints` so they can see you followed it. " +
     "No prose outside the JSON.";
-  const { text, model } = await complete(env, {
+  const { text, model } = await meteredComplete(env, u.id, {
     system: sys,
     user: `Sport: ${sport || "football"}\nPosition/event: ${position || "unspecified"}\nTraining focus: ${focus || "performance"}\nGoal: ${goal}\nSeason: ${season}\nSore: ${sore}\nNotes: ${notes || "none"}`,
     maxTokens: 5000,
@@ -365,7 +513,8 @@ function parseFoodItems(raw: string): { name: string; qty: number; unit: string;
 async function estimateFood(req: Request, env: Env): Promise<Response> {
   const u = await authUser(req, env);
   if (!u) return json({ error: "unauthorized" }, 401);
-  if (!(await allowAiCall(env, u.id))) return json({ error: "daily AI limit reached" }, 429);
+  const budget = await checkBudget(env, u.id);
+  if (!budget.allowed) return overBudget(budget);
   const { text } = (await req.json()) as { text?: string };
   const meal = (text ?? "").trim().slice(0, 300);
   if (meal.length < 2) return json({ error: "text required" }, 400);
@@ -381,7 +530,7 @@ async function estimateFood(req: Request, env: Env): Promise<Response> {
     "kcal must be the total for the stated qty, not per 100g, and must be greater than zero. " +
     "No prose outside the JSON.";
 
-  const { text: raw, model } = await complete(env, {
+  const { text: raw, model } = await meteredComplete(env, u.id, {
     system: sys,
     user: `The athlete ate: ${meal}`,
     maxTokens: 700,
@@ -424,7 +573,8 @@ function parseChallengeList(raw: string): unknown[] | null {
 async function generateChallenges(req: Request, env: Env): Promise<Response> {
   const u = await authUser(req, env);
   if (!u) return json({ error: "unauthorized" }, 401);
-  if (!(await allowAiCall(env, u.id))) return json({ error: "daily AI limit reached" }, 429);
+  const budget = await checkBudget(env, u.id);
+  if (!budget.allowed) return overBudget(budget);
   const { activity, sport, goal } = (await req.json()) as {
     activity?: Record<string, number>; sport?: string; goal?: string;
   };
@@ -444,7 +594,7 @@ async function generateChallenges(req: Request, env: Env): Promise<Response> {
     `Sport: ${sport || "general"}\nGoal: ${goal || "general fitness"}\n` +
     `Last 7 days — ${Object.entries(activity ?? {}).map(([k, v]) => `${k}: ${v}`).join(", ") || "no activity"}`;
 
-  const { text, model } = await complete(env, {
+  const { text, model } = await meteredComplete(env, u.id, {
     system: sys,
     user: ctx,
     maxTokens: 600,
@@ -566,10 +716,20 @@ async function upsertSub(env: Env, sub: any): Promise<void> {
   });
 }
 
+// How old a webhook may be and still be accepted. Stripe signs the timestamp
+// into the payload for exactly this reason: without the check, a signature
+// stays valid forever, so anyone who ever captured one request body could
+// replay it — e.g. re-applying an old "subscription active" event after a
+// cancellation. Five minutes is Stripe's own recommended tolerance.
+const STRIPE_TOLERANCE_S = 300;
+
 async function verifyStripe(payload: string, header: string, secret: string): Promise<boolean> {
   const parts = Object.fromEntries(header.split(",").map((kv) => kv.split("=")));
   const t = parts["t"]; const v1 = parts["v1"];
   if (!t || !v1) return false;
+
+  const age = Math.abs(Date.now() / 1000 - Number(t));
+  if (!Number.isFinite(age) || age > STRIPE_TOLERANCE_S) return false;
   const enc = new TextEncoder();
   const key = await crypto.subtle.importKey("raw", enc.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   const mac = await crypto.subtle.sign("HMAC", key, enc.encode(`${t}.${payload}`));
