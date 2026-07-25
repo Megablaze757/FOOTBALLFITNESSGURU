@@ -10,8 +10,10 @@ import {
   computeXp, levelFor, rankFor, evaluateAchievements, dailyQuests,
   type ActivityStats, type DailyState,
 } from "@/lib/gamification";
+import type { WeekActivity } from "@/lib/challenges";
 import { Confetti } from "@/components/Confetti";
 import { LevelUpModal } from "@/components/LevelUpModal";
+import { WeeklyChallenges } from "@/components/WeeklyChallenges";
 
 export default function RewardsPage() {
   const user = useCurrentUser();
@@ -51,7 +53,17 @@ export default function RewardsPage() {
       trainedToday: trainDates.includes(today),
       nutritionToday: nutriDates.includes(today),
     };
-    return { stats, state };
+    // The last 7 days, which is the window every weekly challenge is scored on.
+    const week: WeekActivity = {
+      check_ins: checkDates.filter((d) => d >= since7).length,
+      training_sessions: trainDates.filter((d) => d >= since7).length,
+      program_sessions: stats.completedSessions,
+      nutrition_logs: nutriDates.filter((d) => d >= since7).length,
+      benchmarks: stats.benchmarks,
+      videos: stats.videos,
+      streak: stats.streak,
+    };
+    return { stats, state, week };
   }, [user.id], `rewards:${user.id}`);
 
   // Detect crossing a level threshold since the last visit → celebrate.
@@ -119,6 +131,8 @@ export default function RewardsPage() {
           </div>
         </div>
       </div>
+
+      <WeeklyChallenges userId={user.id} stats={data.stats} week={data.week} />
 
       {/* Daily quests */}
       <div className="card relative overflow-hidden p-5">

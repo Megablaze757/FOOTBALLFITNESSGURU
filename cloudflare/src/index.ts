@@ -49,6 +49,7 @@ export default {
       if (pathname.endsWith("/coach-chat")) return await coachChat(req, env);
       if (pathname.endsWith("/generate-program")) return await generateProgram(req, env);
       if (pathname.endsWith("/estimate-food")) return await estimateFood(req, env);
+      if (pathname.endsWith("/generate-challenges")) return await generateChallenges(req, env);
       if (pathname.endsWith("/create-checkout")) return await createCheckout(req, env);
       if (pathname.endsWith("/stripe-webhook")) return await stripeWebhook(req, env);
       if (pathname.endsWith("/admin-create-user")) return await adminCreateUser(req, env);
@@ -389,6 +390,69 @@ async function estimateFood(req: Request, env: Env): Promise<Response> {
   const items = parseFoodItems(raw);
   if (!items) return json({ error: "could not read that meal" }, 422); // validate passed, so unreachable
   return json({ items, model });
+}
+
+// --- Personalised weekly challenges ------------------------------------------
+//
+// The model writes the WORDS, never the rule. It must pick a metric from this
+// fixed list, because the client evaluates progress by counting that metric —
+// a free-text goal like "eat clean for a week" would produce a badge nothing
+// could ever unlock. Anything off-list is dropped client-side too (see
+// lib/challenges.ts); this is belt and braces.
+const CHALLENGE_METRICS = [
+  "check_ins", "training_sessions", "program_sessions",
+  "nutrition_logs", "benchmarks", "videos", "streak",
+];
+
+function parseChallengeList(raw: string): unknown[] | null {
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) return null;
+  try {
+    const parsed = JSON.parse(match[0]) as { challenges?: unknown };
+    const list = parsed.challenges;
+    if (!Array.isArray(list)) return null;
+    const ok = list.filter((c) => {
+      const o = c as Record<string, unknown>;
+      return o && CHALLENGE_METRICS.includes(String(o.metric)) && String(o.title ?? "").trim().length > 0;
+    });
+    return ok.length ? ok : null;
+  } catch {
+    return null;
+  }
+}
+
+async function generateChallenges(req: Request, env: Env): Promise<Response> {
+  const u = await authUser(req, env);
+  if (!u) return json({ error: "unauthorized" }, 401);
+  if (!(await allowAiCall(env, u.id))) return json({ error: "daily AI limit reached" }, 429);
+  const { activity, sport, goal } = (await req.json()) as {
+    activity?: Record<string, number>; sport?: string; goal?: string;
+  };
+
+  const sys =
+    "You set three weekly challenges for an athlete using a training app, to be shown as game-style objectives. " +
+    "Output ONLY valid minified JSON: {challenges:[{title:string,blurb:string,icon:string,metric:string,target:number}]}. " +
+    `metric MUST be one of: ${CHALLENGE_METRICS.join(", ")}. Any other value is rejected and the challenge is discarded. ` +
+    "Use a DIFFERENT metric for each of the three. target is a number achievable in one week " +
+    "(check-ins and food logs max 7, training and program sessions max 6, benchmarks and videos max 3). " +
+    "Aim at what they are NEGLECTING — look at the activity numbers and target the weakest habit, not the one they already do. " +
+    "title is under 6 words and reads like a game objective ('Fuel like a pro', 'Perfect week'). " +
+    "blurb is one short sentence saying what to do and why it matters. icon is a single emoji. " +
+    "No prose outside the JSON.";
+
+  const ctx =
+    `Sport: ${sport || "general"}\nGoal: ${goal || "general fitness"}\n` +
+    `Last 7 days — ${Object.entries(activity ?? {}).map(([k, v]) => `${k}: ${v}`).join(", ") || "no activity"}`;
+
+  const { text, model } = await complete(env, {
+    system: sys,
+    user: ctx,
+    maxTokens: 600,
+    validate: (t) => parseChallengeList(t) !== null,
+  });
+  const challenges = parseChallengeList(text);
+  if (!challenges) return json({ error: "bad ai output" }, 422); // validate passed, so unreachable
+  return json({ challenges, model });
 }
 
 // --- Stripe ----------------------------------------------------------------
