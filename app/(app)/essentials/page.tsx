@@ -13,13 +13,15 @@ import {
 } from "@/lib/essentials";
 import { getExercise, SPORTS, type Exercise, type SportId } from "@/lib/exercises";
 import { ExerciseModal } from "@/components/ExerciseDetail";
+import { SkillDrills } from "@/components/SkillDrills";
 import { BodyMap } from "@/components/BodyMap";
 
 // The Playbook covers four unrelated topics. Stacked, that ran to six and a
 // half screens on a phone; split into tabs each view is about two.
-type TabId = "position" | "injury" | "fuel";
+type TabId = "position" | "skills" | "injury" | "fuel";
 const TABS: { id: TabId; label: string; icon: string }[] = [
   { id: "position", label: "Your position", icon: "🎯" },
+  { id: "skills", label: "Skill drills", icon: "⚽" },
   { id: "injury", label: "Injury & rehab", icon: "🩹" },
   { id: "fuel", label: "Fuel & recovery", icon: "🍝" },
 ];
@@ -202,6 +204,10 @@ export default function EssentialsPage() {
       </section>
 
       )}
+
+      {/* Technical work. The position guide says a centre back needs heading;
+          this is where they find out how to actually practise it. */}
+      {tab === "skills" && <SkillDrills sport={sport} position={position} />}
 
       {/* Gameday nutrition timeline */}
       {tab === "fuel" && (
