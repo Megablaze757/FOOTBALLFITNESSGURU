@@ -198,7 +198,10 @@ export interface Profile {
   experience_years: number | null;
   bio: string | null;
   sport?: string | null;
+  /** Primary position — kept as positions[0]. */
   position?: string | null;
+  /** Every position they play. Skill work covers all of them. */
+  positions?: string[] | null;
   training_focus?: string | null;
   onboarded?: boolean | null;
   level?: string | null;

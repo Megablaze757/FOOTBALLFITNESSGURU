@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { Logo } from "@/components/Logo";
 
 export default function ResetPasswordPage() {
   const router = useRouter();
@@ -90,6 +91,7 @@ export default function ResetPasswordPage() {
     <main className="flex min-h-screen items-center justify-center px-5">
       <div className="w-full max-w-sm animate-scale-in">
         <div className="mb-8 text-center">
+          <Logo size={64} className="mx-auto mb-4" />
           <div className="text-4xl font-extrabold tracking-tight">
             <span className="text-pitch-400">PocketAthlete</span>
           </div>

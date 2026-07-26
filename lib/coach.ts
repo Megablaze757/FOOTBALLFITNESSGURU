@@ -12,6 +12,7 @@ import { progressionForName, type SportId } from "./exercises";
 import { parseConstraints, isExcluded, EMPTY_CONSTRAINTS, type Constraints, type Region } from "./constraints";
 import { buildHypertrophyProgram, type SplitStyle } from "./hypertrophy";
 import { skillForSession } from "./skills";
+import { positionLabel } from "./positions";
 
 export type GoalType = "speed" | "agility" | "strength" | "endurance" | "injury_recovery" | "skill";
 export type BodyArea = "knee" | "ankle" | "hamstring" | "hip" | "lower_back" | "shoulder";
@@ -378,7 +379,8 @@ export interface BuildProgramInput {
   block?: number; // 1-based; each block progresses volume slightly
   sport?: SportId;
   focus?: TrainingFocus;
-  position?: string;
+  /** One position, or every position they play — skill work covers all of them. */
+  position?: string | string[];
   /** The athlete's free-text notes, e.g. "I don't train legs". */
   notes?: string | null;
   /** Gym split to follow — push/pull/legs, upper/lower, body-part and so on. */
@@ -556,10 +558,10 @@ const FOCUS_LABEL: Record<TrainingFocus, string> = {
   performance: "performance", fitness: "general fitness", aesthetics: "muscle & aesthetics", rehab: "rehab",
 };
 
-function programSummary(goal: GoalType, sore: BodyArea[], inSeason: boolean, block: number, sport?: SportId, position?: string, focus?: TrainingFocus): string {
+function programSummary(goal: GoalType, sore: BodyArea[], inSeason: boolean, block: number, sport?: SportId, position?: string | string[], focus?: TrainingFocus): string {
   const g = GOALS.find((x) => x.id === goal)?.label ?? goal;
   const season = inSeason ? "in-season (recovery-weighted)" : "off-season (higher volume)";
-  const who = [position?.trim(), sport].filter(Boolean).join(" · ");
+  const who = [positionLabel(position), sport].filter(Boolean).join(" · ");
   const forWhom = who ? ` Tailored for a ${who}.` : "";
   const focusNote = focus && focus !== "performance" ? ` Weighted toward ${FOCUS_LABEL[focus]}.` : "";
   const blockNote = block > 1 ? ` Block ${block} — volume stepped up ${Math.round((block - 1) * 8)}% from your last block.` : "";

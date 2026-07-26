@@ -4,6 +4,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/lib/auth";
 import { useAsync } from "@/lib/use-async";
+import { Logo } from "@/components/Logo";
 import { assessReadiness } from "@/lib/readiness";
 import { summarizeTrends } from "@/lib/trends";
 import { computeACWR, weeklyReport, checkInStreak } from "@/lib/load";
@@ -71,7 +72,7 @@ export default function ReportPage() {
         <div className="flex items-start justify-between border-b border-white/10 pb-5">
           <div>
             <div className="flex items-center gap-2">
-              <span className="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-pitch-400 to-pitch-600 text-sm font-black text-ink-900">A</span>
+              <Logo size={32} />
               <span className="text-lg font-extrabold">PocketAthlete</span>
             </div>
             <h1 className="mt-3 text-2xl font-extrabold tracking-tight">Weekly performance report</h1>

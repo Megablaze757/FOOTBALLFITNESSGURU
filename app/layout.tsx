@@ -14,9 +14,24 @@ const display = Barlow_Semi_Condensed({
   display: "swap",
 });
 
+// basePath is set on GitHub Pages project sites; icon hrefs are plain strings
+// that Next does NOT rewrite, so they have to carry it themselves.
+const base = process.env.NEXT_PUBLIC_BASE_PATH || "";
+
 export const metadata: Metadata = {
   title: "PocketAthlete — AI Athlete Coach",
   description: "Your daily recovery, readiness and performance coach.",
+  icons: {
+    icon: `${base}/logo.png`,
+    shortcut: `${base}/logo.png`,
+    apple: `${base}/logo.png`,
+  },
+  // What shows up when someone shares the link — currently a bare URL.
+  openGraph: {
+    title: "PocketAthlete — AI Athlete Coach",
+    description: "Your daily recovery, readiness and performance coach.",
+    images: [`${base}/logo.png`],
+  },
 };
 
 export const viewport: Viewport = {

@@ -454,8 +454,14 @@ async function generateProgram(req: Request, env: Env): Promise<Response> {
   if (!budget.allowed) return overBudget(budget);
   const { goal, pain_map, notes, in_season, sport, position, focus, days_per_week, split } = (await req.json()) as {
     goal: string; pain_map: Record<string, number>; notes?: string; in_season?: boolean;
-    sport?: string; position?: string; focus?: string; days_per_week?: number; split?: string;
+    sport?: string; position?: string | string[]; focus?: string; days_per_week?: number; split?: string;
   };
+  // An athlete can play more than one position — a full back who covers at
+  // centre back needs both briefed, or half their technical work is for someone
+  // else. First one listed is their main.
+  const positions = (Array.isArray(position) ? position : [position])
+    .filter((p): p is string => typeof p === "string" && p.trim().length > 0)
+    .map((p) => p.trim());
   // The athlete picked a named split on the tile; the AI must build that one,
   // or the plan they get is not the plan they chose.
   const SPLIT_BRIEF: Record<string, string> = {
@@ -507,7 +513,11 @@ async function generateProgram(req: Request, env: Env): Promise<Response> {
   const { text, model } = await meteredComplete(env, u.id, {
     system: sys,
     user:
-      `Sport: ${sport || "football"}\nPosition/event: ${position || "unspecified"}\nTraining focus: ${focus || "performance"}\n` +
+      `Sport: ${sport || "football"}\n` +
+      (positions.length > 1
+        ? `Position/event: ${positions[0]} (main), also plays ${positions.slice(1).join(" and ")} — cover the demands of all of them.\n`
+        : `Position/event: ${positions[0] || "unspecified"}\n`) +
+      `Training focus: ${focus || "performance"}\n` +
       `Goal: ${goal}\nSeason: ${season}\nSore: ${sore}\nNotes: ${notes || "none"}` +
       (split && SPLIT_BRIEF[split] ? `\nREQUIRED SPLIT: ${SPLIT_BRIEF[split]}. Name each session accordingly.` : ""),
     maxTokens: 1600,

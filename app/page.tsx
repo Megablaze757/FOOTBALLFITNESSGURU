@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/auth";
 import { captureRef } from "@/lib/referral";
+import { Logo } from "@/components/Logo";
 
 const FEATURES = [
   { icon: "🩺", title: "Readiness engine", body: "A daily Green / Yellow / Red score built from sleep, fatigue, soreness and a full-body pain map — so you know when to push and when to back off." },
@@ -37,7 +38,7 @@ export default function Landing() {
       {/* Nav */}
       <header className="flex items-center justify-between py-6">
         <div className="flex items-center gap-2">
-          <span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-pitch-400 to-pitch-600 text-lg font-black text-ink-900 shadow-glow">A</span>
+          <Logo size={36} />
           <span className="text-lg font-extrabold tracking-tight">PocketAthlete</span>
         </div>
         <div className="flex items-center gap-2">

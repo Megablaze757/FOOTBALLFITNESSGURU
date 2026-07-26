@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/lib/auth";
 import { SPORTS, type SportId } from "@/lib/exercises";
-import { positionsForSport, FOCI, type TrainingFocus } from "@/lib/coach";
+import { FOCI, type TrainingFocus } from "@/lib/coach";
+import { PositionPicker } from "@/components/PositionPicker";
+import { positionLabel } from "@/lib/positions";
 
 const STEPS = ["Welcome", "Your sport", "About you", "All set"];
 
@@ -14,16 +16,14 @@ export default function OnboardingPage() {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [sport, setSport] = useState<SportId>("football");
-  const [position, setPosition] = useState("");
+  const [positions, setPositions] = useState<string[]>([]);
   const [focus, setFocus] = useState<TrainingFocus>("performance");
   const [saving, setSaving] = useState(false);
-
-  const positions = positionsForSport(sport);
 
   async function finish(next: "/coach" | "/journal") {
     setSaving(true);
     await createClient().from("profiles").update({
-      sport, position: position || null, training_focus: focus, onboarded: true,
+      sport, positions, position: positions[0] ?? null, training_focus: focus, onboarded: true,
     }).eq("id", user.id);
     router.replace(next);
   }
@@ -60,7 +60,7 @@ export default function OnboardingPage() {
               {SPORTS.map((s) => (
                 <button
                   key={s.id}
-                  onClick={() => { setSport(s.id); setPosition(""); }}
+                  onClick={() => { setSport(s.id); setPositions([]); }}
                   className={`card p-5 text-left transition ${sport === s.id ? "ring-2 ring-pitch-400/70 shadow-glow" : "card-hover"}`}
                 >
                   <div className="text-3xl">{s.emoji}</div>
@@ -77,16 +77,7 @@ export default function OnboardingPage() {
               <h1 className="text-2xl font-extrabold tracking-tight">A bit about you</h1>
               <p className="mt-1 text-sm text-slate-400">This shapes your programs and your playbook.</p>
             </div>
-            {positions.length > 0 && (
-              <div>
-                <span className="field-label">Your position / event</span>
-                <div className="flex flex-wrap gap-2">
-                  {positions.map((p) => (
-                    <button key={p} onClick={() => setPosition(p)} className={`rounded-full border px-3 py-1.5 text-sm transition ${position === p ? "border-pitch-400/50 bg-pitch-400/10 text-pitch-400" : "border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.06]"}`}>{p}</button>
-                  ))}
-                </div>
-              </div>
-            )}
+            <PositionPicker sport={sport} value={positions} onChange={setPositions} />
             <div>
               <span className="field-label">What are you training for?</span>
               <div className="grid grid-cols-2 gap-2">
@@ -106,7 +97,7 @@ export default function OnboardingPage() {
             <div className="text-6xl">🎯</div>
             <h1 className="mt-4 text-3xl font-extrabold tracking-tight">You&apos;re all set</h1>
             <p className="mx-auto mt-3 max-w-sm text-slate-400">
-              Set up for <b className="text-slate-200">{position ? `${position} · ` : ""}{SPORTS.find((s) => s.id === sport)?.label}</b>. Where do you want to start?
+              Set up for <b className="text-slate-200">{positions.length ? `${positionLabel(positions)} · ` : ""}{SPORTS.find((s) => s.id === sport)?.label}</b>. Where do you want to start?
             </p>
             <div className="mt-8 space-y-3">
               <button onClick={() => finish("/coach")} disabled={saving} className="btn-primary">🏋️ Build my first program</button>

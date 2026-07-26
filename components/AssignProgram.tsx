@@ -19,7 +19,7 @@ export function AssignProgram({ athleteId, athleteName, sport, position, coachId
   athleteId: string;
   athleteName: string;
   sport: SportId;
-  position?: string | null;
+  position?: string | string[] | null;
   coachId: string;
   onAssigned?: () => void;
 }) {

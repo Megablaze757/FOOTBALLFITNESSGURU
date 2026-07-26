@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useSession } from "@/lib/auth";
 import { captureRef, getRef, clearRef } from "@/lib/referral";
+import { Logo } from "@/components/Logo";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -115,6 +116,7 @@ export default function LoginPage() {
     <main className="flex min-h-screen items-center justify-center px-5">
       <div className="w-full max-w-sm animate-scale-in">
         <div className="mb-8 text-center">
+          <Logo size={64} className="mx-auto mb-4" />
           <div className="text-4xl font-extrabold tracking-tight">
             <span className="text-pitch-400">PocketAthlete</span>
           </div>

@@ -4,7 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { SPORTS, DIFFICULTIES } from "@/lib/exercises";
-import { positionsForSport } from "@/lib/coach";
+import { PositionPicker } from "@/components/PositionPicker";
+import { positionList } from "@/lib/positions";
 import type { Profile } from "@/lib/types";
 
 export function ProfileForm({ profile, email }: { profile: Profile; email: string }) {
@@ -15,7 +16,11 @@ export function ProfileForm({ profile, email }: { profile: Profile; email: strin
   const [experience, setExperience] = useState(profile.experience_years?.toString() ?? "");
   const [role, setRole] = useState<Profile["role"]>(profile.role);
   const [sport, setSport] = useState<string>(profile.sport ?? "football");
-  const [position, setPosition] = useState<string>(profile.position ?? "");
+  // The array is the source of truth; `position` is kept in step as the primary
+  // so the older readers of that column keep working.
+  const [positions, setPositions] = useState<string[]>(
+    positionList(profile.positions?.length ? profile.positions : profile.position),
+  );
   const [level, setLevel] = useState<string>(profile.level ?? "advanced");
   // Opt-IN in the UI, opt-OUT in the column. Storing it as an opt-out means a
   // new row defaults to visible, which is what makes a leaderboard work at all;
@@ -37,7 +42,7 @@ export function ProfileForm({ profile, email }: { profile: Profile; email: strin
       .update({
         full_name: fullName || null, bio: bio || null,
         experience_years: experience ? Number(experience) : null,
-        role, sport, position: position || null, level,
+        role, sport, positions, position: positions[0] ?? null, level,
         leaderboard_opt_out: !onBoards,
       })
       .eq("id", profile.id);
@@ -67,22 +72,14 @@ export function ProfileForm({ profile, email }: { profile: Profile; email: strin
 
       <label className="block">
         <span className="field-label">Sport</span>
-        <select value={sport} onChange={(e) => { setSport(e.target.value); setPosition(""); }} className="field [color-scheme:dark]">
+        <select value={sport} onChange={(e) => { setSport(e.target.value); setPositions([]); }} className="field [color-scheme:dark]">
           {SPORTS.map((s) => (
             <option key={s.id} value={s.id}>{s.emoji} {s.label}</option>
           ))}
         </select>
       </label>
 
-      <label className="block">
-        <span className="field-label">Position / event</span>
-        <select value={position} onChange={(e) => setPosition(e.target.value)} className="field [color-scheme:dark]">
-          <option value="">— none —</option>
-          {[...new Set([position, ...positionsForSport(sport)].filter(Boolean))].map((p) => (
-            <option key={p} value={p}>{p}</option>
-          ))}
-        </select>
-      </label>
+      <PositionPicker sport={sport} value={positions} onChange={setPositions} />
 
       <label className="block">
         <span className="field-label">Training level</span>

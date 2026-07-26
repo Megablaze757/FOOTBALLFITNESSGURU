@@ -6,11 +6,12 @@ import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/lib/auth";
 import { useAsync } from "@/lib/use-async";
 import {
-  positionGuide, gamedayLabel, relevantInjuryProtocols,
+  positionGuides, gamedayLabel, relevantInjuryProtocols,
   GAMEDAY_NUTRITION, RECOVERY_GENERAL, RECOVERY_INJURY, REHAB_DISCLAIMER,
   protocolsForAreas, matchInjuryText, baseAreaOf,
   type RecoveryProtocol,
 } from "@/lib/essentials";
+import { positionList } from "@/lib/positions";
 import { getExercise, SPORTS, type Exercise, type SportId } from "@/lib/exercises";
 import { ExerciseModal } from "@/components/ExerciseDetail";
 import { SkillDrills } from "@/components/SkillDrills";
@@ -54,21 +55,23 @@ export default function EssentialsPage() {
     const supabase = createClient();
     const today = new Date().toISOString().slice(0, 10);
     const [{ data: profile }, { data: checkIn }] = await Promise.all([
-      supabase.from("profiles").select("sport, position").eq("id", user.id).maybeSingle(),
+      supabase.from("profiles").select("sport, position, positions").eq("id", user.id).maybeSingle(),
       supabase.from("daily_check_ins").select("pain_map").eq("user_id", user.id).order("check_in_date", { ascending: false }).limit(1).maybeSingle(),
     ]);
-    const p = profile as { sport?: string; position?: string } | null;
+    const p = profile as { sport?: string; position?: string; positions?: string[] } | null;
     return {
       sport: (p?.sport ?? "football") as SportId,
-      position: p?.position ?? "",
+      positions: positionList(p?.positions?.length ? p.positions : p?.position),
       painMap: (checkIn as { pain_map?: Record<string, number> } | null)?.pain_map ?? {},
     };
   }, [user.id], `essentials:${user.id}`);
 
   if (loading || !data) return <div className="card mx-auto max-w-3xl h-96 animate-pulse" />;
 
-  const { sport, position } = data;
-  const guide = positionGuide(sport, position);
+  const { sport, positions } = data;
+  // One card per position they play — a full back who covers at centre back
+  // reads both, rather than us picking for them.
+  const guides = positionGuides(sport, positions);
   const sportLabel = SPORTS.find((s) => s.id === sport)?.label ?? sport;
   const gameday = gamedayLabel(sport);
   const injuryProtocols = relevantInjuryProtocols(data.painMap);
@@ -98,38 +101,44 @@ export default function EssentialsPage() {
 
       {/* Position essentials */}
       {tab === "position" && (
-      <section className="card-premium p-6">
-        <div className="flex items-center gap-2">
-          <span className="chip text-pitch-400">{sportLabel}</span>
-          <span className="chip">{position || "All-round"}</span>
-        </div>
-        <h2 className="mt-3 text-xl font-extrabold">Your position essentials</h2>
-        <p className="mt-1 text-sm text-slate-300">{guide.summary}</p>
-
-        <div className="mt-4 grid gap-4 sm:grid-cols-2">
-          <Col title="Prioritise physically" items={guide.physical} icon="⚡" />
-          <Col title="Sharpen technically" items={guide.skills} icon="🎯" />
-        </div>
-
-        <div className="mt-4">
-          <div className="stat-label mb-2">Key drills for you</div>
-          <div className="flex flex-wrap gap-2">
-            {guide.keyDrills.map((id) => {
-              const ex = getExercise(id);
-              if (!ex) return null;
-              return (
-                <button key={id} onClick={() => setOpen(ex)} className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-sm text-slate-200 transition hover:border-pitch-400/40 hover:bg-pitch-400/[0.06]">
-                  {ex.name} ›
-                </button>
-              );
-            })}
+      <div className="space-y-4">
+        {guides.map(({ position, guide }, i) => (
+        <section key={position || "all"} className="card-premium p-6">
+          <div className="flex items-center gap-2">
+            <span className="chip text-pitch-400">{sportLabel}</span>
+            <span className="chip">{position || "All-round"}</span>
+            {i === 0 && guides.length > 1 && <span className="chip text-slate-400">main</span>}
           </div>
-        </div>
-        {!position && (
-          <p className="mt-4 text-xs text-slate-500">Set your position in the <Link href="/coach" className="text-pitch-400 hover:underline">AI Coach quiz</Link> to make this position-specific.</p>
-        )}
-      </section>
+          <h2 className="mt-3 text-xl font-extrabold">
+            {position ? `${position} essentials` : "Your position essentials"}
+          </h2>
+          <p className="mt-1 text-sm text-slate-300">{guide.summary}</p>
 
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <Col title="Prioritise physically" items={guide.physical} icon="⚡" />
+            <Col title="Sharpen technically" items={guide.skills} icon="🎯" />
+          </div>
+
+          <div className="mt-4">
+            <div className="stat-label mb-2">Key drills for you</div>
+            <div className="flex flex-wrap gap-2">
+              {guide.keyDrills.map((id) => {
+                const ex = getExercise(id);
+                if (!ex) return null;
+                return (
+                  <button key={id} onClick={() => setOpen(ex)} className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-sm text-slate-200 transition hover:border-pitch-400/40 hover:bg-pitch-400/[0.06]">
+                    {ex.name} ›
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          {!positions.length && (
+            <p className="mt-4 text-xs text-slate-500">Set your position in the <Link href="/coach" className="text-pitch-400 hover:underline">AI Coach quiz</Link> to make this position-specific.</p>
+          )}
+        </section>
+        ))}
+      </div>
       )}
 
       {/* Describe it and get a graded plan. First, because the fixed protocols
@@ -212,7 +221,7 @@ export default function EssentialsPage() {
 
       {/* Technical work. The position guide says a centre back needs heading;
           this is where they find out how to actually practise it. */}
-      {tab === "skills" && <SkillDrills sport={sport} position={position} />}
+      {tab === "skills" && <SkillDrills sport={sport} position={positions} />}
 
       {/* Gameday nutrition timeline */}
       {tab === "fuel" && (

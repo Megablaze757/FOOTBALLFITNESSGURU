@@ -5,6 +5,7 @@
 // =============================================================================
 
 import type { SportId } from "./exercises";
+import { positionList } from "./positions";
 
 // --- Position essentials -----------------------------------------------------
 
@@ -173,9 +174,28 @@ const SPORT_FALLBACK: Record<SportId, PositionGuide> = {
   gym: { summary: "Balanced strength, conditioning and consistency.", physical: ["Strength", "Conditioning", "Mobility"], skills: ["Progressive overload", "Balanced training", "Consistency"], keyDrills: ["goblet_squat", "pull_up", "dumbbell_press", "bike_intervals"] },
 };
 
-export function positionGuide(sport: SportId, position?: string | null): PositionGuide {
+/**
+ * The playbook guide for an athlete.
+ *
+ * Takes one position or several. A guide is a page of prose — merging two of
+ * them would read as contradictory advice — so a multi-position athlete gets
+ * the guide for the first position we hold a guide for, which is their primary.
+ * Use `positionGuides` to show them all.
+ */
+export function positionGuide(sport: SportId, position?: string | string[] | null): PositionGuide {
   const bySport = GUIDES[sport] ?? GUIDES.football;
-  return (position && bySport[position]) || SPORT_FALLBACK[sport] || SPORT_FALLBACK.football;
+  for (const p of positionList(position)) {
+    if (bySport[p]) return bySport[p];
+  }
+  return SPORT_FALLBACK[sport] || SPORT_FALLBACK.football;
+}
+
+/** Every guide an athlete has a position for, so a full back who covers at
+ *  centre back can read both instead of picking one. */
+export function positionGuides(sport: SportId, position?: string | string[] | null): { position: string; guide: PositionGuide }[] {
+  const bySport = GUIDES[sport] ?? GUIDES.football;
+  const out = positionList(position).filter((p) => bySport[p]).map((p) => ({ position: p, guide: bySport[p] }));
+  return out.length ? out : [{ position: "", guide: positionGuide(sport, position) }];
 }
 
 // What the "gameday" section is called for each sport.

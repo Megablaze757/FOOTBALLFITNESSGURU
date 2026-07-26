@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { skillsForSport, skillCategories, hasSkills, drillsYouCanDo, NEEDS_LABEL, type SkillDrill } from "@/lib/skills";
 import type { SportId } from "@/lib/exercises";
+import { positionList, positionLabel } from "@/lib/positions";
 
 const NEEDS_STYLE: Record<SkillDrill["needs"], string> = {
   solo: "text-readiness-green",
@@ -24,15 +25,17 @@ const HAVE_OPTIONS: { id: SkillDrill["needs"]; label: string }[] = [
  * and 1v1s. Everything else is still there below, because a position is a
  * starting point rather than a cage.
  */
-export function SkillDrills({ sport, position }: { sport: SportId; position?: string | null }) {
+export function SkillDrills({ sport, position }: { sport: SportId; position?: string | string[] | null }) {
   const [skill, setSkill] = useState<string | "all">("all");
   const [have, setHave] = useState<SkillDrill["needs"]>("team");
 
+  // An athlete who plays two positions gets the work for both up top.
+  const mine = useMemo(() => positionList(position), [position]);
   const categories = useMemo(() => skillCategories(sport), [sport]);
   const drills = useMemo(() => {
-    const all = skillsForSport(sport, position).filter((d) => skill === "all" || d.skill === skill);
+    const all = skillsForSport(sport, mine).filter((d) => skill === "all" || d.skill === skill);
     return drillsYouCanDo(all, have);
-  }, [sport, position, skill, have]);
+  }, [sport, mine, skill, have]);
 
   if (!hasSkills(sport)) {
     return (
@@ -48,7 +51,7 @@ export function SkillDrills({ sport, position }: { sport: SportId; position?: st
       <div>
         <h2 className="field-label !mb-1">Skill drills</h2>
         <p className="text-xs text-slate-500">
-          {position ? `Ordered for a ${position.toLowerCase()} — ` : ""}
+          {mine.length ? `Ordered for a ${positionLabel(mine).toLowerCase()} — ` : ""}
           the technical work, not the gym work.
         </p>
       </div>
@@ -89,7 +92,7 @@ export function SkillDrills({ sport, position }: { sport: SportId; position?: st
         <ul className="space-y-2">
           {drills.map((d) => (
             <li key={d.id}>
-              <DrillCard drill={d} highlight={!!position && d.positions.includes(position)} />
+              <DrillCard drill={d} highlight={d.positions.some((p) => mine.includes(p))} />
             </li>
           ))}
         </ul>

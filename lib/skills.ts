@@ -17,6 +17,7 @@
 // =============================================================================
 
 import type { SportId } from "./exercises";
+import { positionList } from "./positions";
 
 export interface SkillDrill {
   id: string;
@@ -613,16 +614,23 @@ export const SKILL_DRILLS: SkillDrill[] = [
   ...RUNNING,
 ];
 
-/** Drills for a sport, optionally narrowed to a position. */
-export function skillsForSport(sport: SportId, position?: string | null): SkillDrill[] {
+/**
+ * Drills for a sport, ordered for the position(s) the athlete plays.
+ *
+ * Takes one or many: a full back who covers at centre back should see crossing
+ * AND heading before anything else, because they need both.
+ */
+export function skillsForSport(sport: SportId, position?: string | string[] | null): SkillDrill[] {
   const all = SKILL_DRILLS.filter((d) => d.sport === sport);
-  if (!position) return all;
+  const wanted = positionList(position);
+  if (!wanted.length) return all;
+  const matches = (d: SkillDrill) => d.positions.some((p) => wanted.includes(p));
   // A drill with no positions listed applies to everyone — a winger still needs
   // a first touch. Position-specific ones lead, so the list opens with the work
   // that matters most for them.
-  const mine = all.filter((d) => d.positions.includes(position));
+  const mine = all.filter(matches);
   const general = all.filter((d) => d.positions.length === 0);
-  const rest = all.filter((d) => d.positions.length > 0 && !d.positions.includes(position));
+  const rest = all.filter((d) => d.positions.length > 0 && !matches(d));
   return [...mine, ...general, ...rest];
 }
 
@@ -651,7 +659,11 @@ export function hasSkills(sport: SportId): boolean {
  * Solo-only: a program session has to be doable on the day it lands. A drill
  * needing three team-mates would just be skipped.
  */
-export function skillForSession(sport: SportId, position: string | null | undefined, index: number): SkillDrill | null {
+export function skillForSession(
+  sport: SportId,
+  position: string | string[] | null | undefined,
+  index: number,
+): SkillDrill | null {
   const pool = drillsYouCanDo(skillsForSport(sport, position), "solo");
   if (!pool.length) return null;
   // Spread across skills first, so consecutive sessions aren't two shooting

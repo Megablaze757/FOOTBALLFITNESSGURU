@@ -10,6 +10,7 @@ import { checkInStreak } from "@/lib/load";
 import { computeXp, levelFor } from "@/lib/gamification";
 import { TeamExercises } from "@/components/TeamExercises";
 import { AssignProgram } from "@/components/AssignProgram";
+import { positionList } from "@/lib/positions";
 import type { SportId } from "@/lib/exercises";
 import type { DailyCheckIn, Profile, Program } from "@/lib/types";
 
@@ -26,7 +27,7 @@ interface AthleteRow {
   // Carried so a coach can build them the right kind of program without
   // opening their profile first.
   sport: string | null;
-  position: string | null;
+  positions: string[];
 }
 
 export default function SquadPage() {
@@ -52,7 +53,7 @@ export default function SquadPage() {
 
     const since7 = new Date(Date.now() - 6 * 86400_000).toISOString().slice(0, 10);
     const [{ data: profiles }, { data: checkIns }, { data: programs }, { data: training }, { data: nutrition }, { data: benches }] = await Promise.all([
-      supabase.from("profiles").select("id, full_name, sport, position").in("id", ids),
+      supabase.from("profiles").select("id, full_name, sport, position, positions").in("id", ids),
       supabase.from("daily_check_ins").select("*").in("user_id", ids).order("check_in_date", { ascending: false }),
       supabase.from("programs").select("*").in("user_id", ids),
       supabase.from("training_logs").select("user_id, log_date").in("user_id", ids),
@@ -81,7 +82,7 @@ export default function SquadPage() {
     const nutriCount = countBy(nutrition as { user_id: string }[] | null);
     const benchCount = countBy(benches as { user_id: string }[] | null);
 
-    const athletes: AthleteRow[] = ((profiles ?? []) as Pick<Profile, "id" | "full_name" | "sport" | "position">[]).map((p) => {
+    const athletes: AthleteRow[] = ((profiles ?? []) as Pick<Profile, "id" | "full_name" | "sport" | "position" | "positions">[]).map((p) => {
       const c = latestCheck.get(p.id);
       const prog = activeProg.get(p.id);
       const total = prog ? prog.plan.weeks.reduce((n, w) => n + w.sessions.length, 0) : 0;
@@ -111,7 +112,7 @@ export default function SquadPage() {
         level: levelFor(xp).level,
         streak: checkInStreak(dates),
         sport: p.sport ?? null,
-        position: p.position ?? null,
+        positions: positionList(p.positions?.length ? p.positions : p.position),
       };
     });
     athletes.sort((a, b) => b.xp - a.xp);
@@ -180,7 +181,7 @@ export default function SquadPage() {
                   athleteId={a.id}
                   athleteName={a.name.split(" ")[0] || a.name}
                   sport={(a.sport ?? "football") as SportId}
-                  position={a.position}
+                  position={a.positions}
                   coachId={user.id}
                   onAssigned={reload}
                 />
