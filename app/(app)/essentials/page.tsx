@@ -14,6 +14,7 @@ import {
 import { getExercise, SPORTS, type Exercise, type SportId } from "@/lib/exercises";
 import { ExerciseModal } from "@/components/ExerciseDetail";
 import { SkillDrills } from "@/components/SkillDrills";
+import { InjuryPlanner } from "@/components/InjuryPlanner";
 import { BodyMap } from "@/components/BodyMap";
 
 // The Playbook covers four unrelated topics. Stacked, that ran to six and a
@@ -130,6 +131,10 @@ export default function EssentialsPage() {
       </section>
 
       )}
+
+      {/* Describe it and get a graded plan. First, because the fixed protocols
+          below can't handle "outside of my knee, six months, worse on stairs". */}
+      {tab === "injury" && <InjuryPlanner sport={sport} area={picked[0]} />}
 
       {/* Injury-specific recovery (only if sore) */}
       {tab === "injury" && injuryProtocols.length > 0 && (
