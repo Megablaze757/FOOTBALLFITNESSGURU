@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { invokeAI } from "@/lib/api";
+import { TRIAL_DAYS } from "@/lib/subscription";
 import type { Tier } from "@/lib/types";
 
 // Kicks off Stripe Checkout via the create-checkout Edge Function, then redirects
@@ -40,6 +41,15 @@ export function UpgradeButton({
       <button onClick={handleClick} disabled={disabled || loading} className="btn-primary">
         {loading ? "Redirecting…" : label}
       </button>
+      {/* Stated before they reach the card form, not after. Whether the trial
+          actually applies is decided by the Worker — someone who has subscribed
+          before doesn't get another one — so this says "start with" rather
+          than promising a specific outcome the server may not honour. */}
+      {TRIAL_DAYS > 0 && (
+        <p className="mt-2 text-center text-xs text-slate-500">
+          Starts with a {TRIAL_DAYS}-day free trial. Cancel any time before it ends and you won&apos;t be charged.
+        </p>
+      )}
       {error && <p className="mt-2 text-center text-xs text-readiness-red">{error}</p>}
     </div>
   );

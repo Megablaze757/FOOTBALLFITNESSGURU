@@ -6,7 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/lib/auth";
 import { useAsync } from "@/lib/use-async";
-import { PLANS, TIER_RANK, TEAM_PLAN } from "@/lib/subscription";
+import { PLANS, TIER_RANK, TEAM_PLAN , TRIAL_DAYS } from "@/lib/subscription";
 import { UpgradeButton } from "@/components/UpgradeButton";
 import type { Subscription, Tier } from "@/lib/types";
 
@@ -64,6 +64,9 @@ function PricingInner() {
               </div>
               <div className="mt-2 text-3xl font-extrabold">{plan.priceLabel}</div>
               <p className="mt-1 text-sm text-slate-400">{plan.tagline}</p>
+              {plan.paid && TRIAL_DAYS > 0 && !isCurrent && !isDowngrade && (
+                <p className="mt-1 text-xs font-semibold text-pitch-400">{TRIAL_DAYS} days free first</p>
+              )}
 
               <ul className="my-5 flex-1 space-y-2 text-sm text-slate-300">
                 {plan.features.map((f) => (

@@ -30,6 +30,7 @@ export interface Env {
   GAS_EMAIL_URL: string;     // Google Apps Script web-app URL (preferred email sender)
   GAS_EMAIL_SECRET: string;  // shared secret the GAS script checks
   AI_DAILY_LIMIT: string;       // max LLM calls per user per day (default 40)
+  TRIAL_DAYS: string;           // free-trial length in days (default 7; 0 disables)
   PAID_PROMPT_PER_M: string;    // USD per million prompt tokens on the paid model
   PAID_COMPLETION_PER_M: string; // USD per million completion tokens
   APP_URL: string;
@@ -764,13 +765,24 @@ async function createCheckout(req: Request, env: Env): Promise<Response> {
   if (!priceId) return json({ error: `${tier} price not configured — set STRIPE_PRICE_${tier.toUpperCase()} and redeploy` }, 503);
 
   // Reuse an existing Stripe customer if we have one.
-  const existing = (await (await supa(env, `subscriptions?user_id=eq.${user.id}&select=stripe_customer_id`)).json()) as
-    { stripe_customer_id: string | null }[] | null;
-  let customerId = existing?.[0]?.stripe_customer_id ?? "";
+  const existing = (await (await supa(env, `subscriptions?user_id=eq.${user.id}&select=stripe_customer_id,stripe_subscription_id`)).json()) as
+    { stripe_customer_id: string | null; stripe_subscription_id: string | null }[] | null;
+  const prior = existing?.[0];
+  let customerId = prior?.stripe_customer_id ?? "";
   if (!customerId) {
     const cust = await stripe(env, "customers", { email: user.email, "metadata[user_id]": user.id });
     customerId = cust.id;
   }
+
+  // Free trial, once per person. Stripe applies trial_period_days to whatever
+  // Checkout session asks for it, so without this check someone could cancel
+  // and resubscribe for a fresh free week indefinitely. A prior Stripe
+  // subscription id is the evidence they've already been through this — comped
+  // beta accounts have no such id, so testers still get their trial if they
+  // later choose to pay.
+  const trialDays = Math.max(0, Math.min(90, Number(env.TRIAL_DAYS ?? "7") || 0));
+  const eligibleForTrial = trialDays > 0 && !prior?.stripe_subscription_id;
+
   const session = await stripe(env, "checkout/sessions", {
     mode: "subscription",
     customer: customerId,
@@ -782,8 +794,12 @@ async function createCheckout(req: Request, env: Env): Promise<Response> {
     "metadata[tier]": tier,
     "subscription_data[metadata][user_id]": user.id,
     "subscription_data[metadata][tier]": tier,
+    ...(eligibleForTrial ? { "subscription_data[trial_period_days]": String(trialDays) } : {}),
   });
-  return json({ url: session.url });
+  // The caller shows different copy for a trial than for an immediate charge —
+  // promising "free for 7 days" to someone who is about to be billed today is
+  // the kind of thing that produces chargebacks.
+  return json({ url: session.url, trialDays: eligibleForTrial ? trialDays : 0 });
 }
 
 async function stripeWebhook(req: Request, env: Env): Promise<Response> {

@@ -1,3 +1,5 @@
+import { TRIAL_DAYS } from "./subscription";
+
 // =============================================================================
 // Privacy policy and terms, as structured content so both pages render from one
 // component and the "last updated" date can't drift between them.
@@ -138,6 +140,7 @@ export const TERMS: LegalSection[] = [
   {
     heading: "Subscriptions and payment",
     body: [
+      `New subscribers start with a ${TRIAL_DAYS}-day free trial. We take your card details at sign-up but charge nothing until the trial ends; cancel before then and you pay nothing at all. The trial is once per person — if you have subscribed before, your plan starts immediately.`,
       "Paid plans are billed monthly in advance through Stripe and renew automatically until cancelled. Prices are shown before you buy.",
       "You can cancel any time; the plan runs to the end of the period you have paid for and does not renew. We do not pro-rate part months.",
       "If a payment fails we may downgrade you to the free plan until it succeeds. If we change prices we will tell you first, and the change applies from your next renewal.",
