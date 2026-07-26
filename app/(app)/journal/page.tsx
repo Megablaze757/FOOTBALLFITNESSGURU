@@ -4,6 +4,8 @@ import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/lib/auth";
 import { useAsync } from "@/lib/use-async";
 import { JournalForm } from "@/components/JournalForm";
+import { nextSession } from "@/lib/next-session";
+import type { ProgramPlan } from "@/lib/coach";
 import { WearableImport } from "@/components/WearableImport";
 import type { TrainingState } from "@/components/TrainingLogInput";
 import type { Biometric } from "@/lib/biometrics";
@@ -15,17 +17,24 @@ export default function JournalPage() {
 
   const { data, loading, reload } = useAsync(async () => {
     const supabase = createClient();
-    const [{ data: existing }, { data: training }, { data: bio }, { data: profile }] = await Promise.all([
+    const [{ data: existing }, { data: training }, { data: bio }, { data: profile }, { data: program }] = await Promise.all([
       supabase.from("daily_check_ins").select("*").eq("user_id", user.id).eq("check_in_date", today).maybeSingle(),
       supabase.from("training_logs").select("*").eq("user_id", user.id).eq("log_date", today).maybeSingle(),
       supabase.from("biometrics").select("*").eq("user_id", user.id).eq("metric_date", today).maybeSingle(),
       supabase.from("profiles").select("sport").eq("id", user.id).maybeSingle(),
+      supabase.from("programs").select("plan, completed_sessions").eq("user_id", user.id).eq("status", "active").maybeSingle(),
     ]);
     return {
       existing,
       training: (training ?? null) as TrainingLog | null,
       bio: (bio ?? null) as Biometric | null,
       sport: (profile as { sport?: string } | null)?.sport ?? "football",
+      // Today's scheduled drills, so logging is a tap rather than retyping
+      // names the program already knows.
+      planned: nextSession(
+        (program as { plan?: ProgramPlan } | null)?.plan ?? null,
+        (program as { completed_sessions?: string[] } | null)?.completed_sessions ?? []
+      )?.drills ?? [],
     };
   }, [user.id], `journal:${user.id}`);
 
@@ -63,7 +72,7 @@ export default function JournalPage() {
           {checkIn ? "Already logged today — edit and resubmit anytime." : "Log how your body feels today."}
         </p>
       </header>
-      <JournalForm initial={initial} initialTraining={initialTraining} sport={data?.sport} />
+      <JournalForm initial={initial} initialTraining={initialTraining} sport={data?.sport} planned={data?.planned ?? []} />
 
       <div className="mt-5">
         <WearableImport

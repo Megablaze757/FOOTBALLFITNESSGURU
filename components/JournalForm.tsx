@@ -10,9 +10,9 @@ import { assessReadiness } from "@/lib/readiness";
 import { BodyMap } from "@/components/BodyMap";
 import { ReadinessGauge } from "@/components/ReadinessGauge";
 import { TrainingLogInput, type TrainingState } from "@/components/TrainingLogInput";
-import type { CheckInInput, PainMap, ReadinessResult } from "@/lib/types";
+import type { CheckInInput, PainMap, ReadinessResult, TrainingDrill } from "@/lib/types";
 
-export function JournalForm({ initial, initialTraining, sport }: { initial?: Partial<CheckInInput>; initialTraining?: TrainingState; sport?: string }) {
+export function JournalForm({ initial, initialTraining, sport, planned = [] }: { initial?: Partial<CheckInInput>; initialTraining?: TrainingState; sport?: string; planned?: TrainingDrill[] }) {
   // A basketball player being asked "Match today?" is the tell that a product
   // wasn't built for them. The column is still is_match_day — only the wording
   // changes, so no data migration is involved.
@@ -141,7 +141,7 @@ export function JournalForm({ initial, initialTraining, sport }: { initial?: Par
           <h2 className="field-label !mb-0">Today&apos;s training</h2>
           <span className="chip text-pitch-400">drills logged to history</span>
         </div>
-        <TrainingLogInput value={training} onChange={setTraining} />
+        <TrainingLogInput value={training} onChange={setTraining} planned={planned} />
       </section>
 
       {error && <p className="text-sm text-readiness-red">{error}</p>}

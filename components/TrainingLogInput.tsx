@@ -1,6 +1,7 @@
 "use client";
 
 import type { TrainingDrill } from "@/lib/types";
+import { DrillPicker } from "@/components/DrillPicker";
 
 export interface TrainingState {
   drills: TrainingDrill[];
@@ -8,9 +9,12 @@ export interface TrainingState {
   intensity: number | null;
 }
 
-const QUICK = ["Sprints", "Single-leg RDL", "Box jumps", "Band walks", "Passing drill", "Finishing"];
-
-export function TrainingLogInput({ value, onChange }: { value: TrainingState; onChange: (v: TrainingState) => void }) {
+export function TrainingLogInput({ value, onChange, planned = [] }: {
+  value: TrainingState;
+  onChange: (v: TrainingState) => void;
+  /** Today's scheduled drills, so they can be logged with one tap. */
+  planned?: TrainingDrill[];
+}) {
   const update = (patch: Partial<TrainingState>) => onChange({ ...value, ...patch });
 
   const setDrill = (i: number, patch: Partial<TrainingDrill>) =>
@@ -46,14 +50,15 @@ export function TrainingLogInput({ value, onChange }: { value: TrainingState; on
         </ul>
       )}
 
-      <div className="flex flex-wrap gap-2">
-        {QUICK.filter((q) => !value.drills.some((d) => d.name === q)).slice(0, 4).map((q) => (
-          <button key={q} type="button" onClick={() => addDrill(q)} className="chip text-slate-300 hover:border-pitch-400/50 hover:text-pitch-400">
-            + {q}
-          </button>
-        ))}
-        <button type="button" onClick={() => addDrill()} className="chip text-pitch-400">+ Custom</button>
-      </div>
+      <DrillPicker
+        planned={planned}
+        chosen={value.drills.map((d) => d.name)}
+        onAdd={(d) => update({ drills: [...value.drills, d] })}
+      />
+
+      <button type="button" onClick={() => addDrill()} className="chip text-pitch-400">
+        + Add something not in the library
+      </button>
 
       <div className="grid grid-cols-2 gap-3">
         <label className="block">
