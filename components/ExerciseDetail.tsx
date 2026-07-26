@@ -14,7 +14,7 @@ export function ExerciseDetailCard({ ex, sets, reps }: { ex: Exercise; sets?: nu
       <div className="flex flex-col gap-4 sm:flex-row">
         {/* Wider than it is tall on mobile: two frames side by side need the
             room, and a 40-unit square would squeeze each figure to nothing. */}
-        <div className="grid h-44 w-full shrink-0 place-items-center rounded-2xl border border-white/10 bg-black/40 p-2 sm:w-56">
+        <div className="grid h-44 w-full shrink-0 place-items-center overflow-hidden rounded-2xl border border-white/10 bg-black/40 p-2 sm:w-56">
           {ex.video_url ? (
             <video src={ex.video_url} autoPlay muted loop playsInline className="h-full w-full rounded-2xl object-cover" />
           ) : (

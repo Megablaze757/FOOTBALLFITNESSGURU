@@ -14,6 +14,8 @@ import type { WeekActivity } from "@/lib/challenges";
 import { Confetti } from "@/components/Confetti";
 import { LevelUpModal } from "@/components/LevelUpModal";
 import { WeeklyChallenges } from "@/components/WeeklyChallenges";
+import { Leaderboards } from "@/components/Leaderboards";
+import { RankLadder } from "@/components/RankLadder";
 
 export default function RewardsPage() {
   const user = useCurrentUser();
@@ -132,7 +134,11 @@ export default function RewardsPage() {
         </div>
       </div>
 
+      <RankLadder level={level} />
+
       <WeeklyChallenges userId={user.id} stats={data.stats} week={data.week} />
+
+      <Leaderboards userId={user.id} />
 
       {/* Daily quests */}
       <div className="card relative overflow-hidden p-5">

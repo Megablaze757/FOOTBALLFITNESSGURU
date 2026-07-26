@@ -141,7 +141,7 @@ export default function LibraryPage() {
             onClick={() => setOpen(ex)}
             className="card card-hover flex items-center gap-4 p-4 text-left"
           >
-            <span className="grid h-20 w-16 shrink-0 place-items-center rounded-2xl border border-white/10 bg-black/40">
+            <span className="grid h-20 w-16 shrink-0 place-items-center overflow-hidden rounded-2xl border border-white/10 bg-black/40">
               <ExerciseDemo pattern={ex.demo} implement={demoImplement(ex)} className="h-16 w-12" />
             </span>
             <span className="min-w-0 flex-1">

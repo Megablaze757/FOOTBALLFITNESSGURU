@@ -1,8 +1,22 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { skillsForSport, skillCategories, hasSkills, type SkillDrill } from "@/lib/skills";
+import { skillsForSport, skillCategories, hasSkills, drillsYouCanDo, NEEDS_LABEL, type SkillDrill } from "@/lib/skills";
 import type { SportId } from "@/lib/exercises";
+
+const NEEDS_STYLE: Record<SkillDrill["needs"], string> = {
+  solo: "text-readiness-green",
+  partner: "text-slate-300",
+  team: "text-slate-500",
+};
+
+// What you've got with you today. Ordered so each option includes the ones
+// before it — with a partner you can still do the wall drills.
+const HAVE_OPTIONS: { id: SkillDrill["needs"]; label: string }[] = [
+  { id: "solo", label: "Just me" },
+  { id: "partner", label: "Me + one" },
+  { id: "team", label: "Full session" },
+];
 
 /**
  * Technical drills for a sport, led by the ones that matter for the athlete's
@@ -12,15 +26,13 @@ import type { SportId } from "@/lib/exercises";
  */
 export function SkillDrills({ sport, position }: { sport: SportId; position?: string | null }) {
   const [skill, setSkill] = useState<string | "all">("all");
-  const [soloOnly, setSoloOnly] = useState(false);
+  const [have, setHave] = useState<SkillDrill["needs"]>("team");
 
   const categories = useMemo(() => skillCategories(sport), [sport]);
   const drills = useMemo(() => {
-    const all = skillsForSport(sport, position);
-    return all
-      .filter((d) => skill === "all" || d.skill === skill)
-      .filter((d) => !soloOnly || d.solo);
-  }, [sport, position, skill, soloOnly]);
+    const all = skillsForSport(sport, position).filter((d) => skill === "all" || d.skill === skill);
+    return drillsYouCanDo(all, have);
+  }, [sport, position, skill, have]);
 
   if (!hasSkills(sport)) {
     return (
@@ -41,6 +53,27 @@ export function SkillDrills({ sport, position }: { sport: SportId; position?: st
         </p>
       </div>
 
+      {/* Who have you got? Most people train alone most of the time, and a
+          drill needing three team-mates is useless on a Tuesday evening. */}
+      <div>
+        <span className="mb-1.5 block text-xs text-slate-500">Training with</span>
+        <div className="flex gap-2">
+          {HAVE_OPTIONS.map((o) => (
+            <button
+              key={o.id}
+              onClick={() => setHave(o.id)}
+              className={`flex-1 rounded-xl border py-2 text-xs font-semibold transition ${
+                have === o.id
+                  ? "border-pitch-400/50 bg-pitch-400/10 text-pitch-400"
+                  : "border-white/10 bg-white/[0.03] text-slate-300"
+              }`}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="no-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
         <Pill label="All" active={skill === "all"} onClick={() => setSkill("all")} />
         {categories.map((c) => (
@@ -48,21 +81,9 @@ export function SkillDrills({ sport, position }: { sport: SportId; position?: st
         ))}
       </div>
 
-      {/* Most people train alone most of the time, and a drill needing three
-          team-mates is useless on a Tuesday evening. */}
-      <label className="flex items-center gap-2 text-xs text-slate-400">
-        <input
-          type="checkbox"
-          checked={soloOnly}
-          onChange={(e) => setSoloOnly(e.target.checked)}
-          className="h-4 w-4 accent-pitch-500"
-        />
-        Only show drills I can do on my own
-      </label>
-
       {drills.length === 0 ? (
         <p className="card px-4 py-6 text-center text-sm text-slate-500">
-          Nothing matches — try clearing the solo filter.
+          Nothing here you can do on your own — try &ldquo;Me + one&rdquo;, or a different skill.
         </p>
       ) : (
         <ul className="space-y-2">
@@ -84,7 +105,7 @@ function DrillCard({ drill, highlight }: { drill: SkillDrill; highlight: boolean
         <span className="min-w-0 flex-1">
           <span className="flex flex-wrap items-center gap-2">
             <span className="chip text-pitch-400">{drill.skill}</span>
-            {drill.solo && <span className="chip text-slate-400">solo</span>}
+            <span className={`chip ${NEEDS_STYLE[drill.needs]}`}>{NEEDS_LABEL[drill.needs]}</span>
             {highlight && <span className="chip text-pitch-400">your position</span>}
           </span>
           <span className="mt-1.5 block font-bold text-slate-100">{drill.name}</span>

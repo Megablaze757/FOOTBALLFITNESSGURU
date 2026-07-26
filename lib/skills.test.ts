@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { SKILL_DRILLS, skillsForSport, skillCategories, hasSkills } from "./skills";
+import { SKILL_DRILLS, skillsForSport, skillCategories, hasSkills, drillsYouCanDo } from "./skills";
 import { POSITIONS_BY_SPORT } from "./coach";
 import { SPORTS } from "./exercises";
 
@@ -66,11 +66,23 @@ test("rugby and basketball cover their headline skills", () => {
   for (const s of ["Shooting", "Ball handling"]) assert.ok(bb.includes(s), `basketball missing ${s}`);
 });
 
-test("solo drills genuinely need nobody — enough of them to train alone", () => {
-  for (const s of ["football", "rugby", "basketball"] as const) {
-    const solo = skillsForSport(s).filter((d) => d.solo);
-    assert.ok(solo.length >= 2, `${s} has almost nothing you can do on your own`);
+test("every sport has enough you can do on your own", () => {
+  for (const s of ["football", "rugby", "basketball", "running"] as const) {
+    const solo = drillsYouCanDo(skillsForSport(s), "solo");
+    assert.ok(solo.length >= 2, `${s} has almost nothing you can do alone`);
   }
+});
+
+test("who you need is stated on every drill, and widens correctly", () => {
+  for (const d of SKILL_DRILLS) {
+    assert.ok(["solo", "partner", "team"].includes(d.needs), `${d.id} has needs "${d.needs}"`);
+  }
+  const all = skillsForSport("football");
+  // Having a partner should not hide the drills you could already do alone.
+  const solo = drillsYouCanDo(all, "solo").length;
+  const pair = drillsYouCanDo(all, "partner").length;
+  assert.ok(pair >= solo, "a partner should only ever unlock more");
+  assert.equal(drillsYouCanDo(all, "team").length, all.length);
 });
 
 test("no drill is attributed to a person or brand", () => {

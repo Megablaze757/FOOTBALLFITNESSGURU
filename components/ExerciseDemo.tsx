@@ -185,14 +185,22 @@ export function ExerciseSteps({ pattern, implement = "none", className = "" }: {
     { j: pose.b, label: "Finish" },
   ];
   return (
-    <div className={`flex items-stretch justify-center gap-2 ${className}`}>
+    // overflow-hidden is the backstop: whatever the flex maths does, nothing
+    // escapes this box onto the text below it.
+    <div className={`flex items-stretch justify-center gap-2 overflow-hidden ${className}`}>
       {frames.map(({ j, label }, i) => (
-        <div key={label} className="flex min-w-0 flex-1 flex-col items-center gap-1">
+        // min-h-0 matters as much as min-w-0 and is far easier to forget. A
+        // flex child won't shrink below its content size without it, so the
+        // figure grew past its fixed-height container and sat on top of the
+        // description underneath.
+        <div key={label} className="flex min-h-0 min-w-0 flex-1 flex-col items-center gap-1">
           <Figure
             j={j}
             pattern={pattern}
             implement={implement}
-            className="h-full w-full flex-1"
+            // No h-full here: flex-1 already sizes it, and the two together are
+            // what made it refuse to shrink.
+            className="min-h-0 w-full flex-1"
             label={`${pattern} ${label.toLowerCase()} position`}
           />
           <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">

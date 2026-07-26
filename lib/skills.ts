@@ -34,8 +34,9 @@ export interface SkillDrill {
   /** The single thing that separates doing it from doing it well. */
   coaching: string;
   progression: string;
-  /** True when it needs nobody else — most people train alone most of the time. */
-  solo: boolean;
+  /** Who you need. Most people train alone most of the time, and a drill
+   *  needing a full session is useless on a Tuesday evening. */
+  needs: "solo" | "partner" | "team";
 }
 
 // --- Football ----------------------------------------------------------------
@@ -53,7 +54,7 @@ const FOOTBALL: SkillDrill[] = [
     reps: "5 × 60 seconds, alternating feet",
     coaching: "Your first touch decides the pass — set the ball outside your body, not under it.",
     progression: "Move closer to speed it up, or restrict yourself to two touches, then one.",
-    solo: true,
+    needs: "solo",
   },
   {
     id: "fb_rondo", sport: "football", skill: "Passing", name: "Rondo (piggy in the middle)",
@@ -67,7 +68,7 @@ const FOOTBALL: SkillDrill[] = [
     reps: "4 × 4 minutes",
     coaching: "Scan before it arrives. The pass you make is decided before you touch the ball.",
     progression: "Shrink the square, or go one-touch.",
-    solo: false,
+    needs: "team",
   },
   {
     id: "fb_first_touch_wall", sport: "football", skill: "First touch", name: "Directional first touch",
@@ -81,7 +82,7 @@ const FOOTBALL: SkillDrill[] = [
     reps: "6 × 45 seconds",
     coaching: "Cushion, don't stop it dead — the touch should already be going where you want to run.",
     progression: "Add a turn before the touch so you receive on the half-turn.",
-    solo: true,
+    needs: "solo",
   },
   {
     id: "fb_cone_weave", sport: "football", skill: "Dribbling", name: "Tight cone weave",
@@ -95,7 +96,7 @@ const FOOTBALL: SkillDrill[] = [
     reps: "8 runs, 45s rest",
     coaching: "Touch count beats speed. Small touches keep the ball inside your stride.",
     progression: "Narrow the gaps, or use only your weaker foot.",
-    solo: true,
+    needs: "solo",
   },
   {
     id: "fb_1v1_moves", sport: "football", skill: "Dribbling", name: "1v1 move repetition",
@@ -109,7 +110,7 @@ const FOOTBALL: SkillDrill[] = [
     reps: "3 moves × 6 reps each side",
     coaching: "Sell it with your shoulders and eyes, not just your feet.",
     progression: "Add a real defender at 50%, then full pace.",
-    solo: true,
+    needs: "solo",
   },
   {
     id: "fb_finishing_1touch", sport: "football", skill: "Shooting", name: "One-touch finishing",
@@ -123,7 +124,7 @@ const FOOTBALL: SkillDrill[] = [
     reps: "5 × 10 finishes",
     coaching: "Ankle locked, head over the ball. Placement beats power inside the box.",
     progression: "Server varies the pace and angle without telling you.",
-    solo: false,
+    needs: "partner",
   },
   {
     id: "fb_shooting_edge", sport: "football", skill: "Shooting", name: "Strikes from the edge",
@@ -137,7 +138,7 @@ const FOOTBALL: SkillDrill[] = [
     reps: "4 × 8 strikes",
     coaching: "Plant foot pointing at the target. Most bad strikes are bad plant feet.",
     progression: "Strike moving away from goal, or off the weaker foot only.",
-    solo: true,
+    needs: "solo",
   },
   {
     id: "fb_crossing", sport: "football", skill: "Crossing", name: "Crossing off the dribble",
@@ -151,7 +152,7 @@ const FOOTBALL: SkillDrill[] = [
     reps: "5 × 6 crosses each side",
     coaching: "Look up once, then cross to the picture — don't stare at the ball.",
     progression: "Add a defender pressing, forcing you to cross earlier.",
-    solo: true,
+    needs: "solo",
   },
   {
     id: "fb_heading", sport: "football", skill: "Heading", name: "Attacking & defensive heading",
@@ -165,7 +166,7 @@ const FOOTBALL: SkillDrill[] = [
     reps: "4 × 10 (alternate attacking/defensive)",
     coaching: "Attack the ball, don't wait for it. Eyes open, contact on the forehead.",
     progression: "Add a passive jumper to compete against.",
-    solo: false,
+    needs: "partner",
   },
   {
     id: "fb_defending_1v1", sport: "football", skill: "Defending", name: "1v1 defending shape",
@@ -179,7 +180,7 @@ const FOOTBALL: SkillDrill[] = [
     reps: "8 × 30 seconds, alternating roles",
     coaching: "Get there fast, arrive slow. Diving in is how you get beaten.",
     progression: "Shrink the channel; give the attacker a two-touch limit.",
-    solo: false,
+    needs: "partner",
   },
 ];
 
@@ -198,7 +199,7 @@ const RUGBY: SkillDrill[] = [
     reps: "6 × 30 seconds each hand",
     coaching: "Push the ball, don't throw it. The follow-through is the accuracy.",
     progression: "Step across as you pass so it's off-balance, like a real game.",
-    solo: true,
+    needs: "solo",
   },
   {
     id: "rg_spin_pass", sport: "rugby", skill: "Passing", name: "Long spin pass",
@@ -212,7 +213,7 @@ const RUGBY: SkillDrill[] = [
     reps: "5 × 12 each side",
     coaching: "Power comes from the hips, not the arms. Feet set before the sweep.",
     progression: "Add distance, then pass off one step, then off the deck under pressure.",
-    solo: false,
+    needs: "partner",
   },
   {
     id: "rg_tackle_technique", sport: "rugby", skill: "Tackling", name: "Tackle technique on the bag",
@@ -226,7 +227,7 @@ const RUGBY: SkillDrill[] = [
     reps: "5 × 8 each shoulder",
     coaching: "Eyes open, head behind. Every safe tackle starts with head position.",
     progression: "Add a moving bag carrier, then a light live carry.",
-    solo: false,
+    needs: "partner",
   },
   {
     id: "rg_breakdown", sport: "rugby", skill: "Contact", name: "Ruck arrival & clear-out",
@@ -240,7 +241,7 @@ const RUGBY: SkillDrill[] = [
     reps: "6 × 6 arrivals",
     coaching: "Lowest man wins. If you're standing tall you're a passenger.",
     progression: "Add a second defender so you have to pick which threat to clear.",
-    solo: false,
+    needs: "partner",
   },
   {
     id: "rg_kicking", sport: "rugby", skill: "Kicking", name: "Territory & touch-finding",
@@ -254,7 +255,7 @@ const RUGBY: SkillDrill[] = [
     reps: "4 × 10 kicks",
     coaching: "Ball drop is everything — hold it out and let it fall, don't throw it down.",
     progression: "Kick under fatigue, or with a chaser closing you down.",
-    solo: true,
+    needs: "solo",
   },
   {
     id: "rg_handling_pressure", sport: "rugby", skill: "Handling", name: "Handling under fatigue",
@@ -268,7 +269,7 @@ const RUGBY: SkillDrill[] = [
     reps: "6 rounds, 45s rest",
     coaching: "Skills fail before legs do. Practise them tired or you've only practised the easy version.",
     progression: "Add a defender, or make every pass off the weaker hand.",
-    solo: false,
+    needs: "partner",
   },
 ];
 
@@ -287,7 +288,7 @@ const BASKETBALL: SkillDrill[] = [
     reps: "4 × 20 makes",
     coaching: "Use the glass every time. Footwork, not hands, is what this trains.",
     progression: "Reverse Mikan, then add a contact pad on the finish.",
-    solo: true,
+    needs: "solo",
   },
   {
     id: "bb_form_shooting", sport: "basketball", skill: "Shooting", name: "Form shooting",
@@ -301,7 +302,7 @@ const BASKETBALL: SkillDrill[] = [
     reps: "5 spots × 10 makes",
     coaching: "Elbow under the ball, wrist relaxed. Chase the feel, not the make.",
     progression: "Step back to the free-throw line, then the arc, keeping the same form.",
-    solo: true,
+    needs: "solo",
   },
   {
     id: "bb_catch_shoot", sport: "basketball", skill: "Shooting", name: "Catch-and-shoot off the move",
@@ -315,7 +316,7 @@ const BASKETBALL: SkillDrill[] = [
     reps: "5 spots × 8 shots",
     coaching: "Feet before hands. If you're setting your feet after the catch, you're late.",
     progression: "Add a closeout defender, then shoot off a relocation cut.",
-    solo: false,
+    needs: "partner",
   },
   {
     id: "bb_two_ball", sport: "basketball", skill: "Ball handling", name: "Two-ball dribbling",
@@ -329,7 +330,7 @@ const BASKETBALL: SkillDrill[] = [
     reps: "6 × 45 seconds",
     coaching: "Fingertips, not palms. Pound the ball hard — soft dribbles get stolen.",
     progression: "Move while doing it, then add a stationary defender's hands.",
-    solo: true,
+    needs: "solo",
   },
   {
     id: "bb_cone_handles", sport: "basketball", skill: "Ball handling", name: "Cone series",
@@ -343,7 +344,7 @@ const BASKETBALL: SkillDrill[] = [
     reps: "6 runs per move",
     coaching: "The move doesn't beat anyone; the change of pace does.",
     progression: "Add a live defender at the last cone.",
-    solo: true,
+    needs: "solo",
   },
   {
     id: "bb_closeout", sport: "basketball", skill: "Defence", name: "Closeout & slide",
@@ -357,7 +358,7 @@ const BASKETBALL: SkillDrill[] = [
     reps: "8 × 30 seconds",
     coaching: "Short steps on the closeout. Arriving out of control is the same as not arriving.",
     progression: "Let the attacker choose shot or drive without telling you.",
-    solo: false,
+    needs: "partner",
   },
   {
     id: "bb_rebound", sport: "basketball", skill: "Rebounding", name: "Box-out & pursue",
@@ -371,7 +372,7 @@ const BASKETBALL: SkillDrill[] = [
     reps: "5 × 8 reps",
     coaching: "Contact then ball. Everyone who jumps first loses the rebound.",
     progression: "Two attackers, so you have to pick and seal the right one.",
-    solo: false,
+    needs: "partner",
   },
 ];
 
@@ -390,7 +391,7 @@ const FOOTBALL_MORE: SkillDrill[] = [
     reps: "One session a week, 20 minutes",
     coaching: "It feels bad because it is bad — that's the point. Nobody improves a weak foot in the middle of a game.",
     progression: "Add pressure: a time limit, or a defender who knows you can only use one foot.",
-    solo: true,
+    needs: "solo",
   },
   {
     id: "fb_long_passing", sport: "football", skill: "Passing", name: "Switching play",
@@ -404,7 +405,7 @@ const FOOTBALL_MORE: SkillDrill[] = [
     reps: "5 × 10 switches",
     coaching: "Open your body before the touch, not after. You can't switch play facing your own goal.",
     progression: "Hit a moving target, or switch off one touch.",
-    solo: false,
+    needs: "partner",
   },
   {
     id: "fb_turning", sport: "football", skill: "First touch", name: "Receive and turn",
@@ -418,7 +419,7 @@ const FOOTBALL_MORE: SkillDrill[] = [
     reps: "6 × 45 seconds",
     coaching: "Check your shoulder BEFORE it arrives. The turn is decided by what you saw, not what you feel.",
     progression: "Add a passive defender touching your back so you have to feel where they are.",
-    solo: true,
+    needs: "solo",
   },
   {
     id: "fb_pressing", sport: "football", skill: "Defending", name: "Pressing triggers",
@@ -432,7 +433,7 @@ const FOOTBALL_MORE: SkillDrill[] = [
     reps: "10 × 15-second bursts",
     coaching: "Press the moment their head goes down. Pressing a player who's looking up just tires you out.",
     progression: "Two attackers, so you also have to choose which one to press.",
-    solo: false,
+    needs: "partner",
   },
 ];
 
@@ -451,7 +452,7 @@ const RUGBY_MORE: SkillDrill[] = [
     reps: "5 × 8 carries",
     coaching: "Win the contact first. An offload from a losing position is just a turnover with extra steps.",
     progression: "Two defenders, so the offload has to be late.",
-    solo: false,
+    needs: "partner",
   },
   {
     id: "rg_lineout_throw", sport: "rugby", skill: "Lineout", name: "Lineout throwing accuracy",
@@ -465,7 +466,7 @@ const RUGBY_MORE: SkillDrill[] = [
     reps: "5 × 12 throws to varied targets",
     coaching: "Feet and hips set the line. If your throw drifts, look at your feet before your hands.",
     progression: "Throw after a sprint, so you're doing it with a raised heart rate.",
-    solo: true,
+    needs: "solo",
   },
   {
     id: "rg_scrum_position", sport: "rugby", skill: "Contact", name: "Scrum body position",
@@ -479,7 +480,7 @@ const RUGBY_MORE: SkillDrill[] = [
     reps: "6 × 5-second drives",
     coaching: "Spine in line, chin off the chest. A bent back in a scrum is how necks get hurt.",
     progression: "Add a delayed call so you have to hold the set position longer.",
-    solo: false,
+    needs: "partner",
   },
   {
     id: "rg_kick_chase", sport: "rugby", skill: "Kicking", name: "Kick and chase",
@@ -493,7 +494,7 @@ const RUGBY_MORE: SkillDrill[] = [
     reps: "8 kick-and-chases",
     coaching: "Hang time buys your chasers metres. A flat kick is just giving them the ball.",
     progression: "Add a competitor jumping against you.",
-    solo: true,
+    needs: "solo",
   },
 ];
 
@@ -512,7 +513,7 @@ const BASKETBALL_MORE: SkillDrill[] = [
     reps: "10 sets of 2",
     coaching: "The routine is the skill. Under pressure you fall back on it or you fall apart.",
     progression: "Set a target — miss and the set restarts.",
-    solo: true,
+    needs: "solo",
   },
   {
     id: "bb_floater", sport: "basketball", skill: "Finishing", name: "Floater off two feet",
@@ -526,7 +527,7 @@ const BASKETBALL_MORE: SkillDrill[] = [
     reps: "4 × 10 each side",
     coaching: "Release early and high. The floater exists to beat a shot-blocker, so shoot it before they're set.",
     progression: "Add a defender with a raised hand or a pad.",
-    solo: true,
+    needs: "solo",
   },
   {
     id: "bb_pick_roll", sport: "basketball", skill: "Passing", name: "Pick and roll reads",
@@ -540,7 +541,7 @@ const BASKETBALL_MORE: SkillDrill[] = [
     reps: "3 reads × 8 reps each",
     coaching: "Come off the screen shoulder-to-shoulder. Space between you and the screener is where the defender gets through.",
     progression: "Add live defenders and let them choose the coverage.",
-    solo: false,
+    needs: "partner",
   },
   {
     id: "bb_transition", sport: "basketball", skill: "Finishing", name: "Transition finishing",
@@ -554,7 +555,7 @@ const BASKETBALL_MORE: SkillDrill[] = [
     reps: "10 lengths",
     coaching: "Decide your finish before the last two steps. Deciding late is what gets it blocked.",
     progression: "Add a trailing defender so you have to finish through contact.",
-    solo: true,
+    needs: "solo",
   },
 ];
 
@@ -573,7 +574,7 @@ const RUNNING: SkillDrill[] = [
     reps: "2 rounds of the sequence, before every run",
     coaching: "Tall and relaxed. These are posture drills — doing them tense teaches you nothing.",
     progression: "Add a 30m stride-out after each drill to carry the position into running.",
-    solo: true,
+    needs: "solo",
   },
   {
     id: "rn_cadence", sport: "running", skill: "Technique", name: "Cadence work",
@@ -587,7 +588,7 @@ const RUNNING: SkillDrill[] = [
     reps: "6 × 5 minutes, alternating",
     coaching: "Shorter steps, not faster running. Overstriding is braking with every step.",
     progression: "Hold the higher cadence for longer blocks until it stops feeling deliberate.",
-    solo: true,
+    needs: "solo",
   },
   {
     id: "rn_hill_technique", sport: "running", skill: "Technique", name: "Hill running technique",
@@ -601,7 +602,7 @@ const RUNNING: SkillDrill[] = [
     reps: "8 × 60m, walk-down recovery",
     coaching: "Lean from the ankles. Bending at the waist closes your hips and shortens your stride.",
     progression: "Add reps before adding gradient, and keep the last one as fast as the first.",
-    solo: true,
+    needs: "solo",
   },
 ];
 
@@ -637,4 +638,20 @@ export function skillCategories(sport: SportId): string[] {
 /** Does this sport have technical drills at all? Gym and lifting don't. */
 export function hasSkills(sport: SportId): boolean {
   return SKILL_DRILLS.some((d) => d.sport === sport);
+}
+
+export const NEEDS_LABEL: Record<SkillDrill["needs"], string> = {
+  solo: "On your own",
+  partner: "Needs a partner",
+  team: "Needs a group",
+};
+
+/**
+ * Drills you can do with the people you actually have. "Partner" includes solo
+ * work — if you've got someone with you, you can still do the wall drills —
+ * and a group can do anything.
+ */
+export function drillsYouCanDo(drills: SkillDrill[], have: SkillDrill["needs"]): SkillDrill[] {
+  const rank = { solo: 0, partner: 1, team: 2 } as const;
+  return drills.filter((d) => rank[d.needs] <= rank[have]);
 }
