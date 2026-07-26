@@ -202,4 +202,6 @@ export interface Profile {
   training_focus?: string | null;
   onboarded?: boolean | null;
   level?: string | null;
+  leaderboard_opt_out?: boolean | null;
+}| null;
 }

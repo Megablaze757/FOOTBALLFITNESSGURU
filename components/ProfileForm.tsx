@@ -17,6 +17,10 @@ export function ProfileForm({ profile, email }: { profile: Profile; email: strin
   const [sport, setSport] = useState<string>(profile.sport ?? "football");
   const [position, setPosition] = useState<string>(profile.position ?? "");
   const [level, setLevel] = useState<string>(profile.level ?? "advanced");
+  // Opt-IN in the UI, opt-OUT in the column. Storing it as an opt-out means a
+  // new row defaults to visible, which is what makes a leaderboard work at all;
+  // showing it as "show me on leaderboards" is what makes the choice legible.
+  const [onBoards, setOnBoards] = useState(!profile.leaderboard_opt_out);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -30,7 +34,12 @@ export function ProfileForm({ profile, email }: { profile: Profile; email: strin
 
     const { error } = await supabase
       .from("profiles")
-      .update({ full_name: fullName || null, bio: bio || null, experience_years: experience ? Number(experience) : null, role, sport, position: position || null, level })
+      .update({
+        full_name: fullName || null, bio: bio || null,
+        experience_years: experience ? Number(experience) : null,
+        role, sport, position: position || null, level,
+        leaderboard_opt_out: !onBoards,
+      })
       .eq("id", profile.id);
 
     if (error) setError(error.message);
@@ -101,6 +110,25 @@ export function ProfileForm({ profile, email }: { profile: Profile; email: strin
         <span className="field-label">Bio</span>
         <textarea value={bio} onChange={(e) => setBio(e.target.value)} rows={3} className="field resize-none" />
       </label>
+
+      <div className="rounded-2xl bg-white/[0.03] p-4">
+        <label className="flex cursor-pointer items-start justify-between gap-3">
+          <span className="min-w-0">
+            <span className="block text-sm font-medium text-slate-200">Show me on leaderboards</span>
+            <span className="mt-0.5 block text-xs text-slate-500">
+              Your first name and weekly activity — check-ins, sleep score, minutes trained.
+              Never your injuries, weight or body composition. Turn this off and you disappear
+              from every board, including your squad&apos;s.
+            </span>
+          </span>
+          <input
+            type="checkbox"
+            checked={onBoards}
+            onChange={(e) => setOnBoards(e.target.checked)}
+            className="mt-0.5 h-5 w-5 shrink-0 accent-pitch-500"
+          />
+        </label>
+      </div>
 
       {error && <p className="text-sm text-readiness-red">{error}</p>}
       {saved && <p className="text-sm text-pitch-400">Saved.</p>}
