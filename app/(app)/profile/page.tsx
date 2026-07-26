@@ -8,6 +8,7 @@ import { ProfileForm } from "@/components/ProfileForm";
 import { CoachRequests } from "@/components/CoachRequests";
 import { CoachMessages } from "@/components/CoachMessages";
 import { ManageBilling } from "@/components/ManageBilling";
+import { PushToggle } from "@/components/PushToggle";
 import { DeleteAccount } from "@/components/DeleteAccount";
 import { planFor } from "@/lib/subscription";
 import type { Profile, Subscription, Tier } from "@/lib/types";
@@ -68,6 +69,9 @@ export default function ProfilePage() {
       {/* Cancelling used to mean emailing and asking. A comped account has no
           Stripe customer behind it, so it gets the plans link instead. */}
       <ManageBilling hasBilling={!!subscription?.stripe_customer_id} />
+
+      {/* The whole loop depends on the app being opened in the morning. */}
+      <PushToggle />
 
       {(safeProfile.role === "coach" || safeProfile.role === "admin") && (
         <Link href="/squad" className="btn-ghost mb-4">🧑‍🏫 My squad</Link>

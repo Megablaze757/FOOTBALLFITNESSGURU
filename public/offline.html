@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Offline — PocketAthlete</title>
+<style>
+  :root { color-scheme: dark; }
+  body {
+    margin: 0; min-height: 100vh; display: grid; place-items: center;
+    background: #0a0a0b; color: #e2e8f0; padding: 1.5rem;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif; text-align: center;
+  }
+  .wrap { max-width: 22rem; }
+  h1 { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.02em; margin: 0 0 .5rem; }
+  p { color: #94a3b8; font-size: .9rem; line-height: 1.6; margin: 0 0 1.5rem; }
+  button {
+    background: #34d399; color: #0a0a0b; border: 0; border-radius: 1rem;
+    padding: .75rem 1.5rem; font-size: .9rem; font-weight: 600; cursor: pointer;
+  }
+  .mark { font-size: 2.5rem; margin-bottom: 1rem; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="mark">📡</div>
+    <h1>No connection</h1>
+    <!-- Said plainly because the common case is a basement gym, and the useful
+         information is that their check-in isn't lost. -->
+    <p>
+      You're offline. Anything you've already logged is saved on this device and
+      will sync as soon as you're back on signal.
+    </p>
+    <button onclick="location.reload()">Try again</button>
+  </div>
+</body>
+</html>

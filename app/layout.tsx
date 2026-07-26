@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter, Barlow_Semi_Condensed } from "next/font/google";
 import "./globals.css";
 import { ChunkReloader } from "@/components/ChunkReloader";
+import { PWA } from "@/components/PWA";
 
 // Body: Inter — a workhorse UI face, less of an "AI-template default" than Sora.
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans", display: "swap" });
@@ -21,6 +22,10 @@ const base = process.env.NEXT_PUBLIC_BASE_PATH || "";
 export const metadata: Metadata = {
   title: "PocketAthlete — AI Athlete Coach",
   description: "Your daily recovery, readiness and performance coach.",
+  manifest: `${base}/manifest.webmanifest`,
+  // Tells iOS to open from the home screen without Safari's chrome. iOS ignores
+  // the manifest's display mode and reads this instead.
+  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "PocketAthlete" },
   icons: {
     icon: `${base}/logo.png`,
     shortcut: `${base}/logo.png`,
@@ -46,6 +51,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={`${inter.variable} ${display.variable}`}>
       <body className="font-sans">
         <ChunkReloader />
+        <PWA />
         {children}
       </body>
     </html>

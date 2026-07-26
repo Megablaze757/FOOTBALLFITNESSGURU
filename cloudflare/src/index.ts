@@ -29,6 +29,9 @@ export interface Env {
   REMINDER_FROM: string;
   GAS_EMAIL_URL: string;     // Google Apps Script web-app URL (preferred email sender)
   GAS_EMAIL_SECRET: string;  // shared secret the GAS script checks
+  VAPID_PUBLIC_KEY: string;  // base64url P-256 point; must match NEXT_PUBLIC_VAPID_PUBLIC_KEY
+  VAPID_PRIVATE_KEY: string; // base64url 'd' of the same key pair — secret
+  VAPID_SUBJECT: string;     // mailto: contact, required by the push services
   AI_DAILY_LIMIT: string;       // max LLM calls per user per day (default 40)
   TRIAL_DAYS: string;           // free-trial length in days (default 7; 0 disables)
   PAID_PROMPT_PER_M: string;    // USD per million prompt tokens on the paid model
@@ -73,6 +76,7 @@ export default {
     // this, one bad email address could abort the whole run, and the retention
     // sweep would simply never happen.
     for (const job of [
+      () => sendPushReminders(env),
       () => sendDailyReminders(env),
       () => sendDeadlineReminders(env),
       () => purgeExpiredVideos(env),
@@ -1190,6 +1194,121 @@ async function purgeExpiredVideos(env: Env): Promise<void> {
     else console.error(`row delete failed after storage delete for ${batch.length} clips`);
   }
   console.log(`retention: removed ${removed} expired clip(s) of ${rows.length} due`);
+}
+
+// --- Web push ----------------------------------------------------------------
+//
+// The morning nudge. Everything downstream — readiness, streaks, XP,
+// leaderboards — depends on the app being opened, and email is a weak channel
+// for a 7am reminder to a teenager.
+//
+// Sent WITHOUT a payload. Encrypting one (RFC 8291: ECDH shared secret, HKDF,
+// AES128GCM) is a lot of cryptography to get exactly right, and this message is
+// the same every morning — the value is that the phone buzzes, not that the
+// text varies. The service worker supplies the wording. VAPID signing below is
+// still required: it's how the push service knows the request is from us.
+
+function b64url(bytes: ArrayBuffer | Uint8Array): string {
+  const b = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  let s = "";
+  for (const byte of b) s += String.fromCharCode(byte);
+  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function b64urlToBytes(s: string): Uint8Array {
+  const padded = s.replace(/-/g, "+").replace(/_/g, "/").padEnd(s.length + ((4 - (s.length % 4)) % 4), "=");
+  const raw = atob(padded);
+  return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
+}
+
+/**
+ * A VAPID Authorization header for one push origin.
+ *
+ * The JWT is scoped to the audience (the push service's origin) and expires, so
+ * it's minted per origin per run rather than once globally — a token for
+ * Firebase is not valid for Mozilla's push service.
+ */
+async function vapidHeader(env: Env, audience: string): Promise<string> {
+  const key = await crypto.subtle.importKey(
+    "jwk",
+    {
+      kty: "EC", crv: "P-256",
+      d: env.VAPID_PRIVATE_KEY,
+      // The public key is the uncompressed point 0x04 || X || Y; JWK wants X
+      // and Y separately.
+      x: b64url(b64urlToBytes(env.VAPID_PUBLIC_KEY).slice(1, 33)),
+      y: b64url(b64urlToBytes(env.VAPID_PUBLIC_KEY).slice(33, 65)),
+      ext: true,
+    },
+    { name: "ECDSA", namedCurve: "P-256" },
+    false,
+    ["sign"],
+  );
+
+  const header = b64url(new TextEncoder().encode(JSON.stringify({ typ: "JWT", alg: "ES256" })));
+  const claims = b64url(new TextEncoder().encode(JSON.stringify({
+    aud: audience,
+    // 12 hours. The spec caps this at 24; shorter limits the damage if a token
+    // is ever captured in a log.
+    exp: Math.floor(Date.now() / 1000) + 12 * 3600,
+    sub: env.VAPID_SUBJECT || "mailto:info@pocketathlete.com",
+  })));
+
+  const sig = await crypto.subtle.sign(
+    { name: "ECDSA", hash: "SHA-256" },
+    key,
+    new TextEncoder().encode(`${header}.${claims}`),
+  );
+  return `vapid t=${header}.${claims}.${b64url(sig)}, k=${env.VAPID_PUBLIC_KEY}`;
+}
+
+/** Push to one endpoint. Returns "ok", "gone" (unsubscribe it) or "retry". */
+async function pushOne(env: Env, endpoint: string): Promise<"ok" | "gone" | "retry"> {
+  try {
+    const audience = new URL(endpoint).origin;
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        Authorization: await vapidHeader(env, audience),
+        TTL: "43200", // keep it for 12h if the phone is off — a nudge at 8pm is noise
+        "Content-Length": "0",
+        Urgency: "normal",
+      },
+    });
+    // The push service reports a dead subscription this way — the app was
+    // uninstalled or permission revoked. Retrying it every morning forever is
+    // how a sender gets rate-limited.
+    if (res.status === 404 || res.status === 410) return "gone";
+    return res.ok ? "ok" : "retry";
+  } catch {
+    return "retry";
+  }
+}
+
+async function sendPushReminders(env: Env): Promise<void> {
+  if (!env.VAPID_PRIVATE_KEY || !env.VAPID_PUBLIC_KEY) return; // push not configured
+  if (!env.SUPABASE_SERVICE_ROLE_KEY) return;
+
+  const today = new Date().toISOString().slice(0, 10);
+  const r = await svcRpc(env, "push_targets_for_reminder", { for_date: today });
+  if (!r.ok) {
+    console.error(`push_targets_for_reminder unavailable (${r.status}) — is migration 0043 applied?`);
+    return;
+  }
+  const targets = (await r.json()) as { endpoint: string; sub_id: string }[];
+  if (!Array.isArray(targets) || targets.length === 0) return;
+
+  const dead: string[] = [];
+  let sent = 0;
+  for (const t of targets) {
+    const outcome = await pushOne(env, t.endpoint);
+    if (outcome === "ok") sent++;
+    else if (outcome === "gone") dead.push(t.sub_id);
+  }
+  // Flagged rather than deleted: the athlete's row stays so re-enabling
+  // notifications on that device updates it instead of creating a duplicate.
+  if (dead.length) await svcRpc(env, "mark_push_failed", { sub_ids: dead });
+  console.log(`push: ${sent} sent, ${dead.length} dead of ${targets.length} due`);
 }
 
 // --- Notification emails -----------------------------------------------------

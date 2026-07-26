@@ -10,7 +10,22 @@ import { assessReadiness } from "@/lib/readiness";
 import { BodyMap } from "@/components/BodyMap";
 import { ReadinessGauge } from "@/components/ReadinessGauge";
 import { TrainingLogInput, type TrainingState } from "@/components/TrainingLogInput";
+import { enqueue, browserStore } from "@/lib/offline-queue";
 import type { CheckInInput, PainMap, ReadinessResult, TrainingDrill } from "@/lib/types";
+
+/**
+ * Is this failure "no signal" rather than "the server said no"?
+ *
+ * Only connectivity failures are safe to queue and retry. A policy or
+ * validation rejection would fail the same way on every replay, so queueing it
+ * would replace a visible error with a sync that silently never completes.
+ */
+function isOffline(err: { message?: string; code?: string } | null): boolean {
+  if (typeof navigator !== "undefined" && navigator.onLine === false) return true;
+  const m = (err?.message ?? "").toLowerCase();
+  return m.includes("failed to fetch") || m.includes("networkerror") ||
+         m.includes("network request failed") || m.includes("load failed");
+}
 
 export function JournalForm({ initial, initialTraining, sport, planned = [] }: { initial?: Partial<CheckInInput>; initialTraining?: TrainingState; sport?: string; planned?: TrainingDrill[] }) {
   // A basketball player being asked "Match today?" is the tell that a product
@@ -31,6 +46,7 @@ export function JournalForm({ initial, initialTraining, sport, planned = [] }: {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ReadinessResult | null>(null);
+  const [queued, setQueued] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -55,30 +71,50 @@ export function JournalForm({ initial, initialTraining, sport, planned = [] }: {
       match_minutes_played: isMatchDay ? Number(minutes) || 0 : 0,
     };
 
+    const today = new Date().toISOString().slice(0, 10);
+    const cleanDrills = training.drills.filter((d) => d.name.trim());
+    const trainingRow = (cleanDrills.length || training.total_minutes || training.intensity)
+      ? { drills: cleanDrills, total_minutes: training.total_minutes, intensity: training.intensity }
+      : null;
+
     const { error: dbError } = await supabase
       .from("daily_check_ins")
       .upsert(
-        { user_id: user.id, check_in_date: new Date().toISOString().slice(0, 10), ...input },
+        { user_id: user.id, check_in_date: today, ...input },
         { onConflict: "user_id,check_in_date" }
       );
 
     if (dbError) {
+      // A gym in a basement has no signal, and losing the entry is the worst
+      // possible outcome on a product built around a daily streak. Keep it on
+      // the device and sync when the signal returns.
+      //
+      // Only for connectivity failures: a rejected row (RLS, bad data) would
+      // fail identically on every retry, so queueing it would just hide a real
+      // error behind a promise to sync that never resolves.
+      if (isOffline(dbError)) {
+        enqueue(browserStore(), {
+          kind: "check_in", date: today, userId: user.id,
+          payload: input as unknown as Record<string, unknown>,
+          training: trainingRow,
+          queuedAt: new Date().toISOString(),
+        });
+        setQueued(true);
+        // Readiness is computed on-device from the pure engine, so they still
+        // get their score now — the only thing waiting is the upload.
+        setResult(assessReadiness(input));
+        setSaving(false);
+        return;
+      }
       setError(dbError.message);
       setSaving(false);
       return;
     }
 
     // Persist today's training (drills/volume) for history + AI progression.
-    const cleanDrills = training.drills.filter((d) => d.name.trim());
-    if (cleanDrills.length || training.total_minutes || training.intensity) {
+    if (trainingRow) {
       await supabase.from("training_logs").upsert(
-        {
-          user_id: user.id,
-          log_date: new Date().toISOString().slice(0, 10),
-          drills: cleanDrills,
-          total_minutes: training.total_minutes,
-          intensity: training.intensity,
-        },
+        { user_id: user.id, log_date: today, ...trainingRow },
         { onConflict: "user_id,log_date" }
       );
     }
@@ -96,6 +132,12 @@ export function JournalForm({ initial, initialTraining, sport, planned = [] }: {
       <div className="card animate-scale-in space-y-5 p-6 text-center">
         <h2 className="text-sm font-bold uppercase tracking-wider text-pitch-400">Today&apos;s readiness</h2>
         <ReadinessGauge score={result.score} status={result.status} />
+        {queued && (
+          <p className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-left text-xs text-slate-400">
+            📡 You&apos;re offline — this check-in is saved on your phone and will upload
+            automatically when you&apos;re back on signal. Your streak is safe.
+          </p>
+        )}
         <p className="rounded-2xl bg-white/[0.04] p-4 text-left text-sm text-slate-200">{result.advice}</p>
         <button onClick={() => router.push("/home")} className="btn-primary">Go to dashboard</button>
         <button onClick={() => setResult(null)} className="text-sm text-slate-400 hover:text-pitch-400">
