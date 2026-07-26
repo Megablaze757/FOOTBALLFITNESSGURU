@@ -13,6 +13,7 @@ import { dailyQuests, computeXp, levelFor, type ActivityStats, type LevelInfo } 
 import { biometricSignal, type Biometric } from "@/lib/biometrics";
 import { ReadinessGauge } from "@/components/ReadinessGauge";
 import { BiometricSignalCard } from "@/components/BiometricSignalCard";
+import { Notifications } from "@/components/Notifications";
 import type { CheckInInput, DailyInsight } from "@/lib/types";
 
 export default function HomePage() {
@@ -109,6 +110,7 @@ export default function HomePage() {
     return (
       <div className="animate-fade-up space-y-6">
         <Greeting name={firstName} sub="Let's see how you're recovering." streak={streak} />
+        <Notifications userId={user.id} />
         <RankStrip level={level} week={data!.week} />
 
         <Link href="/journal" className="card-premium card-hover flex items-center gap-4 p-5 sm:p-6">
@@ -143,6 +145,8 @@ export default function HomePage() {
   return (
     <div className="animate-fade-up space-y-6">
       <Greeting name={firstName} sub="Here's your readiness for today." streak={streak} />
+
+      <Notifications userId={user.id} />
 
       <RankStrip level={level} week={data!.week} />
 

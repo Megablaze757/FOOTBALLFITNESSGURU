@@ -53,6 +53,7 @@ export default {
       if (pathname.endsWith("/generate-program")) return await generateProgram(req, env);
       if (pathname.endsWith("/estimate-food")) return await estimateFood(req, env);
       if (pathname.endsWith("/generate-challenges")) return await generateChallenges(req, env);
+      if (pathname.endsWith("/injury-plan")) return await injuryPlan(req, env);
       if (pathname.endsWith("/create-checkout")) return await createCheckout(req, env);
       if (pathname.endsWith("/stripe-webhook")) return await stripeWebhook(req, env);
       if (pathname.endsWith("/admin-create-user")) return await adminCreateUser(req, env);
@@ -73,6 +74,7 @@ export default {
       () => sendDailyReminders(env),
       () => sendDeadlineReminders(env),
       () => purgeExpiredVideos(env),
+      () => emailNotifications(env),
       ...(isMonday ? [() => sendWeeklySummaries(env)] : []),
     ]) {
       try { await job(); } catch (e) { console.error("cron job failed:", String(e)); }
@@ -663,6 +665,86 @@ async function estimateFood(req: Request, env: Env): Promise<Response> {
   return json({ items, model });
 }
 
+// --- Injury rehab plans ------------------------------------------------------
+//
+// The most safety-sensitive thing in this Worker, and the prompt is written
+// accordingly. An LLM asked about an injury will happily name a condition and
+// give a return date; both are things only an examination can establish, and
+// both are exactly what someone who is hurt wants to hear. So the model is
+// constrained to what is genuinely safe to say without seeing the person:
+// stage-by-stage loading, what to avoid, and the signs that mean stop and get
+// assessed.
+//
+// Longer-standing problems get MORE insistent about professional assessment,
+// not less — pain that has lasted months is the case where self-management has
+// already been tried and hasn't worked.
+
+function parseInjuryPlan(raw: string): unknown | null {
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) return null;
+  try {
+    const p = JSON.parse(match[0]) as { stages?: unknown; redFlags?: unknown; summary?: unknown };
+    const stages = p.stages;
+    if (!Array.isArray(stages) || stages.length === 0) return null;
+    for (const s of stages) {
+      const st = s as { name?: unknown; exercises?: unknown };
+      if (typeof st?.name !== "string" || !Array.isArray(st?.exercises) || st.exercises.length === 0) return null;
+    }
+    // A plan without red flags is the unsafe half of the answer. Reject it and
+    // let the chain try another model rather than shipping it.
+    if (!Array.isArray(p.redFlags) || p.redFlags.length === 0) return null;
+    if (typeof p.summary !== "string" || !p.summary.trim()) return null;
+    return p;
+  } catch {
+    return null;
+  }
+}
+
+async function injuryPlan(req: Request, env: Env): Promise<Response> {
+  const u = await authUser(req, env);
+  if (!u) return json({ error: "unauthorized" }, 401);
+  const budget = await checkBudget(env, u.id);
+  if (!budget.allowed) return overBudget(budget);
+
+  const { description, area, weeks, sport } = (await req.json()) as {
+    description?: string; area?: string; weeks?: number; sport?: string;
+  };
+  const desc = (description ?? "").trim().slice(0, 600);
+  if (desc.length < 10) return json({ error: "Tell me a bit more about it — what hurts, when, and for how long." }, 400);
+  const duration = Math.max(0, Math.min(520, Number(weeks) || 0));
+  const chronic = duration >= 6;
+
+  const sys =
+    "You are an experienced strength & conditioning coach writing a graded loading plan for an athlete with a niggle. " +
+    "You have NOT examined them and cannot see imaging. " +
+    "NEVER name a diagnosis, never say what is torn or damaged, and never predict a return-to-play date. " +
+    "If the description suggests something that needs assessment, say so plainly and keep the plan conservative. " +
+    "Output ONLY valid minified JSON: " +
+    "{summary:string,seeAProfessional:string,stages:[{name:string,timeframe:string,goal:string,exercises:[{name:string,dose:string,note:string}],avoid:string[]}],redFlags:string[],progressWhen:string}. " +
+    "3-4 stages moving from settling symptoms, through controlled loading, to return to sport. " +
+    "timeframe is a rough guide phrased as a range, and must be framed as depending on how symptoms respond, not on the calendar. " +
+    "dose is sets/reps/holds. note is the one cue that matters. avoid lists what to stay off during that stage. " +
+    "redFlags are specific, checkable signs that mean stop and get assessed — night pain, giving way, numbness, inability to weight-bear, swelling that returns each session. " +
+    "progressWhen states the symptom-based criterion for moving to the next stage, never a number of days. " +
+    (chronic
+      ? "This has lasted 6+ weeks. Say clearly in seeAProfessional that a persistent problem should be assessed in person by a physiotherapist, that self-management has evidently not resolved it, and keep early stages gentle. "
+      : "Keep seeAProfessional brief but real: if it worsens or doesn't settle in 2-3 weeks, get it looked at. ") +
+    "No prose outside the JSON.";
+
+  const { text, model } = await meteredComplete(env, u.id, {
+    system: sys,
+    user:
+      `Sport: ${sport || "general"}\nArea: ${area || "unspecified"}\n` +
+      `How long: ${duration ? `${duration} week(s)` : "not stated"}\nDescription: ${desc}`,
+    maxTokens: 1400,
+    json: true,
+    validate: (t) => parseInjuryPlan(t) !== null,
+  });
+  const plan = parseInjuryPlan(text);
+  if (!plan) return json({ error: "bad ai output" }, 422); // validate passed, so unreachable
+  return json({ plan, model, chronic });
+}
+
 // --- Personalised weekly challenges ------------------------------------------
 //
 // The model writes the WORDS, never the rule. It must pick a metric from this
@@ -937,6 +1019,45 @@ async function purgeExpiredVideos(env: Env): Promise<void> {
     else console.error(`row delete failed after storage delete for ${batch.length} clips`);
   }
   console.log(`retention: removed ${removed} expired clip(s) of ${rows.length} due`);
+}
+
+// --- Notification emails -----------------------------------------------------
+//
+// A nudge for anything still unread. Only unread ones: if they've already seen
+// it in the app, emailing about it is nagging rather than notifying. Marked as
+// emailed either way so nobody is told twice.
+
+async function emailNotifications(env: Env): Promise<void> {
+  if (!env.SUPABASE_SERVICE_ROLE_KEY) return;
+  const r = await svcRpc(env, "pending_notification_emails", {});
+  if (!r.ok) {
+    console.error(`pending_notification_emails unavailable (${r.status}) — is migration 0040 applied?`);
+    return;
+  }
+  const rows = (await r.json()) as { id: string; user_id: string; title: string; body: string | null; href: string | null }[];
+  if (!Array.isArray(rows) || rows.length === 0) return;
+
+  const emails = await listUsers(env);
+  const sent: string[] = [];
+  for (const n of rows) {
+    const addr = emails.get(n.user_id);
+    // No address means nothing to send — but still mark it, or this row is
+    // retried every night forever.
+    if (addr) {
+      const link = `${env.APP_URL}${n.href ?? "/home"}`;
+      await email(env, addr, n.title,
+        `<p>${n.body ?? ""}</p><p><a href="${link}">Open PocketAthlete →</a></p>`);
+    }
+    sent.push(n.id);
+  }
+  if (sent.length) {
+    await supa(env, `notifications?id=in.(${sent.join(",")})`, {
+      method: "PATCH",
+      headers: { Prefer: "return=minimal" },
+      body: JSON.stringify({ emailed_at: new Date().toISOString() }),
+    });
+  }
+  console.log(`notifications: emailed ${sent.length}`);
 }
 
 // --- Email reminders --------------------------------------------------------

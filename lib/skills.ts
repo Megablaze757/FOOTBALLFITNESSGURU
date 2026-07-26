@@ -375,7 +375,242 @@ const BASKETBALL: SkillDrill[] = [
   },
 ];
 
-export const SKILL_DRILLS: SkillDrill[] = [...FOOTBALL, ...RUGBY, ...BASKETBALL];
+// --- Football, continued ------------------------------------------------------
+
+const FOOTBALL_MORE: SkillDrill[] = [
+  {
+    id: "fb_weak_foot", sport: "football", skill: "First touch", name: "Weak-foot only session",
+    positions: [],
+    setup: "A ball, a wall, 20 minutes.",
+    how: [
+      "Everything with the weaker foot: passes, touches, turns, strikes.",
+      "Start slow and accurate before adding pace.",
+      "Finish with 20 weak-foot strikes at a target.",
+    ],
+    reps: "One session a week, 20 minutes",
+    coaching: "It feels bad because it is bad — that's the point. Nobody improves a weak foot in the middle of a game.",
+    progression: "Add pressure: a time limit, or a defender who knows you can only use one foot.",
+    solo: true,
+  },
+  {
+    id: "fb_long_passing", sport: "football", skill: "Passing", name: "Switching play",
+    positions: ["Centre back", "Defensive mid", "Central mid"],
+    setup: "30–40m of space, a partner or a target zone.",
+    how: [
+      "Take a positive first touch across your body, then drive it 30m.",
+      "Strike through the bottom third with the laces for a driven ball.",
+      "Alternate driven and lofted — different jobs, different techniques.",
+    ],
+    reps: "5 × 10 switches",
+    coaching: "Open your body before the touch, not after. You can't switch play facing your own goal.",
+    progression: "Hit a moving target, or switch off one touch.",
+    solo: false,
+  },
+  {
+    id: "fb_turning", sport: "football", skill: "First touch", name: "Receive and turn",
+    positions: ["Central mid", "Striker", "Defensive mid"],
+    setup: "Two cones 10m apart, a wall or server.",
+    how: [
+      "Receive with your back to the far cone, on the half-turn.",
+      "Turn out of your feet in one movement and drive forward.",
+      "Alternate turning left and right, and inside and outside foot.",
+    ],
+    reps: "6 × 45 seconds",
+    coaching: "Check your shoulder BEFORE it arrives. The turn is decided by what you saw, not what you feel.",
+    progression: "Add a passive defender touching your back so you have to feel where they are.",
+    solo: true,
+  },
+  {
+    id: "fb_pressing", sport: "football", skill: "Defending", name: "Pressing triggers",
+    positions: ["Striker", "Winger", "Central mid"],
+    setup: "A partner with a ball, 15m of space.",
+    how: [
+      "Partner plays a heavy touch or turns their back — that's your trigger.",
+      "Sprint to press on the trigger only; jog otherwise.",
+      "Arrive curved, cutting off the pass back.",
+    ],
+    reps: "10 × 15-second bursts",
+    coaching: "Press the moment their head goes down. Pressing a player who's looking up just tires you out.",
+    progression: "Two attackers, so you also have to choose which one to press.",
+    solo: false,
+  },
+];
+
+// --- Rugby, continued ---------------------------------------------------------
+
+const RUGBY_MORE: SkillDrill[] = [
+  {
+    id: "rg_offload", sport: "rugby", skill: "Handling", name: "Offload out of contact",
+    positions: ["Centre", "No. 8", "Flanker", "Wing"],
+    setup: "A tackle shield, a partner running a support line.",
+    how: [
+      "Carry into the shield, stay square and keep your feet driving.",
+      "Free one arm and pop the ball up to the support runner.",
+      "Support runner takes it at pace, not standing still.",
+    ],
+    reps: "5 × 8 carries",
+    coaching: "Win the contact first. An offload from a losing position is just a turnover with extra steps.",
+    progression: "Two defenders, so the offload has to be late.",
+    solo: false,
+  },
+  {
+    id: "rg_lineout_throw", sport: "rugby", skill: "Lineout", name: "Lineout throwing accuracy",
+    positions: ["Hooker"],
+    setup: "A target at jumping height — a post marking or a partner.",
+    how: [
+      "Same stance and grip every throw; consistency beats power.",
+      "Throw flat and fast to the target, following through at it.",
+      "Call the number before each throw so you're practising under a decision.",
+    ],
+    reps: "5 × 12 throws to varied targets",
+    coaching: "Feet and hips set the line. If your throw drifts, look at your feet before your hands.",
+    progression: "Throw after a sprint, so you're doing it with a raised heart rate.",
+    solo: true,
+  },
+  {
+    id: "rg_scrum_position", sport: "rugby", skill: "Contact", name: "Scrum body position",
+    positions: ["Prop", "Hooker", "Lock"],
+    setup: "A scrum machine or a strong partner with a shield.",
+    how: [
+      "Set with a flat back, hips below shoulders, shins vertical.",
+      "Bind tight, then drive on the call through the heels.",
+      "Hold the shape for 5 seconds — the position is the skill.",
+    ],
+    reps: "6 × 5-second drives",
+    coaching: "Spine in line, chin off the chest. A bent back in a scrum is how necks get hurt.",
+    progression: "Add a delayed call so you have to hold the set position longer.",
+    solo: false,
+  },
+  {
+    id: "rg_kick_chase", sport: "rugby", skill: "Kicking", name: "Kick and chase",
+    positions: ["Fly-half", "Wing", "Full-back"],
+    setup: "Open pitch, a few balls.",
+    how: [
+      "Put up a contestable kick — height over distance.",
+      "Chase hard and compete for it at the top of your jump.",
+      "Land safely, on your feet, ball secured.",
+    ],
+    reps: "8 kick-and-chases",
+    coaching: "Hang time buys your chasers metres. A flat kick is just giving them the ball.",
+    progression: "Add a competitor jumping against you.",
+    solo: true,
+  },
+];
+
+// --- Basketball, continued ----------------------------------------------------
+
+const BASKETBALL_MORE: SkillDrill[] = [
+  {
+    id: "bb_free_throws", sport: "basketball", skill: "Shooting", name: "Pressure free throws",
+    positions: [],
+    setup: "A hoop, a ball, the free-throw line.",
+    how: [
+      "Same routine every time — dribbles, breath, shot.",
+      "Shoot in sets of two, as you would in a game.",
+      "Sprint the width of the court between sets so you're shooting tired.",
+    ],
+    reps: "10 sets of 2",
+    coaching: "The routine is the skill. Under pressure you fall back on it or you fall apart.",
+    progression: "Set a target — miss and the set restarts.",
+    solo: true,
+  },
+  {
+    id: "bb_floater", sport: "basketball", skill: "Finishing", name: "Floater off two feet",
+    positions: ["Point guard", "Shooting guard"],
+    setup: "A hoop, a ball, the paint.",
+    how: [
+      "Attack from the wing, gather just inside the free-throw line.",
+      "Rise off two feet and release high and soft over the front rim.",
+      "Alternate both hands and both sides.",
+    ],
+    reps: "4 × 10 each side",
+    coaching: "Release early and high. The floater exists to beat a shot-blocker, so shoot it before they're set.",
+    progression: "Add a defender with a raised hand or a pad.",
+    solo: true,
+  },
+  {
+    id: "bb_pick_roll", sport: "basketball", skill: "Passing", name: "Pick and roll reads",
+    positions: ["Point guard", "Centre", "Power forward"],
+    setup: "Two players, a ball, a hoop.",
+    how: [
+      "Set the screen, hold it, then roll hard to the rim.",
+      "Handler reads the defence: pull up, drive, or hit the roller.",
+      "Run each read deliberately so all three are available.",
+    ],
+    reps: "3 reads × 8 reps each",
+    coaching: "Come off the screen shoulder-to-shoulder. Space between you and the screener is where the defender gets through.",
+    progression: "Add live defenders and let them choose the coverage.",
+    solo: false,
+  },
+  {
+    id: "bb_transition", sport: "basketball", skill: "Finishing", name: "Transition finishing",
+    positions: ["Small forward", "Shooting guard", "Point guard"],
+    setup: "Full court, a ball.",
+    how: [
+      "Sprint the length, finish at full speed off one foot.",
+      "Alternate the side you attack from and the hand you finish with.",
+      "Jog back, then go again — this is conditioning as much as skill.",
+    ],
+    reps: "10 lengths",
+    coaching: "Decide your finish before the last two steps. Deciding late is what gets it blocked.",
+    progression: "Add a trailing defender so you have to finish through contact.",
+    solo: true,
+  },
+];
+
+// --- Running ------------------------------------------------------------------
+
+const RUNNING: SkillDrill[] = [
+  {
+    id: "rn_form_drills", sport: "running", skill: "Technique", name: "Running form drills",
+    positions: [],
+    setup: "30m of flat ground.",
+    how: [
+      "A-skips 30m: tall posture, drive the knee, snap the foot down.",
+      "B-skips 30m: same, but paw the ground back underneath you.",
+      "High knees, then heel flicks, 30m each. Walk back to recover.",
+    ],
+    reps: "2 rounds of the sequence, before every run",
+    coaching: "Tall and relaxed. These are posture drills — doing them tense teaches you nothing.",
+    progression: "Add a 30m stride-out after each drill to carry the position into running.",
+    solo: true,
+  },
+  {
+    id: "rn_cadence", sport: "running", skill: "Technique", name: "Cadence work",
+    positions: ["5k/10k", "Half marathon", "Marathon"],
+    setup: "A watch or metronome and an easy route.",
+    how: [
+      "Run 5 minutes at your normal cadence and count your steps.",
+      "Run 5 minutes at roughly 5% more, taking shorter steps at the same pace.",
+      "Alternate for the session.",
+    ],
+    reps: "6 × 5 minutes, alternating",
+    coaching: "Shorter steps, not faster running. Overstriding is braking with every step.",
+    progression: "Hold the higher cadence for longer blocks until it stops feeling deliberate.",
+    solo: true,
+  },
+  {
+    id: "rn_hill_technique", sport: "running", skill: "Technique", name: "Hill running technique",
+    positions: ["Sprinter", "5k/10k", "800m/1500m"],
+    setup: "A hill of 8–10% for 60m.",
+    how: [
+      "Uphill: shorten the stride, drive the arms, lean from the ankles not the waist.",
+      "Walk down to recover fully.",
+      "Focus on posture over speed — this is a technique session.",
+    ],
+    reps: "8 × 60m, walk-down recovery",
+    coaching: "Lean from the ankles. Bending at the waist closes your hips and shortens your stride.",
+    progression: "Add reps before adding gradient, and keep the last one as fast as the first.",
+    solo: true,
+  },
+];
+
+export const SKILL_DRILLS: SkillDrill[] = [
+  ...FOOTBALL, ...FOOTBALL_MORE,
+  ...RUGBY, ...RUGBY_MORE,
+  ...BASKETBALL, ...BASKETBALL_MORE,
+  ...RUNNING,
+];
 
 /** Drills for a sport, optionally narrowed to a position. */
 export function skillsForSport(sport: SportId, position?: string | null): SkillDrill[] {

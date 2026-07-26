@@ -70,6 +70,17 @@ export function AssignProgram({ athleteId, athleteName, sport, position, coachId
       );
       return;
     }
+    // Tell them. A program that appears silently is one they find next week.
+    // Best-effort: the program is already assigned, so a failed notification
+    // must not read as a failed assignment.
+    await supabase.from("notifications").insert({
+      user_id: athleteId,
+      kind: "program_assigned",
+      title: "Your coach set you a new program",
+      body: `${GOALS.find((g) => g.id === goal)?.label ?? goal}, ${days} days a week.${notes ? ` "${notes}"` : ""}`,
+      href: "/coach",
+    });
+
     invalidate();           // their coach page is cached; drop it so the new plan shows
     setDone(true);
     setOpen(false);
