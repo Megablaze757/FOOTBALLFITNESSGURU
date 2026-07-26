@@ -11,7 +11,7 @@ const AI_TIMEOUT_MS = 18_000;
  * the user's session token so the server can authorise. Throws on failure OR
  * timeout — the caller decides whether to fall back to the local engine.
  */
-export async function invokeAI<T = unknown>(fn: string, body: unknown): Promise<T> {
+export async function invokeAI<T = unknown>(fn: string, body: unknown, timeoutMs = AI_TIMEOUT_MS): Promise<T> {
   const supabase = createClient();
   const base = process.env.NEXT_PUBLIC_API_URL;
   const { data: { session } } = await supabase.auth.getSession();
@@ -19,8 +19,11 @@ export async function invokeAI<T = unknown>(fn: string, body: unknown): Promise<
   if (base) {
     // Without this, a hung or cold-starting Worker leaves fetch pending forever,
     // so the caller's try/catch never runs and the UI sticks on its spinner.
+    // Account deletion passes a longer budget: it talks to Stripe and storage
+    // before it finishes, and giving up early leaves the caller unsure whether
+    // it happened.
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), AI_TIMEOUT_MS);
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
     try {
       const res = await fetch(`${base.replace(/\/$/, "")}/${fn}`, {
         method: "POST",

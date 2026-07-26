@@ -55,6 +55,8 @@ export default {
       if (pathname.endsWith("/generate-challenges")) return await generateChallenges(req, env);
       if (pathname.endsWith("/injury-plan")) return await injuryPlan(req, env);
       if (pathname.endsWith("/create-checkout")) return await createCheckout(req, env);
+      if (pathname.endsWith("/billing-portal")) return await billingPortal(req, env);
+      if (pathname.endsWith("/delete-account")) return await deleteAccount(req, env);
       if (pathname.endsWith("/stripe-webhook")) return await stripeWebhook(req, env);
       if (pathname.endsWith("/admin-create-user")) return await adminCreateUser(req, env);
       if (pathname.endsWith("/health")) return json({ ok: true });
@@ -892,6 +894,165 @@ async function createCheckout(req: Request, env: Env): Promise<Response> {
   // promising "free for 7 days" to someone who is about to be billed today is
   // the kind of thing that produces chargebacks.
   return json({ url: session.url, trialDays: eligibleForTrial ? trialDays : 0 });
+}
+
+// --- Cancel anytime ---------------------------------------------------------
+//
+// The landing page and the pricing page both promise "cancel anytime". Until
+// this existed that was a promise with no mechanism behind it: the only way out
+// was to email and ask.
+//
+// Stripe's hosted portal does the work — cancel, resume, swap card, download
+// invoices — which is both less code and better than anything hand-rolled,
+// because it stays correct as Stripe's own rules change.
+async function billingPortal(req: Request, env: Env): Promise<Response> {
+  const user = await authUser(req, env);
+  if (!user) return json({ error: "unauthorized" }, 401);
+  if (!env.STRIPE_SECRET_KEY) return json({ error: "billing not configured" }, 503);
+
+  const rows = (await (await supa(env, `subscriptions?user_id=eq.${user.id}&select=stripe_customer_id`)).json()) as
+    { stripe_customer_id: string | null }[] | null;
+  const customerId = rows?.[0]?.stripe_customer_id;
+  // Comped and free accounts have no Stripe customer at all. There is nothing
+  // to manage and nothing to cancel — say that plainly instead of showing them
+  // a Stripe error page.
+  if (!customerId) return json({ error: "no-billing-account" }, 404);
+
+  try {
+    const session = await stripe(env, "billing_portal/sessions", {
+      customer: customerId,
+      return_url: `${env.APP_URL}/profile`,
+    });
+    return json({ url: session.url });
+  } catch (e) {
+    // The portal has to be switched on once in the Stripe dashboard before the
+    // API will create sessions. That failure is indistinguishable from a real
+    // outage unless we name it.
+    const msg = String(e);
+    if (msg.includes("configuration")) {
+      return json({ error: "Stripe customer portal isn't set up yet — enable it in Stripe → Settings → Billing → Customer portal." }, 503);
+    }
+    throw e;
+  }
+}
+
+// --- Account deletion --------------------------------------------------------
+//
+// The privacy policy says "delete your account and we delete them", so this has
+// to actually delete, not deactivate.
+//
+// Order is deliberate, and every step is safe to run twice — a half-finished
+// delete (network blip, client timeout) is fixed by the user pressing the button
+// again, not by us reconstructing state:
+//
+//   1. Stop the billing. Doing this last would mean a cancelled card and a live
+//      subscription with no account attached to it.
+//   2. Delete their files. Storage objects have no foreign key to the profile,
+//      so they do NOT cascade — skip this and 20MB of somebody's training video
+//      sits in the bucket forever, still costing money and still their data.
+//   3. Delete the auth user. Everything in Postgres cascades from there (checked:
+//      every user-owned table is ON DELETE CASCADE), which is why this is last —
+//      it's the step that destroys the storage paths we needed in step 2.
+async function deleteAccount(req: Request, env: Env): Promise<Response> {
+  const user = await authUser(req, env);
+  if (!user) return json({ error: "unauthorized" }, 401);
+  if (!env.SUPABASE_SERVICE_ROLE_KEY) return json({ error: "not configured" }, 503);
+
+  const { confirm } = (await req.json()) as { confirm?: string };
+  // Typing the address is what separates "I meant this" from a mis-tap. There
+  // is no undo after this point.
+  //
+  // The empty check is not paranoia: without it an account with no email on
+  // record would be matched by an empty confirmation, turning the safety gate
+  // into a no-op for exactly the accounts we understand least.
+  const expected = (user.email ?? "").trim().toLowerCase();
+  const given = (confirm ?? "").trim().toLowerCase();
+  if (!expected) return json({ error: "This account has no email on record — contact support to delete it." }, 409);
+  if (given !== expected) return json({ error: "Type your email address exactly to confirm." }, 400);
+
+  // Locking every admin out of /admin is not a recoverable mistake from inside
+  // the app, so refuse rather than let someone do it to themselves.
+  if (await isAdmin(env, user.id)) {
+    const r = await supa(env, "profiles?role=eq.admin&select=id");
+    const admins = (await r.json()) as { id: string }[] | null;
+    if (!Array.isArray(admins) || admins.length <= 1) {
+      return json({ error: "You're the only admin. Make someone else an admin first." }, 409);
+    }
+  }
+
+  // 1 — billing.
+  try {
+    const r = await supa(env, `subscriptions?user_id=eq.${user.id}&select=stripe_subscription_id`);
+    const subs = (await r.json()) as { stripe_subscription_id: string | null }[] | null;
+    const subId = subs?.[0]?.stripe_subscription_id;
+    if (subId && env.STRIPE_SECRET_KEY) {
+      // Immediate, not at-period-end: they're deleting the account, so there
+      // will be nothing left to use for the rest of the period.
+      const res = await fetch(`https://api.stripe.com/v1/subscriptions/${subId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${env.STRIPE_SECRET_KEY}` },
+      });
+      // 404 means it's already gone — that's success for our purposes.
+      if (!res.ok && res.status !== 404) {
+        return json({ error: "Couldn't cancel your subscription — nothing was deleted. Try again in a moment." }, 502);
+      }
+    }
+  } catch {
+    return json({ error: "Couldn't reach the billing system — nothing was deleted. Try again in a moment." }, 502);
+  }
+
+  // 2 — files. Both buckets key everything under `<user id>/`, so the prefix
+  // catches orphans too: an upload that succeeded while its database row failed
+  // would otherwise be invisible here and survive the delete.
+  for (const bucket of ["videos", "photos"]) {
+    const paths = await listUserObjects(env, bucket, user.id);
+    if (paths === null) {
+      return json({ error: "Couldn't list your files — nothing was deleted. Try again in a moment." }, 502);
+    }
+    if (paths.length && !(await removeObjects(env, bucket, paths))) {
+      // Stopping here is the point. Deleting the account while their video
+      // stays in the bucket would tell them they're gone when they aren't.
+      return json({ error: "Couldn't delete your uploaded files — nothing was deleted. Try again in a moment." }, 502);
+    }
+  }
+
+  // 3 — the user. Cascades through profiles and every table that hangs off it.
+  const del = await fetch(`${env.SUPABASE_URL}/auth/v1/admin/users/${user.id}`, {
+    method: "DELETE",
+    headers: {
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+    },
+  });
+  if (!del.ok && del.status !== 404) {
+    return json({ error: `Deletion failed (${del.status}). Your account is unchanged — please contact support.` }, 502);
+  }
+
+  return json({ ok: true });
+}
+
+/** Every storage path under a user's folder, or null if the bucket can't be read. */
+async function listUserObjects(env: Env, bucket: string, userId: string): Promise<string[] | null> {
+  const out: string[] = [];
+  const LIMIT = 100;
+  for (let offset = 0; ; offset += LIMIT) {
+    const r = await fetch(`${env.SUPABASE_URL}/storage/v1/object/list/${bucket}`, {
+      method: "POST",
+      headers: {
+        apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ prefix: `${userId}/`, limit: LIMIT, offset }),
+    });
+    if (!r.ok) return null;
+    const page = (await r.json()) as { name: string }[] | null;
+    if (!Array.isArray(page) || page.length === 0) return out;
+    for (const o of page) if (o?.name) out.push(`${userId}/${o.name}`);
+    if (page.length < LIMIT) return out;
+    // A runaway pager would hold the request open until the Worker is killed.
+    if (out.length > 5000) return out;
+  }
 }
 
 async function stripeWebhook(req: Request, env: Env): Promise<Response> {

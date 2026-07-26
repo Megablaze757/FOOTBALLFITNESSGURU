@@ -7,6 +7,8 @@ import { useAsync } from "@/lib/use-async";
 import { ProfileForm } from "@/components/ProfileForm";
 import { CoachRequests } from "@/components/CoachRequests";
 import { CoachMessages } from "@/components/CoachMessages";
+import { ManageBilling } from "@/components/ManageBilling";
+import { DeleteAccount } from "@/components/DeleteAccount";
 import { planFor } from "@/lib/subscription";
 import type { Profile, Subscription, Tier } from "@/lib/types";
 
@@ -59,9 +61,13 @@ export default function ProfilePage() {
           )}
         </div>
         <span className="rounded-xl bg-gradient-to-br from-pitch-400 to-pitch-600 px-3 py-1.5 text-sm font-semibold text-ink-900">
-          {tier === "gold" ? "Manage" : "Upgrade →"}
+          {tier === "gold" ? "Plans" : "Upgrade →"}
         </span>
       </Link>
+
+      {/* Cancelling used to mean emailing and asking. A comped account has no
+          Stripe customer behind it, so it gets the plans link instead. */}
+      <ManageBilling hasBilling={!!subscription?.stripe_customer_id} />
 
       {(safeProfile.role === "coach" || safeProfile.role === "admin") && (
         <Link href="/squad" className="btn-ghost mb-4">🧑‍🏫 My squad</Link>
@@ -71,6 +77,8 @@ export default function ProfilePage() {
       )}
 
       <ProfileForm profile={safeProfile} email={user.email ?? ""} />
+
+      <DeleteAccount email={user.email ?? ""} />
     </div>
   );
 }

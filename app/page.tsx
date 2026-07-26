@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/auth";
@@ -26,8 +26,15 @@ const STEPS = [
 export default function Landing() {
   const { user, loading } = useSession();
   const router = useRouter();
+  // Someone who just deleted their account lands back here. Without a word of
+  // confirmation they can't tell whether it worked.
+  const [deleted, setDeleted] = useState(false);
 
   useEffect(() => { captureRef(); }, []); // remember ?ref=CODE for signup attribution
+
+  useEffect(() => {
+    setDeleted(new URLSearchParams(window.location.search).get("deleted") === "1");
+  }, []);
 
   useEffect(() => {
     if (!loading && user) router.replace("/home");
@@ -35,6 +42,13 @@ export default function Landing() {
 
   return (
     <main className="mx-auto max-w-6xl px-6 pb-24">
+      {deleted && (
+        <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-slate-300">
+          Your account and all of its data have been deleted. Any subscription was cancelled.
+          Thanks for training with us.
+        </div>
+      )}
+
       {/* Nav */}
       <header className="flex items-center justify-between py-6">
         <div className="flex items-center gap-2">
