@@ -1,0 +1,28 @@
+# PocketAthlete
+
+User-agent: *
+Allow: /
+
+# Everything below needs a session. Crawlers get a login redirect, not content,
+# so indexing them wastes crawl budget and puts empty pages in the index.
+Disallow: /home
+Disallow: /journal
+Disallow: /coach
+Disallow: /nutrition
+Disallow: /library
+Disallow: /essentials
+Disallow: /squad
+Disallow: /profile
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /history
+Disallow: /benchmarks
+Disallow: /body
+Disallow: /rewards
+Disallow: /report
+Disallow: /train
+Disallow: /onboarding
+Disallow: /pricing
+Disallow: /reset-password
+
+Sitemap: https://pocketathlete.com/sitemap.xml

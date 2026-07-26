@@ -6,11 +6,14 @@ import Image from "next/image";
 /**
  * The PocketAthlete mark.
  *
- * Renders `public/logo.png` — via next/image so the GitHub Pages basePath is
- * applied for us — and falls back to a typographic tile if that file isn't
- * there. The fallback matters: this is a static export, so a missing file is a
- * broken-image icon in the header of every page rather than a build error, and
- * a broken logo is the first thing a visitor sees.
+ * Uses the 192px icon rather than the 512: this renders at 32–64px, and the
+ * full-size file is a 295KB brushed-gold texture. 192 still covers a 64px slot
+ * on a 3x display with room to spare.
+ *
+ * next/image so the GitHub Pages basePath is applied for us, and a typographic
+ * fallback if the file is ever missing — this is a static export, so an absent
+ * icon is a broken-image glyph in the header of every page rather than a build
+ * error, and a broken logo is the first thing a visitor sees.
  */
 export function Logo({ size = 36, className = "" }: { size?: number; className?: string }) {
   const [failed, setFailed] = useState(false);
@@ -28,7 +31,7 @@ export function Logo({ size = 36, className = "" }: { size?: number; className?:
 
   return (
     <Image
-      src="/logo.png"
+      src="/icon-192.png"
       alt="PocketAthlete"
       width={size}
       height={size}
