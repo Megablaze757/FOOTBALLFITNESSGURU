@@ -43,6 +43,13 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_kr26XwyR0HZxS3HR3UJI2Q_YLLT7Sfl' }}
           # Optional: your Cloudflare Worker URL (unlocks AI/Stripe/email). Set a repo Variable of this name.
           NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL || '' }}
+          # Web push. The PUBLIC half of the VAPID pair from scripts/gen-vapid.mjs —
+          # safe to expose, it's what browsers subscribe against. Without it the
+          # reminder toggle renders nothing at all, which looks like a bug rather
+          # than missing config. It MUST match VAPID_PUBLIC_KEY on the Worker, or
+          # browsers subscribe against one key while the Worker signs with another
+          # and every push is rejected with 403.
+          NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${{ vars.NEXT_PUBLIC_VAPID_PUBLIC_KEY || '' }}
         run: |
           npm run build
           touch out/.nojekyll
