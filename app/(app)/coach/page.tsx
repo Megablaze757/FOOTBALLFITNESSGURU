@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/lib/auth";
 import { useAsync } from "@/lib/use-async";
 import {
-  GOALS, goalsForSport, buildProgram, recommendDrills, analyzeProgress, painByArea,
+  GOALS, goalsForSport, buildProgram, analyzeProgress, painByArea,
   FOCI, positionsForSport,
   type GoalType, type ProgramPlan, type TrainingFocus,
 } from "@/lib/coach";
@@ -388,7 +388,6 @@ function ActiveProgram({
   const goal = program.goal_type as GoalType;
   const painMap = checkIn?.pain_map ?? {};
   const readiness = readinessOf(checkIn);
-  const recs = recommendDrills({ goal, painMap, count: 4 });
   const insights = analyzeProgress(training, checkHist);
   const totalSessions = plan.weeks.reduce((n, w) => n + w.sessions.length, 0);
   const doneCount = program.completed_sessions.length;
@@ -411,10 +410,9 @@ function ActiveProgram({
     goal,
     soreAreas: Object.entries(painByArea(painMap)).filter(([, v]) => (v ?? 0) >= 4).map(([a]) => a.replace("_", " ")),
     readinessStatus: readiness?.status ?? null,
-    programDrills: nextSession ? nextSession.s.drills.map((d) => d.name) : recs.map((r) => r.name),
+    programDrills: nextSession?.s.drills.map((d) => d.name) ?? [],
   };
 
-  const [logged, setLogged] = useState(false);
   const [switching, setSwitching] = useState(false);
   const [advancing, setAdvancing] = useState(false);
   const [playing, setPlaying] = useState(false);
@@ -482,15 +480,6 @@ function ActiveProgram({
     onChange();
   }
 
-  async function logRecommended() {
-    const supabase = createClient();
-    const drills = recs.map((r) => ({ name: r.name, sets: r.sets, reps: r.reps, load_kg: null }));
-    await supabase.from("training_logs").upsert(
-      { user_id: userId, log_date: today, drills, total_minutes: 60, intensity: 7 },
-      { onConflict: "user_id,log_date" }
-    );
-    setLogged(true);
-  }
 
   async function newProgram() {
     const supabase = createClient();
@@ -653,7 +642,16 @@ function ActiveProgram({
               {readiness?.status === "Yellow" && <p className="mt-1 text-xs text-amber-300">Readiness is moderate — keep it crisp, cut the last set if you fade.</p>}
               <ul className="mt-2 space-y-1 text-xs text-slate-300">
                 {nextSession.s.drills.map((d, k) => (
-                  <li key={k} className="flex items-baseline justify-between gap-2"><span className="min-w-0 break-words">{d.name}</span><span className="shrink-0 text-slate-500">{d.sets}×{d.reps}</span></li>
+                  <li key={k} className="flex items-baseline justify-between gap-2">
+                    <span className="min-w-0 break-words">
+                      {d.skill && <span className="mr-1.5 text-pitch-400">⚽</span>}
+                      {d.name}
+                    </span>
+                    {/* Skill work carries its own prescription — "5 × 60
+                        seconds each foot" doesn't survive being squashed into
+                        sets and reps. */}
+                    <span className="shrink-0 text-slate-500">{d.prescription ?? `${d.sets}×${d.reps}`}</span>
+                  </li>
                 ))}
               </ul>
               <button onClick={() => setPlaying(true)} className="btn-primary mt-4">▶ Start guided session</button>
@@ -671,31 +669,11 @@ function ActiveProgram({
         />
       )}
 
-      {/* Today's tailored drills */}
-      {tab === "today" && (
-      <section className="card p-5">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="field-label !mb-0">Today&apos;s recommended drills</h2>
-          <span className="chip text-pitch-400">tailored to today</span>
-        </div>
-        <ul className="space-y-2">
-          {recs.map((r) => (
-            <li key={r.id} className="rounded-2xl bg-white/[0.03] p-3">
-              <div className="flex items-center justify-between">
-                <span className="font-medium text-slate-100">{r.name}</span>
-                <span className="text-xs text-slate-400">{r.sets}×{r.reps}</span>
-              </div>
-              <p className="mt-1 text-xs text-pitch-400">{r.reason}</p>
-              <p className="mt-0.5 text-xs text-slate-500">{r.cue}</p>
-            </li>
-          ))}
-        </ul>
-        <button onClick={logRecommended} disabled={logged} className="btn-ghost mt-3">
-          {logged ? "Logged to today ✓" : "Log these to today's training"}
-        </button>
-      </section>
-
-      )}
+      {/* "Today's recommended drills" used to sit here: a second, separately
+          computed list of exercises directly beneath the scheduled session.
+          Two different answers to "what do I do today" is worse than one
+          imperfect answer, and the program is the one that counts toward
+          adherence. Skill work now lives inside the session itself. */}
 
       {/* Ask the coach */}
       {tab === "ask" && <CoachChat context={chatContext} />}

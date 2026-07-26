@@ -11,6 +11,7 @@ import type { PainMap, TrainingLog } from "./types";
 import { progressionForName, type SportId } from "./exercises";
 import { parseConstraints, isExcluded, EMPTY_CONSTRAINTS, type Constraints, type Region } from "./constraints";
 import { buildHypertrophyProgram, type SplitStyle } from "./hypertrophy";
+import { skillForSession } from "./skills";
 
 export type GoalType = "speed" | "agility" | "strength" | "endurance" | "injury_recovery" | "skill";
 export type BodyArea = "knee" | "ankle" | "hamstring" | "hip" | "lower_back" | "shoulder";
@@ -340,7 +341,22 @@ function prescription(d: DrillDef, goal: GoalType, focus?: TrainingFocus): { set
 
 // --- Program generation -----------------------------------------------------
 
-export interface ProgramDrill { name: string; sets: number; reps: number; cue: string; reason: string; progression?: string }
+export interface ProgramDrill {
+  name: string;
+  sets: number;
+  reps: number;
+  cue: string;
+  reason: string;
+  progression?: string;
+  /**
+   * Technical work is prescribed in its own terms — "5 × 60 seconds each foot"
+   * rather than sets and reps. When present the UI shows this instead, because
+   * squashing a wall-passing drill into 3×10 tells the athlete nothing.
+   */
+  prescription?: string;
+  /** True for ball work, so it can be labelled apart from the physical block. */
+  skill?: boolean;
+}
 export interface ProgramSession { day: number; title: string; focus: GoalType; drills: ProgramDrill[] }
 export interface ProgramWeek { week: number; theme: string; intensity: string; focusNote: string; sessions: ProgramSession[] }
 export interface ProgramPlan {
@@ -483,6 +499,27 @@ export function buildProgram(input: BuildProgramInput): ProgramPlan {
           progression: WEEK_PROGRESSION[prog][wi],
         };
       });
+      // Add the ball work. A programme that is only lifts and sprints trains a
+      // footballer to be fit rather than to play — and the Playbook's skill
+      // drills were previously somewhere you had to go and look, not something
+      // the plan ever told you to do. Rotated across the block so the whole
+      // week isn't one skill.
+      const skill = input.sport ? skillForSession(input.sport, input.position, wi * days + di) : null;
+      if (skill && !isExcluded(constraints, "skill", skill.name)) {
+        drills.push({
+          name: skill.name,
+          // Kept for anything that reads sets/reps numerically (load maths,
+          // history); the prescription below is what the athlete actually sees.
+          sets: 1,
+          reps: 1,
+          prescription: skill.reps,
+          skill: true,
+          cue: skill.coaching,
+          reason: `${skill.skill} — technical work for your position.`,
+          progression: skill.progression,
+        });
+      }
+
       return { day: di + 1, title: sessionTitle(focus, di), focus, drills };
     });
 

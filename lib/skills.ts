@@ -640,6 +640,34 @@ export function hasSkills(sport: SportId): boolean {
   return SKILL_DRILLS.some((d) => d.sport === sport);
 }
 
+/**
+ * Skill work to attach to a program session.
+ *
+ * A programme that is only lifts and sprints trains a footballer to be fit,
+ * not to play. Rotated by session index so a four-day week covers four
+ * different technical areas rather than the same one four times, and biased to
+ * the position — a winger's programme should have crossing in it.
+ *
+ * Solo-only: a program session has to be doable on the day it lands. A drill
+ * needing three team-mates would just be skipped.
+ */
+export function skillForSession(sport: SportId, position: string | null | undefined, index: number): SkillDrill | null {
+  const pool = drillsYouCanDo(skillsForSport(sport, position), "solo");
+  if (!pool.length) return null;
+  // Spread across skills first, so consecutive sessions aren't two shooting
+  // drills while passing never appears.
+  const byskill = new Map<string, SkillDrill[]>();
+  for (const d of pool) {
+    const list = byskill.get(d.skill) ?? [];
+    list.push(d);
+    byskill.set(d.skill, list);
+  }
+  const skills = [...byskill.keys()];
+  const chosenSkill = skills[index % skills.length];
+  const options = byskill.get(chosenSkill)!;
+  return options[Math.floor(index / skills.length) % options.length];
+}
+
 export const NEEDS_LABEL: Record<SkillDrill["needs"], string> = {
   solo: "On your own",
   partner: "Needs a partner",
