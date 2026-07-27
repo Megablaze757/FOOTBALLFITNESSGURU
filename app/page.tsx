@@ -6,21 +6,28 @@ import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/auth";
 import { captureRef } from "@/lib/referral";
 import { Logo } from "@/components/Logo";
+import { PlanGrid } from "@/components/PlanGrid";
 
+// Every line here describes something the app does today. The previous copy promised
+// "biomechanist-grade programming" and that "injuries fall" — puffery and an
+// outcome claim respectively, and the second is the kind a regulator treats as
+// a health claim. Specific and true converts better than grand and vague
+// anyway: nobody believes "revolutionary", everybody believes "type 'I don't
+// train legs' and it won't program legs".
 const FEATURES = [
-  { icon: "🩺", title: "Readiness engine", body: "A daily Green / Yellow / Red score built from sleep, fatigue, soreness and a full-body pain map — so you know when to push and when to back off." },
-  { icon: "🤖", title: "AI coach", body: "Biomechanist-grade programming that names your weak link and prescribes the exact drills to fix it — pain-aware and periodised to your season." },
-  { icon: "🎥", title: "Video biomechanics", body: "Upload a clip and on-device pose tracking flags knee valgus, asymmetry and ground-contact — then links it to the pain in your journal." },
-  { icon: "🍽️", title: "Fuelling targets", body: "Calorie, macro and hydration targets that adapt to your training load and body-composition goals, updated every day." },
-  { icon: "📈", title: "Progress, proven", body: "Training volume, drill PRs, benchmarks and body comp — every metric trending in one place so you can see the work compounding." },
-  { icon: "👥", title: "Coach & squad", body: "Share a read-only view with your coach or manage a full roster of athletes with live readiness across the whole squad." },
+  { icon: "🩺", title: "Readiness that changes the plan", body: "Sleep, fatigue and a tap on the body map. You get a score in under a minute — and today's session actually changes because of it." },
+  { icon: "🤖", title: "A coach that reads your notes", body: "Type “I don't train legs” or “no barbell” and it's obeyed — not once, not lightened, anywhere in the four-week block." },
+  { icon: "🎯", title: "Built for your position", body: "A centre back and a winger need different bodies. Programs include the ball work for yours: heading, crossing, first touch." },
+  { icon: "🎥", title: "Form analysis on your phone", body: "Film a lift or a sprint and pose tracking flags knee collapse and left–right asymmetry. The clip never leaves your device to be analysed." },
+  { icon: "🍽️", title: "Food that fits your week", body: "Say you eat out on Tuesdays and Tuesday is left alone. The shopping list thinks in packs, so one bag of rice covers three meals." },
+  { icon: "👥", title: "Coach & squad", body: "Coaches build a program once and assign it across the roster, with every athlete's readiness on one screen." },
 ];
 
 const STEPS = [
-  { n: "01", title: "Check in", body: "60 seconds each morning: sleep, soreness, a tap on the pain map. PocketAthlete computes your readiness." },
-  { n: "02", title: "Get your plan", body: "The AI coach builds a periodised program around your goals, your season and today's readiness." },
-  { n: "03", title: "Log & analyse", body: "Tick off sessions, log drills and nutrition, upload video. Everything feeds the next recommendation." },
-  { n: "04", title: "Peak on the day", body: "Watch benchmarks climb and injuries fall as the system learns what works for your body." },
+  { n: "01", title: "Check in", body: "60 seconds each morning: sleep, soreness, a tap on the pain map. You get a readiness score straight away." },
+  { n: "02", title: "Get your plan", body: "A four-week block around your sport, your position and the days you can actually train — Base, Build, Peak, Deload." },
+  { n: "03", title: "Log & analyse", body: "Tick off sessions, log drills and meals, film a lift. Everything feeds the next block." },
+  { n: "04", title: "See the work compound", body: "Benchmarks, training volume and streaks trending in one place, so you can tell what's working from what's just busy." },
 ];
 
 export default function Landing() {
@@ -71,8 +78,9 @@ export default function Landing() {
             <span className="gold-text">full-time performance team.</span>
           </h1>
           <p className="mx-auto mt-5 max-w-lg text-lg text-slate-400 lg:mx-0">
-            Readiness, AI coaching, video biomechanics, nutrition and progress —
-            the entire high-performance staff of a pro club, in one app.
+            Check in each morning and get a plan that already knows you slept badly,
+            played 90 minutes yesterday and don&apos;t have a squat rack. Built around
+            your sport and your position — not a template with your name on it.
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center lg:justify-start">
             <Link href="/login" className="btn-primary sm:w-auto sm:px-8">Start free — no card needed</Link>
@@ -145,51 +153,17 @@ export default function Landing() {
           <h2 className="text-3xl font-extrabold tracking-tight sm:text-4xl">Simple pricing for athletes and teams.</h2>
           <p className="mx-auto mt-3 max-w-xl text-slate-400">A private performance coach runs £100+ an hour. PocketAthlete is the whole staff, every day, from £15 a month.</p>
         </div>
-        <div className="mx-auto mt-12 grid max-w-5xl gap-5 md:grid-cols-3">
-          <div className="card p-7">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400">Free</h3>
-            <div className="mt-3 text-4xl font-extrabold">£0</div>
-            <p className="mt-2 text-sm text-slate-400">Build the habit.</p>
-            <ul className="mt-6 space-y-3 text-sm text-slate-300">
-              <Perk>Daily readiness score</Perk>
-              <Perk>Training &amp; nutrition journal</Perk>
-              <Perk>Progress history</Perk>
-            </ul>
-            <Link href="/login" className="btn-ghost mt-8">Get started</Link>
-          </div>
-
-          <div className="card-premium relative overflow-hidden p-7">
-            <div className="absolute right-5 top-5 chip text-pitch-400">Most popular</div>
-            <h3 className="text-sm font-bold uppercase tracking-wider text-pitch-400">Gold</h3>
-            <div className="mt-3 flex items-baseline gap-1">
-              <span className="text-4xl font-extrabold">£20</span>
-              <span className="text-slate-400">/month</span>
-            </div>
-            <p className="mt-2 text-sm text-slate-400">The full performance team, for you.</p>
-            <ul className="mt-6 space-y-3 text-sm text-slate-300">
-              <Perk gold>AI coach — custom programs</Perk>
-              <Perk gold>Video biomechanics &amp; root-cause</Perk>
-              <Perk gold>Adaptive nutrition targets</Perk>
-              <Perk gold>Full multi-sport exercise library</Perk>
-            </ul>
-            <Link href="/login" className="btn-primary mt-8">Start free trial</Link>
-          </div>
-
-          <div className="card p-7">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400">Team</h3>
-            <div className="mt-3 flex items-baseline gap-1">
-              <span className="text-4xl font-extrabold">£150</span>
-              <span className="text-slate-400">/month</span>
-            </div>
-            <p className="mt-2 text-sm text-slate-400">For clubs &amp; coaches.</p>
-            <ul className="mt-6 space-y-3 text-sm text-slate-300">
-              <Perk>Gold for up to 25 athletes</Perk>
-              <Perk>Live squad readiness dashboard</Perk>
-              <Perk>Per-athlete programs &amp; flags</Perk>
-              <Perk>Team reports (PDF)</Perk>
-            </ul>
-            <a href="mailto:sales@pocketathlete.com?subject=PocketAthlete%20Team%20plan" className="btn-ghost mt-8">Contact us</a>
-          </div>
+        {/* Rendered from lib/subscription.ts, not written out again here. The
+            hand-written version had drifted: it still listed nutrition as free
+            and sold Gold on a library that everyone gets. A price list in two
+            places is a price list that disagrees with itself. */}
+        <div className="mx-auto mt-12 max-w-5xl">
+          <PlanGrid mode="public" />
+          <p className="mt-6 text-center text-sm">
+            <Link href="/plans" className="font-semibold text-pitch-400 hover:underline">
+              Full comparison and FAQ →
+            </Link>
+          </p>
         </div>
       </section>
 
@@ -221,15 +195,6 @@ export default function Landing() {
         </p>
       </footer>
     </main>
-  );
-}
-
-function Perk({ children, gold }: { children: React.ReactNode; gold?: boolean }) {
-  return (
-    <li className="flex items-start gap-2">
-      <span className={gold ? "text-pitch-400" : "text-slate-500"}>✓</span>
-      <span>{children}</span>
-    </li>
   );
 }
 

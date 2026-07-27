@@ -6,12 +6,14 @@ import { createClient } from "@/lib/supabase/client";
 import { SPORTS, DIFFICULTIES } from "@/lib/exercises";
 import { PositionPicker } from "@/components/PositionPicker";
 import { positionList } from "@/lib/positions";
+import { validateUsername, USERNAME_MAX } from "@/lib/username";
 import type { Profile } from "@/lib/types";
 
 export function ProfileForm({ profile, email }: { profile: Profile; email: string }) {
   const router = useRouter();
 
   const [fullName, setFullName] = useState(profile.full_name ?? "");
+  const [username, setUsername] = useState(profile.username ?? "");
   const [bio, setBio] = useState(profile.bio ?? "");
   const [experience, setExperience] = useState(profile.experience_years?.toString() ?? "");
   const [role, setRole] = useState<Profile["role"]>(profile.role);
@@ -37,18 +39,44 @@ export function ProfileForm({ profile, email }: { profile: Profile; email: strin
     setError(null);
     const supabase = createClient();
 
+    // Validate before writing so the person gets "at least 3 characters" rather
+    // than a database constraint name.
+    const check = validateUsername(username);
+    if (!check.ok) {
+      setError(check.error ?? "That username won't work.");
+      setSaving(false);
+      return;
+    }
+
+    // Checked separately from the unique index so a clash reads as "taken"
+    // instead of a raw 23505.
+    if (check.value !== profile.username) {
+      const { data: free } = await supabase.rpc("username_available", { p_name: check.value });
+      if (free === false) {
+        setError(`“${check.value}” is taken — try another.`);
+        setSaving(false);
+        return;
+      }
+    }
+
     const { error } = await supabase
       .from("profiles")
       .update({
         full_name: fullName || null, bio: bio || null,
+        username: check.value,
         experience_years: experience ? Number(experience) : null,
         role, sport, positions, position: positions[0] ?? null, level,
         leaderboard_opt_out: !onBoards,
       })
       .eq("id", profile.id);
 
-    if (error) setError(error.message);
-    else setSaved(true);
+    if (error) {
+      // The unique index is the real guard; the check above just races it.
+      setError(error.code === "23505" ? "That username was just taken — try another." : error.message);
+    } else {
+      setUsername(check.value); // show the normalised form back
+      setSaved(true);
+    }
     setSaving(false);
   }
 
@@ -66,8 +94,29 @@ export function ProfileForm({ profile, email }: { profile: Profile; email: strin
       </label>
 
       <label className="block">
+        <span className="field-label">Username</span>
+        <input
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          maxLength={USERNAME_MAX}
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          className="field"
+          placeholder="striker99"
+        />
+        <span className="mt-1 block text-xs text-slate-400">
+          This is what leaderboards show — your real name never appears there.
+          Letters, numbers and underscores.
+        </span>
+      </label>
+
+      <label className="block">
         <span className="field-label">Full name</span>
         <input value={fullName} onChange={(e) => setFullName(e.target.value)} className="field" />
+        <span className="mt-1 block text-xs text-slate-400">
+          Only your coach sees this.
+        </span>
       </label>
 
       <label className="block">
@@ -113,9 +162,9 @@ export function ProfileForm({ profile, email }: { profile: Profile; email: strin
           <span className="min-w-0">
             <span className="block text-sm font-medium text-slate-200">Show me on leaderboards</span>
             <span className="mt-0.5 block text-xs text-slate-500">
-              Your first name and weekly activity — check-ins, sleep score, minutes trained.
-              Never your injuries, weight or body composition. Turn this off and you disappear
-              from every board, including your squad&apos;s.
+              Your <b>username</b> and weekly activity — check-ins, sleep score, minutes trained.
+              Never your real name, injuries, weight or body composition. Turn this off and you
+              disappear from every board, including your squad&apos;s.
             </span>
           </span>
           <input
