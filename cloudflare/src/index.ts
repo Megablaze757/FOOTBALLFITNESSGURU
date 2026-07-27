@@ -174,6 +174,36 @@ async function requireTier(env: Env, userId: string, need: "silver" | "gold", fe
   return json({ error: `${feature} is a ${need === "gold" ? "Gold" : "Silver"} feature`, upgrade: need, tier }, 402);
 }
 
+// Monthly caps. Mirrors LIMITS in lib/subscription.ts; null is unlimited.
+// These are what make Gold worth the extra £5 to someone who trains daily —
+// a longer feature list never did, because the extra features are occasional.
+const MONTHLY_PROGRAMS: Record<string, number | null> = { bronze: 0, silver: 4, gold: null };
+
+/**
+ * Has this athlete used up their AI programs for the month?
+ *
+ * Counted from programs.created_at rather than a counter table — the row
+ * already exists and can't drift out of step with reality.
+ */
+async function overProgramQuota(env: Env, userId: string): Promise<Response | null> {
+  const tier = await tierOf(env, userId);
+  const cap = MONTHLY_PROGRAMS[tier];
+  if (cap === null || cap === undefined) return null;
+
+  const r = await svcRpc(env, "programs_this_month", { p_user: userId });
+  if (!r.ok) return null; // never block on a broken meter
+  const used = Number(await r.json());
+  if (!Number.isFinite(used) || used < cap) return null;
+
+  return json({
+    error: `You've used all ${cap} program builds this month on ${tier === "silver" ? "Silver" : "your plan"}. Gold is unlimited.`,
+    upgrade: "gold",
+    tier,
+    used,
+    cap,
+  }, 402);
+}
+
 /** Monthly USD budget per tier. Well under the revenue each tier brings in. */
 const TIER_BUDGET: Record<string, number> = {
   bronze: 0.40, // free users: enough to try the coach, not enough to cost real money
@@ -498,6 +528,8 @@ async function generateProgram(req: Request, env: Env): Promise<Response> {
   if (!u) return json({ error: "unauthorized" }, 401);
   const gate = await requireTier(env, u.id, "silver", "AI-written programs");
   if (gate) return gate;
+  const quota = await overProgramQuota(env, u.id);
+  if (quota) return quota;
   const budget = await checkBudget(env, u.id);
   if (!budget.allowed) return overBudget(budget);
   const { goal, pain_map, notes, in_season, sport, position, focus, days_per_week, split } = (await req.json()) as {

@@ -13,6 +13,7 @@ import { parseConstraints, isExcluded, EMPTY_CONSTRAINTS, type Constraints, type
 import { buildHypertrophyProgram, type SplitStyle } from "./hypertrophy";
 import { skillForSession } from "./skills";
 import { positionLabel } from "./positions";
+import { sportTerms } from "./sport-terms";
 
 export type GoalType = "speed" | "agility" | "strength" | "endurance" | "injury_recovery" | "skill";
 export type BodyArea = "knee" | "ankle" | "hamstring" | "hip" | "lower_back" | "shoulder";
@@ -560,7 +561,10 @@ const FOCUS_LABEL: Record<TrainingFocus, string> = {
 
 function programSummary(goal: GoalType, sore: BodyArea[], inSeason: boolean, block: number, sport?: SportId, position?: string | string[], focus?: TrainingFocus): string {
   const g = GOALS.find((x) => x.id === goal)?.label ?? goal;
-  const season = inSeason ? "in-season (recovery-weighted)" : "off-season (higher volume)";
+  // "In-season" means nothing to a lifter and "off-season" nothing to a
+  // gym-goer. Each sport names its own phases.
+  const t = sportTerms(sport);
+  const season = inSeason ? t.inSeason : t.offSeason;
   const who = [positionLabel(position), sport].filter(Boolean).join(" · ");
   const forWhom = who ? ` Tailored for a ${who}.` : "";
   const focusNote = focus && focus !== "performance" ? ` Weighted toward ${FOCUS_LABEL[focus]}.` : "";

@@ -22,6 +22,15 @@ export interface SportTerms {
   eventDay: string;
   /** Used where the event is described as a thing that happened. */
   played: string;
+  /** Title case for a dropdown option, e.g. "Game". */
+  eventLabel: string;
+  /** Where the sport happens: "on the pitch", "on court", "on the road". */
+  venue: string;
+  /** The competitive block: "season" for team sports, "training year" otherwise. */
+  season: string;
+  /** In-season phrasing for a program summary. */
+  inSeason: string;
+  offSeason: string;
 }
 
 const FOOTBALL: SportTerms = {
@@ -30,6 +39,11 @@ const FOOTBALL: SportTerms = {
   minutes: "Minutes played",
   eventDay: "Matchday",
   played: "played",
+  eventLabel: "Match",
+  venue: "on the pitch",
+  season: "season",
+  inSeason: "in-season (recovery-weighted)",
+  offSeason: "off-season (higher volume)",
 };
 
 const TERMS: Record<SportId, SportTerms> = {
@@ -41,6 +55,11 @@ const TERMS: Record<SportId, SportTerms> = {
     minutes: "Minutes on court",
     eventDay: "Gameday",
     played: "played",
+    eventLabel: "Game",
+    venue: "on court",
+    season: "season",
+    inSeason: "in-season (recovery-weighted)",
+    offSeason: "off-season (higher volume)",
   },
   running: {
     event: "race",
@@ -48,6 +67,11 @@ const TERMS: Record<SportId, SportTerms> = {
     minutes: "Minutes racing",
     eventDay: "Race day",
     played: "raced",
+    eventLabel: "Race",
+    venue: "on the road",
+    season: "racing season",
+    inSeason: "in racing season (sharpening, lower volume)",
+    offSeason: "base phase (higher volume)",
   },
   weightlifting: {
     // Lifters compete rarely; the day that matters is a heavy session.
@@ -56,6 +80,11 @@ const TERMS: Record<SportId, SportTerms> = {
     minutes: "Minutes training",
     eventDay: "Big session day",
     played: "trained",
+    eventLabel: "Heavy session",
+    venue: "under the bar",
+    season: "training block",
+    inSeason: "peaking for a meet (intensity up, volume down)",
+    offSeason: "accumulation (higher volume)",
   },
   gym: {
     event: "session",
@@ -63,6 +92,11 @@ const TERMS: Record<SportId, SportTerms> = {
     minutes: "Minutes training",
     eventDay: "Big session day",
     played: "trained",
+    eventLabel: "Big session",
+    venue: "in the gym",
+    season: "training block",
+    inSeason: "intensity phase (heavier, less volume)",
+    offSeason: "volume phase (more sets)",
   },
 };
 

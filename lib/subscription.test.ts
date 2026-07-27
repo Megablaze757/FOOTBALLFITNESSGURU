@@ -1,7 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  tierMeets, planFor, PLANS, CAPABILITY_TIER, can, tierNeededFor, type Capability,
+  tierMeets, planFor, PLANS, CAPABILITY_TIER, can, tierNeededFor,
+  limitsFor, limitLabel, type Capability,
 } from "./subscription";
 
 test("tierMeets respects the ranking", () => {
@@ -93,4 +94,47 @@ test("every plan has enough copy to sell it", () => {
     assert.ok(p.features.length >= 4, `${p.id} has only ${p.features.length} features`);
     if (p.paid) assert.ok(p.priceMonthly > 0, `${p.id} is paid but priced at zero`);
   }
+});
+
+// --- Limits ------------------------------------------------------------------
+
+test("gold lifts every cap silver has", () => {
+  const s = limitsFor("silver"), g = limitsFor("gold");
+  for (const k of ["aiProgramsPerMonth", "coachMessagesPerMonth", "historyDays"] as const) {
+    const sv = s[k], gv = g[k];
+    assert.ok(gv === null || (sv !== null && gv > sv), `gold's ${k} (${gv}) doesn't beat silver's (${sv})`);
+  }
+  assert.ok((g.activePrograms ?? 99) > (s.activePrograms ?? 0), "gold should run more programs at once");
+});
+
+test("free cannot run a program at all", () => {
+  assert.equal(limitsFor("bronze").activePrograms, 0);
+  assert.equal(limitsFor("bronze").aiProgramsPerMonth, 0);
+});
+
+test("gold is a real step up, not one extra toggle", () => {
+  // The complaint this addresses: Silver felt like the whole app.
+  const caps = Object.keys(CAPABILITY_TIER) as Capability[];
+  const extraFeatures = caps.filter((c) => can("gold", c) && !can("silver", c)).length;
+  const s = limitsFor("silver"), g = limitsFor("gold");
+  const liftedCaps = (["activePrograms", "aiProgramsPerMonth", "coachMessagesPerMonth", "historyDays"] as const)
+    .filter((k) => g[k] === null || (s[k] !== null && (g[k] as number) > (s[k] as number))).length;
+  assert.ok(extraFeatures + liftedCaps >= 6,
+    `gold only adds ${extraFeatures} features and lifts ${liftedCaps} caps`);
+});
+
+test("silver's caps are generous enough not to feel mean", () => {
+  const s = limitsFor("silver");
+  // A block is four weeks, so four builds a month is a rebuild a week —
+  // more than any sane periodisation needs. A cap that bites a normal user is
+  // a refund request, not an upgrade.
+  assert.ok((s.aiProgramsPerMonth ?? 0) >= 4);
+  assert.ok((s.coachMessagesPerMonth ?? 0) >= 20);
+  assert.ok((s.historyDays ?? 0) >= 90);
+});
+
+test("limitLabel reads properly at each edge", () => {
+  assert.equal(limitLabel(null, "programs"), "Unlimited");
+  assert.equal(limitLabel(0, "programs"), "No programs");
+  assert.equal(limitLabel(4, "programs"), "4 programs");
 });

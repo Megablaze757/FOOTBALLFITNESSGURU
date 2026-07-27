@@ -181,7 +181,7 @@ export default function Landing() {
         <div className="text-xl font-extrabold">
           <span className="text-pitch-400">PocketAthlete</span>
         </div>
-        <p className="text-xs text-slate-500">Train smarter. Recover faster. Peak on match day.</p>
+        <p className="text-xs text-slate-500">Train smarter. Recover faster. Peak when it counts.</p>
         <Link href="/waitlist" className="mt-2 text-xs font-semibold text-pitch-400 hover:underline">
           Not ready to sign up? Join the waitlist →
         </Link>

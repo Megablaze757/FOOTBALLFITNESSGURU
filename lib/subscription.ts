@@ -83,6 +83,67 @@ export function tierNeededFor(capability: Capability): Tier {
   return CAPABILITY_TIER[capability];
 }
 
+// --- Limits ------------------------------------------------------------------
+
+/**
+ * How much, not just what.
+ *
+ * Gold used to differ from Silver by a handful of occasional-use features —
+ * video analysis, the injury planner — so someone training five times a week
+ * got no more out of it than someone training twice, and £20 looked like £15
+ * with extras. Feature lists can't fix that; the axis was wrong.
+ *
+ * These caps put the axis on how seriously you train. Silver is sized for a
+ * normal athlete and never feels mean; anyone genuinely training daily hits
+ * the ceiling, and for them £5 more is obvious. Nothing here is arbitrary —
+ * each one tracks a real cost (an AI call, storage, compute).
+ *
+ * `null` means unlimited.
+ */
+export interface TierLimits {
+  /** Programs you can have running at once — e.g. in-season plus a gym block. */
+  activePrograms: number | null;
+  /** AI-written program builds per calendar month. A block is four weeks, so
+   *  four is a rebuild a week and more than any sane periodisation needs. */
+  aiProgramsPerMonth: number | null;
+  /** Coach questions per month. */
+  coachMessagesPerMonth: number | null;
+  /** How far back history and trends go. */
+  historyDays: number | null;
+}
+
+export const LIMITS: Record<Tier, TierLimits> = {
+  bronze: {
+    activePrograms: 0, // programs are the paid product
+    aiProgramsPerMonth: 0,
+    coachMessagesPerMonth: 0,
+    historyDays: 30,
+  },
+  silver: {
+    activePrograms: 1,
+    aiProgramsPerMonth: 4,
+    coachMessagesPerMonth: 30,
+    historyDays: 90,
+  },
+  gold: {
+    activePrograms: 3,
+    aiProgramsPerMonth: null,
+    coachMessagesPerMonth: null,
+    historyDays: null,
+  },
+};
+
+export function limitsFor(tier: Tier): TierLimits {
+  return LIMITS[tier] ?? LIMITS.bronze;
+}
+
+/** "4 a month" / "Unlimited" — for showing a cap without a special case at each site. */
+export function limitLabel(n: number | null, unit: string): string {
+  if (n === null) return "Unlimited";
+  if (n === 0) return `No ${unit}`;
+  return `${n} ${unit}`;
+}
+
 // --- Plans -------------------------------------------------------------------
 
 export const PLANS: TierPlan[] = [
@@ -113,9 +174,10 @@ export const PLANS: TierPlan[] = [
       "Everything in Bronze",
       "Four-week training blocks — Base, Build, Peak, Deload",
       "AI-written programs that obey your notes — “I don’t train legs” means no legs",
-      "Ask the coach: questions about your training, answered in context",
+      "1 program at a time · 4 rebuilds a month",
+      "Ask the coach — 30 questions a month",
       "Meal plans that fit your week, with a pack-aware shopping list",
-      "Describe what you ate and it works out the calories",
+      "90 days of history and trends",
     ],
   },
   {
@@ -124,15 +186,17 @@ export const PLANS: TierPlan[] = [
     priceLabel: "£20/mo",
     priceMonthly: 20,
     tagline: "The whole performance team.",
-    headline: "Silver coaches your training. Gold also checks your technique and manages your injuries.",
+    headline: "For anyone training most days: nothing runs out, and it watches your technique too.",
     paid: true,
     features: [
-      "Everything in Silver",
+      "Everything in Silver, with no monthly caps",
+      "Unlimited AI programs and unlimited coach questions",
+      "Run 3 programs at once — in-season, gym block and rehab together",
       "Video form analysis — filmed on your phone, scored on your phone",
       "Injury planner: describe what hurts, get a plan built around it",
       "Weekly objectives set from the habit you’re actually neglecting",
       "Priority AI — straight to the strongest model, no free-tier queue",
-      "The largest monthly AI allowance of any plan",
+      "Your full history, forever",
     ],
   },
 ];

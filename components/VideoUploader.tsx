@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { MOVEMENTS, type MovementType } from "@/lib/movement";
+import { sportTerms } from "@/lib/sport-terms";
 import { MAX_CLIP_SECONDS } from "@/components/InBrowserAnalysis";
 
 // Must match the bucket's file_size_limit in migration 0036 — this copy exists
@@ -49,7 +50,9 @@ async function makeThumb(file: File): Promise<{ url: string; seconds: number } |
   }
 }
 
-export function VideoUploader({ onUploaded }: { onUploaded?: () => void }) {
+export function VideoUploader({ sport, onUploaded }: { sport?: string; onUploaded?: () => void }) {
+  // A runner filming a stride-out shouldn't be offered "Match".
+  const terms = sportTerms(sport);
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
   const [sessionType, setSessionType] = useState<SessionType>("training");
@@ -204,7 +207,7 @@ export function VideoUploader({ onUploaded }: { onUploaded?: () => void }) {
               <span className="field-label">Session</span>
               <select value={sessionType} onChange={(e) => setSessionType(e.target.value as SessionType)} className="field [color-scheme:dark]">
                 <option value="training">Training</option>
-                <option value="match">Match</option>
+                <option value="match">{terms.eventLabel}</option>
                 <option value="recovery">Recovery</option>
               </select>
             </label>

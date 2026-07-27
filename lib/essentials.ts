@@ -6,6 +6,7 @@
 
 import type { SportId } from "./exercises";
 import { positionList } from "./positions";
+import { sportTerms } from "./sport-terms";
 
 // --- Position essentials -----------------------------------------------------
 
@@ -199,10 +200,12 @@ export function positionGuides(sport: SportId, position?: string | string[] | nu
 }
 
 // What the "gameday" section is called for each sport.
+//
+// Delegates to lib/sport-terms.ts rather than keeping its own list — two places
+// deciding what to call a basketball fixture is how one of them ends up saying
+// "Matchday" to a runner.
 export function gamedayLabel(sport: SportId): string {
-  if (sport === "running") return "Race day";
-  if (sport === "weightlifting" || sport === "gym") return "Big session day";
-  return "Matchday";
+  return sportTerms(sport).eventDay;
 }
 
 // --- Matchday / gameday nutrition -------------------------------------------

@@ -78,9 +78,11 @@ export default function TrainPage() {
 
   const { data, loading, reload } = useAsync(async () => {
     const supabase = createClient();
-    const [{ data: rows }, { data: plans }] = await Promise.all([
+    const [{ data: rows }, { data: plans }, { data: profile }] = await Promise.all([
       supabase.from("videos").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(20),
       supabase.from("ai_plans").select("video_id, analysis_json").eq("user_id", user.id),
+      // Needed so the uploader says "Game" to a basketball player, not "Match".
+      supabase.from("profiles").select("sport").eq("id", user.id).maybeSingle(),
     ]);
     const videos = (rows ?? []) as Video[];
     const byVideo = new Map((plans ?? []).map((p) => [p.video_id as string, p.analysis_json as VideoAnalysis]));
@@ -88,7 +90,7 @@ export default function TrainPage() {
       .filter((v) => byVideo.has(v.id))
       .map((v) => ({ id: v.id, date: v.created_at.slice(0, 10), label: v.title || v.session_type || "session", analysis: byVideo.get(v.id)! }))
       .reverse(); // oldest → newest for the trend
-    return { videos, clips };
+    return { videos, clips, sport: (profile as { sport?: string } | null)?.sport ?? "football" };
   }, [user.id], `train:${user.id}`);
 
   const videos = data?.videos ?? [];
@@ -101,7 +103,7 @@ export default function TrainPage() {
         <p className="mt-1 text-sm text-slate-400">Upload a clip for biomechanics analysis &amp; a drill plan.</p>
       </header>
 
-      <VideoUploader onUploaded={reload} />
+      <VideoUploader sport={data?.sport} onUploaded={reload} />
 
       {clips.length > 0 && <FormProgress clips={clips} />}
 
