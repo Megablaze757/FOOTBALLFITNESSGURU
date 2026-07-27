@@ -34,3 +34,9 @@ Thumbs.db
 
 # TypeScript incremental build cache — rewritten by every build.
 *.tsbuildinfo
+
+# Scratch files from diagnostic scripts. Never part of the app.
+_*.mjs
+_*.ts
+_*.svg
+_*.js
