@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { invalidate } from "@/lib/use-async";
 import {
   planTargets, buildWeek, shoppingList, shoppingListText, unmetSlots, dislikedFoodIds,
   ACTIVITY_LEVELS, DIET_GOALS, DIET_PATTERNS, AVOIDANCES, DEFAULT_PREFS,
@@ -16,9 +17,11 @@ interface Props {
   initial?: Partial<BodyStats> | null;
   initialPrefs?: Partial<MealPrefs> | null;
   initialNotes?: string | null;
+  /** Seed of the plan they're already on. Null means they've never generated one. */
+  initialSeed?: number | null;
 }
 
-export function MealPlanner({ userId, initial, initialPrefs, initialNotes }: Props) {
+export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initialSeed }: Props) {
   const [sex, setSex] = useState<Sex>(initial?.sex ?? "male");
   const [age, setAge] = useState(String(initial?.age ?? 20));
   const [heightCm, setHeightCm] = useState(String(initial?.heightCm ?? 178));
@@ -26,6 +29,7 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes }: Pro
   const [activity, setActivity] = useState<ActivityLevel>(initial?.activity ?? "moderate");
   const [goal, setGoal] = useState<DietGoal>(initial?.goal ?? "maintain");
   const [week, setWeek] = useState<PlannedDay[] | null>(null);
+  const [seed, setSeed] = useState<number | null>(initialSeed ?? null);
   const [openDay, setOpenDay] = useState(0);
   const [copied, setCopied] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -54,10 +58,24 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes }: Pro
   );
   const gaps = useMemo(() => unmetSlots(effectivePrefs), [effectivePrefs]);
 
+  // Rebuild the plan they were already on. buildWeek is pure, so the same seed
+  // and the same saved inputs give back the identical week — which is the point:
+  // regenerating with a fresh random seed would hand them a different plan from
+  // the shopping list they'd already started buying against.
+  useEffect(() => {
+    if (seed === null || week) return;
+    setWeek(buildWeek(targets, seed, effectivePrefs, schedule));
+    // Only on mount, and only to restore. Changing stats afterwards should not
+    // silently rewrite the plan under them — that's what Generate is for.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function generate() {
-    setWeek(buildWeek(targets, Math.floor(Math.random() * 3), effectivePrefs, schedule));
+    const next = Math.floor(Math.random() * 3);
+    setSeed(next);
+    setWeek(buildWeek(targets, next, effectivePrefs, schedule));
     setOpenDay(0);
-    // Remember the stats so the plan doesn't have to be re-entered next time.
+    // Remember the stats AND which plan it was, so neither has to be redone.
     const supabase = createClient();
     const { error } = await supabase.from("profiles").update({
       height_cm: stats.heightCm,
@@ -67,8 +85,15 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes }: Pro
       diet_avoid: prefs.avoid,
       meals_per_day: prefs.mealsPerDay,
       diet_notes: notes.trim() || null,
+      meal_plan_seed: next,
     }).eq("id", userId);
-    if (!error) { setSaved(true); setTimeout(() => setSaved(false), 2500); }
+    if (!error) {
+      // The nutrition page caches its loader; without this the restored plan
+      // would be the old seed until the cache expired.
+      invalidate(`nutrition:${userId}`);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    }
   }
 
   async function copyList() {

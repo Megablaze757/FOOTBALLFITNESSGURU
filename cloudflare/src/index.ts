@@ -1009,16 +1009,22 @@ async function supa(env: Env, path: string, init: RequestInit = {}): Promise<Res
 async function createCheckout(req: Request, env: Env): Promise<Response> {
   const user = await authUser(req, env);
   if (!user) return json({ error: "unauthorized" }, 401);
-  const { tier } = (await req.json()) as { tier: string };
-  // Only the plan actually on sale can be bought. Gold still exists for comped
-  // testers and anyone already subscribed, but it is not advertised anywhere —
-  // and a checkout endpoint that will happily charge £20 for a plan no page
-  // mentions is a chargeback waiting to happen.
-  if (tier !== "gold") return json({ error: "unknown tier" }, 400);
+  // The CLIENT DOES NOT CHOOSE THE PLAN. There is exactly one paid plan, so
+  // the price is the server's business alone.
+  //
+  // This used to take a `tier` from the request and validate it against a
+  // hard-coded name. That coupled the deployed site to the deployed Worker
+  // through a magic string: rename the tier, ship one of them, and every
+  // checkout 400s with "unknown tier" until the other catches up. Which is
+  // exactly what happened — payments worked until the two fell out of step.
+  //
+  // A body is still read (and ignored) so old clients sending {tier} are fine.
+  try { await req.json(); } catch { /* no body is fine too */ }
+
   const priceId = env.STRIPE_PRICE_GOLD;
-  // Distinguish "no such tier" from "price id not set yet" — the latter is a
-  // config gap, and saying so plainly beats a confusing Stripe error later.
+  // Saying "not configured" plainly beats a confusing Stripe error later.
   if (!priceId) return json({ error: "Pro price not configured — set STRIPE_PRICE_GOLD and redeploy" }, 503);
+  const tier = "gold";
 
   // Reuse an existing Stripe customer if we have one.
   const existing = (await (await supa(env, `subscriptions?user_id=eq.${user.id}&select=stripe_customer_id,stripe_subscription_id`)).json()) as

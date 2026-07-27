@@ -60,15 +60,25 @@ test("everything a paid plan advertises is actually reachable", () => {
   }
 });
 
-test("the checkout only sells a plan the pricing page shows", () => {
+test("the checkout doesn't let the client pick the price", () => {
   const worker = readFileSync(join(ROOT, "cloudflare", "src", "index.ts"), "utf8");
   const sold = PLANS.filter((p) => p.paid).map((p) => p.id);
-  assert.deepEqual(sold, [PAID_TIER]);
-  // createCheckout must reject anything that isn't the sold tier — otherwise a
-  // stale link can charge someone for a plan no page mentions.
+  assert.deepEqual(sold, [PAID_TIER], "there should be exactly one plan on sale");
+
+  const checkout = worker.slice(worker.indexOf("async function createCheckout"));
+  const body = checkout.slice(0, checkout.indexOf("\n}\n"));
+
+  // This validated a `tier` string sent by the browser, which coupled the
+  // deployed site to the deployed Worker: rename the tier, ship one of them,
+  // and every checkout 400s with "unknown tier" until the other catches up.
+  // That is exactly what took payments down. The server picks the price.
   assert.ok(
-    worker.includes(`if (tier !== "${PAID_TIER}") return json({ error: "unknown tier" }, 400);`),
-    "createCheckout should accept only the tier that's on sale",
+    !/if \(tier !== "\w+"\) return json\(\{ error: "unknown tier" \}/.test(body),
+    "createCheckout must not reject on a tier name the client supplied",
+  );
+  assert.ok(
+    body.includes("env.STRIPE_PRICE_GOLD"),
+    "createCheckout should read the price from config, not from the request",
   );
 });
 
