@@ -53,10 +53,12 @@ export type Capability =
 
 export const CAPABILITY_TIER: Record<Capability, Tier> = {
   check_in: "bronze",
-  program_local: "bronze",
   library: "bronze",
   leaderboards: "bronze",
 
+  // Programs are the product. Free gets the habit loop — check in, see your
+  // readiness, read the drills — and paying is what turns that into a plan.
+  program_local: "silver",
   ai_program: "silver",
   ai_chat: "silver",
   nutrition: "silver",
@@ -94,8 +96,8 @@ export const PLANS: TierPlan[] = [
     features: [
       "Daily check-in with the body pain map",
       "Readiness score, worked out on your device",
-      "Four-week programs built on your device",
       "Full exercise library and every skill drill",
+      "Position guides for your sport",
       "Leaderboards and rank progression",
     ],
   },
@@ -105,10 +107,11 @@ export const PLANS: TierPlan[] = [
     priceLabel: "£15/mo",
     priceMonthly: 15,
     tagline: "The AI coach, writing for you.",
-    headline: "Your program stops being a template and starts being written for you.",
+    headline: "Where you stop tracking training and start having a program.",
     paid: true,
     features: [
       "Everything in Bronze",
+      "Four-week training blocks — Base, Build, Peak, Deload",
       "AI-written programs that obey your notes — “I don’t train legs” means no legs",
       "Ask the coach: questions about your training, answered in context",
       "Meal plans that fit your week, with a pack-aware shopping list",

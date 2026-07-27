@@ -11,6 +11,8 @@ import {
 } from "@/lib/coach";
 import { positionList } from "@/lib/positions";
 import { PositionPicker } from "@/components/PositionPicker";
+import { FeatureLock, tierOfSub } from "@/components/FeatureLock";
+import { can } from "@/lib/subscription";
 import type { SportId } from "@/lib/exercises";
 import type { SplitStyle } from "@/lib/hypertrophy";
 import { templatesForSport } from "@/lib/programs";
@@ -21,7 +23,7 @@ import { RingProgress } from "@/components/RingProgress";
 import { CoachChat } from "@/components/CoachChat";
 import { ProgramCalendar } from "@/components/ProgramCalendar";
 import { WorkoutPlayer } from "@/components/WorkoutPlayer";
-import type { CheckInInput, DailyCheckIn, Program, StrengthBenchmark, TrainingLog, TrainingDrill } from "@/lib/types";
+import type { CheckInInput, DailyCheckIn, Program, StrengthBenchmark, Tier, TrainingLog, TrainingDrill } from "@/lib/types";
 
 /** Latest recorded value per benchmark metric, newest test first. */
 function latestBenchmarks(rows: StrengthBenchmark[]): Record<string, number> {
@@ -80,13 +82,14 @@ export default function CoachPage() {
   const { data, loading, reload } = useAsync(async () => {
     const supabase = createClient();
     const since = new Date(Date.now() - 30 * 86400_000).toISOString().slice(0, 10);
-    const [{ data: program }, { data: checkIn }, { data: training }, { data: checkHist }, { data: benches }, { data: profile }] = await Promise.all([
+    const [{ data: program }, { data: checkIn }, { data: training }, { data: checkHist }, { data: benches }, { data: profile }, { data: sub }] = await Promise.all([
       supabase.from("programs").select("*").eq("user_id", user.id).eq("status", "active").order("created_at", { ascending: false }).limit(1).maybeSingle(),
       supabase.from("daily_check_ins").select("*").eq("user_id", user.id).eq("check_in_date", today).maybeSingle(),
       supabase.from("training_logs").select("*").eq("user_id", user.id).gte("log_date", since).order("log_date", { ascending: true }),
       supabase.from("daily_check_ins").select("check_in_date, pain_map").eq("user_id", user.id).gte("check_in_date", since).order("check_in_date", { ascending: true }),
       supabase.from("strength_benchmarks").select("*").eq("user_id", user.id).order("test_date", { ascending: false }).limit(20),
       supabase.from("profiles").select("sport, position, positions, training_focus").eq("id", user.id).maybeSingle(),
+      supabase.from("subscriptions").select("tier, status").eq("user_id", user.id).maybeSingle(),
     ]);
     const p = profile as { sport?: string; position?: string; positions?: string[]; training_focus?: string } | null;
     return {
@@ -99,10 +102,29 @@ export default function CoachPage() {
       // Profiles written before 0042 only have the single column.
       positions: positionList(p?.positions?.length ? p.positions : p?.position),
       focus: (p?.training_focus ?? "performance") as TrainingFocus,
+      tier: tierOfSub(sub as { tier?: Tier; status?: string } | null),
     };
   }, [user.id], `coach:${user.id}`);
 
   if (loading) return <div className="card mt-6 h-80 animate-pulse" />;
+
+  // Programs are the paid product. An existing program stays readable — someone
+  // who lapses shouldn't lose access to the block they're mid-way through — but
+  // building a new one is Silver.
+  if (!data?.program && !can(data?.tier ?? "bronze", "program_local")) {
+    return (
+      <div className="animate-fade-up">
+        <header className="mb-5">
+          <h1 className="text-3xl font-extrabold tracking-tight">AI Coach</h1>
+        </header>
+        <FeatureLock
+          capability="program_local"
+          title="Training programs are a Silver feature"
+          blurb="Four-week blocks built around your sport, your position and how recovered you are — progressing Base, Build, Peak, Deload. Your check-ins, readiness and the full drill library stay free."
+        />
+      </div>
+    );
+  }
 
   if (!data?.program) {
     return (

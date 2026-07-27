@@ -43,12 +43,18 @@ test("gold is meaningfully more than silver, not one extra toggle", () => {
   assert.ok(extra.length >= 3, `gold only adds ${extra.length}: ${extra.join(", ")}`);
 });
 
-test("the free tier still does the thing the app is for", () => {
-  // A free plan that can't check in has no habit loop, and everything else is
-  // sold on top of that loop.
-  for (const c of ["check_in", "program_local", "library"] as Capability[]) {
+test("the free tier keeps the habit loop", () => {
+  // Free has to be worth opening daily — that's what everything else is sold on
+  // top of. But not the programs: those are the product.
+  for (const c of ["check_in", "library", "leaderboards"] as Capability[]) {
     assert.ok(can("bronze", c), `bronze can't ${c}`);
   }
+});
+
+test("free cannot build a program at all, AI or on-device", () => {
+  assert.ok(!can("bronze", "program_local"), "bronze can still build programs locally");
+  assert.ok(!can("bronze", "ai_program"));
+  assert.ok(can("silver", "program_local"), "silver must be able to build one");
 });
 
 test("both paid tiers gate something real", () => {
