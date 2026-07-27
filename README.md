@@ -231,14 +231,15 @@ Build locally: `npm run build` → static site in `out/`.
 
 ## Live status
 
-The schema is **applied and verified on the live Supabase project** (`eu-west-3`), and the
-app has been run end-to-end against it (auth → check-in → readiness → admin metrics).
-`.env.local` is wired to the project. Seeded demo logins (dummy DB):
+The schema is **applied and verified on the live Supabase project**, and the app runs
+end-to-end against it (auth → check-in → readiness → admin metrics).
 
-- Athlete — `athlete@example.com` / `Test1234!`
-- Admin — `admin@example.com` / `Test1234!` (sees `/admin`)
+The seeded demo logins that used to be listed here are gone — the accounts were deleted
+and their passwords scrambled first. Never put working credentials in a README: this file
+was publicly readable, and git history keeps them even after the lines are removed.
+Create your own account with `npm run dev` instead.
 
-Run `npm run dev` and sign in. Helper scripts: `scripts/db-deploy.mjs` (apply migrations),
+Helper scripts: `scripts/db-deploy.mjs` (apply migrations),
 `scripts/db-verify.mjs` (inspect schema), `scripts/seed-user.mjs` (demo users),
 `scripts/smoke-live.mjs` (live end-to-end check).
 
