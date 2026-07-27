@@ -13,7 +13,7 @@ export const metadata: Metadata = {
   title: "Pricing",
   description:
     `PocketAthlete pricing: free forever for the daily check-in, readiness score and the full ` +
-    `drill library. £15/mo for training programs, the AI coach, nutrition, video form analysis ` +
+    `drill library. £20/mo for training programs, the AI coach, nutrition, video form analysis ` +
     `and injury planning. ${TRIAL_DAYS} days free, cancel any time.`,
   alternates: { canonical: `${SITE}/plans/` },
   openGraph: {
@@ -59,7 +59,7 @@ export default function PlansPage() {
       <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">Simple pricing</h1>
       <p className="mt-3 text-slate-400">
         Free to start, and free forever for the daily habit. A private performance coach is
-        £100+ an hour — this is the whole staff, every day, from £15 a month.
+        £100+ an hour — this is the whole staff, every day, from £20 a month.
       </p>
 
       <div className="mt-8">

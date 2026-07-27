@@ -39,18 +39,31 @@ test("Pro unlocks everything that isn't free", () => {
   }
 });
 
-test("the legacy gold tier still grants everything", () => {
-  // Comped beta testers are on it. It must never become a downgrade.
-  for (const c of Object.keys(CAPABILITY_TIER) as Capability[]) {
-    assert.ok(can("gold", c), `a comped gold account lost ${c}`);
+test("every paid tier grants everything, sold or not", () => {
+  // Whichever tier is currently sold, anyone on ANY paid tier must keep full
+  // access. A historic subscriber becoming second-class after a pricing change
+  // is the bug that hit video analysis.
+  for (const tier of ["silver", "gold"] as const) {
+    for (const c of Object.keys(CAPABILITY_TIER) as Capability[]) {
+      assert.ok(can(tier, c), `a ${tier} account lost ${c}`);
+    }
+    assert.equal(planFor(tier).id, tier, "planFor must not fall back to free");
+    assert.ok(planFor(tier).paid, `${tier} should resolve to a paid plan`);
   }
-  assert.equal(planFor("gold").id, "gold", "planFor must not fall back to free");
-  assert.ok(planFor("gold").paid);
 });
 
-test("gold is not offered for sale", () => {
-  assert.ok(!PLANS.some((p) => p.id === "gold"), "gold should not be on the pricing page");
-  assert.ok(ALL_PLANS.some((p) => p.id === "gold"), "but it must still resolve for lookups");
+test("tiers that aren't sold still resolve, but aren't advertised", () => {
+  const unsold = ALL_PLANS.filter((p) => p.paid && p.id !== PAID_TIER);
+  for (const p of unsold) {
+    assert.ok(!PLANS.some((x) => x.id === p.id), `${p.id} should not be on the pricing page`);
+    assert.equal(planFor(p.id).id, p.id, `${p.id} must still resolve for historic rows`);
+  }
+});
+
+test("the sold tier is the one on the pricing page", () => {
+  const sold = PLANS.filter((p) => p.paid);
+  assert.equal(sold.length, 1);
+  assert.equal(sold[0].id, PAID_TIER);
 });
 
 test("no capability requires a tier nobody can buy", () => {

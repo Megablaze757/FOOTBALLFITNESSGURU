@@ -1,4 +1,5 @@
 import { PUBLISHER, jsonLd } from "@/lib/schema";
+import { PLANS } from "@/lib/subscription";
 
 /**
  * Schema.org JSON-LD.
@@ -37,10 +38,15 @@ export function StructuredData() {
           "built around your sport and position, and nutrition planning.",
         url: "https://pocketathlete.com",
         publisher: { "@id": PUBLISHER["@id"] },
-        offers: [
-          { "@type": "Offer", name: "Free", price: "0", priceCurrency: "GBP" },
-          { "@type": "Offer", name: "Pro", price: "15", priceCurrency: "GBP" },
-        ],
+        // Derived, not typed out. A price written twice is a price that
+        // eventually disagrees with itself — and this is the copy Google
+        // shows next to the result.
+        offers: PLANS.map((plan) => ({
+          "@type": "Offer",
+          name: plan.name,
+          price: String(plan.priceMonthly),
+          priceCurrency: "GBP",
+        })),
       },
       {
         "@type": "FAQPage",

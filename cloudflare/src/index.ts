@@ -1014,11 +1014,11 @@ async function createCheckout(req: Request, env: Env): Promise<Response> {
   // testers and anyone already subscribed, but it is not advertised anywhere —
   // and a checkout endpoint that will happily charge £20 for a plan no page
   // mentions is a chargeback waiting to happen.
-  if (tier !== "silver") return json({ error: "unknown tier" }, 400);
-  const priceId = env.STRIPE_PRICE_SILVER;
+  if (tier !== "gold") return json({ error: "unknown tier" }, 400);
+  const priceId = env.STRIPE_PRICE_GOLD;
   // Distinguish "no such tier" from "price id not set yet" — the latter is a
   // config gap, and saying so plainly beats a confusing Stripe error later.
-  if (!priceId) return json({ error: "Pro price not configured — set STRIPE_PRICE_SILVER and redeploy" }, 503);
+  if (!priceId) return json({ error: "Pro price not configured — set STRIPE_PRICE_GOLD and redeploy" }, 503);
 
   // Reuse an existing Stripe customer if we have one.
   const existing = (await (await supa(env, `subscriptions?user_id=eq.${user.id}&select=stripe_customer_id,stripe_subscription_id`)).json()) as

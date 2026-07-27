@@ -1,13 +1,13 @@
 // =============================================================================
 // Plans.
 //
-// TWO plans for individuals: Free, and Pro at £15. Plus Team for clubs.
+// TWO plans for individuals: Free, and Pro at £20. Plus Team for clubs.
 //
 // It was three, with usage meters separating the top two — 4 program builds a
 // month, 30 coach questions. That was a mistake, and worth writing down so it
 // doesn't get reinvented:
 //
-//   * Metering is a B2B pattern. Nobody counts their coach questions in a £15
+//   * Metering is a B2B pattern. Nobody counts their coach questions in a £20
 //     consumer fitness app, and a cap is invisible until the moment it bites —
 //     which is mid-block, on a Tuesday, for someone who was enjoying it. That
 //     produces refund requests, not upgrades.
@@ -21,8 +21,8 @@
 // tier can be added the day there's evidence of who wants what — that's easy.
 // Taking features off people who already pay for them is not.
 //
-// The `gold` tier still exists in the type and the database. Comped beta
-// testers are on it and it grants everything Pro does; it's simply not sold.
+// Pro IS the gold tier. The comped beta testers were already on gold, so
+// pricing at £20 needed no migration and changed nobody's access.
 // =============================================================================
 
 import type { Tier } from "./types";
@@ -47,8 +47,15 @@ export const TRIAL_DAYS = 7;
 
 export const TIER_RANK: Record<Tier, number> = { bronze: 0, silver: 1, gold: 2 };
 
-/** The tier that "paid" means. Sold as Pro; `gold` is the legacy/comped one. */
-export const PAID_TIER: Tier = "silver";
+/**
+ * The tier that "paid" means, and the Stripe price it maps to.
+ *
+ * Sold as Pro at £20 on the gold price id. This was silver/£15 briefly; moving
+ * it cost nothing because nobody was paying yet and the comped beta testers
+ * were already on gold. `silver` is now the unused one — kept in the type so
+ * any historic row still resolves rather than silently reading as free.
+ */
+export const PAID_TIER: Tier = "gold";
 
 // --- Capabilities ------------------------------------------------------------
 
@@ -138,10 +145,10 @@ const FREE: TierPlan = {
 };
 
 const PRO: TierPlan = {
-  id: "silver",
+  id: "gold",
   name: "Pro",
-  priceLabel: "£15/mo",
-  priceMonthly: 15,
+  priceLabel: "£20/mo",
+  priceMonthly: 20,
   tagline: "Everything, for one price.",
   headline: "Where you stop tracking training and start having a program.",
   paid: true,
@@ -158,15 +165,16 @@ const PRO: TierPlan = {
 };
 
 /**
- * The legacy tier. Not sold — kept so comped beta testers and anyone who bought
- * it before the change keep working, and so planFor("gold") never returns the
- * free plan by accident.
+ * The unused tier. Nobody is on it — it existed as the £15 middle plan for a
+ * few hours and was never sold to anyone. Kept in the list only so that if a
+ * row somewhere still says "silver", it resolves to a paid plan with full
+ * access rather than silently reading as free.
  */
-const LEGACY_GOLD: TierPlan = {
-  id: "gold",
-  name: "Gold",
-  priceLabel: "£20/mo",
-  priceMonthly: 20,
+const LEGACY_SILVER: TierPlan = {
+  id: "silver",
+  name: "Pro (legacy)",
+  priceLabel: "£15/mo",
+  priceMonthly: 15,
   tagline: "Everything in Pro.",
   paid: true,
   features: PRO.features,
@@ -176,7 +184,7 @@ const LEGACY_GOLD: TierPlan = {
 export const PLANS: TierPlan[] = [FREE, PRO];
 
 /** Every plan including the ones no longer sold — for admin and lookups. */
-export const ALL_PLANS: TierPlan[] = [FREE, PRO, LEGACY_GOLD];
+export const ALL_PLANS: TierPlan[] = [FREE, PRO, LEGACY_SILVER];
 
 // Team plan — sold separately (not an individual tier).
 export interface TeamPlan {

@@ -170,6 +170,14 @@ export const TERMS: LegalSection[] = [
     ],
   },
   {
+    heading: "Our content and software",
+    body: [
+      "The app itself — the software, the design, the exercise and drill instructions, the position guides and the coaching text — belongs to us and is protected by copyright. Your subscription buys you the right to use it, not to own it.",
+      "You may not copy, republish or redistribute our content, build a competing product from it, or take it apart to work out how it is made. You may not use our written coaching content to train a machine-learning model.",
+      "You are welcome to quote a short passage with credit and a link, and to share your own screenshots. Our name and logo remain ours.",
+    ],
+  },
+  {
     heading: "Availability",
     body: [
       "We aim to keep the app running but do not promise it will always be available or error-free. Features may change. We may suspend accounts that break these terms or put the service at risk.",

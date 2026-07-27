@@ -151,7 +151,7 @@ export default function Landing() {
       <section id="pricing" className="mt-24 scroll-mt-8">
         <div className="text-center">
           <h2 className="text-3xl font-extrabold tracking-tight sm:text-4xl">Simple pricing for athletes and teams.</h2>
-          <p className="mx-auto mt-3 max-w-xl text-slate-400">A private performance coach runs £100+ an hour. PocketAthlete is the whole staff, every day, from £15 a month.</p>
+          <p className="mx-auto mt-3 max-w-xl text-slate-400">A private performance coach runs £100+ an hour. PocketAthlete is the whole staff, every day, from £20 a month.</p>
         </div>
         {/* Rendered from lib/subscription.ts, not written out again here. The
             hand-written version had drifted: it still listed nutrition as free

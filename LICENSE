@@ -1,0 +1,62 @@
+PocketAthlete — Proprietary Software Licence
+Copyright (c) 2026 PocketAthlete. All rights reserved.
+
+This software and its source code, design, written coaching content, database
+schema and accompanying materials (together, "the Software") are the
+confidential and proprietary property of the copyright holder.
+
+NO LICENCE IS GRANTED
+
+The Software is published for reference only. Its presence in a public source
+repository is not an offer of any licence, express or implied. In the absence
+of a separate written agreement signed by the copyright holder, you may NOT:
+
+  * copy, reproduce, host, publish or redistribute the Software or any part
+    of it;
+  * create derivative works from it, including a competing or substantially
+    similar product;
+  * use the Software, or any portion of it, for any commercial purpose;
+  * remove or alter any copyright, attribution or licence notice;
+  * use the written coaching content, exercise descriptions, drill
+    instructions, position guides or AI prompt text as a dataset for training,
+    fine-tuning or evaluating a machine-learning model.
+
+Under the Copyright, Designs and Patents Act 1988 (United Kingdom), and the
+corresponding law of other jurisdictions, all rights not expressly granted are
+reserved.
+
+WHAT IS PERMITTED
+
+You may read the Software, and you may quote short excerpts for the purposes of
+criticism, review, news reporting, or teaching, where such use qualifies as
+fair dealing under the 1988 Act (or fair use where applicable), with
+attribution to PocketAthlete.
+
+Search engines and answer engines may index the PUBLIC WEBSITE at
+pocketathlete.com and quote from it with attribution, as set out in the site's
+robots.txt. That permission covers the published website only, not this source
+code.
+
+TRADE MARKS
+
+"PocketAthlete", the PocketAthlete name, logo and gold "PA" mark are trade
+marks of the copyright holder. Nothing here grants any right to use them.
+
+THIRD-PARTY COMPONENTS
+
+The Software depends on third-party open-source packages, each licensed by its
+own authors under its own terms. Those licences govern those packages and are
+unaffected by this notice.
+
+NO WARRANTY
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR ITS USE.
+
+The Software provides general training information and is not medical advice.
+
+Enquiries about licensing: info@pocketathlete.com

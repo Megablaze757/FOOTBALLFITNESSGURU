@@ -7,6 +7,8 @@ import { SPORTS, DIFFICULTIES } from "@/lib/exercises";
 import { PositionPicker } from "@/components/PositionPicker";
 import { positionList } from "@/lib/positions";
 import { validateUsername, USERNAME_MAX } from "@/lib/username";
+import { clearAllDrafts } from "@/lib/drafts";
+import { invalidate } from "@/lib/use-async";
 import type { Profile } from "@/lib/types";
 
 export function ProfileForm({ profile, email }: { profile: Profile; email: string }) {
@@ -82,6 +84,10 @@ export function ProfileForm({ profile, email }: { profile: Profile; email: strin
 
   async function handleSignOut() {
     const supabase = createClient();
+    // Leaving a half-written check-in on a shared phone for whoever signs in
+    // next is exactly the kind of thing nobody thinks about until it happens.
+    clearAllDrafts(profile.id);
+    invalidate();
     await supabase.auth.signOut();
     router.replace("/login");
   }

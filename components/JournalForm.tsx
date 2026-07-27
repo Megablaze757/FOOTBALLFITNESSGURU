@@ -2,7 +2,7 @@
 
 import { invalidate } from "@/lib/use-async";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { sportTerms } from "@/lib/sport-terms";
@@ -12,6 +12,20 @@ import { ReadinessGauge } from "@/components/ReadinessGauge";
 import { TrainingLogInput, type TrainingState } from "@/components/TrainingLogInput";
 import { enqueue, browserStore } from "@/lib/offline-queue";
 import { track } from "@/lib/funnel";
+import { useCurrentUser } from "@/lib/auth";
+import { saveDraft, loadDraft, clearDraft, draftAge, describeAge } from "@/lib/drafts";
+
+/** What a half-finished check-in looks like on disk. */
+interface DraftShape {
+  painMap: PainMap;
+  fatigue: number;
+  sleep: number;
+  nutrition: number;
+  weight: string;
+  isMatchDay: boolean;
+  minutes: string;
+  training: TrainingState;
+}
 import type { CheckInInput, PainMap, ReadinessResult, TrainingDrill } from "@/lib/types";
 
 /**
@@ -48,6 +62,41 @@ export function JournalForm({ initial, initialTraining, sport, planned = [] }: {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ReadinessResult | null>(null);
   const [queued, setQueued] = useState(false);
+  const [restored, setRestored] = useState<string | null>(null);
+
+  const today = new Date().toISOString().slice(0, 10);
+  const userId = useCurrentUser().id;
+
+  // Restore anything unsaved from earlier. Only when the form is otherwise
+  // untouched — `initial` means they already checked in today and are editing,
+  // and a draft must never quietly overwrite what's actually stored.
+  useEffect(() => {
+    if (initial) return;
+    const draft = loadDraft<DraftShape>("checkin", userId, today);
+    if (!draft) return;
+    setPainMap(draft.painMap ?? {});
+    setFatigue(draft.fatigue ?? 5);
+    setSleep(draft.sleep ?? 7);
+    setNutrition(draft.nutrition ?? 6);
+    setWeight(draft.weight ?? "");
+    setIsMatchDay(draft.isMatchDay ?? false);
+    setMinutes(draft.minutes ?? "0");
+    if (draft.training) setTraining(draft.training);
+    const age = draftAge("checkin", userId, today);
+    setRestored(age === null ? "earlier" : describeAge(age));
+  }, [initial, userId, today]);
+
+  // Save as they go. Debounced because a slider drag fires continuously and
+  // there's no reason to serialise the whole form on every pixel.
+  useEffect(() => {
+    if (result) return; // already submitted — nothing in progress to keep
+    const t = setTimeout(() => {
+      saveDraft<DraftShape>("checkin", userId, {
+        painMap, fatigue, sleep, nutrition, weight, isMatchDay, minutes, training,
+      }, today);
+    }, 400);
+    return () => clearTimeout(t);
+  }, [painMap, fatigue, sleep, nutrition, weight, isMatchDay, minutes, training, result, userId, today]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -72,7 +121,6 @@ export function JournalForm({ initial, initialTraining, sport, planned = [] }: {
       match_minutes_played: isMatchDay ? Number(minutes) || 0 : 0,
     };
 
-    const today = new Date().toISOString().slice(0, 10);
     const cleanDrills = training.drills.filter((d) => d.name.trim());
     const trainingRow = (cleanDrills.length || training.total_minutes || training.intensity)
       ? { drills: cleanDrills, total_minutes: training.total_minutes, intensity: training.intensity }
@@ -126,6 +174,10 @@ export function JournalForm({ initial, initialTraining, sport, planned = [] }: {
     // occurrence count doubles as a usage signal.
     track("first_check_in", { matchDay: isMatchDay });
 
+    // It's in the database now, so the local copy has done its job. Left
+    // behind, it would be restored over their saved entry next time.
+    clearDraft("checkin", userId, today);
+
     // A check-in changes readiness on Home, Stats and Coach — drop the cached
     // page data so they refetch fresh rather than showing pre-check-in values.
     invalidate();
@@ -156,6 +208,27 @@ export function JournalForm({ initial, initialTraining, sport, planned = [] }: {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      {restored && (
+        <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-slate-300">
+          <span>📝 Picked up where you left off — saved {restored}.</span>
+          <button
+            type="button"
+            onClick={() => {
+              // Start clean. Someone who says "no, start again" must not have
+              // the draft re-saved from the state that's still on screen.
+              clearDraft("checkin", userId, today);
+              setPainMap({}); setFatigue(5); setSleep(7); setNutrition(6);
+              setWeight(""); setIsMatchDay(false); setMinutes("0");
+              setTraining({ drills: [], total_minutes: null, intensity: null });
+              setRestored(null);
+            }}
+            className="tap-target shrink-0 text-xs font-semibold text-slate-400 hover:text-pitch-400"
+          >
+            Start fresh
+          </button>
+        </div>
+      )}
+
       <section className="card p-5">
         <h2 className="field-label">Where does it hurt?</h2>
         <BodyMap value={painMap} onChange={setPainMap} />
