@@ -142,7 +142,11 @@ function InstallPrompt() {
   if (!deferred && !iosHint) return null;
 
   return (
-    <div className="fixed inset-x-3 bottom-3 z-40 rounded-2xl border border-white/10 bg-ink-800/95 p-4 shadow-lg backdrop-blur sm:left-auto sm:right-4 sm:w-80">
+    // The bottom tab bar is fixed at bottom-4 with z-[60], so this sat
+    // underneath it and "Not now" was physically unpressable on a phone —
+    // an install prompt you cannot dismiss is worse than no prompt.
+    // Sit above the bar (it hides at lg) and above it in the stack.
+    <div className="fixed inset-x-3 bottom-28 z-[70] rounded-2xl border border-white/10 bg-ink-800/95 p-4 shadow-lg backdrop-blur lg:inset-x-auto lg:bottom-4 lg:right-4 lg:w-80">
       <div className="text-sm font-semibold text-slate-100">Add PocketAthlete to your home screen</div>
       <p className="mt-1 text-xs text-slate-400">
         {iosHint
@@ -151,11 +155,11 @@ function InstallPrompt() {
       </p>
       <div className="mt-3 flex gap-2">
         {deferred && (
-          <button onClick={install} className="flex-1 rounded-xl bg-pitch-500 px-3 py-2 text-xs font-semibold text-ink-900">
+          <button onClick={install} className="tap-target flex-1 rounded-xl bg-pitch-500 px-3 py-2 text-xs font-semibold text-ink-900">
             Install
           </button>
         )}
-        <button onClick={dismiss} className="flex-1 rounded-xl border border-white/10 px-3 py-2 text-xs font-semibold text-slate-300">
+        <button onClick={dismiss} className="tap-target flex-1 rounded-xl border border-white/10 px-3 py-2 text-xs font-semibold text-slate-300">
           Not now
         </button>
       </div>

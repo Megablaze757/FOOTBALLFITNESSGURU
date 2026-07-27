@@ -149,6 +149,31 @@ async function adminCreateUser(req: Request, env: Env): Promise<Response> {
 // still permits tens of thousands of tiny requests — that's a denial of service
 // on your OpenRouter account rather than a bill.
 
+// --- Tier gating -------------------------------------------------------------
+//
+// Mirrors CAPABILITY_TIER in lib/subscription.ts. Enforced HERE and not only in
+// the UI, because hiding a button is a suggestion — anyone can call the endpoint
+// directly, and the AI calls behind these are what actually cost money.
+//
+// Keep the two lists in step. If they drift, the app sells something the server
+// refuses, which is worse than not selling it at all.
+const TIER_ORDER = ["bronze", "silver", "gold"] as const;
+
+function meetsTier(have: string, need: string): boolean {
+  const h = TIER_ORDER.indexOf(have as typeof TIER_ORDER[number]);
+  const n = TIER_ORDER.indexOf(need as typeof TIER_ORDER[number]);
+  return (h < 0 ? 0 : h) >= (n < 0 ? 0 : n);
+}
+
+/** null when allowed; a 402 Response naming the tier needed when not. */
+async function requireTier(env: Env, userId: string, need: "silver" | "gold", feature: string): Promise<Response | null> {
+  const tier = await tierOf(env, userId);
+  if (meetsTier(tier, need)) return null;
+  // 402 rather than 403: this isn't "you may never", it's "this costs money".
+  // The client shows an upgrade prompt for exactly this status.
+  return json({ error: `${feature} is a ${need === "gold" ? "Gold" : "Silver"} feature`, upgrade: need, tier }, 402);
+}
+
 /** Monthly USD budget per tier. Well under the revenue each tier brings in. */
 const TIER_BUDGET: Record<string, number> = {
   bronze: 0.40, // free users: enough to try the coach, not enough to cost real money
@@ -354,7 +379,12 @@ async function openRouterOnce(
  */
 async function complete(
   env: Env,
-  opts: { system: string; user: string; maxTokens: number; validate?: (text: string) => boolean; json?: boolean }
+  opts: {
+    system: string; user: string; maxTokens: number;
+    validate?: (text: string) => boolean; json?: boolean;
+    /** Gold's "priority AI": skip the free rungs entirely. */
+    priority?: boolean;
+  }
 ): Promise<{ text: string; model: string; cost: number }> {
   const started = Date.now();
   const trail: string[] = [];
@@ -371,7 +401,11 @@ async function complete(
   };
 
   const chain = modelChain(env);
-  const free = chain.filter((m) => m.endsWith(":free"));
+  // Priority AI is Gold's, and it's a real difference rather than a label: the
+  // free rungs are rate-limited shared capacity with no SLA, so skipping them
+  // is the difference between a program in ~3s and one that sometimes takes 15
+  // or falls back to the on-device engine. It costs about half a penny.
+  const free = opts.priority ? [] : chain.filter((m) => m.endsWith(":free"));
   const paid = chain.filter((m) => !m.endsWith(":free"));
 
   // The free rungs are RACED, not queued. Trying them one after another means
@@ -419,7 +453,10 @@ async function meteredComplete(
   opts: { system: string; user: string; maxTokens: number; validate?: (text: string) => boolean; json?: boolean }
 ): Promise<{ text: string; model: string }> {
   try {
-    const { text, model, cost } = await complete(env, opts);
+    // Gold skips the free queue. Looked up here rather than threaded through
+    // every endpoint, so no caller can forget it and no caller can fake it.
+    const priority = (await tierOf(env, userId)) === "gold";
+    const { text, model, cost } = await complete(env, { ...opts, priority });
     await recordSpend(env, userId, cost);
     return { text, model };
   } catch (e) {
@@ -432,6 +469,8 @@ async function meteredComplete(
 async function coachChat(req: Request, env: Env): Promise<Response> {
   const u = await authUser(req, env);
   if (!u) return json({ error: "unauthorized" }, 401);
+  const gate = await requireTier(env, u.id, "silver", "Ask the coach");
+  if (gate) return gate;
   const budget = await checkBudget(env, u.id);
   if (!budget.allowed) return overBudget(budget);
   const body = (await req.json()) as { question: string; context: Record<string, unknown> };
@@ -457,6 +496,8 @@ async function coachChat(req: Request, env: Env): Promise<Response> {
 async function generateProgram(req: Request, env: Env): Promise<Response> {
   const u = await authUser(req, env);
   if (!u) return json({ error: "unauthorized" }, 401);
+  const gate = await requireTier(env, u.id, "silver", "AI-written programs");
+  if (gate) return gate;
   const budget = await checkBudget(env, u.id);
   if (!budget.allowed) return overBudget(budget);
   const { goal, pain_map, notes, in_season, sport, position, focus, days_per_week, split } = (await req.json()) as {
@@ -653,6 +694,8 @@ function parseFoodItems(raw: string): { name: string; qty: number; unit: string;
 async function estimateFood(req: Request, env: Env): Promise<Response> {
   const u = await authUser(req, env);
   if (!u) return json({ error: "unauthorized" }, 401);
+  const gate = await requireTier(env, u.id, "silver", "Nutrition");
+  if (gate) return gate;
   const budget = await checkBudget(env, u.id);
   if (!budget.allowed) return overBudget(budget);
   const { text } = (await req.json()) as { text?: string };
@@ -720,6 +763,8 @@ function parseInjuryPlan(raw: string): unknown | null {
 async function injuryPlan(req: Request, env: Env): Promise<Response> {
   const u = await authUser(req, env);
   if (!u) return json({ error: "unauthorized" }, 401);
+  const gate = await requireTier(env, u.id, "gold", "The injury planner");
+  if (gate) return gate;
   const budget = await checkBudget(env, u.id);
   if (!budget.allowed) return overBudget(budget);
 
@@ -891,6 +936,8 @@ async function generateContent(req: Request, env: Env): Promise<Response> {
 async function generateChallenges(req: Request, env: Env): Promise<Response> {
   const u = await authUser(req, env);
   if (!u) return json({ error: "unauthorized" }, 401);
+  const gate = await requireTier(env, u.id, "gold", "Personalised objectives");
+  if (gate) return gate;
   const budget = await checkBudget(env, u.id);
   if (!budget.allowed) return overBudget(budget);
   const { activity, sport, goal } = (await req.json()) as {
