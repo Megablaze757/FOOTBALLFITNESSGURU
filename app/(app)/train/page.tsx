@@ -51,7 +51,7 @@ function DeleteVideo({ video, onDeleted }: { video: Video; onDeleted: () => void
         onClick={() => setConfirming(true)}
         aria-label="Delete clip"
         title="Delete clip"
-        className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-white/10 text-slate-500 transition hover:border-readiness-red/40 hover:text-readiness-red"
+        className="tap-target grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-white/10 text-slate-500 transition hover:border-readiness-red/40 hover:text-readiness-red"
       >
         🗑
       </button>

@@ -98,7 +98,7 @@ export function ExerciseModal({ ex, sets, reps, onClose }: { ex: Exercise; sets?
           onClick={(e) => e.stopPropagation()}
         >
           <div className="mb-4 flex justify-end">
-            <button onClick={onClose} className="grid h-9 w-9 place-items-center rounded-full bg-white/[0.06] text-slate-300 transition hover:bg-white/10" aria-label="Close">✕</button>
+            <button onClick={onClose} className="tap-target grid h-9 w-9 place-items-center rounded-full bg-white/[0.06] text-slate-300 transition hover:bg-white/10" aria-label="Close">✕</button>
           </div>
           <ExerciseDetailCard ex={ex} sets={sets} reps={reps} />
         </div>

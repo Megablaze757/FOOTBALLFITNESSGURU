@@ -38,7 +38,7 @@ export function TrainingLogInput({ value, onChange, planned = [] }: {
                   placeholder="Drill name"
                   className="field flex-1 py-2"
                 />
-                <button type="button" onClick={() => removeDrill(i)} className="px-2 text-slate-500 hover:text-readiness-red" aria-label="Remove">✕</button>
+                <button type="button" onClick={() => removeDrill(i)} className="tap-target px-2 text-slate-500 hover:text-readiness-red" aria-label="Remove">✕</button>
               </div>
               <div className="mt-2 grid grid-cols-3 gap-2">
                 <NumField label="Sets" value={d.sets} onChange={(v) => setDrill(i, { sets: v || 0 })} />

@@ -74,7 +74,7 @@ export function Notifications({ userId }: { userId: string }) {
               <button
                 onClick={() => dismiss(n.id)}
                 aria-label="Dismiss"
-                className="shrink-0 px-1 text-slate-600 transition hover:text-slate-300"
+                className="tap-target shrink-0 px-1 text-slate-600 transition hover:text-slate-300"
               >
                 ✕
               </button>

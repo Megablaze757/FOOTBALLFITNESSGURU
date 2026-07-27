@@ -10,6 +10,7 @@ import { useAsync } from "@/lib/use-async";
 import { invokeAI } from "@/lib/api";
 import { referralLink, waitlistLink } from "@/lib/referral";
 import { planFor } from "@/lib/subscription";
+import { ContentEngine } from "@/components/ContentEngine";
 import type { Video } from "@/lib/types";
 
 interface Metrics {
@@ -87,6 +88,10 @@ export default function AdminPage() {
 
       <section className="mt-10">
         <CreateBetaAccount />
+      </section>
+
+      <section className="mt-10">
+        <ContentEngine />
       </section>
 
       <section className="mt-10">

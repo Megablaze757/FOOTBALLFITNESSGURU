@@ -86,7 +86,7 @@ export function WorkoutPlayer({ title, drills, onComplete, onClose }: {
           <div className="stat-label">Guided session</div>
           <div className="truncate text-sm font-bold text-slate-100">{title}</div>
         </div>
-        <button onClick={onClose} className="grid h-9 w-9 place-items-center rounded-full bg-white/[0.06] text-slate-300 hover:bg-white/10" aria-label="Close">✕</button>
+        <button onClick={onClose} className="tap-target grid h-9 w-9 place-items-center rounded-full bg-white/[0.06] text-slate-300 hover:bg-white/10" aria-label="Close">✕</button>
       </div>
       <div className="mx-5 mt-4 h-1.5 overflow-hidden rounded-full bg-white/10">
         <div className="h-full rounded-full bg-gradient-to-r from-pitch-400 to-pitch-600 transition-all" style={{ width: `${done ? 100 : progress}%` }} />

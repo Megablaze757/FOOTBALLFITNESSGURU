@@ -24,7 +24,5 @@ Disallow: /train
 Disallow: /onboarding
 Disallow: /pricing
 Disallow: /reset-password
-# Internal tool for whoever runs the social accounts, not a page for visitors.
-Disallow: /studio
 
 Sitemap: https://pocketathlete.com/sitemap.xml

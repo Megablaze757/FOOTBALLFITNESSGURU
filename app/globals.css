@@ -12,7 +12,49 @@ body {
     radial-gradient(1100px 520px at 50% -12%, rgba(227, 181, 63, 0.10), transparent 62%),
     #09090a;
   background-attachment: fixed;
+  /* dvh, not vh: on mobile the URL bar counts toward 100vh, so a full-height
+     page jumped by ~60px every time the bar hid or reappeared on scroll. */
   min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* --- Focus -----------------------------------------------------------------
+   There was no visible focus state anywhere outside .field, so anyone
+   navigating by keyboard had no idea where they were — WCAG 2.4.7 (AA).
+   :focus-visible rather than :focus, so the ring appears for keyboard and
+   assistive tech without putting a ring on every mouse click. */
+:where(a, button, [role="button"], input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid #e3b53f;
+  outline-offset: 2px;
+  border-radius: 0.5rem;
+}
+
+/* --- Motion ----------------------------------------------------------------
+   Entrance animations, confetti, hover lifts and the level-up celebration are
+   all movement someone with a vestibular disorder did not ask for. Honour the
+   OS setting: keep the state changes, drop the motion. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  /* Opacity-only entrances still read as "this appeared" without travel. */
+  .animate-fade-up,
+  .animate-scale-in {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .card-hover:hover {
+    transform: none !important;
+  }
+  .confetti-piece {
+    display: none !important;
+  }
 }
 
 /* Athletic display type on headings — condensed, tight, a little larger. The
@@ -100,6 +142,27 @@ h1 { letter-spacing: -0.02em; }
     @apply inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.05] px-3 py-1 text-xs font-medium;
   }
 
+  /* Any chip-sized control that is actually tappable. WCAG 2.5.8 (AA) sets the
+     floor at 24×24; Apple's HIG and Material both say 44–48, and this is a
+     phone-first app used with cold hands in a kit bag. The visual size is
+     unchanged — the padding grows the hit area, which is what the criterion
+     measures. */
+  .tap-target {
+    @apply relative inline-flex items-center justify-center;
+    min-height: 44px;
+    min-width: 44px;
+  }
+  /* For chips that must stay visually small, grow the hit area outward instead
+     of the box. */
+  .tap-pad::after {
+    content: "";
+    position: absolute;
+    inset: 50% 50% 50% 50%;
+    width: 44px;
+    height: 44px;
+    transform: translate(-50%, -50%);
+  }
+
   .stat-label {
     @apply text-[11px] font-semibold uppercase tracking-wider text-slate-400;
   }
@@ -113,13 +176,30 @@ input[type="range"] {
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.1);
 }
+input[type="range"] {
+  /* The whole slider is the target; a 6px-tall strip is not a fair one to hit
+     with a thumb on a moving bus. */
+  padding: 12px 0;
+  height: 30px;
+  background-clip: content-box;
+}
 input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
-  height: 20px;
-  width: 20px;
+  /* 24px is the WCAG 2.5.8 minimum; the ring adds visual weight without
+     shrinking the target. */
+  height: 24px;
+  width: 24px;
   border-radius: 999px;
   background: #e3b53f;
   box-shadow: 0 0 0 4px rgba(227, 181, 63, 0.18);
+  cursor: pointer;
+}
+input[type="range"]::-moz-range-thumb {
+  height: 24px;
+  width: 24px;
+  border: none;
+  border-radius: 999px;
+  background: #e3b53f;
   cursor: pointer;
 }
 

@@ -37,6 +37,20 @@ const config: Config = {
           yellow: "#fbbf24",
           red: "#fb5d6b",
         },
+        // Tailwind's own slate-500 and slate-600 do not pass WCAG AA on this
+        // background — measured 4.18:1 and 2.63:1 against #09090a, where normal
+        // text needs 4.5:1. They were used for helper text and small print in
+        // ~160 places, which is exactly the copy that most needs to be legible
+        // in daylight on a phone at the side of a pitch.
+        //
+        // Overridden here rather than find-and-replaced across every file: one
+        // definition, no chance of missing a site, and `text-slate-500` keeps
+        // meaning "muted" wherever it already appears. The three muted tiers
+        // stay visually distinct — 4.9, 6.2 and 7.8 against the page.
+        slate: {
+          600: "#717f96", // was #475569 (2.63:1) → 4.91:1
+          500: "#8391a6", // was #64748b (4.18:1) → 6.22:1
+        },
       },
       boxShadow: {
         glow: "0 0 0 1px rgba(227,181,63,0.30), 0 8px 40px -8px rgba(227,181,63,0.35)",
