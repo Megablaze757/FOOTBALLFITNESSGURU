@@ -24,6 +24,7 @@ export function MarketingShell({ children }: { children: React.ReactNode }) {
       <footer className="mt-16 border-t border-white/10 pt-6 text-xs text-slate-500">
         <div className="flex flex-wrap gap-x-4 gap-y-2">
           <Link href="/" className="hover:text-slate-300">Home</Link>
+          <Link href="/plans" className="hover:text-slate-300">Pricing</Link>
           <Link href="/guides" className="hover:text-slate-300">Position guides</Link>
           <Link href="/drills" className="hover:text-slate-300">Drills</Link>
           <Link href="/privacy" className="hover:text-slate-300">Privacy</Link>

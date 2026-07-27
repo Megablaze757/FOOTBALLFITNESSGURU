@@ -8,6 +8,8 @@ import { SPORTS, type SportId } from "@/lib/exercises";
 import { FOCI, type TrainingFocus } from "@/lib/coach";
 import { PositionPicker } from "@/components/PositionPicker";
 import { positionLabel } from "@/lib/positions";
+import { track } from "@/lib/funnel";
+import { Logo } from "@/components/Logo";
 
 const STEPS = ["Welcome", "Your sport", "About you", "All set"];
 
@@ -25,6 +27,8 @@ export default function OnboardingPage() {
     await createClient().from("profiles").update({
       sport, positions, position: positions[0] ?? null, training_focus: focus, onboarded: true,
     }).eq("id", user.id);
+    // Shape only — which sport, how many positions. Never the values themselves.
+    track("onboarded", { sport, positions: positions.length });
     router.replace(next);
   }
 
@@ -46,7 +50,7 @@ export default function OnboardingPage() {
       <div className="animate-fade-up flex-1">
         {step === 0 && (
           <div className="text-center">
-            <div className="mx-auto grid h-20 w-20 place-items-center rounded-3xl bg-gradient-to-br from-pitch-400 to-pitch-600 text-4xl shadow-glow">A</div>
+            <Logo size={80} className="mx-auto" />
             <h1 className="mt-6 text-3xl font-extrabold tracking-tight">Welcome to PocketAthlete</h1>
             <p className="mx-auto mt-3 max-w-sm text-slate-400">Your AI performance coach, physio, nutritionist and analyst — in one app. Let&apos;s set it up around you in 30 seconds.</p>
           </div>

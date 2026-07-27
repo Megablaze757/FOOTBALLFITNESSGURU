@@ -13,6 +13,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
 
   const core = [
     { url: `${SITE}/`, changeFrequency: "weekly" as const, priority: 1 },
+    { url: `${SITE}/plans/`, changeFrequency: "weekly" as const, priority: 0.95 },
     { url: `${SITE}/waitlist/`, changeFrequency: "weekly" as const, priority: 0.9 },
     { url: `${SITE}/drills/`, changeFrequency: "monthly" as const, priority: 0.8 },
     { url: `${SITE}/guides/`, changeFrequency: "monthly" as const, priority: 0.8 },

@@ -22,6 +22,7 @@ Disallow: /rewards
 Disallow: /report
 Disallow: /train
 Disallow: /onboarding
+# /pricing is the in-app upgrade screen; /plans is the public one.
 Disallow: /pricing
 Disallow: /reset-password
 

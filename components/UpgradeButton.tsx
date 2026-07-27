@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { invokeAI } from "@/lib/api";
 import { TRIAL_DAYS } from "@/lib/subscription";
+import { track } from "@/lib/funnel";
 import type { Tier } from "@/lib/types";
 
 // Kicks off Stripe Checkout via the create-checkout Edge Function, then redirects
@@ -22,6 +23,11 @@ export function UpgradeButton({
   async function handleClick() {
     setLoading(true);
     setError(null);
+    // Recorded before the redirect, not after: once the browser leaves for
+    // Stripe this code never runs again, so anyone who abandons at the card
+    // form would otherwise be invisible — and that gap is exactly the one
+    // worth seeing.
+    track("checkout_start", { tier });
     try {
       const json = await invokeAI<{ url?: string; error?: string }>("create-checkout", { tier });
       if (!json.url) {

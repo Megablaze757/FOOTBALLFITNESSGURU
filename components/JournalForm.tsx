@@ -11,6 +11,7 @@ import { BodyMap } from "@/components/BodyMap";
 import { ReadinessGauge } from "@/components/ReadinessGauge";
 import { TrainingLogInput, type TrainingState } from "@/components/TrainingLogInput";
 import { enqueue, browserStore } from "@/lib/offline-queue";
+import { track } from "@/lib/funnel";
 import type { CheckInInput, PainMap, ReadinessResult, TrainingDrill } from "@/lib/types";
 
 /**
@@ -118,6 +119,12 @@ export function JournalForm({ initial, initialTraining, sport, planned = [] }: {
         { onConflict: "user_id,log_date" }
       );
     }
+
+    // Activation. Fired on every check-in rather than only the first, because
+    // the client can't cheaply know which is which — funnel_summary counts
+    // DISTINCT users, so "how many people activated" is still right, and the
+    // occurrence count doubles as a usage signal.
+    track("first_check_in", { matchDay: isMatchDay });
 
     // A check-in changes readiness on Home, Stats and Coach — drop the cached
     // page data so they refetch fresh rather than showing pre-check-in values.

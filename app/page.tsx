@@ -56,6 +56,7 @@ export default function Landing() {
           <span className="text-lg font-extrabold tracking-tight">PocketAthlete</span>
         </div>
         <div className="flex items-center gap-2">
+          <Link href="/plans" className="hidden rounded-2xl px-4 py-2 text-sm font-medium text-slate-300 transition hover:text-white sm:inline-block">Pricing</Link>
           <Link href="/login" className="hidden rounded-2xl px-4 py-2 text-sm font-medium text-slate-300 transition hover:text-white sm:inline-block">Sign in</Link>
           <Link href="/login" className="rounded-2xl bg-white/[0.06] px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/[0.1]">Start free</Link>
         </div>

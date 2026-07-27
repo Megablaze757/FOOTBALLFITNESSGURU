@@ -91,7 +91,15 @@ export const PRIVACY: LegalSection[] = [
   {
     heading: "Cookies",
     body: [
-      "We do not use advertising or analytics cookies. The app stores your login session in your browser so you stay signed in, plus a referral code if you arrived through one. That is all.",
+      "We do not use advertising or analytics cookies, and there is no third-party tracker anywhere in the app — no Google Analytics, no advertising pixel, nothing that reports you to another company. The app stores your login session in your browser so you stay signed in, plus a referral code if you arrived through one. That is all.",
+    ],
+  },
+  {
+    heading: "How we measure the product",
+    body: [
+      "When you are signed in we record a small number of product milestones — that an account was created, that onboarding finished, that a check-in happened, that a paid feature was viewed, that checkout was opened or completed. We use them to find where the app confuses people, and nothing else.",
+      "These records hold the fact an event happened and its shape, such as which plan a button belonged to. They never contain your training data, your injuries, what you ate, or anything you typed. Signed-out visitors are not recorded at all, and we do not store any identifier on your device to follow you between visits.",
+      "Nothing is shared with anyone. Delete your account and these records go with it.",
     ],
   },
   {

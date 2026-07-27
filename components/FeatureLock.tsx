@@ -1,7 +1,9 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
-import { planFor, tierNeededFor, type Capability } from "@/lib/subscription";
+import { planFor, tierNeededFor, TRIAL_DAYS, type Capability } from "@/lib/subscription";
+import { track } from "@/lib/funnel";
 import type { Tier } from "@/lib/types";
 
 /**
@@ -22,6 +24,11 @@ export function FeatureLock({ capability, title, blurb }: {
   const need = tierNeededFor(capability);
   const plan = planFor(need);
 
+  // A paywall is the clearest signal of intent the product ever gets: someone
+  // wanted a thing enough to walk into the wall. Which wall, and how often, is
+  // what tells you where the money is.
+  useEffect(() => { track("paywall_hit", { capability, need }); }, [capability, need]);
+
   return (
     <div className="card p-6 text-center">
       <div className="text-3xl" aria-hidden="true">🔒</div>
@@ -33,9 +40,16 @@ export function FeatureLock({ capability, title, blurb }: {
         </span>
         <span className="text-slate-400"> · {plan.priceLabel}</span>
       </p>
-      <Link href="/pricing" className="btn-primary mx-auto mt-4 max-w-[14rem]">
-        See plans
+      {/* Lead with the trial, not with "see plans". The ask is smaller and the
+          risk is visibly zero, which is the whole point of having a trial. */}
+      <Link href="/pricing" className="btn-primary mx-auto mt-4 max-w-[16rem]">
+        {TRIAL_DAYS > 0 ? `Try ${plan.name} free for ${TRIAL_DAYS} days` : `Get ${plan.name}`}
       </Link>
+      {TRIAL_DAYS > 0 && (
+        <p className="mt-2 text-xs text-slate-400">
+          Cancel any time before it ends and you&apos;re not charged.
+        </p>
+      )}
     </div>
   );
 }

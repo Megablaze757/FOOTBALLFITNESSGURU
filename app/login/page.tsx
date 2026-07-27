@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useSession } from "@/lib/auth";
 import { captureRef, getRef, clearRef } from "@/lib/referral";
 import { Logo } from "@/components/Logo";
+import { track } from "@/lib/funnel";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -20,8 +21,20 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [awaitingConfirm, setAwaitingConfirm] = useState(false);
   const [cooldown, setCooldown] = useState(0);
+  // Set when they arrived from a plan card on the public pricing page. Carried
+  // through signup so they land back on checkout instead of the home screen
+  // having forgotten why they came.
+  const [wantedPlan, setWantedPlan] = useState<string | null>(null);
 
   useEffect(() => { captureRef(); }, []); // in case they land straight on /login?ref=
+
+  useEffect(() => {
+    const plan = new URLSearchParams(window.location.search).get("plan");
+    if (plan === "silver" || plan === "gold") {
+      setWantedPlan(plan);
+      setMode("sign_up"); // they came to buy, not to sign in
+    }
+  }, []);
 
   // Tick the resend cooldown down to zero.
   useEffect(() => {
@@ -77,7 +90,14 @@ export default function LoginPage() {
           await supabase.from("profiles").update({ referral_code: ref }).eq("id", data.user.id);
           clearRef();
         }
-        if (data.session) router.push("/home");
+        // Only recordable once there's a session — the insert is RLS'd to the
+        // signed-in user. On a confirm-by-email flow the row lands on first
+        // sign-in instead, which is the right moment anyway: an unconfirmed
+        // address isn't a signup yet.
+        if (data.session) {
+          track("signup", { referred: !!ref, ...(wantedPlan ? { plan: wantedPlan } : {}) });
+          router.push(wantedPlan ? "/pricing" : "/home");
+        }
         else {
           setInfo("Check your email to confirm your account, then sign in.");
           setAwaitingConfirm(true);

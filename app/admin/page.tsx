@@ -11,6 +11,7 @@ import { invokeAI } from "@/lib/api";
 import { referralLink, waitlistLink } from "@/lib/referral";
 import { planFor } from "@/lib/subscription";
 import { ContentEngine } from "@/components/ContentEngine";
+import { FunnelReport } from "@/components/FunnelReport";
 import type { Video } from "@/lib/types";
 
 interface Metrics {
@@ -84,6 +85,10 @@ export default function AdminPage() {
 
       <section className="mt-8">
         <LaunchToggle />
+      </section>
+
+      <section className="mt-10">
+        <FunnelReport />
       </section>
 
       <section className="mt-10">
