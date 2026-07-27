@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { invalidate } from "@/lib/use-async";
 import {
-  planTargets, buildWeek, shoppingList, shoppingListText, unmetSlots, dislikedFoodIds,
+  planTargets, buildWeek, shoppingList, shoppingListText, unmetSlots, dislikedFoodIds, favouriteFoodIds,
   ACTIVITY_LEVELS, DIET_GOALS, DIET_PATTERNS, AVOIDANCES, DEFAULT_PREFS,
   type BodyStats, type Sex, type ActivityLevel, type DietGoal, type PlannedDay,
   type MealPrefs, type DietPattern, type Avoidance,
@@ -37,6 +37,8 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
   const [prefs, setPrefs] = useState<MealPrefs>({ ...DEFAULT_PREFS, ...(initialPrefs ?? {}) });
   const [notes, setNotes] = useState(initialNotes ?? "");
   const noteDislikes = useMemo(() => dislikedFoodIds(notes), [notes]);
+  // "my favourite food is egg" used to do nothing at all. Now it biases the week.
+  const noteFavourites = useMemo(() => favouriteFoodIds(notes), [notes]);
   // The same note also says WHEN they eat — "I eat out on Tuesdays" has to stop
   // us planning (and shopping for) a Tuesday dinner.
   const schedule = useMemo(() => parseSchedule(notes), [notes]);

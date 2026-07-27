@@ -41,14 +41,28 @@ const REGION_WORDS: { region: Region; label: string; words: RegExp }[] = [
   { region: "shoulders", label: "shoulders", words: /\b(shoulder|shoulders|delt|delts|overhead press|ohp|lateral raise)\b/i },
   { region: "arms", label: "arms", words: /\b(arm|arms|bicep|biceps|tricep|triceps|curl|curls)\b/i },
   { region: "core", label: "core", words: /\b(core|ab|abs|abdominal|abdominals|plank|planks)\b/i },
-  { region: "conditioning", label: "cardio & conditioning", words: /\b(cardio|conditioning|running|run|runs|jog|jogging|sprint|sprints|sprinting|bike|cycling|endurance|aerobic)\b/i },
+  // Only words that mean the WHOLE CATEGORY.
+  //
+  // This used to include running, jogging, sprinting, bike and cycling, which
+  // made "no running" ban every piece of conditioning in the programme — bike,
+  // rower, skipping, the lot. That is precisely backwards: someone who says no
+  // running usually has shins, knees or a pavement problem, and they are
+  // exactly the person who still wants the bike. Those words are named
+  // movements now (below), so the specific thing is dropped and a substitute
+  // survives.
+  { region: "conditioning", label: "cardio & conditioning", words: /\b(cardio|conditioning|endurance|aerobic)\b/i },
   { region: "impact", label: "jumping & high-impact work", words: /\b(jump|jumps|jumping|plyo|plyos|plyometric|plyometrics|impact|box jump|hop|hops|hopping)\b/i },
 ];
 
 // Named movements worth excluding on their own, independent of region.
+//
+// The cardio entries matter: excluding "running" must leave the bike and the
+// rower available, so conditioning can be substituted rather than deleted.
 const MOVEMENT_WORDS = [
   "squat", "deadlift", "bench press", "overhead press", "lunge", "pull-up",
-  "power clean", "burpee", "box jump", "running", "sprint",
+  "power clean", "burpee", "box jump",
+  "running", "run", "jog", "jogging", "sprint", "sprinting",
+  "bike", "cycling", "rowing", "swimming", "skipping",
 ];
 
 /**
@@ -80,9 +94,13 @@ export function parseConstraints(notes: string | null | undefined): Constraints 
       }
     }
     for (const m of MOVEMENT_WORDS) {
-      // Match the movement's first word so "no squats" catches "squat".
+      // Match the movement's first word across its endings, so "no squats",
+      // "avoid deadlifting" and "I can't run" all land. Matching only `s?`
+      // meant "deadlifting" was recognised as nothing at all — and an
+      // instruction the parser doesn't see is one the athlete thinks was
+      // followed.
       const head = m.split(" ")[0];
-      if (new RegExp(`\\b${head}s?\\b`, "i").test(clause)) movements.add(m);
+      if (new RegExp(`\\b${head}(s|es|ing|ed)?\\b`, "i").test(clause)) movements.add(m);
     }
   }
 
@@ -93,10 +111,40 @@ export function parseConstraints(notes: string | null | undefined): Constraints 
 }
 
 /** True when a drill in `region` (named `name`) is ruled out by `c`. */
+/**
+ * Reduce a word to a stem so inflections match.
+ *
+ * Needed because the note and the drill name rarely agree on grammar: someone
+ * writes "no running" and the drill is called "Tempo runs". A plain substring
+ * test missed that, so the exclusion silently did nothing — which is worse than
+ * over-excluding, because the athlete believes they were listened to.
+ */
+function stem(word: string): string {
+  let s = word.toLowerCase().replace(/[^a-z]/g, "");
+  if (s.length <= 3) return s;
+  if (s.endsWith("ing")) {
+    s = s.slice(0, -3);
+    // "running" -> "runn" -> "run". English doubles the consonant before -ing.
+    if (/([bdfglmnprt])\1$/.test(s)) s = s.slice(0, -1);
+  } else if (s.endsWith("es")) {
+    s = s.slice(0, -2);
+  } else if (s.endsWith("s")) {
+    s = s.slice(0, -1);
+  }
+  return s;
+}
+
 export function isExcluded(c: Constraints, region: Region | undefined, name: string): boolean {
   if (region && c.excludeRegions.includes(region)) return true;
-  const n = name.toLowerCase();
-  return c.excludeMovements.some((m) => n.includes(m.split(" ")[0]));
+  if (!c.excludeMovements.length) return false;
+
+  // Compare stems word by word rather than testing substrings, so "running"
+  // catches "Tempo runs" without "row" also matching "throw" or "crowd".
+  const nameStems = new Set(name.toLowerCase().split(/[^a-z]+/i).filter(Boolean).map(stem));
+  return c.excludeMovements.some((m) => {
+    const head = stem(m.split(" ")[0]);
+    return head.length > 2 && nameStems.has(head);
+  });
 }
 
 /** True when the parser found nothing to act on. */

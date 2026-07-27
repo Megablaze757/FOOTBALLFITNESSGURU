@@ -55,6 +55,8 @@ export interface MealPrefs {
   mealsPerDay: 3 | 4 | 5;
   budget: boolean;      // prefer cheaper staples
   dislikes: string[];   // food ids the athlete never wants to see
+  /** Food ids they've said they like. A nudge toward, not a guarantee of. */
+  favourites?: string[];
 }
 
 
@@ -106,27 +108,65 @@ export const FOOD_KEYWORDS: Record<string, string[]> = {
 const NEGATION = /(don'?t|do not|dont|\bno\b|\bnot\b|hate|avoid|without|can'?t|cant|dislike|allerg|rather not|no more)/;
 
 /**
+ * Phrases that mean "give me more of this".
+ *
+ * The notes box only ever understood exclusions, so writing "my favourite food
+ * is egg" did precisely nothing — the plan might contain egg, by luck, and
+ * usually didn't. Naming something you like and being ignored is worse than
+ * having no box at all, because it reads as the app not listening.
+ */
+const AFFECTION = /(favourite|favorite|\blove\b|\blike\b|\blikes\b|enjoy|prefer|more of|lots of|plenty of|keen on|please include|include)/;
+
+/**
  * Food ids to exclude, inferred from a free-text note. Only foods named inside a
  * NEGATED phrase are excluded — the note is split on conjunctions and
  * punctuation, so "I love chicken but no fish" drops fish, not chicken.
  */
 export function dislikedFoodIds(notes: string): string[] {
+  return foodIdsIn(notes, NEGATION);
+}
+
+/**
+ * Food ids the athlete has said they LIKE.
+ *
+ * Meals containing these are made cheaper to pick (see buildWeek), so they turn
+ * up often without crowding out the macros. A preference is a nudge, not an
+ * instruction — "I like eggs" shouldn't mean eggs at every meal.
+ */
+export function favouriteFoodIds(notes: string): string[] {
+  const liked = foodIdsIn(notes, AFFECTION);
+  // A food mentioned in both a positive and a negative clause is a
+  // contradiction ("I love cheese but no dairy"). The exclusion wins: getting
+  // served something you said to avoid is a worse failure than missing a treat,
+  // and it might be an allergy.
+  const disliked = new Set(dislikedFoodIds(notes));
+  return liked.filter((id) => !disliked.has(id));
+}
+
+/** Foods named inside a clause matching `mood`. */
+function foodIdsIn(notes: string, mood: RegExp): string[] {
   const text = (notes ?? "").toLowerCase();
   if (text.trim().length < 3) return [];
-  // Split into clauses; keep only the ones expressing a dislike.
+  // Clause-split so "I love chicken but no fish" reads each half separately.
   const clauses = text.split(/[,.;\n]|\band\b|\bbut\b|\balso\b|\bplus\b/);
-  const negated = clauses.filter((c) => NEGATION.test(c)).join(" | ");
-  if (!negated.trim()) return [];
+  const matching = clauses.filter((c) => mood.test(c)).join(" | ");
+  if (!matching.trim()) return [];
   const out = new Set<string>();
   for (const [id, words] of Object.entries(FOOD_KEYWORDS)) {
-    if (words.some((w) => negated.includes(w))) out.add(id);
+    if (words.some((w) => matching.includes(w))) out.add(id);
   }
   return [...out];
 }
 
 export const DEFAULT_PREFS: MealPrefs = {
-  pattern: "omnivore", avoid: [], mealsPerDay: 4, budget: false, dislikes: [],
+  pattern: "omnivore", avoid: [], mealsPerDay: 4, budget: false, dislikes: [], favourites: [],
 };
+
+/** Does this meal contain something the athlete said they like? */
+function isFavourite(meal: Meal, favourites: Set<string>): boolean {
+  if (!favourites.size) return false;
+  return meal.items.some((it) => favourites.has(it.foodId));
+}
 
 /** Every tag a meal carries, via its ingredients. */
 export function mealTags(meal: Meal): FoodTag[] {
@@ -386,6 +426,10 @@ function addToBasket(meal: Meal, basket: Basket, scale = 1): void {
 // meal adds this much to its effective cost, so reuse has to genuinely save
 // money to win, and no meal may appear more than MAX_REPEATS times.
 const REPEAT_PENALTY = 0.85; // £
+// Discount applied to a meal containing a food they said they like. Sized to
+// beat a typical price gap between meals but not a large one, so a favourite
+// wins ties and near-ties without wrecking the shopping bill.
+const FAVOURITE_BONUS = 1.2; // £
 const MAX_REPEATS = 3;
 
 /** Slots that have nothing left once the athlete's rules are applied. */
@@ -423,6 +467,7 @@ export function buildWeek(
   // single biggest lever on the bill, and someone who ticked "cheap staples" has
   // told us they'd rather eat the same thing than pay more.
   const repeatPenalty = prefs.budget ? REPEAT_PENALTY * 0.35 : REPEAT_PENALTY;
+  const favourites = new Set(prefs.favourites ?? []);
 
   const choose = (slot: Slot, nth = 0, avoid: Set<string> = new Set()): Meal | undefined => {
     const list = pools[slot].filter((m) => !avoid.has(m.id));
@@ -432,7 +477,12 @@ export function buildWeek(
         meal,
         // The seed/nth term is a fraction of a penny — it only breaks ties
         // between meals that cost the same, never overrides a real saving.
+        // A meal built round something they said they like is discounted, so
+        // it wins ties and near-ties. Deliberately a nudge and not an
+        // override: "I like eggs" should mean eggs turn up regularly, not
+        // eggs at every meal, and the repeat penalty still applies on top.
         score: marginalCost(meal, basket)
+          - (isFavourite(meal, favourites) ? FAVOURITE_BONUS : 0)
           + (uses.get(meal.id) ?? 0) * repeatPenalty
           + ((idx + seed + nth) % list.length) * 0.001,
         capped: (uses.get(meal.id) ?? 0) >= MAX_REPEATS,

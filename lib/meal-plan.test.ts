@@ -2,8 +2,10 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   basalRate, planTargets, buildWeek, shoppingList, shoppingListText,
-  mealMacros, MEALS, ACTIVITY_LEVELS, type BodyStats,
+  mealMacros, MEALS, ACTIVITY_LEVELS, DEFAULT_PREFS,
+  dislikedFoodIds, favouriteFoodIds, type BodyStats,
 } from "./meal-plan";
+import { EMPTY_SCHEDULE } from "./meal-schedule";
 import { FOOD_BY_ID } from "./food-db";
 
 const ATHLETE: BodyStats = {
@@ -89,4 +91,48 @@ test("exported text is honest that prices are estimates", () => {
   const txt = shoppingListText(shoppingList(buildWeek(planTargets(ATHLETE))));
   assert.match(txt, /not live pricing/i);
   assert.match(txt, /Estimated total/);
+});
+
+// --- Favourite foods ---------------------------------------------------------
+
+test("naming a favourite food actually does something", () => {
+  // "my favourite food is egg" used to be a no-op — the notes box only ever
+  // understood exclusions, so a stated preference was silently ignored.
+  assert.deepEqual(favouriteFoodIds("my favourite food is egg"), ["eggs"]);
+  assert.deepEqual(favouriteFoodIds("I love chicken"), ["chicken_breast"]);
+  assert.deepEqual(favouriteFoodIds("please include rice"), ["rice"]);
+});
+
+test("a favourite is not read as a dislike, and vice versa", () => {
+  assert.deepEqual(dislikedFoodIds("my favourite food is egg"), []);
+  assert.deepEqual(favouriteFoodIds("I hate eggs"), []);
+});
+
+test("an exclusion beats a preference when they conflict", () => {
+  // Being served something you said to avoid is worse than missing a treat,
+  // and it might be an allergy.
+  assert.deepEqual(favouriteFoodIds("I love eggs but no eggs this week"), []);
+});
+
+test("plain text with no opinion in it changes nothing", () => {
+  assert.deepEqual(favouriteFoodIds("training four times a week"), []);
+  assert.deepEqual(favouriteFoodIds(""), []);
+});
+
+test("a favourite food shows up more often in the week", () => {
+  const t = planTargets({ sex: "male", goal: "maintain", activity: "moderate", age: 22, heightCm: 180, weightKg: 78 });
+  const eggMeals = (favourites: string[]) =>
+    buildWeek(t, 1, { ...DEFAULT_PREFS, favourites }, EMPTY_SCHEDULE)
+      .flatMap((d) => d.meals)
+      .filter((m) => m.meal.items.some((i) => i.foodId === "eggs")).length;
+  assert.ok(eggMeals(["eggs"]) > eggMeals([]), "asking for eggs should get you more eggs");
+});
+
+test("a favourite is a nudge, not a takeover", () => {
+  // "I like eggs" must not mean eggs at every single meal.
+  const t = planTargets({ sex: "male", goal: "maintain", activity: "moderate", age: 22, heightCm: 180, weightKg: 78 });
+  const week = buildWeek(t, 1, { ...DEFAULT_PREFS, favourites: ["eggs"] }, EMPTY_SCHEDULE);
+  const meals = week.flatMap((d) => d.meals);
+  const withEgg = meals.filter((m) => m.meal.items.some((i) => i.foodId === "eggs")).length;
+  assert.ok(withEgg < meals.length, "not every meal should contain the favourite");
 });
