@@ -459,9 +459,12 @@ async function meteredComplete(
   opts: { system: string; user: string; maxTokens: number; validate?: (text: string) => boolean; json?: boolean }
 ): Promise<{ text: string; model: string }> {
   try {
-    // Gold skips the free queue. Looked up here rather than threaded through
-    // every endpoint, so no caller can forget it and no caller can fake it.
-    const priority = (await tierOf(env, userId)) === "gold";
+    // Paying skips the free queue. This said `=== "gold"`, which quietly meant
+    // that once Gold stopped being sold, every Pro subscriber was pushed onto
+    // the rate-limited free models they'd just paid to avoid — while comped
+    // beta accounts kept the fast path. Asking "did they pay?" survives the
+    // next pricing change too.
+    const priority = meetsTier(await tierOf(env, userId), "silver");
     const { text, model, cost } = await complete(env, { ...opts, priority });
     await recordSpend(env, userId, cost);
     return { text, model };
@@ -1007,11 +1010,15 @@ async function createCheckout(req: Request, env: Env): Promise<Response> {
   const user = await authUser(req, env);
   if (!user) return json({ error: "unauthorized" }, 401);
   const { tier } = (await req.json()) as { tier: string };
-  if (tier !== "gold" && tier !== "silver") return json({ error: "unknown tier" }, 400);
-  const priceId = tier === "gold" ? env.STRIPE_PRICE_GOLD : env.STRIPE_PRICE_SILVER;
+  // Only the plan actually on sale can be bought. Gold still exists for comped
+  // testers and anyone already subscribed, but it is not advertised anywhere —
+  // and a checkout endpoint that will happily charge £20 for a plan no page
+  // mentions is a chargeback waiting to happen.
+  if (tier !== "silver") return json({ error: "unknown tier" }, 400);
+  const priceId = env.STRIPE_PRICE_SILVER;
   // Distinguish "no such tier" from "price id not set yet" — the latter is a
   // config gap, and saying so plainly beats a confusing Stripe error later.
-  if (!priceId) return json({ error: `${tier} price not configured — set STRIPE_PRICE_${tier.toUpperCase()} and redeploy` }, 503);
+  if (!priceId) return json({ error: "Pro price not configured — set STRIPE_PRICE_SILVER and redeploy" }, 503);
 
   // Reuse an existing Stripe customer if we have one.
   const existing = (await (await supa(env, `subscriptions?user_id=eq.${user.id}&select=stripe_customer_id,stripe_subscription_id`)).json()) as

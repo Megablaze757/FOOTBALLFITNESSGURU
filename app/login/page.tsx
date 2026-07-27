@@ -7,6 +7,7 @@ import { useSession } from "@/lib/auth";
 import { captureRef, getRef, clearRef } from "@/lib/referral";
 import { Logo } from "@/components/Logo";
 import { track } from "@/lib/funnel";
+import { PAID_TIER } from "@/lib/subscription";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -30,7 +31,9 @@ export default function LoginPage() {
 
   useEffect(() => {
     const plan = new URLSearchParams(window.location.search).get("plan");
-    if (plan === "silver" || plan === "gold") {
+    // Only the plan on sale. An old ?plan=gold link shouldn't send someone
+    // into a signup expecting a tier they can no longer buy.
+    if (plan === PAID_TIER) {
       setWantedPlan(plan);
       setMode("sign_up"); // they came to buy, not to sign in
     }

@@ -35,9 +35,7 @@ export function FeatureLock({ capability, title, blurb }: {
       <h2 className="mt-2 text-lg font-extrabold">{title}</h2>
       <p className="mx-auto mt-1 max-w-sm text-sm text-slate-400">{blurb}</p>
       <p className="mt-3 text-sm">
-        <span className={need === "gold" ? "font-bold text-pitch-400" : "font-bold text-sky-300"}>
-          {plan.name}
-        </span>
+        <span className="font-bold text-pitch-400">{plan.name}</span>
         <span className="text-slate-400"> · {plan.priceLabel}</span>
       </p>
       {/* Lead with the trial, not with "see plans". The ask is smaller and the

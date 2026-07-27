@@ -5,7 +5,8 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/lib/auth";
 import { useAsync } from "@/lib/use-async";
-import { tierMeets } from "@/lib/subscription";
+import { can } from "@/lib/subscription";
+import { FeatureLock } from "@/components/FeatureLock";
 import { MealPlanner } from "@/components/MealPlanner";
 import { MealCheckIn } from "@/components/MealCheckIn";
 import { Tabs } from "@/components/Tabs";
@@ -68,15 +69,19 @@ export default function NutritionPage() {
 
   if (loading) return <div className="card mt-6 h-80 animate-pulse" />;
 
-  if (!tierMeets(tier, "silver")) {
+  // can(), not tierMeets(tier, "silver") — naming the tier here is what made
+  // every other gate in the app break when the plans changed. The capability
+  // stays true whatever the plans are called.
+  if (!can(tier, "nutrition")) {
     return (
       <div className="animate-fade-up">
         <Header />
-        <div className="card mt-6 p-6 text-center">
-          <div className="text-3xl">🔒</div>
-          <h2 className="mt-2 text-lg font-extrabold">Nutrition is a Silver feature</h2>
-          <p className="mt-1 text-sm text-slate-400">Track calories, macros and hydration with Silver or Gold.</p>
-          <Link href="/pricing" className="btn-primary mx-auto mt-4 max-w-[14rem]">See plans</Link>
+        <div className="mt-6">
+          <FeatureLock
+            capability="nutrition"
+            title="Nutrition is part of Pro"
+            blurb="Meal plans that fit your week — say you eat out on Tuesdays and Tuesday is left alone. The shopping list thinks in packs, so one bag of rice covers three meals."
+          />
         </div>
       </div>
     );

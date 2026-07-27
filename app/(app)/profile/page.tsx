@@ -55,14 +55,17 @@ export default function ProfilePage() {
         <div>
           <div className="stat-label">Plan</div>
           <div className="mt-0.5 text-lg font-extrabold">
-            <span className={tier === "gold" ? "text-pitch-400" : tier === "silver" ? "text-sky-300" : "text-slate-200"}>{plan.name}</span>
+            <span className={plan.paid ? "text-pitch-400" : "text-slate-200"}>{plan.name}</span>
           </div>
           {subscription?.cancel_at_period_end && subscription.current_period_end && (
             <div className="text-xs text-readiness-red">Cancels {subscription.current_period_end.slice(0, 10)}</div>
           )}
         </div>
+        {/* Keyed on whether they've paid, not on a tier id. It used to compare
+            against the gold tier by name, so a Pro subscriber was invited to
+            upgrade to something that no longer exists. */}
         <span className="rounded-xl bg-gradient-to-br from-pitch-400 to-pitch-600 px-3 py-1.5 text-sm font-semibold text-ink-900">
-          {tier === "gold" ? "Plans" : "Upgrade →"}
+          {plan.paid ? "Plans" : "Upgrade →"}
         </span>
       </Link>
 
