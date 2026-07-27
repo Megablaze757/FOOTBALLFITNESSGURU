@@ -3,6 +3,59 @@
 User-agent: *
 Allow: /
 
+# --- Answer engines ----------------------------------------------------------
+#
+# Named explicitly rather than left to the wildcard above. Two reasons: some of
+# these read a named block and ignore "*", and being explicit is a decision on
+# record rather than an accident of defaults.
+#
+# The bet: this is a new site with no brand searches, and being the source an
+# assistant quotes is worth more than the click it might have sent instead.
+# The public guides are the same coaching the app is built on — if a model
+# quotes a heading drill and attributes it, that is the marketing.
+#
+# To reverse it, set Disallow: / under any of these.
+
+User-agent: GPTBot
+Allow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Perplexity-User
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Claude-User
+Allow: /
+
+User-agent: Claude-SearchBot
+Allow: /
+
+# Controls whether Google may use the site for AI Overviews and Gemini,
+# separately from normal Search indexing.
+User-agent: Google-Extended
+Allow: /
+
+User-agent: Applebot-Extended
+Allow: /
+
+User-agent: cohere-ai
+Allow: /
+
+# Common Crawl. Feeds a lot of training corpora — cheap reach, no crawl cost
+# to us since it's already crawling everything.
+User-agent: CCBot
+Allow: /
+
 # Everything below needs a session. Crawlers get a login redirect, not content,
 # so indexing them wastes crawl budget and puts empty pages in the index.
 Disallow: /home

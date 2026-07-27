@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1080" viewBox="0 0 1080 1080">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f6d365"/><stop offset="100%" stop-color="#c9962f"/>
+    </linearGradient>
+  </defs>
+  <rect width="1080" height="1080" fill="#0a0a0b"/>
+  <rect x="0" y="0" width="1080" height="8" fill="url(#g)"/>
+
+  <text x="72" y="120" font-family="Arial, Helvetica, sans-serif" font-size="26" font-weight="700" fill="#e3b53f" letter-spacing="3">
+    FOOTBALL Â· HEADING
+  </text>
+  <text x="1008" y="120" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700" fill="#64748b" letter-spacing="2">
+    YOU + ONE
+  </text>
+
+  <text x="72" y="292" font-family="Arial, Helvetica, sans-serif" font-size="68" font-weight="800" fill="#ffffff">Attack the ball, don't</text>
+  <text x="72" y="378" font-family="Arial, Helvetica, sans-serif" font-size="68" font-weight="800" fill="#ffffff">wait for it. Eyes open,</text>
+  <text x="72" y="464" font-family="Arial, Helvetica, sans-serif" font-size="68" font-weight="800" fill="#ffffff">contact on the forehead.</text>
+  <rect x="72" y="556" width="120" height="5" fill="#e3b53f"/>
+  <text x="72" y="650" font-family="Arial, Helvetica, sans-serif" font-size="36" font-weight="700" fill="#e3b53f">Attacking &amp; defensive heading</text>
+  <text x="72" y="702" font-family="Arial, Helvetica, sans-serif" font-size="32" fill="#94a3b8">4 Ã— 10 (alternate attacking/defensive)</text>
+
+  <text x="72" y="1024" font-family="Arial, Helvetica, sans-serif" font-size="26" font-weight="700" fill="#475569">
+    pocketathlete.com/drills
+  </text>
+  <text x="1008" y="1024" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="800" fill="#e3b53f">
+    PocketAthlete
+  </text>
+</svg>

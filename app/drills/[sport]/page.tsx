@@ -5,6 +5,7 @@ import { skillsForSport, skillCategories, NEEDS_LABEL } from "@/lib/skills";
 import type { SportId } from "@/lib/exercises";
 import { guideSports, guidePages, sportLabel, SITE } from "@/lib/seo";
 import { MarketingShell, GuideCta } from "@/components/MarketingShell";
+import { jsonLd, graph, drillHowTo, guideArticle } from "@/lib/schema";
 
 export function generateStaticParams() {
   return guideSports().map((sport) => ({ sport }));
@@ -34,11 +35,34 @@ export default function SportDrillsPage({ params }: Params) {
   const soloCount = all.filter((d) => d.needs === "solo").length;
   const positions = guidePages().filter((p) => p.sport === sport);
 
+  const url = `${SITE}/drills/${sport}/`;
+
   return (
     <MarketingShell>
+      {/* Every drill marked up as a HowTo. This is what turns "a page about
+          heading drills" into the source an assistant quotes when someone asks
+          how to practise heading — the steps are bound to a structure rather
+          than implied by the layout. */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: jsonLd(graph([
+            guideArticle({
+              url,
+              headline: `${label} skill drills`,
+              description: `${all.length} technical ${label.toLowerCase()} drills with setup, coaching points and progressions.`,
+              keywords: [`${label.toLowerCase()} drills`, `${label.toLowerCase()} training`, "skill drills", "solo drills"],
+            }),
+            ...all.map((d) => drillHowTo(d, label, url)),
+          ])),
+        }}
+      />
       <article>
         <p className="text-xs font-semibold uppercase tracking-wider text-pitch-400">{label}</p>
         <h1 className="mt-2 text-3xl font-extrabold tracking-tight sm:text-4xl">{label} skill drills</h1>
+        {/* The answer, first. An assistant lifting one passage should get
+            something complete and true from the opening sentence — burying it
+            under preamble is how a page gets crawled and never cited. */}
         <p className="mt-3 text-slate-300">
           {all.length} technical drills — the ball work, not the gym work. Each one says what you
           need, how to run it, the single coaching point that separates doing it from doing it

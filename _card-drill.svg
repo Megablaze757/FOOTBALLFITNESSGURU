@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1080" viewBox="0 0 1080 1080">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f6d365"/><stop offset="100%" stop-color="#c9962f"/>
+    </linearGradient>
+  </defs>
+  <rect width="1080" height="1080" fill="#0a0a0b"/>
+  <rect x="0" y="0" width="1080" height="8" fill="url(#g)"/>
+
+  <text x="72" y="120" font-family="Arial, Helvetica, sans-serif" font-size="26" font-weight="700" fill="#e3b53f" letter-spacing="3">
+    FOOTBALL Â· PASSING
+  </text>
+  <text x="1008" y="120" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700" fill="#64748b" letter-spacing="2">
+    YOU ONLY
+  </text>
+
+  <text x="72" y="230" font-family="Arial, Helvetica, sans-serif" font-size="72" font-weight="800" fill="#ffffff">Wall passing reps</text>
+  <text x="72" y="334" font-family="Arial, Helvetica, sans-serif" font-size="26" font-weight="700" fill="#e3b53f" letter-spacing="2">SETUP</text>
+  <text x="72" y="376" font-family="Arial, Helvetica, sans-serif" font-size="32" fill="#cbd5e1">A wall and a ball. 5â€“8m back.</text>
+  <text x="72" y="446" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="800" fill="#e3b53f">1</text>
+  <text x="120" y="446" font-family="Arial, Helvetica, sans-serif" font-size="34" fill="#e2e8f0">Pass firmly against the wall with the inside</text>
+  <text x="120" y="492" font-family="Arial, Helvetica, sans-serif" font-size="34" fill="#e2e8f0">of the foot.</text>
+  <text x="72" y="552" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="800" fill="#e3b53f">2</text>
+  <text x="120" y="552" font-family="Arial, Helvetica, sans-serif" font-size="34" fill="#e2e8f0">Take the return with your far foot, away from</text>
+  <text x="120" y="598" font-family="Arial, Helvetica, sans-serif" font-size="34" fill="#e2e8f0">where a defender would be.</text>
+  <text x="72" y="658" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="800" fill="#e3b53f">3</text>
+  <text x="120" y="658" font-family="Arial, Helvetica, sans-serif" font-size="34" fill="#e2e8f0">Play it back first time, alternating feet</text>
+  <text x="120" y="704" font-family="Arial, Helvetica, sans-serif" font-size="34" fill="#e2e8f0">every rep.</text>
+  <text x="72" y="770" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="700" fill="#94a3b8">5 Ã— 60 seconds, alternating feet</text>
+  <rect x="56" y="802" width="968" height="148" rx="28" fill="#ffffff" fill-opacity="0.05"/>
+  <rect x="56" y="802" width="6" height="148" rx="3" fill="#e3b53f"/>
+  <text x="92" y="862" font-family="Arial, Helvetica, sans-serif" font-size="34" font-style="italic" fill="#f1f5f9">Your first touch decides the pass â€” set the ball</text>
+  <text x="92" y="906" font-family="Arial, Helvetica, sans-serif" font-size="34" font-style="italic" fill="#f1f5f9">outside your body, not under it.</text>
+
+  <text x="72" y="1024" font-family="Arial, Helvetica, sans-serif" font-size="26" font-weight="700" fill="#475569">
+    pocketathlete.com/drills
+  </text>
+  <text x="1008" y="1024" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="800" fill="#e3b53f">
+    PocketAthlete
+  </text>
+</svg>

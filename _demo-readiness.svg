@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1080" viewBox="0 0 1080 1080">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#141416"/><stop offset="100%" stop-color="#0a0a0b"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f6d365"/><stop offset="100%" stop-color="#c9962f"/>
+    </linearGradient>
+    <clipPath id="screen">
+      <rect x="322" y="342" width="436" height="676" rx="36"/>
+    </clipPath>
+  </defs>
+
+  <rect width="1080" height="1080" fill="url(#bg)"/>
+  <rect x="0" y="0" width="1080" height="8" fill="url(#gold)"/>
+
+  <text x="72" y="180" font-family="Arial, Helvetica, sans-serif" font-size="52" font-weight="800" fill="#ffffff">It knows you played 90</text>
+  <text x="72" y="240" font-family="Arial, Helvetica, sans-serif" font-size="52" font-weight="800" fill="#ffffff">minutes yesterday.</text>
+
+  <!-- Phone chassis -->
+  <rect x="310" y="330" width="460" height="700" rx="48" fill="#1c1c1f" stroke="#2f2f34" stroke-width="2"/>
+  <rect x="322" y="342" width="436" height="676" rx="36" fill="#0a0a0b"/>
+  <g clip-path="url(#screen)">
+    <text x="350" y="432" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="800" fill="#e2e8f0">Good morning, Sam</text>
+    <text x="350" y="466" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="400" fill="#8391a6">Tuesday · matchday −2</text>
+    <circle cx="540" cy="592" r="92" fill="none" stroke="#ffffff" stroke-opacity="0.08" stroke-width="18"/>
+    <circle cx="540" cy="592" r="92" fill="none" stroke="#fbbf24" stroke-width="18" stroke-linecap="round"
+         stroke-dasharray="416.19819474757577 578.0530482605219" transform="rotate(-90 540 592)"/>
+    <text x="540" y="604" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="76" font-weight="800" fill="#ffffff">72</text>
+    <text x="540" y="638" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="700" fill="#fbbf24">MODERATE</text>
+    <rect x="350" y="722" width="380" height="128" rx="20" fill="#ffffff" fill-opacity="0.04" stroke="#ffffff" stroke-opacity="0.07"/>
+    <text x="350" y="760" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" fill="#e3b53f">Why it dropped</text>
+    <text x="350" y="794" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="400" fill="#cbd5e1">5h 20m sleep, and you played</text>
+    <text x="350" y="822" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="400" fill="#cbd5e1">78 minutes yesterday.</text>
+    <rect x="350" y="870" width="380" height="112" rx="20" fill="#ffffff" fill-opacity="0.04" stroke="#ffffff" stroke-opacity="0.07"/>
+    <text x="350" y="908" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" fill="#e3b53f">Today</text>
+    <text x="350" y="942" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="400" fill="#cbd5e1">Technical + mobility. The heavy</text>
+    <text x="350" y="966" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="400" fill="#cbd5e1">lower session moves to Thursday.</text>
+  </g>
+  <!-- Notch -->
+  <rect x="485" y="352" width="110" height="26" rx="13" fill="#1c1c1f"/>
+
+  <text x="72" y="1028" font-family="Arial, Helvetica, sans-serif" font-size="26" font-weight="700" fill="#8391a6">pocketathlete.com</text>
+  <text x="1008" y="1028" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="800" fill="#e3b53f">PocketAthlete</text>
+</svg>

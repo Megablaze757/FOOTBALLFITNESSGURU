@@ -4,6 +4,7 @@ import { TRIAL_DAYS } from "@/lib/subscription";
 import { SITE } from "@/lib/seo";
 import { PlanGrid } from "@/components/PlanGrid";
 import { MarketingShell } from "@/components/MarketingShell";
+import { jsonLd, graph, faqPage } from "@/lib/schema";
 
 // Public and indexable. Pricing used to live inside the authenticated app,
 // which meant "how much is it?" — the first question anyone asks — could only
@@ -48,6 +49,13 @@ const FAQ = [
 export default function PlansPage() {
   return (
     <MarketingShell>
+      {/* The FAQ copy below, marked up. "How much is PocketAthlete?" is the
+          question an assistant is most likely to be asked about a product —
+          answering it in structure means the answer given is the right one. */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: jsonLd(graph([faqPage(FAQ.map((f) => ({ q: f.q, a: f.a })))])) }}
+      />
       <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">Simple pricing</h1>
       <p className="mt-3 text-slate-400">
         Free to start, and free forever for the daily habit. A private performance coach is

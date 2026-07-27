@@ -6,6 +6,7 @@ import { skillsForSport, NEEDS_LABEL } from "@/lib/skills";
 import { getExercise, type SportId } from "@/lib/exercises";
 import { guidePages, positionFromSlug, sportLabel, SITE } from "@/lib/seo";
 import { MarketingShell, GuideCta } from "@/components/MarketingShell";
+import { jsonLd, graph, drillHowTo, guideArticle, faqPage } from "@/lib/schema";
 
 // One page per sport × position. Static export, so every one is a real HTML
 // file with its content already in it — which is the only version a crawler
@@ -50,16 +51,61 @@ export default function PositionGuidePage({ params }: Params) {
   const drills = skillsForSport(sport, position).filter((d) => d.positions.includes(position));
   const solo = drills.filter((d) => d.needs === "solo");
 
+  const url = `${SITE}/guides/${sport}/${params.position}/`;
+  const label = sportLabel(sport);
+  const lower = position.toLowerCase();
+
   return (
     <MarketingShell>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: jsonLd(graph([
+            guideArticle({
+              url,
+              headline: `How a ${lower} should train`,
+              description: guide.summary,
+              keywords: [`${lower} training`, `${lower} ${label.toLowerCase()}`, `${lower} drills`, `${lower} gym program`],
+            }),
+            // The question this page exists to answer, stated as a Q&A pair.
+            // An assistant asked "how should a centre back train?" can lift
+            // this whole thing and be right.
+            faqPage([
+              {
+                q: `How should a ${lower} train?`,
+                a: `${guide.summary} Physically, prioritise ${guide.physical.join(", ").toLowerCase()}. Technically, work on ${guide.skills.join(", ").toLowerCase()}.`,
+              },
+              ...(drills.length ? [{
+                q: `What drills should a ${lower} do?`,
+                a: `${drills.map((d) => d.name).join(", ")}. ${solo.length} of these need nobody but you.`,
+              }] : []),
+            ]),
+            ...drills.map((d) => drillHowTo(d, label, url)),
+          ])),
+        }}
+      />
       <article className="prose-invert">
         <p className="text-xs font-semibold uppercase tracking-wider text-pitch-400">
-          {sportLabel(sport)} · Position guide
+          {label} · Position guide
         </p>
         <h1 className="mt-2 text-3xl font-extrabold tracking-tight sm:text-4xl">
-          How a {position.toLowerCase()} should train
+          How a {lower} should train
         </h1>
         <p className="mt-3 text-slate-300">{guide.summary}</p>
+
+        {/* The short answer, up front and self-contained. Someone skimming gets
+            it in five seconds; an answer engine lifting one passage gets
+            something complete rather than a fragment that needs the rest of
+            the page to make sense. */}
+        <div className="mt-5 rounded-2xl border border-pitch-400/20 bg-pitch-400/[0.04] p-5">
+          <h2 className="text-sm font-bold uppercase tracking-wide text-pitch-400">The short answer</h2>
+          <p className="mt-2 text-sm text-slate-200">
+            A {lower} should build {guide.physical.slice(0, 2).join(" and ").toLowerCase()},
+            and practise {guide.skills.slice(0, 2).join(" and ").toLowerCase()}.
+            {drills.length > 0 && ` The drills that matter most are ${drills.slice(0, 3).map((d) => d.name.toLowerCase()).join(", ")}.`}
+            {solo.length > 0 && ` ${solo.length} of them need nobody but you.`}
+          </p>
+        </div>
 
         <section className="mt-8 grid gap-4 sm:grid-cols-2">
           <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-5">

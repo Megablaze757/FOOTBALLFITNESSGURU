@@ -1,3 +1,5 @@
+import { PUBLISHER, jsonLd } from "@/lib/schema";
+
 /**
  * Schema.org JSON-LD.
  *
@@ -13,20 +15,17 @@ export function StructuredData() {
   const data = {
     "@context": "https://schema.org",
     "@graph": [
-      {
-        "@type": "Organization",
-        "@id": "https://pocketathlete.com/#org",
-        name: "PocketAthlete",
-        url: "https://pocketathlete.com",
-        logo: "https://pocketathlete.com/logo.png",
-        email: "info@pocketathlete.com",
-      },
+      // The same node the page-level graphs reference. Defined once: two
+      // Organization nodes with different @ids would split the entity in half,
+      // and an answer engine would have two half-described publishers to choose
+      // between rather than one it can attribute to.
+      { ...PUBLISHER, email: "info@pocketathlete.com", areaServed: "GB" },
       {
         "@type": "WebSite",
         "@id": "https://pocketathlete.com/#site",
         url: "https://pocketathlete.com",
         name: "PocketAthlete",
-        publisher: { "@id": "https://pocketathlete.com/#org" },
+        publisher: { "@id": PUBLISHER["@id"] },
       },
       {
         "@type": "SoftwareApplication",
@@ -37,7 +36,7 @@ export function StructuredData() {
           "An AI performance coach: daily readiness from sleep and soreness, training programs " +
           "built around your sport and position, and nutrition planning.",
         url: "https://pocketathlete.com",
-        publisher: { "@id": "https://pocketathlete.com/#org" },
+        publisher: { "@id": PUBLISHER["@id"] },
         offers: [
           { "@type": "Offer", name: "Free", price: "0", priceCurrency: "GBP" },
           { "@type": "Offer", name: "Pro", price: "15", priceCurrency: "GBP" },
@@ -98,7 +97,7 @@ export function StructuredData() {
       type="application/ld+json"
       // JSON.stringify output is data we just built, not user input; the escape
       // guards against a "</script>" ever appearing in a copy change.
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(data).replace(/</g, "\\u003c") }}
+      dangerouslySetInnerHTML={{ __html: jsonLd(data) }}
     />
   );
 }
