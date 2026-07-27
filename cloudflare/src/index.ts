@@ -10,6 +10,11 @@
 // for the app to run — it just unlocks the "real AI + payments + email" path.
 // =============================================================================
 
+// Commission maths is imported rather than reimplemented here. esbuild inlines
+// it at bundle time, so the code that decides what someone is owed is the same
+// code the unit tests cover — a second copy would be the one that goes wrong.
+import { splitCommission, estimateStripeFee } from "../../lib/affiliate";
+
 export interface Env {
   // AI
   OPENROUTER_API_KEY: string;
@@ -78,6 +83,7 @@ export default {
     // sweep would simply never happen.
     for (const job of [
       () => sendPushReminders(env),
+      () => approveDueCommissions(env),
       () => sendDailyReminders(env),
       () => sendDeadlineReminders(env),
       () => purgeExpiredVideos(env),
@@ -1245,8 +1251,131 @@ async function stripeWebhook(req: Request, env: Env): Promise<Response> {
         body: JSON.stringify({ status: "canceled", tier: "bronze", cancel_at_period_end: false }),
       });
     }
+    // Nothing to claw back on a cancellation: they keep what was already paid
+    // for, and no further invoices means no further commission. Only a REFUND
+    // takes money back, which is the next branch.
+  } else if (type === "invoice.payment_succeeded") {
+    // The only event that earns anyone anything.
+    await accrueCommission(env, obj);
+  } else if (type === "charge.refunded" || type === "charge.dispute.created") {
+    // Money went back to the customer, so the commission on it was never
+    // really earned.
+    await reverseCommission(env, obj?.id, type === "charge.refunded" ? "refund" : "chargeback");
   }
   return json({ received: true });
+}
+
+// --- Affiliate commission ----------------------------------------------------
+//
+// Accrues ONLY on a successful payment, as a share of what actually landed
+// after Stripe's fee, and reverses if that payment is refunded. Nobody is ever
+// paid for a signup, a trial, or for recruiting another affiliate — see
+// migration 0052 for why that distinction is the whole basis of the scheme.
+
+/** Stripe's real fee on a charge, in pennies. Null when it can't be read. */
+async function stripeFeeFor(env: Env, chargeId?: string | null): Promise<number | null> {
+  if (!chargeId) return null;
+  try {
+    const charge = await stripe(env, `charges/${chargeId}`);
+    const txId = charge?.balance_transaction;
+    if (!txId) return null;
+    const tx = await stripe(env, `balance_transactions/${txId}`);
+    return typeof tx?.fee === "number" ? tx.fee : null;
+  } catch {
+    // Fall back to the estimate rather than assuming zero — assuming zero
+    // overpays every affiliate on every payment.
+    return null;
+  }
+}
+
+async function accrueCommission(env: Env, invoice: any): Promise<void> {
+  if (!env.SUPABASE_SERVICE_ROLE_KEY) return;
+
+  const paid = Number(invoice?.amount_paid ?? 0);
+  const invoiceId = invoice?.id as string | undefined;
+  if (!invoiceId || paid <= 0) return; // £0 invoice: a trial starting, nothing earned
+
+  // Whose payment is this? The subscription carries the user id we set at
+  // checkout; without it there's nobody to attribute the referral to.
+  const subId = invoice?.subscription;
+  let userId: string | undefined = invoice?.subscription_details?.metadata?.user_id;
+  if (!userId && subId) {
+    try { userId = (await stripe(env, `subscriptions/${subId}`))?.metadata?.user_id; } catch { /* ignore */ }
+  }
+  if (!userId) return;
+
+  const profRes = await supa(env, `profiles?id=eq.${userId}&select=referral_code`);
+  const prof = (await profRes.json()) as { referral_code: string | null }[] | null;
+  const code = prof?.[0]?.referral_code;
+  if (!code) return; // organic customer — most of them, hopefully
+
+  const affRes = await supa(env, "affiliates?select=id,code,parent_id,rate_pct,active,user_id");
+  const rows = (await affRes.json()) as {
+    id: string; code: string; parent_id: string | null;
+    rate_pct: string | number | null; active: boolean; user_id: string | null;
+  }[] | null;
+  if (!Array.isArray(rows) || !rows.length) return;
+
+  const nodes = rows.map((r) => ({
+    id: r.id, code: r.code, parentId: r.parent_id,
+    ratePct: r.rate_pct === null ? null : Number(r.rate_pct),
+    active: r.active !== false, userId: r.user_id,
+  }));
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const byCode = new Map(nodes.map((n) => [n.code, n]));
+
+  const chargeId = (invoice?.charge ?? null) as string | null;
+  const fee = await stripeFeeFor(env, chargeId);
+
+  const lines = splitCommission({
+    referralCode: code,
+    paidPennies: paid,
+    stripeFeePennies: fee,
+    byCode, byId,
+    payerUserId: userId,
+  });
+  if (!lines.length) return;
+
+  // The unique index on (invoice, affiliate, level) is what makes this safe to
+  // run twice — Stripe redelivers webhooks by design, and a duplicate would
+  // otherwise pay someone the same commission again. Conflicts are ignored.
+  const feeUsed = fee ?? estimateStripeFee(paid);
+  await supa(env, "affiliate_commissions", {
+    method: "POST",
+    headers: { Prefer: "resolution=ignore-duplicates,return=minimal" },
+    body: JSON.stringify(lines.map((l) => ({
+      affiliate_id: l.affiliateId,
+      source_user_id: userId,
+      stripe_invoice_id: invoiceId,
+      stripe_charge_id: chargeId,
+      level: l.level,
+      rate_pct: l.ratePct,
+      gross_pennies: paid,
+      fee_pennies: feeUsed,
+      net_pennies: l.netPennies,
+      amount_pennies: l.amountPennies,
+    }))),
+  });
+}
+
+/**
+ * Reverse commission on a refunded or disputed charge.
+ *
+ * Anything still pending or approved becomes 'reversed'. Rows already marked
+ * paid are reversed too so the ledger tells the truth, but the money is gone —
+ * which is exactly why commission is held for 30 days before it can be paid.
+ */
+async function reverseCommission(env: Env, chargeId: string | undefined, reason: string): Promise<void> {
+  if (!env.SUPABASE_SERVICE_ROLE_KEY || !chargeId) return;
+  await supa(env, `affiliate_commissions?stripe_charge_id=eq.${chargeId}&status=neq.reversed`, {
+    method: "PATCH",
+    headers: { Prefer: "return=minimal" },
+    body: JSON.stringify({
+      status: "reversed",
+      reversed_at: new Date().toISOString(),
+      reversal_reason: reason,
+    }),
+  });
 }
 
 async function upsertSub(env: Env, sub: any): Promise<void> {
@@ -1473,6 +1602,25 @@ async function sendPushReminders(env: Env): Promise<void> {
   // notifications on that device updates it instead of creating a duplicate.
   if (dead.length) await svcRpc(env, "mark_push_failed", { sub_ids: dead });
   console.log(`push: ${sent} sent, ${dead.length} dead of ${targets.length} due`);
+}
+
+/**
+ * Release commission that has cleared its holding period.
+ *
+ * Nothing is payable for 30 days after it's earned, because refunds and
+ * chargebacks arrive late. Reversing a held commission is a status change;
+ * recovering money from someone who has already been paid and spent it is a
+ * conversation.
+ */
+async function approveDueCommissions(env: Env): Promise<void> {
+  if (!env.SUPABASE_SERVICE_ROLE_KEY) return;
+  const r = await svcRpc(env, "approve_due_commissions", {});
+  if (!r.ok) {
+    console.error(`approve_due_commissions unavailable (${r.status}) — is migration 0052 applied?`);
+    return;
+  }
+  const n = Number(await r.json());
+  if (n > 0) console.log(`commission: approved ${n} line(s) for payout`);
 }
 
 // --- Notification emails -----------------------------------------------------

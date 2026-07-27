@@ -12,6 +12,7 @@ import { referralLink, waitlistLink } from "@/lib/referral";
 import { planFor } from "@/lib/subscription";
 import { ContentEngine } from "@/components/ContentEngine";
 import { FunnelReport } from "@/components/FunnelReport";
+import { AffiliateEarnings } from "@/components/AffiliateEarnings";
 import type { Video } from "@/lib/types";
 
 interface Metrics {
@@ -101,6 +102,10 @@ export default function AdminPage() {
 
       <section className="mt-10">
         <Affiliates />
+      </section>
+
+      <section className="mt-10">
+        <AffiliateEarnings />
       </section>
 
       <section className="mt-10">

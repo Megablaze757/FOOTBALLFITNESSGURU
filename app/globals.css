@@ -138,6 +138,28 @@ h1 { letter-spacing: -0.02em; }
     @apply mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-400;
   }
 
+  /* Dropdown options were invisible — white text on white.
+   *
+   * `.field` sets bg-white/[0.04], which is 4% opaque. That's fine for the
+   * closed control sitting on a dark page, but the OPEN dropdown is painted by
+   * the operating system on its own light surface, and it uses the select's
+   * background-color. 4% white over a white popup is white, and the text is
+   * text-slate-100. So the list rendered, and you couldn't read a word of it.
+   *
+   * The fix has to be an OPAQUE colour: any alpha at all and the OS surface
+   * shows through again. Applied globally rather than per-select, because
+   * there are sixteen of them and the next one added would have the same bug.
+   */
+  select option,
+  select optgroup {
+    background-color: #18181b; /* ink-700, fully opaque */
+    color: #e2e8f0;
+  }
+  /* Placeholder rows like "— none —" stay legible but read as secondary. */
+  select option:disabled {
+    color: #8391a6;
+  }
+
   .chip {
     @apply inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.05] px-3 py-1 text-xs font-medium;
   }
