@@ -26,8 +26,28 @@ export default function LoginPage() {
   // through signup so they land back on checkout instead of the home screen
   // having forgotten why they came.
   const [wantedPlan, setWantedPlan] = useState<string | null>(null);
+  // Typed by hand OR prefilled from ?ref=. A visible field matters because a
+  // code heard out loud — "use SACHA20" — has no link to stash.
+  const [refCode, setRefCode] = useState("");
+  const [refState, setRefState] = useState<"idle" | "checking" | "ok" | "bad">("idle");
 
   useEffect(() => { captureRef(); }, []); // in case they land straight on /login?ref=
+
+  // Prefill from the link they arrived on, so the common path needs no typing.
+  useEffect(() => { const r = getRef(); if (r) setRefCode(r); }, []);
+
+  // Check the code as they type. A silently-wrong code is the whole problem
+  // here — the affiliate never finds out their referrals didn't count.
+  useEffect(() => {
+    const code = refCode.trim();
+    if (!code) { setRefState("idle"); return; }
+    setRefState("checking");
+    const t = setTimeout(async () => {
+      const { data } = await createClient().rpc("referral_code_valid", { p_code: code });
+      setRefState(data === true ? "ok" : "bad");
+    }, 400);
+    return () => clearTimeout(t);
+  }, [refCode]);
 
   useEffect(() => {
     const plan = new URLSearchParams(window.location.search).get("plan");
@@ -74,10 +94,17 @@ export default function LoginPage() {
         if (/confirm/i.test(error.message)) setAwaitingConfirm(true);
       } else router.push("/home");
     } else {
+      // The referral code travels in the signup METADATA, not as a follow-up
+      // update. The old code wrote to profiles straight after signUp — but on
+      // an email-confirmation signup there is no session yet, so RLS rejected
+      // it, no error surfaced, and the attribution vanished. Every affiliate
+      // referral that needed email confirmation was lost this way.
+      // handle_new_user() now reads it server-side as the row is created.
+      const ref = refCode.trim() || getRef() || "";
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: { data: { full_name: fullName } },
+        options: { data: { full_name: fullName, ...(ref ? { referral_code: ref } : {}) } },
       });
       if (error) setError(error.message);
       else if (data.user && (data.user.identities?.length ?? 0) === 0) {
@@ -87,12 +114,8 @@ export default function LoginPage() {
         // confirmation that will never arrive, because nothing was sent.
         setInfo("That email already has an account. Try signing in, or use “Forgot password?” below.");
       } else {
-        // Attribute the signup to the affiliate whose link they arrived on.
-        const ref = getRef();
-        if (ref && data.user) {
-          await supabase.from("profiles").update({ referral_code: ref }).eq("id", data.user.id);
-          clearRef();
-        }
+        // Attribution already happened server-side, in handle_new_user().
+        if (ref) clearRef();
         // Only recordable once there's a session — the insert is RLS'd to the
         // signed-in user. On a confirm-by-email flow the row lands on first
         // sign-in instead, which is the right moment anyway: an unconfirmed
@@ -153,6 +176,29 @@ export default function LoginPage() {
             <label className="block">
               <span className="field-label">Full name</span>
               <input className="field" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Alex Striker" />
+            </label>
+          )}
+          {/* A visible field, not just the ?ref= link. Codes get passed on by
+              word of mouth — "use SACHA20" — and there's no link to stash in
+              that case, so the referral was simply lost. */}
+          {mode === "sign_up" && (
+            <label className="block">
+              <span className="field-label">Referral code <span className="normal-case text-slate-500">(optional)</span></span>
+              <input
+                className="field"
+                value={refCode}
+                onChange={(e) => setRefCode(e.target.value)}
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                placeholder="Got a code from a coach or a mate?"
+              />
+              {refState === "ok" && <span className="mt-1 block text-xs text-readiness-green">✓ Code applied.</span>}
+              {refState === "bad" && (
+                <span className="mt-1 block text-xs text-readiness-red">
+                  We don&apos;t recognise that code — check it, or leave it blank.
+                </span>
+              )}
             </label>
           )}
           <label className="block">

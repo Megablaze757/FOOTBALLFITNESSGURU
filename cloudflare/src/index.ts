@@ -171,8 +171,30 @@ function meetsTier(have: string, need: string): boolean {
   return (h < 0 ? 0 : h) >= (n < 0 ? 0 : n);
 }
 
+/**
+ * Deactivated accounts get nothing.
+ *
+ * Checked here rather than trusting the browser: the UI gate is a courtesy,
+ * but this is what stops a suspended account running up AI spend by calling
+ * the endpoints directly.
+ */
+async function isSuspended(env: Env, userId: string): Promise<boolean> {
+  if (!env.SUPABASE_SERVICE_ROLE_KEY) return false;
+  try {
+    const r = await supa(env, `profiles?id=eq.${userId}&select=suspended_at`);
+    if (!r.ok) return false; // fail open: a lookup blip must not lock out a payer
+    const rows = (await r.json()) as { suspended_at: string | null }[];
+    return !!rows?.[0]?.suspended_at;
+  } catch {
+    return false;
+  }
+}
+
 /** null when allowed; a 402 Response naming the tier needed when not. */
 async function requireTier(env: Env, userId: string, need: "silver" | "gold", feature: string): Promise<Response | null> {
+  if (await isSuspended(env, userId)) {
+    return json({ error: "This account has been deactivated.", suspended: true }, 403);
+  }
   const tier = await tierOf(env, userId);
   if (meetsTier(tier, need)) return null;
   // 402 rather than 403: this isn't "you may never", it's "this costs money".

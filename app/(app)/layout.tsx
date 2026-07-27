@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useSession, UserProvider } from "@/lib/auth";
 import { TabBar } from "@/components/TabBar";
 import { SideNav } from "@/components/SideNav";
+import { SuspendedGate } from "@/components/SuspendedGate";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useSession();
@@ -24,6 +25,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <UserProvider user={user}>
+      <SuspendedGate userId={user.id}>
       <div className="flex min-h-screen">
         <SideNav />
         <div className="min-w-0 flex-1">
@@ -33,6 +35,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
         <TabBar />
       </div>
+      </SuspendedGate>
     </UserProvider>
   );
 }

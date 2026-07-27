@@ -240,6 +240,8 @@ interface AdminUser {
   referral_code: string | null;
   affiliate_name: string | null;
   created_at: string;
+  suspended_at: string | null;
+  comped: boolean;
   last_sign_in_at: string | null;
 }
 
@@ -252,12 +254,39 @@ const TIER_STYLE: Record<string, string> = {
 /** Everyone on the app: plan, beta status, and who referred them. */
 function Users() {
   const [filter, setFilter] = useState<"all" | "beta" | "paid" | "free">("all");
+  const [busy, setBusy] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
 
-  const { data, loading, error } = useAsync(async () => {
+  const { data, loading, error, reload } = useAsync(async () => {
     const { data, error } = await createClient().rpc("admin_users");
     if (error) throw error;
     return (data ?? []) as AdminUser[];
-  }, []);
+  }, [], "admin-users");
+
+  async function act(id: string, run: () => PromiseLike<{ error: { message: string } | null }>, done: string) {
+    setBusy(id);
+    const { error } = await run();
+    setBusy(null);
+    // Surface the database's own refusal — "you cannot suspend your own
+    // account" is more useful than a generic failure.
+    setNote(error ? error.message : done);
+    setTimeout(() => setNote(null), 5000);
+    if (!error) reload();
+  }
+
+  const suspend = (u: AdminUser) =>
+    act(u.user_id,
+      () => createClient().rpc("admin_set_suspended", {
+        p_user: u.user_id, p_suspended: !u.suspended_at, p_reason: null,
+      }),
+      u.suspended_at
+        ? `${u.email} restored — they can sign in again.`
+        : `${u.email} deactivated. Any comped access has been revoked.`);
+
+  const toggleComped = (u: AdminUser) =>
+    act(u.user_id,
+      () => createClient().rpc("admin_set_comped", { p_user: u.user_id, p_on: !u.comped }),
+      u.comped ? `Pro removed from ${u.email}.` : `${u.email} now has comped Pro.`);
 
   const rows = data ?? [];
   const paid = rows.filter((r) => r.tier !== "bronze");
@@ -314,10 +343,11 @@ function Users() {
             </thead>
             <tbody className="divide-y divide-white/5">
               {shown.map((u) => (
-                <tr key={u.user_id}>
+                <tr key={u.user_id} className={u.suspended_at ? "opacity-50" : ""}>
                   <td className="px-4 py-2">
                     <div className="flex items-center gap-2">
                       <span className="truncate text-slate-200">{u.email}</span>
+                      {u.suspended_at && <span className="chip shrink-0 text-readiness-red">deactivated</span>}
                       {u.beta && <span className="chip shrink-0 text-pitch-400">beta</span>}
                       {u.role !== "athlete" && <span className="chip shrink-0 text-slate-400">{u.role}</span>}
                     </div>
@@ -340,6 +370,34 @@ function Users() {
                   </td>
                   <td className="px-4 py-2 text-slate-400">{u.created_at.slice(0, 10)}</td>
                   <td className="px-4 py-2 text-slate-400">{u.last_sign_in_at?.slice(0, 10) ?? "never"}</td>
+                  <td className="px-4 py-2">
+                    <div className="flex gap-1">
+                      {/* Only offered for COMPED access. A real Stripe
+                          subscription has to be changed in Stripe — quietly
+                          cutting off someone who is still being billed is the
+                          worst thing this panel could do. */}
+                      {(u.comped || u.tier === "bronze") && !u.suspended_at && (
+                        <button
+                          onClick={() => toggleComped(u)}
+                          disabled={busy === u.user_id}
+                          className="tap-target rounded-lg border border-white/10 px-2 py-1 text-[11px] font-semibold text-slate-300 disabled:opacity-40"
+                        >
+                          {u.comped ? "Remove Pro" : "Give Pro"}
+                        </button>
+                      )}
+                      <button
+                        onClick={() => suspend(u)}
+                        disabled={busy === u.user_id}
+                        className={`tap-target rounded-lg border px-2 py-1 text-[11px] font-semibold disabled:opacity-40 ${
+                          u.suspended_at
+                            ? "border-readiness-green/40 text-readiness-green"
+                            : "border-readiness-red/40 text-readiness-red"
+                        }`}
+                      >
+                        {u.suspended_at ? "Restore" : "Deactivate"}
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
