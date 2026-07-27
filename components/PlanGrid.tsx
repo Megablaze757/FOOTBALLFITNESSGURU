@@ -23,24 +23,28 @@ export function PlanGrid({ mode, currentTier = "bronze" }: {
 }) {
   return (
     <>
-      <div className="grid items-start gap-4 md:grid-cols-3">
+      {/* Columns follow the plan count, so adding one back later doesn't leave
+          a gap where the third card used to be. */}
+      <div className={`mx-auto grid items-start gap-4 ${PLANS.length > 2 ? "md:grid-cols-3" : "max-w-3xl md:grid-cols-2"}`}>
         {PLANS.map((plan, i) => {
           const isCurrent = mode === "app" && plan.id === currentTier;
           const isDowngrade = mode === "app" && TIER_RANK[plan.id] < TIER_RANK[currentTier];
-          const isGold = plan.id === "gold";
-          const accent = isGold ? "text-pitch-400" : plan.id === "silver" ? "text-sky-300" : "text-slate-200";
+          // Highlight the plan being SOLD, not a hard-coded id — pinning this
+          // to "gold" broke the moment the tiers changed.
+          const featured = plan.paid;
+          const accent = featured ? "text-pitch-400" : "text-slate-200";
 
           return (
             <div
               key={plan.id}
-              className={`${isGold ? "card-premium" : "card"} animate-fade-up flex h-full flex-col p-6 ${
+              className={`${featured ? "card-premium" : "card"} animate-fade-up flex h-full flex-col p-6 ${
                 isCurrent ? "ring-2 ring-pitch-400/60 shadow-glow" : ""
               }`}
               style={{ animationDelay: `${i * 60}ms` }}
             >
               <div className="flex items-center justify-between">
                 <h2 className={`text-lg font-extrabold ${accent}`}>{plan.name}</h2>
-                {isGold && !isCurrent && <span className="chip text-pitch-400">Most popular</span>}
+                {featured && !isCurrent && TRIAL_DAYS > 0 && <span className="chip text-pitch-400">{TRIAL_DAYS} days free</span>}
               </div>
               <div className="mt-2 text-3xl font-extrabold">{plan.priceLabel}</div>
               <p className="mt-1 text-sm text-slate-400">{plan.tagline}</p>
@@ -58,7 +62,7 @@ export function PlanGrid({ mode, currentTier = "bronze" }: {
               <ul className="my-5 flex-1 space-y-2 text-sm text-slate-300">
                 {plan.features.map((f) => (
                   <li key={f} className="flex gap-2">
-                    <span className={isGold ? "text-pitch-400" : "text-slate-400"} aria-hidden="true">✓</span>
+                    <span className={featured ? "text-pitch-400" : "text-slate-400"} aria-hidden="true">✓</span>
                     {f}
                   </li>
                 ))}

@@ -171,38 +171,14 @@ async function requireTier(env: Env, userId: string, need: "silver" | "gold", fe
   if (meetsTier(tier, need)) return null;
   // 402 rather than 403: this isn't "you may never", it's "this costs money".
   // The client shows an upgrade prompt for exactly this status.
-  return json({ error: `${feature} is a ${need === "gold" ? "Gold" : "Silver"} feature`, upgrade: need, tier }, 402);
+  return json({ error: `${feature} is part of Pro`, upgrade: need, tier }, 402);
 }
 
-// Monthly caps. Mirrors LIMITS in lib/subscription.ts; null is unlimited.
-// These are what make Gold worth the extra £5 to someone who trains daily —
-// a longer feature list never did, because the extra features are occasional.
-const MONTHLY_PROGRAMS: Record<string, number | null> = { bronze: 0, silver: 4, gold: null };
-
-/**
- * Has this athlete used up their AI programs for the month?
- *
- * Counted from programs.created_at rather than a counter table — the row
- * already exists and can't drift out of step with reality.
- */
-async function overProgramQuota(env: Env, userId: string): Promise<Response | null> {
-  const tier = await tierOf(env, userId);
-  const cap = MONTHLY_PROGRAMS[tier];
-  if (cap === null || cap === undefined) return null;
-
-  const r = await svcRpc(env, "programs_this_month", { p_user: userId });
-  if (!r.ok) return null; // never block on a broken meter
-  const used = Number(await r.json());
-  if (!Number.isFinite(used) || used < cap) return null;
-
-  return json({
-    error: `You've used all ${cap} program builds this month on ${tier === "silver" ? "Silver" : "your plan"}. Gold is unlimited.`,
-    upgrade: "gold",
-    tier,
-    used,
-    cap,
-  }, 402);
-}
+// There is deliberately NO monthly program quota. A metered cap on a £15
+// consumer app is invisible until it bites, and it bites mid-block on someone
+// who was enjoying themselves — which produces refunds, not upgrades. Spend is
+// still bounded by checkBudget/TIER_BUDGET below, which is a cost control
+// rather than a pricing lever and never blocks a normal week of use.
 
 /** Monthly USD budget per tier. Well under the revenue each tier brings in. */
 const TIER_BUDGET: Record<string, number> = {
@@ -526,10 +502,8 @@ async function coachChat(req: Request, env: Env): Promise<Response> {
 async function generateProgram(req: Request, env: Env): Promise<Response> {
   const u = await authUser(req, env);
   if (!u) return json({ error: "unauthorized" }, 401);
-  const gate = await requireTier(env, u.id, "silver", "AI-written programs");
+  const gate = await requireTier(env, u.id, "silver", "Training programs");
   if (gate) return gate;
-  const quota = await overProgramQuota(env, u.id);
-  if (quota) return quota;
   const budget = await checkBudget(env, u.id);
   if (!budget.allowed) return overBudget(budget);
   const { goal, pain_map, notes, in_season, sport, position, focus, days_per_week, split } = (await req.json()) as {
@@ -795,7 +769,7 @@ function parseInjuryPlan(raw: string): unknown | null {
 async function injuryPlan(req: Request, env: Env): Promise<Response> {
   const u = await authUser(req, env);
   if (!u) return json({ error: "unauthorized" }, 401);
-  const gate = await requireTier(env, u.id, "gold", "The injury planner");
+  const gate = await requireTier(env, u.id, "silver", "The injury planner");
   if (gate) return gate;
   const budget = await checkBudget(env, u.id);
   if (!budget.allowed) return overBudget(budget);
@@ -968,7 +942,7 @@ async function generateContent(req: Request, env: Env): Promise<Response> {
 async function generateChallenges(req: Request, env: Env): Promise<Response> {
   const u = await authUser(req, env);
   if (!u) return json({ error: "unauthorized" }, 401);
-  const gate = await requireTier(env, u.id, "gold", "Personalised objectives");
+  const gate = await requireTier(env, u.id, "silver", "Personalised objectives");
   if (gate) return gate;
   const budget = await checkBudget(env, u.id);
   if (!budget.allowed) return overBudget(budget);

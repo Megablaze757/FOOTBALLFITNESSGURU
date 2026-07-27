@@ -4,6 +4,8 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { can } from "@/lib/subscription";
+import { FeatureLock, tierOfSub } from "@/components/FeatureLock";
 import { useCurrentUser } from "@/lib/auth";
 import { useAsync } from "@/lib/use-async";
 import { VideoAnalysisView } from "@/components/VideoAnalysisView";
@@ -52,7 +54,9 @@ function VideoDetailInner() {
   if (!data?.video) return <p className="card px-4 py-8 text-center text-sm text-slate-400">Video not found.</p>;
 
   const { video, src, sub, plan, painMap, inSeason } = data;
-  const isGold = sub?.status === "active" && sub.tier === "gold";
+  // Was pinned to tier === "gold" specifically, which locked Pro subscribers
+  // out the moment Gold stopped being sold. Ask the capability, not the tier.
+  const unlocked = can(tierOfSub(sub), "video_analysis");
 
   return (
     <div className="animate-fade-up mx-auto max-w-3xl space-y-5">
@@ -64,7 +68,7 @@ function VideoDetailInner() {
         <Link href="/train" className="text-sm text-slate-400 hover:text-pitch-400">← Back</Link>
       </header>
 
-      {!isGold ? (
+      {!unlocked ? (
         <>
           <video src={src} controls playsInline className="w-full rounded-2xl bg-black" />
           <UpgradeLock />

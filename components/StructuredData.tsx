@@ -39,8 +39,8 @@ export function StructuredData() {
         url: "https://pocketathlete.com",
         publisher: { "@id": "https://pocketathlete.com/#org" },
         offers: [
-          { "@type": "Offer", name: "Silver", price: "15", priceCurrency: "GBP" },
-          { "@type": "Offer", name: "Gold", price: "20", priceCurrency: "GBP" },
+          { "@type": "Offer", name: "Free", price: "0", priceCurrency: "GBP" },
+          { "@type": "Offer", name: "Pro", price: "15", priceCurrency: "GBP" },
         ],
       },
       {

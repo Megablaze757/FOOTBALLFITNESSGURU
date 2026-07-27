@@ -1,12 +1,29 @@
-// Subscription tier catalog — the single source of truth for pricing and
-// feature copy. Stripe price IDs live in env (server-side), not here.
+// =============================================================================
+// Plans.
 //
-// Every line of feature copy below describes something the app ACTUALLY gates.
-// It didn't before: Gold advertised "custom periodised programs" and "full
-// exercise library across every sport" when both were free to everyone, so the
-// only real differences were video analysis and an AI budget nobody can see.
-// Selling a difference that doesn't exist is how you end up refunding people.
-// CAPABILITY_TIER below is what both the app and the Worker now enforce.
+// TWO plans for individuals: Free, and Pro at £15. Plus Team for clubs.
+//
+// It was three, with usage meters separating the top two — 4 program builds a
+// month, 30 coach questions. That was a mistake, and worth writing down so it
+// doesn't get reinvented:
+//
+//   * Metering is a B2B pattern. Nobody counts their coach questions in a £15
+//     consumer fitness app, and a cap is invisible until the moment it bites —
+//     which is mid-block, on a Tuesday, for someone who was enjoying it. That
+//     produces refund requests, not upgrades.
+//   * Two paid tiers £5 apart forced a difference that wasn't really there, so
+//     it got manufactured. A buyer with a choice they can't evaluate doesn't
+//     upgrade; they stall.
+//   * It optimised the second conversion (Silver -> Gold) for a product with
+//     none of the first (Free -> paid). Wrong order.
+//
+// One paid plan means one decision, one price to test, one code path. A higher
+// tier can be added the day there's evidence of who wants what — that's easy.
+// Taking features off people who already pay for them is not.
+//
+// The `gold` tier still exists in the type and the database. Comped beta
+// testers are on it and it grants everything Pro does; it's simply not sold.
+// =============================================================================
 
 import type { Tier } from "./types";
 
@@ -17,7 +34,7 @@ export interface TierPlan {
   priceMonthly: number; // GBP/month, for MRR math
   tagline: string;
   features: string[];
-  /** The one line answering "why pay more than the tier below?" */
+  /** The one line answering "why pay?" */
   headline?: string;
   paid: boolean;
 }
@@ -25,48 +42,48 @@ export interface TierPlan {
 /**
  * Free-trial length shown in the UI. Must match TRIAL_DAYS on the Worker, which
  * is what actually sets it on the Stripe session — this copy only describes it.
- * Set to 0 here and there to turn trials off.
  */
 export const TRIAL_DAYS = 7;
 
 export const TIER_RANK: Record<Tier, number> = { bronze: 0, silver: 1, gold: 2 };
 
+/** The tier that "paid" means. Sold as Pro; `gold` is the legacy/comped one. */
+export const PAID_TIER: Tier = "silver";
+
 // --- Capabilities ------------------------------------------------------------
 
 /**
- * What each tier can do. This is the contract: the client prompts on these and
- * the Worker refuses the matching endpoints, so the two can't drift into
- * promising different things.
+ * What each tier can do.
+ *
+ * Everything paid sits at `silver`, so Pro and the legacy Gold grant exactly
+ * the same thing. The client prompts on these and the Worker refuses the
+ * matching endpoints, so the two can't drift into promising different things.
  */
 export type Capability =
   | "check_in"        // daily check-in, pain map, readiness
-  | "program_local"   // programs built on-device
+  | "program"         // training programs, AI-written or on-device
   | "library"         // exercise library + skill drills
   | "leaderboards"
-  | "ai_program"      // programs written by the AI coach
   | "ai_chat"         // ask the coach
   | "nutrition"       // meal plans, macros, food estimation
   | "video_analysis"  // in-browser form analysis
   | "injury_plan"     // AI rehab planning from a written description
-  | "ai_challenges"   // personalised weekly objectives
-  | "priority_ai";    // straight to the strongest model, no free-tier queue
+  | "ai_challenges";  // personalised weekly objectives
 
 export const CAPABILITY_TIER: Record<Capability, Tier> = {
+  // Free is a real product: the daily habit, the whole coaching library, and
+  // your place on the leaderboards. That's what earns the right to sell.
   check_in: "bronze",
   library: "bronze",
   leaderboards: "bronze",
 
-  // Programs are the product. Free gets the habit loop — check in, see your
-  // readiness, read the drills — and paying is what turns that into a plan.
-  program_local: "silver",
-  ai_program: "silver",
+  // Everything else is Pro. No second paid step to evaluate.
+  program: "silver",
   ai_chat: "silver",
   nutrition: "silver",
-
-  video_analysis: "gold",
-  injury_plan: "gold",
-  ai_challenges: "gold",
-  priority_ai: "gold",
+  video_analysis: "silver",
+  injury_plan: "silver",
+  ai_challenges: "silver",
 };
 
 /** True if `have` tier includes everything in `need` tier. */
@@ -83,126 +100,85 @@ export function tierNeededFor(capability: Capability): Tier {
   return CAPABILITY_TIER[capability];
 }
 
-// --- Limits ------------------------------------------------------------------
+// --- Guard rails, not pricing levers -----------------------------------------
 
 /**
- * How much, not just what.
+ * The only remaining cap, and it isn't a pricing lever.
  *
- * Gold used to differ from Silver by a handful of occasional-use features —
- * video analysis, the injury planner — so someone training five times a week
- * got no more out of it than someone training twice, and £20 looked like £15
- * with extras. Feature lists can't fix that; the axis was wrong.
- *
- * These caps put the axis on how seriously you train. Silver is sized for a
- * normal athlete and never feels mean; anyone genuinely training daily hits
- * the ceiling, and for them £5 more is obvious. Nothing here is arbitrary —
- * each one tracks a real cost (an AI call, storage, compute).
- *
- * `null` means unlimited.
+ * Five concurrent programs is well past anything a person can actually follow;
+ * it exists so a runaway loop or a bad script can't fill the table. Free is 0
+ * because programs are the paid product.
  */
-export interface TierLimits {
-  /** Programs you can have running at once — e.g. in-season plus a gym block. */
-  activePrograms: number | null;
-  /** AI-written program builds per calendar month. A block is four weeks, so
-   *  four is a rebuild a week and more than any sane periodisation needs. */
-  aiProgramsPerMonth: number | null;
-  /** Coach questions per month. */
-  coachMessagesPerMonth: number | null;
-  /** How far back history and trends go. */
-  historyDays: number | null;
-}
-
-export const LIMITS: Record<Tier, TierLimits> = {
-  bronze: {
-    activePrograms: 0, // programs are the paid product
-    aiProgramsPerMonth: 0,
-    coachMessagesPerMonth: 0,
-    historyDays: 30,
-  },
-  silver: {
-    activePrograms: 1,
-    aiProgramsPerMonth: 4,
-    coachMessagesPerMonth: 30,
-    historyDays: 90,
-  },
-  gold: {
-    activePrograms: 3,
-    aiProgramsPerMonth: null,
-    coachMessagesPerMonth: null,
-    historyDays: null,
-  },
+export const MAX_ACTIVE_PROGRAMS: Record<Tier, number> = {
+  bronze: 0,
+  silver: 5,
+  gold: 5,
 };
 
-export function limitsFor(tier: Tier): TierLimits {
-  return LIMITS[tier] ?? LIMITS.bronze;
-}
-
-/** "4 a month" / "Unlimited" — for showing a cap without a special case at each site. */
-export function limitLabel(n: number | null, unit: string): string {
-  if (n === null) return "Unlimited";
-  if (n === 0) return `No ${unit}`;
-  return `${n} ${unit}`;
+export function maxActivePrograms(tier: Tier): number {
+  return MAX_ACTIVE_PROGRAMS[tier] ?? 0;
 }
 
 // --- Plans -------------------------------------------------------------------
 
-export const PLANS: TierPlan[] = [
-  {
-    id: "bronze",
-    name: "Bronze",
-    priceLabel: "Free",
-    priceMonthly: 0,
-    tagline: "The daily habit, free forever.",
-    paid: false,
-    features: [
-      "Daily check-in with the body pain map",
-      "Readiness score, worked out on your device",
-      "Full exercise library and every skill drill",
-      "Position guides for your sport",
-      "Leaderboards and rank progression",
-    ],
-  },
-  {
-    id: "silver",
-    name: "Silver",
-    priceLabel: "£15/mo",
-    priceMonthly: 15,
-    tagline: "The AI coach, writing for you.",
-    headline: "Where you stop tracking training and start having a program.",
-    paid: true,
-    features: [
-      "Everything in Bronze",
-      "Four-week training blocks — Base, Build, Peak, Deload",
-      "AI-written programs that obey your notes — “I don’t train legs” means no legs",
-      "1 program at a time · 4 rebuilds a month",
-      "Ask the coach — 30 questions a month",
-      "Meal plans that fit your week, with a pack-aware shopping list",
-      "90 days of history and trends",
-    ],
-  },
-  {
-    id: "gold",
-    name: "Gold",
-    priceLabel: "£20/mo",
-    priceMonthly: 20,
-    tagline: "The whole performance team.",
-    headline: "For anyone training most days: nothing runs out, and it watches your technique too.",
-    paid: true,
-    features: [
-      "Everything in Silver, with no monthly caps",
-      "Unlimited AI programs and unlimited coach questions",
-      "Run 3 programs at once — in-season, gym block and rehab together",
-      "Video form analysis — filmed on your phone, scored on your phone",
-      "Injury planner: describe what hurts, get a plan built around it",
-      "Weekly objectives set from the habit you’re actually neglecting",
-      "Priority AI — straight to the strongest model, no free-tier queue",
-      "Your full history, forever",
-    ],
-  },
-];
+const FREE: TierPlan = {
+  id: "bronze",
+  name: "Free",
+  priceLabel: "£0",
+  priceMonthly: 0,
+  tagline: "The daily habit, free forever.",
+  paid: false,
+  features: [
+    "Daily check-in with the body pain map",
+    "Readiness score, worked out on your device",
+    "Full exercise library and every skill drill",
+    "Position guides for your sport",
+    "Leaderboards and rank progression",
+  ],
+};
 
-// Team plan — sold separately (not an individual tier). Maps to a coach account
-// with Gold features for the whole roster + the squad dashboard.
+const PRO: TierPlan = {
+  id: "silver",
+  name: "Pro",
+  priceLabel: "£15/mo",
+  priceMonthly: 15,
+  tagline: "Everything, for one price.",
+  headline: "Where you stop tracking training and start having a program.",
+  paid: true,
+  features: [
+    "Everything in Free",
+    "Four-week training blocks — Base, Build, Peak, Deload",
+    "Programs that obey your notes — “I don’t train legs” means no legs",
+    "Ask the coach anything about your training",
+    "Video form analysis — filmed on your phone, scored on your phone",
+    "Injury planner: describe what hurts, get a plan built around it",
+    "Meal plans that fit your week, with a pack-aware shopping list",
+    "Weekly objectives set from the habit you’re neglecting",
+  ],
+};
+
+/**
+ * The legacy tier. Not sold — kept so comped beta testers and anyone who bought
+ * it before the change keep working, and so planFor("gold") never returns the
+ * free plan by accident.
+ */
+const LEGACY_GOLD: TierPlan = {
+  id: "gold",
+  name: "Gold",
+  priceLabel: "£20/mo",
+  priceMonthly: 20,
+  tagline: "Everything in Pro.",
+  paid: true,
+  features: PRO.features,
+};
+
+/** What the pricing pages show. */
+export const PLANS: TierPlan[] = [FREE, PRO];
+
+/** Every plan including the ones no longer sold — for admin and lookups. */
+export const ALL_PLANS: TierPlan[] = [FREE, PRO, LEGACY_GOLD];
+
+// Team plan — sold separately (not an individual tier).
 export interface TeamPlan {
   name: string;
   priceLabel: string;
@@ -217,7 +193,7 @@ export const TEAM_PLAN: TeamPlan = {
   priceMonthly: 150,
   tagline: "For clubs, coaches & S&C staff.",
   features: [
-    "Everything in Gold for up to 25 athletes",
+    "Everything in Pro for up to 25 athletes",
     "Coach dashboard with live squad readiness",
     "Build a program once and assign it across the roster",
     "Roster management and athlete invites",
@@ -227,5 +203,5 @@ export const TEAM_PLAN: TeamPlan = {
 };
 
 export function planFor(tier: Tier): TierPlan {
-  return PLANS.find((p) => p.id === tier) ?? PLANS[0];
+  return ALL_PLANS.find((p) => p.id === tier) ?? FREE;
 }

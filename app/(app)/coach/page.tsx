@@ -109,17 +109,17 @@ export default function CoachPage() {
   if (loading) return <div className="card mt-6 h-80 animate-pulse" />;
 
   // Programs are the paid product. An existing program stays readable — someone
-  // who lapses shouldn't lose access to the block they're mid-way through — but
-  // building a new one is Silver.
-  if (!data?.program && !can(data?.tier ?? "bronze", "program_local")) {
+  // who lapses shouldn't lose the block they're mid-way through — but building
+  // a new one needs Pro.
+  if (!data?.program && !can(data?.tier ?? "bronze", "program")) {
     return (
       <div className="animate-fade-up">
         <header className="mb-5">
           <h1 className="text-3xl font-extrabold tracking-tight">AI Coach</h1>
         </header>
         <FeatureLock
-          capability="program_local"
-          title="Training programs are a Silver feature"
+          capability="program"
+          title="Training programs are part of Pro"
           blurb="Four-week blocks built around your sport, your position and how recovered you are — progressing Base, Build, Peak, Deload. Your check-ins, readiness and the full drill library stay free."
         />
       </div>

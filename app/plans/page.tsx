@@ -11,9 +11,9 @@ import { MarketingShell } from "@/components/MarketingShell";
 export const metadata: Metadata = {
   title: "Pricing",
   description:
-    `PocketAthlete plans: a free tier for the daily habit, £15/mo for AI-written training ` +
-    `programs and nutrition, £20/mo for video form analysis and injury planning. ` +
-    `${TRIAL_DAYS} days free on any paid plan.`,
+    `PocketAthlete pricing: free forever for the daily check-in, readiness score and the full ` +
+    `drill library. £15/mo for training programs, the AI coach, nutrition, video form analysis ` +
+    `and injury planning. ${TRIAL_DAYS} days free, cancel any time.`,
   alternates: { canonical: `${SITE}/plans/` },
   openGraph: {
     title: "PocketAthlete pricing",
@@ -32,8 +32,12 @@ const FAQ = [
     a: "The daily check-in and readiness score, the full exercise library, every skill drill, the position guides and the leaderboards. Free is the daily habit; paid is the training plan built around you.",
   },
   {
-    q: "Can I switch plans or cancel?",
-    a: "Any time, from your profile. Cancelling leaves you access until the end of the period you've already paid for.",
+    q: "Is there a higher tier?",
+    a: "No. There's one paid plan and it includes everything — programs, the coach, nutrition, video analysis and the injury planner. No add-ons, no usage limits, nothing held back for a tier above.",
+  },
+  {
+    q: "Can I cancel?",
+    a: "Any time, from your profile, through Stripe's own billing portal. Cancelling leaves you access until the end of the period you've already paid for.",
   },
   {
     q: "Do I need a gym?",
