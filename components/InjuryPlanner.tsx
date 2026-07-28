@@ -62,11 +62,13 @@ export function InjuryPlanner({ sport, area }: { sport: SportId; area?: string }
       setPlan(res.plan);
       setChronic(!!res.chronic);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "";
+      // Show what actually went wrong. This used to replace every failure with
+      // "couldn't build a plan just now", which is comforting, useless, and the
+      // reason a broken endpoint can sit unnoticed — there is no difference on
+      // screen between the AI being down, the plan needing Pro, and a bug.
+      const msg = e instanceof Error ? e.message : String(e);
       setError(
-        /allowance|limit/i.test(msg)
-          ? msg
-          : "Couldn't build a plan just now. The rehab guides below still apply — and for something persistent, a physio beats any app."
+        `${msg}${/allowance|limit|Pro/i.test(msg) ? "" : " — the rehab guides below still apply, and for something persistent a physio beats any app."}`
       );
     } finally {
       setBusy(false);

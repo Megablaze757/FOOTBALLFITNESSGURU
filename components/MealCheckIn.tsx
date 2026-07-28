@@ -32,6 +32,8 @@ export function MealCheckIn({ stats, prefs, dietNotes, onAdd }: Props) {
   const [text, setText] = useState("");
   const [estimate, setEstimate] = useState<FoodEstimate | null>(null);
   const [source, setSource] = useState<"local" | "ai">("local");
+  /** Why the AI estimate didn't happen. Null when it did, or wasn't asked for. */
+  const [aiError, setAiError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [added, setAdded] = useState<string | null>(null);
 
@@ -71,16 +73,21 @@ export function MealCheckIn({ stats, prefs, dietNotes, onAdd }: Props) {
   async function askAi() {
     if (text.trim().length < 3) return;
     setBusy(true);
+    setAiError(null);
     try {
       const res = await invokeAI<{ items?: Parameters<typeof fromAiItems>[0] }>("estimate-food", { text: text.trim() });
       const parsed = fromAiItems(res?.items ?? []);
       // An AI answer with nothing usable in it is worse than the local guess.
-      if (parsed.items.length === 0) throw new Error("no items");
+      if (parsed.items.length === 0) throw new Error("The AI didn't recognise any food in that.");
       setEstimate(parsed);
       setSource("ai");
-    } catch {
+    } catch (e) {
+      // Falling back to the local estimate is right — but doing it SILENTLY is
+      // how this looked like a working AI feature while never once calling the
+      // AI successfully. The fallback still happens; it just says why now.
       setEstimate(preview);
       setSource("local");
+      setAiError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
     }
@@ -147,6 +154,11 @@ export function MealCheckIn({ stats, prefs, dietNotes, onAdd }: Props) {
                 ~{shown.total.kcal} kcal · {shown.total.protein}g protein
               </span>
               <span className="chip text-slate-400">{source === "ai" ? "AI estimate" : "On-device estimate"}</span>
+              {aiError && (
+                <span className="mt-1 block break-words text-[11px] text-amber-300">
+                  AI estimate unavailable — {aiError} Showing the on-device guess instead.
+                </span>
+              )}
             </div>
 
             <ul className="space-y-1 text-xs text-slate-400">

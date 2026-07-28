@@ -7,6 +7,8 @@ import { TabBar } from "@/components/TabBar";
 import { SideNav } from "@/components/SideNav";
 import { SuspendedGate } from "@/components/SuspendedGate";
 import { LoadErrorBanner } from "@/components/LoadErrorBanner";
+import { JobsProvider } from "@/lib/jobs";
+import { JobTray } from "@/components/JobTray";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useSession();
@@ -26,6 +28,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <UserProvider user={user}>
+      {/* Above the router outlet on purpose: work started inside a page has to
+          outlive that page being navigated away from. */}
+      <JobsProvider>
       <SuspendedGate userId={user.id}>
       <div className="flex min-h-screen">
         <SideNav />
@@ -45,8 +50,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         {/* One place that tells the truth when a query fails, instead of
             twenty-five pages rendering an empty list as if it were an answer. */}
         <LoadErrorBanner />
+        <JobTray />
       </div>
       </SuspendedGate>
+      </JobsProvider>
     </UserProvider>
   );
 }
