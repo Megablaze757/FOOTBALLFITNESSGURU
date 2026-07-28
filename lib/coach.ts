@@ -11,13 +11,18 @@ import type { PainMap, TrainingLog } from "./types";
 import { progressionForName, type SportId } from "./exercises";
 import { parseConstraints, isExcluded, EMPTY_CONSTRAINTS, type Constraints, type Region } from "./constraints";
 import { buildHypertrophyProgram, type SplitStyle } from "./hypertrophy";
-import { skillForSession } from "./skills";
 import { positionLabel } from "./positions";
 import { sportTerms } from "./sport-terms";
+import { MOVEMENTS, regionOfMovement, type Movement, type GoalType, type BodyArea } from "./movements";
+import { buildBlock, painByArea, type ProgramPlan, type TrainingFocus } from "./engine";
 
-export type GoalType = "speed" | "agility" | "strength" | "endurance" | "injury_recovery" | "skill";
-export type BodyArea = "knee" | "ankle" | "hamstring" | "hip" | "lower_back" | "shoulder";
-export type TrainingFocus = "performance" | "fitness" | "aesthetics" | "rehab";
+// The catalogue lives in ./movements and the block builder in ./engine. This
+// module keeps the athlete-facing API — the goal lists, the recommendations and
+// the progress analysis — so everything that already imports from "@/lib/coach"
+// carries on working.
+export type { GoalType, BodyArea } from "./movements";
+export type { TrainingFocus, ProgramDrill, ProgramSession, ProgramWeek, ProgramPlan } from "./engine";
+export { painByArea } from "./engine";
 
 export const GOALS: { id: GoalType; label: string; blurb: string }[] = [
   { id: "speed", label: "Speed", blurb: "Top-end sprint speed & acceleration" },
@@ -105,98 +110,17 @@ export function goalsForSport(sport: string | null | undefined): { id: GoalType;
   });
 }
 
-interface DrillDef {
-  id: string;
-  name: string;
-  targets: GoalType[];
-  load: Partial<Record<BodyArea, number>>; // 0–3 mechanical load per joint
-  equipment: "none" | "band" | "weights" | "box" | "ball" | "cones" | "bike";
-  level: 1 | 2 | 3;
-  cue: string;
-  sports?: SportId[]; // omitted = general (fits any sport)
-}
-
-// Library spans low- and high-impact options so the engine can substitute around
-// pain (e.g. agility work that spares a sore knee).
-const LIBRARY: DrillDef[] = [
-  { id: "ladder_quickfeet", name: "Ladder quick-feet", targets: ["agility", "speed"], load: { ankle: 1 }, equipment: "none", level: 1, cue: "Stay on the balls of your feet, fast ground contacts" },
-  { id: "reactive_mirror", name: "Reactive mirror drill", targets: ["agility"], load: {}, equipment: "none", level: 2, cue: "React to a partner — no pre-planning your steps" },
-  { id: "lateral_shuffle", name: "Lateral shuffle gates", targets: ["agility"], load: { knee: 1, ankle: 1 }, equipment: "cones", level: 1, cue: "Low hips, push off the outside foot" },
-  { id: "cone_weave", name: "Cone weave dribble", targets: ["agility", "skill"], load: { ankle: 1 }, equipment: "ball", level: 1, cue: "Small touches, eyes up between cones" },
-  { id: "t_drill", name: "T-drill", targets: ["agility", "speed"], load: { knee: 1, ankle: 1 }, equipment: "cones", level: 2, cue: "Decelerate under control before each turn" },
-  { id: "a_skips", name: "A-skips", targets: ["speed"], load: { ankle: 1 }, equipment: "none", level: 1, cue: "Tall posture, drive the knee, snap the foot down" },
-  { id: "resisted_sprint", name: "Resisted sprint starts", targets: ["speed"], load: { hamstring: 2 }, equipment: "band", level: 2, cue: "Aggressive arm drive, lean into the band" },
-  { id: "flying_sprints", name: "Flying 20m sprints", targets: ["speed"], load: { hamstring: 2, knee: 1 }, equipment: "none", level: 3, cue: "Build to 95%, relaxed face and shoulders" },
-  { id: "pogo_hops", name: "Pogo hops", targets: ["speed", "strength"], load: { ankle: 2 }, equipment: "none", level: 2, cue: "Stiff ankles, minimal ground time" },
-  { id: "box_jumps", name: "Box jumps", targets: ["strength", "speed"], load: { knee: 2, ankle: 2 }, equipment: "box", level: 2, cue: "Land soft and quiet, full hip extension up" },
-  { id: "depth_drop", name: "Depth drop to sprint", targets: ["speed", "strength"], load: { knee: 3, ankle: 2 }, equipment: "box", level: 3, cue: "Absorb then explode — minimal pause" },
-  { id: "bulgarian_split", name: "Bulgarian split squat", targets: ["strength"], load: { knee: 2, hip: 1 }, equipment: "weights", level: 2, cue: "Vertical shin, control the descent" },
-  { id: "single_leg_rdl", name: "Single-leg RDL", targets: ["strength", "injury_recovery"], load: { hamstring: 1 }, equipment: "weights", level: 2, cue: "Hinge at the hip, flat back, slow tempo" },
-  { id: "nordic_curl", name: "Nordic hamstring curl", targets: ["strength", "injury_recovery"], load: { hamstring: 2 }, equipment: "none", level: 2, cue: "Resist the lower as long as you can" },
-  { id: "copenhagen", name: "Copenhagen plank", targets: ["strength", "injury_recovery"], load: { hip: 1 }, equipment: "none", level: 2, cue: "Squeeze the top leg, hips high" },
-  { id: "band_lateral_walk", name: "Band lateral walks", targets: ["injury_recovery", "strength"], load: {}, equipment: "band", level: 1, cue: "Tension on the band the whole set, knees tracking out" },
-  { id: "spanish_squat", name: "Spanish squat iso-hold", targets: ["injury_recovery"], load: { knee: 1 }, equipment: "band", level: 1, cue: "Knees forward, hold the burn — great for sore knees" },
-  { id: "bike_intervals", name: "Bike intervals", targets: ["endurance", "injury_recovery"], load: {}, equipment: "bike", level: 2, cue: "Hard efforts, easy spins — zero impact" },
-  { id: "tempo_runs", name: "Tempo runs", targets: ["endurance"], load: { hamstring: 1, knee: 1 }, equipment: "none", level: 2, cue: "~75% effort, smooth and repeatable" },
-  { id: "dribbling_grid", name: "Tight-space dribbling", targets: ["skill", "agility"], load: { ankle: 1 }, equipment: "ball", level: 1, cue: "Both feet, manipulate the ball in small spaces", sports: ["football", "basketball"] },
-  { id: "passing_wall", name: "Wall passing reps", targets: ["skill"], load: {}, equipment: "ball", level: 1, cue: "First touch out of your feet, weight the pass", sports: ["football"] },
-
-  // Weightlifting / gym (ids match lib/exercises.ts so demos + descriptions resolve)
-  { id: "back_squat", name: "Barbell back squat", targets: ["strength"], load: { knee: 2, hip: 1 }, equipment: "weights", level: 2, cue: "Brace, knees track the toes, drive the floor away", sports: ["weightlifting", "gym", "rugby"] },
-  { id: "front_squat", name: "Front squat", targets: ["strength"], load: { knee: 2 }, equipment: "weights", level: 2, cue: "Elbows high, stay upright", sports: ["weightlifting", "gym"] },
-  { id: "deadlift", name: "Conventional deadlift", targets: ["strength"], load: { hamstring: 2, lower_back: 2 }, equipment: "weights", level: 3, cue: "Take the slack out, push the floor away", sports: ["weightlifting", "gym", "rugby"] },
-  { id: "hip_thrust", name: "Barbell hip thrust", targets: ["strength"], load: { hamstring: 1 }, equipment: "weights", level: 1, cue: "Drive through the heels, full lockout", sports: ["weightlifting", "gym", "running"] },
-  { id: "bench_press", name: "Barbell bench press", targets: ["strength"], load: { shoulder: 1 }, equipment: "weights", level: 2, cue: "Shoulder blades pinned, bar to mid-chest", sports: ["weightlifting", "gym", "rugby"] },
-  { id: "overhead_press", name: "Overhead press", targets: ["strength"], load: { shoulder: 2 }, equipment: "weights", level: 2, cue: "Brace, bar path close to the face", sports: ["weightlifting", "gym", "rugby"] },
-  { id: "pull_up", name: "Pull-up", targets: ["strength"], load: { shoulder: 1 }, equipment: "none", level: 2, cue: "Dead hang to chest, own the lower", sports: ["gym", "weightlifting", "rugby"] },
-  { id: "lat_pulldown", name: "Lat pulldown", targets: ["strength"], load: {}, equipment: "weights", level: 1, cue: "Drive the elbows down and back", sports: ["gym"] },
-  { id: "barbell_row", name: "Bent-over barbell row", targets: ["strength"], load: { lower_back: 1 }, equipment: "weights", level: 2, cue: "Flat back, row to the lower ribs", sports: ["weightlifting", "gym", "rugby"] },
-  { id: "power_clean", name: "Power clean", targets: ["strength", "speed"], load: { knee: 2 }, equipment: "weights", level: 3, cue: "Explode through the hips, pull under fast", sports: ["weightlifting", "rugby"] },
-  { id: "goblet_squat", name: "Goblet squat", targets: ["strength"], load: { knee: 1 }, equipment: "weights", level: 1, cue: "Elbows inside the knees, sit tall", sports: ["gym", "weightlifting"] },
-  { id: "dumbbell_press", name: "Dumbbell shoulder press", targets: ["strength"], load: { shoulder: 1 }, equipment: "weights", level: 1, cue: "Neutral wrists, full range", sports: ["gym"] },
-  { id: "calf_raise", name: "Standing calf raise", targets: ["strength"], load: { ankle: 1 }, equipment: "none", level: 1, cue: "Full stretch, rise onto the big toe", sports: ["gym", "running", "basketball"] },
-  { id: "farmers_carry", name: "Farmer's carry", targets: ["strength", "endurance"], load: {}, equipment: "weights", level: 1, cue: "Tall posture, crush the handles", sports: ["gym", "weightlifting", "rugby"] },
-
-  // Rugby / court / running
-  { id: "tackle_technique", name: "Tackle technique", targets: ["skill"], load: { shoulder: 1 }, equipment: "none", level: 2, cue: "Cheek to cheek, head behind, drive and wrap", sports: ["rugby"] },
-  { id: "scrum_drive", name: "Scrum engage & drive", targets: ["strength"], load: { lower_back: 1 }, equipment: "none", level: 2, cue: "Flat back, hips below shoulders, drive as one", sports: ["rugby"] },
-  { id: "broad_jump", name: "Standing broad jump", targets: ["strength", "speed"], load: { knee: 2, ankle: 1 }, equipment: "none", level: 2, cue: "Load the hips, explode out, stick it", sports: ["rugby", "basketball", "running"] },
-  { id: "vertical_jump", name: "Vertical jump", targets: ["strength", "speed"], load: { knee: 2, ankle: 1 }, equipment: "none", level: 2, cue: "Quick dip, full triple extension, reach", sports: ["basketball", "rugby"] },
-  { id: "defensive_slides", name: "Defensive slides", targets: ["agility"], load: { knee: 1 }, equipment: "none", level: 1, cue: "Low and wide, push don't cross the feet", sports: ["basketball"] },
-  { id: "hill_sprints", name: "Hill sprints", targets: ["speed"], load: { hamstring: 1 }, equipment: "none", level: 2, cue: "Aggressive arms, short powerful contacts", sports: ["running", "football", "rugby"] },
-  { id: "stride_outs", name: "Stride-outs", targets: ["speed"], load: { hamstring: 1 }, equipment: "none", level: 1, cue: "Build to ~90%, long relaxed strides", sports: ["running", "football"] },
-];
-
-// Which training region each drill belongs to, so "I don't train legs" can
-// actually remove the leg work. Kept as one map rather than a field on every
-// LIBRARY entry so the drill list above stays readable and this stays auditable
-// in one place. Anything unmapped is treated as unrestricted.
-const REGION_BY_DRILL: Record<string, Region> = {
-  // Field / court conditioning and footwork
-  ladder_quickfeet: "conditioning", reactive_mirror: "conditioning", lateral_shuffle: "conditioning",
-  t_drill: "conditioning", a_skips: "conditioning", resisted_sprint: "conditioning",
-  flying_sprints: "conditioning", bike_intervals: "conditioning", tempo_runs: "conditioning",
-  defensive_slides: "conditioning", hill_sprints: "conditioning", stride_outs: "conditioning",
-  // Plyometric / high-impact
-  pogo_hops: "impact", box_jumps: "impact", depth_drop: "impact",
-  broad_jump: "impact", vertical_jump: "impact",
-  // Lower body
-  bulgarian_split: "legs", single_leg_rdl: "legs", nordic_curl: "legs", copenhagen: "legs",
-  band_lateral_walk: "legs", spanish_squat: "legs", back_squat: "legs", front_squat: "legs",
-  deadlift: "legs", hip_thrust: "legs", power_clean: "legs", goblet_squat: "legs", calf_raise: "legs",
-  // Upper body
-  bench_press: "chest", overhead_press: "shoulders", dumbbell_press: "shoulders",
-  pull_up: "back", lat_pulldown: "back", barbell_row: "back",
-  // Trunk / carries
-  farmers_carry: "core",
-  // Sport skill
-  cone_weave: "skill", dribbling_grid: "skill", passing_wall: "skill",
-  tackle_technique: "skill", scrum_drive: "skill",
-};
+/**
+ * The drill pool. This used to be a second, private library of 42 drills
+ * declared right here — which is why no program ever contained a warm-up, any
+ * core work, or a single one of the seven goalkeeper drills: they existed in
+ * lib/exercises.ts, and this list could not see them. See lib/movements.ts.
+ */
+const LIBRARY: Movement[] = MOVEMENTS;
 
 /** The training region a drill belongs to, if we've classified it. */
 export function regionOfDrill(id: string): Region | undefined {
-  return REGION_BY_DRILL[id];
+  return regionOfMovement(id);
 }
 
 /** Look up a drill's coaching info by (fuzzy) name — used by the coach chat. */
@@ -208,19 +132,12 @@ export function drillInfo(name: string): { name: string; cue: string; targets: G
   const d = LIBRARY.find((x) => x.name.toLowerCase() === q)
     ?? (q.length >= 4 ? LIBRARY.find((x) => q.includes(x.name.toLowerCase()) || x.name.toLowerCase().includes(q)) : undefined);
   if (!d) return null;
-  return { name: d.name, cue: d.cue, targets: d.targets, loadAreas: Object.keys(d.load).filter((a) => (d.load as Record<string, number>)[a] >= 2) };
-}
-
-const SIDE = new Set(["left", "right"]);
-
-/** Worst pain per body area from a pain map ({knee_left:7} -> {knee:7}). */
-export function painByArea(painMap: PainMap): Partial<Record<BodyArea, number>> {
-  const out: Partial<Record<BodyArea, number>> = {};
-  for (const [k, v] of Object.entries(painMap ?? {})) {
-    const area = k.split("_").filter((t) => !SIDE.has(t)).join("_") as BodyArea;
-    out[area] = Math.max(out[area] ?? 0, Number(v) || 0);
-  }
-  return out;
+  return {
+    name: d.name,
+    cue: d.cue,
+    targets: d.targets,
+    loadAreas: Object.keys(d.load).filter((a) => (d.load as Record<string, number>)[a] >= 2),
+  };
 }
 
 function prettyArea(a: string): string {
@@ -260,7 +177,11 @@ export function recommendDrills(input: RecommendInput): Recommendation[] {
 
   // An exclusion the athlete typed is a hard filter, not a scoring penalty —
   // "I don't train legs" must mean zero leg work, not less of it.
-  const allowed = LIBRARY.filter((d) => !isExcluded(constraints, REGION_BY_DRILL[d.id], d.name));
+  // Warm-ups and cool-downs aren't recommendations — nobody asks the coach what
+  // to do and wants "ankle rocks" back. They're part of a session, not an answer.
+  const allowed = LIBRARY
+    .filter((d) => d.slot !== "warmup" && d.slot !== "cooldown")
+    .filter((d) => !isExcluded(constraints, d.region, d.name));
 
   const scored = allowed.map((d) => {
     const onGoal = d.targets.includes(input.goal);
@@ -285,8 +206,8 @@ export function recommendDrills(input: RecommendInput): Recommendation[] {
       else score -= 8;
     }
     // Aesthetics (hypertrophy) leans on gym/weights work; fitness on conditioning.
-    if (input.focus === "aesthetics" && d.equipment === "weights") score += 3;
-    if (input.focus === "fitness" && (d.targets.includes("endurance") || d.equipment === "bike")) score += 3;
+    if (input.focus === "aesthetics" && (d.kit === "barbell" || d.kit === "dumbbell" || d.kit === "machine")) score += 3;
+    if (input.focus === "fitness" && (d.targets.includes("endurance") || d.kit === "machine")) score += 3;
 
     const sparesSore = soreAreas.length > 0 && soreAreas.every((a) => (d.load[a] ?? 0) <= 1);
     if (soreAreas.length && sparesSore && onGoal) score += 3; // reward smart substitutions
@@ -322,7 +243,7 @@ function adjacent(goal: GoalType, t: GoalType): boolean {
   return pairs[goal]?.includes(t) ?? false;
 }
 
-function buildReason(d: DrillDef, goal: GoalType, soreAreas: BodyArea[], spares: boolean): string {
+function buildReason(d: Movement, goal: GoalType, soreAreas: BodyArea[], spares: boolean): string {
   const goalLabel = GOALS.find((g) => g.id === goal)?.label.toLowerCase() ?? goal;
   if (soreAreas.length && spares) {
     return `Develops ${goalLabel} with minimal load on your ${soreAreas.map(prettyArea).join(" / ")} while it's sore.`;
@@ -331,46 +252,21 @@ function buildReason(d: DrillDef, goal: GoalType, soreAreas: BodyArea[], spares:
   return `Supports ${goalLabel} as a complement.`;
 }
 
-function prescription(d: DrillDef, goal: GoalType, focus?: TrainingFocus): { sets: number; reps: number } {
-  // Aesthetics → hypertrophy rep ranges on resistance work; fitness → higher reps.
-  if (focus === "aesthetics" && d.equipment === "weights") return { sets: 4, reps: 10 };
-  if (focus === "fitness" && goal !== "strength") return { sets: 3, reps: d.equipment === "bike" ? 10 : 8 };
-  if (goal === "endurance") return { sets: 1, reps: d.equipment === "bike" ? 8 : 6 };
-  if (goal === "strength") return { sets: 4, reps: d.level >= 2 ? 6 : 8 };
-  if (goal === "injury_recovery") return { sets: 3, reps: 12 };
-  return { sets: 4, reps: d.level >= 3 ? 4 : 8 }; // speed/agility/skill
+/**
+ * Each movement now carries its own dose, so a deadlift and a calf raise stop
+ * being prescribed identically because they share a goal. The training focus
+ * still nudges it — hypertrophy wants more reps than a strength block does.
+ */
+function prescription(d: Movement, goal: GoalType, focus?: TrainingFocus): { sets: number; reps: number } {
+  const { sets, reps } = d.dose;
+  if (focus === "aesthetics" && (d.kit === "barbell" || d.kit === "dumbbell" || d.kit === "machine")) {
+    return { sets: Math.max(sets, 3), reps: Math.max(reps, 10) };
+  }
+  if (focus === "fitness" && goal !== "strength") return { sets, reps: Math.max(reps, 8) };
+  return { sets, reps };
 }
 
 // --- Program generation -----------------------------------------------------
-
-export interface ProgramDrill {
-  name: string;
-  sets: number;
-  reps: number;
-  cue: string;
-  reason: string;
-  progression?: string;
-  /**
-   * Technical work is prescribed in its own terms — "5 × 60 seconds each foot"
-   * rather than sets and reps. When present the UI shows this instead, because
-   * squashing a wall-passing drill into 3×10 tells the athlete nothing.
-   */
-  prescription?: string;
-  /** True for ball work, so it can be labelled apart from the physical block. */
-  skill?: boolean;
-}
-export interface ProgramSession { day: number; title: string; focus: GoalType; drills: ProgramDrill[] }
-export interface ProgramWeek { week: number; theme: string; intensity: string; focusNote: string; sessions: ProgramSession[] }
-export interface ProgramPlan {
-  goal: GoalType;
-  summary: string;
-  constraints: string[];
-  weeks: ProgramWeek[];
-  block?: number;
-}
-
-const THEMES = ["Base", "Build", "Peak", "Deload"];
-const REHAB_THEMES = ["Protect & activate", "Controlled load", "Build capacity", "Return to sprint"];
 
 export interface BuildProgramInput {
   goal: GoalType;
@@ -388,50 +284,6 @@ export interface BuildProgramInput {
   style?: SplitStyle;
 }
 
-// How each week loads, per progression type. A drill you add weight to (load)
-// climbs in intensity as reps come DOWN; a drill you add reps/time to climbs in
-// volume as reps go UP; a skill drill holds its numbers and progresses by
-// difficulty. This is what makes week 3 genuinely different from week 1 rather
-// than the same session with a different label.
-type Prog = "load" | "reps" | "time" | "skill";
-interface WeekShape { setsDelta: number; repFactor: number }
-const WEEK_SHAPE: Record<Prog, WeekShape[]> = {
-  // index 0..3 = weeks 1..4 (week 4 is the deload)
-  load:  [{ setsDelta: 0, repFactor: 1.0 }, { setsDelta: 1, repFactor: 0.85 }, { setsDelta: 1, repFactor: 0.7 }, { setsDelta: -1, repFactor: 1.0 }],
-  reps:  [{ setsDelta: 0, repFactor: 1.0 }, { setsDelta: 0, repFactor: 1.2 },  { setsDelta: 1, repFactor: 1.35 }, { setsDelta: -1, repFactor: 0.9 }],
-  time:  [{ setsDelta: 0, repFactor: 1.0 }, { setsDelta: 0, repFactor: 1.2 },  { setsDelta: 1, repFactor: 1.4 },  { setsDelta: -1, repFactor: 0.8 }],
-  skill: [{ setsDelta: 0, repFactor: 1.0 }, { setsDelta: 0, repFactor: 1.0 },  { setsDelta: 1, repFactor: 1.0 },  { setsDelta: -1, repFactor: 1.0 }],
-};
-
-// What the athlete should actually do differently this week, per progression type.
-const WEEK_PROGRESSION: Record<Prog, string[]> = {
-  load:  ["Groove the movement at a weight you could do 2-3 more reps with.",
-          "Add a little weight and a set — reps drop slightly, that's the point.",
-          "Heaviest week: push the load, stop 1 rep short of failure.",
-          "Deload: same movements, ~60% of the weight, stay snappy."],
-  reps:  ["Establish clean reps you fully control.",
-          "Same movement, more reps per set than last week.",
-          "Peak volume: extra set and the highest reps of the block.",
-          "Deload: cut the volume right back and recover."],
-  time:  ["Settle into the work intervals at a repeatable effort.",
-          "Extend each interval versus last week.",
-          "Longest, hardest intervals of the block.",
-          "Deload: short and easy, just keep ticking over."],
-  skill: ["Prioritise clean technique over speed.",
-          "Same drill, do it faster or in tighter space.",
-          "Add a decision, a defender, or your weaker side.",
-          "Deload: light, sharp reps to stay grooved."],
-};
-
-// Per-week intensity label and the block's job that week.
-const WEEK_INTENSITY = ["Moderate", "Higher", "Peak", "Deload"];
-const WEEK_FOCUS = [
-  "Build a base and nail technique.",
-  "Turn the dial up — more load and volume than week 1.",
-  "Peak week: the hardest sessions of the block.",
-  "Recover and absorb the work so you come back stronger.",
-];
-
 /**
  * Whether this athlete should get a bodybuilding split rather than an S&C block.
  * Rehab always wins — someone coming back from injury needs the rehab
@@ -443,116 +295,52 @@ function wantsHypertrophy(input: BuildProgramInput): boolean {
   return input.sport === "gym" && input.goal === "strength";  // "strength & muscle" in the gym
 }
 
-/** A 4-week block tailored to the goal, with pain-aware drill selection and a taper. */
+/**
+ * A 4-week block tailored to the goal, with pain-aware selection and a taper.
+ *
+ * The block itself is built by ./engine — session structure, movement selection
+ * and dosing all live there. What stays here is the athlete-facing copy: the
+ * summary that explains the block, and showing them their own exclusions back so
+ * it's visible the note was read rather than silently swallowed.
+ */
 export function buildProgram(input: BuildProgramInput): ProgramPlan {
   const block = Math.max(1, input.block ?? 1);
-  const blockScale = 1 + (block - 1) * 0.08; // +8% volume per completed block
-  const days = Math.max(2, Math.min(5, input.daysPerWeek ?? (input.goal === "endurance" ? 4 : 3)));
+  const constraints = parseConstraints(input.notes);
   const pain = painByArea(input.painMap);
   const sore = (Object.keys(pain) as BodyArea[]).filter((a) => (pain[a] ?? 0) >= 4);
-  const rehab = input.goal === "injury_recovery";
-  const themes = rehab ? REHAB_THEMES : THEMES;
-  const constraints = parseConstraints(input.notes);
 
-  // Training for muscle is a different sport to training for a sport. The
-  // rotation below is built around speed/agility/conditioning and shapes weeks
-  // like a strength block; a bodybuilder needs a split, isolation work and reps
-  // that stay in range. Hand those athletes to the hypertrophy engine.
-  if (wantsHypertrophy(input)) {
-    return buildHypertrophyProgram({
-      painMap: input.painMap,
-      daysPerWeek: input.daysPerWeek,
-      block,
-      constraints,
-      isInSeason: input.isInSeason,
-      style: input.style,
-    });
-  }
-
-  // Session focuses rotate the primary goal with a complementary stimulus.
-  // Training focus reshapes the rotation: aesthetics → strength-led (hypertrophy),
-  // fitness → conditioning-led.
-  const focusRotation: GoalType[] =
-    rehab || input.focus === "rehab" ? ["injury_recovery", "injury_recovery", "endurance"]
-    : input.focus === "aesthetics" ? ["strength", "strength", "endurance"]
-    : input.focus === "fitness" ? ["endurance", "strength", "endurance"]
-    : input.goal === "endurance" ? ["endurance", "endurance", "strength", "endurance"]
-    : [input.goal, "strength", input.goal === "speed" ? "agility" : "speed"];
-
-  const weeks: ProgramWeek[] = THEMES.map((_, wi) => {
-    const week = wi + 1;
-    const inSeasonScale = (input.isInSeason ? 0.75 : 1) * blockScale;
-
-    const sessions: ProgramSession[] = Array.from({ length: days }, (_, di) => {
-      const focus = focusRotation[di % focusRotation.length];
-      const recs = recommendDrills({ goal: focus, painMap: input.painMap, count: 3, sport: input.sport, focus: input.focus, constraints });
-      const drills: ProgramDrill[] = recs.map((r) => {
-        const prog = (progressionForName(r.name) ?? "reps") as Prog;
-        const shape = WEEK_SHAPE[prog][wi];
-        // Sets move by the week's delta (min 2, or 1 on a deload); reps move by
-        // the week's factor. Together these make each week genuinely different.
-        const sets = Math.max(week === 4 ? 1 : 2, Math.round(r.sets * inSeasonScale) + shape.setsDelta);
-        const reps = Math.max(3, Math.round(r.reps * shape.repFactor));
-        return {
-          name: r.name,
-          sets,
-          reps,
-          cue: r.cue,
-          reason: r.reason,
-          progression: WEEK_PROGRESSION[prog][wi],
-        };
+  // Training for muscle is a different sport to training for a sport. A
+  // bodybuilder needs a split, isolation work and reps that stay in range —
+  // hand those athletes to the hypertrophy engine instead.
+  const plan = wantsHypertrophy(input)
+    ? buildHypertrophyProgram({
+        painMap: input.painMap,
+        daysPerWeek: input.daysPerWeek,
+        block,
+        constraints,
+        isInSeason: input.isInSeason,
+        style: input.style,
+      })
+    : buildBlock({
+        goal: input.goal,
+        painMap: input.painMap,
+        isInSeason: input.isInSeason,
+        daysPerWeek: input.daysPerWeek,
+        block,
+        sport: input.sport,
+        focus: input.focus,
+        position: input.position,
+        constraints,
       });
-      // Add the ball work. A programme that is only lifts and sprints trains a
-      // footballer to be fit rather than to play — and the Playbook's skill
-      // drills were previously somewhere you had to go and look, not something
-      // the plan ever told you to do. Rotated across the block so the whole
-      // week isn't one skill.
-      const skill = input.sport ? skillForSession(input.sport, input.position, wi * days + di) : null;
-      if (skill && !isExcluded(constraints, "skill", skill.name)) {
-        drills.push({
-          name: skill.name,
-          // Kept for anything that reads sets/reps numerically (load maths,
-          // history); the prescription below is what the athlete actually sees.
-          sets: 1,
-          reps: 1,
-          prescription: skill.reps,
-          skill: true,
-          cue: skill.coaching,
-          reason: `${skill.skill} — technical work for your position.`,
-          progression: skill.progression,
-        });
-      }
-
-      return { day: di + 1, title: sessionTitle(focus, di), focus, drills };
-    });
-
-    return { week, theme: themes[wi], intensity: WEEK_INTENSITY[wi], focusNote: WEEK_FOCUS[wi], sessions };
-  });
 
   return {
-    goal: input.goal,
+    ...plan,
     summary: programSummary(input.goal, sore, input.isInSeason ?? false, block, input.sport, input.position, input.focus),
-    // Show the athlete their own exclusions back, so it's visible that the note
-    // was read rather than silently swallowed.
     constraints: [
       ...(sore.length ? [`Protecting your ${sore.map(prettyArea).join(", ")} — high-impact loading on these is dialled back.`] : []),
       ...constraints.summary,
     ],
-    weeks,
-    block,
   };
-}
-
-function sessionTitle(focus: GoalType, day: number): string {
-  const map: Record<GoalType, string> = {
-    speed: "Speed & sprint mechanics",
-    agility: "Agility & change of direction",
-    strength: "Strength & power",
-    endurance: "Conditioning",
-    injury_recovery: "Rehab & activation",
-    skill: "Ball skill",
-  };
-  return `Day ${day + 1} · ${map[focus]}`;
 }
 
 const FOCUS_LABEL: Record<TrainingFocus, string> = {

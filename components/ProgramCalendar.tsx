@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { ProgramWeek } from "@/lib/coach";
 import { getExerciseByName, type Exercise } from "@/lib/exercises";
 import { ExerciseModal } from "@/components/ExerciseDetail";
+import { SessionDrills } from "@/components/SessionDrills";
 
 // Week-by-week program calendar you tick through. Each session is a tile;
 // completing one calls onToggle (which also logs it to training).
@@ -75,23 +76,15 @@ export function ProgramCalendar({
                         ✓
                       </button>
                     </div>
-                    <ul className="mt-2 space-y-1">
-                      {s.drills.map((d, k) => {
-                        const ex = getExerciseByName(d.name);
-                        return (
-                          <li key={k}>
-                            <button
-                              onClick={() => ex && setOpen(ex)}
-                              disabled={!ex}
-                              className="flex w-full items-center justify-between gap-2 text-left text-xs disabled:cursor-default"
-                            >
-                              <span className="truncate text-slate-300">{d.name}</span>
-                              <span className="shrink-0 text-slate-500">{d.sets}×{d.reps}{ex ? " ›" : ""}</span>
-                            </button>
-                          </li>
-                        );
-                      })}
-                    </ul>
+                    <div className="mt-2">
+                      <SessionDrills
+                        drills={s.drills}
+                        onPick={(name) => {
+                          const ex = getExerciseByName(name);
+                          if (ex) setOpen(ex);
+                        }}
+                      />
+                    </div>
                   </div>
                 );
               })}

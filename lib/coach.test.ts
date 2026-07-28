@@ -53,12 +53,16 @@ test("buildProgram returns a 4-week block with sessions and notes the constraint
   assert.ok(setsW4 <= setsW3);
 });
 
+/** Total prescribed sets in a week — warm-ups included, they just don't wave. */
+const weekSets = (plan: { weeks: { sessions: { drills: { sets: number }[] }[] }[] }, wi: number) =>
+  plan.weeks[wi].sessions.flatMap((s) => s.drills).reduce((n, d) => n + d.sets, 0);
+
 test("a later block progresses volume above block 1", () => {
   const b1 = buildProgram({ goal: "strength", painMap: {}, block: 1 });
   const b3 = buildProgram({ goal: "strength", painMap: {}, block: 3 });
-  const sets1 = b1.weeks[2].sessions[0].drills[0].sets;
-  const sets3 = b3.weeks[2].sessions[0].drills[0].sets;
-  assert.ok(sets3 > sets1, `block3 ${sets3} should exceed block1 ${sets1}`);
+  // Measured across the week, not off drills[0]: that's the warm-up now, and a
+  // warm-up that grows 8% a block is not a feature.
+  assert.ok(weekSets(b3, 2) > weekSets(b1, 2), `block3 ${weekSets(b3, 2)} should exceed block1 ${weekSets(b1, 2)}`);
   assert.equal(b3.block, 3);
   assert.match(b3.summary, /Block 3/);
 });
@@ -83,28 +87,25 @@ test("analyzeProgress surfaces load progression and the knee-flare pattern", () 
 
 test("program weeks genuinely progress rather than repeating", () => {
   const plan = buildProgram({ goal: "strength", painMap: {}, sport: "rugby" });
-  // Pick a drill that appears every week and compare its prescription.
-  const nameOf = (wi: number) => plan.weeks[wi].sessions[0].drills[0];
-  const sig = (wi: number) => {
-    const d = nameOf(wi);
-    return `${d.name}:${d.sets}x${d.reps}`;
-  };
-  // Weeks 1-3 must not all be identical — that was the bug.
-  const distinct = new Set([sig(0), sig(1), sig(2)]);
-  assert.ok(distinct.size >= 2, `weeks 1-3 barely differ: ${[...distinct].join(" | ")}`);
 
-  // Every week carries its own focus note and each drill a progression cue.
+  // Compare the whole week, not one drill: what matters is that week 2 isn't
+  // week 1 relabelled.
+  const sig = (wi: number) =>
+    plan.weeks[wi].sessions.flatMap((s) => s.drills).map((d) => `${d.name}:${d.sets}x${d.reps}`).join("|");
+  const distinct = new Set([sig(0), sig(1), sig(2)]);
+  assert.equal(distinct.size, 3, "weeks 1-3 should each be different");
+
   for (const w of plan.weeks) {
     assert.ok(w.focusNote && w.focusNote.length > 5, `week ${w.week} missing focusNote`);
     for (const d of w.sessions.flatMap((s) => s.drills)) {
+      // Warm-ups and cool-downs are the same every session on purpose, so they
+      // carry no "do it harder this week" line — everything else must.
+      if (d.slot === "warmup" || d.slot === "cooldown") continue;
       assert.ok(d.progression && d.progression.length > 5, `${d.name} missing progression`);
     }
   }
 
-  // Week 4 is a deload: fewer total sets than the peak week 3.
-  const totalSets = (wi: number) =>
-    plan.weeks[wi].sessions.flatMap((s) => s.drills).reduce((n, d) => n + d.sets, 0);
-  assert.ok(totalSets(3) < totalSets(2), "deload should cut volume below the peak week");
+  assert.ok(weekSets(plan, 3) < weekSets(plan, 2), "deload should cut volume below the peak week");
 });
 
 test("weighted lifts wave reps down toward the peak, bodyweight waves up", () => {

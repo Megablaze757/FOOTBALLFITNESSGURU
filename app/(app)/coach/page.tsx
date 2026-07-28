@@ -22,6 +22,7 @@ import { METRIC_CATALOG, metricDef, benchmarkProgress } from "@/lib/benchmarks";
 import { RingProgress } from "@/components/RingProgress";
 import { CoachChat } from "@/components/CoachChat";
 import { ProgramCalendar } from "@/components/ProgramCalendar";
+import { SessionDrills } from "@/components/SessionDrills";
 import { WorkoutPlayer } from "@/components/WorkoutPlayer";
 import type { CheckInInput, DailyCheckIn, Program, StrengthBenchmark, Tier, TrainingLog, TrainingDrill } from "@/lib/types";
 
@@ -649,20 +650,9 @@ function ActiveProgram({
             <div>
               <div className="text-sm font-semibold text-slate-100">Week {nextSession.w} · {nextSession.s.title}</div>
               {readiness?.status === "Yellow" && <p className="mt-1 text-xs text-amber-300">Readiness is moderate — keep it crisp, cut the last set if you fade.</p>}
-              <ul className="mt-2 space-y-1 text-xs text-slate-300">
-                {nextSession.s.drills.map((d, k) => (
-                  <li key={k} className="flex items-baseline justify-between gap-2">
-                    <span className="min-w-0 break-words">
-                      {d.skill && <span className="mr-1.5 text-pitch-400">⚽</span>}
-                      {d.name}
-                    </span>
-                    {/* Skill work carries its own prescription — "5 × 60
-                        seconds each foot" doesn't survive being squashed into
-                        sets and reps. */}
-                    <span className="shrink-0 text-slate-500">{d.prescription ?? `${d.sets}×${d.reps}`}</span>
-                  </li>
-                ))}
-              </ul>
+              <div className="mt-2">
+                <SessionDrills drills={nextSession.s.drills} />
+              </div>
               <button onClick={() => setPlaying(true)} className="btn-primary mt-4">▶ Start guided session</button>
             </div>
           )}

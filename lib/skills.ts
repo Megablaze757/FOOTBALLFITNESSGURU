@@ -607,11 +607,367 @@ const RUNNING: SkillDrill[] = [
   },
 ];
 
+// --- Goalkeeping ---------------------------------------------------------------
+//
+// "Goalkeeper" was in the position list from the start and there was not one
+// drill for it, so a keeper's program prescribed rondos and crossing practice —
+// technical work for the ten players who aren't them. Every drill here is
+// position-locked, so it only ever reaches a keeper.
+
+const GOALKEEPING: SkillDrill[] = [
+  {
+    id: "gk_set_position", sport: "football", skill: "Set position", name: "Set-and-save rhythm",
+    positions: ["Goalkeeper"],
+    setup: "A wall and a ball, 6–8m back.",
+    how: [
+      "Throw the ball against the wall and get set before it comes back.",
+      "Feet land shoulder-width, weight on the balls of the feet, hands up in front of the chest.",
+      "Save, reset to your starting mark, repeat immediately.",
+    ],
+    reps: "5 × 45 seconds",
+    coaching: "Be still at the moment of contact. A keeper moving as the ball is struck is a keeper going the wrong way.",
+    progression: "Throw harder and closer so you have less time to set.",
+    needs: "solo",
+  },
+  {
+    id: "gk_low_hands", sport: "football", skill: "Handling", name: "Low-hand collapse saves",
+    positions: ["Goalkeeper"],
+    setup: "A wall, a ball, soft ground if you can.",
+    how: [
+      "Roll the ball hard into the wall low so it returns along the floor.",
+      "Collapse sideways, bottom hand behind the ball, top hand over it.",
+      "Trap it against the ground and pull it into your chest before you get up.",
+    ],
+    reps: "6 × 6 each side",
+    coaching: "The bottom hand is the barrier — if it's beside the ball rather than behind it, the ball goes through you.",
+    progression: "Start standing rather than crouched, so you have to drop into it.",
+    needs: "solo",
+  },
+  {
+    id: "gk_high_ball", sport: "football", skill: "Crossing", name: "High-ball claiming",
+    positions: ["Goalkeeper"],
+    setup: "A ball and someone to serve, or a wall you can chip against.",
+    how: [
+      "Attack the ball at its highest point, taking off from one leg.",
+      "Lead knee up — it makes room and protects you.",
+      "Catch in front of your head, fingers spread behind the ball, then bring it down.",
+    ],
+    reps: "4 × 8 claims",
+    coaching: "Call it loud and early. Half of claiming a cross is the defenders knowing you're coming.",
+    progression: "Add a passive body in front of you so you have to come through traffic.",
+    needs: "partner",
+  },
+  {
+    id: "gk_footwork_gates", sport: "football", skill: "Footwork", name: "Across-goal footwork",
+    positions: ["Goalkeeper"],
+    setup: "Four cones two metres apart across your goal line.",
+    how: [
+      "Side-step between the cones staying square to the pitch — never cross your feet.",
+      "On a call or a clap, set and take an imaginary save.",
+      "Recover to the middle cone each time.",
+    ],
+    reps: "6 × 30 seconds",
+    coaching: "Stay tall. Keepers who drop their hips shuffling can't push off to save.",
+    progression: "Add a ball thrown to a random side as you finish the shuffle.",
+    needs: "solo",
+  },
+  {
+    id: "gk_reaction_wall", sport: "football", skill: "Reactions", name: "Rebound reaction saves",
+    positions: ["Goalkeeper"],
+    setup: "A wall with an uneven surface if possible, and a ball.",
+    how: [
+      "Throw the ball hard at the wall from close range.",
+      "React to whatever comes back — you won't know the angle.",
+      "Parry wide or catch, whichever the ball allows.",
+    ],
+    reps: "5 × 10 throws",
+    coaching: "Hands travel to the ball on the shortest path. Any loop and you're late.",
+    progression: "Move closer to cut the reaction time, or use a rebounder for a truly random return.",
+    needs: "solo",
+  },
+  {
+    id: "gk_distribution_targets", sport: "football", skill: "Distribution", name: "Distribution to targets",
+    positions: ["Goalkeeper"],
+    setup: "Cones or markers at 15m, 30m and 45m, and a few balls.",
+    how: [
+      "Roll to the near target, drive to the middle one, kick long to the far one.",
+      "Cycle through all three so you're switching technique every rep.",
+      "Take each one as if you've just made a save — move, then release.",
+    ],
+    reps: "4 × 9 (3 to each target)",
+    coaching: "Distribution starts attacks. Pick the target before you gather, not after.",
+    progression: "Add a time limit — release within three seconds of collecting.",
+    needs: "solo",
+  },
+  {
+    id: "gk_one_v_one_spread", sport: "football", skill: "1v1", name: "1v1 spread technique",
+    positions: ["Goalkeeper"],
+    setup: "A ball and an attacker, or cones to run onto.",
+    how: [
+      "Close the distance fast while the ball is away from the attacker's foot.",
+      "Stop and get set as they touch it — never dive early.",
+      "Spread big: hands and feet wide, make yourself the largest barrier you can.",
+    ],
+    reps: "4 × 6",
+    coaching: "Patience beats bravery. The keeper who goes to ground first loses the 1v1.",
+    progression: "Let the attacker choose to shoot early or take you on.",
+    needs: "partner",
+  },
+];
+
+// --- Weightlifting -------------------------------------------------------------
+//
+// Technique IS the skill in the barbell sports, and there wasn't a single drill
+// for it. These are the standard technical exercises — positions grooved light,
+// so they hold when the bar gets heavy.
+
+const WEIGHTLIFTING: SkillDrill[] = [
+  {
+    id: "wl_tempo_squat", sport: "weightlifting", skill: "Squat technique", name: "Tempo squats",
+    positions: ["Powerlifting", "Olympic lifting", "General strength"],
+    setup: "An empty bar or about 50% of your working weight.",
+    how: [
+      "Five seconds down, two seconds paused at the bottom, then stand normally.",
+      "Keep the bar over mid-foot the whole way — film from the side to check.",
+      "Brace before you unrack, not on the way down.",
+    ],
+    reps: "4 × 3",
+    coaching: "The pause removes the bounce. Whatever position you're in at the bottom is the position you actually own.",
+    progression: "Add weight only once all reps hold position, then shorten the pause.",
+    needs: "solo",
+  },
+  {
+    id: "wl_pause_bench", sport: "weightlifting", skill: "Bench technique", name: "Paused bench",
+    positions: ["Powerlifting", "General strength"],
+    setup: "A bar you can control for triples, and a rack with safeties.",
+    how: [
+      "Lower to the chest and hold for a full two seconds, still and tight.",
+      "Keep the shoulder blades pinned back and down throughout.",
+      "Press without letting the bar drift toward your face.",
+    ],
+    reps: "5 × 3",
+    coaching: "Stay tight in the pause. Relaxing at the bottom is where both the press and the shoulder go wrong.",
+    progression: "Lengthen the pause to three seconds before adding weight.",
+    needs: "solo",
+  },
+  {
+    id: "wl_deadlift_setup", sport: "weightlifting", skill: "Deadlift technique", name: "Setup and wedge",
+    positions: ["Powerlifting", "Olympic lifting", "General strength"],
+    setup: "A loaded bar at about 60%.",
+    how: [
+      "Take your stance, grip, then pull your chest up to take the slack out of the bar.",
+      "Hold that wedged position for two seconds before the bar leaves the floor.",
+      "Lift, then reset completely — no touch-and-go.",
+    ],
+    reps: "6 × 2",
+    coaching: "Hear the bar click into the plates before you pull. Yanking a loose bar is how backs get hurt.",
+    progression: "Add weight once the setup is identical on every rep.",
+    needs: "solo",
+  },
+  {
+    id: "wl_overhead_position", sport: "weightlifting", skill: "Overhead position", name: "Overhead holds",
+    positions: ["Olympic lifting", "General strength"],
+    setup: "An empty bar or a broomstick.",
+    how: [
+      "Press or snatch the bar overhead with a wide grip.",
+      "Lock the elbows, push the head slightly through, ribs down.",
+      "Hold, then walk ten steps without letting the bar drift forward.",
+    ],
+    reps: "5 × 20 seconds",
+    coaching: "If the bar sits in front of your ears you're holding it with your shoulders instead of your skeleton.",
+    progression: "Add a light load, or hold in a quarter squat.",
+    needs: "solo",
+  },
+  {
+    id: "wl_clean_pull_position", sport: "weightlifting", skill: "Pull technique", name: "Halting clean pull",
+    positions: ["Olympic lifting", "General strength"],
+    setup: "A bar at roughly 70% of your clean.",
+    how: [
+      "Pull to just above the knee and stop dead, shoulders still over the bar.",
+      "Hold for two seconds, feeling the weight in the middle of the foot.",
+      "Finish the pull with a hard hip extension, or lower and reset.",
+    ],
+    reps: "5 × 3",
+    coaching: "Shoulders in front of the bar at the knee. Let them drift back and the bar swings away from you.",
+    progression: "Raise the halt position, or take the pause out and go straight through.",
+    needs: "solo",
+  },
+  {
+    id: "wl_bracing", sport: "weightlifting", skill: "Bracing", name: "Breathe and brace practice",
+    positions: ["Powerlifting", "Olympic lifting", "General strength"],
+    setup: "Nothing, or a light belt.",
+    how: [
+      "Breathe into your stomach and sides, not your chest.",
+      "Brace as if about to take a punch, without letting the air out.",
+      "Hold the brace for ten seconds, then breathe out and repeat.",
+    ],
+    reps: "3 × 5 breaths",
+    coaching: "Pressure goes 360° around the trunk. Sucking the stomach in is the opposite of a brace.",
+    progression: "Practise it under a light bar, then at your working weight.",
+    needs: "solo",
+  },
+];
+
+// --- Gym -----------------------------------------------------------------------
+//
+// A gym athlete's "skill" is execution: the difference between doing ten reps
+// and doing ten reps that count.
+
+const GYM: SkillDrill[] = [
+  {
+    id: "gym_tempo_control", sport: "gym", skill: "Execution", name: "Tempo sets",
+    positions: ["Hypertrophy", "Strength", "General fitness"],
+    setup: "Any machine or dumbbell exercise, roughly half your normal weight.",
+    how: [
+      "Three seconds lowering, one second pause, then lift normally.",
+      "No swinging, no bouncing out of the bottom.",
+      "Stop the set the moment the tempo breaks.",
+    ],
+    reps: "3 × 8",
+    coaching: "Muscle responds to tension, not to weight moved. Slowing down is how you add tension without adding load.",
+    progression: "Extend the lowering to five seconds before adding weight.",
+    needs: "solo",
+  },
+  {
+    id: "gym_full_range", sport: "gym", skill: "Execution", name: "Full-range reps",
+    positions: ["Hypertrophy", "Strength", "General fitness"],
+    setup: "Your usual exercise, 20% lighter than normal.",
+    how: [
+      "Take every rep to the deepest position you can control.",
+      "Pause for a full second in the stretched position.",
+      "Finish each rep completely — full lockout or full contraction.",
+    ],
+    reps: "3 × 10",
+    coaching: "Half reps with a big weight build less than full reps with a smaller one. The stretched position does most of the work.",
+    progression: "Return to your normal weight once full range holds for every rep.",
+    needs: "solo",
+  },
+  {
+    id: "gym_unilateral_check", sport: "gym", skill: "Balance", name: "Single-side check",
+    positions: ["Hypertrophy", "Strength", "General fitness"],
+    setup: "Dumbbells and a bench.",
+    how: [
+      "Do your press or row one arm at a time.",
+      "Match the reps to whichever side is weaker — the strong side stops when the weak one does.",
+      "Note the difference so you can watch it close over the block.",
+    ],
+    reps: "3 × 10 each side",
+    coaching: "Barbells hide side-to-side differences by letting the strong side take over. Dumbbells can't.",
+    progression: "Add a rep to the weaker side each week until they match.",
+    needs: "solo",
+  },
+  {
+    id: "gym_rest_discipline", sport: "gym", skill: "Execution", name: "Timed rest",
+    positions: ["Hypertrophy", "Strength", "General fitness"],
+    setup: "A timer, and your normal session.",
+    how: [
+      "Start the timer the moment a set ends.",
+      "Hold the prescribed rest exactly — don't cut it short, don't drift past it.",
+      "Log the weight and reps while you wait.",
+    ],
+    reps: "One full session",
+    coaching: "Rest is part of the prescription. Two minutes for strength, sixty to ninety seconds for muscle — a phone scroll makes it four and changes what you trained.",
+    progression: "Keep the rest fixed and try to beat last week's reps at the same weight.",
+    needs: "solo",
+  },
+  {
+    id: "gym_form_film", sport: "gym", skill: "Technique", name: "Film your working set",
+    positions: ["Hypertrophy", "Strength", "General fitness"],
+    setup: "A phone propped side-on.",
+    how: [
+      "Film one working set of your main lift from the side.",
+      "Watch it back and pick one thing only — bar path, depth, or knee position.",
+      "Fix that one thing on the next set.",
+    ],
+    reps: "1 set per session",
+    coaching: "How a lift feels and how it looks are different things, and only one of them is true.",
+    progression: "Compare this week's clip to last month's rather than to how it felt.",
+    needs: "solo",
+  },
+];
+
+// --- Running, continued ---------------------------------------------------------
+
+const RUNNING_MORE: SkillDrill[] = [
+  {
+    id: "rn_strides", sport: "running", skill: "Speed", name: "Strides",
+    positions: ["Sprinter", "800m/1500m", "5k/10k", "Half marathon", "Marathon"],
+    setup: "80–100m of flat ground, after an easy run.",
+    how: [
+      "Build smoothly to about 95% over the first 40m.",
+      "Hold relaxed at that speed for 20m — face loose, shoulders down.",
+      "Decelerate gradually over the last stretch. Walk back.",
+    ],
+    reps: "6 × 80m, walk-back recovery",
+    coaching: "Fast and relaxed, not fast and straining. Clenching your jaw slows you down.",
+    progression: "Add a stride or two, or put them on a slight downhill for overspeed.",
+    needs: "solo",
+  },
+  {
+    id: "rn_arm_drive", sport: "running", skill: "Technique", name: "Arm drive isolation",
+    positions: ["Sprinter", "800m/1500m"],
+    setup: "Anywhere you can stand.",
+    how: [
+      "Stand tall and drive the arms as if sprinting, elbows at about 90°.",
+      "Hands travel from hip pocket to cheek, not across the body.",
+      "Build to maximum speed for the last five seconds.",
+    ],
+    reps: "5 × 15 seconds",
+    coaching: "The legs follow the arms. Arms crossing your midline turns into a rotating torso and wasted stride.",
+    progression: "Do it seated so the legs can't help, then standing again.",
+    needs: "solo",
+  },
+  {
+    id: "rn_pacing_ladder", sport: "running", skill: "Pacing", name: "Pacing ladder",
+    positions: ["800m/1500m", "5k/10k", "Half marathon", "Marathon"],
+    setup: "A track or a measured route, and a watch.",
+    how: [
+      "Run 400m at marathon pace, then 400m at half pace, then 400m at 10k pace.",
+      "Check the watch only at the end of each rep, not during it.",
+      "Note how far off you were — that gap is the skill.",
+    ],
+    reps: "3 rounds, 90 seconds between",
+    coaching: "Pacing is a feel you build, not a number you read. Guess first, verify after.",
+    progression: "Cover the watch entirely and estimate each split before looking.",
+    needs: "solo",
+  },
+  {
+    id: "rn_downhill_control", sport: "running", skill: "Technique", name: "Downhill control",
+    positions: ["5k/10k", "Half marathon", "Marathon"],
+    setup: "A gentle 4–6% descent, 100m long.",
+    how: [
+      "Lean very slightly forward from the ankles, not the waist.",
+      "Increase your cadence rather than reaching with your stride.",
+      "Land underneath yourself, quiet feet.",
+    ],
+    reps: "6 × 100m, jog back",
+    coaching: "Reaching downhill brakes on every step. That's what wrecks quads late in a race.",
+    progression: "Slightly steeper, or hold the control for longer descents.",
+    needs: "solo",
+  },
+  {
+    id: "rn_breathing_rhythm", sport: "running", skill: "Breathing", name: "Breathing rhythm",
+    positions: ["800m/1500m", "5k/10k", "Half marathon", "Marathon"],
+    setup: "An easy run.",
+    how: [
+      "Settle into breathing in for three steps and out for two.",
+      "Hold that pattern for five minutes, then switch to two-in two-out at a harder effort.",
+      "Return to easy and re-establish the three-two.",
+    ],
+    reps: "3 × 5 minutes",
+    coaching: "An odd-numbered pattern alternates which foot you exhale on, so one side doesn't take every impact at full exhale.",
+    progression: "Hold the rhythm at progressively harder efforts.",
+    needs: "solo",
+  },
+];
+
 export const SKILL_DRILLS: SkillDrill[] = [
-  ...FOOTBALL, ...FOOTBALL_MORE,
+  ...FOOTBALL, ...FOOTBALL_MORE, ...GOALKEEPING,
   ...RUGBY, ...RUGBY_MORE,
   ...BASKETBALL, ...BASKETBALL_MORE,
-  ...RUNNING,
+  ...RUNNING, ...RUNNING_MORE,
+  ...WEIGHTLIFTING,
+  ...GYM,
 ];
 
 /**
@@ -659,12 +1015,27 @@ export function hasSkills(sport: SportId): boolean {
  * Solo-only: a program session has to be doable on the day it lands. A drill
  * needing three team-mates would just be skipped.
  */
+/**
+ * The drills that belong to THIS athlete — their positions' work plus whatever
+ * applies to everyone. skillsForSport() deliberately returns the whole sport so
+ * the Playbook can show it all; programming from that list is what would put
+ * goalkeeper saves in a winger's session, or lineout work in a prop's.
+ */
+export function skillsForAthlete(sport: SportId, position?: string | string[] | null): SkillDrill[] {
+  const wanted = positionList(position);
+  const all = SKILL_DRILLS.filter((d) => d.sport === sport);
+  if (!wanted.length) return all;
+  const mine = all.filter((d) => d.positions.some((p) => wanted.includes(p)) || d.positions.length === 0);
+  // A position we hold no drills for shouldn't leave them with nothing at all.
+  return mine.length ? mine : all;
+}
+
 export function skillForSession(
   sport: SportId,
   position: string | string[] | null | undefined,
   index: number,
 ): SkillDrill | null {
-  const pool = drillsYouCanDo(skillsForSport(sport, position), "solo");
+  const pool = drillsYouCanDo(skillsForAthlete(sport, position), "solo");
   if (!pool.length) return null;
   // Spread across skills first, so consecutive sessions aren't two shooting
   // drills while passing never appears.

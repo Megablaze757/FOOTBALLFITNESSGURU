@@ -23,7 +23,9 @@ import type { PainMap } from "./types";
 import type { Exercise } from "./exercises";
 import { IMPORTED_EXERCISES } from "./exercise-catalog";
 import { isExcluded, type Constraints, type Region } from "./constraints";
-import type { ProgramPlan, ProgramWeek, ProgramSession, ProgramDrill, BodyArea } from "./coach";
+// From ./engine, not ./coach: coach.ts imports this module, so taking the
+// program shapes from there made the two files import each other.
+import type { ProgramPlan, ProgramWeek, ProgramSession, ProgramDrill, BodyArea } from "./engine";
 
 export type MuscleGroup =
   | "chest" | "back" | "shoulders" | "biceps" | "triceps"
