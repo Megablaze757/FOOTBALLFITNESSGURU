@@ -1,17 +1,21 @@
 // Shared navigation model + icons, used by both the mobile TabBar and the
 // desktop SideNav so the two stay in sync.
+//
+// "Stats" and "Progress" used to be two entries pointing at two pages that
+// answered the same question — and no one could reasonably guess which held
+// injury risk and which held their squat history. They are one page with two
+// tabs now, and one entry in the nav.
 
 export const NAV_ITEMS = [
   { href: "/home", label: "Home", icon: "home" },
   { href: "/coach", label: "Coach", icon: "coach" },
   { href: "/journal", label: "Journal", icon: "journal" },
-  { href: "/dashboard", label: "Stats", icon: "stats" },
+  { href: "/dashboard", label: "Progress", icon: "stats" },
   { href: "/train", label: "Train", icon: "train" },
   { href: "/library", label: "Library", icon: "library" },
   { href: "/essentials", label: "Playbook", icon: "playbook" },
   { href: "/rewards", label: "Rewards", icon: "trophy" },
   { href: "/nutrition", label: "Nutrition", icon: "nutrition" },
-  { href: "/history", label: "Progress", icon: "history" },
   { href: "/profile", label: "Profile", icon: "profile" },
 ] as const;
 
@@ -26,11 +30,10 @@ export const MOBILE_NAV = [
 
 // Secondary destinations, reached from the mobile "More" sheet.
 export const MOBILE_MORE = [
-  { href: "/dashboard", label: "Stats", icon: "stats" },
+  { href: "/dashboard", label: "Progress", icon: "stats" },
   { href: "/rewards", label: "Rewards", icon: "trophy" },
   { href: "/library", label: "Exercise library", icon: "library" },
   { href: "/nutrition", label: "Nutrition", icon: "nutrition" },
-  { href: "/history", label: "Progress", icon: "history" },
   { href: "/profile", label: "Profile", icon: "profile" },
 ] as const;
 

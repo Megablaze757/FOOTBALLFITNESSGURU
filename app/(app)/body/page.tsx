@@ -40,7 +40,7 @@ export default function BodyPage() {
           <h1 className="text-3xl font-extrabold tracking-tight">Body</h1>
           <p className="mt-1 text-sm text-slate-400">Weight, body-fat &amp; progress photos.</p>
         </div>
-        <Link href="/history" className="text-sm text-slate-400 hover:text-pitch-400">← Back</Link>
+        <Link href="/dashboard" className="text-sm text-slate-400 hover:text-pitch-400">← Back</Link>
       </header>
 
       <BodyForm userId={user.id} today={today} onSaved={reload} />

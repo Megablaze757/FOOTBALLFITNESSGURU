@@ -1,7 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { Tabs } from "@/components/Tabs";
+import { ProgressPanel } from "@/components/ProgressPanel";
 import { useCurrentUser } from "@/lib/auth";
 import { useAsync } from "@/lib/use-async";
 import { summarizeTrends, type Trend } from "@/lib/trends";
@@ -30,8 +33,23 @@ function riskColor(risk: number): string {
   return "#fb5d6b";
 }
 
+const TABS = [
+  { id: "recovery" as const, label: "Recovery", icon: "🧠" },
+  { id: "progress" as const, label: "Progress", icon: "📈" },
+];
+
+/**
+ * One answer to "how am I doing".
+ *
+ * This was two pages. Stats held recovery, risk and training load; Progress
+ * held volume, per-lift charts and nutrition — and Stats carried a link to
+ * Progress, which is a page with a door in it rather than two destinations.
+ * Both are now tabs, because they're two halves of the same question and
+ * nobody could reasonably guess which page held which half.
+ */
 export default function DashboardPage() {
   const user = useCurrentUser();
+  const [tab, setTab] = useState<"recovery" | "progress">("recovery");
 
   const { data, loading } = useAsync(async () => {
     const supabase = createClient();
@@ -63,12 +81,26 @@ export default function DashboardPage() {
   }
 
   const checkIns = data?.checkIns ?? [];
+
+  // No check-ins blocks the RECOVERY half only. Training and nutrition history
+  // are independent of it, so the Progress tab still has to be reachable —
+  // otherwise someone who trains but doesn't check in sees an empty page and
+  // concludes the app has lost their work.
   if (!checkIns.length) {
     return (
       <div className="animate-fade-up space-y-5">
         <Header />
-        <div className="card p-8 text-center text-sm text-slate-400">No check-ins yet. Log a few days to unlock trends.</div>
-        <BenchmarksLink />
+        <Tabs tabs={TABS} active={tab} onChange={setTab} />
+        {tab === "recovery" ? (
+          <>
+            <div className="card p-8 text-center text-sm text-slate-400">
+              No check-ins yet. Log a few days to unlock recovery trends and injury risk.
+            </div>
+            <BenchmarksLink />
+          </>
+        ) : (
+          <ProgressPanel userId={user.id} />
+        )}
       </div>
     );
   }
@@ -84,7 +116,11 @@ export default function DashboardPage() {
   return (
     <div className="animate-fade-up space-y-5">
       <Header source={resolved.source} />
+      <Tabs tabs={TABS} active={tab} onChange={setTab} />
 
+      {tab === "progress" && <ProgressPanel userId={user.id} />}
+
+      {tab === "recovery" && <>
       {resolved.source === "ai" && resolved.summaryText && (
         <div className="card p-5">
           <div className="mb-2 flex items-center justify-between">
@@ -169,20 +205,14 @@ export default function DashboardPage() {
             <Link href="/report" className="btn-ghost mt-4">📄 Weekly report (PDF)</Link>
           </div>
 
-          <Link href="/history" className="card card-hover flex items-center justify-between p-4">
-            <div>
-              <div className="stat-label">Progress</div>
-              <div className="mt-0.5 text-lg font-extrabold text-slate-100">Training &amp; nutrition history</div>
-            </div>
-            <span className="text-pitch-400">→</span>
-          </Link>
-
+          {/* The link to /history used to sit here. It's the Progress tab now. */}
           <div className="grid grid-cols-2 gap-3">
             <BenchmarksLink />
             <Link href="/nutrition" className="btn-ghost">🥗 Nutrition</Link>
           </div>
         </div>
       </div>
+      </>}
     </div>
   );
 }
@@ -191,8 +221,8 @@ function Header({ source }: { source?: "ai" | "local" }) {
   return (
     <header className="flex items-start justify-between">
       <div>
-        <h1 className="text-3xl font-extrabold tracking-tight">Stats</h1>
-        <p className="mt-1 text-sm text-slate-400">Your recovery trends and risk.</p>
+        <h1 className="text-3xl font-extrabold tracking-tight">Progress</h1>
+        <p className="mt-1 text-sm text-slate-400">How you&apos;re recovering, and what you&apos;ve built.</p>
       </div>
       {source && (
         <span
