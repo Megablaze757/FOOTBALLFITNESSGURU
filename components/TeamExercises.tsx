@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAsync } from "@/lib/use-async";
 import { CustomExerciseForm } from "@/components/CustomExerciseForm";

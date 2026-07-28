@@ -30,4 +30,10 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # Typecheck BEFORE the tests. `next build` is currently the only thing
+      # that checks types, which means a missing import is discovered by the
+      # deploy — the most expensive place to find it, and it blocks shipping
+      # everything else in the push. This is the same check, thirty seconds
+      # after the push instead.
+      - run: npm run typecheck
       - run: npm test
