@@ -9,24 +9,13 @@
 
 import { FOODS, FOOD_BY_ID, type Aisle, type Food, type FoodTag } from "./food-db";
 import { skipReason, EMPTY_SCHEDULE, type DietSchedule } from "./meal-schedule";
+import type { PlanTargets } from "./nutrition"; // used below; also re-exported
 
-export type Sex = "male" | "female";
-export type ActivityLevel = "sedentary" | "light" | "moderate" | "high" | "athlete";
-export type DietGoal = "cut" | "maintain" | "build";
-
-export const ACTIVITY_LEVELS: { id: ActivityLevel; label: string; blurb: string; factor: number }[] = [
-  { id: "sedentary", label: "Sedentary", blurb: "Desk job, little training", factor: 1.2 },
-  { id: "light", label: "Light", blurb: "1–2 sessions a week", factor: 1.375 },
-  { id: "moderate", label: "Moderate", blurb: "3–4 sessions a week", factor: 1.55 },
-  { id: "high", label: "High", blurb: "5–6 sessions a week", factor: 1.725 },
-  { id: "athlete", label: "Athlete", blurb: "Daily training or two-a-days", factor: 1.9 },
-];
-
-export const DIET_GOALS: { id: DietGoal; label: string; blurb: string; adjust: number }[] = [
-  { id: "cut", label: "Lean down", blurb: "Lose fat, hold muscle", adjust: -0.18 },
-  { id: "maintain", label: "Maintain", blurb: "Fuel performance", adjust: 0 },
-  { id: "build", label: "Build muscle", blurb: "Gain size and strength", adjust: 0.12 },
-];
+// The energy maths moved to ./nutrition so the Coach targets card and the meal
+// planner share one set of constants instead of two that drift apart. Re-exported
+// here because callers already import them from this module.
+export { ACTIVITY_LEVELS, DIET_GOALS, basalRate, planTargets } from "./nutrition";
+export type { Sex, ActivityLevel, DietGoal, BodyStats, PlanTargets } from "./nutrition";
 
 export type DietPattern = "omnivore" | "pescatarian" | "vegetarian" | "vegan";
 
@@ -187,56 +176,9 @@ export function mealAllowed(meal: Meal, prefs: MealPrefs): boolean {
   return !meal.items.some((it) => prefs.dislikes.includes(it.foodId));
 }
 
-export interface BodyStats {
-  sex: Sex;
-  age: number;
-  heightCm: number;
-  weightKg: number;
-  activity: ActivityLevel;
-  goal: DietGoal;
-}
-
-export interface PlanTargets {
-  bmr: number;
-  tdee: number;
-  calories: number;
-  protein: number;
-  carbs: number;
-  fats: number;
-  rationale: string;
-}
-
-/**
- * Mifflin-St Jeor — the equation with the best track record for estimating
- * resting metabolic rate in non-obese adults. Needs height and age, which is
- * why weight alone was never enough.
- */
-export function basalRate({ sex, age, heightCm, weightKg }: BodyStats): number {
-  const base = 10 * weightKg + 6.25 * heightCm - 5 * age;
-  return Math.round(sex === "male" ? base + 5 : base - 161);
-}
-
-export function planTargets(stats: BodyStats): PlanTargets {
-  const bmr = basalRate(stats);
-  const factor = ACTIVITY_LEVELS.find((a) => a.id === stats.activity)?.factor ?? 1.55;
-  const tdee = Math.round(bmr * factor);
-  const adjust = DIET_GOALS.find((g) => g.id === stats.goal)?.adjust ?? 0;
-  const calories = Math.round((tdee * (1 + adjust)) / 10) * 10;
-
-  // Protein first (it's what protects muscle in a deficit and builds it in a
-  // surplus), then fats for hormones, carbs take the remainder as training fuel.
-  const proteinPerKg = stats.goal === "cut" ? 2.2 : stats.goal === "build" ? 2.0 : 1.8;
-  const protein = Math.round(stats.weightKg * proteinPerKg);
-  const fats = Math.round(stats.weightKg * 0.9);
-  const remaining = calories - protein * 4 - fats * 9;
-  const carbs = Math.max(50, Math.round(remaining / 4));
-
-  const goalLabel = DIET_GOALS.find((g) => g.id === stats.goal)?.label.toLowerCase() ?? "maintain";
-  return {
-    bmr, tdee, calories, protein, carbs, fats,
-    rationale: `Your body burns about ${bmr} kcal at rest and roughly ${tdee} with your training load. To ${goalLabel} we've set ${calories} kcal with ${protein}g protein (${proteinPerKg}g per kg) to protect muscle.`,
-  };
-}
+// basalRate() and planTargets() now live in ./nutrition, re-exported at the top
+// of this file. Everything below is food selection, which is what this module
+// is actually for.
 
 // --- meals -------------------------------------------------------------------
 

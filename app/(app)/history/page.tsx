@@ -7,21 +7,43 @@ import { useAsync } from "@/lib/use-async";
 import { summarizeTraining, summarizeNutrition } from "@/lib/history";
 import { MiniBars } from "@/components/MiniBars";
 import { ShareButton } from "@/components/ShareButton";
-import type { NutritionLog, TrainingLog } from "@/lib/types";
+import { ExerciseProgress } from "@/components/ExerciseProgress";
+import { FeatureLock, tierOfSub } from "@/components/FeatureLock";
+import { can } from "@/lib/subscription";
+import type { NutritionLog, Subscription, TrainingLog } from "@/lib/types";
+
+// The bars and the totals are a month. Strength moves slower than that — a
+// squat that added 10kg over the winter shows nothing across four weeks — so the
+// per-exercise chart gets a quarter to work with.
+const WINDOW_DAYS = 30;
+const EXERCISE_WINDOW_DAYS = 90;
 
 export default function HistoryPage() {
   const user = useCurrentUser();
-  const since = new Date(Date.now() - 30 * 86400_000).toISOString().slice(0, 10);
+  const since = new Date(Date.now() - WINDOW_DAYS * 86400_000).toISOString().slice(0, 10);
+  const sinceLong = new Date(Date.now() - EXERCISE_WINDOW_DAYS * 86400_000).toISOString().slice(0, 10);
 
   const { data, loading } = useAsync(async () => {
     const supabase = createClient();
-    const [{ data: training }, { data: nutrition }, { data: profile }] = await Promise.all([
-      supabase.from("training_logs").select("*").eq("user_id", user.id).gte("log_date", since).order("log_date", { ascending: true }),
+    // One query for the wider window, sliced below — cheaper than asking twice.
+    const [{ data: training }, { data: nutrition }, { data: profile }, { data: sub }] = await Promise.all([
+      supabase.from("training_logs").select("*").eq("user_id", user.id).gte("log_date", sinceLong).order("log_date", { ascending: true }),
       supabase.from("nutrition_logs").select("*").eq("user_id", user.id).gte("log_date", since).order("log_date", { ascending: true }),
       supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle(),
+      supabase.from("subscriptions").select("*").eq("user_id", user.id).maybeSingle(),
     ]);
-    return { training: (training ?? []) as TrainingLog[], nutrition: (nutrition ?? []) as NutritionLog[], name: profile?.full_name ?? "Athlete" };
-  }, [user.id], `history:${user.id}`);
+    const all = (training ?? []) as TrainingLog[];
+    return {
+      training: all.filter((l) => l.log_date >= since),
+      trainingLong: all,
+      nutrition: (nutrition ?? []) as NutritionLog[],
+      name: profile?.full_name ?? "Athlete",
+      sub: (sub ?? null) as Subscription | null,
+    };
+    // The key is v2 because this payload gained `sub` and `trainingLong`. A
+    // cached v1 entry has no subscription in it, which reads as "free" — and
+    // would show a paying customer a paywall until the cache aged out.
+  }, [user.id], `history:v2:${user.id}`);
 
   if (loading) {
     return (
@@ -43,7 +65,7 @@ export default function HistoryPage() {
       <header className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-extrabold tracking-tight">Progress</h1>
-          <p className="mt-1 text-sm text-slate-400">Last 30 days — how you&apos;ve improved.</p>
+          <p className="mt-1 text-sm text-slate-400">How you&apos;ve improved.</p>
         </div>
         <Link href="/dashboard" className="text-sm text-slate-400 hover:text-pitch-400">← Back</Link>
       </header>
@@ -51,11 +73,26 @@ export default function HistoryPage() {
       {/* Training */}
       <section className="card p-5">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="field-label !mb-0">Training volume</h2>
+          <div>
+            <h2 className="field-label !mb-0">Training volume</h2>
+            <p className="text-[11px] text-slate-500">Last {WINDOW_DAYS} days</p>
+          </div>
           <span className="text-xs text-slate-400">{t.totalSessions} sessions · {t.totalReps.toLocaleString()} reps</span>
         </div>
         {hasTraining ? <MiniBars data={t.volume} color="#e3b53f" unit=" reps" /> : <Empty label="Log training in your daily check-in." />}
       </section>
+
+      {/* Per-exercise progression. The one chart that answers "am I getting
+          stronger", which is why it's the thing worth paying for. */}
+      {can(tierOfSub(data?.sub), "exercise_analytics") ? (
+        <ExerciseProgress logs={data?.trainingLong ?? []} windowDays={EXERCISE_WINDOW_DAYS} />
+      ) : (
+        <FeatureLock
+          capability="exercise_analytics"
+          title="See every lift's progress"
+          blurb="Pick any exercise and watch it climb — estimated one-rep max, total volume and the date of every personal best, over the last three months."
+        />
+      )}
 
       {/* Drill frequency leaderboard */}
       {t.drillFrequency.length > 0 && (

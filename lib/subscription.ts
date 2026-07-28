@@ -75,7 +75,8 @@ export type Capability =
   | "nutrition"       // meal plans, macros, food estimation
   | "video_analysis"  // in-browser form analysis
   | "injury_plan"     // AI rehab planning from a written description
-  | "ai_challenges";  // personalised weekly objectives
+  | "ai_challenges"   // personalised weekly objectives
+  | "exercise_analytics"; // per-exercise progression, estimated 1RM, PR history
 
 export const CAPABILITY_TIER: Record<Capability, Tier> = {
   // Free is a real product: the daily habit, the whole coaching library, and
@@ -91,6 +92,9 @@ export const CAPABILITY_TIER: Record<Capability, Tier> = {
   video_analysis: "silver",
   injury_plan: "silver",
   ai_challenges: "silver",
+  // Free still shows total volume and most-trained drills. What's paid is the
+  // per-lift picture: is my squat actually going up, and when did I last PR.
+  exercise_analytics: "silver",
 };
 
 /** True if `have` tier includes everything in `need` tier. */

@@ -48,6 +48,10 @@ export default function NutritionPage() {
       weightKg: (weightRow?.weight_kg ?? null) as number | null,
       goal: (program?.goal_type ?? null) as GoalType | null,
       avgMinutes: avgDailyMinutes((training ?? []) as Pick<TrainingLog, "total_minutes">[]),
+      // How much of the window is actually backed by a log. Below a handful of
+      // days we trust what they told us about their week over what we measured,
+      // so a quiet fortnight doesn't quietly cut their calories.
+      trainingDays: (training ?? []).length,
       // Seed the planner from the profile so stats survive between visits.
       stats: {
         heightCm: pr?.height_cm ?? undefined,
@@ -89,7 +93,21 @@ export default function NutritionPage() {
     );
   }
 
-  const targets = nutritionTargets({ weightKg: data?.weightKg ?? null, goal: data?.goal ?? null, avgTrainingMinutes: data?.avgMinutes ?? 0 });
+  // Everything the profile knows goes in. This page already loaded height, age
+  // and sex for the meal planner and then handed the targets card nothing but a
+  // weight — so the card was estimating from scratch beside a planner that had
+  // the real numbers.
+  const targets = nutritionTargets({
+    weightKg: data?.weightKg ?? null,
+    goal: data?.goal ?? null, // sport goal — sets the macro split
+    avgTrainingMinutes: data?.avgMinutes ?? 0,
+    heightCm: data?.stats.heightCm ?? null,
+    age: data?.stats.age ?? null,
+    sex: data?.stats.sex ?? null,
+    activity: data?.stats.activity ?? null,
+    dietGoal: data?.stats.goal ?? null, // diet goal — cut / maintain / build
+    trainingDaysLogged: data?.trainingDays ?? 0,
+  });
   return (
     <NutritionTabs
       userId={user.id}
@@ -102,6 +120,12 @@ export default function NutritionPage() {
       mealSeed={data?.mealSeed ?? null}
     />
   );
+}
+
+/** ["height","age","sex"] -> "height, age and sex" */
+function listWords(words: string[]): string {
+  if (words.length <= 1) return words[0] ?? "";
+  return `${words.slice(0, -1).join(", ")} and ${words[words.length - 1]}`;
 }
 
 function avgDailyMinutes(rows: Pick<TrainingLog, "total_minutes">[]): number {
@@ -140,6 +164,7 @@ function NutritionTabs({ userId, today, log, targets, stats, prefs, dietNotes, m
           stats={stats}
           prefs={prefs}
           dietNotes={dietNotes}
+          onAddStats={() => setTab("plan")}
         />
       ) : (
         <MealPlanner userId={userId} initial={stats} initialPrefs={prefs} initialNotes={dietNotes} initialSeed={mealSeed} />
@@ -160,11 +185,18 @@ function Header() {
   );
 }
 
-function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietNotes }: {
+function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietNotes, onAddStats }: {
   userId: string; today: string; initial: any; targets: NutritionTargets | null;
   stats: Partial<BodyStats> | null; prefs: Partial<MealPrefs> | null; dietNotes: string | null;
+  /** Sends them to the tab that collects height/age/sex, so the estimate sharpens. */
+  onAddStats: () => void;
 }) {
-  const [calories, setCalories] = useState<string>(initial?.daily_calorie_target?.toString() ?? "");
+  // Automatic unless they've already set one. "Coach targets" sat next to an
+  // empty target box with a button to copy one into the other, which meant the
+  // number we'd worked out did nothing until you noticed the button.
+  const [calories, setCalories] = useState<string>(
+    initial?.daily_calorie_target?.toString() ?? (targets ? String(targets.calories) : "")
+  );
   const [macros, setMacros] = useState<Record<string, string>>({
     protein: initial?.macros?.protein?.toString() ?? "",
     carbs: initial?.macros?.carbs?.toString() ?? "",
@@ -230,6 +262,20 @@ function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietN
     <div className="animate-fade-up space-y-5">
       <MealCheckIn stats={stats} prefs={prefs} dietNotes={dietNotes} onAdd={addEaten} />
 
+      {/* No weight, no targets — say so instead of hiding the card silently. */}
+      {!targets && (
+        <div className="card p-5">
+          <h2 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-pitch-400">
+            <span className="h-1.5 w-1.5 rounded-full bg-pitch-400" /> Coach targets
+          </h2>
+          <p className="mt-2 text-xs text-slate-400">
+            Log your weight in the daily check-in and we&apos;ll work out your calories, macros
+            and hydration for you.
+          </p>
+          <Link href="/home" className="btn-ghost mt-3 inline-flex w-auto px-4 py-2 text-sm">Daily check-in →</Link>
+        </div>
+      )}
+
       {/* Coach-set smart targets */}
       {targets && (
         <div className="card p-5">
@@ -240,6 +286,30 @@ function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietN
             <button onClick={applyTargets} className="text-xs font-medium text-pitch-400 hover:underline">Apply to today</button>
           </div>
           <p className="text-xs text-slate-400">{targets.rationale}</p>
+
+          {/* The working, when we have enough to show it. */}
+          {targets.bmr != null && targets.tdee != null && (
+            <p className="mt-1 text-[11px] text-slate-500">
+              Resting {targets.bmr.toLocaleString()} kcal · with training {targets.tdee.toLocaleString()} kcal
+            </p>
+          )}
+
+          {/* A floor moved the number — say which, rather than showing a figure
+              that doesn't match the maths above it. */}
+          {targets.guard && (
+            <p className="mt-2 rounded-xl bg-pitch-400/10 px-3 py-2 text-[11px] text-pitch-400">{targets.guard}</p>
+          )}
+
+          {/* Ask for what's missing, once, where the imprecision actually shows. */}
+          {targets.basis === "estimated" && targets.missing.length > 0 && (
+            <button
+              onClick={onAddStats}
+              className="mt-2 w-full rounded-xl bg-white/[0.04] px-3 py-2 text-left text-[11px] text-slate-400 transition hover:bg-white/[0.07] hover:text-slate-200"
+            >
+              Add your {listWords(targets.missing)} to swap this estimate for a proper
+              metabolic calculation →
+            </button>
+          )}
           {/* Two up on a phone — four across 375px clips the numbers. */}
           <div className="mt-3 grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
             {[
@@ -328,8 +398,13 @@ function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietN
       <div className="card p-5">
         <div className="flex items-baseline justify-between">
           <span className="field-label">Hydration</span>
-          <span className="text-sm font-bold text-sky-300">{(water / 1000).toFixed(2)} L / {(waterGoal / 1000).toFixed(0)} L</span>
+          <span className="text-sm font-bold text-sky-300">{(water / 1000).toFixed(2)} L / {(waterGoal / 1000).toFixed(1)} L</span>
         </div>
+        {targets && (
+          <p className="-mt-1 mb-1 text-[11px] text-slate-500">
+            Set from your body weight plus sweat loss for the training you&apos;ve logged.
+          </p>
+        )}
         <div className="mt-2 h-3 w-full overflow-hidden rounded-full bg-white/10">
           <div className="h-full rounded-full bg-gradient-to-r from-sky-400 to-sky-300 transition-all" style={{ width: `${Math.min(100, (water / waterGoal) * 100)}%` }} />
         </div>
