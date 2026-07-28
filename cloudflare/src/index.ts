@@ -369,14 +369,29 @@ function modelChain(env: Env): string[] {
   return [primary, ...fallbacks].filter((m, i, all) => m && all.indexOf(m) === i);
 }
 
-// Price of the paid rung, in USD per MILLION tokens. Defaults match
-// deepseek/deepseek-chat; override in wrangler.toml if you change the model,
-// because getting these wrong silently under-counts every bill.
+// Price of the paid rung, in USD per MILLION tokens, for deepseek/deepseek-chat
+// as of 2026-07-25. Published pricing, not a secret — so it lives in the code
+// rather than as a dashboard var. That matters here: this Worker is pasted into
+// the Cloudflare dashboard by hand, which applies nothing from wrangler.toml, so
+// anything that only exists there is effectively unset in production. The env
+// vars still win when present, for changing the model without a redeploy.
+//
+// If you change OPENROUTER_MODEL you MUST change these, or spend is
+// under-counted and the monthly cap stops capping.
+const PAID_PROMPT_PER_M = 0.2002;
+const PAID_COMPLETION_PER_M = 0.8001;
+
 function modelPrice(env: Env, model: string): { prompt: number; completion: number } {
   if (model.endsWith(":free")) return { prompt: 0, completion: 0 };
+  // Number("") is 0 and Number(undefined) is NaN, either of which would price
+  // every call at zero — fall back unless the override actually parses.
+  const num = (v: string | undefined, fallback: number) => {
+    const n = Number(v);
+    return v && Number.isFinite(n) && n >= 0 ? n : fallback;
+  };
   return {
-    prompt: Number(env.PAID_PROMPT_PER_M || "0.2002"),
-    completion: Number(env.PAID_COMPLETION_PER_M || "0.8001"),
+    prompt: num(env.PAID_PROMPT_PER_M, PAID_PROMPT_PER_M),
+    completion: num(env.PAID_COMPLETION_PER_M, PAID_COMPLETION_PER_M),
   };
 }
 

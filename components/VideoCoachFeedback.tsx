@@ -23,7 +23,11 @@ export function VideoCoachFeedback({ analysis }: { analysis: VideoAnalysis }) {
         const data = await invokeAI<{ answer?: string }>("coach-chat", { question, context });
         if (!data?.answer) throw new Error("fallback");
         if (!cancelled) { setText(data.answer); setAi(true); }
-      } catch {
+      } catch (e) {
+        // Keep the reason. This swallowed every failure identically, so a dead
+        // endpoint, a timeout and a Pro-only refusal all looked like a working
+        // feature — which is exactly how the AI timeout went unnoticed.
+        console.warn("coach-chat feedback fell back to local:", e);
         if (!cancelled) setText(localVideoFeedback(analysis));
       } finally {
         if (!cancelled) setLoading(false);

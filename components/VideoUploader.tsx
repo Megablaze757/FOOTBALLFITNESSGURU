@@ -11,6 +11,13 @@ import { MAX_CLIP_SECONDS } from "@/components/InBrowserAnalysis";
 export const MAX_UPLOAD_MB = 60;
 const MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024;
 
+// Accepted, but worth a word first. Analysis runs on the phone, and the two
+// clips that never finished were 21MB and 42MB against 1.7MB for the two that
+// worked — file size is the single best predictor of whether pose tracking
+// completes. Advice, not a block: a big clip still analyses, just slower and
+// with more chance of falling back to an estimate.
+const HEAVY_UPLOAD_BYTES = 15 * 1024 * 1024;
+
 type SessionType = "training" | "match" | "recovery";
 
 // Poster frame for the clip list, grabbed locally before upload. Small enough
@@ -167,7 +174,7 @@ export function VideoUploader({ sport, onUploaded }: { sport?: string; onUploade
           <div className="min-w-0 flex-1">
             <div className="truncate text-sm font-semibold text-slate-100">{file.name}</div>
             <div className="text-xs text-pitch-400">
-              ✓ Ready to upload{preview.seconds ? ` · ${preview.seconds.toFixed(1)}s` : ""}
+              ✓ Ready to upload{preview.seconds ? ` · ${preview.seconds.toFixed(1)}s` : ""} · {(file.size / 1048576).toFixed(1)}MB
             </div>
           </div>
           <button type="button" onClick={() => setFile(null)} className="shrink-0 text-xs text-slate-400 hover:text-slate-200">Change</button>
@@ -179,6 +186,14 @@ export function VideoUploader({ sport, onUploaded }: { sport?: string; onUploade
           <span className="mt-1 text-xs text-slate-500">MP4 / MOV — up to 30s. Short clips of one or two reps read best.</span>
           <input type="file" accept="video/*" className="hidden" onChange={(e) => { setDone(false); setFile(e.target.files?.[0] ?? null); }} />
         </label>
+      )}
+
+      {file && file.size > HEAVY_UPLOAD_BYTES && (
+        <p className="rounded-2xl bg-amber-400/[0.07] px-3 py-2 text-xs text-amber-200">
+          <span className="font-semibold">This one&apos;s big.</span> Analysis runs on your phone, so a{" "}
+          {(file.size / 1048576).toFixed(0)}MB clip is slow and more likely to fall back to an estimate. Trimming
+          to just the movement — a couple of seconds — gives a better reading, not a worse one.
+        </p>
       )}
 
       {file && (
