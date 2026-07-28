@@ -1405,6 +1405,23 @@ async function stripeWebhook(req: Request, env: Env): Promise<Response> {
   const type = event.type as string;
   const obj = event.data.object;
 
+  // MODE MISMATCH, NAMED.
+  //
+  // Stripe keeps test and live completely separate: separate events, separate
+  // endpoints, separate keys. Point a live-key Worker at a test-mode webhook
+  // and the signature verifies fine — then every Stripe API call we make with
+  // that key 404s, because the objects live in the other mode. That surfaced as
+  // an unexplained 500 and cost an afternoon.
+  const keyIsLive = (env.STRIPE_SECRET_KEY ?? "").startsWith("sk_live_");
+  if (typeof event.livemode === "boolean" && event.livemode !== keyIsLive) {
+    const msg = `mode mismatch: this webhook is ${event.livemode ? "LIVE" : "TEST"} but the Worker's STRIPE_SECRET_KEY is ${keyIsLive ? "LIVE" : "TEST"}. Use the endpoint and the key from the same mode.`;
+    console.error(`[stripe] ${msg} (event ${event.id}, ${type})`);
+    // 400, not 500: retrying will not fix a configuration mistake, and Stripe
+    // would keep redelivering for three days.
+    return json({ error: msg }, 400);
+  }
+
+  try {
   if (type === "checkout.session.completed" && obj.subscription) {
     await upsertSub(env, await stripe(env, `subscriptions/${obj.subscription}`));
   } else if (type === "customer.subscription.created" || type === "customer.subscription.updated") {
@@ -1437,6 +1454,13 @@ async function stripeWebhook(req: Request, env: Env): Promise<Response> {
       refundedPennies: isDispute ? null : Number(obj?.amount_refunded ?? 0),
       totalPennies: isDispute ? null : Number(obj?.amount ?? 0),
     });
+  }
+  } catch (e) {
+    // Say WHICH event failed and why. A bare 500 in the delivery log tells
+    // nobody anything, and this is the path that decides whether a paying
+    // customer gets what they paid for.
+    console.error(`[stripe] ${type} (${event.id}) failed:`, String(e));
+    return json({ error: `${type} failed: ${String(e)}` }, 500);
   }
   return json({ received: true });
 }
