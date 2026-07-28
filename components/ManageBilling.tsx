@@ -23,12 +23,14 @@ import { CancelFlow } from "@/components/CancelFlow";
  * Someone on a comped or free plan has no Stripe customer to manage, so they
  * get the upgrade link instead of a button that would only ever error.
  */
-export function ManageBilling({ hasBilling, cancelling, paused, resumesAt, onChanged }: {
+export function ManageBilling({ hasBilling, cancelling, paused, resumesAt, endsAt, onChanged }: {
   hasBilling: boolean;
   /** Cancelled but still inside the paid period — reversible. */
   cancelling?: boolean;
   paused?: boolean;
   resumesAt?: string | null;
+  /** When access actually ends. "The end of your period" is not an answer. */
+  endsAt?: string | null;
   onChanged?: () => void;
 }) {
   const [busy, setBusy] = useState(false);
@@ -78,14 +80,28 @@ export function ManageBilling({ hasBilling, cancelling, paused, resumesAt, onCha
           <p className="text-sm font-semibold text-slate-100">
             {paused ? "Your plan is paused" : "Your plan is set to cancel"}
           </p>
+          {/* The date, not "the end of your period". Someone who has cancelled
+              wants to know exactly how long they've got — making them work it
+              out from a billing cycle they can't see is the sort of vagueness
+              that gets read as evasive. */}
+          <p className="mt-1 text-2xl font-extrabold text-pitch-400">
+            {paused
+              ? (resumesAt ? fmt(resumesAt) : "Paused")
+              : (endsAt ? fmt(endsAt) : "End of your paid period")}
+          </p>
           <p className="mt-1 text-xs text-slate-400">
             {paused
-              ? `No charges while it's paused${resumesAt ? `, and Pro comes back on ${fmt(resumesAt)}` : ""}. Nothing has been deleted.`
-              : "You keep full access until the end of the period you've paid for. Nothing has been deleted."}
+              ? "No charges while it's paused, and Pro switches itself back on automatically. Nothing has been deleted."
+              : `You keep everything until then${endsAt ? ` — ${daysLeft(endsAt)}` : ""}. Nothing has been deleted, and you won't be charged again.`}
           </p>
           <button onClick={resume} disabled={busy} className="btn-primary mt-3">
             {busy ? "…" : paused ? "Resume now" : "Keep my plan"}
           </button>
+          {!paused && (
+            <p className="mt-2 text-[11px] text-slate-500">
+              Change your mind any time before then and nothing is lost.
+            </p>
+          )}
         </div>
         {error && <p className="mt-2 text-sm text-readiness-red">{error}</p>}
       </div>
@@ -117,5 +133,14 @@ function fmt(iso: string): string {
   const d = new Date(iso);
   return Number.isNaN(d.getTime())
     ? iso
-    : d.toLocaleDateString(undefined, { day: "numeric", month: "long" });
+    : d.toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" });
+}
+
+/** "12 days left" — the number people actually care about. */
+function daysLeft(iso: string): string {
+  const d = new Date(iso).getTime();
+  if (Number.isNaN(d)) return "";
+  const days = Math.ceil((d - Date.now()) / 86_400_000);
+  if (days <= 0) return "it ends today";
+  return days === 1 ? "1 day left" : `${days} days left`;
 }

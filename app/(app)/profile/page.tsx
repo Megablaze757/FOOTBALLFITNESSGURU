@@ -1,9 +1,10 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/lib/auth";
-import { useAsync } from "@/lib/use-async";
+import { useAsync, invalidate } from "@/lib/use-async";
 import { ProfileForm } from "@/components/ProfileForm";
 import { CoachRequests } from "@/components/CoachRequests";
 import { CoachMessages } from "@/components/CoachMessages";
@@ -24,6 +25,26 @@ export default function ProfilePage() {
     ]);
     return { profile: profile as Profile | null, sub: (sub ?? null) as Subscription | null };
   }, [user.id], `profile:${user.id}`);
+
+  // Coming back from Stripe's portal, the change was made THERE and only
+  // reaches us when the webhook lands a beat later. Reading once on arrival
+  // reliably reads the state from BEFORE the change — the same race that made
+  // checkout look like it had failed. Drop the cached copy and re-check a few
+  // times, so a cancellation made in the portal shows up here by itself.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!new URLSearchParams(window.location.search).has("billing")) return;
+    invalidate("profile:");
+    let n = 0;
+    const t = setInterval(() => {
+      reload();
+      if (++n >= 4) clearInterval(t);
+    }, 2500);
+    return () => clearInterval(t);
+    // Once, on arrival. reload is stable enough for this and re-running would
+    // restart the polling on every refetch it triggers.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (loading) {
     return (
@@ -76,6 +97,7 @@ export default function ProfilePage() {
         cancelling={!!subscription?.cancel_at_period_end}
         paused={subscription?.status === "paused"}
         resumesAt={subscription?.pause_until ?? null}
+        endsAt={subscription?.current_period_end ?? null}
         onChanged={reload}
       />
 

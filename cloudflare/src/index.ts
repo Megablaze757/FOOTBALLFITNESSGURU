@@ -1120,7 +1120,11 @@ async function billingPortal(req: Request, env: Env): Promise<Response> {
   try {
     const session = await stripe(env, "billing_portal/sessions", {
       customer: customerId,
-      return_url: `${env.APP_URL}/profile`,
+      // The marker tells the app it has just come back from the portal, so it
+      // can drop its cached subscription and wait for the webhook. Without it,
+      // someone who cancels in the portal returns to a page still showing the
+      // pre-cancellation state and reasonably concludes it didn't work.
+      return_url: `${env.APP_URL}/profile?billing=return`,
     });
     return json({ url: session.url });
   } catch (e) {
