@@ -7,6 +7,7 @@
 // =============================================================================
 
 import { IMPORTED_EXERCISES, difficultyOf, equipBucket } from "./exercise-catalog";
+import { IMPORTED_HOWTO } from "./exercise-howto";
 
 export type DemoPattern =
   | "squat" | "hinge" | "lunge" | "jump" | "plank"
@@ -579,9 +580,11 @@ for (const e of IMPORTED_EXERCISES) {
 // heading that reads "How to perform it" is its own kind of lie, and the UI
 // needs to be able to tell the two apart.
 for (const e of EXERCISES) {
-  const written = DESCRIPTIONS[e.id];
+  // Two sources, one meaning: DESCRIPTIONS covers the hand-built exercises,
+  // IMPORTED_HOWTO the bulk gym catalogue. Either counts as a real how-to.
+  const written = DESCRIPTIONS[e.id] ?? IMPORTED_HOWTO[e.id];
   e.hasHowTo = !!written;
-  e.description ??= written ?? e.why;
+  e.description = written ?? e.description ?? e.why;
 }
 // Every exercise gets a difficulty (rich ones inferred from the name).
 for (const e of EXERCISES) e.difficulty ??= difficultyOf(e.name);

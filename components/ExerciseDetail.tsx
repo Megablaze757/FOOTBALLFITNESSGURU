@@ -51,16 +51,21 @@ export function ExerciseDetailCard({ ex, sets, reps }: { ex: Exercise; sets?: nu
         </div>
       )}
 
-      <div>
-        <div className="stat-label mb-2">Coaching cues</div>
-        <ul className="space-y-2">
-          {ex.cues.map((c) => (
-            <li key={c} className="flex gap-2 text-sm text-slate-200">
-              <span className="text-pitch-400">›</span>{c}
-            </li>
-          ))}
-        </ul>
-      </div>
+      {/* A heading over an empty list is a promise the data can't keep. 199 of
+          the imported exercises have no cues at all — they get the full how-to
+          above instead, which is the more useful of the two anyway. */}
+      {ex.cues.length > 0 && (
+        <div>
+          <div className="stat-label mb-2">Coaching cues</div>
+          <ul className="space-y-2">
+            {ex.cues.map((c) => (
+              <li key={c} className="flex gap-2 text-sm text-slate-200">
+                <span className="text-pitch-400">›</span>{c}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div>
         <div className="stat-label mb-1.5">Targets</div>
