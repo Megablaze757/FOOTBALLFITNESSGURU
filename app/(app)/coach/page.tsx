@@ -271,9 +271,14 @@ function GoalBuilder({ painMap, latestBench, sport, initialPositions, initialFoc
                     ? <span className="h-5 w-5 animate-spin rounded-full border-2 border-pitch-500 border-t-transparent" />
                     : t.icon}
                 </span>
-                <span className="min-w-0">
-                  <span className="block text-sm font-bold text-slate-100">{isBuilding ? "Building your program…" : t.name}</span>
-                  <span className="block text-xs text-slate-400">{isBuilding ? "A few seconds" : t.blurb}</span>
+                {/* min-w-0 lets the text column shrink inside the flex row —
+                    without it a flex child refuses to go below its content
+                    width — and break-words handles the long hyphenated blurbs
+                    like "Chest-shoulders-triceps" that otherwise push the card
+                    wider than the phone. */}
+                <span className="min-w-0 flex-1">
+                  <span className="block break-words text-sm font-bold text-slate-100">{isBuilding ? "Building your program…" : t.name}</span>
+                  <span className="block break-words text-xs text-slate-400">{isBuilding ? "A few seconds" : t.blurb}</span>
                 </span>
               </button>
             );

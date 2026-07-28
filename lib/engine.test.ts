@@ -314,3 +314,43 @@ test("a trimmed prescription still reads correctly", () => {
     }
   }
 });
+
+// --- a coach picking exercises --------------------------------------------
+
+test("a coach's picks actually appear in the program", () => {
+  const picks = ["back_squat", "barbell_row", "farmers_carry"];
+  const plan = buildBlock({ goal: "strength", painMap: {}, sport: "gym", mustInclude: picks });
+  const names = new Set(plan.weeks.flatMap((w) => w.sessions.flatMap((s) => s.drills)).map((d) => d.name));
+  for (const id of picks) {
+    const m = MOVEMENT_BY_ID[id];
+    assert.ok(names.has(m.name), `${m.name} was picked by the coach and never appeared`);
+  }
+});
+
+test("a pick that would load an injured joint is still refused", () => {
+  // The whole point of it being a preference rather than a command. A coach
+  // picking a back squat for someone reporting 9/10 knee pain must not get one.
+  const plan = buildBlock({
+    goal: "strength", painMap: { knee_left: 9 }, sport: "gym",
+    mustInclude: ["back_squat", "box_jumps"],
+  });
+  const names = plan.weeks.flatMap((w) => w.sessions.flatMap((s) => s.drills)).map((d) => d.name);
+  assert.ok(!names.includes(MOVEMENT_BY_ID.back_squat.name), "a squat reached a badly injured knee");
+  assert.ok(!names.includes(MOVEMENT_BY_ID.box_jumps.name), "box jumps reached a badly injured knee");
+});
+
+test("a pick the athlete has excluded is still excluded", () => {
+  const plan = buildBlock({
+    goal: "strength", painMap: {}, sport: "gym",
+    constraints: parseConstraints("I don't train legs"),
+    mustInclude: ["back_squat"],
+  });
+  const names = plan.weeks.flatMap((w) => w.sessions.flatMap((s) => s.drills)).map((d) => d.name);
+  assert.ok(!names.includes(MOVEMENT_BY_ID.back_squat.name), "a coach's pick overrode the athlete's own exclusion");
+});
+
+test("with no picks, nothing changes", () => {
+  const a = buildBlock({ goal: "speed", painMap: {}, sport: "football" });
+  const b = buildBlock({ goal: "speed", painMap: {}, sport: "football", mustInclude: [] });
+  assert.deepEqual(a, b);
+});

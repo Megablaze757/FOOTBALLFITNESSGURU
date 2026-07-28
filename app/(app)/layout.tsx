@@ -30,7 +30,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <div className="flex min-h-screen">
         <SideNav />
         <div className="min-w-0 flex-1">
-          <main className="no-scrollbar mx-auto w-full max-w-5xl px-5 pb-28 pt-8 lg:px-10 lg:pb-14 lg:pt-12">
+          {/* overflow-x:clip, not hidden. Both stop the page sliding sideways
+              when one child overflows, but `hidden` makes this a scroll
+              container — which breaks `position: sticky` inside it and lets a
+              stray wide element be scrolled to. `clip` just refuses to show it.
+              This is the backstop; the individual overflows are still worth
+              fixing, but no single card should be able to make the whole app
+              slide left and right on a phone. */}
+          <main className="no-scrollbar mx-auto w-full max-w-5xl px-5 pb-28 pt-8 [overflow-x:clip] lg:px-10 lg:pb-14 lg:pt-12">
             {children}
           </main>
         </div>

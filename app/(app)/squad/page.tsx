@@ -183,6 +183,15 @@ export default function SquadPage() {
                   sport={(a.sport ?? "football") as SportId}
                   position={a.positions}
                   coachId={user.id}
+                  // The whole squad, so one build can go to everyone. Each is
+                  // still built from their own sport and position rather than
+                  // copied, so the keeper doesn't get crossing practice.
+                  team={data.athletes.map((x) => ({
+                    id: x.id,
+                    name: x.name.split(" ")[0] || x.name,
+                    sport: (x.sport ?? "football") as SportId,
+                    position: x.positions,
+                  }))}
                   onAssigned={reload}
                 />
               </div>

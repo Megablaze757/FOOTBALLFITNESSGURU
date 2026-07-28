@@ -36,7 +36,21 @@ export function CoachRequests() {
           <div className="text-sm">
             <span className="font-semibold text-slate-100">{inv.coachName}</span>
             <span className="text-slate-400"> wants to coach you</span>
-            <div className="text-[11px] text-slate-500">They&apos;ll be able to view your readiness &amp; training.</div>
+            {/* Say what a coach can ACTUALLY see. This read "your readiness &
+                training", while the policies also grant them body logs —
+                progress photos and measurements — and biometrics: HRV, resting
+                heart rate, sleep. Neither is "readiness & training" by any
+                ordinary reading, and agreeing to a narrower description isn't
+                agreeing to the wider thing. Someone deciding whether to let
+                their coach in should be told the truth before they tap Accept,
+                not discover it later. */}
+            <div className="text-[11px] leading-relaxed text-slate-500">
+              They&apos;ll see your daily check-ins — sleep, fatigue, pain and{" "}
+              <b className="text-slate-400">weight</b> — plus your readiness, training, programs,
+              benchmark tests, any wearable data you import, and your body log{" "}
+              <b className="text-slate-400">including progress photos</b>. They won&apos;t see your
+              food diary or your uploaded videos.
+            </div>
           </div>
           <div className="flex gap-2">
             <button onClick={() => respond(inv.id, "accepted")} className="rounded-xl bg-gradient-to-br from-pitch-400 to-pitch-600 px-3 py-1.5 text-xs font-semibold text-ink-900">Accept</button>

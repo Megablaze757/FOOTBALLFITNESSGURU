@@ -252,6 +252,10 @@ export function movementsInSlot(slot: Slot): Movement[] {
   return MOVEMENTS.filter((m) => m.slot === slot);
 }
 
+/** Session order, for sorting a list of movements the way a session runs. */
+export const SLOT_LABEL_ORDER: Slot[] =
+  ["warmup", "primary", "secondary", "accessory", "skill", "conditioning", "cooldown"];
+
 /** The region a movement belongs to, for "I don't train legs" exclusions. */
 export function regionOfMovement(id: string): Region | undefined {
   return MOVEMENT_BY_ID[id]?.region;

@@ -87,6 +87,17 @@ export interface EngineInput {
   focus?: TrainingFocus;
   position?: string | string[];
   constraints?: Constraints;
+  /**
+   * Movement ids a coach has specifically chosen for this athlete.
+   *
+   * A strong PREFERENCE, not an override. Each pick gets a large scoring bonus
+   * so it wins its slot wherever it's eligible — but it still passes through
+   * the pain filter and the athlete's own exclusions first. A coach picking a
+   * back squat for someone reporting 8/10 knee pain should not get a back
+   * squat, and finding that out from an injury is not acceptable when the
+   * engine already knows.
+   */
+  mustInclude?: string[];
 }
 
 // --- Pain ---------------------------------------------------------------------
@@ -207,6 +218,8 @@ interface Ctx {
   sport?: SportId;
   trainingFocus?: TrainingFocus;
   constraints: Constraints;
+  /** Coach's picks, as a set for cheap lookup. */
+  picked?: Set<string>;
 }
 
 interface Scored { m: Movement; score: number; spares: boolean }
@@ -252,6 +265,12 @@ function rankSlot(slot: Slot, ctx: Ctx): Scored[] {
       // substitution is the coaching, so it should win over a plain penalty.
       const spares = ctx.soreAreas.length > 0 && ctx.soreAreas.every((a) => (m.load[a] ?? 0) <= 1);
       if (spares && m.targets.includes(ctx.focusGoal)) score += 3;
+
+      // A coach chose this one. Big enough to win any slot it's eligible for,
+      // and applied AFTER the pain checks above rather than instead of them —
+      // the hard refusal for a badly loaded sore joint has already returned
+      // null by this point and nothing here can bring it back.
+      if (ctx.picked?.has(m.id)) score += 50;
 
       return { m, score, spares };
     })
@@ -463,7 +482,10 @@ export function buildBlock(input: EngineInput): ProgramPlan {
 
     const sessions: ProgramSession[] = Array.from({ length: days }, (_, di) => {
       const focusGoal = rotation[di % rotation.length];
-      const ctx: Ctx = { focusGoal, pain, soreAreas, sport: input.sport, trainingFocus: input.focus, constraints };
+      const ctx: Ctx = {
+        focusGoal, pain, soreAreas, sport: input.sport, trainingFocus: input.focus, constraints,
+        picked: input.mustInclude?.length ? new Set(input.mustInclude) : undefined,
+      };
       const sessionIndex = wi * days + di;
 
       const blueprint = { ...BLUEPRINTS[focusGoal] };

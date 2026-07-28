@@ -282,6 +282,9 @@ export interface BuildProgramInput {
   notes?: string | null;
   /** Gym split to follow — push/pull/legs, upper/lower, body-part and so on. */
   style?: SplitStyle;
+  /** Movement ids a coach picked from the library. A strong preference that
+   *  still passes through the pain filter and the athlete's exclusions. */
+  mustInclude?: string[];
 }
 
 /**
@@ -338,6 +341,7 @@ export function buildProgram(input: BuildProgramInput): ProgramPlan {
     focus: input.focus,
     position: input.position,
     constraints,
+    mustInclude: input.mustInclude,
   });
 
   return {

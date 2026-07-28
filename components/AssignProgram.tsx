@@ -3,8 +3,9 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { invalidate } from "@/lib/use-async";
-import { buildProgram, GOALS, type GoalType } from "@/lib/coach";
+import { buildProgram, GOALS, goalsForSport, type GoalType } from "@/lib/coach";
 import { SPLIT_STYLES, type SplitStyle } from "@/lib/hypertrophy";
+import { ExercisePicker } from "@/components/ExercisePicker";
 import type { SportId } from "@/lib/exercises";
 
 /**
@@ -15,12 +16,23 @@ import type { SportId } from "@/lib/exercises";
  * and session logging all work on it untouched. The only difference is
  * assigned_by, which is what the athlete sees and what the RLS policy pins.
  */
-export function AssignProgram({ athleteId, athleteName, sport, position, coachId, onAssigned }: {
+/** One athlete a program can be built for. */
+export interface AssignTarget {
+  id: string;
+  name: string;
+  sport: SportId;
+  position?: string | string[] | null;
+}
+
+export function AssignProgram({ athleteId, athleteName, sport, position, coachId, team, onAssigned }: {
   athleteId: string;
   athleteName: string;
   sport: SportId;
   position?: string | string[] | null;
   coachId: string;
+  /** The whole squad, so one build can go to everyone rather than being
+   *  repeated athlete by athlete for a session they all do together. */
+  team?: AssignTarget[];
   onAssigned?: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -28,22 +40,37 @@ export function AssignProgram({ athleteId, athleteName, sport, position, coachId
   const [days, setDays] = useState(3);
   const [style, setStyle] = useState<SplitStyle>("auto");
   const [notes, setNotes] = useState("");
+  const [picks, setPicks] = useState<string[]>([]);
+  const [toTeam, setToTeam] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState(false);
+  const [done, setDone] = useState<string | null>(null);
 
-  const isGym = sport === "gym";
+  // Mirrors wantsHypertrophy() in lib/coach.ts — the only case where the split
+  // is read at all. Keep the two in step: a control that doesn't change the
+  // output is worse than no control, because it teaches people it did.
+  const usesSplit = sport === "gym" && goal === "strength";
+  const squad = team ?? [];
 
-  async function assign() {
-    setBusy(true);
-    setError(null);
+  /**
+   * Build and assign to one athlete. Returns an error string, or null.
+   *
+   * Each athlete is built SEPARATELY rather than sharing one plan object: the
+   * engine reads their sport and position, so a squad of a keeper, two wingers
+   * and a centre-back get the same session structure with the ball work each of
+   * them actually needs. Copying one plan across the team would give the keeper
+   * crossing practice.
+   */
+  async function assignTo(target: AssignTarget): Promise<string | null> {
     const supabase = createClient();
+    const targetIsGym = target.sport === "gym";
 
     const plan = buildProgram({
-      goal, painMap: {}, sport, position: position ?? undefined,
-      focus: isGym ? "aesthetics" : "performance",
+      goal, painMap: {}, sport: target.sport, position: target.position ?? undefined,
+      focus: targetIsGym ? "aesthetics" : "performance",
       daysPerWeek: days, notes: notes || null,
-      style: isGym ? style : undefined,
+      style: targetIsGym && goal === "strength" ? style : undefined,
+      mustInclude: picks.length ? picks : undefined,
     });
 
     // Insert FIRST, archive after it succeeds.
@@ -54,10 +81,10 @@ export function AssignProgram({ athleteId, athleteName, sport, position, coachId
     // athlete quietly lost the program they were following. The failure case
     // destroyed data on someone who wasn't even in the room.
     const { data: existing } = await supabase
-      .from("programs").select("id").eq("user_id", athleteId).eq("status", "active");
+      .from("programs").select("id").eq("user_id", target.id).eq("status", "active");
 
     const { error: e } = await supabase.from("programs").insert({
-      user_id: athleteId,
+      user_id: target.id,
       assigned_by: coachId,
       goal_type: goal,
       goal_notes: notes || null,
@@ -67,13 +94,9 @@ export function AssignProgram({ athleteId, athleteName, sport, position, coachId
       block: 1,
     });
     if (e) {
-      setBusy(false);
-      setError(
-        /row-level security/i.test(e.message)
-          ? "They haven't accepted you as their coach yet — they need to approve the request first."
-          : e.message
-      );
-      return;
+      return /row-level security/i.test(e.message)
+        ? `${target.name} hasn't accepted you as their coach yet.`
+        : `${target.name}: ${e.message}`;
     }
 
     // Now it's safe to stand the old one down. One active program at a time,
@@ -82,27 +105,58 @@ export function AssignProgram({ athleteId, athleteName, sport, position, coachId
     if (oldIds.length) {
       await supabase.from("programs").update({ status: "archived" }).in("id", oldIds);
     }
-    setBusy(false);
+
     // Tell them. A program that appears silently is one they find next week.
     // Best-effort: the program is already assigned, so a failed notification
     // must not read as a failed assignment.
     await supabase.from("notifications").insert({
-      user_id: athleteId,
+      user_id: target.id,
       kind: "program_assigned",
       title: "Your coach set you a new program",
       body: `${GOALS.find((g) => g.id === goal)?.label ?? goal}, ${days} days a week.${notes ? ` "${notes}"` : ""}`,
       href: "/coach",
     });
+    return null;
+  }
+
+  async function assign() {
+    setBusy(true);
+    setError(null);
+
+    const targets: AssignTarget[] = toTeam && squad.length
+      ? squad
+      : [{ id: athleteId, name: athleteName, sport, position }];
+
+    // Sequential, not Promise.all. One refusal must not take the others down,
+    // and a coach needs to know WHICH athletes it reached — "something went
+    // wrong" across a squad of twenty is not a usable answer.
+    const failures: string[] = [];
+    for (const t of targets) {
+      const err = await assignTo(t);
+      if (err) failures.push(err);
+    }
+
+    setBusy(false);
+    const ok = targets.length - failures.length;
+
+    if (failures.length) {
+      setError(
+        ok > 0
+          ? `Assigned to ${ok} of ${targets.length}. ${failures.join(" ")}`
+          : failures.join(" ")
+      );
+      if (ok === 0) return;
+    }
 
     invalidate();           // their coach page is cached; drop it so the new plan shows
-    setDone(true);
+    setDone(ok === 1 && targets.length === 1 ? athleteName : `${ok} athletes`);
     setOpen(false);
     onAssigned?.();
-    setTimeout(() => setDone(false), 3000);
+    setTimeout(() => setDone(null), 4000);
   }
 
   if (done) {
-    return <p className="text-xs font-semibold text-pitch-400">✓ Program assigned to {athleteName}</p>;
+    return <p className="text-xs font-semibold text-pitch-400">✓ Program assigned to {done}</p>;
   }
 
   if (!open) {
@@ -115,19 +169,50 @@ export function AssignProgram({ athleteId, athleteName, sport, position, coachId
 
   return (
     <div className="mt-3 space-y-3 rounded-2xl border border-white/10 bg-white/[0.02] p-3">
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-bold text-slate-100">Program for {athleteName}</span>
-        <button onClick={() => setOpen(false)} className="text-xs text-slate-500">Cancel</button>
+      <div className="flex items-center justify-between gap-2">
+        <span className="min-w-0 break-words text-sm font-bold text-slate-100">
+          Program for {toTeam && squad.length ? `the whole squad (${squad.length})` : athleteName}
+        </span>
+        <button onClick={() => setOpen(false)} className="shrink-0 text-xs text-slate-500">Cancel</button>
       </div>
 
+      {/* Whole-squad assignment. Each athlete is still built individually from
+          their own sport and position — a keeper gets keeping drills, not the
+          winger's crossing practice — so this saves the repetition without
+          flattening everyone into one identical plan. */}
+      {squad.length > 1 && (
+        <label className="flex cursor-pointer items-start gap-2.5 rounded-xl bg-white/[0.04] p-3">
+          <input
+            type="checkbox"
+            checked={toTeam}
+            onChange={(e) => setToTeam(e.target.checked)}
+            className="mt-0.5 h-4 w-4 shrink-0 accent-[#e3b53f]"
+          />
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold text-slate-100">Assign to all {squad.length} athletes</span>
+            <span className="block text-[11px] text-slate-400">
+              Each one is built for their own position and sport, not copied.
+            </span>
+          </span>
+        </label>
+      )}
+
+      {/* Goals for THIS sport, not all six. A coach assigning to a gym athlete
+          was being offered "Speed" and "Ball skill", and a runner could be set
+          a ball-skill block — combinations the athlete's own page has never
+          offered because they don't make sense. */}
       <label className="block">
         <span className="field-label">Goal</span>
         <select value={goal} onChange={(e) => setGoal(e.target.value as GoalType)} className="field [color-scheme:dark]">
-          {GOALS.map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}
+          {goalsForSport(sport).map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}
         </select>
       </label>
 
-      {isGym && (
+      {/* The split only exists in the bodybuilding engine, and buildProgram only
+          routes there for gym + strength. Showing an Arnold-split picker on a
+          speed or conditioning block offered a choice that was then thrown
+          away — the plan came back identical whatever was selected. */}
+      {usesSplit && (
         <label className="block">
           <span className="field-label">Split</span>
           <select value={style} onChange={(e) => setStyle(e.target.value as SplitStyle)} className="field [color-scheme:dark]">
@@ -136,6 +221,12 @@ export function AssignProgram({ athleteId, athleteName, sport, position, coachId
           </select>
         </label>
       )}
+
+      {/* Coach picks specific work */}
+      <div>
+        <span className="field-label">Exercises</span>
+        <ExercisePicker sport={sport} value={picks} onChange={setPicks} />
+      </div>
 
       <div>
         <span className="field-label">Days per week</span>
