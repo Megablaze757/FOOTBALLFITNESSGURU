@@ -48,6 +48,9 @@ export interface Exercise {
   why: string;          // one line: why it helps the athlete
   sports?: SportId[];   // omitted = general (applies to every sport)
   description?: string; // fuller how-to (merged from DESCRIPTIONS below)
+  /** True when `description` actually teaches the movement, rather than being
+   *  the one-line `why` used as a fallback. */
+  hasHowTo?: boolean;
   custom?: boolean;     // true for coach-authored team exercises
   imported?: boolean;   // true for the bulk gym-database entries
   difficulty?: Difficulty;
@@ -542,14 +545,43 @@ const DESCRIPTIONS: Record<string, string> = {
   gk_reaction_saves: "From close range with a rebounder or a rapid server, take six to ten quick serves with your hands ready at hip height and your body big. React to the ball itself, not the server's arm. Critically, recover to your feet immediately after every save to deal with the second ball — the rebound is where most close-range goals actually come from. Take full rest between sets so quality stays high.",
   gk_crosses: "With servers delivering from both wings, call early and loudly, attack the ball at its highest point, and take off from one foot with the lead knee up to protect yourself in a crowd. Catch when you can, punch decisively with two fists when you can't. Dominating your box kills crosses before they ever become chances, and a keeper who commands their area lifts the whole back line.",
   gk_one_v_one: "As the attacker breaks through, close the distance fast while they're still taking a touch, then set and stay tall as long as possible to keep the goal covered. When they commit, spread big and low with your hands leading, making yourself as wide a barrier as possible. One-v-ones are the highest-value situation a keeper faces — going to ground early is the most common and most punished mistake.",
-};
 
-for (const e of EXERCISES) e.description = DESCRIPTIONS[e.id] ?? e.why;
+  // Conditioning. These were added to give the engine cardio that isn't
+  // running, and shipped with only a one-line benefit — so the "How to perform
+  // it" panel explained the point of the exercise and not the exercise.
+  rowing_intervals: "Set the damper around 4–5. Drive with the legs first, then swing the hips back, then pull the handle to the bottom of your ribs — legs, hips, arms, and the exact reverse on the way back. Most people pull with the arms and waste the biggest muscles they own. Aim for a steady stroke rate around 24–28 during work intervals and let the legs do the work; the screen should show consistent splits rather than a fast start and a fade.",
+  ski_erg: "Stand tall with the handles overhead, then drive down by hinging at the hips and crunching the trunk, finishing with the hands past your thighs. It's a hip hinge, not an arm pull — the power comes from folding at the hips and using your bodyweight. Return under control to full extension before the next stroke. It's kind on the legs, which makes it a good conditioning option when your legs are already beaten up from training.",
+  skipping: "Turn the rope with the wrists, not the arms, and keep the elbows tucked in near the ribs. Stay on the balls of the feet with small hops, barely leaving the floor — a couple of centimetres is plenty. Keep the shoulders relaxed and look ahead rather than down at your feet. Start with steady two-foot bouncing and only add single-leg or double-unders once you can hold a full minute without tripping.",
+  incline_walk: "Set the treadmill to a steep incline (10–15%) and a walking pace you can hold conversationally. Do not hold the handrails — gripping them takes most of the load out and turns a genuinely useful session into nothing. Stand tall, let the arms swing, and drive through the whole foot. It builds a real aerobic base with almost no impact, which makes it ideal when you're carrying a niggle or in a heavy training week.",
+  swim_intervals: "Push off, extend fully, and rotate from the hips rather than thrashing with the arms. Breathe every three strokes to keep both sides even. Rest on the clock between lengths rather than by feel, so the intervals stay honest as you tire. Zero impact makes this the conditioning option that works when running is off the table entirely — a stress fracture, shin splints, or the day after a hard match.",
+  sled_push: "Set the handles at chest height for a heavier push or low for a more aggressive drive. Get a strong forward lean with straight arms, brace the trunk, and take short, powerful steps driving through the whole foot. Do not let the hips rise and the back round. Keep the load heavy enough that it stays a push rather than a jog — this is meant to build leg drive as much as an engine.",
+  kb_swing_intervals: "Hinge at the hips with a flat back, hike the bell back between your legs like a rugby pass, then snap the hips forward hard to float it to chest height. The arms are ropes, the hips are the engine — never lift it with the shoulders. Lock the glutes at the top and let the bell fall before hinging again. Done properly this is a hinge and a conditioning tool at once; done as a squat-and-lift it's neither.",
+  shuttle_runs: "Mark two lines the given distance apart. Sprint out, decelerate under control, touch the line with a foot or hand, and change direction hard. The turn is the whole exercise: get the hips low and the weight over the outside foot rather than drifting through it. Full effort out, honest rest between reps — the aim is repeat sprint quality, so once your times fall off noticeably the useful part of the set is over.",
+  stair_intervals: "Run or bound up a flight, then walk down as recovery — always walk down, since descending fast is where the knees and the injuries come from. Drive the knees and use your arms. Keep the torso tall rather than folding forward at the waist. Steep stairs make this closer to a power session than a run, so treat the first couple of reps as a build rather than going flat out cold.",
+};
 
 // Merge the bulk gym database — skip any whose name already has a rich entry.
 const richNames = new Set(EXERCISES.map((e) => e.name.toLowerCase()));
 for (const e of IMPORTED_EXERCISES) {
   if (!richNames.has(e.name.toLowerCase())) EXERCISES.push(e);
+}
+
+// Descriptions are assigned AFTER the merge, not before.
+//
+// This used to run first, so every one of the ~245 imported exercises ended up
+// with description: undefined — and ExerciseDetail hides the "How to perform
+// it" section when there's no description. The library therefore listed 330
+// exercises of which most silently refused to tell you how to do them, even
+// where the text to show was sitting right there in their `why`.
+//
+// `hasHowTo` marks the ones where that text genuinely teaches the movement,
+// rather than saying what it's good for. Showing a one-line benefit under a
+// heading that reads "How to perform it" is its own kind of lie, and the UI
+// needs to be able to tell the two apart.
+for (const e of EXERCISES) {
+  const written = DESCRIPTIONS[e.id];
+  e.hasHowTo = !!written;
+  e.description ??= written ?? e.why;
 }
 // Every exercise gets a difficulty (rich ones inferred from the name).
 for (const e of EXERCISES) e.difficulty ??= difficultyOf(e.name);

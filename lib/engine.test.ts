@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildBlock, prescriptionText, restText, painByArea, type ProgramDrill, type ProgramPlan } from "./engine";
+import { buildBlock, prescriptionText, restText, painByArea, adjustForReadiness, type ProgramDrill, type ProgramPlan } from "./engine";
 import { MOVEMENTS, PROGRAMMED_IDS, MOVEMENT_BY_ID, movementsInSlot, normaliseKit } from "./movements";
 import { EXERCISES } from "./exercises";
 import { skillsForSport, skillsForAthlete } from "./skills";
@@ -257,4 +257,60 @@ test("every movement id in the catalogue is unique", () => {
   const ids = MOVEMENTS.map((m) => m.id);
   assert.equal(new Set(ids).size, ids.length);
   assert.equal(Object.keys(MOVEMENT_BY_ID).length, ids.length);
+});
+
+// --- readiness actually changing the session ---------------------------------
+
+test("green trains exactly as written", () => {
+  const s = buildBlock({ goal: "strength", painMap: {}, sport: "gym" }).weeks[0].sessions[0];
+  assert.deepEqual(adjustForReadiness(s, "Green"), s);
+});
+
+test("yellow takes a set off the working movements, but not the warm-up", () => {
+  const s = buildBlock({ goal: "strength", painMap: {}, sport: "rugby" }).weeks[1].sessions[0];
+  const eased = adjustForReadiness(s, "Yellow");
+
+  for (const [i, d] of s.drills.entries()) {
+    const e = eased.drills[i];
+    if (d.slot === "warmup" || d.slot === "cooldown" || d.skill) {
+      assert.equal(e.sets, d.sets, `${d.name}: warm-up/cool-down must not be trimmed`);
+    } else {
+      assert.ok(e.sets < d.sets || d.sets <= 1, `${d.name}: expected a set off ${d.sets}, got ${e.sets}`);
+    }
+  }
+  // And it says why, rather than leaving the athlete to wonder.
+  assert.ok(eased.drills.some((d) => /readiness is down/i.test(d.reason)));
+});
+
+test("yellow eases the effort target rather than only the volume", () => {
+  const s = buildBlock({ goal: "strength", painMap: {}, sport: "weightlifting" }).weeks[2].sessions[0];
+  const eased = adjustForReadiness(s, "Yellow");
+  const before = s.drills.find((d) => d.intensity);
+  const after = eased.drills.find((d) => d.name === before?.name);
+  if (before?.intensity && after?.intensity) {
+    const n = (x: string) => Number(x.replace(/[^\d.]/g, ""));
+    assert.ok(n(after.intensity) < n(before.intensity), "RPE should come down on a flat day");
+    assert.ok(n(after.intensity) >= 5, "but never below RPE 5 — that isn't training");
+  }
+});
+
+test("red is a real session you can open, not a paragraph of advice", () => {
+  const s = buildBlock({ goal: "speed", painMap: {}, sport: "football" }).weeks[2].sessions[0];
+  const rest = adjustForReadiness(s, "Red");
+  assert.match(rest.title, /recovery/i);
+  assert.ok(rest.drills.length > 0, "a recovery day still has to give you something to do");
+  assert.ok(rest.drills.every((d) => d.slot !== "primary"), "no hard work on a red day");
+  assert.ok(rest.drills.some((d) => d.slot === "warmup"), "keep the warm-up — you need more of it, not less");
+});
+
+test("a trimmed prescription still reads correctly", () => {
+  const s = buildBlock({ goal: "strength", painMap: {}, sport: "gym" }).weeks[0].sessions[0];
+  const eased = adjustForReadiness(s, "Yellow");
+  for (const d of eased.drills) {
+    if (!d.prescription) continue;
+    const lead = Number(d.prescription.split(" ")[0]);
+    if (Number.isFinite(lead) && d.slot !== "warmup" && d.slot !== "cooldown" && !d.skill) {
+      assert.equal(lead, d.sets, `${d.name}: prescription "${d.prescription}" disagrees with sets=${d.sets}`);
+    }
+  }
 });

@@ -9,6 +9,7 @@ import {
   FOCI,
   type GoalType, type ProgramPlan, type TrainingFocus,
 } from "@/lib/coach";
+import { adjustForReadiness, type ReadinessStatus } from "@/lib/engine";
 import { positionList } from "@/lib/positions";
 import { PositionPicker } from "@/components/PositionPicker";
 import { FeatureLock, tierOfSub } from "@/components/FeatureLock";
@@ -432,6 +433,13 @@ function ActiveProgram({
   const deadline = program.target_date ? deadlineInfo(program.start_date, program.target_date, adherence) : null;
 
   // Measurable benchmark target progress.
+  // What today's session ACTUALLY is, once this morning's check-in is taken
+  // into account. Everything downstream — the list, the guided player, what
+  // gets logged — uses this rather than the version written four weeks ago.
+  const todaySession = nextSession
+    ? adjustForReadiness(nextSession.s, (readiness?.status as ReadinessStatus) ?? "Green")
+    : null;
+
   const bench = (program.target_metric && program.target_value != null && program.baseline_value != null)
     ? benchmarkProgress(program.target_metric, program.baseline_value, program.target_value, latestBench[program.target_metric] ?? program.baseline_value)
     : null;
@@ -686,7 +694,7 @@ function ActiveProgram({
       )}
 
       {/* Readiness-aware: what to do today */}
-      {tab === "today" && nextSession && (
+      {tab === "today" && nextSession && todaySession && (
         <section className="card p-5">
           <div className="mb-2 flex items-center justify-between">
             <h2 className="field-label !mb-0">Today&apos;s session</h2>
@@ -696,27 +704,38 @@ function ActiveProgram({
               </span>
             )}
           </div>
-          {readiness?.status === "Red" ? (
-            <div className="rounded-2xl bg-readiness-red/10 p-3 text-sm text-slate-200">
-              Your readiness is <b className="text-readiness-red">Red</b> today — skip the scheduled <b>{nextSession.s.title.split("· ")[1]}</b> and take active recovery: mobility, light spin and stretching. {readiness.advice}
-            </div>
-          ) : (
-            <div>
-              <div className="text-sm font-semibold text-slate-100">Week {nextSession.w} · {nextSession.s.title}</div>
-              {readiness?.status === "Yellow" && <p className="mt-1 text-xs text-amber-300">Readiness is moderate — keep it crisp, cut the last set if you fade.</p>}
-              <div className="mt-2">
-                <SessionDrills drills={nextSession.s.drills} />
+          {/* The session shown is the ADJUSTED one. Readiness used to be
+              measured, displayed, then ignored: Yellow told you to cut a set
+              and left you to do it, Red told you to rest and gave you nothing
+              to open. Now the plan itself changes. */}
+          <div>
+            {readiness?.status === "Red" ? (
+              <div className="mb-3 rounded-2xl bg-readiness-red/10 p-3 text-sm text-slate-200">
+                Readiness is <b className="text-readiness-red">Red</b>, so today&apos;s{" "}
+                <b>{nextSession.s.title.split("· ")[1] ?? "session"}</b> has been swapped for active
+                recovery. {readiness.advice} It still counts toward your block.
               </div>
-              <button onClick={() => setPlaying(true)} className="btn-primary mt-4">▶ Start guided session</button>
+            ) : (
+              <div className="text-sm font-semibold text-slate-100">Week {nextSession.w} · {todaySession.title}</div>
+            )}
+            {readiness?.status === "Yellow" && (
+              <p className="mb-2 mt-1 text-xs text-amber-300">
+                Readiness is moderate — a set has come off the working movements and the effort
+                targets are eased.
+              </p>
+            )}
+            <div className="mt-2">
+              <SessionDrills drills={todaySession.drills} />
             </div>
-          )}
+            <button onClick={() => setPlaying(true)} className="btn-primary mt-4">▶ Start guided session</button>
+          </div>
         </section>
       )}
 
-      {playing && nextSession && (
+      {playing && nextSession && todaySession && (
         <WorkoutPlayer
-          title={`Week ${nextSession.w} · ${nextSession.s.title}`}
-          drills={nextSession.s.drills}
+          title={`Week ${nextSession.w} · ${todaySession.title}`}
+          drills={todaySession.drills}
           onComplete={() => { if (!program.completed_sessions.includes(`w${nextSession.w}d${nextSession.s.day}`)) void toggleSession(`w${nextSession.w}d${nextSession.s.day}`); }}
           onClose={() => setPlaying(false)}
         />

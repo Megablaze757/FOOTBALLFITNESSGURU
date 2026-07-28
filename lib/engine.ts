@@ -364,6 +364,86 @@ function focusRotationFor(input: EngineInput): GoalType[] {
   return [input.goal, "strength", input.goal === "speed" ? "agility" : "speed"];
 }
 
+// --- Today's readiness actually changing today's session ---------------------
+
+export type ReadinessStatus = "Green" | "Yellow" | "Red";
+
+/**
+ * Adapt a planned session to how recovered the athlete actually is.
+ *
+ * Readiness was measured every morning, shown prominently, and then ignored:
+ * the session was byte-for-byte identical whether you'd slept nine hours or
+ * three. Yellow printed "cut the last set if you fade" and left the athlete to
+ * do the arithmetic; Red said "take active recovery" and offered nothing you
+ * could open, follow or log. Measuring something and then not acting on it is
+ * the definition of a feature that's for show.
+ *
+ *   GREEN  — train as written.
+ *   YELLOW — drop a set from the working movements and ease the effort target.
+ *            The warm-up and cool-down are untouched; they're the part you need
+ *            MORE of on a flat day, not less.
+ *   RED    — replace it entirely with a real recovery session that can be
+ *            played and logged like any other.
+ */
+export function adjustForReadiness(session: ProgramSession, status: ReadinessStatus): ProgramSession {
+  if (status === "Green") return session;
+
+  if (status === "Yellow") {
+    return {
+      ...session,
+      title: `${session.title} · eased back`,
+      drills: session.drills.map((d) => {
+        if (d.slot === "warmup" || d.slot === "cooldown" || d.skill) return d;
+        const sets = Math.max(1, d.sets - 1);
+        return {
+          ...d,
+          sets,
+          prescription: d.prescription ? restated(d.prescription, d.sets, sets) : d.prescription,
+          // One notch easier. Chasing a peak RPE on a bad day is how a flat
+          // week becomes an injury.
+          intensity: easeIntensity(d.intensity),
+          reason: `${d.reason} Trimmed a set — your readiness is down today.`,
+        };
+      }),
+    };
+  }
+
+  // Red. Not "here's some advice", an actual session.
+  const keep = session.drills.filter((d) => d.slot === "warmup" || d.slot === "cooldown");
+  const easy = MOVEMENTS.filter((m) => m.slot === "conditioning" && (m.dose.rpe ?? 10) <= 6);
+  const spin = easy[0] ?? MOVEMENTS.find((m) => m.slot === "conditioning");
+
+  return {
+    ...session,
+    title: "Recovery session",
+    drills: [
+      ...keep.filter((d) => d.slot === "warmup"),
+      ...(spin ? [{
+        name: spin.name,
+        sets: spin.dose.sets, reps: spin.dose.reps,
+        cue: spin.cue,
+        reason: "Easy aerobic work moves blood without adding fatigue.",
+        prescription: prescriptionText(spin.dose),
+        slot: "conditioning" as Slot,
+        rest: spin.dose.rest,
+      }] : []),
+      ...keep.filter((d) => d.slot === "cooldown"),
+    ],
+  };
+}
+
+/** "4 × 5" -> "3 × 5" when a set comes off. Leaves anything else alone. */
+function restated(prescription: string, from: number, to: number): string {
+  return prescription.startsWith(`${from} ×`) ? prescription.replace(`${from} ×`, `${to} ×`) : prescription;
+}
+
+function easeIntensity(intensity?: string): string | undefined {
+  if (!intensity) return intensity;
+  const m = intensity.match(/RPE\s*([\d.]+)/i);
+  if (!m) return intensity;
+  return `RPE ${Math.max(5, Number(m[1]) - 1)}`;
+}
+
 /** A 4-week block: pain-aware, structured, and different every session. */
 export function buildBlock(input: EngineInput): ProgramPlan {
   const block = Math.max(1, input.block ?? 1);

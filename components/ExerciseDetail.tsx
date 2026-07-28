@@ -33,10 +33,21 @@ export function ExerciseDetailCard({ ex, sets, reps }: { ex: Exercise; sets?: nu
         </div>
       </div>
 
+      {/* Only claim to be teaching the movement when we actually are. The bulk
+          gym entries carry a one-line note on what the lift is for, which is
+          useful — but printing it under "How to perform it" promises a
+          step-by-step and delivers a sentence, which is worse than saying
+          nothing. Label each for what it is, and be honest about the gap. */}
       {ex.description && (
         <div>
-          <div className="stat-label mb-1.5">How to perform it</div>
+          <div className="stat-label mb-1.5">{ex.hasHowTo ? "How to perform it" : "What it's for"}</div>
           <p className="text-sm leading-relaxed text-slate-300">{ex.description}</p>
+          {!ex.hasHowTo && (
+            <p className="mt-2 rounded-xl bg-white/[0.04] px-3 py-2 text-xs text-slate-400">
+              We haven&apos;t written a full step-by-step for this one yet. The cues below are the
+              points that matter most — and the animation shows the movement pattern.
+            </p>
+          )}
         </div>
       )}
 
