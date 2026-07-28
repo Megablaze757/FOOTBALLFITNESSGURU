@@ -312,11 +312,25 @@ function overBudget(state: BudgetState): Response {
 // If every rung fails, the endpoint returns an error and the browser drops to
 // the on-device engine in lib/coach.ts, which is the real final rung.
 
-// The client (lib/api.ts) aborts at 18s. Stay inside that or the fallback chain
-// just burns time the athlete spends watching a spinner: no new attempt starts
-// after CHAIN_BUDGET_MS, and no single attempt may run past ATTEMPT_TIMEOUT_MS.
-const CHAIN_BUDGET_MS = 15_000;
-const ATTEMPT_TIMEOUT_MS = 9_000;
+// THESE NUMBERS WERE THE BUG.
+//
+// 9 seconds per attempt was fine for a short answer and far too short for a
+// long one. Estimating a meal returns a few hundred tokens and finished
+// comfortably; a rehab plan or a four-week program is a large JSON document
+// that takes longer than that to generate, so EVERY attempt was aborted
+// mid-stream and the endpoint returned "all models failed".
+//
+// The injury planner then showed "couldn't build a plan just now", and program
+// generation fell through to the on-device engine without a word — which is why
+// building a program appeared to work. It did work. It just never once used the
+// AI, on any request, since these limits were set.
+//
+// The old ceiling existed because the client aborted at 18s and there was no
+// point outliving it. Long jobs now run in the background (lib/jobs.tsx), so
+// nobody is watching a spinner and the budget can be what the work actually
+// needs. Callers pass their own client-side timeout to match.
+const CHAIN_BUDGET_MS = 55_000;
+const ATTEMPT_TIMEOUT_MS = 30_000;
 
 /** Free rungs first, paid last, de-duplicated. */
 function modelChain(env: Env): string[] {

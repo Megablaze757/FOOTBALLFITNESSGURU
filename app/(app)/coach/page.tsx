@@ -10,6 +10,7 @@ import {
   type GoalType, type ProgramPlan, type TrainingFocus,
 } from "@/lib/coach";
 import { adjustForReadiness, type ReadinessStatus } from "@/lib/engine";
+import { useJobs } from "@/lib/jobs";
 import { positionList } from "@/lib/positions";
 import { PositionPicker } from "@/components/PositionPicker";
 import { FeatureLock, tierOfSub } from "@/components/FeatureLock";
@@ -175,14 +176,28 @@ function GoalBuilder({ painMap, latestBench, sport, initialPositions, initialFoc
   const [creating, setCreating] = useState(false);
   const [buildingId, setBuildingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { start: startJob } = useJobs();
 
   const sore = Object.entries(painByArea(painMap)).filter(([, v]) => (v ?? 0) >= 4).map(([a]) => a.replace("_", " "));
 
-  async function createProgram(g: GoalType, f: TrainingFocus, pos: string[], tileId?: string, style?: SplitStyle, days?: number) {
+  /**
+   * Build and save a program.
+   *
+   * Runs as a background job so you can leave this page while it works. The
+   * AI call can take the best part of a minute for a four-week block, and
+   * before this you had to sit and watch it — on a phone, on a page you had
+   * already read. The job survives navigating away; the tray tells you when
+   * it's done.
+   */
+  function createProgram(g: GoalType, f: TrainingFocus, pos: string[], tileId?: string, style?: SplitStyle, days?: number) {
     setGoal(g); setFocus(f); setPositions(pos);
     setCreating(true);
     setBuildingId(tileId ?? null);
     setError(null);
+    startJob("program", "Building your program", () => buildAndSave(g, f, pos, style, days));
+  }
+
+  async function buildAndSave(g: GoalType, f: TrainingFocus, pos: string[], style?: SplitStyle, days?: number) {
     const supabase = createClient();
 
     // Prefer the AI backend (Cloudflare Worker / Edge Function); fall back to the
@@ -224,16 +239,19 @@ function GoalBuilder({ painMap, latestBench, sport, initialPositions, initialFoc
       target_metric: metric || null, target_value: targetValue ? Number(targetValue) : null, baseline_value: baseline,
     });
     if (insErr) {
-      setError(insErr.message);
       setCreating(false);
       setBuildingId(null);
-      return;
+      // Thrown, not swallowed: the job runner catches it and the tray shows the
+      // real reason, which works whether or not you're still on this page.
+      throw new Error(insErr.message);
     }
     // Safe now. One active program at a time, so stand the previous one down.
     const priorIds = (current ?? []).map((p) => p.id);
     if (priorIds.length) {
       await supabase.from("programs").update({ status: "archived" }).in("id", priorIds);
     }
+    setCreating(false);
+    setBuildingId(null);
     onCreated();
   }
 

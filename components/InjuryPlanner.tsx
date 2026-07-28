@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { invokeAI } from "@/lib/api";
+import { useJobs } from "@/lib/jobs";
 import { REHAB_DISCLAIMER } from "@/lib/essentials";
 import type { SportId } from "@/lib/exercises";
 
@@ -49,16 +50,23 @@ export function InjuryPlanner({ sport, area }: { sport: SportId; area?: string }
   const [plan, setPlan] = useState<Plan | null>(null);
   const [chronic, setChronic] = useState(false);
   const [busy, setBusy] = useState(false);
+  const { start: startJob } = useJobs();
   const [error, setError] = useState<string | null>(null);
 
-  async function build() {
+  // Runs as a background job so you can leave the page while it builds — a
+  // rehab plan is a big generation and takes the best part of a minute.
+  function build() {
     setBusy(true);
     setError(null);
+    startJob("injury", "Building your rehab plan", buildPlan);
+  }
+
+  async function buildPlan() {
     try {
       const res = await invokeAI<{ plan?: Plan; chronic?: boolean }>("injury-plan", {
         description, area, weeks: weeks ?? 0, sport,
       });
-      if (!res?.plan) throw new Error("no plan");
+      if (!res?.plan) throw new Error("The AI returned nothing usable.");
       setPlan(res.plan);
       setChronic(!!res.chronic);
     } catch (e) {
@@ -70,6 +78,7 @@ export function InjuryPlanner({ sport, area }: { sport: SportId; area?: string }
       setError(
         `${msg}${/allowance|limit|Pro/i.test(msg) ? "" : " — the rehab guides below still apply, and for something persistent a physio beats any app."}`
       );
+      throw e; // let the job tray report it too, in case you've navigated away
     } finally {
       setBusy(false);
     }

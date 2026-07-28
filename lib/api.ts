@@ -3,7 +3,14 @@ import { createClient } from "@/lib/supabase/client";
 // How long to wait on the backend before giving up. A Worker cold-start plus an
 // LLM call can legitimately take 10-15s; past this the caller is better served
 // by the instant local engine than by a spinner that never resolves.
-const AI_TIMEOUT_MS = 18_000;
+// Was 18s, which was less than a long generation takes — so the browser gave up
+// on requests the Worker would have completed. Raised to sit just outside the
+// Worker's own 55s chain budget, so the server's error (which says WHICH model
+// failed and why) arrives instead of the client's silent abort.
+//
+// Long enough only because these calls run in the background now — see
+// lib/jobs.tsx. Nobody is watching a spinner for a minute.
+const AI_TIMEOUT_MS = 60_000;
 
 /**
  * Calls a backend function. Prefers the Cloudflare Worker (NEXT_PUBLIC_API_URL)
