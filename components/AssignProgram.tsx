@@ -46,10 +46,15 @@ export function AssignProgram({ athleteId, athleteName, sport, position, coachId
       style: isGym ? style : undefined,
     });
 
-    // One active program at a time, same rule as the athlete's own page —
-    // otherwise they open Coach and find two competing plans.
-    await supabase.from("programs").update({ status: "archived" })
-      .eq("user_id", athleteId).eq("status", "active");
+    // Insert FIRST, archive after it succeeds.
+    //
+    // This used to archive the athlete's active program and then insert. When
+    // the insert was refused — most commonly by RLS, because the athlete hadn't
+    // accepted the coach yet — the coach got a tidy error message and the
+    // athlete quietly lost the program they were following. The failure case
+    // destroyed data on someone who wasn't even in the room.
+    const { data: existing } = await supabase
+      .from("programs").select("id").eq("user_id", athleteId).eq("status", "active");
 
     const { error: e } = await supabase.from("programs").insert({
       user_id: athleteId,
@@ -61,8 +66,8 @@ export function AssignProgram({ athleteId, athleteName, sport, position, coachId
       in_season: false,
       block: 1,
     });
-    setBusy(false);
     if (e) {
+      setBusy(false);
       setError(
         /row-level security/i.test(e.message)
           ? "They haven't accepted you as their coach yet — they need to approve the request first."
@@ -70,6 +75,14 @@ export function AssignProgram({ athleteId, athleteName, sport, position, coachId
       );
       return;
     }
+
+    // Now it's safe to stand the old one down. One active program at a time,
+    // otherwise they open Coach and find two competing plans.
+    const oldIds = (existing ?? []).map((p) => p.id);
+    if (oldIds.length) {
+      await supabase.from("programs").update({ status: "archived" }).in("id", oldIds);
+    }
+    setBusy(false);
     // Tell them. A program that appears silently is one they find next week.
     // Best-effort: the program is already assigned, so a failed notification
     // must not read as a failed assignment.

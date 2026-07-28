@@ -15,8 +15,14 @@ export function TeamExercises({ coachId }: { coachId: string }) {
     return (data ?? []) as Row[];
   }, [coachId]);
 
+  const [error, setError] = useState<string | null>(null);
+
   async function remove(id: string) {
-    await createClient().from("custom_exercises").delete().eq("id", id);
+    setError(null);
+    const { error } = await createClient().from("custom_exercises").delete().eq("id", id);
+    // Without this the row simply reappears on reload, which reads as the
+    // delete button not working rather than the delete being refused.
+    if (error) { setError(`Couldn't remove that exercise: ${error.message}`); return; }
     reload();
   }
 

@@ -21,12 +21,20 @@ export default function OnboardingPage() {
   const [positions, setPositions] = useState<string[]>([]);
   const [focus, setFocus] = useState<TrainingFocus>("performance");
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
+  // Navigating away regardless of the result was the bug here: a refused write
+  // left `onboarded` false with no sport saved, so the athlete was dropped into
+  // a coach page that knew nothing about them and bounced back through
+  // onboarding on the next visit, with nothing ever explaining why.
   async function finish(next: "/coach" | "/journal") {
     setSaving(true);
-    await createClient().from("profiles").update({
+    setError(null);
+    const { error } = await createClient().from("profiles").update({
       sport, positions, position: positions[0] ?? null, training_focus: focus, onboarded: true,
     }).eq("id", user.id);
+    setSaving(false);
+    if (error) { setError(`Couldn't save your details: ${error.message}`); return; }
     // Shape only — which sport, how many positions. Never the values themselves.
     track("onboarded", { sport, positions: positions.length });
     router.replace(next);
@@ -34,7 +42,10 @@ export default function OnboardingPage() {
 
   async function skip() {
     setSaving(true);
-    await createClient().from("profiles").update({ onboarded: true }).eq("id", user.id);
+    setError(null);
+    const { error } = await createClient().from("profiles").update({ onboarded: true }).eq("id", user.id);
+    setSaving(false);
+    if (error) { setError(`Couldn't skip: ${error.message}`); return; }
     router.replace("/home");
   }
 
@@ -110,6 +121,12 @@ export default function OnboardingPage() {
           </div>
         )}
       </div>
+
+      {error && (
+        <p className="mt-4 rounded-2xl border border-readiness-red/30 bg-readiness-red/10 px-4 py-2.5 text-center text-sm text-slate-200">
+          {error}
+        </p>
+      )}
 
       {/* Nav */}
       <div className="mt-8 flex items-center justify-between">

@@ -33,6 +33,7 @@ interface Earnings {
 export function AffiliateEarnings() {
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const { data, loading, reload } = useAsync(async () => {
     const { data, error } = await createClient().rpc("affiliate_earnings");
@@ -40,28 +41,43 @@ export function AffiliateEarnings() {
     return (data ?? []) as Earnings[];
   }, [], "affiliate-earnings");
 
+  // These three move money, or decide who earns it. Every one of them used to
+  // throw its error away: a refused rate change simply snapped back to the old
+  // number, and a failed payout announced "Marked £0.00 as paid" — a failure
+  // that reads as a success is the worst possible outcome on a payouts screen.
   async function setRate(id: string, pct: string) {
     const n = pct.trim() === "" ? null : Number(pct);
     if (n !== null && (!Number.isFinite(n) || n < 0 || n > 100)) return;
     setBusy(id);
-    await createClient().from("affiliates").update({ rate_pct: n }).eq("id", id);
+    setError(null);
+    const { error } = await createClient().from("affiliates").update({ rate_pct: n }).eq("id", id);
     setBusy(null);
+    if (error) { setError(`Couldn't change that rate: ${error.message}`); return; }
     reload();
   }
 
   async function toggleActive(id: string, next: boolean) {
     setBusy(id);
-    await createClient().from("affiliates").update({ active: next }).eq("id", id);
+    setError(null);
+    const { error } = await createClient().from("affiliates").update({ active: next }).eq("id", id);
     setBusy(null);
+    if (error) { setError(`Couldn't ${next ? "activate" : "pause"} that affiliate: ${error.message}`); return; }
     reload();
   }
 
   async function markPaid(id: string, name: string) {
     setBusy(id);
-    const { data: settled } = await createClient().rpc("mark_commissions_paid", { p_affiliate: id });
+    setError(null);
+    const { data: settled, error } = await createClient().rpc("mark_commissions_paid", { p_affiliate: id });
     setBusy(null);
-    setNote(`Marked ${poundsFromPennies(Number(settled) || 0)} as paid to ${name}.`);
-    setTimeout(() => setNote(null), 4000);
+    if (error) { setError(`Nothing was marked paid — ${error.message}`); return; }
+    // Zero is a real answer (nothing had cleared the refund window yet) and
+    // needs saying differently, or it looks like the payout failed.
+    const pennies = Number(settled) || 0;
+    setNote(pennies > 0
+      ? `Marked ${poundsFromPennies(pennies)} as paid to ${name}.`
+      : `Nothing to pay ${name} yet — their commission is still inside the 30-day window.`);
+    setTimeout(() => setNote(null), 5000);
     reload();
   }
 
@@ -82,6 +98,11 @@ export function AffiliateEarnings() {
       </div>
 
       {note && <p className="mb-3 rounded-2xl border border-pitch-400/20 bg-pitch-400/[0.05] px-4 py-2.5 text-sm text-slate-200">{note}</p>}
+      {error && (
+        <p className="mb-3 rounded-2xl border border-readiness-red/30 bg-readiness-red/10 px-4 py-2.5 text-sm text-slate-200">
+          {error}
+        </p>
+      )}
 
       {!rows.length ? (
         <p className="card px-4 py-6 text-center text-sm text-slate-400">

@@ -24,7 +24,13 @@ function urlBase64ToBytes(base64: string): ArrayBuffer {
   return buf;
 }
 
-type State = "loading" | "unsupported" | "needs-install" | "blocked" | "off" | "on";
+// "unconfigured" is deliberately distinct from "unsupported". They render the
+// same (nothing — there's no point offering a reminder we can't send), but they
+// mean opposite things: one is the device, the other is us. Conflating them
+// meant a missing VAPID key looked like a browser limitation, so the whole
+// reminders feature could be silently absent for every user on every device
+// with nothing anywhere to say why.
+type State = "loading" | "unsupported" | "unconfigured" | "needs-install" | "blocked" | "off" | "on";
 
 export function PushToggle() {
   const [state, setState] = useState<State>("loading");
@@ -33,7 +39,12 @@ export function PushToggle() {
 
   useEffect(() => {
     (async () => {
-      if (!VAPID) return setState("unsupported");
+      if (!VAPID) {
+        // Loud in the console on purpose: this is a deploy-config mistake, and
+        // the only other symptom is a feature that quietly doesn't exist.
+        console.warn("[push] NEXT_PUBLIC_VAPID_PUBLIC_KEY is not set — reminders are disabled for everyone.");
+        return setState("unconfigured");
+      }
       if (typeof window === "undefined" || !("serviceWorker" in navigator) || !("PushManager" in window)) {
         // iOS only exposes PushManager to an installed PWA, so this is the
         // common case on iPhone — and "not supported" would be wrong and
@@ -110,7 +121,7 @@ export function PushToggle() {
     }
   }
 
-  if (state === "loading" || state === "unsupported") return null;
+  if (state === "loading" || state === "unsupported" || state === "unconfigured") return null;
 
   return (
     <div className="mb-4 rounded-2xl bg-white/[0.03] p-4">

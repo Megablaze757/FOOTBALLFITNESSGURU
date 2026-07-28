@@ -430,6 +430,12 @@ function ActiveProgram({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  /**
+   * Anything that went wrong changing the program. These writes all used to
+   * discard their error: the tick would appear, the state would silently snap
+   * back on the next load, and nothing ever said the save was refused.
+   */
+  const [actionError, setActionError] = useState<string | null>(null);
 
   async function switchSeason() {
     setSwitching(true);
@@ -441,18 +447,29 @@ function ActiveProgram({
       goal, painMap, isInSeason: nextSeason, sport, focus, position: positions,
       daysPerWeek: plan.weeks[0]?.sessions.length, notes: program.goal_notes,
     });
-    await supabase.from("programs").update({ plan: newPlan, in_season: nextSeason }).eq("id", program.id);
+    const { error: seasonErr } = await supabase
+      .from("programs").update({ plan: newPlan, in_season: nextSeason }).eq("id", program.id);
     setSwitching(false);
+    if (seasonErr) { setActionError(`Couldn't switch phase: ${seasonErr.message}`); return; }
     onChange();
   }
 
   async function toggleSession(sid: string) {
     const supabase = createClient();
+    setActionError(null);
     const marking = !program.completed_sessions.includes(sid);
     const next = marking
       ? [...program.completed_sessions, sid]
       : program.completed_sessions.filter((s) => s !== sid);
-    await supabase.from("programs").update({ completed_sessions: next }).eq("id", program.id);
+    const { error: tickErr } = await supabase
+      .from("programs").update({ completed_sessions: next }).eq("id", program.id);
+    // Ticking a session off is the core habit of the whole app. If it doesn't
+    // save, say so — the alternative is a tick that vanishes on the next visit
+    // and an athlete who thinks the app lost their week.
+    if (tickErr) {
+      setActionError(`Couldn't save that session as done: ${tickErr.message}`);
+      return;
+    }
 
     // Completing a scheduled session logs it as training so it counts toward your
     // load (ACWR) and history. Merge into today's training log.
@@ -481,19 +498,28 @@ function ActiveProgram({
       goal, painMap, isInSeason: program.in_season, block: nextBlock, sport, focus, position: positions,
       daysPerWeek: plan.weeks[0]?.sessions.length, notes: program.goal_notes,
     });
-    await supabase.from("programs").update({ status: "archived" }).eq("id", program.id);
-    await supabase.from("programs").insert({
+    // Insert first, archive second. The other order archives the block they're
+    // on and then, if the insert fails, leaves them with no active program at
+    // all — their training plan gone, with nothing on screen to say why.
+    const { error: insErr } = await supabase.from("programs").insert({
       user_id: userId, goal_type: program.goal_type, goal_notes: program.goal_notes, plan: newPlan,
       status: "active", in_season: program.in_season, target_date: program.target_date, block: nextBlock,
     });
+    if (insErr) {
+      setAdvancing(false);
+      setActionError(`Couldn't start the next block: ${insErr.message}`);
+      return;
+    }
+    await supabase.from("programs").update({ status: "archived" }).eq("id", program.id);
     setAdvancing(false);
     onChange();
   }
 
 
   async function newProgram() {
-    const supabase = createClient();
-    await supabase.from("programs").update({ status: "archived" }).eq("id", program.id);
+    setActionError(null);
+    const { error } = await createClient().from("programs").update({ status: "archived" }).eq("id", program.id);
+    if (error) { setActionError(`Couldn't archive this block: ${error.message}`); return; }
     onChange();
   }
 
@@ -513,6 +539,14 @@ function ActiveProgram({
 
   return (
     <div className="animate-fade-up space-y-5">
+      {/* A refused write has to be visible. Without this the tick just doesn't
+          stick and the athlete blames the app for losing their session. */}
+      {actionError && (
+        <div className="rounded-2xl border border-readiness-red/30 bg-readiness-red/10 p-3 text-sm text-slate-200">
+          {actionError}
+          <button onClick={() => setActionError(null)} className="ml-2 text-xs text-slate-400 hover:text-pitch-400">Dismiss</button>
+        </div>
+      )}
       <header className="flex items-start justify-between">
         <div>
           <h1 className="text-3xl font-extrabold tracking-tight">AI Coach</h1>
