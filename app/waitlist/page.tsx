@@ -30,9 +30,17 @@ export default function WaitlistPage() {
     setState("saving"); setMsg("");
     const supabase = createClient();
     // The affiliate code may be in the URL now, or stored from an earlier click
-    // on the landing page — either way it attributes this signup to them.
+    // on the landing page — either way it attributes this person to them.
+    //
+    // Sent as `referral_code`, not smuggled in `source`: joining the waitlist
+    // through someone's link binds this email to them PERMANENTLY (see
+    // migration 0057), and the column that decides who gets paid should be the
+    // one that says so. `source` is kept in step for the older links already in
+    // circulation, which still put the code there.
     const source = getRef();
-    const { error } = await supabase.from("waitlist").insert({ email: clean, source });
+    const { error } = await supabase
+      .from("waitlist")
+      .insert({ email: clean, source, referral_code: source });
     if (!error) { setState("done"); return; }
     // A unique-violation means they're already on the list — treat as success.
     if (/duplicate|unique/i.test(error.message)) { setState("already"); return; }
