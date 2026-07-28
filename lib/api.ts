@@ -40,7 +40,11 @@ export async function invokeAI<T = unknown>(fn: string, body: unknown, timeoutMs
           const errBody = (await res.json()) as { error?: string };
           if (errBody?.error) msg = errBody.error;
         } catch { /* non-JSON body */ }
-        throw new Error(msg);
+        // Carry the status. Callers fall back to the local engine when the
+        // backend is unreachable, and they must be able to tell that apart
+        // from the backend REFUSING them — a 402 means "this needs Pro", and
+        // falling back there would quietly hand a free user the paid feature.
+        throw Object.assign(new Error(msg), { status: res.status });
       }
       return (await res.json()) as T;
     } catch (e) {

@@ -191,7 +191,18 @@ function GoalBuilder({ painMap, latestBench, sport, initialPositions, initialFoc
       const data = await invokeAI<{ plan?: ProgramPlan }>("generate-program", { goal: g, pain_map: painMap, notes, in_season: inSeason, sport, position: pos, focus: f, days_per_week: days ?? daysPerWeek, split: style });
       if (!data?.plan) throw new Error("fallback");
       plan = data.plan;
-    } catch {
+    } catch (e) {
+      // 402 is the server saying this needs Pro, and 403 that the account is
+      // deactivated. Neither means "the backend is down", so neither may fall
+      // through to the local engine — that would quietly overrule our own
+      // paywall and build the program anyway.
+      const status = (e as { status?: number })?.status;
+      if (status === 402 || status === 403) {
+        setError(e instanceof Error ? e.message : "This is part of Pro.");
+        setCreating(false);
+        setBuildingId(null);
+        return;
+      }
       // `notes` matters as much here as on the AI path — without it the local
       // engine ignored "I don't train legs" and prescribed squats anyway.
       plan = buildProgram({ goal: g, painMap, isInSeason: inSeason, sport, position: pos, focus: f, daysPerWeek: days ?? daysPerWeek, notes, style });
@@ -199,8 +210,12 @@ function GoalBuilder({ painMap, latestBench, sport, initialPositions, initialFoc
 
     // Remember the athlete's positions + focus for next time.
     await supabase.from("profiles").update({ positions: pos, position: pos[0] ?? null, training_focus: f }).eq("id", userId);
-    // One active program at a time.
-    await supabase.from("programs").update({ status: "archived" }).eq("user_id", userId).eq("status", "active");
+
+    // Insert the new block BEFORE archiving the old one. The other order
+    // archives what they're following and then, if the insert is refused,
+    // leaves them with no program at all — having just asked for a better one.
+    const { data: current } = await supabase
+      .from("programs").select("id").eq("user_id", userId).eq("status", "active");
     const baseline = metric ? latestBench[metric] ?? null : null;
     const { error: insErr } = await supabase.from("programs").insert({
       user_id: userId, goal_type: g, goal_notes: notes || null, plan, status: "active",
@@ -212,6 +227,11 @@ function GoalBuilder({ painMap, latestBench, sport, initialPositions, initialFoc
       setCreating(false);
       setBuildingId(null);
       return;
+    }
+    // Safe now. One active program at a time, so stand the previous one down.
+    const priorIds = (current ?? []).map((p) => p.id);
+    if (priorIds.length) {
+      await supabase.from("programs").update({ status: "archived" }).in("id", priorIds);
     }
     onCreated();
   }

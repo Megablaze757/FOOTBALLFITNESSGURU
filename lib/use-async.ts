@@ -79,6 +79,35 @@ function clearStored(prefix?: string): void {
   } catch { /* nothing to do */ }
 }
 
+// --- Making a failed load visible -------------------------------------------
+//
+// Every caller gets an `error` back. Two of twenty-seven ever looked at it.
+//
+// The rest render `data ?? []`, so a rejected query — RLS, a missing migration,
+// a dead connection — comes out as an empty list and the screen says "no
+// training logged yet" to someone with a year of history. That reads as the app
+// losing their data, and it's indistinguishable from the honest empty state.
+//
+// Rather than ask twenty-five call sites to remember, the hook reports failures
+// on a channel that one banner renders. New pages get it for free, and a page
+// that wants bespoke handling still has its own `error` (see Leaderboards).
+type LoadErrorListener = (info: { key?: string; error: Error }) => void;
+const loadErrorListeners = new Set<LoadErrorListener>();
+
+export function onLoadError(fn: LoadErrorListener): () => void {
+  loadErrorListeners.add(fn);
+  return () => { loadErrorListeners.delete(fn); };
+}
+
+function reportLoadError(error: Error, key?: string): void {
+  // Always log: whoever is reading a console during a bug report should see the
+  // real reason, not just the banner.
+  console.error(`[load] ${key ?? "unkeyed"} failed:`, error.message);
+  for (const fn of loadErrorListeners) {
+    try { fn({ key, error }); } catch { /* a broken listener must not break loading */ }
+  }
+}
+
 // Minimal client data hook for the static SPA: runs an async loader, exposes
 // data + loading, and a reload() to refetch after mutations.
 //
@@ -114,8 +143,10 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[] = [], cacheKey
       // so callers can say which happened.
       .catch((e: unknown) => {
         if (!active) return;
-        setError(e instanceof Error ? e : new Error(String(e)));
+        const err = e instanceof Error ? e : new Error(String(e));
+        setError(err);
         setLoading(false);
+        reportLoadError(err, cacheKey);
       });
     return () => { active = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -6,6 +6,7 @@ import { useSession, UserProvider } from "@/lib/auth";
 import { TabBar } from "@/components/TabBar";
 import { SideNav } from "@/components/SideNav";
 import { SuspendedGate } from "@/components/SuspendedGate";
+import { LoadErrorBanner } from "@/components/LoadErrorBanner";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useSession();
@@ -34,6 +35,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </main>
         </div>
         <TabBar />
+        {/* One place that tells the truth when a query fails, instead of
+            twenty-five pages rendering an empty list as if it were an answer. */}
+        <LoadErrorBanner />
       </div>
       </SuspendedGate>
     </UserProvider>
