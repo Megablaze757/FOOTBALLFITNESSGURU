@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { recommendDrills, buildProgram, analyzeProgress, painByArea, goalsForSport } from "./coach";
+import { MOVEMENTS } from "./movements";
 import type { TrainingLog } from "./types";
 
 test("goalsForSport tailors goals per sport", () => {
@@ -47,10 +48,10 @@ test("buildProgram returns a 4-week block with sessions and notes the constraint
   assert.ok(plan.weeks[0].sessions.length >= 2);
   assert.ok(plan.weeks[0].sessions[0].drills.length > 0);
   assert.ok(plan.constraints.some((c) => /knee/i.test(c)));
-  // In-season deload week has lighter volume than build weeks.
-  const setsW3 = plan.weeks[2].sessions[0].drills[0].sets;
-  const setsW4 = plan.weeks[3].sessions[0].drills[0].sets;
-  assert.ok(setsW4 <= setsW3);
+  // In-season deload week has lighter volume than the peak week. Measured
+  // across the week: drills[0] is no longer the same movement from one week to
+  // the next, which is the point of the rotation.
+  assert.ok(weekSets(plan, 3) <= weekSets(plan, 2));
 });
 
 /** Total prescribed sets in a week — warm-ups included, they just don't wave. */
@@ -108,17 +109,27 @@ test("program weeks genuinely progress rather than repeating", () => {
   assert.ok(weekSets(plan, 3) < weekSets(plan, 2), "deload should cut volume below the peak week");
 });
 
-test("weighted lifts wave reps down toward the peak, bodyweight waves up", () => {
-  // Weightlifting, not gym+aesthetics: that combination now routes to the
+test("weighted lifts wave reps down toward the peak", () => {
+  // Weightlifting, not gym+aesthetics: that combination routes to the
   // hypertrophy engine, which deliberately holds reps in range instead of
   // waving them down (see hypertrophy.test.ts).
   const plan = buildProgram({ goal: "strength", painMap: {}, sport: "weightlifting", focus: "performance" });
-  const drillAcrossWeeks = (match: RegExp) =>
-    plan.weeks.map((w) => w.sessions.flatMap((s) => s.drills).find((d) => match.test(d.name))).filter(Boolean);
 
-  const squat = drillAcrossWeeks(/squat|deadlift|bench|press|row/i);
-  if (squat.length === 4) {
-    // Peak week (index 2) reps should be <= base week reps for a load lift.
-    assert.ok(squat[2]!.reps <= squat[0]!.reps, "load lift should get heavier (fewer reps) at peak");
+  // Compare a lift only against ITSELF. The block now rotates which movements
+  // appear, so "the first drill matching /squat/" is a different exercise from
+  // one week to the next — and matching loosely also caught the Spanish squat
+  // iso-hold, which is timed work and correctly goes UP.
+  const loadLifts = new Set(MOVEMENTS.filter((m) => m.prog === "load").map((m) => m.name));
+  const repsIn = (wi: number, name: string) =>
+    plan.weeks[wi].sessions.flatMap((s) => s.drills).find((d) => d.name === name)?.reps;
+
+  let compared = 0;
+  for (const name of loadLifts) {
+    const base = repsIn(0, name);
+    const peak = repsIn(2, name);
+    if (base == null || peak == null) continue;
+    assert.ok(peak <= base, `${name}: peak week ${peak} reps should not exceed base week ${base}`);
+    compared++;
   }
+  assert.ok(compared > 0, "no load lift appeared in both week 1 and week 3 to compare");
 });

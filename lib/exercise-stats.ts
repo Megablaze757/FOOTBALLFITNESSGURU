@@ -64,6 +64,10 @@ export const MAX_REPS_FOR_1RM = 12;
 
 export function estimate1RM(loadKg: number, reps: number): number | null {
   if (!(loadKg > 0) || !Number.isFinite(reps) || reps < 1 || reps > MAX_REPS_FOR_1RM) return null;
+  // A single rep IS the one-rep max — there's nothing left to estimate. Epley
+  // returns load × 1.033 at one rep, which would quietly inflate a lift the
+  // athlete actually performed into one they haven't.
+  if (reps === 1) return Math.round(loadKg);
   return Math.round(loadKg * (1 + reps / 30));
 }
 

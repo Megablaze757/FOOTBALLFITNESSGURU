@@ -312,26 +312,33 @@ export function buildProgram(input: BuildProgramInput): ProgramPlan {
   // Training for muscle is a different sport to training for a sport. A
   // bodybuilder needs a split, isolation work and reps that stay in range —
   // hand those athletes to the hypertrophy engine instead.
-  const plan = wantsHypertrophy(input)
-    ? buildHypertrophyProgram({
-        painMap: input.painMap,
-        daysPerWeek: input.daysPerWeek,
-        block,
-        constraints,
-        isInSeason: input.isInSeason,
-        style: input.style,
-      })
-    : buildBlock({
-        goal: input.goal,
-        painMap: input.painMap,
-        isInSeason: input.isInSeason,
-        daysPerWeek: input.daysPerWeek,
-        block,
-        sport: input.sport,
-        focus: input.focus,
-        position: input.position,
-        constraints,
-      });
+  //
+  // It writes its own summary and constraints, describing the SPLIT it built,
+  // and returns untouched. Overwriting them here with the S&C wording told a
+  // bodybuilder they were on a "strength & power block" when they were on
+  // push/pull/legs.
+  if (wantsHypertrophy(input)) {
+    return buildHypertrophyProgram({
+      painMap: input.painMap,
+      daysPerWeek: input.daysPerWeek,
+      block,
+      constraints,
+      isInSeason: input.isInSeason,
+      style: input.style,
+    });
+  }
+
+  const plan = buildBlock({
+    goal: input.goal,
+    painMap: input.painMap,
+    isInSeason: input.isInSeason,
+    daysPerWeek: input.daysPerWeek,
+    block,
+    sport: input.sport,
+    focus: input.focus,
+    position: input.position,
+    constraints,
+  });
 
   return {
     ...plan,

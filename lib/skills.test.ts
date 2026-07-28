@@ -36,11 +36,16 @@ test("the sports that need technical work have it", () => {
   }
 });
 
-test("lifting sports honestly report having none", () => {
-  // Their training IS the lifting; pretending otherwise would pad the UI with
-  // nothing.
-  assert.equal(hasSkills("weightlifting"), false);
-  assert.equal(hasSkills("gym"), false);
+test("the lifting sports have technical work too", () => {
+  // This used to assert they had NONE, on the reasoning that "their training IS
+  // the lifting". That was backwards: technique is precisely the skill in the
+  // barbell sports, and a lifter got a program with no technical work in it at
+  // all while a footballer got rondos.
+  for (const s of ["weightlifting", "gym"] as const) {
+    assert.ok(hasSkills(s), `${s} still has no skill drills`);
+  }
+  const wl = skillsForSport("weightlifting");
+  assert.ok(wl.some((d) => /squat|bench|deadlift/i.test(d.name)), "no main-lift technique work");
 });
 
 test("a position's own drills come first, and nothing is lost", () => {
