@@ -8,16 +8,24 @@ crons = ["0 8 * * *"]
 
 # Non-secret defaults. Point these at your project.
 [vars]
-# Model chain, cheapest first. The Worker tries each OPENROUTER_FREE_MODELS slug
-# in order, then OPENROUTER_MODEL (paid), then gives up and the browser uses the
-# on-device engine. All of it runs on ONE OpenRouter key, which is why this stays
-# within their terms — no stacking of other vendors' free tiers behind a proxy.
+# Model chain: OPENROUTER_MODEL (paid) is tried FIRST, then these free slugs as
+# fallback, then the browser's on-device engine. All on ONE OpenRouter key,
+# which is why this stays within their terms — no stacking of other vendors'
+# free tiers behind a proxy.
 #
-# These are ":free" tiers: no token cost, but low daily caps and no SLA, so the
-# paid rung below is what makes the feature dependable. Slugs verified live on
-# 2026-07-25; free models get retired often, so if the coach feels slow, re-check
-# https://openrouter.ai/models?max_price=0 and prune dead entries — a dead slug
-# costs one wasted attempt per request.
+# Free-first was the original design and it was a false economy: the free tiers
+# are rate-limited, slower and the likeliest to ignore "reply with JSON only",
+# so the usual path was several failed attempts before reaching the model that
+# was always going to answer. 22 calls on the paid model cost $0.0015.
+#
+# NOTE: the Worker is pasted into the Cloudflare dashboard by hand, and that
+# does NOT apply anything in this [vars] block — it has to be set in the
+# dashboard too. Because that never happened, this var was unset in production
+# and there was no fallback chain at all. The Worker now carries these same
+# defaults in code so a fallback exists whether or not this is configured.
+#
+# Slugs verified live on 2026-07-28; free models get retired often, and a dead
+# slug costs one wasted attempt.
 OPENROUTER_FREE_MODELS = "nvidia/nemotron-3-super-120b-a12b:free,openai/gpt-oss-20b:free,google/gemma-4-31b-it:free"
 
 # A REAL OpenRouter model slug. "deepseek/deepseek-v4-flash" was invalid, so

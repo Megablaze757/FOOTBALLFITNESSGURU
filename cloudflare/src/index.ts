@@ -301,13 +301,15 @@ function overBudget(state: BudgetState): Response {
 }
 
 // --- AI via OpenRouter -----------------------------------------------------
-// Requests walk a chain of models: OpenRouter's ":free" tiers first, then the
-// paid model. Same key, same account, same provider — so this stays inside
-// OpenRouter's terms, unlike stacking other vendors' free tiers behind a proxy.
+// Requests walk a chain of models: the paid model FIRST, then OpenRouter's
+// ":free" tiers as fallback. Same key, same account, same provider — so this
+// stays inside OpenRouter's terms, unlike stacking other vendors' free tiers
+// behind a proxy.
 //
 // A rung is abandoned and the next tried when it 429s (free quota spent), 5xxs,
 // times out, or hands back something the caller can't use (see `validate`) —
-// free models are the ones most likely to ignore "reply with JSON only".
+// free models are the ones most likely to ignore "reply with JSON only", which
+// is the other reason they're the fallback rather than the first choice.
 //
 // If every rung fails, the endpoint returns an error and the browser drops to
 // the on-device engine in lib/coach.ts, which is the real final rung.
@@ -332,11 +334,39 @@ function overBudget(state: BudgetState): Response {
 const CHAIN_BUDGET_MS = 55_000;
 const ATTEMPT_TIMEOUT_MS = 30_000;
 
-/** Free rungs first, paid last, de-duplicated. */
+// Fallback rungs, tried only if the good model fails. Hard-coded defaults on
+// purpose: these live in wrangler.toml too, but the Worker is pasted into the
+// dashboard by hand and pasting code does NOT apply wrangler.toml vars — so
+// OPENROUTER_FREE_MODELS was simply unset in production and the chain had
+// exactly one rung. A fallback that only exists if you remember to configure it
+// is not a fallback. Setting the var still overrides this.
+//
+// Verified live on OpenRouter 2026-07-28. Free slugs get retired often; a dead
+// one costs one wasted attempt, which is why they sit BELOW the paid model
+// rather than in front of it.
+const DEFAULT_FALLBACK_MODELS = [
+  "nvidia/nemotron-3-super-120b-a12b:free",
+  "openai/gpt-oss-20b:free",
+  "google/gemma-4-31b-it:free",
+];
+
+/**
+ * The good model FIRST, free rungs as fallback.
+ *
+ * This used to run free-first to save money, and it was a false economy. The
+ * free tiers are rate-limited, slower and the most likely to ignore "reply with
+ * JSON only" — so the common path was several failed attempts before reaching
+ * the model that was always going to answer, burning the time budget on the way
+ * and, once the budget ran out, failing the whole request.
+ *
+ * The actual saving was nothing worth having: 22 calls on the paid model cost
+ * $0.0015. Quality first, fall back only when it genuinely breaks.
+ */
 function modelChain(env: Env): string[] {
-  const free = (env.OPENROUTER_FREE_MODELS || "").split(",").map((s) => s.trim()).filter(Boolean);
-  const paid = (env.OPENROUTER_MODEL || "deepseek/deepseek-chat").trim();
-  return [...free, paid].filter((m, i, all) => m && all.indexOf(m) === i);
+  const configured = (env.OPENROUTER_FREE_MODELS || "").split(",").map((s) => s.trim()).filter(Boolean);
+  const fallbacks = configured.length ? configured : DEFAULT_FALLBACK_MODELS;
+  const primary = (env.OPENROUTER_MODEL || "deepseek/deepseek-chat").trim();
+  return [primary, ...fallbacks].filter((m, i, all) => m && all.indexOf(m) === i);
 }
 
 // Price of the paid rung, in USD per MILLION tokens. Defaults match
