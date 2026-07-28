@@ -1281,8 +1281,18 @@ async function stripeWebhook(req: Request, env: Env): Promise<Response> {
     await accrueCommission(env, obj);
   } else if (type === "charge.refunded" || type === "charge.dispute.created") {
     // Money went back to the customer, so the commission on it was never
-    // really earned.
-    await reverseCommission(env, obj?.id, type === "charge.refunded" ? "refund" : "chargeback");
+    // really earned. A dispute is treated as the whole amount; a refund may be
+    // partial, and charge.refunded fires for those too — reversing everything
+    // on a £1 refund of a £20 payment would wipe the affiliate's commission.
+    const isDispute = type === "charge.dispute.created";
+    const charge = isDispute ? obj?.charge : obj?.id;
+    await reverseCommission(env, {
+      chargeId: typeof charge === "string" ? charge : null,
+      invoiceId: typeof obj?.invoice === "string" ? obj.invoice : null,
+      reason: isDispute ? "chargeback" : "refund",
+      refundedPennies: isDispute ? null : Number(obj?.amount_refunded ?? 0),
+      totalPennies: isDispute ? null : Number(obj?.amount ?? 0),
+    });
   }
   return json({ received: true });
 }
@@ -1387,17 +1397,34 @@ async function accrueCommission(env: Env, invoice: any): Promise<void> {
  * paid are reversed too so the ledger tells the truth, but the money is gone —
  * which is exactly why commission is held for 30 days before it can be paid.
  */
-async function reverseCommission(env: Env, chargeId: string | undefined, reason: string): Promise<void> {
-  if (!env.SUPABASE_SERVICE_ROLE_KEY || !chargeId) return;
-  await supa(env, `affiliate_commissions?stripe_charge_id=eq.${chargeId}&status=neq.reversed`, {
-    method: "PATCH",
-    headers: { Prefer: "return=minimal" },
-    body: JSON.stringify({
-      status: "reversed",
-      reversed_at: new Date().toISOString(),
-      reversal_reason: reason,
-    }),
+async function reverseCommission(env: Env, opts: {
+  chargeId: string | null;
+  invoiceId: string | null;
+  reason: string;
+  refundedPennies: number | null;
+  totalPennies: number | null;
+}): Promise<void> {
+  if (!env.SUPABASE_SERVICE_ROLE_KEY) return;
+  if (!opts.chargeId && !opts.invoiceId) return;
+
+  // Matches on the charge OR the invoice. It used to match on the charge alone,
+  // so an invoice that carried no charge id left rows that no refund could ever
+  // reach — commission stayed payable on money already given back.
+  const r = await svcRpc(env, "reverse_commission", {
+    p_charge: opts.chargeId,
+    p_invoice: opts.invoiceId,
+    p_reason: opts.reason,
+    p_refunded_pennies: opts.refundedPennies,
+    p_total_pennies: opts.totalPennies,
   });
+  if (!r.ok) {
+    console.error(`reverse_commission failed (${r.status}) — is migration 0055 applied?`);
+    return;
+  }
+  const n = Number(await r.json());
+  // A reversal that matched nothing is worth seeing: it means either an
+  // unreferred customer (fine) or a row we failed to write (not fine).
+  console.log(`commission: ${opts.reason} touched ${n} line(s) for ${opts.chargeId ?? opts.invoiceId}`);
 }
 
 async function upsertSub(env: Env, sub: any): Promise<void> {
