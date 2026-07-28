@@ -1398,6 +1398,21 @@ async function listUserObjects(env: Env, bucket: string, userId: string): Promis
 async function stripeWebhook(req: Request, env: Env): Promise<Response> {
   const sig = req.headers.get("stripe-signature");
   const payload = await req.text();
+
+  // Check the secret EXISTS before trying to verify with it.
+  //
+  // Without this, an unset STRIPE_WEBHOOK_SECRET reaches WebCrypto as an empty
+  // key and throws "DataError: Imported HMAC key length (0)..." — a message
+  // that names the symptom and gives no clue whatsoever about the cause. It
+  // cost an afternoon and three failed payment tests to trace back to a missing
+  // secret. Say it plainly instead.
+  if (!env.STRIPE_WEBHOOK_SECRET) {
+    console.error("[stripe] STRIPE_WEBHOOK_SECRET is not set on this Worker — no subscription can ever activate.");
+    return json({
+      error: "STRIPE_WEBHOOK_SECRET is not set on the Worker. Add it in Cloudflare → Workers → apex-api → Settings → Variables and Secrets, using the signing secret (whsec_...) from this Stripe endpoint.",
+    }, 503);
+  }
+
   if (!sig || !(await verifyStripe(payload, sig, env.STRIPE_WEBHOOK_SECRET))) {
     return new Response("bad signature", { status: 400 });
   }
