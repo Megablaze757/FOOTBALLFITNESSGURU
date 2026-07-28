@@ -6,11 +6,30 @@ import { getExerciseByName, demoImplement } from "@/lib/exercises";
 import { ExerciseSteps } from "@/components/ExerciseDemo";
 import { Confetti } from "@/components/Confetti";
 
-interface Drill { name: string; sets: number; reps: number }
+interface Drill {
+  name: string;
+  sets: number;
+  reps: number;
+  // --- from the engine. Optional: programs built before it have none. ---
+  /** Prescribed rest in seconds. Varies enormously by movement. */
+  rest?: number;
+  /** "RPE 8" — how hard this set should feel. */
+  intensity?: string;
+  tempo?: string;
+  /** "4 × 20m", "3 × 30s each side" — when reps alone can't say it. */
+  prescription?: string;
+}
 
 interface Step { drill: Drill; setNum: number; totalSets: number; drillIndex: number }
 
-const REST_SECONDS = 75;
+/**
+ * Fallback rest, for programs built before the engine prescribed it per
+ * movement. It used to be the ONLY rest: every set of every exercise got 75
+ * seconds, so a heavy deadlift and a calf raise were treated identically. Rest
+ * is not padding between sets — 45 seconds on a max-effort sprint turns speed
+ * work into conditioning, and 3 minutes on an accessory wastes the session.
+ */
+const DEFAULT_REST_SECONDS = 75;
 
 // Full-screen guided session: steps through every set with rest timers, then
 // calls onComplete (which logs the session + marks it done).
@@ -29,7 +48,9 @@ export function WorkoutPlayer({ title, drills, onComplete, onClose }: {
 
   const [i, setI] = useState(0);
   const [resting, setResting] = useState(false);
-  const [rest, setRest] = useState(REST_SECONDS);
+  const [rest, setRest] = useState(DEFAULT_REST_SECONDS);
+  /** What the rest was prescribed as, so the countdown can show progress against it. */
+  const [restTarget, setRestTarget] = useState(DEFAULT_REST_SECONDS);
   const [done, setDone] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [actual, setActual] = useState(0);   // reps actually completed this set
@@ -69,7 +90,12 @@ export function WorkoutPlayer({ title, drills, onComplete, onClose }: {
       onComplete();
       return;
     }
-    setRest(REST_SECONDS);
+    // Rest belongs to the movement you're about to do, not the one just
+    // finished — you rest long before a heavy set, not after a light one.
+    const next = steps[i + 1]?.drill.rest;
+    const secs = typeof next === "number" && next > 0 ? next : DEFAULT_REST_SECONDS;
+    setRestTarget(secs);
+    setRest(secs);
     setResting(true);
   }
 
@@ -107,7 +133,18 @@ export function WorkoutPlayer({ title, drills, onComplete, onClose }: {
             )}
             <div className="stat-label">Rest</div>
             <div className="my-4 text-7xl font-extrabold tabular-nums text-pitch-400">{rest}s</div>
-            <p className="text-slate-400">Next: <b className="text-slate-200">{steps[i + 1]?.drill.name}</b> · set {steps[i + 1]?.setNum}/{steps[i + 1]?.totalSets}</p>
+            {/* A bar, so a 3-minute rest before a heavy pull doesn't read as
+                the timer having stalled. */}
+            <div className="mx-auto h-1.5 w-40 overflow-hidden rounded-full bg-white/10">
+              <div
+                className="h-full rounded-full bg-pitch-400 transition-all duration-1000 ease-linear"
+                style={{ width: `${Math.max(0, Math.min(100, ((restTarget - rest) / Math.max(1, restTarget)) * 100))}%` }}
+              />
+            </div>
+            <p className="mt-4 text-slate-400">Next: <b className="text-slate-200">{steps[i + 1]?.drill.name}</b> · set {steps[i + 1]?.setNum}/{steps[i + 1]?.totalSets}</p>
+            {steps[i + 1]?.drill.intensity && (
+              <p className="mt-1 text-xs text-slate-500">Take it at {steps[i + 1]?.drill.intensity}</p>
+            )}
             <div className="mt-8 flex justify-center gap-3">
               <button onClick={() => setRest((r) => r + 15)} className="btn-ghost w-auto px-5">+15s</button>
               <button onClick={() => { setResting(false); setI((n) => n + 1); }} className="btn-primary w-auto px-6">Skip rest →</button>
@@ -122,7 +159,19 @@ export function WorkoutPlayer({ title, drills, onComplete, onClose }: {
             )}
             <div className="chip mx-auto text-pitch-400">Set {step.setNum} of {step.totalSets}</div>
             <h2 className="mt-3 break-words text-2xl font-extrabold sm:text-3xl">{step.drill.name}</h2>
-            <p className="mt-1 text-sm text-slate-400">Target {step.drill.reps} reps · log what you actually got</p>
+            {/* "Target 20 reps" is wrong for a 20-metre sprint or a 30-second
+                hold. Where the engine wrote a real prescription, show that. */}
+            <p className="mt-1 text-sm text-slate-400">
+              {step.drill.prescription ? `${step.drill.prescription} · ` : `Target ${step.drill.reps} reps · `}
+              log what you actually got
+            </p>
+            {/* Effort and tempo belong here, while the bar is in your hands —
+                not only on the plan you read this morning. */}
+            {(step.drill.intensity || step.drill.tempo) && (
+              <p className="mt-1 text-xs font-semibold text-pitch-400">
+                {[step.drill.intensity, step.drill.tempo].filter(Boolean).join(" · ")}
+              </p>
+            )}
 
             {/* Reps stepper — record the reps you completed (fewer is fine) */}
             <div className="mt-4 flex items-center justify-center gap-4">
