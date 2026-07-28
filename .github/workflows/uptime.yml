@@ -1,0 +1,99 @@
+name: Site check
+
+# WHY THIS EXISTS.
+#
+# On 28 July the site "went down" while returning HTTP 200 the whole time.
+# GitHub Pages had been switched from "GitHub Actions" to "Deploy from a
+# branch", so Jekyll built the repo and published README.md as the homepage.
+# Every uptime check in the world would have called that healthy: 200 OK, fast,
+# valid HTML. It just wasn't the app. The whole product was gone for hours and
+# the only thing that noticed was a person opening the site.
+#
+# So this does not check that the site is UP. It checks that the site is THE
+# APP — and it runs on a schedule, because the failure had nothing to do with a
+# deploy and no deploy-time check would ever have fired.
+#
+# A failed run emails whoever owns the repo. That is the entire point.
+
+on:
+  schedule:
+    - cron: "17 * * * *" # hourly, off the hour (the top of the hour is congested)
+  workflow_dispatch:
+  # Also straight after a deploy, so a bad publish is caught in minutes.
+  workflow_run:
+    workflows: ["Deploy to GitHub Pages"]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      # Pages' CDN takes a few seconds to serve a new publish. Without this a
+      # post-deploy run can read the previous build and cry wolf.
+      - name: Let the CDN settle after a deploy
+        if: github.event_name == 'workflow_run'
+        run: sleep 30
+
+      - name: The site is the app, not a README
+        run: |
+          set -euo pipefail
+          SITE="https://pocketathlete.com"
+          fail=0
+
+          # 1. The routes that only exist if the Next.js export was published.
+          #    Jekyll-from-README serves / just fine and 404s all of these.
+          for path in /login/ /manifest.webmanifest /icon-192.png; do
+            code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 20 "$SITE$path" || echo 000)
+            if [ "$code" != "200" ]; then
+              echo "::error::$path returned $code (expected 200) — the built app is not being served"
+              fail=1
+            else
+              echo "ok  $path -> $code"
+            fi
+          done
+
+          # 2. The homepage must carry the Next.js runtime.
+          home=$(curl -sS --max-time 20 "$SITE/" || true)
+          if ! printf '%s' "$home" | grep -q "/_next/"; then
+            echo "::error::the homepage has no /_next/ assets — this is not the built app"
+            fail=1
+          else
+            echo "ok  homepage references /_next/"
+          fi
+
+          # 3. The specific failure mode, named so the cause is obvious at 2am.
+          if printf '%s' "$home" | grep -qi "jekyll"; then
+            echo "::error::Jekyll is serving this site. Settings -> Pages -> Source must be 'GitHub Actions', not 'Deploy from a branch'."
+            fail=1
+          fi
+
+          # 4. The custom domain still belongs to us.
+          if ! printf '%s' "$home" | grep -qi "pocketathlete"; then
+            echo "::error::the homepage does not mention PocketAthlete — wrong site or wrong build"
+            fail=1
+          fi
+
+          exit $fail
+
+      - name: The API the app depends on is answering
+        run: |
+          set -euo pipefail
+          API="https://apex-api.fitnessguru.workers.dev"
+
+          code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 20 "$API/health" || echo 000)
+          [ "$code" = "200" ] || { echo "::error::Worker /health returned $code — AI, checkout and email are all down"; exit 1; }
+          echo "ok  worker health -> 200"
+
+          # The webhook route specifically. An unsigned POST must be REFUSED
+          # (400), not 404 — a 404 here is what silently broke every
+          # subscription, because Stripe was posting to a path that didn't
+          # exist and nothing anywhere reported it.
+          code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 20 -X POST "$API/stripe-webhook" || echo 000)
+          if [ "$code" = "404" ]; then
+            echo "::error::/stripe-webhook is 404 — Stripe deliveries will fail and no subscription will ever activate"
+            exit 1
+          fi
+          echo "ok  stripe-webhook route exists (returned $code, 400 = signature refused, which is correct)"
