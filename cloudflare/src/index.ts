@@ -65,6 +65,9 @@ export default {
       if (pathname.endsWith("/injury-plan")) return await injuryPlan(req, env);
       if (pathname.endsWith("/create-checkout")) return await createCheckout(req, env);
       if (pathname.endsWith("/billing-portal")) return await billingPortal(req, env);
+      if (pathname.endsWith("/cancel-subscription")) return await cancelSubscription(req, env);
+      if (pathname.endsWith("/pause-subscription")) return await pauseSubscription(req, env);
+      if (pathname.endsWith("/resume-subscription")) return await resumeSubscription(req, env);
       if (pathname.endsWith("/delete-account")) return await deleteAccount(req, env);
       if (pathname.endsWith("/stripe-webhook")) return await stripeWebhook(req, env);
       if (pathname.endsWith("/admin-create-user")) return await adminCreateUser(req, env);
@@ -1132,6 +1135,147 @@ async function billingPortal(req: Request, env: Env): Promise<Response> {
   }
 }
 
+
+// --- Cancel, pause, resume ---------------------------------------------------
+//
+// Stripe's hosted portal can cancel. It cannot offer a seasonal athlete a pause
+// instead, and it tells us nothing about why they left. Both of those are worth
+// more than the portal saves us in code.
+//
+// THE LEGAL FLOOR, because it constrains the design rather than decorating it:
+// cancelling must not be harder than subscribing (UK DMCCA 2024, and the FTC's
+// click-to-cancel rule). So `cancelSubscription` is a single call that always
+// works. It never requires the athlete to have seen an offer, it is never
+// gated behind a survey — `reason` is optional and a missing one is fine.
+
+/** How long a pause may run. Longer than this and cancelling is the honest advice. */
+const MAX_PAUSE_DAYS = 120;
+
+/**
+ * Record why someone is leaving. Best-effort on purpose: never let a failure
+ * here block the cancellation itself. Somebody trying to leave must always be
+ * able to leave, whatever our analytics are doing.
+ */
+async function recordCancellationFeedback(
+  env: Env,
+  userId: string,
+  reason: string | undefined,
+  detail: string | undefined,
+  outcome: "cancelled" | "paused" | "saved",
+): Promise<void> {
+  if (!reason) return;
+  try {
+    await supa(env, "cancellation_feedback", {
+      method: "POST",
+      body: JSON.stringify([{
+        user_id: userId,
+        reason: String(reason).slice(0, 80),
+        detail: detail ? String(detail).slice(0, 500) : null,
+        outcome,
+      }]),
+    });
+  } catch (e) {
+    console.error("cancellation feedback not recorded:", String(e));
+  }
+}
+
+/** The athlete's live Stripe subscription id, or null if they haven't got one. */
+async function stripeSubIdFor(env: Env, userId: string): Promise<string | null> {
+  const rows = (await (await supa(env, `subscriptions?user_id=eq.${userId}&select=stripe_subscription_id`)).json()) as
+    { stripe_subscription_id: string | null }[] | null;
+  return rows?.[0]?.stripe_subscription_id ?? null;
+}
+
+/**
+ * Cancel at the end of the paid period.
+ *
+ * Not immediately: they paid for the month, so they keep the month. It also
+ * makes the whole thing reversible right up until the period ends, which is
+ * what `resume-subscription` is for — a good number of people change their mind
+ * within a day, and without this their only route back is paying again.
+ */
+async function cancelSubscription(req: Request, env: Env): Promise<Response> {
+  const user = await authUser(req, env);
+  if (!user) return json({ error: "unauthorized" }, 401);
+  if (!env.STRIPE_SECRET_KEY) return json({ error: "billing not configured" }, 503);
+
+  const { reason, detail } = (await req.json().catch(() => ({}))) as { reason?: string; detail?: string };
+
+  const subId = await stripeSubIdFor(env, user.id);
+  if (!subId) return json({ error: "no-billing-account" }, 404);
+
+  const sub = await stripe(env, `subscriptions/${subId}`, { cancel_at_period_end: "true" });
+  await recordCancellationFeedback(env, user.id, reason, detail, "cancelled");
+  // Write it through rather than waiting on the webhook: the athlete is looking
+  // at the screen now, and "cancelled" needs to be true when it repaints.
+  await upsertSub(env, sub);
+
+  return json({
+    ok: true,
+    endsAt: sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : null,
+  });
+}
+
+/**
+ * Pause billing instead of cancelling.
+ *
+ * The reason this exists: an injured or out-of-season athlete doesn't want to
+ * leave, they want to come back. Cancelling makes them re-decide from scratch
+ * in three months; pausing makes returning the default.
+ *
+ * `behavior: void` means invoices raised during the pause are voided, so they
+ * genuinely aren't charged. Stripe resumes billing on its own at `resumes_at`.
+ */
+async function pauseSubscription(req: Request, env: Env): Promise<Response> {
+  const user = await authUser(req, env);
+  if (!user) return json({ error: "unauthorized" }, 401);
+  if (!env.STRIPE_SECRET_KEY) return json({ error: "billing not configured" }, 503);
+
+  const { days, reason, detail } = (await req.json().catch(() => ({}))) as
+    { days?: number; reason?: string; detail?: string };
+
+  const requested = Math.round(Number(days) || 0);
+  if (!Number.isFinite(requested) || requested < 7 || requested > MAX_PAUSE_DAYS) {
+    return json({ error: `Choose a pause between 7 and ${MAX_PAUSE_DAYS} days.` }, 400);
+  }
+
+  const subId = await stripeSubIdFor(env, user.id);
+  if (!subId) return json({ error: "no-billing-account" }, 404);
+
+  const resumesAt = Math.floor(Date.now() / 1000) + requested * 86400;
+  const sub = await stripe(env, `subscriptions/${subId}`, {
+    "pause_collection[behavior]": "void",
+    "pause_collection[resumes_at]": String(resumesAt),
+  });
+
+  await recordCancellationFeedback(env, user.id, reason, detail, "paused");
+  await upsertSub(env, sub);
+
+  return json({ ok: true, resumesAt: new Date(resumesAt * 1000).toISOString() });
+}
+
+/**
+ * Undo a cancellation or a pause. One call, because someone coming back is the
+ * cheapest customer there is and should never be asked to re-subscribe.
+ */
+async function resumeSubscription(req: Request, env: Env): Promise<Response> {
+  const user = await authUser(req, env);
+  if (!user) return json({ error: "unauthorized" }, 401);
+  if (!env.STRIPE_SECRET_KEY) return json({ error: "billing not configured" }, 503);
+
+  const subId = await stripeSubIdFor(env, user.id);
+  if (!subId) return json({ error: "no-billing-account" }, 404);
+
+  // Clearing both is deliberate: whichever state they were in, "resume" means
+  // back to normal. An empty pause_collection is how Stripe unpauses.
+  const sub = await stripe(env, `subscriptions/${subId}`, {
+    cancel_at_period_end: "false",
+    pause_collection: "",
+  });
+  await upsertSub(env, sub);
+
+  return json({ ok: true, tier: sub.metadata?.tier ?? null });
+}
 // --- Account deletion --------------------------------------------------------
 //
 // The privacy policy says "delete your account and we delete them", so this has
@@ -1433,7 +1577,18 @@ async function upsertSub(env: Env, sub: any): Promise<void> {
   if (!uid || !tier) return;
   const item = sub.items?.data?.[0];
   const s = sub.status;
-  const status = s === "active" || s === "trialing" ? "active" : s === "past_due" || s === "unpaid" ? "past_due" : s === "canceled" ? "canceled" : "incomplete";
+  let status = s === "active" || s === "trialing" ? "active" : s === "past_due" || s === "unpaid" ? "past_due" : s === "canceled" ? "canceled" : "incomplete";
+
+  // A PAUSED SUBSCRIPTION IS STILL "active" TO STRIPE.
+  //
+  // pause_collection stops the invoices but leaves the status alone, so without
+  // this we'd keep granting Pro to someone we have deliberately stopped
+  // charging — free access for as long as they cared to stay paused.
+  const pausedUntil: number | null = sub.pause_collection
+    ? Number(sub.pause_collection.resumes_at) || null
+    : null;
+  if (sub.pause_collection) status = "paused";
+
   await supa(env, "subscriptions?on_conflict=user_id", {
     method: "POST",
     headers: { Prefer: "resolution=merge-duplicates" },
@@ -1441,6 +1596,7 @@ async function upsertSub(env: Env, sub: any): Promise<void> {
       user_id: uid,
       tier: status === "active" ? tier : "bronze",
       status,
+      pause_until: pausedUntil ? new Date(pausedUntil * 1000).toISOString() : null,
       stripe_customer_id: sub.customer,
       stripe_subscription_id: sub.id,
       stripe_price_id: item?.price?.id ?? null,

@@ -13,6 +13,7 @@ import { planFor } from "@/lib/subscription";
 import { ContentEngine } from "@/components/ContentEngine";
 import { FunnelReport } from "@/components/FunnelReport";
 import { AffiliateEarnings } from "@/components/AffiliateEarnings";
+import { ChurnReport } from "@/components/ChurnReport";
 import type { Video } from "@/lib/types";
 
 interface Metrics {
@@ -90,6 +91,12 @@ export default function AdminPage() {
 
       <section className="mt-10">
         <FunnelReport />
+      </section>
+
+      {/* The other half of the funnel. Knowing where people arrive is only
+          useful next to why they leave. */}
+      <section className="mt-10">
+        <ChurnReport />
       </section>
 
       <section className="mt-10">

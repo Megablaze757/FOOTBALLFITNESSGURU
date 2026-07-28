@@ -30,7 +30,10 @@ export interface ReadinessResult {
 }
 
 export type Tier = "bronze" | "silver" | "gold";
-export type SubscriptionStatus = "active" | "canceled" | "past_due" | "incomplete";
+// "paused" is ours, not Stripe's. Stripe leaves a paused subscription reading
+// as active, so the Worker translates pause_collection into this — otherwise we
+// keep granting Pro to someone we've deliberately stopped charging.
+export type SubscriptionStatus = "active" | "canceled" | "past_due" | "incomplete" | "paused";
 
 export interface Subscription {
   id: string;
@@ -42,6 +45,8 @@ export interface Subscription {
   stripe_price_id: string | null;
   current_period_end: string | null;
   cancel_at_period_end: boolean;
+  /** When a paused subscription starts billing again. Null unless paused. */
+  pause_until?: string | null;
 }
 
 export type FatigueTrend = "improving" | "stable" | "declining";

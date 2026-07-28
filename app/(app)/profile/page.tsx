@@ -16,7 +16,7 @@ import type { Profile, Subscription, Tier } from "@/lib/types";
 export default function ProfilePage() {
   const user = useCurrentUser();
 
-  const { data, loading } = useAsync(async () => {
+  const { data, loading, reload } = useAsync(async () => {
     const supabase = createClient();
     const [{ data: profile }, { data: sub }] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", user.id).maybeSingle(),
@@ -71,7 +71,13 @@ export default function ProfilePage() {
 
       {/* Cancelling used to mean emailing and asking. A comped account has no
           Stripe customer behind it, so it gets the plans link instead. */}
-      <ManageBilling hasBilling={!!subscription?.stripe_customer_id} />
+      <ManageBilling
+        hasBilling={!!subscription?.stripe_customer_id}
+        cancelling={!!subscription?.cancel_at_period_end}
+        paused={subscription?.status === "paused"}
+        resumesAt={subscription?.pause_until ?? null}
+        onChanged={reload}
+      />
 
       {/* The whole loop depends on the app being opened in the morning. */}
       <PushToggle />
