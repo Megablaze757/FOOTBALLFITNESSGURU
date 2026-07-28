@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
+    "build:worker": "esbuild cloudflare/src/index.ts --bundle --format=esm --target=es2022 --platform=neutral --outfile=../worker-paste-me.js",
     "test": "node --import tsx --test \"lib/**/*.test.ts\""
   },
   "engines": {
