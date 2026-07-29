@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { invokeAI } from "@/lib/api";
+import { createClient } from "@/lib/supabase/client";
 import { useJobs } from "@/lib/jobs";
 import { REHAB_DISCLAIMER } from "@/lib/essentials";
 import type { SportId } from "@/lib/exercises";
@@ -52,6 +53,30 @@ export function InjuryPlanner({ sport, area }: { sport: SportId; area?: string }
   const [busy, setBusy] = useState(false);
   const { start: startJob } = useJobs();
   const [error, setError] = useState<string | null>(null);
+  const [savedAt, setSavedAt] = useState<string | null>(null);
+
+  // Bring back the last plan. Without this the plan lived in component state
+  // only: the job kept generating after you navigated away, but the result
+  // landed in an unmounted component and no row existed anywhere, so a plan you
+  // waited a minute for vanished on a tab change.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const { data, error: e } = await createClient()
+        .from("rehab_plans")
+        .select("plan, chronic, description, created_at")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (cancelled || e || !data) return;
+      const row = data as { plan: Plan; chronic: boolean; description: string; created_at: string };
+      setPlan(row.plan);
+      setChronic(row.chronic);
+      setDescription(row.description);
+      setSavedAt(new Date(row.created_at).toLocaleDateString(undefined, { day: "numeric", month: "short" }));
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   // Runs as a background job so you can leave the page while it builds — a
   // rehab plan is a big generation and takes the best part of a minute.
@@ -69,6 +94,25 @@ export function InjuryPlanner({ sport, area }: { sport: SportId; area?: string }
       if (!res?.plan) throw new Error("The AI returned nothing usable.");
       setPlan(res.plan);
       setChronic(!!res.chronic);
+
+      // Saved inside the job, so leaving the page keeps the plan rather than
+      // throwing away the generation. Best-effort: a failed write must not
+      // replace a plan they can see with an error, so it only warns.
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { error: saveErr } = await supabase.from("rehab_plans").insert({
+          user_id: user.id,
+          description,
+          area: area ?? null,
+          weeks: weeks ?? 0,
+          sport,
+          chronic: !!res.chronic,
+          plan: res.plan,
+        });
+        if (saveErr) console.warn("rehab plan not saved:", saveErr.message);
+        else setSavedAt(new Date().toLocaleDateString(undefined, { day: "numeric", month: "short" }));
+      }
     } catch (e) {
       // Show what actually went wrong. This used to replace every failure with
       // "couldn't build a plan just now", which is comforting, useless, and the
@@ -89,9 +133,15 @@ export function InjuryPlanner({ sport, area }: { sport: SportId; area?: string }
       <section className="space-y-4">
         <div className="card-premium p-5">
           <div className="flex items-start justify-between gap-3">
-            <h2 className="text-lg font-extrabold">Your plan</h2>
+            <div className="min-w-0">
+              <h2 className="text-lg font-extrabold">Your plan</h2>
+              {/* Says it's kept. The old version gave no sign either way, so the
+                  reasonable assumption was that closing the tab lost it — and
+                  that assumption happened to be correct. */}
+              {savedAt && <p className="mt-0.5 text-xs text-slate-500">Saved {savedAt} — it&apos;s here whenever you come back.</p>}
+            </div>
             <button onClick={() => setPlan(null)} className="shrink-0 text-xs text-slate-400 hover:text-pitch-400">
-              Start again
+              New plan
             </button>
           </div>
           <p className="mt-2 text-sm text-slate-200">{plan.summary}</p>

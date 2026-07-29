@@ -45,7 +45,7 @@ export interface SportProfile {
   headlineMetrics: string[];
 }
 
-// Every sport gets the same six destinations; only the order changes.
+// Every sport gets the same seven destinations; only the order changes.
 const TOOL: Record<string, SportTool> = {
   plan: { href: "/coach", title: "My plan", icon: "🏋️" },
   exercises: { href: "/library", title: "Exercises", icon: "📚" },
@@ -53,6 +53,10 @@ const TOOL: Record<string, SportTool> = {
   nutrition: { href: "/nutrition", title: "Nutrition", icon: "🍽️" },
   guides: { href: "/essentials", title: "Guides", icon: "🎯" },
   progress: { href: "/dashboard", title: "Progress", icon: "📈" },
+  // Its own tile, deep-linked past the tab. Rehab and mobility were reachable
+  // only by opening "Guides" and finding the third tab, which is a poor place
+  // to hide the thing people need when something hurts.
+  injury: { href: "/essentials?tab=injury", title: "Injury & mobility", icon: "🩹" },
 };
 
 const order = (...keys: (keyof typeof TOOL)[]) => keys.map((k) => TOOL[k]);
@@ -64,7 +68,7 @@ const PROFILES: Record<SportId, SportProfile> = {
     emoji: "⚽",
     accent: "#4ade80",
     tagline: "Train for the weekend, recover for the one after.",
-    tools: order("plan", "video", "progress", "guides", "exercises", "nutrition"),
+    tools: order("plan", "video", "progress", "injury", "exercises", "guides", "nutrition"),
     headlineMetrics: ["sprint_10m", "sprint_40m", "vertical_jump_cm", "yo_yo_level", "squat_1rm"],
   },
   rugby: {
@@ -75,7 +79,7 @@ const PROFILES: Record<SportId, SportProfile> = {
     // Rugby was aliased to football's vocabulary and football's tests. Contact
     // load, not just running load, is what a rugby player is managing.
     tagline: "Get bigger, hit harder, and still be right on Saturday.",
-    tools: order("plan", "progress", "guides", "video", "exercises", "nutrition"),
+    tools: order("plan", "progress", "injury", "guides", "video", "exercises", "nutrition"),
     headlineMetrics: ["squat_1rm", "bench_1rm", "sprint_40m", "bronco_s", "deadlift_1rm"],
   },
   basketball: {
@@ -84,7 +88,7 @@ const PROFILES: Record<SportId, SportProfile> = {
     emoji: "🏀",
     accent: "#fb923c",
     tagline: "Jump higher, change direction faster, land safely.",
-    tools: order("plan", "video", "progress", "exercises", "guides", "nutrition"),
+    tools: order("plan", "video", "progress", "injury", "exercises", "guides", "nutrition"),
     headlineMetrics: ["vertical_jump_cm", "lane_agility_s", "sprint_20m", "squat_1rm"],
   },
   running: {
@@ -95,7 +99,7 @@ const PROFILES: Record<SportId, SportProfile> = {
     // Runners get injured from load errors more than anything else, so Progress
     // — which is where the acute:chronic ratio lives — comes first.
     tagline: "Build mileage without buying an injury.",
-    tools: order("progress", "plan", "nutrition", "guides", "exercises", "video"),
+    tools: order("progress", "plan", "injury", "nutrition", "guides", "exercises", "video"),
     headlineMetrics: ["run_5k_min", "run_10k_min", "run_1500m_min", "squat_1rm"],
   },
   weightlifting: {
@@ -104,7 +108,7 @@ const PROFILES: Record<SportId, SportProfile> = {
     emoji: "🏋️",
     accent: "#c084fc",
     tagline: "Add kilos to the bar without stalling or breaking.",
-    tools: order("plan", "progress", "video", "exercises", "nutrition", "guides"),
+    tools: order("plan", "progress", "injury", "video", "exercises", "nutrition", "guides"),
     headlineMetrics: ["snatch_1rm", "clean_jerk_1rm", "front_squat_1rm", "squat_1rm", "ohp_1rm"],
   },
   gym: {
@@ -113,7 +117,7 @@ const PROFILES: Record<SportId, SportProfile> = {
     emoji: "💪",
     accent: "#e3b53f",
     tagline: "A plan that progresses, instead of the same session forever.",
-    tools: order("plan", "exercises", "progress", "nutrition", "video", "guides"),
+    tools: order("plan", "exercises", "progress", "injury", "nutrition", "video", "guides"),
     headlineMetrics: ["bench_1rm", "squat_1rm", "deadlift_1rm", "pullups_max", "ohp_1rm"],
   },
 };

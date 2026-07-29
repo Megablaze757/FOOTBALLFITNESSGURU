@@ -208,6 +208,12 @@ export default function HomePage() {
         </div>
       </div>
 
+      {/* Offered at the moment it's relevant. Rehab and mobility sat behind
+          "Guides" and then a tab, which is precisely where someone in pain will
+          not look — so when they've told us something hurts, we bring it to
+          them instead. */}
+      <SorenessCard painMap={data.checkIn.pain_map ?? {}} focus={readiness.focus_body_part} />
+
       <ToolGrid tools={sport.tools} />
 
       <BiometricSignalCard signal={data!.bioSignal} />
@@ -320,6 +326,39 @@ function ToolGrid({ tools }: { tools: { href: string; title: string; icon: strin
  * it's for, how long it really takes now, and that skipping it costs nothing,
  * which is true and worth saying out loud.
  */
+/**
+ * Shown only when they've reported real soreness.
+ *
+ * Threshold is 4/10 — below that it's ordinary training stiffness and a card
+ * offering rehab every time someone ticks a 2 would be noise, which is how
+ * people learn to ignore the one that matters.
+ */
+function SorenessCard({ painMap, focus }: { painMap: Record<string, number>; focus: string | null }) {
+  const worst = Math.max(0, ...Object.values(painMap).map((v) => Number(v) || 0));
+  if (worst < 4 || !focus) return null;
+  const bad = worst >= 7;
+
+  return (
+    <Link
+      href="/essentials?tab=injury"
+      className={`card card-hover flex items-center gap-3 border-l-4 p-4 ${bad ? "border-l-readiness-red" : "border-l-amber-400"}`}
+    >
+      <span className="text-2xl">🩹</span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-bold text-slate-100">
+          Your {focus} is at {worst}/10
+        </span>
+        <span className="block text-xs text-slate-400">
+          {bad
+            ? "Get a graded plan to load it safely — and if it's this sore for more than a couple of weeks, see a physio."
+            : "Build a rehab plan around it, or find mobility work for the area."}
+        </span>
+      </span>
+      <span className="shrink-0 text-xs font-bold text-pitch-400">Open →</span>
+    </Link>
+  );
+}
+
 function CheckInNudge() {
   return (
     <Link href="/journal" className="card card-hover flex items-center gap-3 p-4">

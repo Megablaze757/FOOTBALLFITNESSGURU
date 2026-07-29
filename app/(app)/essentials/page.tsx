@@ -38,7 +38,15 @@ const MOBILITY_IDS = [
 export default function EssentialsPage() {
   const user = useCurrentUser();
   const [open, setOpen] = useState<Exercise | null>(null);
-  const [tab, setTab] = useState<TabId>("position");
+  // Deep-linkable, so anything that wants to send a sore athlete straight to
+  // rehab can. Injury help lived two levels down — nav to "Guides", then a tab —
+  // which nobody in pain would ever guess, and pain is the one moment they
+  // won't go hunting.
+  const [tab, setTab] = useState<TabId>(() => {
+    if (typeof window === "undefined") return "position";
+    const wanted = new URLSearchParams(window.location.search).get("tab");
+    return TABS.some((t) => t.id === wanted) ? (wanted as TabId) : "position";
+  });
   const [hurt, setHurt] = useState<Record<string, number>>({});
   const [desc, setDesc] = useState("");
   // "knee_left" -> "knee" so a tapped region maps to its rehab protocol.
