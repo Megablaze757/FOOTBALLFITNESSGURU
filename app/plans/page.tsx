@@ -30,7 +30,7 @@ const FAQ = [
   },
   {
     q: "What do I get without paying?",
-    a: "The daily check-in and readiness score, the full exercise library, every skill drill, the position guides and the leaderboards. Free is the daily habit; paid is the training plan built around you.",
+    a: "The daily check-in and readiness score, the full exercise library, every skill drill, the position guides and the leaderboards. Free covers tracking and looking things up; paid is the training plan built around you.",
   },
   {
     q: "Is there a higher tier?",
@@ -58,7 +58,7 @@ export default function PlansPage() {
       />
       <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">Simple pricing</h1>
       <p className="mt-3 text-slate-400">
-        Free to start, and free forever for the daily habit. A private performance coach is
+        Free to start, and free forever for the tracking. A private performance coach is
         £100+ an hour — this is the whole staff, every day, from £20 a month.
       </p>
 

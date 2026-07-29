@@ -15,7 +15,8 @@ import { PlanGrid } from "@/components/PlanGrid";
 // anyway: nobody believes "revolutionary", everybody believes "type 'I don't
 // train legs' and it won't program legs".
 const FEATURES = [
-  { icon: "🩺", title: "Readiness that changes the plan", body: "Sleep, fatigue and a tap on the body map. You get a score in under a minute — and today's session actually changes because of it." },
+  // "Under a minute" was true of the old form. The quick check-in is three taps.
+  { icon: "🩺", title: "Readiness that changes the plan", body: "Three taps — sleep, how the body feels, anything sore. Today's session actually changes because of it, and a load spike caps the verdict even when you feel fine." },
   { icon: "🤖", title: "A coach that reads your notes", body: "Type “I don't train legs” or “no barbell” and it's obeyed — not once, not lightened, anywhere in the four-week block." },
   { icon: "🎯", title: "Built for your position", body: "A centre back and a winger need different bodies. Programs include the ball work for yours: heading, crossing, first touch." },
   { icon: "🎥", title: "Form analysis on your phone", body: "Film a lift or a sprint and pose tracking flags knee collapse and left–right asymmetry. The clip never leaves your device to be analysed." },
@@ -23,11 +24,19 @@ const FEATURES = [
   { icon: "👥", title: "Coach & squad", body: "Coaches build a program once and assign it across the roster, with every athlete's readiness on one screen." },
 ];
 
+// ORDER MATTERS, AND IT WAS WRONG.
+//
+// Step 01 used to be "Check in — 60 seconds each morning", so the first thing a
+// stranger learned about the product was the daily obligation, before they knew
+// what they'd get for it. That is precisely the impression users fed back as
+// "the app is a lot of commitment to use". The plan is the product; the check-in
+// tunes it. The app itself now opens a new athlete on "build your program", and
+// this reads in the same order.
 const STEPS = [
-  { n: "01", title: "Check in", body: "60 seconds each morning: sleep, soreness, a tap on the pain map. You get a readiness score straight away." },
-  { n: "02", title: "Get your plan", body: "A four-week block around your sport, your position and the days you can actually train — Base, Build, Peak, Deload." },
-  { n: "03", title: "Log & analyse", body: "Tick off sessions, log drills and meals, film a lift. Everything feeds the next block." },
-  { n: "04", title: "See the work compound", body: "Benchmarks, training volume and streaks trending in one place, so you can tell what's working from what's just busy." },
+  { n: "01", title: "Get your plan", body: "A four-week block around your sport, your position and the days you can actually train — Base, Build, Peak, Deload." },
+  { n: "02", title: "Train it", body: "Every session laid out with sets, reps, rest and how to do each movement. Tick them off as you go." },
+  { n: "03", title: "Check in when you can", body: "Three taps — how you slept, how the body feels, whether anything hurts. It retunes today's session. Skip it and everything still works." },
+  { n: "04", title: "See what's actually working", body: "Benchmarks, training load and per-lift progress in one place, so you can tell real progress from just being busy." },
 ];
 
 export default function Landing() {
@@ -77,10 +86,13 @@ export default function Landing() {
             Train like you have a{" "}
             <span className="gold-text">full-time performance team.</span>
           </h1>
+          {/* Led with "Check in each morning" before, which put the daily
+              obligation in front of the thing you get for it. The plan is the
+              product. */}
           <p className="mx-auto mt-5 max-w-lg text-lg text-slate-400 lg:mx-0">
-            Check in each morning and get a plan that already knows you slept badly,
-            played 90 minutes yesterday and don&apos;t have a squat rack. Built around
-            your sport and your position — not a template with your name on it.
+            A four-week plan built around your sport, your position and the days you
+            can actually train — with every movement explained. Tell it you slept
+            badly or have no squat rack, in three taps, and today&apos;s session changes.
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center lg:justify-start">
             <Link href="/login" className="btn-primary sm:w-auto sm:px-8">Start free — no card needed</Link>
@@ -89,7 +101,10 @@ export default function Landing() {
           <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-slate-500 lg:justify-start">
             <span>✓ On-device video analysis</span>
             <span>✓ Cancel anytime</span>
-            <span>✓ Football · rugby · lifting & more</span>
+            {/* Naming all six beats "& more" now that each has its own tests,
+                drills, vocabulary and tool order rather than football's with a
+                different badge. */}
+            <span>✓ Football · rugby · basketball · running · lifting · gym</span>
           </div>
         </div>
 
@@ -172,7 +187,7 @@ export default function Landing() {
         <div className="card relative overflow-hidden p-10 text-center sm:p-16">
           <div className="absolute inset-0 -z-10 bg-[radial-gradient(600px_300px_at_50%_-20%,rgba(227,181,63,0.18),transparent)]" />
           <h2 className="text-3xl font-extrabold tracking-tight sm:text-4xl">Your next season starts this morning.</h2>
-          <p className="mx-auto mt-3 max-w-lg text-slate-400">Check in, get your plan, and let the system compound. Free to start.</p>
+          <p className="mx-auto mt-3 max-w-lg text-slate-400">Build your plan in a couple of minutes and train it today. Free to start, no card needed.</p>
           <Link href="/login" className="btn-primary mx-auto mt-8 max-w-xs">Create your free account</Link>
         </div>
       </section>

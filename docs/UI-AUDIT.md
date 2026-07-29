@@ -160,9 +160,22 @@ something hurts. Full form is one tap away and the choice is remembered.
 | Onboarding | todo | 4 `<h1>`s, step flow not reviewed against rule 1 |
 | Admin | todo | 11 cards, 587 lines — not user-facing, lowest priority |
 
-## Public pages — todo
+## Public pages — partial
 
-None reviewed against the new goal. These are what a stranger sees first.
+The landing page and pricing now read to the new goal. The SEO pages and waitlist
+have not been through it.
+
+**Landing:** step 01 was "Check in — 60 seconds each morning", so the first thing
+a stranger learned was the daily obligation, before they knew what they got for
+it. Reordered to Get your plan / Train it / Check in when you can / See what is
+working, matching what the app itself now opens a new athlete on. The hero led
+with "Check in each morning" and now leads with the plan. Two stale timings
+fixed ("60 seconds", "under a minute" — it is three taps). All six sports named
+instead of "lifting & more", which is honest now that each has its own tests,
+drills, vocabulary and tool order.
+
+**Pricing:** "Free is the daily habit" -> "Free covers tracking and looking
+things up". Same split, without selling the obligation as the free tier.
 
 | Page | Note |
 |---|---|
