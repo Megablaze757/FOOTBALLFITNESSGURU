@@ -1,6 +1,7 @@
 "use client";
 
 import type { TrainingDrill } from "@/lib/types";
+import type { SportId } from "@/lib/exercises";
 import { DrillPicker } from "@/components/DrillPicker";
 
 export interface TrainingState {
@@ -9,11 +10,13 @@ export interface TrainingState {
   intensity: number | null;
 }
 
-export function TrainingLogInput({ value, onChange, planned = [] }: {
+export function TrainingLogInput({ value, onChange, planned = [], sport = "all" }: {
   value: TrainingState;
   onChange: (v: TrainingState) => void;
   /** Today's scheduled drills, so they can be logged with one tap. */
   planned?: TrainingDrill[];
+  /** Passed to the picker so search stays inside the athlete's own sport. */
+  sport?: SportId | "all";
 }) {
   const update = (patch: Partial<TrainingState>) => onChange({ ...value, ...patch });
 
@@ -54,6 +57,7 @@ export function TrainingLogInput({ value, onChange, planned = [] }: {
         planned={planned}
         chosen={value.drills.map((d) => d.name)}
         onAdd={(d) => update({ drills: [...value.drills, d] })}
+        sport={sport}
       />
 
       <button type="button" onClick={() => addDrill()} className="chip text-pitch-400">

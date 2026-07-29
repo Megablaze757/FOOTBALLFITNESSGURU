@@ -71,7 +71,14 @@ export default {
       if (pathname.endsWith("/delete-account")) return await deleteAccount(req, env);
       if (pathname.endsWith("/stripe-webhook")) return await stripeWebhook(req, env);
       if (pathname.endsWith("/admin-create-user")) return await adminCreateUser(req, env);
-      if (pathname.endsWith("/health")) return json({ ok: true });
+      // WORKER_VERSION is bumped whenever this file changes in a way that
+      // matters. The Worker is pasted into the dashboard by hand, so "is the
+      // fix actually live?" was previously unanswerable without an authorised
+      // request — and I twice reasoned about behaviour from source that wasn't
+      // deployed. curl the health route and you know.
+      if (pathname.endsWith("/health")) {
+        return json({ ok: true, version: WORKER_VERSION, model: modelChain(env)[0] });
+      }
       return json({ error: "not found" }, 404);
     } catch (e) {
       return json({ error: String(e) }, 500);
@@ -331,6 +338,9 @@ function overBudget(state: BudgetState): Response {
 // point outliving it. Long jobs now run in the background (lib/jobs.tsx), so
 // nobody is watching a spinner and the budget can be what the work actually
 // needs. Callers pass their own client-side timeout to match.
+// Bump on every paste into the Cloudflare dashboard. GET /health reports it.
+const WORKER_VERSION = "2026-07-29.1";
+
 const CHAIN_BUDGET_MS = 55_000;
 const ATTEMPT_TIMEOUT_MS = 30_000;
 
@@ -897,7 +907,11 @@ async function injuryPlan(req: Request, env: Env): Promise<Response> {
     user:
       `Sport: ${sport || "general"}\nArea: ${area || "unspecified"}\n` +
       `How long: ${duration ? `${duration} week(s)` : "not stated"}\nDescription: ${desc}`,
-    maxTokens: 1400,
+    // 4 stages x 3 exercises, each with a name, dose and cue, plus red flags —
+    // that runs past 1400 tokens on a verbose model, and a truncated response
+    // fails parseInjuryPlan, which reads as "the AI returned nothing usable"
+    // however healthy the endpoint is. Headroom is cheaper than a retry.
+    maxTokens: 2200,
     json: true,
     validate: (t) => parseInjuryPlan(t) !== null,
   });

@@ -49,3 +49,45 @@ test("prettyBodyPart formats sided joints", () => {
   assert.equal(prettyBodyPart("lower_back"), "lower back");
   assert.equal(prettyBodyPart(null), null);
 });
+
+// --- training load in the verdict -------------------------------------------
+// The app used to say "ready to train" on Home while the load panel was red,
+// because readiness scored only how you FEEL. These pin the reconciliation.
+
+test("a load spike caps a Green day at Yellow", () => {
+  const green = assessReadiness(base);
+  assert.equal(green.status, "Green");
+
+  const spiked = assessReadiness(base, { acwr: 1.8 });
+  assert.equal(spiked.status, "Yellow", "feeling fine on an 80% load jump is exactly what ACWR is for");
+  assert.equal(spiked.score, green.score, "the spike changes the verdict, not how recovered they are");
+});
+
+test("the spike advice says what happened and what to do", () => {
+  const r = assessReadiness(base, { acwr: 1.6 });
+  assert.match(r.advice, /60%/, "states the jump as a percentage, not a bare ratio");
+  assert.match(r.advice, /volume/i, "tells them what to hold back");
+});
+
+test("load never rescues a Red day", () => {
+  const r = assessReadiness({ ...base, pain_map: { knee_left: 8 } }, { acwr: 0.5 });
+  assert.equal(r.status, "Red", "a low ratio must not talk an injured athlete into training");
+});
+
+test("load in the sweet spot leaves the verdict alone", () => {
+  const plain = assessReadiness(base);
+  const withLoad = assessReadiness(base, { acwr: 1.0 });
+  assert.equal(withLoad.status, plain.status);
+  assert.equal(withLoad.advice, plain.advice);
+});
+
+test("climbing load is mentioned without downgrading the day", () => {
+  const r = assessReadiness(base, { acwr: 1.4 });
+  assert.equal(r.status, "Green");
+  assert.match(r.advice, /climbing/i);
+});
+
+test("no load data behaves exactly as before", () => {
+  assert.deepEqual(assessReadiness(base, { acwr: null }), assessReadiness(base));
+  assert.deepEqual(assessReadiness(base, {}), assessReadiness(base));
+});

@@ -8,13 +8,13 @@ import { useCurrentUser } from "@/lib/auth";
 import { useAsync } from "@/lib/use-async";
 import { assessReadiness } from "@/lib/readiness";
 import { actionLabel } from "@/lib/insights";
-import { checkInStreak } from "@/lib/load";
+import { checkInStreak, computeACWR } from "@/lib/load";
 import { dailyQuests, computeXp, levelFor, type ActivityStats, type LevelInfo } from "@/lib/gamification";
 import { biometricSignal, type Biometric } from "@/lib/biometrics";
 import { ReadinessGauge } from "@/components/ReadinessGauge";
 import { BiometricSignalCard } from "@/components/BiometricSignalCard";
 import { Notifications } from "@/components/Notifications";
-import type { CheckInInput, DailyInsight } from "@/lib/types";
+import type { CheckInInput, DailyInsight, TrainingLog } from "@/lib/types";
 
 export default function HomePage() {
   const user = useCurrentUser();
@@ -61,7 +61,10 @@ export default function HomePage() {
     const head = { count: "exact" as const, head: true };
     const [allChecks, allTraining, progs, benchC, videoC, allNutrition] = await Promise.all([
       supabase.from("daily_check_ins").select("check_in_date").eq("user_id", user.id),
-      supabase.from("training_logs").select("log_date, total_minutes").eq("user_id", user.id),
+      // intensity and drills come along so the readiness verdict can account for
+      // training load — without them sessionLoad has nothing to work with and
+      // ACWR silently reads as "building" forever.
+      supabase.from("training_logs").select("log_date, total_minutes, intensity, drills").eq("user_id", user.id),
       supabase.from("programs").select("completed_sessions, status").eq("user_id", user.id),
       supabase.from("strength_benchmarks").select("id", head).eq("user_id", user.id),
       supabase.from("ai_plans").select("id", head).eq("user_id", user.id),
@@ -87,7 +90,8 @@ export default function HomePage() {
       minutes: trainRows.filter((r) => r.log_date >= since7).reduce((n, r) => n + (r.total_minutes ?? 0), 0),
       checkIns: stats.checkInsLast7,
     };
-    return { profile, checkIn, insight, streak, quests, bioSignal, setup, stats, week };
+    const acwr = computeACWR(trainRows as unknown as TrainingLog[]);
+    return { profile, checkIn, insight, streak, quests, bioSignal, setup, stats, week, acwr };
   }, [user.id], `home:${user.id}`);
 
   const firstName = data?.profile?.full_name?.split(" ")[0] ?? "athlete";
@@ -137,7 +141,7 @@ export default function HomePage() {
     is_match_day: data.checkIn.is_match_day,
     match_minutes_played: data.checkIn.match_minutes_played,
   };
-  const readiness = assessReadiness(input);
+  const readiness = assessReadiness(input, { acwr: data.acwr.ratio });
   const coachText = data.insight?.ai_summary_text ?? readiness.advice;
   const watchZone = data.insight?.focus_body_part ?? readiness.focus_body_part;
   const actionTag = actionLabel(data.insight?.recommended_action ?? null);

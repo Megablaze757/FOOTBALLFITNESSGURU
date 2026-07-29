@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { EXERCISES, exerciseEquip, type Exercise } from "@/lib/exercises";
+import { getExercisesForSport, exerciseEquip, type Exercise, type SportId } from "@/lib/exercises";
 import type { TrainingDrill } from "@/lib/types";
 
 /**
@@ -14,13 +14,22 @@ import type { TrainingDrill } from "@/lib/types";
  * the library also break the history leaderboard and the load calculations,
  * which key on the drill name.
  */
-export function DrillPicker({ planned, chosen, onAdd }: {
+export function DrillPicker({ planned, chosen, onAdd, sport = "all" }: {
   planned: TrainingDrill[];
   chosen: string[];
   onAdd: (drill: TrainingDrill) => void;
+  /**
+   * The athlete's sport. Searched the whole library regardless before, so a
+   * rugby player typing "drill" got football-only work back — the library page
+   * has filtered by sport for ages and this, the other way into the same
+   * catalogue, did not.
+   */
+  sport?: SportId | "all";
 }) {
   const [q, setQ] = useState("");
   const already = useMemo(() => new Set(chosen.map((n) => n.toLowerCase())), [chosen]);
+
+  const pool = useMemo(() => getExercisesForSport(sport), [sport]);
 
   const results = useMemo(() => {
     const query = q.trim().toLowerCase();
@@ -29,14 +38,14 @@ export function DrillPicker({ planned, chosen, onAdd }: {
       e.name.toLowerCase().includes(query) || e.muscles.some((m) => m.toLowerCase().includes(query));
     // Names that start with the query first — typing "squat" should surface
     // "Squat" before "Bulgarian split squat".
-    return EXERCISES.filter(hit)
+    return pool.filter(hit)
       .sort((a, b) => {
         const aStarts = a.name.toLowerCase().startsWith(query) ? 0 : 1;
         const bStarts = b.name.toLowerCase().startsWith(query) ? 0 : 1;
         return aStarts - bStarts || a.name.localeCompare(b.name);
       })
       .slice(0, 8);
-  }, [q]);
+  }, [q, pool]);
 
   const remaining = planned.filter((d) => !already.has(d.name.toLowerCase()));
 

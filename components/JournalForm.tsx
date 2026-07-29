@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { sportTerms } from "@/lib/sport-terms";
+import { SPORTS, type SportId } from "@/lib/exercises";
 import { assessReadiness } from "@/lib/readiness";
 import { BodyMap } from "@/components/BodyMap";
 import { ReadinessGauge } from "@/components/ReadinessGauge";
@@ -63,6 +64,45 @@ export function JournalForm({ initial, initialTraining, sport, planned = [] }: {
   const [result, setResult] = useState<ReadinessResult | null>(null);
   const [queued, setQueued] = useState(false);
   const [restored, setRestored] = useState<string | null>(null);
+
+  /**
+   * QUICK vs FULL.
+   *
+   * The check-in was a body map, three sliders, a weight field, a match toggle
+   * and a whole training log — a dozen interactions, every day, before the app
+   * tells you anything. That is a fine ask of a full-time athlete with a sports
+   * scientist. It is far too much for a 15-year-old or someone fitting training
+   * around a job, and a daily habit that takes two minutes is a daily habit
+   * that gets dropped by Wednesday.
+   *
+   * Quick asks the three things that actually move the readiness score — sleep,
+   * how the body feels, and whether anything hurts — as taps, not sliders. It's
+   * three touches and about ten seconds. The body map only appears if you say
+   * something hurts, because most days nothing does.
+   *
+   * Nothing is lost: everything else stays one tap away, and someone who wants
+   * to log every set still can. The choice is remembered, so neither athlete
+   * has to keep re-making it.
+   */
+  const [detailed, setDetailed] = useState(false);
+  const [modeLoaded, setModeLoaded] = useState(false);
+  useEffect(() => {
+    // Editing an existing entry opens in full — they came back for a reason,
+    // and hiding the field they want to change would be its own annoyance.
+    if (initial) { setDetailed(true); setModeLoaded(true); return; }
+    try {
+      setDetailed(localStorage.getItem("pa:checkin-mode") === "full");
+    } catch { /* private mode — quick is the better default anyway */ }
+    setModeLoaded(true);
+  }, [initial]);
+
+  function chooseMode(full: boolean) {
+    setDetailed(full);
+    try { localStorage.setItem("pa:checkin-mode", full ? "full" : "quick"); } catch { /* ignore */ }
+  }
+
+  // Only meaningful in quick mode, where the body map is hidden until asked for.
+  const [sore, setSore] = useState<boolean | null>(null);
 
   const today = new Date().toISOString().slice(0, 10);
   const userId = useCurrentUser().id;
@@ -229,8 +269,87 @@ export function JournalForm({ initial, initialTraining, sport, planned = [] }: {
         </div>
       )}
 
+      {!modeLoaded ? null : !detailed ? (
+        <>
+          <section className="card space-y-5 p-5">
+            <TapScale
+              label="How did you sleep?"
+              value={sleep}
+              onChange={setSleep}
+              options={[
+                { emoji: "😵", label: "Barely", value: 2 },
+                { emoji: "😴", label: "Poorly", value: 4 },
+                { emoji: "😐", label: "OK", value: 6 },
+                { emoji: "🙂", label: "Well", value: 8 },
+                { emoji: "🤩", label: "Great", value: 10 },
+              ]}
+            />
+            <TapScale
+              label="How does the body feel?"
+              value={fatigue}
+              onChange={setFatigue}
+              options={[
+                { emoji: "⚡", label: "Fresh", value: 2 },
+                { emoji: "💪", label: "Good", value: 4 },
+                { emoji: "😐", label: "OK", value: 6 },
+                { emoji: "🥱", label: "Heavy", value: 8 },
+                { emoji: "🪫", label: "Wrecked", value: 10 },
+              ]}
+            />
+
+            <div>
+              <span className="field-label">Anything hurting?</span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => { setSore(false); setPainMap({}); }}
+                  className={`flex-1 rounded-2xl border px-3 py-3 text-sm font-semibold transition ${
+                    sore === false ? "border-pitch-400/50 bg-pitch-400/10 text-pitch-400" : "border-white/10 bg-white/[0.03] text-slate-300"
+                  }`}
+                >
+                  No, all good
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSore(true)}
+                  className={`flex-1 rounded-2xl border px-3 py-3 text-sm font-semibold transition ${
+                    sore === true ? "border-amber-400/50 bg-amber-400/10 text-amber-300" : "border-white/10 bg-white/[0.03] text-slate-300"
+                  }`}
+                >
+                  Yes — show me
+                </button>
+              </div>
+              {/* Only once they've said yes. Most days nothing hurts, and a body
+                  map on screen every morning invites made-up numbers. */}
+              {sore === true && (
+                <div className="mt-4">
+                  <BodyMap value={painMap} onChange={setPainMap} />
+                </div>
+              )}
+            </div>
+          </section>
+
+          <button
+            type="button"
+            onClick={() => chooseMode(true)}
+            className="w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-slate-300 transition hover:border-pitch-400/40 hover:text-pitch-400"
+          >
+            + Add weight, {terms.eventToday.toLowerCase().replace(/\?$/, "")} and today&apos;s training
+          </button>
+        </>
+      ) : (
+      <>
       <section className="card p-5">
-        <h2 className="field-label">Where does it hurt?</h2>
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="field-label !mb-0">Where does it hurt?</h2>
+          <button
+            type="button"
+            onClick={() => chooseMode(false)}
+            className="shrink-0 text-xs font-semibold text-slate-400 hover:text-pitch-400"
+          >
+            Use the quick check-in
+          </button>
+        </div>
         <BodyMap value={painMap} onChange={setPainMap} />
       </section>
 
@@ -263,8 +382,15 @@ export function JournalForm({ initial, initialTraining, sport, planned = [] }: {
           <h2 className="field-label !mb-0">Today&apos;s training</h2>
           <span className="chip text-pitch-400">drills logged to history</span>
         </div>
-        <TrainingLogInput value={training} onChange={setTraining} planned={planned} />
+        <TrainingLogInput
+          value={training}
+          onChange={setTraining}
+          planned={planned}
+          sport={(SPORTS.some((s) => s.id === sport) ? sport : "all") as SportId | "all"}
+        />
       </section>
+      </>
+      )}
 
       {error && <p className="text-sm text-readiness-red">{error}</p>}
 
@@ -272,6 +398,49 @@ export function JournalForm({ initial, initialTraining, sport, planned = [] }: {
         {saving ? "Saving…" : "Submit check-in"}
       </button>
     </form>
+  );
+}
+
+/**
+ * Five taps instead of a slider.
+ *
+ * A 1-10 range input is a poor fit for a thumb on a phone, and the precision is
+ * false anyway — nobody can tell their sleep was a 6 rather than a 7. Five
+ * labelled options are quicker, more honest, and hit the same score bands.
+ */
+function TapScale({ label, value, onChange, options }: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+  options: { emoji: string; label: string; value: number }[];
+}) {
+  return (
+    <div>
+      <span className="field-label">{label}</span>
+      <div className="grid grid-cols-5 gap-1.5">
+        {options.map((o) => {
+          const active = value === o.value;
+          return (
+            <button
+              key={o.value}
+              type="button"
+              aria-pressed={active}
+              onClick={() => onChange(o.value)}
+              className={`flex flex-col items-center gap-1 rounded-2xl border px-1 py-2.5 transition ${
+                active
+                  ? "border-pitch-400/50 bg-pitch-400/10"
+                  : "border-white/10 bg-white/[0.03] hover:border-white/20"
+              }`}
+            >
+              <span className="text-xl leading-none">{o.emoji}</span>
+              <span className={`text-[10px] font-medium leading-tight ${active ? "text-pitch-400" : "text-slate-400"}`}>
+                {o.label}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 

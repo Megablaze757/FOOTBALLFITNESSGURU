@@ -19,6 +19,7 @@ import type { SportId } from "@/lib/exercises";
 import type { SplitStyle } from "@/lib/hypertrophy";
 import { templatesForSport } from "@/lib/programs";
 import { assessReadiness } from "@/lib/readiness";
+import { computeACWR } from "@/lib/load";
 import { invokeAI } from "@/lib/api";
 import { METRIC_CATALOG, metricDef, benchmarkProgress } from "@/lib/benchmarks";
 import { RingProgress } from "@/components/RingProgress";
@@ -57,7 +58,7 @@ function deadlineInfo(startDate: string, targetDate: string, adherencePct: numbe
   return { daysLeft, elapsedPct: Math.round(elapsedPct), onTrack };
 }
 
-function readinessOf(checkIn: DailyCheckIn | null) {
+function readinessOf(checkIn: DailyCheckIn | null, training: TrainingLog[] = []) {
   if (!checkIn) return null;
   const input: CheckInInput = {
     pain_map: checkIn.pain_map ?? {},
@@ -441,7 +442,7 @@ function ActiveProgram({
   const plan = program.plan;
   const goal = program.goal_type as GoalType;
   const painMap = checkIn?.pain_map ?? {};
-  const readiness = readinessOf(checkIn);
+  const readiness = readinessOf(checkIn, training);
   const insights = analyzeProgress(training, checkHist);
   const totalSessions = plan.weeks.reduce((n, w) => n + w.sessions.length, 0);
   const doneCount = program.completed_sessions.length;

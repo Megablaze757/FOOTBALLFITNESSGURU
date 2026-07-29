@@ -13,6 +13,28 @@ import type { CheckInInput, PainMap, ReadinessResult, ReadinessStatus } from "./
 const PAIN_HARD_LIMIT = 7; // any joint at/above this forces Red
 const SLEEP_HARD_LIMIT = 3; // sleep at/below this forces Red
 
+// Acute:chronic workload thresholds, matching lib/load.ts. Kept here rather
+// than imported so this module stays dependency-free and portable to the Edge
+// Function — but they MUST agree with computeACWR's zone boundaries, or the
+// dashboard and the verdict will disagree again.
+const ACWR_SPIKE = 1.5;   // "danger" — sharp spike, elevated injury risk
+const ACWR_CLIMBING = 1.3; // "caution" — climbing fast
+
+/**
+ * Training-load context for the readiness verdict.
+ *
+ * WHY THIS EXISTS. Readiness scored sleep, fatigue, nutrition and pain, and
+ * nothing else. Training load lived on a separate page with its own colour. So
+ * an athlete who slept well and hurt nowhere got a green "ready to train" while
+ * the load panel was red — the app contradicting itself on the one question it
+ * exists to answer. They aren't the same measurement, but they are the same
+ * decision, and the athlete only makes one.
+ */
+export interface LoadContext {
+  /** acute:chronic ratio; null until there are 28 days to average over. */
+  acwr?: number | null;
+}
+
 function maxPain(painMap: PainMap): { part: string | null; value: number } {
   let part: string | null = null;
   let value = 0;
@@ -41,7 +63,7 @@ export function prettyBodyPart(key: string | null): string | null {
  * Score (0-100, higher = more ready) blends sleep, fatigue, nutrition and the
  * worst current pain. Hard limits short-circuit to Red regardless of the blend.
  */
-export function assessReadiness(input: CheckInInput): ReadinessResult {
+export function assessReadiness(input: CheckInInput, load?: LoadContext): ReadinessResult {
   const sleep = clamp1to10(input.sleep_quality);
   const fatigue = clamp1to10(input.fatigue_score); // higher = more tired (worse)
   const nutrition = clamp1to10(input.nutrition_quality);
@@ -73,14 +95,47 @@ export function assessReadiness(input: CheckInInput): ReadinessResult {
     status = "Red";
   }
 
-  return { status, score, advice: buildAdvice(status, { sleep, fatigue, pain, focus }), focus_body_part: focus };
+  // A load spike is an injury risk the athlete cannot feel — that's the point
+  // of measuring it. Feeling fine on the back of a 60% jump in weekly load is
+  // exactly the state ACWR exists to catch, so it caps the verdict rather than
+  // sitting in a separate panel disagreeing with it. It only ever caps: it
+  // can't turn a Red day green.
+  const acwr = load?.acwr ?? null;
+  const spiking = acwr != null && acwr > ACWR_SPIKE;
+  if (spiking && status === "Green") status = "Yellow";
+
+  return {
+    status,
+    score,
+    advice: buildAdvice(status, { sleep, fatigue, pain, focus, acwr }),
+    focus_body_part: focus,
+  };
 }
 
 function buildAdvice(
   status: ReadinessStatus,
-  ctx: { sleep: number; fatigue: number; pain: { part: string | null; value: number }; focus: string | null }
+  ctx: {
+    sleep: number;
+    fatigue: number;
+    pain: { part: string | null; value: number };
+    focus: string | null;
+    acwr?: number | null;
+  }
 ): string {
-  const { sleep, fatigue, pain, focus } = ctx;
+  const { sleep, fatigue, pain, focus, acwr } = ctx;
+
+  // Said first, because when it applies it's the reason for the verdict and the
+  // athlete has no other way to know it. Percentages beat a bare ratio: "58%
+  // more than your four-week average" is a sentence you can act on, "1.58" is
+  // not.
+  if (acwr != null && acwr > ACWR_SPIKE && status !== "Red") {
+    const over = Math.round((acwr - 1) * 100);
+    return (
+      `You feel recovered, and that's real — but you've trained ${over}% more this week than your four-week ` +
+      `average, and that jump is where injuries come from. Train today, keep the intensity, hold the volume ` +
+      `where it is rather than adding to it.`
+    );
+  }
 
   if (status === "Red") {
     if (pain.value >= PAIN_HARD_LIMIT && focus) {
@@ -102,6 +157,9 @@ function buildAdvice(
     return "You're moderately ready. Train as planned but listen to your body and ease off if anything flares up.";
   }
 
+  if (acwr != null && acwr > ACWR_CLIMBING) {
+    return "You're well recovered and ready to go. Your load is climbing fast though, so take the intensity, not the extra volume.";
+  }
   return "You're well recovered and ready to go. Good day for a higher-intensity session.";
 }
 
