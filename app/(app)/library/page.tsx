@@ -52,6 +52,25 @@ export default function LibraryPage() {
     );
   }, [sport, cat, level, equip, q, custom]);
 
+  /**
+   * Drills tagged for this sport, pulled to the front.
+   *
+   * getExercisesForSport already returns sport-specific entries before the
+   * general ones, but "general" is 500+ imported gym movements — so a rugby
+   * player's dozen actual rugby drills were the first dozen rows of a list that
+   * looked, and scrolled, exactly like everyone else's. Sport tailoring you have
+   * to notice isn't tailoring.
+   *
+   * Only when they haven't started filtering: once someone picks a category or
+   * types a query they're hunting for something specific, and a "your sport"
+   * band above the results is then in the way.
+   */
+  const browsing = !q.trim() && cat === "All" && equip === "all";
+  const sportDrills = useMemo(
+    () => (sport === "all" || !browsing ? [] : list.filter((e) => e.sports?.includes(sport)).slice(0, 6)),
+    [list, sport, browsing]
+  );
+
   // Narrowing the filters shouldn't leave you deep in a previous page.
   useEffect(() => { setShown(PAGE); }, [sport, cat, level, equip, q]);
 
@@ -130,7 +149,33 @@ export default function LibraryPage() {
         </div>
       </details>
 
+      {sportDrills.length > 0 && (
+        <section>
+          <h2 className="field-label">
+            {SPORTS.find((s) => s.id === sport)?.emoji} Made for {SPORTS.find((s) => s.id === sport)?.label.toLowerCase()}
+          </h2>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {sportDrills.map((ex) => (
+              <button
+                key={`sport-${ex.id}`}
+                onClick={() => setOpen(ex)}
+                className="card card-hover flex items-center gap-3 border-l-4 border-l-pitch-400/60 p-3 text-left"
+              >
+                <span className="grid h-14 w-12 shrink-0 place-items-center overflow-hidden rounded-xl border border-white/10 bg-black/40">
+                  <ExerciseDemo pattern={ex.demo} implement={demoImplement(ex)} className="h-11 w-9" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-bold text-slate-100">{ex.name}</span>
+                  <span className="truncate text-xs text-slate-400">{ex.category}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
       <p className="text-xs text-slate-500">
+        {sportDrills.length > 0 ? "Everything else · " : ""}
         {list.length} exercises{list.length > shown ? ` · showing ${shown}` : ""}
       </p>
 

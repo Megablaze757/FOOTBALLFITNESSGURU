@@ -11,6 +11,7 @@ import { MealPlanner } from "@/components/MealPlanner";
 import { MealCheckIn } from "@/components/MealCheckIn";
 import { Tabs } from "@/components/Tabs";
 import { nutritionTargets, type NutritionTargets } from "@/lib/nutrition";
+import { sportProfile, type SportProfile } from "@/lib/sport-profile";
 import type { BodyStats, MealPrefs } from "@/lib/meal-plan";
 import type { GoalType } from "@/lib/coach";
 import type { Subscription, Tier, TrainingLog } from "@/lib/types";
@@ -34,13 +35,13 @@ export default function NutritionPage() {
       supabase.from("daily_check_ins").select("weight_kg").eq("user_id", user.id).not("weight_kg", "is", null).order("check_in_date", { ascending: false }).limit(1).maybeSingle(),
       supabase.from("programs").select("goal_type").eq("user_id", user.id).eq("status", "active").maybeSingle(),
       supabase.from("training_logs").select("log_date, total_minutes").eq("user_id", user.id).gte("log_date", since),
-      supabase.from("profiles").select("height_cm, birth_year, sex, activity_level, diet_goal, diet_pattern, diet_avoid, meals_per_day, diet_notes, meal_plan_seed").eq("id", user.id).maybeSingle(),
+      supabase.from("profiles").select("height_cm, birth_year, sex, activity_level, diet_goal, diet_pattern, diet_avoid, meals_per_day, diet_notes, meal_plan_seed, sport").eq("id", user.id).maybeSingle(),
     ]);
     const pr = profile as {
       height_cm?: number; birth_year?: number; sex?: string;
       activity_level?: string; diet_goal?: string;
       diet_pattern?: string; diet_avoid?: string[]; meals_per_day?: number; diet_notes?: string;
-      meal_plan_seed?: number | null;
+      meal_plan_seed?: number | null; sport?: string;
     } | null;
     return {
       sub: (sub ?? null) as Subscription | null,
@@ -68,6 +69,9 @@ export default function NutritionPage() {
       },
       dietNotes: pr?.diet_notes ?? "",
       mealSeed: pr?.meal_plan_seed ?? null,
+      // Frames the verdict in their sport's terms — carbs for a runner, protein
+      // for a lifter, rather than one neutral sentence for everyone.
+      sport: sportProfile(pr?.sport as string | undefined),
     };
   }, [user.id], `nutrition:${user.id}`);
 
@@ -118,7 +122,88 @@ export default function NutritionPage() {
       prefs={data?.prefs ?? null}
       dietNotes={data?.dietNotes ?? null}
       mealSeed={data?.mealSeed ?? null}
+      sport={data?.sport ?? sportProfile(null)}
     />
+  );
+}
+
+/**
+ * Whether today is going well, said once, at the top.
+ *
+ * The page showed a target, a macro breakdown, a water figure, a log form and a
+ * meal planner — and never once said whether you were on track. Everything
+ * needed to answer that was already on screen; nothing did the subtraction.
+ * "You're 600 under" is the whole point of a calorie target.
+ */
+function FuelVerdict({ targets, eaten, waterMl, sport }: {
+  targets: NutritionTargets | null;
+  eaten: number | null;
+  waterMl: number | null;
+  sport: SportProfile;
+}) {
+  if (!targets) return null;
+
+  // Nothing logged yet is not "you're 2,600 under" — it's an empty log, and
+  // saying otherwise would be alarming and wrong first thing in the morning.
+  if (!eaten) {
+    return (
+      <div className="card border-l-4 border-l-white/15 p-4">
+        <span className="eyebrow">Today</span>
+        <h2 className="mt-1 text-lg font-extrabold">Target {targets.calories.toLocaleString()} kcal</h2>
+        <p className="mt-1 text-sm text-slate-400">
+          {targets.protein}g protein, {targets.carbs}g carbs, {targets.fats}g fat.
+          Log what you&apos;ve eaten and this becomes a running total.
+        </p>
+      </div>
+    );
+  }
+
+  const diff = eaten - targets.calories;
+  // A calorie target is an estimate, so treating a 100 kcal miss as a failure
+  // would be false precision. 250 is roughly a snack — the point at which the
+  // gap is worth doing something about.
+  const TOLERANCE = 250;
+  const short = -diff;
+  const thirsty = waterMl != null && waterMl < targets.water_ml * 0.6;
+
+  const priority = sport.id === "weightlifting" || sport.id === "gym"
+    ? `Protein is the one to protect — aim for the ${targets.protein}g.`
+    : sport.id === "running"
+      ? `Carbs are what you run on — the ${targets.carbs}g matters more than the total.`
+      : `Get the ${targets.protein}g protein in and the rest looks after itself.`;
+
+  const v = short > TOLERANCE
+    ? {
+        tone: "#fbbf24",
+        eyebrow: "Worth topping up",
+        headline: `You're ${short.toLocaleString()} kcal short`,
+        body: `Under-eating on training days is how people stall and get injured, not how they get lean. ${priority}`,
+      }
+    : diff > TOLERANCE
+      ? {
+          tone: "#38bdf8",
+          eyebrow: "Over target",
+          headline: `You're ${diff.toLocaleString()} kcal over`,
+          body: `One day doesn't undo a week — it's the pattern that counts. ${priority}`,
+        }
+      : {
+          tone: sport.accent,
+          eyebrow: "On target",
+          headline: `${eaten.toLocaleString()} of ${targets.calories.toLocaleString()} kcal`,
+          body: `Within range for today. ${priority}`,
+        };
+
+  return (
+    <div className="card border-l-4 p-4" style={{ borderLeftColor: v.tone }}>
+      <span className="eyebrow" style={{ color: v.tone }}>{v.eyebrow}</span>
+      <h2 className="mt-1 text-lg font-extrabold">{v.headline}</h2>
+      <p className="mt-1 max-w-prose text-sm text-slate-400">{v.body}</p>
+      {thirsty && (
+        <p className="mt-2 text-sm text-amber-200">
+          💧 {(waterMl / 1000).toFixed(1)}L of {(targets.water_ml / 1000).toFixed(1)}L — worth catching up on.
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -145,15 +230,22 @@ const NUTRITION_TABS = [
   { id: "plan" as const, label: "Meal plan", icon: "🛒" },
 ];
 
-function NutritionTabs({ userId, today, log, targets, stats, prefs, dietNotes, mealSeed }: {
+function NutritionTabs({ userId, today, log, targets, stats, prefs, dietNotes, mealSeed, sport }: {
   userId: string; today: string; log: any; targets: NutritionTargets | null;
   stats: Partial<BodyStats> | null; prefs: Partial<MealPrefs> | null; dietNotes: string | null;
-  mealSeed: number | null;
+  mealSeed: number | null; sport: SportProfile;
 }) {
   const [tab, setTab] = useState<"today" | "plan">("today");
   return (
     <div className="mx-auto max-w-2xl space-y-5">
       <Header />
+      {/* Above the tabs, so the answer is there whichever half you're looking at. */}
+      <FuelVerdict
+        targets={targets}
+        eaten={log?.calories_eaten ?? null}
+        waterMl={log?.daily_water_intake_ml ?? null}
+        sport={sport}
+      />
       <Tabs tabs={NUTRITION_TABS} active={tab} onChange={setTab} />
       {tab === "today" ? (
         <NutritionTracker
