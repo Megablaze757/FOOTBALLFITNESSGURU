@@ -15,6 +15,7 @@ import { ReadinessGauge } from "@/components/ReadinessGauge";
 import { BiometricSignalCard } from "@/components/BiometricSignalCard";
 import { Notifications } from "@/components/Notifications";
 import type { CheckInInput, DailyInsight, TrainingLog } from "@/lib/types";
+import type { ProgramPlan } from "@/lib/engine";
 
 export default function HomePage() {
   const user = useCurrentUser();
@@ -42,16 +43,27 @@ export default function HomePage() {
       insight = (ins ?? null) as DailyInsight | null;
     }
     // Cheap existence checks so "Getting started" can show real progress.
-    const [{ count: programCount }, { count: videoCount }] = await Promise.all([
-      supabase.from("programs").select("id", { count: "exact", head: true }).eq("user_id", user.id).eq("status", "active"),
+    // The plan itself, not just a count — home can't name the one thing worth
+    // doing without knowing which session is next.
+    const [{ data: activeProgram }, { count: videoCount }] = await Promise.all([
+      supabase.from("programs").select("plan, completed_sessions").eq("user_id", user.id)
+        .eq("status", "active").order("created_at", { ascending: false }).limit(1).maybeSingle(),
       supabase.from("videos").select("id", { count: "exact", head: true }).eq("user_id", user.id),
     ]);
-    const setup = {
-      checkedIn: !!checkIn,
-      hasProgram: (programCount ?? 0) > 0,
-      hasVideo: (videoCount ?? 0) > 0,
-      loggedNutrition: !!nutriToday,
-    };
+    const programCount = activeProgram ? 1 : 0;
+
+    // First session in the block that isn't ticked off. Walked in order because
+    // the program is periodised — week 3 is not interchangeable with week 1.
+    const prog = activeProgram as { plan: ProgramPlan | null; completed_sessions: string[] | null } | null;
+    let nextSession: { title: string; week: number; drills: number } | null = null;
+    outer: for (const w of prog?.plan?.weeks ?? []) {
+      for (const s of w.sessions) {
+        if (!(prog?.completed_sessions ?? []).includes(`w${w.week}d${s.day}`)) {
+          nextSession = { title: s.title, week: w.week, drills: s.drills.length };
+          break outer;
+        }
+      }
+    }
     const streak = checkInStreak((streakRows ?? []).map((r) => r.check_in_date));
     const quests = dailyQuests({ checkedInToday: !!checkIn, trainedToday: !!trainToday, nutritionToday: !!nutriToday });
 
@@ -90,8 +102,22 @@ export default function HomePage() {
       minutes: trainRows.filter((r) => r.log_date >= since7).reduce((n, r) => n + (r.total_minutes ?? 0), 0),
       checkIns: stats.checkInsLast7,
     };
+    // "Getting started" asks whether they've EVER done each thing. It used to
+    // ask whether they'd checked in TODAY, so the onboarding checklist rose from
+    // the dead every morning they hadn't — a first-run card nagging month-old
+    // users, which is precisely the tone this app was accused of.
+    const setup = {
+      checkedIn: checkDates.length > 0,
+      hasProgram: (programCount ?? 0) > 0,
+      hasVideo: (videoCount ?? 0) > 0,
+      loggedNutrition: (allNutrition.data ?? []).length > 0,
+    };
+
     const acwr = computeACWR(trainRows as unknown as TrainingLog[]);
-    return { profile, checkIn, insight, streak, quests, bioSignal, setup, stats, week, acwr };
+    return {
+      profile, checkIn, insight, streak, quests, bioSignal, setup, stats, week, acwr,
+      nextSession, hasProgram: programCount > 0, trainedToday: !!trainToday,
+    };
   }, [user.id], `home:${user.id}`);
 
   const firstName = data?.profile?.full_name?.split(" ")[0] ?? "athlete";
@@ -107,26 +133,30 @@ export default function HomePage() {
 
   const level = levelFor(computeXp(data!.stats));
 
-  // Before the check-in, home used to be a single empty-state card and nothing
-  // else — no rank, no stats, no quests. The prompt to check in is now one card
-  // among the rest rather than a wall in front of them.
+  // WHAT YOU CAME FOR, THEN WHAT YOU'VE EARNED — in that order.
+  //
+  // Home used to open with a streak, a rank, an XP bar, a four-step checklist
+  // and a full-width "Start today's check-in" card. Every one of those is a
+  // demand, and they all arrived before the app had been useful once. For
+  // someone fitting training around school or a job that reads as a chore list
+  // from something they pay for.
+  //
+  // The tools come first now. The check-in is a slim optional line that says
+  // outright the app works without it, because it does — the program, the
+  // library, video analysis and fuelling targets never needed it. Progress and
+  // goals still exist, below, for the people who like them.
   if (!data?.checkIn) {
     return (
       <div className="animate-fade-up space-y-6">
-        <Greeting name={firstName} sub="Let's see how you're recovering." streak={streak} />
+        <Greeting name={firstName} sub="What do you need today?" streak={streak} />
         <Notifications userId={user.id} />
-        <RankStrip level={level} week={data!.week} />
 
-        <Link href="/journal" className="card-premium card-hover flex items-center gap-4 p-5 sm:p-6">
-          <span className="text-4xl">🌅</span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-lg font-extrabold">Start today&apos;s check-in</span>
-            <span className="block text-sm text-slate-400">A minute of sleep, soreness and how you feel — it sets your readiness and today&apos;s session.</span>
-          </span>
-          <span className="hidden shrink-0 text-sm font-bold text-pitch-400 sm:block">Start →</span>
-        </Link>
+        <NextUp hasProgram={data!.hasProgram} nextSession={data!.nextSession} trainedToday={data!.trainedToday} />
+        <CheckInNudge />
+        <ToolGrid />
 
         <GettingStarted setup={data!.setup} />
+        <RankStrip level={level} week={data!.week} />
         <DailyQuests quests={data!.quests} />
       </div>
     );
@@ -148,13 +178,13 @@ export default function HomePage() {
 
   return (
     <div className="animate-fade-up space-y-6">
-      <Greeting name={firstName} sub="Here's your readiness for today." streak={streak} />
+      <Greeting name={firstName} sub="Here's where you're at today." streak={streak} />
 
       <Notifications userId={user.id} />
 
-      <RankStrip level={level} week={data!.week} />
-
-      <GettingStarted setup={data!.setup} />
+      {/* The action first, then the readiness that qualifies it. Readiness on
+          its own is a number; what to do with it is the product. */}
+      <NextUp hasProgram={data.hasProgram} nextSession={data.nextSession} trainedToday={data.trainedToday} />
 
       <div className="grid gap-5 lg:grid-cols-3">
         <div className="card flex items-center justify-center p-6 pt-8 lg:col-span-1">
@@ -172,20 +202,130 @@ export default function HomePage() {
             <p className="text-sm leading-relaxed text-slate-200 sm:text-base">{coachText}</p>
             {watchZone && <div className="chip mt-3 text-readiness-red">⚠️ Watch zone: {watchZone}</div>}
           </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <QuickLink href="/coach" title="Today's session" sub="Your program & drills" icon="🏋️" />
-            <QuickLink href="/train" title="Video analysis" sub="Upload & break down a clip" icon="🎥" />
-            <QuickLink href="/nutrition" title="Fuelling" sub="Targets for today's load" icon="🍽️" />
-            <QuickLink href="/essentials" title="Playbook" sub="Position, rehab & gameday" icon="🎯" />
-          </div>
         </div>
       </div>
 
+      <ToolGrid />
+
       <BiometricSignalCard signal={data!.bioSignal} />
 
+      <GettingStarted setup={data!.setup} />
+      <RankStrip level={level} week={data!.week} />
       <DailyQuests quests={data!.quests} />
     </div>
+  );
+}
+
+/**
+ * ONE thing to do, stated plainly.
+ *
+ * The real complaint wasn't that the app asks a lot — it's that everything on
+ * this page had the same weight, so nothing said where to start. A readiness
+ * gauge, a rank, an XP bar, four quick links, three quests and a checklist all
+ * shouting at once is a page you bounce off, not a page you use.
+ *
+ * So home now answers one question above the fold: what should I do right now?
+ * It's derived, not generic — the actual next session in the actual block, by
+ * name. Everything else on the page is support for that answer or is below it.
+ */
+function NextUp({ hasProgram, nextSession, trainedToday }: {
+  hasProgram: boolean;
+  nextSession: { title: string; week: number; drills: number } | null;
+  trainedToday: boolean;
+}) {
+  // Ordered by what's genuinely most useful, not by what we'd like them to do.
+  const card = !hasProgram
+    ? {
+        href: "/coach",
+        eyebrow: "Start here",
+        title: "Build your training program",
+        sub: "Answer a few questions and the coach writes you a four-week block. Everything else works better once this exists.",
+        cta: "Build it",
+      }
+    : nextSession
+      ? {
+          href: "/coach",
+          eyebrow: trainedToday ? "Next session" : "Today",
+          title: nextSession.title,
+          sub: `Week ${nextSession.week} · ${nextSession.drills} exercise${nextSession.drills === 1 ? "" : "s"}${
+            trainedToday ? " · you've already logged something today, so this can wait" : ""
+          }`,
+          cta: trainedToday ? "Have a look" : "Start session",
+        }
+      : {
+          href: "/coach",
+          eyebrow: "Block complete",
+          title: "Build your next block",
+          sub: "You've finished every session in this one. The next block progresses from what you actually did.",
+          cta: "Build it",
+        };
+
+  return (
+    <Link href={card.href} className="card-premium card-hover block p-5 sm:p-6">
+      <span className="eyebrow">{card.eyebrow}</span>
+      <h2 className="mt-1 text-xl font-extrabold leading-tight sm:text-2xl">{card.title}</h2>
+      <p className="mt-2 text-sm text-slate-400">{card.sub}</p>
+      <span className="btn-primary mt-4 inline-block">{card.cta} →</span>
+    </Link>
+  );
+}
+
+/**
+ * Everything else, deliberately quiet.
+ *
+ * Small, uniform, unlabelled with progress or counts — a drawer you open when
+ * you want something, not six more things asking to be done. It sits below the
+ * one real answer so the page has an obvious top.
+ */
+function ToolGrid() {
+  const tools = [
+    { href: "/coach", title: "Today's session", icon: "🏋️" },
+    { href: "/library", title: "Exercise library", icon: "📚" },
+    { href: "/train", title: "Video analysis", icon: "🎥" },
+    { href: "/nutrition", title: "Fuelling", icon: "🍽️" },
+    { href: "/essentials", title: "Playbook", icon: "🎯" },
+    { href: "/dashboard", title: "Progress", icon: "📈" },
+  ];
+  return (
+    <div>
+      <h2 className="field-label">Anything else</h2>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+      {tools.map((t) => (
+        <Link
+          key={t.href}
+          href={t.href}
+          className="card card-hover flex flex-col items-start gap-2 p-4"
+        >
+          <span className="grid h-10 w-10 place-items-center rounded-2xl bg-white/[0.04] text-xl">{t.icon}</span>
+          <span className="text-sm font-bold leading-tight text-slate-100">{t.title}</span>
+        </Link>
+      ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The check-in, offered rather than demanded.
+ *
+ * The old card was full-width, premium-styled and said "Start today's check-in"
+ * above "A minute of sleep, soreness and how you feel". A minute, every day,
+ * before anything else — and it was the first thing on the page. This says what
+ * it's for, how long it really takes now, and that skipping it costs nothing,
+ * which is true and worth saying out loud.
+ */
+function CheckInNudge() {
+  return (
+    <Link href="/journal" className="card card-hover flex items-center gap-3 p-4">
+      <span className="text-2xl">🌤️</span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-bold text-slate-100">Tune today to how you&apos;re feeling</span>
+        <span className="block text-xs text-slate-400">
+          Three taps, about ten seconds. Skip it and everything above still works.
+        </span>
+      </span>
+      <span className="shrink-0 text-xs font-bold text-pitch-400">Open →</span>
+    </Link>
   );
 }
 
@@ -202,7 +342,9 @@ function RankStrip({ level, week }: { level: LevelInfo; week: { sessions: number
   const stats = [
     { label: "Sessions", value: String(week.sessions) },
     { label: "Trained", value: week.minutes >= 60 ? `${Math.round(week.minutes / 60)}h` : `${week.minutes}m` },
-    { label: "Check-ins", value: `${week.checkIns}/7` },
+    // Was "3/7". A denominator turns a record of what you did into a score out
+    // of seven you're failing, and nobody ever promised the app seven.
+    { label: "Check-ins", value: String(week.checkIns) },
   ];
   return (
     <Link href="/rewards" className="card card-hover block p-4">
@@ -239,13 +381,40 @@ function RankStrip({ level, week }: { level: LevelInfo; week: { sessions: number
   );
 }
 
+/**
+ * Optional, and says so.
+ *
+ * Three unticked boxes labelled "quests" every morning is a debt you didn't
+ * agree to, and the people most likely to feel it are exactly the ones with
+ * least time. Gamification works when it's a bonus and grates when it's an
+ * obligation, so this can now be turned off for good — the XP still accrues
+ * from real activity either way, and /rewards still shows all of it.
+ */
 function DailyQuests({ quests }: { quests: { id: string; label: string; xp: number; done: boolean; href: string }[] }) {
   const done = quests.filter((q) => q.done).length;
+  const [hidden, setHidden] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    try { setHidden(localStorage.getItem("pa:hide-goals") === "1"); } catch { setHidden(false); }
+  }, []);
+
+  if (hidden !== false) return null; // null = not read yet, avoids a flash
+
   return (
     <div className="card p-5">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="field-label !mb-0">Daily quests</h2>
-        <Link href="/rewards" className="text-xs font-semibold text-pitch-400 hover:underline">{done}/{quests.length} · Rewards →</Link>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h2 className="field-label !mb-0">If you fancy it today</h2>
+        <div className="flex shrink-0 items-center gap-3">
+          <Link href="/rewards" className="text-xs font-semibold text-pitch-400 hover:underline">{done}/{quests.length} · Rewards →</Link>
+          <button
+            type="button"
+            onClick={() => { setHidden(true); try { localStorage.setItem("pa:hide-goals", "1"); } catch { /* ignore */ } }}
+            className="text-xs text-slate-500 hover:text-slate-300"
+            title="Hide these — XP still counts from what you actually do"
+          >
+            Hide
+          </button>
+        </div>
       </div>
       <div className="grid gap-3 sm:grid-cols-3">
         {quests.map((q) => (
@@ -262,7 +431,7 @@ function DailyQuests({ quests }: { quests: { id: string; label: string; xp: numb
 
 function GettingStarted({ setup }: { setup: { checkedIn: boolean; hasProgram: boolean; hasVideo: boolean; loggedNutrition: boolean } }) {
   const steps = [
-    { done: setup.checkedIn, href: "/journal", title: "Log today's check-in", sub: "60 seconds — sleep, soreness, how you feel" },
+    { done: setup.checkedIn, href: "/journal", title: "Try a check-in", sub: "Three taps — it tunes your session to how you feel" },
     { done: setup.hasProgram, href: "/coach", title: "Build your training program", sub: "The AI coach periodises it to your goal" },
     { done: setup.hasVideo, href: "/train", title: "Analyse a video", sub: "Upload a clip for a technique breakdown" },
     { done: setup.loggedNutrition, href: "/nutrition", title: "Set your nutrition", sub: "Calorie & macro targets, meal plan" },
@@ -278,8 +447,8 @@ function GettingStarted({ setup }: { setup: { checkedIn: boolean; hasProgram: bo
     <section className="card-premium p-5 sm:p-6">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <span className="eyebrow">Getting started · {doneCount}/{steps.length}</span>
-          <h2 className="mt-1 text-lg font-extrabold">New here? Here&apos;s your first few minutes</h2>
+          <span className="eyebrow">Worth a look · {doneCount}/{steps.length}</span>
+          <h2 className="mt-1 text-lg font-extrabold">Things you haven&apos;t tried yet</h2>
         </div>
         <button onClick={() => setHidden(true)} className="shrink-0 text-xs text-slate-500 hover:text-slate-300">Hide</button>
       </div>
