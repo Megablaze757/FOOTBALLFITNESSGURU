@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import type { EmailOtpType } from "@supabase/supabase-js";
 import { useSession } from "@/lib/auth";
 import { captureRef, getRef, clearRef } from "@/lib/referral";
 import { Logo } from "@/components/Logo";
@@ -65,6 +66,56 @@ export default function LoginPage() {
     const t = setTimeout(() => setCooldown((n) => n - 1), 1000);
     return () => clearTimeout(t);
   }, [cooldown]);
+
+  /**
+   * Confirmation and magic links that carry a token hash.
+   *
+   * The email templates in supabase/email-templates point here as
+   *   /login/?token_hash=<hash>&type=email
+   * and nothing on this page consumed it, so the link landed on a plain sign-in
+   * form and the address was never confirmed. The reset-password page has had
+   * this for a while; this is the same handling for the other direction.
+   *
+   * Why token_hash rather than Supabase's own {{ .ConfirmationURL }}: that URL
+   * points at /auth/v1/verify, which SPENDS the token and then redirects with
+   * ?code=, and the code exchange needs the PKCE verifier stored by the browser
+   * that made the request. Open the mail in Gmail's in-app viewer, on another
+   * device, or let a corporate link-scanner prefetch it, and the exchange fails
+   * against a token that is already gone — the link can never work again.
+   * verifyOtp takes the hash directly and works in any browser.
+   */
+  const [verifying, setVerifying] = useState(false);
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const tokenHash = url.searchParams.get("token_hash");
+    if (!tokenHash) return;
+
+    // Supabase reports its own failures on the URL — an expired link arrives
+    // here as an error, not as a token. Say what it said.
+    const urlErr = url.searchParams.get("error_description");
+    if (urlErr) { setError(urlErr); return; }
+
+    const type = (url.searchParams.get("type") ?? "email") as EmailOtpType;
+    setVerifying(true);
+    void (async () => {
+      const { error: vErr } = await createClient().auth.verifyOtp({ token_hash: tokenHash, type });
+      // Clean the token out of the address bar either way, so a refresh or a
+      // shared URL doesn't retry a hash that's now spent.
+      window.history.replaceState({}, "", url.pathname);
+      if (vErr) {
+        setError(
+          /expired|invalid/i.test(vErr.message)
+            ? "That link has expired or has already been used. Sign in below, or request a new one."
+            : vErr.message
+        );
+        setVerifying(false);
+        return;
+      }
+      // verifyOtp signs them in; the redirect effect below takes it from here.
+      setInfo("Email confirmed — signing you in…");
+      setVerifying(false);
+    })();
+  }, []);
 
   useEffect(() => {
     if (user) router.replace("/home");
@@ -218,6 +269,12 @@ export default function LoginPage() {
             </button>
           )}
 
+          {verifying && (
+            <p className="flex items-center gap-2 text-sm text-pitch-400">
+              <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-pitch-500 border-t-transparent" />
+              Confirming your email…
+            </p>
+          )}
           {error && <p className="text-sm text-readiness-red">{error}</p>}
           {info && <p className="text-sm text-pitch-400">{info}</p>}
 
