@@ -6,10 +6,10 @@ import Link from "next/link";
 // Places worth offering someone who took a wrong turn.
 const LINKS: { href: string; label: string; icon: string }[] = [
   { href: "/home", label: "Home", icon: "🏠" },
-  { href: "/coach", label: "AI Coach", icon: "🧠" },
+  { href: "/coach", label: "My plan", icon: "🧠" },
   { href: "/train", label: "Train", icon: "🎬" },
   { href: "/library", label: "Exercises", icon: "📚" },
-  { href: "/essentials", label: "Playbook", icon: "🎯" },
+  { href: "/essentials", label: "Guides", icon: "🎯" },
   { href: "/nutrition", label: "Nutrition", icon: "🍝" },
 ];
 

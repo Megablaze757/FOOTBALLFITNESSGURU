@@ -99,8 +99,8 @@ export default function TrainPage() {
   return (
     <div className="animate-fade-up space-y-5">
       <header>
-        <h1 className="text-3xl font-extrabold tracking-tight">Train</h1>
-        <p className="mt-1 text-sm text-slate-400">Upload a clip for biomechanics analysis &amp; a drill plan.</p>
+        <h1 className="text-3xl font-extrabold tracking-tight">Video analysis</h1>
+        <p className="mt-1 text-sm text-slate-400">Film a movement, get it broken down frame by frame, and drills to fix what it finds.</p>
       </header>
 
       <VideoUploader sport={data?.sport} onUploaded={reload} />

@@ -178,7 +178,7 @@ function Header() {
     <header className="flex items-center justify-between">
       <div>
         <h1 className="text-3xl font-extrabold tracking-tight">Nutrition</h1>
-        <p className="mt-1 text-sm text-slate-400">Fuel for recovery and performance.</p>
+        <p className="mt-1 text-sm text-slate-400">What to eat today, worked out from your body and how much you are training.</p>
       </div>
       <Link href="/dashboard" className="text-sm text-slate-400 hover:text-pitch-400">← Back</Link>
     </header>

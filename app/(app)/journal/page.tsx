@@ -67,7 +67,7 @@ export default function JournalPage() {
   return (
     <div className="animate-fade-up mx-auto max-w-2xl">
       <header className="mb-5">
-        <h1 className="text-3xl font-extrabold tracking-tight">Daily check-in</h1>
+        <h1 className="text-3xl font-extrabold tracking-tight">Check in</h1>
         <p className="mt-1 text-sm text-slate-400">
           {checkIn ? "Already logged today — edit and resubmit anytime." : "Log how your body feels today."}
         </p>

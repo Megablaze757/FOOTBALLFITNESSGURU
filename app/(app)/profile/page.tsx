@@ -67,6 +67,7 @@ export default function ProfilePage() {
     <div className="animate-fade-up mx-auto max-w-2xl">
       <header className="mb-5">
         <h1 className="text-3xl font-extrabold tracking-tight">Profile</h1>
+        <p className="mt-1 text-sm text-slate-400">Your sport, position and plan. Change these and your program and targets follow.</p>
       </header>
 
       <CoachRequests />

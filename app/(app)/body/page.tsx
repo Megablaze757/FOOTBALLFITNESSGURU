@@ -38,7 +38,7 @@ export default function BodyPage() {
       <header className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-extrabold tracking-tight">Body</h1>
-          <p className="mt-1 text-sm text-slate-400">Weight, body-fat &amp; progress photos.</p>
+          <p className="mt-1 text-sm text-slate-400">Weight, body fat and photos over time. Feeds your calorie targets.</p>
         </div>
         <Link href="/dashboard" className="text-sm text-slate-400 hover:text-pitch-400">← Back</Link>
       </header>

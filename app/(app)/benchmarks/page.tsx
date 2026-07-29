@@ -30,7 +30,7 @@ export default function BenchmarksPage() {
       <header className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-extrabold tracking-tight">Benchmarks</h1>
-          <p className="mt-1 text-sm text-slate-400">Track strength &amp; speed over time.</p>
+          <p className="mt-1 text-sm text-slate-400">Test the same lifts and sprints now and then, so progress is measured rather than guessed.</p>
         </div>
         <Link href="/dashboard" className="text-sm text-slate-400 hover:text-pitch-400">← Back</Link>
       </header>

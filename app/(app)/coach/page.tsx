@@ -69,7 +69,10 @@ function readinessOf(checkIn: DailyCheckIn | null, training: TrainingLog[] = [])
     is_match_day: checkIn.is_match_day,
     match_minutes_played: checkIn.match_minutes_played,
   };
-  return assessReadiness(input);
+  // Training load is part of the verdict, not a separate panel — see
+  // lib/readiness.ts. Without this the plan page can tell you you're good to go
+  // while Progress shows a red load spike.
+  return assessReadiness(input, { acwr: computeACWR(training).ratio });
 }
 
 type CoachTab = "today" | "program" | "ask";
@@ -119,7 +122,7 @@ export default function CoachPage() {
     return (
       <div className="animate-fade-up">
         <header className="mb-5">
-          <h1 className="text-3xl font-extrabold tracking-tight">AI Coach</h1>
+          <h1 className="text-3xl font-extrabold tracking-tight">My plan</h1>
         </header>
         <FeatureLock
           capability="program"
@@ -259,7 +262,7 @@ function GoalBuilder({ painMap, latestBench, sport, initialPositions, initialFoc
   return (
     <div className="animate-fade-up space-y-5">
       <header>
-        <h1 className="text-3xl font-extrabold tracking-tight">AI Coach</h1>
+        <h1 className="text-3xl font-extrabold tracking-tight">My plan</h1>
         <p className="mt-1 text-sm text-slate-400">A few quick questions and I&apos;ll build a program around you.</p>
       </header>
 
@@ -601,7 +604,7 @@ function ActiveProgram({
       )}
       <header className="flex items-start justify-between">
         <div>
-          <h1 className="text-3xl font-extrabold tracking-tight">AI Coach</h1>
+          <h1 className="text-3xl font-extrabold tracking-tight">My plan</h1>
           <p className="mt-1 text-sm capitalize text-pitch-400">
             {GOALS.find((g) => g.id === goal)?.label} program · Block {program.block}
           </p>

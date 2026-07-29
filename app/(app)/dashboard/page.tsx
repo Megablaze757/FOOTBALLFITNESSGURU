@@ -222,7 +222,7 @@ function Header({ source }: { source?: "ai" | "local" }) {
     <header className="flex items-start justify-between">
       <div>
         <h1 className="text-3xl font-extrabold tracking-tight">Progress</h1>
-        <p className="mt-1 text-sm text-slate-400">How you&apos;re recovering, and what you&apos;ve built.</p>
+        <p className="mt-1 text-sm text-slate-400">Whether your training load is safe, and what has actually improved.</p>
       </div>
       {source && (
         <span

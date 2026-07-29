@@ -279,11 +279,13 @@ function NextUp({ hasProgram, nextSession, trainedToday }: {
  */
 function ToolGrid() {
   const tools = [
-    { href: "/coach", title: "Today's session", icon: "🏋️" },
-    { href: "/library", title: "Exercise library", icon: "📚" },
+    // Same wording as the nav. Two names for one destination on one screen is
+    // the confusion this pass exists to remove.
+    { href: "/coach", title: "My plan", icon: "🏋️" },
+    { href: "/library", title: "Exercises", icon: "📚" },
     { href: "/train", title: "Video analysis", icon: "🎥" },
     { href: "/nutrition", title: "Fuelling", icon: "🍽️" },
-    { href: "/essentials", title: "Playbook", icon: "🎯" },
+    { href: "/essentials", title: "Guides", icon: "🎯" },
     { href: "/dashboard", title: "Progress", icon: "📈" },
   ];
   return (

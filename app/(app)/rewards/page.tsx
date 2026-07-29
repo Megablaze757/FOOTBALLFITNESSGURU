@@ -101,7 +101,7 @@ export default function RewardsPage() {
       )}
       <header>
         <h1 className="text-3xl font-extrabold tracking-tight">Rewards</h1>
-        <p className="mt-1 text-sm text-slate-400">Earn XP for everything you do. Level up, unlock badges, keep the streak alive.</p>
+        <p className="mt-1 text-sm text-slate-400">XP builds up from things you were doing anyway. Nothing here needs chasing.</p>
       </header>
 
       {/* Level card */}

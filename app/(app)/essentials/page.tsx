@@ -79,7 +79,7 @@ export default function EssentialsPage() {
   return (
     <div className="animate-fade-up mx-auto max-w-3xl space-y-6">
       <header>
-        <h1 className="text-3xl font-extrabold tracking-tight">Playbook</h1>
+        <h1 className="text-3xl font-extrabold tracking-tight">Guides</h1>
         <p className="mt-1 text-sm text-slate-400">Position essentials, {gameday.toLowerCase()} nutrition and recovery — tailored to you.</p>
       </header>
 

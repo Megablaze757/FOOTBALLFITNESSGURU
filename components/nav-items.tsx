@@ -6,34 +6,50 @@
 // injury risk and which held their squat history. They are one page with two
 // tabs now, and one entry in the nav.
 
+// LABELS SAY WHAT YOU GET, NOT WHAT WE CALL IT INTERNALLY.
+//
+// The old set could not be guessed by anyone who hadn't built it. "Train" was
+// video analysis, while the place you actually train was "Coach". "Journal"
+// was a daily check-in, not a diary. "Playbook" and "Library" both sounded
+// like reference material and one of them was the exercise list. Five of the
+// ten labels required you to already know the answer.
+//
+// Routes are deliberately unchanged — they're bookmarked, linked from emails
+// and baked into a static export, and renaming them buys nothing a label
+// doesn't. So /coach reads "My plan" and /train reads "Video analysis", which
+// is the wrong way round from the URLs and the right way round for a person.
 export const NAV_ITEMS = [
   { href: "/home", label: "Home", icon: "home" },
-  { href: "/coach", label: "Coach", icon: "coach" },
-  { href: "/journal", label: "Journal", icon: "journal" },
+  { href: "/coach", label: "My plan", icon: "coach" },
+  { href: "/journal", label: "Check in", icon: "journal" },
   { href: "/dashboard", label: "Progress", icon: "stats" },
-  { href: "/train", label: "Train", icon: "train" },
-  { href: "/library", label: "Library", icon: "library" },
-  { href: "/essentials", label: "Playbook", icon: "playbook" },
-  { href: "/rewards", label: "Rewards", icon: "trophy" },
+  { href: "/train", label: "Video analysis", icon: "train" },
+  { href: "/library", label: "Exercises", icon: "library" },
   { href: "/nutrition", label: "Nutrition", icon: "nutrition" },
+  { href: "/essentials", label: "Guides", icon: "playbook" },
+  { href: "/rewards", label: "Rewards", icon: "trophy" },
   { href: "/profile", label: "Profile", icon: "profile" },
 ] as const;
 
-// Primary tabs for the space-constrained mobile bar (+ a "More" sheet below).
+// The four you'd touch on a normal day, plus More.
+//
+// Was Home / Coach / Journal / Playbook / Train — two of the five primary tabs
+// were reference content and video analysis, while Progress was buried in the
+// sheet. The daily loop is: see the plan, do it, check in, watch it move.
 export const MOBILE_NAV = [
   { href: "/home", label: "Home", icon: "home" },
-  { href: "/coach", label: "Coach", icon: "coach" },
-  { href: "/journal", label: "Journal", icon: "journal" },
-  { href: "/essentials", label: "Playbook", icon: "playbook" },
-  { href: "/train", label: "Train", icon: "train" },
+  { href: "/coach", label: "My plan", icon: "coach" },
+  { href: "/journal", label: "Check in", icon: "journal" },
+  { href: "/dashboard", label: "Progress", icon: "stats" },
 ] as const;
 
-// Secondary destinations, reached from the mobile "More" sheet.
+// Everything else. Reached from the mobile "More" sheet.
 export const MOBILE_MORE = [
-  { href: "/dashboard", label: "Progress", icon: "stats" },
-  { href: "/rewards", label: "Rewards", icon: "trophy" },
-  { href: "/library", label: "Exercise library", icon: "library" },
+  { href: "/train", label: "Video analysis", icon: "train" },
+  { href: "/library", label: "Exercises", icon: "library" },
   { href: "/nutrition", label: "Nutrition", icon: "nutrition" },
+  { href: "/essentials", label: "Guides", icon: "playbook" },
+  { href: "/rewards", label: "Rewards", icon: "trophy" },
   { href: "/profile", label: "Profile", icon: "profile" },
 ] as const;
 

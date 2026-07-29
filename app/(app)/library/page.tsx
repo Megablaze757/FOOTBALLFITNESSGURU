@@ -63,7 +63,7 @@ export default function LibraryPage() {
     <div className="animate-fade-up space-y-4">
       <header>
         <h1 className="text-3xl font-extrabold tracking-tight">Exercise library</h1>
-        <p className="mt-1 text-sm text-slate-400">{EXERCISES.length} exercises — filter by sport, level, equipment &amp; muscle.</p>
+        <p className="mt-1 text-sm text-slate-400">Look up any movement — how to do it, what it works, and when to use it. {EXERCISES.length} in total.</p>
       </header>
 
       <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search exercises or muscles…" className="field" />

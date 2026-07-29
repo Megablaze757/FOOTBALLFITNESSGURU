@@ -211,7 +211,7 @@ function Header() {
     <header className="flex items-center justify-between">
       <div>
         <h1 className="text-3xl font-extrabold tracking-tight">Squad</h1>
-        <p className="mt-1 text-sm text-slate-400">Your athletes at a glance.</p>
+        <p className="mt-1 text-sm text-slate-400">Who is fit, who is carrying something, and who has stopped checking in.</p>
       </div>
       <Link href="/profile" className="text-sm text-slate-400 hover:text-pitch-400">← Back</Link>
     </header>
