@@ -19,10 +19,11 @@ export default function BenchmarksPage() {
       .eq("user_id", user.id)
       .order("test_date", { ascending: false })
       .limit(20);
-    return (rows ?? []) as StrengthBenchmark[];
+    const { data: prof } = await supabase.from("profiles").select("sport").eq("id", user.id).maybeSingle();
+    return { rows: (rows ?? []) as StrengthBenchmark[], sport: (prof as { sport?: string } | null)?.sport ?? null };
   }, [user.id], `benchmarks:${user.id}`);
 
-  const benchmarks = data ?? [];
+  const benchmarks = data?.rows ?? [];
   const latestByMetric = computeLatest(benchmarks);
 
   return (
@@ -35,7 +36,7 @@ export default function BenchmarksPage() {
         <Link href="/dashboard" className="text-sm text-slate-400 hover:text-pitch-400">← Back</Link>
       </header>
 
-      <BenchmarkForm onSaved={reload} />
+      <BenchmarkForm onSaved={reload} sport={data?.sport} />
 
       {Object.keys(latestByMetric).length > 0 && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

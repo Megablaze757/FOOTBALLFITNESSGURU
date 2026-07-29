@@ -48,7 +48,22 @@ const FOOTBALL: SportTerms = {
 
 const TERMS: Record<SportId, SportTerms> = {
   football: FOOTBALL,
-  rugby: FOOTBALL,
+  // Was aliased to football outright. Close enough that nobody noticed, and
+  // wrong in the one place it matters: a rugby player's week is built around
+  // contact, and "Minutes played" is the field that decides how much recovery
+  // the engine gives them back.
+  rugby: {
+    event: "match",
+    eventToday: "Match today?",
+    minutes: "Minutes on the park",
+    eventDay: "Matchday",
+    played: "played",
+    eventLabel: "Match",
+    venue: "on the park",
+    season: "season",
+    inSeason: "in-season (contact load is the priority)",
+    offSeason: "pre-season (size and conditioning)",
+  },
   basketball: {
     event: "game",
     eventToday: "Game today?",

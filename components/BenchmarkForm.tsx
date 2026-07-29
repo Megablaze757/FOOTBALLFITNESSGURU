@@ -2,9 +2,14 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { METRIC_CATALOG } from "@/lib/benchmarks";
+import { METRIC_CATALOG, metricDef } from "@/lib/benchmarks";
+import { metricsForSport } from "@/lib/sport-profile";
 
-export function BenchmarkForm({ onSaved }: { onSaved?: () => void }) {
+export function BenchmarkForm({ onSaved, sport }: { onSaved?: () => void; sport?: string | null }) {
+  // Their sport’s tests first. Everything stays available underneath — a
+  // footballer who wants to log a snatch still can — but a weightlifter should
+  // not have to scroll past a Yo-Yo IR1 level to reach the clean & jerk.
+  const ordered = metricsForSport(sport, METRIC_CATALOG).map(metricDef);
   const [open, setOpen] = useState(false);
   const [testDate, setTestDate] = useState(new Date().toISOString().slice(0, 10));
   const [values, setValues] = useState<Record<string, string>>({});
@@ -67,7 +72,7 @@ export function BenchmarkForm({ onSaved }: { onSaved?: () => void }) {
       </label>
 
       <div className="space-y-2">
-        {METRIC_CATALOG.map((m) => (
+        {ordered.map((m) => (
           <label key={m.key} className="flex items-center justify-between gap-3">
             <span className="text-sm text-slate-300">{m.label}</span>
             <span className="flex items-center gap-2">

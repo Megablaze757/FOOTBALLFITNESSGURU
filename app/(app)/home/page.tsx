@@ -11,6 +11,7 @@ import { actionLabel } from "@/lib/insights";
 import { checkInStreak, computeACWR } from "@/lib/load";
 import { dailyQuests, computeXp, levelFor, type ActivityStats, type LevelInfo } from "@/lib/gamification";
 import { biometricSignal, type Biometric } from "@/lib/biometrics";
+import { sportProfile } from "@/lib/sport-profile";
 import { ReadinessGauge } from "@/components/ReadinessGauge";
 import { BiometricSignalCard } from "@/components/BiometricSignalCard";
 import { Notifications } from "@/components/Notifications";
@@ -26,7 +27,7 @@ export default function HomePage() {
     const supabase = createClient();
     const since = new Date(Date.now() - 40 * 86400_000).toISOString().slice(0, 10);
     const [{ data: profile }, { data: checkIn }, { data: streakRows }, { data: trainToday }, { data: nutriToday }] = await Promise.all([
-      supabase.from("profiles").select("full_name, onboarded").eq("id", user.id).maybeSingle(),
+      supabase.from("profiles").select("full_name, onboarded, sport").eq("id", user.id).maybeSingle(),
       supabase.from("daily_check_ins").select("*").eq("user_id", user.id).eq("check_in_date", today).maybeSingle(),
       supabase.from("daily_check_ins").select("check_in_date").eq("user_id", user.id).gte("check_in_date", since),
       supabase.from("training_logs").select("log_date").eq("user_id", user.id).eq("log_date", today).maybeSingle(),
@@ -122,6 +123,8 @@ export default function HomePage() {
 
   const firstName = data?.profile?.full_name?.split(" ")[0] ?? "athlete";
   const streak = data?.streak ?? 0;
+  // Tool order, accent and tagline all come from here — see lib/sport-profile.ts.
+  const sport = sportProfile((data?.profile as { sport?: string } | null)?.sport);
 
   // First-run: send brand-new athletes through onboarding.
   const needsOnboarding = data?.profile != null && (data.profile as { onboarded?: boolean }).onboarded === false;
@@ -148,12 +151,12 @@ export default function HomePage() {
   if (!data?.checkIn) {
     return (
       <div className="animate-fade-up space-y-6">
-        <Greeting name={firstName} sub="What do you need today?" streak={streak} />
+        <Greeting name={firstName} sub={sport.tagline} streak={streak} />
         <Notifications userId={user.id} />
 
-        <NextUp hasProgram={data!.hasProgram} nextSession={data!.nextSession} trainedToday={data!.trainedToday} />
+        <NextUp hasProgram={data!.hasProgram} nextSession={data!.nextSession} trainedToday={data!.trainedToday} accent={sport.accent} />
         <CheckInNudge />
-        <ToolGrid />
+        <ToolGrid tools={sport.tools} />
 
         <GettingStarted setup={data!.setup} />
         <RankStrip level={level} week={data!.week} />
@@ -184,7 +187,7 @@ export default function HomePage() {
 
       {/* The action first, then the readiness that qualifies it. Readiness on
           its own is a number; what to do with it is the product. */}
-      <NextUp hasProgram={data.hasProgram} nextSession={data.nextSession} trainedToday={data.trainedToday} />
+      <NextUp hasProgram={data.hasProgram} nextSession={data.nextSession} trainedToday={data.trainedToday} accent={sport.accent} />
 
       <div className="grid gap-5 lg:grid-cols-3">
         <div className="card flex items-center justify-center p-6 pt-8 lg:col-span-1">
@@ -205,7 +208,7 @@ export default function HomePage() {
         </div>
       </div>
 
-      <ToolGrid />
+      <ToolGrid tools={sport.tools} />
 
       <BiometricSignalCard signal={data!.bioSignal} />
 
@@ -228,10 +231,12 @@ export default function HomePage() {
  * It's derived, not generic — the actual next session in the actual block, by
  * name. Everything else on the page is support for that answer or is below it.
  */
-function NextUp({ hasProgram, nextSession, trainedToday }: {
+function NextUp({ hasProgram, nextSession, trainedToday, accent }: {
   hasProgram: boolean;
   nextSession: { title: string; week: number; drills: number } | null;
   trainedToday: boolean;
+  /** Sport accent — the one place on home that visibly belongs to their sport. */
+  accent: string;
 }) {
   // Ordered by what's genuinely most useful, not by what we'd like them to do.
   const card = !hasProgram
@@ -261,8 +266,12 @@ function NextUp({ hasProgram, nextSession, trainedToday }: {
         };
 
   return (
-    <Link href={card.href} className="card-premium card-hover block p-5 sm:p-6">
-      <span className="eyebrow">{card.eyebrow}</span>
+    <Link
+      href={card.href}
+      className="card-premium card-hover block border-l-4 p-5 sm:p-6"
+      style={{ borderLeftColor: accent }}
+    >
+      <span className="eyebrow" style={{ color: accent }}>{card.eyebrow}</span>
       <h2 className="mt-1 text-xl font-extrabold leading-tight sm:text-2xl">{card.title}</h2>
       <p className="mt-2 text-sm text-slate-400">{card.sub}</p>
       <span className="btn-primary mt-4 inline-block">{card.cta} →</span>
@@ -277,17 +286,12 @@ function NextUp({ hasProgram, nextSession, trainedToday }: {
  * you want something, not six more things asking to be done. It sits below the
  * one real answer so the page has an obvious top.
  */
-function ToolGrid() {
-  const tools = [
-    // Same wording as the nav. Two names for one destination on one screen is
-    // the confusion this pass exists to remove.
-    { href: "/coach", title: "My plan", icon: "🏋️" },
-    { href: "/library", title: "Exercises", icon: "📚" },
-    { href: "/train", title: "Video analysis", icon: "🎥" },
-    { href: "/nutrition", title: "Fuelling", icon: "🍽️" },
-    { href: "/essentials", title: "Guides", icon: "🎯" },
-    { href: "/dashboard", title: "Progress", icon: "📈" },
-  ];
+function ToolGrid({ tools }: { tools: { href: string; title: string; icon: string }[] }) {
+  // Order comes from lib/sport-profile.ts. Same six destinations for everyone —
+  // hiding features by sport would stop a footballer who wants to lift — but a
+  // weightlifter shouldn't scan past video analysis to reach their plan, and a
+  // runner's first stop is load, not drills. Wording matches the nav, because
+  // two names for one destination on one screen is the confusion being removed.
   return (
     <div>
       <h2 className="field-label">Anything else</h2>
