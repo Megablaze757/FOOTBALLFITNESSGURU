@@ -123,6 +123,9 @@ export default function CoachPage() {
       <div className="animate-fade-up">
         <header className="mb-5">
           <h1 className="text-3xl font-extrabold tracking-tight">My plan</h1>
+          <p className="mt-1 max-w-prose text-sm text-slate-400">
+            Your four-week training block — what to do, in what order, and how it progresses.
+          </p>
         </header>
         <FeatureLock
           capability="program"

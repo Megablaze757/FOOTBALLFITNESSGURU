@@ -100,28 +100,42 @@ what hurts is the most sensitive thing anyone types here.
 806 lines, **three separate `<h1>`s**, three tabs (Today / Program / Ask coach).
 The tab structure is sound and the heading now matches the nav.
 
+The locked state now has a lead. Readiness on this page also accounts for
+training load, which it silently didn't — a CRLF mismatch meant the parameter was
+added and never used, so the page reported readiness that ignored load while
+TypeScript accepted the unused argument.
+
 **Todo:**
-- The three `<h1>`s are three different page states (locked, empty, active) —
-  fine semantically, but the locked and empty states have no lead sentence.
 - No `NextUp` equivalent: the Today tab opens on the session but doesn't state
   whether today is a training day at all.
 - Not sport-aware beyond the program contents. A weightlifter's plan page reads
   identically to a footballer's.
 
-## Nutrition — partial
+## Nutrition — done
 
-Seven cards plus tabs. Heading and lead are now plain English. **Todo:** no
-verdict — it shows targets and logs without ever saying "you're 600 under today,
-eat". Not sport-aware; a runner's carb needs and a lifter's protein needs are
-framed the same.
+Seven cards plus tabs, and it never did the subtraction — a target, macros, a
+water figure and a log form, with nothing saying whether you were on track.
 
-## Exercises (`/library`) — partial
+`FuelVerdict` now leads above the tabs: the target when nothing is logged, "you're
+600 kcal short" past a 250 tolerance, over-target said without moralising, or on
+target. Tolerance is 250 because a calorie target is an estimate and treating a
+100 kcal miss as failure is false precision. The macro that matters is chosen by
+sport — protein for lifters, carbs for runners.
 
-Filters correctly by the athlete's sport and defaults to it. Lead rewritten from
-feature-speak. **Todo:** 500+ imported gym movements dominate every sport's list
-because they carry no `sports` tag, so sport-specific drills are a handful at the
-top of a very long generic list. Worth surfacing "your sport's drills" as a
-distinct section.
+## Exercises (`/library`) — done
+
+Filtered by sport already, but "general" is 500+ imported gym movements with no
+`sports` tag — so a rugby player's dozen rugby drills were the first dozen rows
+of a list that looked and scrolled exactly like everyone else's. Tailoring you
+have to notice isn't tailoring.
+
+A **"Made for rugby"** band now sits above the full list, capped at six, and only
+while browsing: once someone types a query or picks a category they're hunting
+for something specific and a sport band is in the way.
+
+`DrillPicker` — the other way into the same catalogue, used when logging training
+— was searching the raw list with no sport filter at all. Now shares
+`getExercisesForSport`.
 
 ## Check in (`/journal`) — done
 
@@ -154,7 +168,7 @@ None reviewed against the new goal. These are what a stranger sees first.
 |---|---|
 | `/` landing | 4 cards, 2 CTAs — written to the old "commitment" framing |
 | `/plans`, `/pricing` | not reviewed |
-| `/drills`, `/drills/[sport]` | `drills/[sport]` has an `<h1>` with **no lead** — the only page still missing one |
+| `/drills`, `/drills/[sport]` | both fine — an earlier survey flagged the sport page as missing a lead, which was a false positive: a comment block pushed its `<p>` outside the regex window |
 | `/guides`, `/guides/[sport]/[position]` | SEO pages, not reviewed |
 | `/waitlist` | 2 `<h1>`s |
 | `/login`, `/reset-password` | forms; no heading by design |
