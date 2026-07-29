@@ -23,6 +23,7 @@ import { computeACWR } from "@/lib/load";
 import { invokeAI } from "@/lib/api";
 import { METRIC_CATALOG, metricDef, benchmarkProgress } from "@/lib/benchmarks";
 import { RingProgress } from "@/components/RingProgress";
+import { Tabs } from "@/components/Tabs";
 import { CoachChat } from "@/components/CoachChat";
 import { ProgramCalendar } from "@/components/ProgramCalendar";
 import { SessionDrills } from "@/components/SessionDrills";
@@ -633,21 +634,8 @@ function ActiveProgram({
       {/* Today's session and today's recommended drills used to sit stacked with
           the calendar and the chat below, which left the athlete deciding which
           of two "today" blocks to actually do. Grouped into tabs instead. */}
-      <div className="no-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
-        {COACH_TABS.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={`shrink-0 rounded-full border px-3.5 py-2 text-sm font-medium transition ${
-              tab === t.id
-                ? "border-pitch-400/50 bg-pitch-400/10 text-pitch-400"
-                : "border-white/10 bg-white/[0.03] text-slate-300"
-            }`}
-          >
-            {t.icon} {t.label}
-          </button>
-        ))}
-      </div>
+      {/* Shared strip, not a fourth copy of the same markup — see components/Tabs. */}
+      <Tabs tabs={COACH_TABS} active={tab} onChange={setTab} label="Plan sections" />
 
       {/* Deadline-near nudge */}
       {tab === "today" && deadline && deadline.daysLeft >= 0 && deadline.daysLeft <= 7 && (

@@ -246,7 +246,7 @@ function NutritionTabs({ userId, today, log, targets, stats, prefs, dietNotes, m
         waterMl={log?.daily_water_intake_ml ?? null}
         sport={sport}
       />
-      <Tabs tabs={NUTRITION_TABS} active={tab} onChange={setTab} />
+      <Tabs tabs={NUTRITION_TABS} active={tab} onChange={setTab} label="Nutrition sections" />
       {tab === "today" ? (
         <NutritionTracker
           userId={userId}

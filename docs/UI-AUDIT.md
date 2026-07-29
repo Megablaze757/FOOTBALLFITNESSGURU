@@ -187,9 +187,20 @@ things up". Same split, without selling the obligation as the free tier.
 | `/login`, `/reset-password` | forms; no heading by design |
 | `/privacy`, `/terms` | legal; fine as-is |
 
-## In-page menus — todo
+## In-page menus — partial
 
-Only the main nav and the mobile More sheet were audited. Not yet reviewed: the
+All four tab strips are done. Two of them were hand-rolled copies of the same
+markup with no roles, no aria-selected and no arrow keys, so the same control
+behaved differently depending on which page you were on — Coach and Guides now
+use the shared component. It gained an accessible name, arrow/Home/End keys with
+wrapping, one tab stop for the strip instead of one per tab, and a TabPanel so
+the aria-controls it advertises actually resolves.
+
+Also a naming fix: the Progress page had a tab ALSO called Progress, so it read
+"Progress > Progress" and neither name said which half held what. Now Recovery
+and Performance.
+
+Not yet reviewed: the
 tab strips on Coach, Progress, Nutrition and Guides; the workout player; the
 `JobTray`; `LoadErrorBanner`; and the modals inside Squad and Admin.
 

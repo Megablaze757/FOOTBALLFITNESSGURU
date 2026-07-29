@@ -1,5 +1,7 @@
 "use client";
 
+import { useRef } from "react";
+
 /**
  * The pill tab strip the Coach page already used, extracted so the other long
  * pages can group their sections the same way instead of stacking everything.
@@ -14,29 +16,88 @@ export interface TabDef<T extends string> {
   icon?: string;
 }
 
-export function Tabs<T extends string>({ tabs, active, onChange }: {
+export function Tabs<T extends string>({ tabs, active, onChange, label = "Sections" }: {
   tabs: readonly TabDef<T>[];
   active: T;
   onChange: (id: T) => void;
+  /**
+   * Names the strip for a screen reader. Without it a tablist announces as
+   * "tab list" with nothing to say what it switches between — and there are four
+   * of these across the app on four unrelated pages.
+   */
+  label?: string;
 }) {
+  const strip = useRef<HTMLDivElement>(null);
+
+  /**
+   * Arrow-key movement, per the ARIA tabs pattern.
+   *
+   * These were plain buttons in a row: reachable by Tab, but each one its own
+   * stop, so a keyboard user pressed Tab four times to get past the strip and
+   * arrow keys did nothing. The pattern is one stop for the whole strip and
+   * arrows to move within it, which is also what a screen-reader user expects
+   * the moment it announces as a tablist.
+   */
+  function onKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    const delta = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+    const jump = e.key === "Home" ? 0 : e.key === "End" ? tabs.length - 1 : null;
+    if (!delta && jump === null) return;
+    e.preventDefault();
+
+    const at = tabs.findIndex((t) => t.id === active);
+    // Wraps, so the last tab doesn't dead-end.
+    const next = jump ?? (at + delta + tabs.length) % tabs.length;
+    onChange(tabs[next].id);
+    // Focus follows selection, otherwise the focus ring is left on the old tab.
+    strip.current?.querySelectorAll<HTMLButtonElement>("[role=tab]")[next]?.focus();
+  }
+
   return (
-    <div className="no-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1 pb-1" role="tablist">
-      {tabs.map((t) => (
-        <button
-          key={t.id}
-          role="tab"
-          aria-selected={active === t.id}
-          onClick={() => onChange(t.id)}
-          className={`shrink-0 rounded-full border px-3.5 py-2 text-sm font-medium transition ${
-            active === t.id
-              ? "border-pitch-400/50 bg-pitch-400/10 text-pitch-400"
-              : "border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.06]"
-          }`}
-        >
-          {t.icon && <span className="mr-1">{t.icon}</span>}
-          {t.label}
-        </button>
-      ))}
+    <div
+      ref={strip}
+      className="no-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1 pb-1"
+      role="tablist"
+      aria-label={label}
+      onKeyDown={onKeyDown}
+    >
+      {tabs.map((t) => {
+        const selected = active === t.id;
+        return (
+          <button
+            key={t.id}
+            role="tab"
+            id={`tab-${t.id}`}
+            aria-selected={selected}
+            aria-controls={`panel-${t.id}`}
+            // One tab stop for the strip; arrows move inside it.
+            tabIndex={selected ? 0 : -1}
+            onClick={() => onChange(t.id)}
+            className={`shrink-0 rounded-full border px-3.5 py-2 text-sm font-medium transition ${
+              selected
+                ? "border-pitch-400/50 bg-pitch-400/10 text-pitch-400"
+                : "border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.06]"
+            }`}
+          >
+            {t.icon && <span className="mr-1">{t.icon}</span>}
+            {t.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * The content half of a tab.
+ *
+ * Each tab now advertises `aria-controls`, and that is a promise the markup has
+ * to keep — without a matching element the association is a lie told to
+ * assistive tech. Wrap a tab's content in this and it's true.
+ */
+export function TabPanel({ id, children }: { id: string; children: React.ReactNode }) {
+  return (
+    <div role="tabpanel" id={`panel-${id}`} aria-labelledby={`tab-${id}`}>
+      {children}
     </div>
   );
 }

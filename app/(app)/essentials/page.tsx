@@ -16,6 +16,7 @@ import { getExercise, SPORTS, type Exercise, type SportId } from "@/lib/exercise
 import { ExerciseModal } from "@/components/ExerciseDetail";
 import { SkillDrills } from "@/components/SkillDrills";
 import { InjuryPlanner } from "@/components/InjuryPlanner";
+import { Tabs } from "@/components/Tabs";
 import { BodyMap } from "@/components/BodyMap";
 
 // The Playbook covers four unrelated topics. Stacked, that ran to six and a
@@ -91,21 +92,11 @@ export default function EssentialsPage() {
         <p className="mt-1 text-sm text-slate-400">Position essentials, {gameday.toLowerCase()} nutrition and recovery — tailored to you.</p>
       </header>
 
-      <div className="no-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={`shrink-0 rounded-full border px-3.5 py-2 text-sm font-medium transition ${
-              tab === t.id
-                ? "border-pitch-400/50 bg-pitch-400/10 text-pitch-400"
-                : "border-white/10 bg-white/[0.03] text-slate-300"
-            }`}
-          >
-            {t.icon} {t.label}
-          </button>
-        ))}
-      </div>
+      {/* Was a hand-rolled copy of this markup. Four tab strips across the app,
+          two implementations, and the copies had no roles, no aria-selected and
+          no arrow keys — so the same control behaved differently depending on
+          which page you were on. */}
+      <Tabs tabs={TABS} active={tab} onChange={setTab} label="Guide sections" />
 
       {/* Position essentials */}
       {tab === "position" && (

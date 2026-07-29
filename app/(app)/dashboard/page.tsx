@@ -101,9 +101,13 @@ function Verdict({ acwr, riskScore, focusBodyPart, topWin, sport }: {
   );
 }
 
+// The page is called Progress and one of its two tabs was ALSO called Progress,
+// so the breadcrumb read "Progress › Progress" and neither name told you which
+// half held what. Recovery is how the body is coping; Performance is what you've
+// built. Distinct, and neither repeats the page.
 const TABS = [
   { id: "recovery" as const, label: "Recovery", icon: "🧠" },
-  { id: "progress" as const, label: "Progress", icon: "📈" },
+  { id: "progress" as const, label: "Performance", icon: "📈" },
 ];
 
 /**
@@ -162,7 +166,7 @@ export default function DashboardPage() {
     return (
       <div className="animate-fade-up space-y-5">
         <Header />
-        <Tabs tabs={TABS} active={tab} onChange={setTab} />
+        <Tabs tabs={TABS} active={tab} onChange={setTab} label="Progress sections" />
         {tab === "recovery" ? (
           <>
             <div className="card p-8 text-center text-sm text-slate-400">
@@ -189,7 +193,7 @@ export default function DashboardPage() {
   return (
     <div className="animate-fade-up space-y-5">
       <Header source={resolved.source} />
-      <Tabs tabs={TABS} active={tab} onChange={setTab} />
+      <Tabs tabs={TABS} active={tab} onChange={setTab} label="Progress sections" />
 
       {tab === "progress" && <ProgressPanel userId={user.id} />}
 
