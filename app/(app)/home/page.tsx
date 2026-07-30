@@ -156,7 +156,7 @@ export default function HomePage() {
 
         <NextUp hasProgram={data!.hasProgram} nextSession={data!.nextSession} trainedToday={data!.trainedToday} accent={sport.accent} />
         <CheckInNudge />
-        <ToolGrid tools={sport.tools} />
+        <ToolGrid tools={sport.tools} exclude="/coach" />
 
         <GettingStarted setup={data!.setup} />
         <RankStrip level={level} week={data!.week} />
@@ -214,7 +214,7 @@ export default function HomePage() {
           them instead. */}
       <SorenessCard painMap={data.checkIn.pain_map ?? {}} focus={readiness.focus_body_part} />
 
-      <ToolGrid tools={sport.tools} />
+      <ToolGrid tools={sport.tools} exclude="/coach" />
 
       <BiometricSignalCard signal={data!.bioSignal} />
 
@@ -292,17 +292,29 @@ function NextUp({ hasProgram, nextSession, trainedToday, accent }: {
  * you want something, not six more things asking to be done. It sits below the
  * one real answer so the page has an obvious top.
  */
-function ToolGrid({ tools }: { tools: { href: string; title: string; icon: string }[] }) {
-  // Order comes from lib/sport-profile.ts. Same six destinations for everyone —
-  // hiding features by sport would stop a footballer who wants to lift — but a
-  // weightlifter shouldn't scan past video analysis to reach their plan, and a
-  // runner's first stop is load, not drills. Wording matches the nav, because
-  // two names for one destination on one screen is the confusion being removed.
+function ToolGrid({ tools, exclude }: {
+  tools: { href: string; title: string; icon: string }[];
+  /** Destination the primary card already goes to, so it isn't offered twice. */
+  exclude?: string;
+}) {
+  // Order comes from lib/sport-profile.ts — a weightlifter shouldn't scan past
+  // video analysis to reach their plan, and a runner's first stop is load, not
+  // drills. Nothing is hidden by sport; hiding features would stop a footballer
+  // who wants to lift. Wording matches the nav, because two names for one
+  // destination on one screen is the confusion this pass removed.
+  //
+  // AND THE PRIMARY CARD'S DESTINATION IS DROPPED. NextUp is a link to /coach in
+  // every one of its states, so listing "My plan" here too put the same
+  // destination on the same screen twice — the exact duplication criticised in
+  // the nav audit, reintroduced two sections lower by me. Removing it also takes
+  // the grid from seven tiles to six, which divides evenly by both 2 and 3, so
+  // neither breakpoint ends on an orphan.
+  const shown = exclude ? tools.filter((t) => t.href !== exclude) : tools;
   return (
     <div>
       <h2 className="field-label">Anything else</h2>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-      {tools.map((t) => (
+      {shown.map((t) => (
         <Link
           key={t.href}
           href={t.href}
@@ -572,7 +584,8 @@ function Skeleton() {
       <div className="card h-44 animate-pulse" />
       {/* CheckInNudge — one slim row */}
       <div className="card h-16 animate-pulse" />
-      {/* ToolGrid — 2 columns on mobile, 3 from sm, seven tiles */}
+      {/* ToolGrid — 2 columns on mobile, 3 from sm, six tiles (the seventh is
+          /coach, which the primary card above already links to) */}
       <div>
         <div className="mb-2 h-3 w-24 animate-pulse rounded bg-white/5" />
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">

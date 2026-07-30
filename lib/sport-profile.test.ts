@@ -125,3 +125,36 @@ test("every sport has a tagline that says something", () => {
     assert.ok(/[.!]$/.test(tagline), `${label}'s tagline should read as a sentence`);
   }
 });
+
+// --- the home tool grid -----------------------------------------------------
+// Home's primary card (NextUp) is a link to /coach in every one of its states,
+// so the grid below it drops /coach rather than offering the same destination
+// twice on one screen. That also makes the tile count divide evenly by the
+// grid's two column counts, so neither breakpoint ends on an orphan row.
+
+test("dropping the primary destination leaves a grid that divides evenly", () => {
+  for (const id of ALL) {
+    const shown = sportProfile(id).tools.filter((t) => t.href !== "/coach");
+    assert.equal(
+      shown.length % 2,
+      0,
+      `${id} shows ${shown.length} tiles — grid-cols-2 on mobile would end on an orphan`
+    );
+    assert.equal(
+      shown.length % 3,
+      0,
+      `${id} shows ${shown.length} tiles — sm:grid-cols-3 would end on an orphan`
+    );
+  }
+});
+
+test("every sport still offers the plan somewhere in its tools", () => {
+  // The grid filters /coach out for display; the underlying list must still
+  // contain it, or the sport ordering has silently lost the main destination.
+  for (const id of ALL) {
+    assert.ok(
+      sportProfile(id).tools.some((t) => t.href === "/coach"),
+      `${id} has no /coach in its tools at all`
+    );
+  }
+});
