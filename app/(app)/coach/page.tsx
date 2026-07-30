@@ -387,14 +387,29 @@ function GoalBuilder({ painMap, latestBench, sport, initialPositions, initialFoc
 
       <SeasonToggle inSeason={inSeason} onChange={setInSeason} />
 
-      <label className="block">
-        <span className="field-label">Target date (optional)</span>
-        <input type="date" className="field [color-scheme:dark]" value={targetDate} onChange={(e) => setTargetDate(e.target.value)} />
-      </label>
+      {/* THE THREE OPTIONAL FIELDS, COLLAPSED.
+          This is the form standing between "build my program" and a program —
+          the one stretch that decides whether a new account ever sees the
+          product work. Eight visible inputs read as a long form even when five
+          of them are the only ones that matter; a target date, a benchmark
+          target and a free-text note are all refinements you'd add on a second
+          block, not things to ask before anyone has trained once.
+          Collapsed, not removed: someone with a trial date in mind still wants
+          them, and open is one tap. */}
+      <details className="rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-3">
+        <summary className="tap-target cursor-pointer text-sm font-medium text-slate-300">
+          Add a deadline or a target <span className="text-xs text-slate-500">— optional</span>
+        </summary>
+
+        <div className="mt-4 space-y-4">
+          <label className="block">
+            <span className="field-label">Target date</span>
+            <input type="date" className="field [color-scheme:dark]" value={targetDate} onChange={(e) => setTargetDate(e.target.value)} />
+          </label>
 
       {/* Measurable benchmark target */}
       <div>
-        <span className="field-label">Measurable target (optional)</span>
+        <span className="field-label">Measurable target</span>
         <div className="grid grid-cols-2 gap-2">
           <select className="field [color-scheme:dark]" value={metric} onChange={(e) => setMetric(e.target.value)}>
             <option value="">No metric</option>
@@ -414,10 +429,12 @@ function GoalBuilder({ painMap, latestBench, sport, initialPositions, initialFoc
         )}
       </div>
 
-      <label className="block">
-        <span className="field-label">Anything specific? (optional)</span>
-        <input className="field" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. improve my first 5 metres" />
-      </label>
+          <label className="block">
+            <span className="field-label">Anything specific?</span>
+            <input className="field" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. improve my first 5 metres" />
+          </label>
+        </div>
+      </details>
 
       {error && <p className="text-sm text-readiness-red">{error}</p>}
       <button onClick={() => goal && createProgram(goal, focus, positions)} disabled={!goal || creating} className="btn-primary">

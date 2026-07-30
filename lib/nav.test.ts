@@ -83,7 +83,9 @@ test("every page says what it is for", () => {
 // obvious wrong fix of putting it in the athlete nav where it opens a wall.
 
 test("the coach nav is not shown to athletes", () => {
-  const athleteRoutes = new Set([...NAV_ITEMS, ...MOBILE_NAV, ...MOBILE_MORE].map((i) => i.href));
+  // Typed as string, not the athlete routes' literal union — the whole point is
+  // to ask about a route that must NOT be in it, which the narrow type forbids.
+  const athleteRoutes = new Set<string>([...NAV_ITEMS, ...MOBILE_NAV, ...MOBILE_MORE].map((i) => i.href));
   for (const item of COACH_NAV) {
     assert.ok(
       !athleteRoutes.has(item.href),

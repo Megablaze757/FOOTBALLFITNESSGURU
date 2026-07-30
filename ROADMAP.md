@@ -36,13 +36,29 @@ month flatters you. Don't read early numbers as proof of anything.
 - **Turn push notifications on.** The code is written; the VAPID keys aren't
   generated. This is the single highest-leverage thing on the whole list and it's
   a config task, not a build.
-- **Streaks.** A visible run of check-in days, with one "rest day" a week that
-  doesn't break it. Streaks that punish rest days teach athletes to lie to you.
+- ~~**Streaks.** A visible run of check-in days, with one "rest day" a week.~~
+  **Dropped — this contradicts the product now.** Written before the UX pass,
+  which found the opposite problem: users said the app felt like "a lot of
+  commitment" and "a second job". So streaks were *de-emphasised* — "Daily
+  quests" became "If you fancy it today" with a Hide that sticks, "Check-ins 3/7"
+  lost its denominator, and "keep the streak alive" came off the Rewards page. A
+  forgiving streak is still a streak, and building a bigger one now would be
+  shipping against the clearest feedback we have. See `docs/UI-AUDIT.md`.
+
+  The retention goal this was meant to serve stands. Pursue it by making the app
+  more *useful* on the day someone opens it, not by raising the cost of missing a
+  day.
 - **Reminder timing that learns.** Send at the hour they usually check in, not a
   fixed 8pm. Falls back to 7pm on no data.
 - **First session in under three minutes.** Time the current onboarding with a
   stopwatch. Every question that isn't needed for the first program gets moved to
   later.
+
+  *Partly done.* Onboarding already ends on "Build my first program" as the
+  primary action, Home leads with one derived next action, and the check-in has a
+  three-tap quick mode. **Still untimed with a stopwatch** — the goal-builder quiz
+  between "Build my program" and an actual program is the unmeasured stretch, and
+  it's the one that decides whether a new account ever sees the product work.
 
 **Done when:** 60% of new accounts complete a second check-in within 7 days.
 
@@ -180,7 +196,10 @@ Saying no is most of what a roadmap is for.
 These aren't features and none of the above matters if they're not done:
 
 - [ ] Generate VAPID keys — **month 1 depends entirely on this**
-- [ ] Paste the current Worker into Cloudflare
+- [x] ~~Paste the current Worker into Cloudflare~~ — live, `/health` reports
+      `2026-07-29.1`. Check it after every paste; the version stamp exists
+      because a fix sat undeployed for days while I reasoned about source that
+      wasn't running
 - [ ] Add the three Stripe webhook events (`invoice.payment_succeeded`,
       `charge.refunded`, `charge.dispute.created`)
 - [ ] Enable Stripe's Customer Portal
