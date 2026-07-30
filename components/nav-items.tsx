@@ -28,7 +28,7 @@ export const NAV_ITEMS = [
   { href: "/nutrition", label: "Nutrition", icon: "nutrition" },
   // Its own destination, not the third tab of Guides. Two rounds of "still can't
   // find the injury stuff" is the answer to whether a deep link was enough.
-  { href: "/injury", label: "Injury & mobility", icon: "injury" },
+  { href: "/injury", label: "Injury", icon: "injury" },
   { href: "/essentials", label: "Guides", icon: "playbook" },
   { href: "/rewards", label: "Rewards", icon: "trophy" },
   { href: "/profile", label: "Profile", icon: "profile" },
@@ -44,6 +44,16 @@ export const MOBILE_NAV = [
   { href: "/coach", label: "My plan", icon: "coach" },
   { href: "/journal", label: "Check in", icon: "journal" },
   { href: "/dashboard", label: "Progress", icon: "stats" },
+  // Promoted out of the More sheet. Told twice it was unfindable, and "open
+  // More, then look" is not findable when something hurts — which is the one
+  // moment this page exists for.
+  //
+  // That makes five tabs plus More, one more than I originally allowed myself.
+  // The label had to shrink to "Injury" to fit: at six slots a 343px phone gives
+  // each about 57px, which "Injury" clears and "Injury & mobility" does not.
+  // Mobility is named in the page's own lead and has its own section there —
+  // a short label people can find beats a complete one they can't.
+  { href: "/injury", label: "Injury", icon: "injury" },
 ] as const;
 
 /**
@@ -66,9 +76,8 @@ export const MOBILE_MORE = [
   { href: "/train", label: "Video analysis", icon: "train" },
   { href: "/library", label: "Exercises", icon: "library" },
   { href: "/nutrition", label: "Nutrition", icon: "nutrition" },
-  // Its own destination, not the third tab of Guides. Two rounds of "still can't
-  // find the injury stuff" is the answer to whether a deep link was enough.
-  { href: "/injury", label: "Injury & mobility", icon: "injury" },
+  // Injury lives in MOBILE_NAV now, as a primary tab, so it must not also be
+  // here — a route in both lists reads as two different places.
   { href: "/essentials", label: "Guides", icon: "playbook" },
   { href: "/rewards", label: "Rewards", icon: "trophy" },
   { href: "/profile", label: "Profile", icon: "profile" },

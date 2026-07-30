@@ -54,7 +54,7 @@ const TOOL: Record<string, SportTool> = {
   guides: { href: "/essentials", title: "Guides", icon: "🎯" },
   progress: { href: "/dashboard", title: "Progress", icon: "📈" },
   // Its own page now, not a deep link into a tab. See app/(app)/injury.
-  injury: { href: "/injury", title: "Injury & mobility", icon: "🩹" },
+  injury: { href: "/injury", title: "Injury", icon: "🩹" },
 };
 
 const order = (...keys: (keyof typeof TOOL)[]) => keys.map((k) => TOOL[k]);

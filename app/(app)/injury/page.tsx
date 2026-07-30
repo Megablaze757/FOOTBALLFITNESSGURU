@@ -27,10 +27,15 @@ import { BodyMap } from "@/components/BodyMap";
  * the third tab is about them, and pain is exactly the moment someone stops
  * exploring and gives up. So it's a page, in the nav, with its own name.
  *
- * Mobility came with it. The tile says "Injury & mobility" and the two belong
- * together — the warm-up sequence is the cheapest prevention there is, and it was
- * stranded under "Your position" where nobody looking to avoid injury would find
- * it either.
+ * Mobility came with it — the warm-up sequence is the cheapest prevention there
+ * is, and it was stranded under "Your position", where nobody looking to avoid
+ * injury would find it either.
+ *
+ * NAMED "INJURY", NOT "INJURY & MOBILITY". It's a primary tab on mobile now, and
+ * at six slots a 343px phone gives each about 57px — enough for an icon and
+ * "Injury", not enough for the longer name. A short label people can find beats a
+ * complete one they can't, so mobility is named in the lead and has its own
+ * section instead.
  */
 
 // The pre-training sequence, in the order it should be performed.
@@ -71,10 +76,10 @@ export default function InjuryPage() {
 
   const header = (
     <header>
-      <h1 className="text-3xl font-extrabold tracking-tight">Injury &amp; mobility</h1>
+      <h1 className="text-3xl font-extrabold tracking-tight">Injury</h1>
       <p className="mt-1 max-w-prose text-sm text-slate-400">
-        Something hurting? Describe it and get a graded plan to load it safely. Plus the warm-up
-        that prevents most of it.
+        Something hurting? Describe it and get a graded plan to load it safely. Plus the mobility
+        warm-up that prevents most of it.
       </p>
     </header>
   );

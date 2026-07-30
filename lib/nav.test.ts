@@ -35,7 +35,10 @@ test("mobile reaches everything the desktop nav does", () => {
 
 test("the mobile bar stays small enough to read", () => {
   // Four tabs plus More. Five equal-weight choices is a menu, not a bar.
-  assert.ok(MOBILE_NAV.length <= 4, `${MOBILE_NAV.length} primary tabs plus More is too many for a phone`);
+  // Five plus More. Raised from four to give Injury a tab, after two rounds of
+  // "still can't find it" — but six slots on a 343px phone is about 57px each,
+  // which is the floor for an icon and a readable label. Six tabs would not fit.
+  assert.ok(MOBILE_NAV.length <= 5, `${MOBILE_NAV.length} primary tabs plus More is too many for a phone`);
 });
 
 test("no destination is listed twice", () => {
@@ -121,10 +124,9 @@ test("injury has one name everywhere, not three", () => {
   // finding.
   const nav = NAV_ITEMS.find((i) => i.href === "/injury");
   assert.ok(nav, "/injury is missing from the nav — it was buried as a tab for exactly this reason");
-  assert.equal(nav!.label, "Injury & mobility");
+  assert.equal(nav!.label, "Injury");
   assert.ok(
-    page("/injury").includes(`>${nav!.label}</h1>`) ||
-      page("/injury").includes("Injury &amp; mobility</h1>"),
+    page("/injury").includes(`>${nav!.label}</h1>`),
     "the page heading doesn't match the nav label that leads there"
   );
 });
