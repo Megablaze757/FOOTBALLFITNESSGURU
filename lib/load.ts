@@ -5,11 +5,63 @@
 
 import type { DailyCheckIn, NutritionLog, TrainingLog } from "./types";
 
-/** Session load = duration × intensity (session-RPE). Falls back to rep volume. */
+/**
+ * How much harder a minute of contact is than a minute of running.
+ *
+ * Rugby's injury driver is collisions, not running volume — so sixty minutes of
+ * contact and sixty minutes of shuttles used to score identically, and ACWR
+ * understated a contact week exactly when it mattered. 2x is the conservative
+ * end of the collision-load literature; it is a weighting, not a measurement,
+ * and it is deliberately blunt rather than falsely precise.
+ *
+ * Contact minutes are ADDITIONAL to total_minutes, not instead of them: an
+ * athlete logs 80 minutes with 20 of contact, and those 20 count once as
+ * ordinary minutes and once more again.
+ */
+export const CONTACT_WEIGHT = 2;
+
+/**
+ * Session load in arbitrary units = duration × intensity (session-RPE), with
+ * contact minutes weighted up. Falls back to rep volume when there's no
+ * duration.
+ *
+ * The unit stays arbitrary on purpose. ACWR is a RATIO of two averages of this
+ * function, so what matters is that the formula is consistent across an
+ * athlete's history — not what the number means. That's also why tonnage and
+ * distance are reported separately rather than substituted in here: mixing
+ * kilograms into a minutes-based series would make the ratio meaningless for
+ * anyone who logs both.
+ */
 export function sessionLoad(t: TrainingLog): number {
-  const sRPE = (t.total_minutes ?? 0) * (t.intensity ?? 0);
+  const minutes = (t.total_minutes ?? 0) + (t.contact_minutes ?? 0) * (CONTACT_WEIGHT - 1);
+  const sRPE = minutes * (t.intensity ?? 0);
   if (sRPE > 0) return sRPE;
   return (t.drills ?? []).reduce((s, d) => s + (Number(d.sets) || 0) * (Number(d.reps) || 0), 0);
+}
+
+/**
+ * Total weight moved: sets × reps × load, summed.
+ *
+ * The honest headline for a lifter. sRPE is a poor fit for strength work — a
+ * heavy triple and a set of twenty can sit at the same RPE for wildly different
+ * work — and this is computable from drills we already store, so it needs no new
+ * input from the athlete.
+ */
+export function tonnage(logs: TrainingLog[]): number {
+  return logs.reduce(
+    (total, t) =>
+      total +
+      (t.drills ?? []).reduce(
+        (s, d) => s + (Number(d.sets) || 0) * (Number(d.reps) || 0) * (Number(d.load_kg) || 0),
+        0
+      ),
+    0
+  );
+}
+
+/** Total distance. The unit a runner actually plans and thinks in. */
+export function totalDistanceKm(logs: TrainingLog[]): number {
+  return +logs.reduce((s, t) => s + (Number(t.distance_km) || 0), 0).toFixed(1);
 }
 
 export type LoadZone = "building" | "detraining" | "optimal" | "caution" | "danger";

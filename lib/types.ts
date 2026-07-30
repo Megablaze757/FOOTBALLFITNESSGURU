@@ -154,6 +154,10 @@ export interface TrainingLog {
   drills: TrainingDrill[];
   total_minutes: number | null;
   intensity: number | null;
+  /** Distance covered. What a runner actually plans in — see migration 0062. */
+  distance_km?: number | null;
+  /** Contact work, weighted above running minutes in sessionLoad. */
+  contact_minutes?: number | null;
   created_at: string;
 }
 

@@ -67,6 +67,15 @@ export default function ReportPage() {
         <button onClick={() => window.print()} className="btn-primary w-auto px-5">Save as PDF</button>
       </header>
 
+      {/* Says what the sheet is for. The page opened with a back link and a print
+          button and left you to work out why you'd want either — and the only
+          heading was inside the printable area, so nothing on screen explained
+          the page itself. Hidden from the print, which speaks for itself. */}
+      <p className="no-print max-w-prose text-sm text-slate-400">
+        A one-page summary to show a coach, a physio or a parent. Everything on it comes from what
+        you logged this week — nothing is estimated or filled in.
+      </p>
+
       {/* The report sheet */}
       <div className="card-premium space-y-6 p-6 sm:p-8">
         <div className="flex items-start justify-between border-b border-white/10 pb-5">

@@ -27,7 +27,7 @@ import { Tabs } from "@/components/Tabs";
 import { CoachChat } from "@/components/CoachChat";
 import { ProgramCalendar } from "@/components/ProgramCalendar";
 import { SessionDrills } from "@/components/SessionDrills";
-import { WorkoutPlayer } from "@/components/WorkoutPlayer";
+import { WorkoutPlayer, type SessionResult } from "@/components/WorkoutPlayer";
 import type { CheckInInput, DailyCheckIn, Program, StrengthBenchmark, Tier, TrainingLog, TrainingDrill } from "@/lib/types";
 
 /** Latest recorded value per benchmark metric, newest test first. */
@@ -516,7 +516,14 @@ function ActiveProgram({
     onChange();
   }
 
-  async function toggleSession(sid: string) {
+  /**
+   * Tick a session off, and log it as training.
+   *
+   * `result` is present when the guided player finished it and measured what
+   * happened; absent when the athlete ticked the box by hand, in which case the
+   * old estimates still apply — there is nothing better to use.
+   */
+  async function toggleSession(sid: string, result?: SessionResult) {
     const supabase = createClient();
     setActionError(null);
     const marking = !program.completed_sessions.includes(sid);
@@ -538,13 +545,35 @@ function ActiveProgram({
     if (marking) {
       const sess = allSessions.find(({ w, s }) => `w${w}d${s.day}` === sid);
       if (sess) {
-        const newDrills = sess.s.drills.map((d) => ({ name: d.name, sets: d.sets, reps: d.reps, load_kg: null }));
+        // What actually happened, when the player measured it.
+        //
+        // This used to log a flat 45 minutes and the PRESCRIBED reps for every
+        // session, however long it took and whatever was actually completed —
+        // then ACWR, the nutrition targets and the whole readiness verdict were
+        // computed off that fiction. The player already had the real numbers and
+        // dropped them on the floor. `result` is absent when a session is ticked
+        // off by hand rather than played, and 45 is still the estimate then.
+        const newDrills = sess.s.drills.map((d) => ({
+          name: d.name,
+          sets: d.sets,
+          reps: result?.repsByDrill[d.name] != null
+            // repsByDrill is the TOTAL across sets; drills store per-set reps.
+            ? Math.max(0, Math.round(result.repsByDrill[d.name] / Math.max(1, d.sets)))
+            : d.reps,
+          load_kg: null,
+        }));
         const { data: existing } = await supabase
           .from("training_logs").select("drills, total_minutes").eq("user_id", userId).eq("log_date", today).maybeSingle();
         const merged = dedupeDrills([...(existing?.drills ?? []), ...newDrills]);
         const intensity = sess.s.title.includes("Rehab") ? 4 : 7;
         await supabase.from("training_logs").upsert(
-          { user_id: userId, log_date: today, drills: merged, total_minutes: (existing?.total_minutes ?? 0) + 45, intensity },
+          {
+            user_id: userId,
+            log_date: today,
+            drills: merged,
+            total_minutes: (existing?.total_minutes ?? 0) + (result?.minutes ?? 45),
+            intensity,
+          },
           { onConflict: "user_id,log_date" }
         );
       }
@@ -767,7 +796,7 @@ function ActiveProgram({
         <WorkoutPlayer
           title={`Week ${nextSession.w} · ${todaySession.title}`}
           drills={todaySession.drills}
-          onComplete={() => { if (!program.completed_sessions.includes(`w${nextSession.w}d${nextSession.s.day}`)) void toggleSession(`w${nextSession.w}d${nextSession.s.day}`); }}
+          onComplete={(result) => { if (!program.completed_sessions.includes(`w${nextSession.w}d${nextSession.s.day}`)) void toggleSession(`w${nextSession.w}d${nextSession.s.day}`, result); }}
           onClose={() => setPlaying(false)}
         />
       )}

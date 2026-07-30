@@ -9,7 +9,7 @@ import { useCurrentUser } from "@/lib/auth";
 import { useAsync } from "@/lib/use-async";
 import { summarizeTrends, type Trend } from "@/lib/trends";
 import { resolveInsight, actionLabel } from "@/lib/insights";
-import { computeACWR, weeklyReport, type LoadZone } from "@/lib/load";
+import { computeACWR, weeklyReport, tonnage, totalDistanceKm, type LoadZone } from "@/lib/load";
 import { sportProfile, type SportProfile } from "@/lib/sport-profile";
 import { TrendChart } from "@/components/TrendChart";
 import type { DailyCheckIn, DailyInsight, NutritionLog, TrainingLog } from "@/lib/types";
@@ -190,6 +190,12 @@ export default function DashboardPage() {
   const zone = ZONE_META[acwr.zone];
   const sport = data!.sport;
 
+  // This week only, for the sport-specific headline figure.
+  const since7 = new Date(Date.now() - 6 * 86400_000).toISOString().slice(0, 10);
+  const thisWeek = data!.training.filter((t) => t.log_date >= since7);
+  const weekDistance = totalDistanceKm(thisWeek);
+  const weekTonnage = tonnage(thisWeek);
+
   return (
     <div className="animate-fade-up space-y-5">
       <Header source={resolved.source} />
@@ -279,9 +285,19 @@ export default function DashboardPage() {
           {/* Weekly report */}
           <div className="card p-5">
             <h2 className="field-label">This week</h2>
+            {/* The first figure is the one that sport thinks in. A runner counts
+                mileage, not sessions; a lifter counts weight moved. Session
+                count was the same neutral non-answer for everyone. */}
             <div className="grid grid-cols-3 gap-3 text-center">
-              <Wk label="Sessions" value={`${report.sessions}`} />
-              <Wk label="Check-ins" value={`${report.checkIns}/7`} />
+              {sport.id === "running" ? (
+                <Wk label="Distance" value={weekDistance > 0 ? `${weekDistance}km` : "–"} />
+              ) : sport.id === "weightlifting" || sport.id === "gym" ? (
+                <Wk label="Moved" value={weekTonnage > 0 ? `${Math.round(weekTonnage / 1000)}t` : "–"} />
+              ) : (
+                <Wk label="Sessions" value={`${report.sessions}`} />
+              )}
+              {/* Was "3/7" here too — same failing-score framing fixed on Home. */}
+              <Wk label="Check-ins" value={`${report.checkIns}`} />
               <Wk label="Load" value={report.loadTrend === "up" ? "↗" : report.loadTrend === "down" ? "↘" : "→"} />
             </div>
             <p className="mt-3 text-sm text-slate-200">🏆 {report.topWin}</p>

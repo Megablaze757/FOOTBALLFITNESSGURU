@@ -112,6 +112,11 @@ export function ExerciseModal({ ex, sets, reps, onClose }: { ex: Exercise; sets?
           // tab bar, which otherwise sits on top of the last section.
           className="animate-scale-in max-h-[88vh] w-full max-w-lg overflow-y-auto rounded-t-3xl border border-white/10 bg-ink-800 p-6 pb-28 shadow-card sm:rounded-3xl sm:pb-6"
           onClick={(e) => e.stopPropagation()}
+          // Escape already worked here; the dialog semantics didn't exist, so a
+          // screen reader was never told the page behind had become unavailable.
+          role="dialog"
+          aria-modal="true"
+          aria-label={ex.name}
         >
           <div className="mb-4 flex justify-end">
             <button onClick={onClose} className="tap-target grid h-9 w-9 place-items-center rounded-full bg-white/[0.06] text-slate-300 transition hover:bg-white/10" aria-label="Close">✕</button>

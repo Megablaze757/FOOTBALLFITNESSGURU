@@ -191,8 +191,18 @@ export function JournalForm({ initial, initialTraining, sport, planned = [] }: {
     };
 
     const cleanDrills = training.drills.filter((d) => d.name.trim());
-    const trainingRow = (cleanDrills.length || training.total_minutes || training.intensity)
-      ? { drills: cleanDrills, total_minutes: training.total_minutes, intensity: training.intensity }
+    // distance and contact count as "something was logged" in their own right —
+    // a runner who enters 8km and nothing else has told us about a session, and
+    // dropping it because there were no drills or minutes would lose the entry.
+    const trainingRow = (cleanDrills.length || training.total_minutes || training.intensity ||
+                         training.distance_km || training.contact_minutes)
+      ? {
+          drills: cleanDrills,
+          total_minutes: training.total_minutes,
+          intensity: training.intensity,
+          distance_km: training.distance_km ?? null,
+          contact_minutes: training.contact_minutes ?? null,
+        }
       : null;
 
     const { error: dbError } = await supabase

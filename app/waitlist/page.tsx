@@ -64,9 +64,12 @@ export default function WaitlistPage() {
             <h1 className="mt-2 text-4xl font-extrabold leading-tight tracking-tight">
               Train like you have a full-time performance team.
             </h1>
+            {/* Was a feature list — "readiness, AI coaching, video biomechanics
+                and nutrition" tells someone what we built, not what they get.
+                The landing page's own comment says specific beats grand. */}
             <p className="mx-auto mt-3 max-w-sm text-sm text-slate-400">
-              Readiness, AI coaching, video biomechanics and nutrition — the whole staff of a pro
-              club, in one app. Join the waitlist for first access.
+              A four-week plan built around your sport and position, with every movement explained.
+              Football, rugby, basketball, running, lifting or gym. Join the waitlist for first access.
             </p>
 
             <form onSubmit={join} className="mt-7 flex flex-col gap-3 sm:flex-row">

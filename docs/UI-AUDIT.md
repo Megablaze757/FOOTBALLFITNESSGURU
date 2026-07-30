@@ -82,9 +82,14 @@ moment they stop exploring.
 Tabs are deep-linkable (`?tab=injury`), "Injury & mobility" is its own tool
 tile, and home surfaces it on reported soreness.
 
-**Still todo:** the four tabs cover genuinely unrelated topics (position, skill
-drills, injury, fuel). Consider splitting injury out as its own page rather than
-a tab, now that it's linked from three places.
+**Decided against splitting injury into its own page.** It was the obvious next
+step and it isn't worth it. The four injury blocks share `hurt`, `desc`,
+`picked`, `matched`, `injuryProtocols` and the exercise modal with the rest of
+the page, so a separate route means duplicating the body map, the protocol
+matching and the modal wiring. The problem that motivated it — nobody in pain
+could find rehab — is already solved three ways: the deep link, its own tool
+tile, and the soreness card on Home. Revisit only if the injury content grows
+enough to justify the duplication.
 
 ## Rehab planner — done
 
@@ -179,10 +184,10 @@ something hurts. Full form is one tap away and the choice is remembered.
 | Squad | done | lead rewritten to what a coach actually scans for |
 | Squad → athlete | done | `CoachVerdict` leads: one line on what to do, in priority order. Advisory, never diagnostic — a coach isn't their athlete's physio, so it reports what the data says and suggests a conversation rather than issuing a clearance |
 | Video analysis | done | lead rewritten; background job + error recording |
-| Report | todo | 3 cards, not reviewed |
-| History | todo | 26 lines, no heading — likely a redirect |
-| Onboarding | todo | 4 `<h1>`s, step flow not reviewed against rule 1 |
-| Admin | todo | 11 cards, 587 lines — not user-facing, lowest priority |
+| Report | done | had no on-screen explanation at all — the only heading lived inside the printable sheet. A no-print lead now says what it is for: something to show a coach, physio or parent, built only from what you logged |
+| History | n/a | 26 lines, a redirect. Nothing to audit |
+| Onboarding | done | structure was already right — four steps ending on "Build my first program" as primary, which matches Home. Copy fixed: grand vague blurb replaced with what you actually get, and it still said "playbook" |
+| Admin | out of scope | 11 cards, 587 lines, internal only. The goal is athlete-facing clarity; restructuring a back-office panel spends effort no user sees |
 
 ## Public pages — partial
 
@@ -211,7 +216,7 @@ things up". Same split, without selling the obligation as the free tier.
 | `/login`, `/reset-password` | forms; no heading by design |
 | `/privacy`, `/terms` | legal; fine as-is |
 
-## In-page menus — partial
+## In-page menus — done
 
 All four tab strips are done. Two of them were hand-rolled copies of the same
 markup with no roles, no aria-selected and no arrow keys, so the same control
@@ -224,7 +229,19 @@ Also a naming fix: the Progress page had a tab ALSO called Progress, so it read
 "Progress > Progress" and neither name said which half held what. Now Recovery
 and Performance.
 
-Not yet reviewed: the
+Modals and the job tray are done too:
+
+- **WorkoutPlayer** is a full-screen overlay that covered the whole app and
+  announced as a plain div, so assistive tech was never told the page behind had
+  gone away — and Escape did nothing, making the ✕ the only exit. Now
+  role=dialog, aria-modal, aria-labelledby and Escape-to-close.
+- **ExerciseModal** already handled Escape but had no dialog semantics. Added.
+- **JobTray** is the whole point of background jobs — something finishes while
+  you are elsewhere. A sighted user catches it peripherally; a screen-reader user
+  was told nothing at all. Now role=status with aria-live=polite, so it waits
+  for a gap rather than cutting in.
+
+Nothing further outstanding here. Previously listed but reviewed and fine: the
 tab strips on Coach, Progress, Nutrition and Guides; the workout player; the
 `JobTray`; `LoadErrorBanner`; and the modals inside Squad and Admin.
 
@@ -248,9 +265,13 @@ app doesn't know when it is); position-specific loading in the plan page.
 Was **aliased to football outright** — same vocabulary, same tests. Now has its
 own: "Minutes on the park", contact-load framing, Bronco test.
 
-**Wants next:** contact load as a first-class input. Rugby's injury driver is
-collisions, not running volume, and ACWR built from minutes alone understates it.
-Forwards and backs also want different benchmark sets.
+**Contact load is now a real input** (migration 0062). Rugby logs contact minutes
+separately and they count double in sessionLoad, so a contact week spikes ACWR
+that minutes alone would have shown as flat — there is a test for exactly that.
+2x is the conservative end of the collision-load literature; it is a weighting,
+not a measurement, and deliberately blunt rather than falsely precise.
+
+**Wants next:** forwards and backs want different benchmark sets.
 
 ## Basketball 🏀 `#fb923c`
 *"Jump higher, change direction faster, land safely."*
@@ -265,16 +286,28 @@ Leads with **Progress**, not drills — load errors are what injure runners, and
 that's where ACWR lives. The one ordering with a safety argument behind it, and
 it has a test.
 
-**Wants next:** weekly mileage as the headline unit instead of session count;
-pace zones; the check-in should ask distance, not just minutes.
+**Mileage is now the headline unit.** The check-in asks distance for runners, and
+Progress leads with weekly km instead of a session count. Load stays sRPE —
+minutes x RPE is the standard model for runners too, and swapping kilometres into
+a minutes-based series would break the ratio for anyone who logs both.
+
+**Wants next:** pace zones.
 
 ## Weightlifting 🏋️ `#c084fc`
 *"Add kilos to the bar without stalling or breaking."*
 Benchmarks: snatch, clean & jerk, front squat, back squat, overhead press — was
 being offered a **Yo-Yo IR1 level**.
 
-**Wants next:** tonnage and intensity (% of 1RM) rather than sRPE, which is a
-poor fit for strength work; meet-date peaking in the program builder.
+**Tonnage is now the headline figure** — sets x reps x load, computed from drills
+already stored, so it needed no new input. Progress shows tonnes moved this week
+instead of a session count. Bodyweight work contributes zero rather than being
+counted as zero-weight reps.
+
+Deliberately NOT swapped into sessionLoad: mixing kilograms into a minutes-based
+series makes ACWR meaningless for anyone who logs both, and the ratio only works
+if the formula is consistent across an athlete's history.
+
+**Wants next:** intensity as % of 1RM; meet-date peaking in the program builder.
 
 ## Gym & fitness 💪 `#e3b53f`
 *"A plan that progresses, instead of the same session forever."*
@@ -291,3 +324,35 @@ One row in `PROFILES` (`lib/sport-profile.ts`) and one in `TERMS`
 (`lib/sport-terms.ts`). `sport-profile.test.ts` will fail it if the accent is
 under 4.5:1 on `ink-900`, duplicates another sport's, promotes a benchmark that
 doesn't exist, or drops a tool.
+
+---
+
+# A note on where this stops
+
+The per-sport wishlist that remains — pace zones, %1RM intensity, meet-date
+peaking, forwards-vs-backs benchmarks — all point the same way: **more to fill
+in**. That is the direction the original feedback was complaining about. "Easy to
+use, a tool rather than a second job" is not served by another four fields, and
+a sport-specific input the athlete has to remember is worse than a generic one
+they don't.
+
+So the bar for anything further is: **does it remove work, or does it add it?**
+
+Two of the three sport changes that shipped pass that test only because they're
+gated to one sport each and replace guesswork with a number the athlete already
+knows. Tonnage passes it outright — it's computed from what's already stored and
+asks nothing.
+
+The best remaining ideas are subtractive:
+
+- **Derive rather than ask.** The guided player now reports real elapsed minutes
+  and real reps, so a played session logs itself. Anything else the app already
+  observes should follow — a video's duration, a session's actual rest taken.
+- **Default rather than prompt.** Nutrition targets are already derived from
+  body and load rather than typed. The same could apply to intensity: the engine
+  prescribed an RPE, so asking for it back is asking the athlete to grade
+  homework the app set.
+- **Ask once, not daily.** Weight, height and sex live on the profile. Anything
+  that changes monthly does not belong in a daily form.
+
+Adding a field is the easy answer and almost always the wrong one.

@@ -63,14 +63,14 @@ export default function OnboardingPage() {
           <div className="text-center">
             <Logo size={80} className="mx-auto" />
             <h1 className="mt-6 text-3xl font-extrabold tracking-tight">Welcome to PocketAthlete</h1>
-            <p className="mx-auto mt-3 max-w-sm text-slate-400">Your AI performance coach, physio, nutritionist and analyst — in one app. Let&apos;s set it up around you in 30 seconds.</p>
+            <p className="mx-auto mt-3 max-w-sm text-slate-400">Tell us two things and you&apos;ll get a four-week plan built around your sport, with every movement explained. Takes about thirty seconds.</p>
           </div>
         )}
 
         {step === 1 && (
           <div>
             <h1 className="text-2xl font-extrabold tracking-tight">What&apos;s your sport?</h1>
-            <p className="mt-1 text-sm text-slate-400">We&apos;ll tailor your drills, programs and playbook to it.</p>
+            <p className="mt-1 text-sm text-slate-400">It changes your drills, your benchmarks and what the app puts first — not just the wording.</p>
             <div className="mt-5 grid grid-cols-2 gap-3">
               {SPORTS.map((s) => (
                 <button
@@ -90,7 +90,7 @@ export default function OnboardingPage() {
           <div className="space-y-6">
             <div>
               <h1 className="text-2xl font-extrabold tracking-tight">A bit about you</h1>
-              <p className="mt-1 text-sm text-slate-400">This shapes your programs and your playbook.</p>
+              <p className="mt-1 text-sm text-slate-400">Your position decides which skill work goes in the plan.</p>
             </div>
             <PositionPicker sport={sport} value={positions} onChange={setPositions} />
             <div>

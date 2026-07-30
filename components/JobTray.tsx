@@ -16,7 +16,18 @@ export function JobTray() {
   if (!visible.length) return null;
 
   return (
-    <div className="pointer-events-none fixed inset-x-3 bottom-28 z-[64] mx-auto flex max-w-md flex-col gap-2 lg:inset-x-auto lg:bottom-4 lg:right-4 lg:w-80">
+    /*
+     * Announced, not just displayed. The whole point of this tray is that you've
+     * navigated away and something finishes behind you — which a sighted user
+     * catches out of the corner of their eye and a screen-reader user was never
+     * told about at all. `polite` so it waits for a gap rather than cutting in
+     * mid-sentence.
+     */
+    <div
+      role="status"
+      aria-live="polite"
+      className="pointer-events-none fixed inset-x-3 bottom-28 z-[64] mx-auto flex max-w-md flex-col gap-2 lg:inset-x-auto lg:bottom-4 lg:right-4 lg:w-80"
+    >
       {visible.map((j) => (
         <div
           key={j.id}

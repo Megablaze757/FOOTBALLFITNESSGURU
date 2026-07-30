@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { getExerciseByName, demoImplement } from "@/lib/exercises";
 import { ExerciseSteps } from "@/components/ExerciseDemo";
@@ -31,12 +31,28 @@ interface Step { drill: Drill; setNum: number; totalSets: number; drillIndex: nu
  */
 const DEFAULT_REST_SECONDS = 75;
 
+/**
+ * What actually happened, handed back so nothing has to be retyped.
+ *
+ * The player already knew all of this and threw it away: onComplete took no
+ * arguments, so the caller logged a flat 45 minutes and the PRESCRIBED reps
+ * regardless of how long the session took or what was actually completed. An app
+ * that watched you train and then asks you to tell it what you did is a second
+ * job. Now it reports back.
+ */
+export interface SessionResult {
+  /** Real elapsed minutes, wall clock, rounded up to at least 1. */
+  minutes: number;
+  /** Reps actually completed per drill, keyed by drill name. */
+  repsByDrill: Record<string, number>;
+}
+
 // Full-screen guided session: steps through every set with rest timers, then
-// calls onComplete (which logs the session + marks it done).
+// calls onComplete with what was actually done (which logs it + marks it done).
 export function WorkoutPlayer({ title, drills, onComplete, onClose }: {
   title: string;
   drills: Drill[];
-  onComplete: () => void;
+  onComplete: (result: SessionResult) => void;
   onClose: () => void;
 }) {
   const steps = useMemo<Step[]>(
@@ -56,11 +72,39 @@ export function WorkoutPlayer({ title, drills, onComplete, onClose }: {
   const [actual, setActual] = useState(0);   // reps actually completed this set
   const [guidance, setGuidance] = useState<string | null>(null);
 
+  /**
+   * Real elapsed time and real reps, accumulated as they go.
+   *
+   * Refs rather than state: nothing renders from these, and a re-render per rep
+   * on a phone mid-set is waste. `startedAt` is set once on mount and never
+   * reset, so pausing to catch your breath still counts as time training —
+   * which it is.
+   */
+  const startedAt = useRef(Date.now());
+  const repsDone = useRef<Record<string, number>>({});
+
+  function summarise(): SessionResult {
+    return {
+      // Elapsed wall clock, floored to whole minutes but never zero — a session
+      // did happen, and logging 0 minutes would score it as no load at all.
+      minutes: Math.max(1, Math.round((Date.now() - startedAt.current) / 60_000)),
+      repsByDrill: { ...repsDone.current },
+    };
+  }
+
   useEffect(() => {
     setMounted(true);
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = ""; };
   }, []);
+
+  // Escape closes it. Standard for anything that covers the screen, and the only
+  // exit before this was hunting for the ✕ in the corner.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
   // Rest countdown.
   useEffect(() => {
@@ -84,10 +128,15 @@ export function WorkoutPlayer({ title, drills, onComplete, onClose }: {
   }
 
   function completeSet() {
-    if (step) setGuidance(guidanceFor(actual, step.drill.reps));
+    if (step) {
+      setGuidance(guidanceFor(actual, step.drill.reps));
+      // Sum across sets, so three sets of 8 records 24 rather than the last 8.
+      const name = step.drill.name;
+      repsDone.current[name] = (repsDone.current[name] ?? 0) + actual;
+    }
     if (i >= steps.length - 1) {
       setDone(true);
-      onComplete();
+      onComplete(summarise());
       return;
     }
     // Rest belongs to the movement you're about to do, not the one just
@@ -104,13 +153,23 @@ export function WorkoutPlayer({ title, drills, onComplete, onClose }: {
   if (!mounted) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[100] flex flex-col bg-ink-900/95 backdrop-blur-md">
+    /*
+     * A full-screen overlay that covers the whole app, and it was announcing as
+     * a plain div — so assistive tech was never told the rest of the page had
+     * gone away, and Escape did nothing. The only way out was finding the ✕.
+     */
+    <div
+      className="fixed inset-0 z-[100] flex flex-col bg-ink-900/95 backdrop-blur-md"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="player-title"
+    >
       {done && <Confetti count={60} />}
       {/* Header */}
       <div className="flex items-center justify-between px-5 pt-5">
         <div className="min-w-0">
           <div className="stat-label">Guided session</div>
-          <div className="truncate text-sm font-bold text-slate-100">{title}</div>
+          <div id="player-title" className="truncate text-sm font-bold text-slate-100">{title}</div>
         </div>
         <button onClick={onClose} className="tap-target grid h-9 w-9 place-items-center rounded-full bg-white/[0.06] text-slate-300 hover:bg-white/10" aria-label="Close">✕</button>
       </div>
