@@ -16,6 +16,7 @@ export default function ResetPasswordPage() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     const supabase = createClient();
@@ -118,13 +119,45 @@ export default function ResetPasswordPage() {
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="card space-y-4 p-6">
+            {/* Two blind fields, for a password you'll need again tomorrow. One
+                toggle reveals both — you can't sensibly show one and hide the
+                other when the whole job is checking they match. */}
             <label className="block">
-              <span className="field-label">New password</span>
-              <input type="password" required minLength={6} className="field" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
+              <div className="flex items-baseline justify-between">
+                <span className="field-label">New password</span>
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-pressed={showPassword}
+                  className="tap-target text-xs font-semibold text-slate-400 hover:text-pitch-400"
+                >
+                  {showPassword ? "Hide" : "Show"}
+                </button>
+              </div>
+              <input
+                type={showPassword ? "text" : "password"}
+                required
+                minLength={6}
+                autoComplete="new-password"
+                className="field"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+              />
+              <span className="mt-1 block text-xs text-slate-500">At least 6 characters.</span>
             </label>
             <label className="block">
               <span className="field-label">Confirm password</span>
-              <input type="password" required minLength={6} className="field" value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder="••••••••" />
+              <input
+                type={showPassword ? "text" : "password"}
+                required
+                minLength={6}
+                autoComplete="new-password"
+                className="field"
+                value={confirm}
+                onChange={(e) => setConfirm(e.target.value)}
+                placeholder="••••••••"
+              />
             </label>
             {error && <p className="text-sm text-readiness-red">{error}</p>}
             <button type="submit" disabled={saving} className="btn-primary">{saving ? "Saving…" : "Update password"}</button>

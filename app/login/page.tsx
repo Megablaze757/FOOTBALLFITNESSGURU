@@ -22,6 +22,7 @@ export default function LoginPage() {
   const [info, setInfo] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [awaitingConfirm, setAwaitingConfirm] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [cooldown, setCooldown] = useState(0);
   // Set when they arrived from a plan card on the public pricing page. Carried
   // through signup so they land back on checkout instead of the home screen
@@ -259,12 +260,44 @@ export default function LoginPage() {
           {mode !== "forgot" && (
             <label className="block">
               <span className="field-label">Password</span>
-              <input type="password" required minLength={6} className="field" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
+              {/* SHOW/HIDE. Typing a password blind on a phone keyboard is where
+                  people fail and give up, and there was no way to check it — so a
+                  fat-fingered character became "wrong password" with no clue
+                  which. Standard on every login form for exactly this reason. */}
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  required
+                  minLength={6}
+                  autoComplete={mode === "sign_up" ? "new-password" : "current-password"}
+                  className="field pr-16"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-pressed={showPassword}
+                  className="tap-target absolute right-1 top-1/2 -translate-y-1/2 px-2 text-xs font-semibold text-slate-400 hover:text-pitch-400"
+                >
+                  {showPassword ? "Hide" : "Show"}
+                </button>
+              </div>
+              {/* Said up front rather than left to a native browser popup after
+                  they've already tried to submit. */}
+              {mode === "sign_up" && (
+                <span className="mt-1 block text-xs text-slate-500">At least 6 characters.</span>
+              )}
             </label>
           )}
 
           {mode === "sign_in" && (
-            <button type="button" onClick={() => { setMode("forgot"); setError(null); setInfo(null); }} className="block text-left text-xs text-slate-400 hover:text-pitch-400">
+            <button
+              type="button"
+              onClick={() => { setMode("forgot"); setError(null); setInfo(null); }}
+              className="tap-target block text-left text-xs text-slate-400 hover:text-pitch-400"
+            >
               Forgot password?
             </button>
           )}
