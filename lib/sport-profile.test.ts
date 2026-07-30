@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { sportProfile, metricsForSport } from "./sport-profile";
 import { sportTerms } from "./sport-terms";
 import { METRIC_CATALOG } from "./benchmarks";
@@ -156,5 +157,59 @@ test("every sport still offers the plan somewhere in its tools", () => {
       sportProfile(id).tools.some((t) => t.href === "/coach"),
       `${id} has no /coach in its tools at all`
     );
+  }
+});
+
+// --- per-sport dashboard ----------------------------------------------------
+// Progress showed everyone the same four numbers. These check the tailoring is
+// real, renderable, and can't drift out of sync with the page that draws it.
+
+test("every sport asks for exactly four dashboard stats", () => {
+  for (const id of ALL) {
+    const stats = sportProfile(id).dashboardStats;
+    assert.equal(stats.length, 4, `${id} has ${stats.length} — the grid is 2x2 on a phone, a fifth orphans`);
+    assert.equal(new Set(stats).size, 4, `${id} lists the same stat twice`);
+  }
+});
+
+test("every requested stat is one the dashboard can actually draw", () => {
+  // A stat with no case in the switch renders nothing — a blank tile with no
+  // error, which is the failure mode nobody notices until a screenshot.
+  const page = readFileSync(new URL("../app/(app)/dashboard/page.tsx", import.meta.url), "utf8");
+  for (const id of ALL) {
+    for (const stat of sportProfile(id).dashboardStats) {
+      assert.ok(
+        page.includes(`case "${stat}":`),
+        `${id} asks for "${stat}" and dashboard/page.tsx has no case for it`
+      );
+    }
+  }
+});
+
+test("the dashboards genuinely differ between sports", () => {
+  const signatures = ALL.map((id) => sportProfile(id).dashboardStats.join(","));
+  assert.ok(
+    new Set(signatures).size >= 4,
+    `only ${new Set(signatures).size} distinct dashboards across six sports — the tailoring isn't doing much`
+  );
+});
+
+test("each sport leads with the number it actually cares about", () => {
+  // The first tile is the most prominent; it should be the sport's own unit, not
+  // a generic one shared with everybody.
+  assert.equal(sportProfile("running").dashboardStats[0], "distance");
+  assert.equal(sportProfile("weightlifting").dashboardStats[0], "tonnage");
+  assert.equal(sportProfile("gym").dashboardStats[0], "tonnage");
+  assert.equal(sportProfile("rugby").dashboardStats[0], "contactLoad");
+});
+
+test("sport-specific stats are only asked for by the sports that can supply them", () => {
+  // distance and contact minutes come from fields only shown to runners and
+  // rugby players (see TrainingLogInput), so any other sport asking for them
+  // would render a permanent dash.
+  for (const id of ALL) {
+    const stats: string[] = [...sportProfile(id).dashboardStats];
+    if (id !== "running") assert.ok(!stats.includes("distance"), `${id} asks for distance but is never asked for it`);
+    if (id !== "rugby") assert.ok(!stats.includes("contactLoad"), `${id} asks for contact load but is never asked for it`);
   }
 });

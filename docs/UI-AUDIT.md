@@ -352,6 +352,32 @@ aesthetics-led user and a general-fitness user want different homes. The
 `training_focus` field already distinguishes them and the interface doesn't use
 it.
 
+## The dashboard is now per-sport
+
+Everything before this was wording and ordering. Progress still showed all six
+sports the same four numbers — injury risk, fatigue trend, average sleep, weight
+change — a defensible set for nobody in particular.
+
+`dashboardStats` picks the four each sport leads with:
+
+| Sport | Leads with |
+|---|---|
+| Football, Basketball | Injury risk · Sessions · Sleep · Fatigue |
+| Rugby | **Contact** · Injury risk · Sessions · Sleep |
+| Running | **Distance** · Injury risk · Sleep · Fatigue |
+| Weightlifting | **Tonnage** · Weight change · Sleep · Fatigue |
+| Gym | **Tonnage** · Weight change · Sessions · Sleep |
+
+Which four is data; how each is computed and worded lives on the page. Weight
+change is promoted for the barbell sports because a lifter competes against their
+body weight, and demoted for the field sports where it is a curiosity.
+
+Five tests guard it: exactly four per sport, no duplicates, every requested stat
+has a matching `case` in the page (a missing one renders a blank tile with no
+error), at least four of the six differ, and distance/contact are only requested
+by the sports whose check-in actually collects them — otherwise the tile would
+read "–" forever.
+
 ## Adding a sport
 
 One row in `PROFILES` (`lib/sport-profile.ts`) and one in `TERMS`

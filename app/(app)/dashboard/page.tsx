@@ -195,6 +195,7 @@ export default function DashboardPage() {
   const thisWeek = data!.training.filter((t) => t.log_date >= since7);
   const weekDistance = totalDistanceKm(thisWeek);
   const weekTonnage = tonnage(thisWeek);
+  const weekContact = thisWeek.reduce((n, t) => n + (Number(t.contact_minutes) || 0), 0);
 
   return (
     <div className="animate-fade-up space-y-5">
@@ -229,23 +230,72 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* KPI row */}
+      {/* THE KPI ROW IS THE SPORT'S OWN.
+          It used to be the same four numbers for everyone — injury risk, fatigue
+          trend, average sleep, weight change — which is a defensible set for
+          nobody in particular. A runner opens this page to see mileage. A lifter
+          wants weight moved, and their body weight matters because they compete
+          against it. A rugby player is managing contact.
+          Which four appear comes from lib/sport-profile.ts; how each is computed
+          and worded lives here. */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <div className="card p-4">
-          <div className="stat-label">Injury risk</div>
-          <div className="mt-1 text-3xl font-extrabold" style={{ color: riskColor(resolved.riskScore) }}>{riskPct}%</div>
-          <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
-            <div className="h-full rounded-full transition-all" style={{ width: `${riskPct}%`, background: riskColor(resolved.riskScore) }} />
-          </div>
-        </div>
-        <div className="card p-4">
-          <div className="stat-label">Fatigue trend</div>
-          <div className="mt-1 flex items-baseline gap-2 text-xl font-extrabold" style={{ color: trend.color }}>
-            <span>{trend.icon}</span><span>{trend.label}</span>
-          </div>
-        </div>
-        <StatCard label="Avg sleep" value={summary.avgSleep != null ? `${summary.avgSleep}/10` : "–"} />
-        <StatCard label="Weight change" value={summary.weightDeltaKg == null ? "–" : `${summary.weightDeltaKg > 0 ? "+" : ""}${summary.weightDeltaKg} kg`} />
+        {sport.dashboardStats.map((key) => {
+          switch (key) {
+            case "injuryRisk":
+              return (
+                <div key={key} className="card p-4">
+                  <div className="stat-label">Injury risk</div>
+                  <div className="mt-1 text-3xl font-extrabold" style={{ color: riskColor(resolved.riskScore) }}>{riskPct}%</div>
+                  <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+                    <div className="h-full rounded-full transition-all" style={{ width: `${riskPct}%`, background: riskColor(resolved.riskScore) }} />
+                  </div>
+                </div>
+              );
+            case "fatigueTrend":
+              return (
+                <div key={key} className="card p-4">
+                  <div className="stat-label">Fatigue trend</div>
+                  <div className="mt-1 flex items-baseline gap-2 text-xl font-extrabold" style={{ color: trend.color }}>
+                    <span>{trend.icon}</span><span>{trend.label}</span>
+                  </div>
+                </div>
+              );
+            case "avgSleep":
+              return <StatCard key={key} label="Avg sleep" value={summary.avgSleep != null ? `${summary.avgSleep}/10` : "–"} />;
+            case "weightChange":
+              return (
+                <StatCard
+                  key={key}
+                  label="Weight change"
+                  value={summary.weightDeltaKg == null ? "–" : `${summary.weightDeltaKg > 0 ? "+" : ""}${summary.weightDeltaKg} kg`}
+                />
+              );
+            case "sessions":
+              return <StatCard key={key} label="Sessions · 7d" value={String(report.sessions)} />;
+            case "distance":
+              // Runners plan in distance; this comes from the check-in's km field.
+              return <StatCard key={key} label="Distance · 7d" value={weekDistance > 0 ? `${weekDistance} km` : "–"} />;
+            case "tonnage":
+              // Computed from logged sets x reps x load — no extra input needed.
+              return (
+                <StatCard
+                  key={key}
+                  label="Moved · 7d"
+                  value={weekTonnage > 0 ? `${(weekTonnage / 1000).toFixed(1)} t` : "–"}
+                />
+              );
+            case "contactLoad":
+              // The number a rugby player is actually managing, and the one sRPE
+              // from minutes alone hides.
+              return (
+                <StatCard
+                  key={key}
+                  label="Contact · 7d"
+                  value={weekContact > 0 ? `${weekContact} min` : "–"}
+                />
+              );
+          }
+        })}
       </div>
 
       <div className="grid gap-5 lg:grid-cols-2">

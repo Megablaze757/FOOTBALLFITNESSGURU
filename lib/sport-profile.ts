@@ -43,7 +43,34 @@ export interface SportProfile {
   tools: SportTool[];
   /** Benchmark keys worth offering first. Others stay available, just later. */
   headlineMetrics: string[];
+  /**
+   * The four numbers this sport's dashboard leads with.
+   *
+   * Progress showed everyone the same row — injury risk, fatigue trend, average
+   * sleep, weight change — which is a reasonable set for nobody in particular.
+   * A runner's week is mileage. A lifter's is weight moved, and their body weight
+   * matters because they compete against it. A rugby player's is contact.
+   *
+   * Four, always: it's a 2x2 on a phone and a single row on a desktop, and a
+   * fifth would orphan.
+   */
+  dashboardStats: [DashboardStat, DashboardStat, DashboardStat, DashboardStat];
 }
+
+/**
+ * A stat the Progress page can show. The dashboard owns how each is computed and
+ * labelled; this type just constrains what a sport is allowed to ask for, so a
+ * typo here is a compile error rather than a blank tile.
+ */
+export type DashboardStat =
+  | "injuryRisk"
+  | "fatigueTrend"
+  | "avgSleep"
+  | "weightChange"
+  | "sessions"
+  | "distance"      // running
+  | "tonnage"       // weightlifting, gym
+  | "contactLoad";  // rugby
 
 // Every sport gets the same seven destinations; only the order changes.
 const TOOL: Record<string, SportTool> = {
@@ -68,6 +95,7 @@ const PROFILES: Record<SportId, SportProfile> = {
     tagline: "Train for the weekend, recover for the one after.",
     tools: order("plan", "video", "progress", "injury", "exercises", "guides", "nutrition"),
     headlineMetrics: ["sprint_10m", "sprint_40m", "vertical_jump_cm", "yo_yo_level", "squat_1rm"],
+    dashboardStats: ["injuryRisk", "sessions", "avgSleep", "fatigueTrend"],
   },
   rugby: {
     id: "rugby",
@@ -79,6 +107,7 @@ const PROFILES: Record<SportId, SportProfile> = {
     tagline: "Get bigger, hit harder, and still be right on Saturday.",
     tools: order("plan", "progress", "injury", "guides", "video", "exercises", "nutrition"),
     headlineMetrics: ["squat_1rm", "bench_1rm", "sprint_40m", "bronco_s", "deadlift_1rm"],
+    dashboardStats: ["contactLoad", "injuryRisk", "sessions", "avgSleep"],
   },
   basketball: {
     id: "basketball",
@@ -88,6 +117,7 @@ const PROFILES: Record<SportId, SportProfile> = {
     tagline: "Jump higher, change direction faster, land safely.",
     tools: order("plan", "video", "progress", "injury", "exercises", "guides", "nutrition"),
     headlineMetrics: ["vertical_jump_cm", "lane_agility_s", "sprint_20m", "squat_1rm"],
+    dashboardStats: ["injuryRisk", "sessions", "avgSleep", "fatigueTrend"],
   },
   running: {
     id: "running",
@@ -99,6 +129,7 @@ const PROFILES: Record<SportId, SportProfile> = {
     tagline: "Build mileage without buying an injury.",
     tools: order("progress", "plan", "injury", "nutrition", "guides", "exercises", "video"),
     headlineMetrics: ["run_5k_min", "run_10k_min", "run_1500m_min", "squat_1rm"],
+    dashboardStats: ["distance", "injuryRisk", "avgSleep", "fatigueTrend"],
   },
   weightlifting: {
     id: "weightlifting",
@@ -108,6 +139,7 @@ const PROFILES: Record<SportId, SportProfile> = {
     tagline: "Add kilos to the bar without stalling or breaking.",
     tools: order("plan", "progress", "injury", "video", "exercises", "nutrition", "guides"),
     headlineMetrics: ["snatch_1rm", "clean_jerk_1rm", "front_squat_1rm", "squat_1rm", "ohp_1rm"],
+    dashboardStats: ["tonnage", "weightChange", "avgSleep", "fatigueTrend"],
   },
   gym: {
     id: "gym",
@@ -117,6 +149,7 @@ const PROFILES: Record<SportId, SportProfile> = {
     tagline: "A plan that progresses, instead of the same session forever.",
     tools: order("plan", "exercises", "progress", "injury", "nutrition", "video", "guides"),
     headlineMetrics: ["bench_1rm", "squat_1rm", "deadlift_1rm", "pullups_max", "ohp_1rm"],
+    dashboardStats: ["tonnage", "weightChange", "sessions", "avgSleep"],
   },
 };
 
