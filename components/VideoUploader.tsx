@@ -153,6 +153,18 @@ export function VideoUploader({ sport, onUploaded }: { sport?: string; onUploade
       ({ error: rowErr } = await supabase.from("videos").insert(core));
     }
     if (rowErr) {
+      // THE ORPHAN LEAK. The file is already in storage by this point, and this
+      // path used to return without touching it — so every failed insert left a
+      // video nobody could see, in a bucket somebody pays for. There are
+      // currently 12 such objects totalling 217MB, and they can never be reached
+      // from the app because "visible" means "has a row".
+      //
+      // Best-effort and deliberately not surfaced: the athlete's problem is that
+      // their upload failed, and a second error about cleaning up after it tells
+      // them nothing they can act on.
+      const { error: cleanupErr } = await supabase.storage.from("videos").remove([path]);
+      if (cleanupErr) console.warn("orphaned upload left in storage:", path, cleanupErr.message);
+
       setError(`Upload failed: ${rowErr.message}`);
       setBusy(false);
       return;
