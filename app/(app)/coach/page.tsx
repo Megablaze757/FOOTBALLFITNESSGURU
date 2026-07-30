@@ -700,9 +700,17 @@ function ActiveProgram({
             "New goal" is what someone clicks when they've FINISHED a goal, not
             when the program they were just given is wrong — so an athlete with a
             bad first block had the fix in front of them and no reason to think
-            it was the fix. And "Delete" was slate-600 on near-black, about
-            3.1:1, which fails AA for text: the way out of a mistake was the
-            least readable thing on the page. */}
+            it was the fix.
+
+            "Delete" was also the dimmest thing on the page — the way out of a
+            mistake shouldn't be the hardest thing to see. It's slate-400 now.
+
+            An earlier version of this comment claimed slate-600 failed AA at
+            3.1:1. That was wrong: it quoted Tailwind's stock #475569, and
+            tailwind.config.ts overrides slate-600 to #717f96 precisely so the
+            muted tiers pass. Measured against this app's real background it's
+            4.88:1 — a pass. The change was still worth making; the reason given
+            for it wasn't true. */}
         <div className="flex shrink-0 flex-col items-end gap-1">
           <button onClick={newProgram} className="tap-target text-xs font-semibold text-slate-300 hover:text-pitch-400">
             Not right? Rebuild it
