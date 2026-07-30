@@ -34,7 +34,7 @@ export function FormProgress({ clips }: { clips: Clip[] }) {
             </span>
           )}
         </div>
-        <MiniBars data={series} unit=" form" />
+        <MiniBars data={series} unit=" form" emptyLabel="Analyse a clip in Video analysis and your form score is tracked here." />
         <p className="mt-2 text-xs text-slate-400">
           {clips.length < 2
             ? "Upload another clip to start tracking your form trend."

@@ -447,6 +447,13 @@ function GoalBuilder({ painMap, latestBench, sport, initialPositions, initialFoc
       <button onClick={() => goal && createProgram(goal, focus, positions)} disabled={!goal || creating} className="btn-primary">
         {creating ? "Building your program…" : "Generate my program"}
       </button>
+      {/* A dead button with no reason is the most common way a form traps
+          someone: they tap, nothing happens, and there's nothing on screen
+          saying why. The goal select starts empty, so this is the default state
+          of the page, not an edge case. */}
+      {!goal && !creating && (
+        <p className="text-xs text-slate-500">Pick your main goal above and this turns on.</p>
+      )}
     </div>
   );
 }

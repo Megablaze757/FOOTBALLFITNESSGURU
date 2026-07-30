@@ -255,8 +255,17 @@ export function InjuryPlanner({ sport, area }: { sport: SportId; area?: string }
       >
         {busy ? "Building your plan…" : "Build my plan"}
       </button>
+      {/* Two things gate this button and only one of them said so. Someone who
+          wrote a full paragraph and didn't tap a duration got a dead button and
+          a hint about description length they'd already satisfied — which reads
+          as the app being broken, not as a missing field. */}
       {description.trim().length > 0 && description.trim().length < 10 && (
         <p className="text-xs text-slate-500">A few more words — &ldquo;knee hurts&rdquo; can&apos;t be planned around.</p>
+      )}
+      {description.trim().length >= 10 && weeks === null && !busy && (
+        <p className="text-xs text-slate-500">
+          Now pick how long it&apos;s been going on — it changes the plan more than anything else here.
+        </p>
       )}
 
       <p className="text-xs text-slate-500">{REHAB_DISCLAIMER}</p>

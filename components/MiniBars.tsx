@@ -6,14 +6,27 @@ export function MiniBars({
   color = "#e3b53f",
   unit = "",
   height = 96,
+  emptyLabel,
 }: {
   data: DayPoint[];
   color?: string;
   unit?: string;
   height?: number;
+  /**
+   * What would fill this chart. "No data yet." is true of all four places this
+   * appears and useful in none of them — it names the state and leaves the
+   * reader to work out which of weight, body fat, form score or protein they'd
+   * have to log, and where. ProgressPanel already wrote a specific message for
+   * its training chart; this lets the rest do the same.
+   */
+  emptyLabel?: string;
 }) {
   if (!data.length) {
-    return <p className="rounded-2xl bg-white/[0.04] px-4 py-6 text-center text-xs text-slate-500">No data yet.</p>;
+    return (
+      <p className="rounded-2xl bg-white/[0.04] px-4 py-6 text-center text-xs text-slate-500">
+        {emptyLabel ?? "No data yet."}
+      </p>
+    );
   }
 
   const W = 320;

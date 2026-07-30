@@ -109,9 +109,9 @@ export function ProgressPanel({ userId }: { userId: string }) {
         </div>
         {hasNutrition ? (
           <div className="space-y-4">
-            <Labeled title="Calories"><MiniBars data={n.calories} color="#e3b53f" unit=" kcal" height={72} /></Labeled>
-            <Labeled title="Protein"><MiniBars data={n.protein} color="#fb7185" unit="g" height={64} /></Labeled>
-            <Labeled title="Water"><MiniBars data={n.water} color="#38bdf8" unit="L" height={64} /></Labeled>
+            <Labeled title="Calories"><MiniBars data={n.calories} color="#e3b53f" unit=" kcal" height={72} emptyLabel="Log what you eat on the Nutrition page." /></Labeled>
+            <Labeled title="Protein"><MiniBars data={n.protein} color="#fb7185" unit="g" height={64} emptyLabel="Comes from your nutrition log." /></Labeled>
+            <Labeled title="Water"><MiniBars data={n.water} color="#38bdf8" unit="L" height={64} emptyLabel="Comes from your nutrition log." /></Labeled>
           </div>
         ) : (
           <Empty label="Track nutrition to see trends." />
