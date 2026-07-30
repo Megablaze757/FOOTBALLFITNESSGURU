@@ -75,7 +75,21 @@ export default function EssentialsPage() {
     };
   }, [user.id], `essentials:${user.id}`);
 
-  if (loading || !data) return <div className="card mx-auto max-w-3xl h-96 animate-pulse" />;
+  // Title and tabs first — see the note in nutrition/page.tsx. The tabs matter
+  // here in particular: someone who followed a link to ?tab=injury should see
+  // where they've landed while the query runs, not a blank card.
+  if (loading || !data) {
+    return (
+      <div className="mx-auto max-w-3xl space-y-6">
+        <header>
+          <h1 className="text-3xl font-extrabold tracking-tight">Guides</h1>
+          <p className="mt-1 text-sm text-slate-400">Position essentials, matchday nutrition and recovery.</p>
+        </header>
+        <Tabs tabs={TABS} active={tab} onChange={setTab} label="Guide sections" />
+        <div className="card h-96 animate-pulse" />
+      </div>
+    );
+  }
 
   const { sport, positions } = data;
   // One card per position they play — a full back who covers at centre back

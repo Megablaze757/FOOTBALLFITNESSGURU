@@ -66,7 +66,17 @@ export default function BenchmarksPage() {
         {loading ? (
           <div className="card h-24 animate-pulse" />
         ) : !benchmarks.length ? (
-          <p className="card px-4 py-8 text-center text-sm text-slate-500">No tests logged yet.</p>
+          /* "No tests logged yet." named the state and stopped. On a page whose
+             entire point is measuring rather than guessing, the empty state is
+             the best chance to explain why one number today is worth having —
+             and to say it's a two-minute job, not a programme. */
+          <div className="card px-4 py-8 text-center">
+            <p className="text-sm text-slate-300">Nothing to compare against yet.</p>
+            <p className="mx-auto mt-1 max-w-sm text-xs text-slate-500">
+              One number today is enough to start. Test the same thing again in a month and you&apos;ll
+              know whether the training worked, instead of guessing from how you felt.
+            </p>
+          </div>
         ) : (
           <ul className="space-y-2">
             {benchmarks.map((b) => (

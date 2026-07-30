@@ -140,7 +140,7 @@ export function InjuryPlanner({ sport, area }: { sport: SportId; area?: string }
                   that assumption happened to be correct. */}
               {savedAt && <p className="mt-0.5 text-xs text-slate-500">Saved {savedAt} — it&apos;s here whenever you come back.</p>}
             </div>
-            <button onClick={() => setPlan(null)} className="shrink-0 text-xs text-slate-400 hover:text-pitch-400">
+            <button onClick={() => setPlan(null)} className="tap-target shrink-0 text-xs text-slate-400 hover:text-pitch-400">
               New plan
             </button>
           </div>

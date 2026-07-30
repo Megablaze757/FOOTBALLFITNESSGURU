@@ -77,7 +77,17 @@ export default function NutritionPage() {
 
   const tier: Tier = data?.sub?.status === "active" ? data.sub.tier : "bronze";
 
-  if (loading) return <div className="card mt-6 h-80 animate-pulse" />;
+  // The header renders immediately. A bare grey box told you nothing about where
+  // you were, and the title then popped in and shoved the content down — the
+  // page title is the one thing we already know before any query returns.
+  if (loading) {
+    return (
+      <div className="mx-auto max-w-2xl space-y-5">
+        <Header />
+        <div className="card h-80 animate-pulse" />
+      </div>
+    );
+  }
 
   // can(), not tierMeets(tier, "silver") — naming the tier here is what made
   // every other gate in the app break when the plans changed. The capability

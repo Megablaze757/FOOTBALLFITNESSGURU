@@ -114,7 +114,21 @@ export default function CoachPage() {
     };
   }, [user.id], `coach:${user.id}`);
 
-  if (loading) return <div className="card mt-6 h-80 animate-pulse" />;
+  // Title first, always — see the note in nutrition/page.tsx. Matches the
+  // heading and lead the loaded page uses, so nothing shifts when data lands.
+  if (loading) {
+    return (
+      <div className="animate-fade-up">
+        <header className="mb-5">
+          <h1 className="text-3xl font-extrabold tracking-tight">My plan</h1>
+          <p className="mt-1 max-w-prose text-sm text-slate-400">
+            Your four-week training block — what to do, in what order, and how it progresses.
+          </p>
+        </header>
+        <div className="card h-80 animate-pulse" />
+      </div>
+    );
+  }
 
   // Programs are the paid product. An existing program stays readable — someone
   // who lapses shouldn't lose the block they're mid-way through — but building

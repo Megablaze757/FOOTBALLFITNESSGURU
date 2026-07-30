@@ -59,7 +59,7 @@ export function JobTray() {
             {j.status !== "running" && (
               <button
                 onClick={() => dismiss(j.id)}
-                className="shrink-0 text-xs text-slate-500 hover:text-slate-300"
+                className="tap-target shrink-0 text-xs text-slate-500 hover:text-slate-300"
                 aria-label="Dismiss"
               >
                 ✕

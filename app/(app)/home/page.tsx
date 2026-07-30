@@ -454,7 +454,7 @@ function DailyQuests({ quests }: { quests: { id: string; label: string; xp: numb
           <button
             type="button"
             onClick={() => { setHidden(true); try { localStorage.setItem("pa:hide-goals", "1"); } catch { /* ignore */ } }}
-            className="text-xs text-slate-500 hover:text-slate-300"
+            className="tap-target text-xs text-slate-500 hover:text-slate-300"
             title="Hide these — XP still counts from what you actually do"
           >
             Hide
@@ -495,7 +495,7 @@ function GettingStarted({ setup }: { setup: { checkedIn: boolean; hasProgram: bo
           <span className="eyebrow">Worth a look · {doneCount}/{steps.length}</span>
           <h2 className="mt-1 text-lg font-extrabold">Things you haven&apos;t tried yet</h2>
         </div>
-        <button onClick={() => setHidden(true)} className="shrink-0 text-xs text-slate-500 hover:text-slate-300">Hide</button>
+        <button onClick={() => setHidden(true)} className="tap-target shrink-0 text-xs text-slate-500 hover:text-slate-300">Hide</button>
       </div>
 
       <ol className="mt-4 space-y-1.5">
@@ -554,12 +554,31 @@ function Greeting({ name, sub, streak = 0 }: { name: string; sub: string; streak
   );
 }
 
+/**
+ * Shaped like the page it stands in for.
+ *
+ * It was a heading bar, a tall card and a short card — which was roughly right
+ * for the OLD home and is wrong for this one, so every load settled with a jump
+ * as a 6-tile grid appeared where a 28px card had been. A skeleton whose
+ * proportions don't match the real layout is worse than none: it promises a
+ * shape and then breaks it.
+ */
 function Skeleton() {
   return (
     <div className="space-y-6">
+      {/* Greeting */}
       <div className="h-9 w-40 animate-pulse rounded-lg bg-white/5" />
-      <div className="card h-64 animate-pulse" />
-      <div className="card h-28 animate-pulse" />
+      {/* NextUp — the tall primary card */}
+      <div className="card h-44 animate-pulse" />
+      {/* CheckInNudge — one slim row */}
+      <div className="card h-16 animate-pulse" />
+      {/* ToolGrid — 2 columns on mobile, 3 from sm, seven tiles */}
+      <div>
+        <div className="mb-2 h-3 w-24 animate-pulse rounded bg-white/5" />
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          {Array.from({ length: 6 }, (_, i) => <div key={i} className="card h-24 animate-pulse" />)}
+        </div>
+      </div>
     </div>
   );
 }

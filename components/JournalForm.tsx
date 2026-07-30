@@ -384,7 +384,7 @@ export function JournalForm({ initial, initialTraining, sport, planned = [] }: {
           <button
             type="button"
             onClick={() => chooseMode(false)}
-            className="shrink-0 text-xs font-semibold text-slate-400 hover:text-pitch-400"
+            className="tap-target shrink-0 text-xs font-semibold text-slate-400 hover:text-pitch-400"
           >
             Use the quick check-in
           </button>
