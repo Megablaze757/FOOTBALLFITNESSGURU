@@ -26,6 +26,11 @@ export const FUNNEL_EVENTS = [
   "checkout_complete",
   "team_enquiry",
   "cancelled",
+  // The two milestones that decide whether a new account ever sees the product
+  // work. Neither was recorded, so "how long until someone has a plan and has
+  // trained from it?" — the number the D7 target rests on — was unanswerable.
+  "program_built",
+  "first_session",
 ] as const;
 
 export type FunnelEvent = (typeof FUNNEL_EVENTS)[number];
@@ -56,7 +61,23 @@ export function track(event: FunnelEvent, meta: Record<string, string | number |
       // Signed out means no row. That's the privacy design, not a bug —
       // anonymous traffic is counted in aggregate by the host instead.
       if (!user) return;
-      await supabase.from("funnel_events").insert({ user_id: user.id, event, meta });
+      // Elapsed seconds since the account was created, on every event.
+      //
+      // This is what makes the first run measurable without anyone holding a
+      // stopwatch: with it on signup, onboarded, program_built and
+      // first_session, "how long from account to training" is a query rather
+      // than a guess. A duration is not an identifier — it says nothing about
+      // who or which device, which keeps this inside 0045's rule that meta
+      // describes the shape of an event and never its content.
+      const created = user.created_at ? Date.parse(user.created_at) : NaN;
+      const sinceSignup = Number.isFinite(created)
+        ? { since_signup_s: Math.max(0, Math.round((Date.now() - created) / 1000)) }
+        : {};
+      await supabase.from("funnel_events").insert({
+        user_id: user.id,
+        event,
+        meta: { ...sinceSignup, ...meta },
+      });
     } catch {
       /* analytics must never surface an error to someone mid-workout */
     }

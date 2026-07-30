@@ -12,7 +12,7 @@ import { computeACWR } from "@/lib/load";
 import { BodyMap } from "@/components/BodyMap";
 import { ReadinessGauge } from "@/components/ReadinessGauge";
 import { TrainingLogInput, type TrainingState } from "@/components/TrainingLogInput";
-import { enqueue, browserStore } from "@/lib/offline-queue";
+import { enqueue, browserStore, queueCount } from "@/lib/offline-queue";
 import { track } from "@/lib/funnel";
 import { useCurrentUser } from "@/lib/auth";
 import { saveDraft, loadDraft, clearDraft, draftAge, describeAge } from "@/lib/drafts";
@@ -104,6 +104,34 @@ export function JournalForm({ initial, initialTraining, sport, planned = [] }: {
 
   // Only meaningful in quick mode, where the body map is hidden until asked for.
   const [sore, setSore] = useState<boolean | null>(null);
+
+  /**
+   * Offline state, said BEFORE they fill the form in.
+   *
+   * Check-ins have always survived no signal — they queue on the device and
+   * upload when it returns — and nothing anywhere said so. The reassurance only
+   * appeared AFTER submitting, which is the one moment it isn't needed: by then
+   * you've either seen it work or you haven't. Someone in a basement gym with no
+   * bars reasonably assumes there's no point filling anything in, closes the app,
+   * and the streak they were told not to worry about breaks anyway.
+   *
+   * A trust feature nobody knows about earns no trust.
+   */
+  const [offline, setOffline] = useState(false);
+  const [queuedCount, setQueuedCount] = useState(0);
+  useEffect(() => {
+    const sync = () => {
+      setOffline(typeof navigator !== "undefined" && navigator.onLine === false);
+      try { setQueuedCount(queueCount(browserStore())); } catch { /* no storage */ }
+    };
+    sync();
+    window.addEventListener("online", sync);
+    window.addEventListener("offline", sync);
+    return () => {
+      window.removeEventListener("online", sync);
+      window.removeEventListener("offline", sync);
+    };
+  }, []);
 
   const today = new Date().toISOString().slice(0, 10);
   const userId = useCurrentUser().id;
@@ -287,6 +315,21 @@ export function JournalForm({ initial, initialTraining, sport, planned = [] }: {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      {/* Told up front, not after submitting — see the note on `offline` above. */}
+      {offline && (
+        <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-slate-300">
+          <span className="font-semibold text-slate-100">📡 You&apos;re offline — fill it in anyway.</span>{" "}
+          It saves on your phone and uploads by itself when you&apos;re back on signal. You&apos;ll still
+          get your readiness score now.
+        </div>
+      )}
+      {!offline && queuedCount > 0 && (
+        <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-slate-400">
+          📡 {queuedCount} earlier check-in{queuedCount === 1 ? "" : "s"} still uploading — nothing
+          is lost, it happens in the background.
+        </div>
+      )}
+
       {restored && (
         <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-slate-300">
           <span>📝 Picked up where you left off — saved {restored}.</span>

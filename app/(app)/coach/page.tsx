@@ -21,6 +21,7 @@ import { templatesForSport } from "@/lib/programs";
 import { assessReadiness } from "@/lib/readiness";
 import { computeACWR } from "@/lib/load";
 import { invokeAI } from "@/lib/api";
+import { track } from "@/lib/funnel";
 import { METRIC_CATALOG, metricDef, benchmarkProgress } from "@/lib/benchmarks";
 import { RingProgress } from "@/components/RingProgress";
 import { Tabs } from "@/components/Tabs";
@@ -274,6 +275,12 @@ function GoalBuilder({ painMap, latestBench, sport, initialPositions, initialFoc
     }
     setCreating(false);
     setBuildingId(null);
+    // Milestone: a plan exists. Carries seconds-since-signup automatically, so
+    // "how long from account to program" becomes a query — see lib/funnel.ts.
+    // Fired on every build, not just the first: funnel_summary counts DISTINCT
+    // users, so first-time conversion stays correct and the repeat count doubles
+    // as a signal that people rebuild.
+    track("program_built", { goal: g, block: 1 });
     onCreated();
   }
 
@@ -571,6 +578,12 @@ function ActiveProgram({
       return;
     }
 
+    // Milestone: they trained from the plan. The other half of the first-run
+    // measurement — a program nobody trains from hasn't activated anyone.
+    if (marking) {
+      track("first_session", { played: result ? true : false, minutes: result?.minutes ?? 0 });
+    }
+
     // Completing a scheduled session logs it as training so it counts toward your
     // load (ACWR) and history. Merge into today's training log.
     if (marking) {
@@ -676,10 +689,19 @@ function ActiveProgram({
             {GOALS.find((g) => g.id === goal)?.label} program · Block {program.block}
           </p>
         </div>
+        {/* BOTH ESCAPE ROUTES EXISTED AND NEITHER READ AS ONE.
+            "New goal" is what someone clicks when they've FINISHED a goal, not
+            when the program they were just given is wrong — so an athlete with a
+            bad first block had the fix in front of them and no reason to think
+            it was the fix. And "Delete" was slate-600 on near-black, about
+            3.1:1, which fails AA for text: the way out of a mistake was the
+            least readable thing on the page. */}
         <div className="flex shrink-0 flex-col items-end gap-1">
-          <button onClick={newProgram} className="text-xs text-slate-400 hover:text-pitch-400">New goal</button>
+          <button onClick={newProgram} className="tap-target text-xs font-semibold text-slate-300 hover:text-pitch-400">
+            Not right? Rebuild it
+          </button>
           {!confirmDelete ? (
-            <button onClick={() => setConfirmDelete(true)} className="text-xs text-slate-600 hover:text-readiness-red">
+            <button onClick={() => setConfirmDelete(true)} className="tap-target text-xs text-slate-400 hover:text-readiness-red">
               Delete
             </button>
           ) : (
