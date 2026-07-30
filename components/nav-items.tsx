@@ -43,6 +43,21 @@ export const MOBILE_NAV = [
   { href: "/dashboard", label: "Progress", icon: "stats" },
 ] as const;
 
+/**
+ * Shown only to coaches, appended by SideNav and the mobile More sheet.
+ *
+ * /squad is the whole coach product — roster, readiness at a glance, assigning
+ * programs, team exercises, per-athlete analytics — and it had no navigation
+ * entry whatsoever. The only route in was a link on the Profile page, so a coach
+ * set their role and then had to guess where their squad had gone.
+ *
+ * Not in NAV_ITEMS because most users are athletes, and a permanent tab that
+ * opens onto a "coaches only" wall is worse than no tab at all.
+ */
+export const COACH_NAV = [
+  { href: "/squad", label: "My squad", icon: "squad" },
+] as const;
+
 // Everything else. Reached from the mobile "More" sheet.
 export const MOBILE_MORE = [
   { href: "/train", label: "Video analysis", icon: "train" },
@@ -84,6 +99,9 @@ export function NavIcon({ name, active, size = 22 }: { name: string; active: boo
       return <svg {...common}><path d="M8 4h8v4a4 4 0 0 1-8 0V4z" /><path d="M8 5H5v2a3 3 0 0 0 3 3M16 5h3v2a3 3 0 0 1-3 3" /><path d="M12 12v4M9 20h6M10 20l.5-4M14 20l-.5-4" /></svg>;
     case "playbook":
       return <svg {...common}><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2V5z" /><path d="M9 7h6M9 11h6" /></svg>;
+    case "squad":
+      // Two people — a roster, not a single profile.
+      return <svg {...common}><circle cx="9" cy="8" r="3.2" /><path d="M3 20v-1.5A4.5 4.5 0 0 1 7.5 14h3A4.5 4.5 0 0 1 15 18.5V20" /><path d="M16 5.5a3.2 3.2 0 0 1 0 6M18 14h.5A4.5 4.5 0 0 1 23 18.5V20" /></svg>;
     default:
       return null;
   }

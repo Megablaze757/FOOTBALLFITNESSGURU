@@ -9,7 +9,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { NAV_ITEMS, MOBILE_NAV, MOBILE_MORE } from "../components/nav-items";
+import { NAV_ITEMS, MOBILE_NAV, MOBILE_MORE, COACH_NAV } from "../components/nav-items";
 
 const page = (route: string) =>
   readFileSync(new URL(`../app/(app)${route}/page.tsx`, import.meta.url), "utf8");
@@ -74,5 +74,40 @@ test("every page says what it is for", () => {
     const src = page(route);
     const hasLead = /<\/h1>\s*(\{[^}]*\}\s*)?<p/.test(src) || /<h1[\s\S]{0,400}?<p className="mt-1/.test(src);
     assert.ok(hasLead, `${route} has a heading with no sentence explaining what the page is for`);
+  }
+});
+
+// --- the coach entry -------------------------------------------------------
+// /squad is the whole coach product and had NO navigation entry: the only route
+// in was a link on the Profile page. These guard the fix, and guard against the
+// obvious wrong fix of putting it in the athlete nav where it opens a wall.
+
+test("the coach nav is not shown to athletes", () => {
+  const athleteRoutes = new Set([...NAV_ITEMS, ...MOBILE_NAV, ...MOBILE_MORE].map((i) => i.href));
+  for (const item of COACH_NAV) {
+    assert.ok(
+      !athleteRoutes.has(item.href),
+      `${item.href} is in the athlete nav — most users aren't coaches, and a tab that opens a "coaches only" wall is worse than no tab`
+    );
+  }
+});
+
+test("the coach nav has a label and an icon that exists", () => {
+  const icons = readFileSync(new URL("../components/nav-items.tsx", import.meta.url), "utf8");
+  for (const item of COACH_NAV) {
+    assert.ok(item.label.length > 2, `${item.href} needs a real label`);
+    assert.ok(
+      icons.includes(`case "${item.icon}":`),
+      `icon "${item.icon}" has no case in NavIcon, so it renders as nothing`
+    );
+  }
+});
+
+test("every nav icon resolves", () => {
+  // A missing case falls through and renders blank — a nav entry with no icon
+  // and no error is the kind of thing nobody notices until a screenshot.
+  const icons = readFileSync(new URL("../components/nav-items.tsx", import.meta.url), "utf8");
+  for (const item of [...NAV_ITEMS, ...MOBILE_NAV, ...MOBILE_MORE, ...COACH_NAV]) {
+    assert.ok(icons.includes(`case "${item.icon}":`), `icon "${item.icon}" (${item.href}) has no case in NavIcon`);
   }
 });

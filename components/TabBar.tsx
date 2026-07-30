@@ -3,12 +3,17 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { MOBILE_NAV, MOBILE_MORE, NavIcon } from "@/components/nav-items";
+import { MOBILE_NAV, MOBILE_MORE, COACH_NAV, NavIcon } from "@/components/nav-items";
+import { useIsCoach } from "@/lib/coach-role";
 
 export function TabBar() {
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
-  const moreActive = MOBILE_MORE.some((m) => pathname.startsWith(m.href));
+  const isCoach = useIsCoach();
+  // Squad goes in the More sheet for coaches — the four primary tabs stay the
+  // daily loop, which a coach uses as an athlete too.
+  const more = isCoach ? [...COACH_NAV, ...MOBILE_MORE] : MOBILE_MORE;
+  const moreActive = more.some((m) => pathname.startsWith(m.href));
 
   return (
     <>
@@ -18,7 +23,7 @@ export function TabBar() {
             className="animate-fade-up absolute inset-x-3 bottom-24 card overflow-hidden p-2"
             onClick={(e) => e.stopPropagation()}
           >
-            {MOBILE_MORE.map((m) => {
+            {more.map((m) => {
               const active = pathname.startsWith(m.href);
               return (
                 <Link

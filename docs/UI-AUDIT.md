@@ -24,6 +24,32 @@ Status legend: **done** · **partial** — the frame is right, contents aren't �
 
 ## Navigation — done
 
+### Reachability audit
+
+Mapped every route to everywhere it links from. One finding dominated: **/squad,
+the entire coach product** — roster, readiness at a glance, assigning programs,
+team exercises, per-athlete analytics — had **no navigation entry at all**. The
+only way in was a link on the Profile page, so a coach set their role to Coach
+and then had to guess where their squad lived. Ten athlete features had a front
+door and the paid coach feature did not.
+
+Fixed with a conditional `COACH_NAV`: "My squad" appears in the sidebar and the
+mobile More sheet only for coaches and admins. Deliberately NOT added to
+NAV_ITEMS — most users are athletes, and a permanent tab that opens onto a
+"coaches only" wall is worse than a missing one. The role is cached per tab and
+cleared when someone changes it on their own profile, so ticking "Coach" makes
+the entry appear without a reload.
+
+Also from the same audit:
+
+- `/benchmarks` and `/body` are reachable only from Progress, which is the right
+  home — but they were labelled **"PRs"** and **"Body"**. "PRs" is jargon a
+  15-year-old may not know. Now "Benchmarks" and "Weight".
+- `/history` links from nowhere and should: it is a deliberate redirect kept
+  because the URL is in old emails and bookmarks. Correct as-is.
+- `/train/view`, `/squad/view` and `/reset-password` also link from nowhere and
+  should — they are opened with an id or from an email, never browsed to.
+
 Five of ten labels were unguessable. "Train" opened video analysis while the
 place you actually train was "Coach"; "Journal" was a check-in, not a diary;
 "Playbook" and "Library" both sounded like reference material.

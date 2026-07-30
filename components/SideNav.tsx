@@ -2,13 +2,17 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { NAV_ITEMS, NavIcon } from "@/components/nav-items";
+import { NAV_ITEMS, COACH_NAV, NavIcon } from "@/components/nav-items";
 import { useLaunched } from "@/lib/launch";
+import { useIsCoach } from "@/lib/coach-role";
 
 // Desktop-only left sidebar (hidden below lg — mobile uses the bottom TabBar).
 export function SideNav() {
   const pathname = usePathname();
   const launched = useLaunched();
+  const isCoach = useIsCoach();
+  // Coaches get their squad in the nav; athletes never see the entry at all.
+  const items = isCoach ? [...NAV_ITEMS, ...COACH_NAV] : NAV_ITEMS;
 
   return (
     <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-white/10 bg-white/[0.02] px-4 py-6 backdrop-blur-xl lg:flex">
@@ -20,7 +24,7 @@ export function SideNav() {
 
       <nav className="flex-1">
         <ul className="space-y-1">
-          {NAV_ITEMS.map((item) => {
+          {items.map((item) => {
             const active = pathname.startsWith(item.href);
             return (
               <li key={item.href}>

@@ -133,9 +133,9 @@ export function ProgressPanel({ userId }: { userId: string }) {
       />
 
       <div className="grid grid-cols-3 gap-3">
-        <Link href="/benchmarks" className="btn-ghost">💪 PRs</Link>
+        <Link href="/benchmarks" className="btn-ghost">💪 Benchmarks</Link>
         <Link href="/nutrition" className="btn-ghost">🥗 Food</Link>
-        <Link href="/body" className="btn-ghost">📸 Body</Link>
+        <Link href="/body" className="btn-ghost">📸 Weight</Link>
       </div>
     </div>
   );

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { clearCoachRoleCache } from "@/lib/coach-role";
 import { SPORTS, DIFFICULTIES } from "@/lib/exercises";
 import { PositionPicker } from "@/components/PositionPicker";
 import { positionList } from "@/lib/positions";
@@ -78,6 +79,10 @@ export function ProfileForm({ profile, email }: { profile: Profile; email: strin
     } else {
       setUsername(check.value); // show the normalised form back
       setSaved(true);
+      // The nav caches the role for the tab's lifetime. Without this, ticking
+      // "Coach" and saving leaves the Squad entry missing until a reload — which
+      // reads as the setting not having taken.
+      clearCoachRoleCache();
     }
     setSaving(false);
   }
