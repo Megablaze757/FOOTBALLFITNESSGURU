@@ -1,77 +1,61 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/lib/auth";
 import { useAsync } from "@/lib/use-async";
-import {
-  positionGuides, gamedayLabel, relevantInjuryProtocols,
-  GAMEDAY_NUTRITION, RECOVERY_GENERAL, RECOVERY_INJURY, REHAB_DISCLAIMER,
-  protocolsForAreas, matchInjuryText, baseAreaOf,
-  type RecoveryProtocol,
-} from "@/lib/essentials";
+import { positionGuides, gamedayLabel, GAMEDAY_NUTRITION, RECOVERY_GENERAL } from "@/lib/essentials";
 import { positionList } from "@/lib/positions";
 import { getExercise, SPORTS, type Exercise, type SportId } from "@/lib/exercises";
 import { ExerciseModal } from "@/components/ExerciseDetail";
 import { SkillDrills } from "@/components/SkillDrills";
-import { InjuryPlanner } from "@/components/InjuryPlanner";
 import { Tabs } from "@/components/Tabs";
-import { BodyMap } from "@/components/BodyMap";
+import { ProtocolCard } from "@/components/ProtocolCard";
 
 // The Playbook covers four unrelated topics. Stacked, that ran to six and a
 // half screens on a phone; split into tabs each view is about two.
-type TabId = "position" | "skills" | "injury" | "fuel";
+type TabId = "position" | "skills" | "fuel";
 const TABS: { id: TabId; label: string; icon: string }[] = [
   { id: "position", label: "Your position", icon: "🎯" },
   { id: "skills", label: "Skill drills", icon: "⚽" },
-  { id: "injury", label: "Injury & rehab", icon: "🩹" },
+  // "Injury & rehab" was here, and being a tab on a page called "Guides" is why
+  // nobody could find it. It's /injury now, in the nav. Mobility went with it —
+  // the warm-up was stranded under "Your position", equally unfindable for
+  // anyone trying to avoid getting hurt.
   { id: "fuel", label: "Fuel & recovery", icon: "🍝" },
-];
-
-// The pre-training sequence, in the order it should be performed.
-const MOBILITY_IDS = [
-  "leg_swings", "world_greatest_stretch", "hip_90_90", "ankle_rocks",
-  "glute_bridge", "monster_walk", "dead_bug", "thoracic_openers",
-  "scap_pull_up", "couch_stretch",
 ];
 
 export default function EssentialsPage() {
   const user = useCurrentUser();
   const [open, setOpen] = useState<Exercise | null>(null);
-  // Deep-linkable, so anything that wants to send a sore athlete straight to
-  // rehab can. Injury help lived two levels down — nav to "Guides", then a tab —
-  // which nobody in pain would ever guess, and pain is the one moment they
-  // won't go hunting.
+  const router = useRouter();
   const [tab, setTab] = useState<TabId>(() => {
     if (typeof window === "undefined") return "position";
     const wanted = new URLSearchParams(window.location.search).get("tab");
     return TABS.some((t) => t.id === wanted) ? (wanted as TabId) : "position";
   });
-  const [hurt, setHurt] = useState<Record<string, number>>({});
-  const [desc, setDesc] = useState("");
-  // "knee_left" -> "knee" so a tapped region maps to its rehab protocol.
-  const picked = useMemo(() => [...new Set(Object.keys(hurt).map(baseAreaOf))], [hurt]);
 
-  // Tapped areas and free text both feed the same protocol lookup; de-duped so
-  // describing an ankle after tapping "ankle" doesn't show it twice.
-  const matched = useMemo(() => {
-    const out = [...protocolsForAreas(picked), ...matchInjuryText(desc)];
-    return out.filter((p, i) => out.findIndex((q) => q.id === p.id) === i);
-  }, [picked, desc]);
-
+  // ?tab=injury used to open the injury tab here, and that link is out in the
+  // wild — it was the tool tile's href and Home's soreness card. Injury is its
+  // own page now, so forward rather than silently showing the position guide,
+  // which would look like the link was broken.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (new URLSearchParams(window.location.search).get("tab") === "injury") {
+      router.replace("/injury");
+    }
+  }, [router]);
   const { data, loading } = useAsync(async () => {
-    const supabase = createClient();
-    const today = new Date().toISOString().slice(0, 10);
-    const [{ data: profile }, { data: checkIn }] = await Promise.all([
-      supabase.from("profiles").select("sport, position, positions").eq("id", user.id).maybeSingle(),
-      supabase.from("daily_check_ins").select("pain_map").eq("user_id", user.id).order("check_in_date", { ascending: false }).limit(1).maybeSingle(),
-    ]);
+    // The check-in query went with the injury tab: this page no longer needs to
+    // know what hurts, so it no longer asks.
+    const { data: profile } = await createClient()
+      .from("profiles").select("sport, position, positions").eq("id", user.id).maybeSingle();
     const p = profile as { sport?: string; position?: string; positions?: string[] } | null;
     return {
       sport: (p?.sport ?? "football") as SportId,
       positions: positionList(p?.positions?.length ? p.positions : p?.position),
-      painMap: (checkIn as { pain_map?: Record<string, number> } | null)?.pain_map ?? {},
     };
   }, [user.id], `essentials:${user.id}`);
 
@@ -97,7 +81,6 @@ export default function EssentialsPage() {
   const guides = positionGuides(sport, positions);
   const sportLabel = SPORTS.find((s) => s.id === sport)?.label ?? sport;
   const gameday = gamedayLabel(sport);
-  const injuryProtocols = relevantInjuryProtocols(data.painMap);
 
   return (
     <div className="animate-fade-up mx-auto max-w-3xl space-y-6">
@@ -154,84 +137,6 @@ export default function EssentialsPage() {
       </div>
       )}
 
-      {/* Describe it and get a graded plan. First, because the fixed protocols
-          below can't handle "outside of my knee, six months, worse on stairs". */}
-      {tab === "injury" && <InjuryPlanner sport={sport} area={picked[0]} />}
-
-      {/* Injury-specific recovery (only if sore) */}
-      {tab === "injury" && injuryProtocols.length > 0 && (
-        <section className="space-y-3">
-          <h2 className="field-label">Recover your sore areas</h2>
-          {injuryProtocols.map((p) => <ProtocolCard key={p.id} p={p} highlight onOpenExercise={setOpen} />)}
-        </section>
-      )}
-
-      {/* Tell us directly what hurts, rather than waiting on a check-in. */}
-      {tab === "injury" && (
-      <section className="card-premium space-y-4 p-6">
-        <div>
-          <h2 className="text-xl font-extrabold">What&apos;s bothering you?</h2>
-          <p className="mt-1 text-sm text-slate-400">Tap where it hurts, or describe it — we&apos;ll pull up the right rehab plan.</p>
-        </div>
-
-        {/* Same body map as the daily check-in, in tap-to-select mode. */}
-        <BodyMap value={hurt} onChange={setHurt} mode="select" />
-
-        <label className="block">
-          <span className="field-label">Or describe it in your own words</span>
-          <textarea
-            value={desc}
-            onChange={(e) => setDesc(e.target.value)}
-            rows={2}
-            placeholder="e.g. rolled my ankle at training, sore behind the knee when I sprint…"
-            className="field resize-none"
-          />
-        </label>
-
-        {picked.length + desc.trim().length > 0 && (
-          matched.length > 0
-            ? <p className="text-xs text-slate-500">Showing {matched.length} matching plan{matched.length === 1 ? "" : "s"} below.</p>
-            : <p className="text-xs text-slate-500">No match yet — try tapping an area above, or see all the guides below.</p>
-        )}
-      </section>
-
-      )}
-
-      {/* Full rehab library — browsable whether or not you logged pain today. */}
-      {tab === "injury" && (
-      <section className="space-y-3">
-        <div>
-          <h2 className="field-label">{matched.length > 0 ? "Your rehab plan" : "Injury rehab guides"}</h2>
-          <p className="mt-1 text-xs text-slate-500">{REHAB_DISCLAIMER}</p>
-        </div>
-        {matched.length > 0
-          ? matched.map((p) => <ProtocolCard key={p.id} p={p} highlight onOpenExercise={setOpen} />)
-          : RECOVERY_INJURY.filter((p) => !injuryProtocols.some((i) => i.id === p.id))
-              .map((p) => <ProtocolCard key={p.id} p={p} collapsed onOpenExercise={setOpen} />)}
-      </section>
-
-      )}
-
-      {/* Mobility & activation — the warm-up that prevents most of the above. */}
-      {tab === "position" && (
-      <section>
-        <h2 className="field-label mb-1">Mobility &amp; activation</h2>
-        <p className="mb-3 text-xs text-slate-500">Run through these before training — the cheapest injury prevention there is.</p>
-        <div className="flex flex-wrap gap-2">
-          {MOBILITY_IDS.map((id) => {
-            const ex = getExercise(id);
-            if (!ex) return null;
-            return (
-              <button key={id} onClick={() => setOpen(ex)} className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-sm text-slate-200 transition hover:border-pitch-400/40 hover:bg-pitch-400/[0.06]">
-                {ex.name} ›
-              </button>
-            );
-          })}
-        </div>
-      </section>
-
-      )}
-
       {/* Technical work. The position guide says a centre back needs heading;
           this is where they find out how to actually practise it. */}
       {tab === "skills" && <SkillDrills sport={sport} position={positions} />}
@@ -284,104 +189,5 @@ function Col({ title, items, icon }: { title: string; items: string[]; icon: str
         {items.map((i) => <li key={i} className="flex gap-2"><span className="text-pitch-400">›</span>{i}</li>)}
       </ul>
     </div>
-  );
-}
-
-function ProtocolCard({ p, highlight, collapsed, onOpenExercise }: {
-  p: RecoveryProtocol;
-  highlight?: boolean;
-  // Browsing the full library: show a one-line summary until asked for detail.
-  collapsed?: boolean;
-  onOpenExercise?: (ex: Exercise) => void;
-}) {
-  const body = <ProtocolBody p={p} onOpenExercise={onOpenExercise} />;
-  if (collapsed) {
-    return (
-      <details className="card p-4">
-        <summary className="flex cursor-pointer items-center gap-2 list-none">
-          <span className="text-xl">{p.icon}</span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-sm font-bold text-slate-100">{p.title}</span>
-            <span className="block text-[11px] uppercase tracking-wide text-slate-500">{p.when}</span>
-          </span>
-          <span className="shrink-0 text-xs text-pitch-400">View plan ›</span>
-        </summary>
-        <div className="mt-3">{body}</div>
-      </details>
-    );
-  }
-  return (
-    <div className={`card p-4 ${highlight ? "border-readiness-red/25" : ""}`}>
-      <div className="flex items-center gap-2">
-        <span className="text-xl">{p.icon}</span>
-        <div>
-          <div className="text-sm font-bold text-slate-100">{p.title}</div>
-          <div className="text-[11px] uppercase tracking-wide text-slate-500">{p.when}</div>
-        </div>
-      </div>
-      {body}
-    </div>
-  );
-}
-
-function ProtocolBody({ p, onOpenExercise }: {
-  p: RecoveryProtocol;
-  onOpenExercise?: (ex: Exercise) => void;
-}) {
-  return (
-    <>
-      <ul className="mt-3 space-y-1.5 text-sm text-slate-300">
-        {p.steps.map((s) => <li key={s} className="flex gap-2"><span className="text-pitch-400">✓</span>{s}</li>)}
-      </ul>
-
-      {/* Staged return-to-play — progress on criteria, not on dates. */}
-      {p.stages && (
-        <details className="mt-3 rounded-xl border border-white/10 bg-white/[0.02] p-3">
-          <summary className="cursor-pointer text-sm font-semibold text-pitch-400">
-            Return-to-play plan ({p.stages.length} stages)
-          </summary>
-          <ol className="mt-3 space-y-3">
-            {p.stages.map((st) => (
-              <li key={st.phase} className="border-l-2 border-pitch-500/40 pl-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-sm font-bold text-slate-100">{st.phase}</span>
-                  <span className="chip text-slate-400">{st.window}</span>
-                </div>
-                <p className="mt-1 text-sm text-slate-300">{st.focus}</p>
-                <p className="mt-1 text-xs text-slate-500">
-                  <span className="font-semibold text-slate-400">Move on when:</span> {st.criteria}
-                </p>
-              </li>
-            ))}
-          </ol>
-        </details>
-      )}
-
-      {p.redFlags && (
-        <div className="mt-3 rounded-xl border border-readiness-red/30 bg-readiness-red/[0.06] p-3">
-          <div className="text-xs font-bold uppercase tracking-wide text-readiness-red">🚩 Stop and get assessed if</div>
-          <ul className="mt-1.5 space-y-1 text-sm text-slate-300">
-            {p.redFlags.map((f) => <li key={f} className="flex gap-2"><span className="text-readiness-red">•</span>{f}</li>)}
-          </ul>
-        </div>
-      )}
-
-      {p.exerciseIds && (
-        <div className="mt-3">
-          <div className="stat-label mb-1.5">Rehab exercises</div>
-          <div className="flex flex-wrap gap-1.5">
-            {p.exerciseIds.map((id) => {
-              const ex = getExercise(id);
-              if (!ex) return null;
-              return (
-                <button key={id} onClick={() => onOpenExercise?.(ex)} className="chip hover:border-pitch-500/50 hover:text-pitch-400">
-                  {ex.name}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-    </>
   );
 }

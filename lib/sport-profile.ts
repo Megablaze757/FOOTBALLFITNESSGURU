@@ -53,10 +53,8 @@ const TOOL: Record<string, SportTool> = {
   nutrition: { href: "/nutrition", title: "Nutrition", icon: "🍽️" },
   guides: { href: "/essentials", title: "Guides", icon: "🎯" },
   progress: { href: "/dashboard", title: "Progress", icon: "📈" },
-  // Its own tile, deep-linked past the tab. Rehab and mobility were reachable
-  // only by opening "Guides" and finding the third tab, which is a poor place
-  // to hide the thing people need when something hurts.
-  injury: { href: "/essentials?tab=injury", title: "Injury & mobility", icon: "🩹" },
+  // Its own page now, not a deep link into a tab. See app/(app)/injury.
+  injury: { href: "/injury", title: "Injury & mobility", icon: "🩹" },
 };
 
 const order = (...keys: (keyof typeof TOOL)[]) => keys.map((k) => TOOL[k]);

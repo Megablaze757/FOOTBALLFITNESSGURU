@@ -352,7 +352,7 @@ function SorenessCard({ painMap, focus }: { painMap: Record<string, number>; foc
 
   return (
     <Link
-      href="/essentials?tab=injury"
+      href="/injury"
       className={`card card-hover flex items-center gap-3 border-l-4 p-4 ${bad ? "border-l-readiness-red" : "border-l-amber-400"}`}
     >
       <span className="text-2xl">🩹</span>

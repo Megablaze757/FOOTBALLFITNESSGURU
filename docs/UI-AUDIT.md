@@ -108,14 +108,22 @@ moment they stop exploring.
 Tabs are deep-linkable (`?tab=injury`), "Injury & mobility" is its own tool
 tile, and home surfaces it on reported soreness.
 
-**Decided against splitting injury into its own page.** It was the obvious next
-step and it isn't worth it. The four injury blocks share `hurt`, `desc`,
-`picked`, `matched`, `injuryProtocols` and the exercise modal with the rest of
-the page, so a separate route means duplicating the body map, the protocol
-matching and the modal wiring. The problem that motivated it — nobody in pain
-could find rehab — is already solved three ways: the deep link, its own tool
-tile, and the soreness card on Home. Revisit only if the injury content grows
-enough to justify the duplication.
+**REVERSED: injury is now its own page.** I argued against splitting it, on the
+grounds that the four blocks shared state with Guides and the deep link plus tool
+tile plus soreness card were enough. They were not. The feedback came back twice:
+"still not clear where the injury stuff is".
+
+That argument was convenience dressed as design. A tab is not a location — nobody
+in pain browses a page called "Guides" hoping the third tab is about them, and
+pain is exactly when someone stops exploring and gives up. Cost of the split was
+extracting ProtocolCard to a component and duplicating a body map; that was
+always the real reason not to, and it was never a good one.
+
+ is in the nav, named the same in all three places it appears, with the
+rehab planner, the body map, matched protocols, the full guide library and the
+mobility sequence. Mobility came too — the warm-up was stranded under "Your
+position", equally unfindable for anyone trying not to get hurt. 
+forwards, since that link is out in the wild.
 
 ## Rehab planner — done
 

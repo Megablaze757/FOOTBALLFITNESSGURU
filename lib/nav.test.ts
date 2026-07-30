@@ -113,3 +113,18 @@ test("every nav icon resolves", () => {
     assert.ok(icons.includes(`case "${item.icon}":`), `icon "${item.icon}" (${item.href}) has no case in NavIcon`);
   }
 });
+
+test("injury has one name everywhere, not three", () => {
+  // It was a tab called "Injury & rehab", a tile called "Injury & mobility" and
+  // very nearly a nav entry called "Injury". One destination, one name — the
+  // rule the rest of this file enforces, applied to the page that most needed
+  // finding.
+  const nav = NAV_ITEMS.find((i) => i.href === "/injury");
+  assert.ok(nav, "/injury is missing from the nav — it was buried as a tab for exactly this reason");
+  assert.equal(nav!.label, "Injury & mobility");
+  assert.ok(
+    page("/injury").includes(`>${nav!.label}</h1>`) ||
+      page("/injury").includes("Injury &amp; mobility</h1>"),
+    "the page heading doesn't match the nav label that leads there"
+  );
+});
