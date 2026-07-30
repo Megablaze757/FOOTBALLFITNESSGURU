@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/client";
 import { sportTerms } from "@/lib/sport-terms";
 import { SPORTS, type SportId } from "@/lib/exercises";
 import { assessReadiness } from "@/lib/readiness";
+import { computeACWR } from "@/lib/load";
 import { BodyMap } from "@/components/BodyMap";
 import { ReadinessGauge } from "@/components/ReadinessGauge";
 import { TrainingLogInput, type TrainingState } from "@/components/TrainingLogInput";
@@ -27,7 +28,7 @@ interface DraftShape {
   minutes: string;
   training: TrainingState;
 }
-import type { CheckInInput, PainMap, ReadinessResult, TrainingDrill } from "@/lib/types";
+import type { CheckInInput, PainMap, ReadinessResult, TrainingDrill, TrainingLog } from "@/lib/types";
 
 /**
  * Is this failure "no signal" rather than "the server said no"?
@@ -106,6 +107,34 @@ export function JournalForm({ initial, initialTraining, sport, planned = [] }: {
 
   const today = new Date().toISOString().slice(0, 10);
   const userId = useCurrentUser().id;
+
+  /**
+   * Acute:chronic ratio, loaded up front so the result screen agrees with Home.
+   *
+   * The screen shown the instant you submit is where most people read their
+   * readiness, and it was computed without load — so it could say "you're well
+   * recovered, good day for a higher-intensity session" and then Home, a tap
+   * later, would say Yellow because of a load spike. Same engine, same day, two
+   * answers.
+   *
+   * Fetched on mount rather than at submit so the verdict is instant and an
+   * offline submit still uses whatever we already had.
+   */
+  const [acwr, setAcwr] = useState<number | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const since = new Date(Date.now() - 28 * 86400_000).toISOString().slice(0, 10);
+      const { data } = await createClient()
+        .from("training_logs")
+        .select("log_date, total_minutes, intensity, drills")
+        .eq("user_id", userId)
+        .gte("log_date", since);
+      if (cancelled) return;
+      setAcwr(computeACWR((data ?? []) as unknown as TrainingLog[]).ratio);
+    })();
+    return () => { cancelled = true; };
+  }, [userId]);
 
   // Restore anything unsaved from earlier. Only when the form is otherwise
   // untouched — `initial` means they already checked in today and are editing,
@@ -191,7 +220,7 @@ export function JournalForm({ initial, initialTraining, sport, planned = [] }: {
         setQueued(true);
         // Readiness is computed on-device from the pure engine, so they still
         // get their score now — the only thing waiting is the upload.
-        setResult(assessReadiness(input));
+        setResult(assessReadiness(input, { acwr }));
         setSaving(false);
         return;
       }
@@ -222,7 +251,7 @@ export function JournalForm({ initial, initialTraining, sport, planned = [] }: {
     // page data so they refetch fresh rather than showing pre-check-in values.
     invalidate();
     // Readiness is computed client-side from the pure engine (also feeds Home).
-    setResult(assessReadiness(input));
+    setResult(assessReadiness(input, { acwr }));
     setSaving(false);
   }
 

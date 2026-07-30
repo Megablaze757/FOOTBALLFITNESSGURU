@@ -105,11 +105,35 @@ training load, which it silently didn't — a CRLF mismatch meant the parameter 
 added and never used, so the page reported readiness that ignored load while
 TypeScript accepted the unused argument.
 
+The Today tab also called the next unticked session "Today's session"
+unconditionally — so after you'd trained it presented the *following* session as
+today's, which is how someone ends up doing two in a day or assumes the app lost
+the first. It now reads "Next session" once anything is logged today, and says
+there's no need to do it now.
+
 **Todo:**
-- No `NextUp` equivalent: the Today tab opens on the session but doesn't state
-  whether today is a training day at all.
 - Not sport-aware beyond the program contents. A weightlifter's plan page reads
   identically to a footballer's.
+
+## Readiness consistency — done
+
+The load-in-readiness fix had to be applied at **every** call site, and wasn't.
+Auditing all seven found three still computing a verdict that ignored training
+load, so the same engine gave different answers on different screens:
+
+| Where | Was |
+|---|---|
+| Check-in result screen | the screen most people actually read their readiness on — could say "good day for a higher-intensity session" while Home said Yellow a tap later |
+| Squad list | a coach's triage screen showed greens next to load spikes it couldn't see |
+| Squad → athlete | a green gauge directly above a red training-load card, for the one screen where someone else's health is the decision |
+
+All three now pass the ratio. The squad queries had to start selecting
+`intensity` and `drills` too — without them `sessionLoad` is 0 and ACWR reads
+"building" for the whole roster.
+
+`lib/trends.ts` is deliberately left alone: it builds a historical day-by-day
+series, and back-computing a rolling ratio per past day is a different job from
+reconciling today's verdict.
 
 ## Nutrition — done
 
@@ -153,7 +177,7 @@ something hurts. Full form is one tap away and the choice is remembered.
 | Benchmarks | done | sport-ordered metrics; catalogue extended |
 | Body | done | lead rewritten |
 | Squad | done | lead rewritten to what a coach actually scans for |
-| Squad → athlete | todo | 7 cards, no verdict |
+| Squad → athlete | done | `CoachVerdict` leads: one line on what to do, in priority order. Advisory, never diagnostic — a coach isn't their athlete's physio, so it reports what the data says and suggests a conversation rather than issuing a clearance |
 | Video analysis | done | lead rewritten; background job + error recording |
 | Report | todo | 3 cards, not reviewed |
 | History | todo | 26 lines, no heading — likely a redirect |

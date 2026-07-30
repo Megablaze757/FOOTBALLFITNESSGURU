@@ -6,13 +6,13 @@ import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/lib/auth";
 import { useAsync } from "@/lib/use-async";
 import { assessReadiness } from "@/lib/readiness";
-import { checkInStreak } from "@/lib/load";
+import { checkInStreak, computeACWR } from "@/lib/load";
 import { computeXp, levelFor } from "@/lib/gamification";
 import { TeamExercises } from "@/components/TeamExercises";
 import { AssignProgram } from "@/components/AssignProgram";
 import { positionList } from "@/lib/positions";
 import type { SportId } from "@/lib/exercises";
-import type { DailyCheckIn, Profile, Program } from "@/lib/types";
+import type { DailyCheckIn, Profile, Program, TrainingLog } from "@/lib/types";
 
 interface AthleteRow {
   id: string;
@@ -56,7 +56,10 @@ export default function SquadPage() {
       supabase.from("profiles").select("id, full_name, sport, position, positions").in("id", ids),
       supabase.from("daily_check_ins").select("*").in("user_id", ids).order("check_in_date", { ascending: false }),
       supabase.from("programs").select("*").in("user_id", ids),
-      supabase.from("training_logs").select("user_id, log_date").in("user_id", ids),
+      // intensity and drills come too, so each athlete's acute:chronic ratio can
+      // feed their readiness. Without them sessionLoad is 0 for everyone and the
+      // squad list shows greens next to load spikes it can't see.
+      supabase.from("training_logs").select("user_id, log_date, total_minutes, intensity, drills").in("user_id", ids),
       supabase.from("nutrition_logs").select("user_id").in("user_id", ids),
       supabase.from("strength_benchmarks").select("user_id").in("user_id", ids),
     ]);
@@ -79,6 +82,17 @@ export default function SquadPage() {
       return m;
     };
     const trainCount = countBy(training as { user_id: string }[] | null);
+
+    // One ratio per athlete, so a coach's list flags the load spike the athlete
+    // can't feel — the same reconciliation Home and the plan page do.
+    const logsByUser = new Map<string, TrainingLog[]>();
+    for (const t of (training ?? []) as unknown as (TrainingLog & { user_id: string })[]) {
+      const bucket = logsByUser.get(t.user_id) ?? [];
+      bucket.push(t);
+      logsByUser.set(t.user_id, bucket);
+    }
+    const acwrByUser = new Map<string, number | null>();
+    for (const [uid, logs] of logsByUser) acwrByUser.set(uid, computeACWR(logs).ratio);
     const nutriCount = countBy(nutrition as { user_id: string }[] | null);
     const benchCount = countBy(benches as { user_id: string }[] | null);
 
@@ -104,7 +118,7 @@ export default function SquadPage() {
         readiness: c ? (({ score, status }) => ({ score, status }))(assessReadiness({
           pain_map: c.pain_map ?? {}, fatigue_score: c.fatigue_score, sleep_quality: c.sleep_quality,
           nutrition_quality: c.nutrition_quality, weight_kg: c.weight_kg, is_match_day: c.is_match_day, match_minutes_played: c.match_minutes_played,
-        })) : null,
+        }, { acwr: acwrByUser.get(p.id) ?? null })) : null,
         lastCheckIn: c?.check_in_date ?? null,
         goal: prog?.goal_type ?? null,
         adherence: prog && total ? Math.round((prog.completed_sessions.length / total) * 100) : null,

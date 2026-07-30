@@ -459,6 +459,9 @@ function ActiveProgram({
   const allSessions = plan.weeks.flatMap((w) => w.sessions.map((s) => ({ w: w.week, s })));
   const nextSession = allSessions.find(({ w, s }) => !program.completed_sessions.includes(`w${w}d${s.day}`));
   const complete = doneCount >= totalSessions && totalSessions > 0;
+  // Whether anything has been logged today, so the page can stop calling the
+  // next unticked session "today's".
+  const loggedToday = training.some((t) => t.log_date === today);
 
   // Goal-deadline progress.
   const deadline = program.target_date ? deadlineInfo(program.start_date, program.target_date, adherence) : null;
@@ -715,7 +718,11 @@ function ActiveProgram({
       {tab === "today" && nextSession && todaySession && (
         <section className="card p-5">
           <div className="mb-2 flex items-center justify-between">
-            <h2 className="field-label !mb-0">Today&apos;s session</h2>
+            {/* "Today's session" was shown unconditionally, but nextSession is
+                simply the next UNTICKED one — so after you'd trained it kept
+                presenting the following session as today's, which is how people
+                end up doing two in a day or assuming the app lost the first. */}
+            <h2 className="field-label !mb-0">{loggedToday ? "Next session" : "Today’s session"}</h2>
             {readiness && (
               <span className="chip" style={{ color: readiness.status === "Green" ? "#34d399" : readiness.status === "Yellow" ? "#fbbf24" : "#fb5d6b" }}>
                 Readiness {readiness.status}
@@ -735,6 +742,12 @@ function ActiveProgram({
               </div>
             ) : (
               <div className="text-sm font-semibold text-slate-100">Week {nextSession.w} · {todaySession.title}</div>
+            )}
+            {loggedToday && (
+              <p className="mb-2 mt-1 text-xs text-slate-400">
+                You&apos;ve already logged training today. This is what&apos;s next whenever you&apos;re ready —
+                there&apos;s no need to do it now.
+              </p>
             )}
             {readiness?.status === "Yellow" && (
               <p className="mb-2 mt-1 text-xs text-amber-300">

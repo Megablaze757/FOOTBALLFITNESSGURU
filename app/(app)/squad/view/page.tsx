@@ -53,12 +53,17 @@ function Inner() {
   if (loading) return <div className="card mt-6 h-64 animate-pulse" />;
   if (!data) return <p className="card px-4 py-8 text-center text-sm text-slate-400">Athlete not found.</p>;
 
+  const acwr = computeACWR(data.training);
+  const zone = ZONE[acwr.zone];
+  // Load goes IN to the verdict. Without it this page showed a coach a green
+  // readiness gauge directly above a red training-load card and left them to
+  // reconcile the two — the same contradiction that was fixed on Home and the
+  // plan page, still live on the one screen where someone else's health is the
+  // decision being made.
   const readiness = data.checkIn ? assessReadiness({
     pain_map: data.checkIn.pain_map ?? {}, fatigue_score: data.checkIn.fatigue_score, sleep_quality: data.checkIn.sleep_quality,
     nutrition_quality: data.checkIn.nutrition_quality, weight_kg: data.checkIn.weight_kg, is_match_day: data.checkIn.is_match_day, match_minutes_played: data.checkIn.match_minutes_played,
-  }) : null;
-  const acwr = computeACWR(data.training);
-  const zone = ZONE[acwr.zone];
+  }, { acwr: acwr.ratio }) : null;
   const prog = data.program;
   const total = prog ? prog.plan.weeks.reduce((n, w) => n + w.sessions.length, 0) : 0;
 
@@ -71,6 +76,11 @@ function Inner() {
         </div>
         <Link href="/squad" className="text-sm text-slate-400 hover:text-pitch-400">← Squad</Link>
       </header>
+
+      {/* What a coach should actually do about this athlete, before the numbers
+          they'd have to interpret themselves. A squad of twenty is twenty of
+          these pages, and nobody reads twenty gauges. */}
+      <CoachVerdict readiness={readiness} acwr={acwr} name={data.name.split(" ")[0]} />
 
       {readiness ? (
         <div className="card p-6 pt-8"><ReadinessGauge score={readiness.score} status={readiness.status} /></div>
@@ -100,6 +110,59 @@ function Inner() {
       )}
 
       <MessageThread coachId={user.id} athleteId={athleteId} meId={user.id} otherName={data.name.split(" ")[0]} />
+    </div>
+  );
+}
+
+/**
+ * One line telling the coach what to do, in priority order.
+ *
+ * Deliberately advisory, never diagnostic — a coach is not their athlete's
+ * physio, and "hold them out" is a decision for the athlete and whoever is
+ * treating them. So this reports what the data says and suggests a
+ * conversation, rather than issuing a clearance.
+ */
+function CoachVerdict({ readiness, acwr, name }: {
+  readiness: { status: string; focus_body_part: string | null } | null;
+  acwr: { zone: string; ratio: number | null };
+  name: string;
+}) {
+  const v = !readiness
+    ? {
+        tone: "#94a3b8",
+        eyebrow: "No data today",
+        text: `${name} hasn't checked in today, so there's nothing current to go on. Everything below is from their last entry.`,
+      }
+    : acwr.zone === "danger" && acwr.ratio != null
+      ? {
+          tone: "#fb5d6b",
+          eyebrow: "Load spike",
+          text: `${name}'s week is ${Math.round((acwr.ratio - 1) * 100)}% above their four-week average. Worth easing their volume off before it becomes an injury.`,
+        }
+      : readiness.status === "Red"
+        ? {
+            tone: "#fb5d6b",
+            eyebrow: "Flagging",
+            text: readiness.focus_body_part
+              ? `${name} has reported their ${readiness.focus_body_part} as a problem. Worth a conversation before the next session.`
+              : `${name} is reporting poor recovery. Worth a conversation before the next session.`,
+          }
+        : readiness.status === "Yellow"
+          ? {
+              tone: "#fbbf24",
+              eyebrow: "Manage today",
+              text: `${name} is partly recovered. Their session has already been eased automatically — no action needed unless they say otherwise.`,
+            }
+          : {
+              tone: "#34d399",
+              eyebrow: "Good to go",
+              text: `${name} is recovered and their load is where it should be. Nothing needs doing.`,
+            };
+
+  return (
+    <div className="card border-l-4 p-4" style={{ borderLeftColor: v.tone }}>
+      <span className="eyebrow" style={{ color: v.tone }}>{v.eyebrow}</span>
+      <p className="mt-1 max-w-prose text-sm text-slate-200">{v.text}</p>
     </div>
   );
 }
