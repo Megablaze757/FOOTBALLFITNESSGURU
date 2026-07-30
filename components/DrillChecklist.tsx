@@ -20,7 +20,12 @@ export function DrillChecklist({ drills }: { drills: DrillItem[] }) {
   return (
     <div>
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="field-label">Today&apos;s program</h2>
+        {/* Was "Today's program", which is a different thing that lives on My
+            plan. These are the corrective drills THIS clip's analysis suggested —
+            calling them your program implies they replace it, and puts a third
+            name on a screen that already has "Today's session" and "Today's
+            training" elsewhere in the app. */}
+        <h2 className="field-label">Drills to fix this</h2>
         <span className="text-xs text-slate-400">{completed}/{drills.length} done</span>
       </div>
       <div className="mb-3 h-2 w-full overflow-hidden rounded-full bg-white/10">

@@ -259,7 +259,7 @@ export default function DashboardPage() {
             <div className="flex items-end gap-4">
               <div>
                 <div className="text-3xl font-extrabold" style={{ color: zone.color }}>{acwr.ratio ?? "—"}</div>
-                <div className="stat-label">acute : chronic</div>
+                <div className="stat-label">this week vs your norm</div>
               </div>
               {acwr.ratio != null && (
                 <div className="flex-1 pb-1">

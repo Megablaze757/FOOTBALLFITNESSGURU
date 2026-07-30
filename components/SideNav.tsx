@@ -49,7 +49,7 @@ export function SideNav() {
         href="/pricing"
         className="mt-4 rounded-2xl border border-pitch-400/25 bg-pitch-400/[0.06] p-4 transition hover:bg-pitch-400/10"
       >
-        <div className="text-xs font-semibold uppercase tracking-wider text-pitch-400">PocketAthlete Gold</div>
+        <div className="text-xs font-semibold uppercase tracking-wider text-pitch-400">PocketAthlete Pro</div>
         <p className="mt-1 text-xs text-slate-400">Unlock AI programs, video biomechanics &amp; coaching.</p>
         <span className="mt-2 inline-block text-xs font-bold text-pitch-400">Upgrade →</span>
       </Link>

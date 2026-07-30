@@ -95,9 +95,9 @@ function UpgradeLock() {
   return (
     <div className="card p-6 text-center">
       <div className="text-3xl">🔒</div>
-      <h2 className="mt-2 text-lg font-extrabold">Biomechanics is a Gold feature</h2>
+      <h2 className="mt-2 text-lg font-extrabold">Video analysis is part of Pro</h2>
       <p className="mt-1 text-sm text-slate-400">Unlock pose heatmaps, symmetry scoring, and tailored drill programs.</p>
-      <Link href="/pricing" className="btn-primary mx-auto mt-4 max-w-[14rem]">Upgrade to Gold</Link>
+      <Link href="/pricing" className="btn-primary mx-auto mt-4 max-w-[14rem]">See Pro</Link>
     </div>
   );
 }

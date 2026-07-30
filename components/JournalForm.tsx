@@ -305,7 +305,7 @@ export function JournalForm({ initial, initialTraining, sport, planned = [] }: {
           </p>
         )}
         <p className="rounded-2xl bg-white/[0.04] p-4 text-left text-sm text-slate-200">{result.advice}</p>
-        <button onClick={() => router.push("/home")} className="btn-primary">Go to dashboard</button>
+        <button onClick={() => router.push("/home")} className="btn-primary">Back to home</button>
         <button onClick={() => setResult(null)} className="text-sm text-slate-400 hover:text-pitch-400">
           Edit today&apos;s entry
         </button>

@@ -144,7 +144,7 @@ export default function RewardsPage() {
       <div className="card relative overflow-hidden p-5">
         {allDone && <Confetti />}
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="field-label !mb-0">Today&apos;s quests</h2>
+          <h2 className="field-label !mb-0">If you fancy it today</h2>
           <span className="text-xs text-slate-400">{questsDone}/{quests.length}</span>
         </div>
         <ul className="space-y-2">

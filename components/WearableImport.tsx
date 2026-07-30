@@ -60,7 +60,7 @@ export function WearableImport({ userId, today, initial, onSaved }: {
   return (
     <div className="card p-5">
       <div className="mb-1 flex items-center gap-2">
-        <h2 className="field-label !mb-0">⌚ Wearable data</h2>
+        <h2 className="field-label !mb-0">⌚ Wearable</h2>
       </div>
       <p className="mb-3 text-xs text-slate-400">Feed real HRV, resting HR &amp; sleep into your readiness.</p>
 

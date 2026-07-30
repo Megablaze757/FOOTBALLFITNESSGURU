@@ -28,7 +28,11 @@ export function PositionPicker({ sport, value, onChange }: {
 
   return (
     <div>
-      <span className="field-label">Your position / event</span>
+      {/* "Your position / event" — a slash serving two sports at once, which is
+          the kind of label that reads as an unfinished thought. A runner has an
+          event, everyone else has a position; the app knows which they are, so
+          it can just say the right word. */}
+      <span className="field-label">{sport === "running" ? "Your event" : "Your position"}</span>
       <div className="flex flex-wrap gap-2">
         {all.map((p) => {
           const i = value.indexOf(p);

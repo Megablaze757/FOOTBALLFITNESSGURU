@@ -25,7 +25,7 @@ export function BiometricSignalCard({ signal }: { signal: BiometricSignal }) {
   return (
     <div className="card p-5">
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="field-label !mb-0">⌚ Biometrics</h2>
+        <h2 className="field-label !mb-0">⌚ Wearable</h2>
         <span className="chip" style={{ color: rec.color }}>{signal.adjustment >= 0 ? "▲" : "▼"} readiness {signal.adjustment >= 0 ? "+" : ""}{signal.adjustment}</span>
       </div>
       <div className="grid grid-cols-3 gap-3 text-center">
