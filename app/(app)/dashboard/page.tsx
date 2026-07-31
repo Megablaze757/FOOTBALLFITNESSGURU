@@ -11,6 +11,8 @@ import { summarizeTrends, type Trend } from "@/lib/trends";
 import { resolveInsight, actionLabel } from "@/lib/insights";
 import { computeACWR, weeklyReport, tonnage, totalDistanceKm, type LoadZone } from "@/lib/load";
 import { easyShare } from "@/lib/running";
+import { BiometricTrends } from "@/components/BiometricTrends";
+import type { Biometric } from "@/lib/biometrics";
 import { sportProfile, type SportProfile } from "@/lib/sport-profile";
 import { TrendChart } from "@/components/TrendChart";
 import type { DailyCheckIn, DailyInsight, NutritionLog, TrainingLog } from "@/lib/types";
@@ -127,7 +129,7 @@ export default function DashboardPage() {
   const { data, loading } = useAsync(async () => {
     const supabase = createClient();
     const since = new Date(Date.now() - 28 * 86400_000).toISOString().slice(0, 10);
-    const [{ data: rows }, { data: insightRow }, { data: training }, { data: nutrition }, { data: weekCheck }, { data: prof }] = await Promise.all([
+    const [{ data: rows }, { data: insightRow }, { data: training }, { data: nutrition }, { data: weekCheck }, { data: prof }, { data: bio }] = await Promise.all([
       supabase.from("daily_check_ins").select("*").eq("user_id", user.id).order("check_in_date", { ascending: false }).limit(14),
       supabase.from("daily_insights").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(1).maybeSingle(),
       supabase.from("training_logs").select("*").eq("user_id", user.id).gte("log_date", since),
@@ -136,6 +138,10 @@ export default function DashboardPage() {
       // Their sport decides how the verdict is worded — a runner is told to cut
       // mileage, a lifter to drop a set.
       supabase.from("profiles").select("sport").eq("id", user.id).maybeSingle(),
+      // A connected ring writes here nightly. Loaded on Progress so the data
+      // visibly does something beyond nudging the readiness score — a feed you
+      // cannot see the output of is a feed people disconnect.
+      supabase.from("biometrics").select("*").eq("user_id", user.id).gte("metric_date", since).order("metric_date", { ascending: true }),
     ]);
     return {
       checkIns: (rows ?? []) as DailyCheckIn[],
@@ -144,6 +150,7 @@ export default function DashboardPage() {
       nutrition: (nutrition ?? []) as NutritionLog[],
       weekCheck: (weekCheck ?? []) as DailyCheckIn[],
       sport: sportProfile((prof as { sport?: string } | null)?.sport),
+      bio: (bio ?? []) as Biometric[],
     };
   }, [user.id], `dashboard:${user.id}`);
 
@@ -240,6 +247,10 @@ export default function DashboardPage() {
           ⚠️ <span className="font-medium text-slate-200">Risk zone:</span> {resolved.focusBodyPart}
         </div>
       )}
+
+      {/* Renders nothing without data, so an athlete with no wearable never
+          sees an empty card asking them to buy one. */}
+      <BiometricTrends rows={data!.bio} />
 
       {/* Only when there are runs to report on. This is the whole reason the
           check-in asks which run it was — without it the split can't be known,
