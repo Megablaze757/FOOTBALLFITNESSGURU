@@ -7,7 +7,10 @@ import {
   type BodyStats, type MealPrefs, type PlannedMeal,
 } from "@/lib/meal-plan";
 import { parseSchedule } from "@/lib/meal-schedule";
-import { estimateMeal, fromAiItems, roundMacros, fitDimensions, PHOTO_MAX_EDGE, PHOTO_QUALITY, type FoodEstimate } from "@/lib/food-estimate";
+import {
+  estimateMeal, fromAiItems, roundMacros, fitDimensions, scaleItem, totalOf,
+  PHOTO_MAX_EDGE, PHOTO_QUALITY, type FoodEstimate, type EstimatedItem,
+} from "@/lib/food-estimate";
 import type { Macros } from "@/lib/meal-plan";
 import type { TargetContext } from "@/lib/nutrition";
 
@@ -211,12 +214,37 @@ export function MealCheckIn({ stats, prefs, dietNotes, seed, context, onAdd }: P
     }
   }
 
+  /**
+   * Edit one row of the estimate.
+   *
+   * Writes into `estimate` even when what's on screen came from the on-device
+   * preview, because the preview is derived from `text` and would be recomputed
+   * — throwing the correction away the moment they touched anything else.
+   * Promoting it to a held estimate is what makes the edit stick.
+   */
+  function reviseItems(next: EstimatedItem[]) {
+    setEstimate({ items: next, total: totalOf(next), unmatched: shown?.unmatched ?? [] });
+  }
+
+  function setQty(index: number, qty: number) {
+    if (!shown) return;
+    reviseItems(shown.items.map((it, i) => (i === index ? scaleItem(it, qty) : it)));
+  }
+
+  function removeItem(index: number) {
+    if (!shown) return;
+    reviseItems(shown.items.filter((_, i) => i !== index));
+  }
+
   function addEstimate() {
     if (!shown || shown.items.length === 0) return;
+    // shown.total, not a fresh sum: the two are kept equal by reviseItems, and
+    // adding a number the athlete never saw is how a tracker loses trust.
     onAdd(shown.total);
     setAdded(`Added ${shown.total.kcal} kcal`);
     setText("");
     setEstimate(null);
+    setPhoto(null);
     setTimeout(() => setAdded(null), 2500);
   }
 
@@ -323,19 +351,37 @@ export function MealCheckIn({ stats, prefs, dietNotes, seed, context, onAdd }: P
               )}
             </div>
 
-            <ul className="space-y-1 text-xs text-slate-400">
+            {/* EDITABLE, because the portion is the guess.
+                Identifying the food is the part a model is good at; deciding
+                whether that was 200g of rice or 90g is the part it isn't, and
+                portions are most of the error in a calorie count. Accept-all
+                or discard-all is the worst affordance for something the
+                athlete can see is nearly right — so each row's quantity is a
+                field, and anything misidentified can be dropped. */}
+            <ul className="space-y-1.5 text-xs text-slate-400">
               {shown.items.map((it, i) => (
-                <li key={`${it.name}-${i}`} className="flex justify-between gap-2">
-                  <span className="min-w-0 truncate">
+                <li key={`${it.name}-${i}`} className="flex items-center gap-2">
+                  <span className="min-w-0 flex-1 truncate">
                     {it.name}
-                    <span className="text-slate-600">
-                      {" "}{it.unit === "each" ? `× ${it.qty}` : `${it.qty}${it.unit}`}
-                      {/* Say when the portion was assumed — otherwise a guessed
-                          200g reads as something the athlete told us. */}
-                      {!it.explicit && " (assumed)"}
-                    </span>
+                    {!it.explicit && <span className="text-slate-600"> (assumed)</span>}
                   </span>
-                  <span className="shrink-0 tabular-nums">{it.macros.kcal}</span>
+                  <input
+                    type="number" inputMode="numeric" min={0}
+                    value={it.qty}
+                    onChange={(e) => setQty(i, Number(e.target.value))}
+                    aria-label={`${it.name} quantity`}
+                    className="field w-16 shrink-0 px-2 py-1 text-center text-xs tabular-nums"
+                  />
+                  <span className="w-6 shrink-0 text-slate-600">{it.unit === "each" ? "×" : it.unit}</span>
+                  <span className="w-12 shrink-0 text-right tabular-nums text-slate-300">{it.macros.kcal}</span>
+                  <button
+                    type="button"
+                    onClick={() => removeItem(i)}
+                    aria-label={`Remove ${it.name}`}
+                    className="shrink-0 px-1 text-slate-600 hover:text-readiness-red"
+                  >
+                    ✕
+                  </button>
                 </li>
               ))}
             </ul>

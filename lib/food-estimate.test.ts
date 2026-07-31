@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { estimateMeal, fromAiItems, fitDimensions } from "./food-estimate";
+import { estimateMeal, fromAiItems, fitDimensions, scaleItem, totalOf } from "./food-estimate";
 
 const names = (t: string) => estimateMeal(t).items.map((i) => i.name.toLowerCase());
 
@@ -157,4 +157,46 @@ test("fitDimensions survives degenerate input", () => {
   assert.deepEqual(fitDimensions(NaN, 100), { width: 0, height: 0 });
   // A panorama must not round its short edge to a canvas of zero height.
   assert.ok(fitDimensions(10000, 3, 768).height >= 1);
+});
+
+// --- Correcting an estimate --------------------------------------------------
+
+test("scaleItem moves the macros with the portion", () => {
+  const item = { foodId: null, name: "Rice", qty: 200, unit: "g" as const, explicit: false,
+    macros: { kcal: 260, protein: 6, carbs: 56, fats: 1 } };
+  const half = scaleItem(item, 100);
+  assert.equal(half.qty, 100);
+  assert.equal(half.macros.kcal, 130);
+  assert.equal(half.macros.carbs, 28);
+  const double = scaleItem(item, 400);
+  assert.equal(double.macros.kcal, 520);
+});
+
+test("a corrected portion is no longer an assumption", () => {
+  // Otherwise the row keeps saying "(assumed)" about a number the athlete
+  // just typed in themselves.
+  const item = { foodId: null, name: "Rice", qty: 200, unit: "g" as const, explicit: false,
+    macros: { kcal: 260, protein: 6, carbs: 56, fats: 1 } };
+  assert.equal(scaleItem(item, 150).explicit, true);
+});
+
+test("scaleItem survives zero and nonsense quantities", () => {
+  const item = { foodId: null, name: "Rice", qty: 200, unit: "g" as const, explicit: true,
+    macros: { kcal: 260, protein: 6, carbs: 56, fats: 1 } };
+  assert.equal(scaleItem(item, 0).macros.kcal, 0);
+  assert.equal(scaleItem(item, -50).qty, 0);
+  // A corrupt source item must not divide by zero.
+  const broken = { ...item, qty: 0 };
+  assert.ok(Number.isFinite(scaleItem(broken, 100).macros.kcal));
+});
+
+test("totalOf keeps the headline honest after an edit", () => {
+  const items = [
+    { foodId: null, name: "Rice", qty: 200, unit: "g" as const, explicit: true, macros: { kcal: 260, protein: 6, carbs: 56, fats: 1 } },
+    { foodId: null, name: "Chicken", qty: 150, unit: "g" as const, explicit: true, macros: { kcal: 250, protein: 46, carbs: 0, fats: 6 } },
+  ];
+  assert.deepEqual(totalOf(items), { kcal: 510, protein: 52, carbs: 56, fats: 7 });
+  // Remove one and the total must follow.
+  assert.equal(totalOf(items.slice(1)).kcal, 250);
+  assert.deepEqual(totalOf([]), { kcal: 0, protein: 0, carbs: 0, fats: 0 });
 });

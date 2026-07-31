@@ -247,3 +247,50 @@ export function fitDimensions(w: number, h: number, max = PHOTO_MAX_EDGE): { wid
   // its height to zero and produce a canvas nothing can be drawn on.
   return { width: Math.max(1, Math.round(w * scale)), height: Math.max(1, Math.round(h * scale)) };
 }
+
+// --- Correcting an estimate --------------------------------------------------
+//
+// An estimate — from a photo or a sentence — is a guess about portions, and
+// portions are most of the error in a calorie count. The athlete can usually
+// see immediately that it has said 200g of rice when they ate half that, and
+// "accept all of it or throw all of it away" is the worst possible affordance
+// for something you can nearly fix. These two let the UI make it editable.
+
+/**
+ * Rescale one item to a new quantity, moving its macros with it.
+ *
+ * Linear, because that is what a portion IS — twice the rice is twice
+ * everything. Guards zero and negatives: a quantity of 0 means "I didn't eat
+ * this", which is a removal, and the caller handles that rather than storing a
+ * zero-calorie row.
+ */
+export function scaleItem(item: EstimatedItem, newQty: number): EstimatedItem {
+  const qty = Math.max(0, Math.round(newQty));
+  // The item's own qty is the reference. Falling back to 1 stops a corrupt
+  // qty:0 item turning every correction into a division by zero.
+  const factor = qty / (item.qty > 0 ? item.qty : 1);
+  return {
+    ...item,
+    qty,
+    macros: roundMacros({
+      kcal: item.macros.kcal * factor,
+      protein: item.macros.protein * factor,
+      carbs: item.macros.carbs * factor,
+      fats: item.macros.fats * factor,
+    }),
+    // A number the athlete typed is no longer an assumption, so the "(assumed)"
+    // hint has to come off — it would be claiming they told us something they
+    // didn't, in reverse.
+    explicit: true,
+  };
+}
+
+/** Re-total a list after edits. The displayed total must never drift from the rows. */
+export function totalOf(items: EstimatedItem[]): Macros {
+  return roundMacros(
+    items.reduce(
+      (s, i) => addMacros(s, i.macros),
+      { kcal: 0, protein: 0, carbs: 0, fats: 0 },
+    ),
+  );
+}
