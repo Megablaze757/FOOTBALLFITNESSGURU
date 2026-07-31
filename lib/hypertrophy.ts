@@ -24,6 +24,7 @@ import type { Exercise } from "./exercises";
 import { IMPORTED_EXERCISES } from "./exercise-catalog";
 import { isExcluded, type Constraints, type Region } from "./constraints";
 import { MOVEMENTS } from "./movements";
+import { runZoneLabel, runZoneFeel } from "./running";
 // From ./engine, not ./coach: coach.ts imports this module, so taking the
 // program shapes from there made the two files import each other.
 import type { ProgramPlan, ProgramWeek, ProgramSession, ProgramDrill, BodyArea } from "./engine";
@@ -432,15 +433,21 @@ function cardioFinisher(offset: number, deload: boolean, constraints: Constraint
   if (!pool.length) return null;
 
   const m = pool[offset % pool.length];
+  // Same rule as the general engine: if it's a run, the zone is the
+  // instruction and goes in the prescription, with the talk test as the cue.
+  const zone = runZoneLabel(m.id);
+  const feel = runZoneFeel(m.id);
   return {
     name: m.name,
     sets: m.dose.sets,
     reps: m.dose.reps,
-    cue: m.cue,
+    cue: feel ? `${zone} — ${feel}` : m.cue,
     reason: deload
       ? "Easy aerobic work on a down week — moves blood without adding to the bill."
       : "Keeps the engine going alongside the lifting, at an effort that won't cost you the next session.",
-    prescription: `${m.dose.sets} × ${m.dose.reps} ${m.dose.unit}`,
+    prescription: zone
+      ? `${m.dose.sets} × ${m.dose.reps} ${m.dose.unit} · ${zone}`
+      : `${m.dose.sets} × ${m.dose.reps} ${m.dose.unit}`,
     progression: deload
       ? "Hold it easy. The down week is where the last three turn into muscle."
       : "Add a couple of minutes a week, or keep it flat — this is a finisher, not a session to chase.",

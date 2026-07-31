@@ -32,6 +32,7 @@ import type { PainMap } from "./types";
 import type { SportId } from "./exercises";
 import { isExcluded, EMPTY_CONSTRAINTS, type Constraints } from "./constraints";
 import { skillForSession } from "./skills";
+import { runZoneLabel, runZoneFeel } from "./running";
 import {
   MOVEMENTS, type BodyArea, type Dose, type GoalType, type Movement,
   type Pattern, type Prog, type Slot,
@@ -344,9 +345,46 @@ function doseForWeek(base: Dose, prog: Prog, wi: number, volumeScale: number, fi
   if (fixed) return { ...base };
 
   const shape = WEEK_SHAPE[prog][wi];
+
+  /**
+   * A CONTINUOUS RUN IS NOT A LIFT, AND PERIODISING IT LIKE ONE BROKE IT.
+   *
+   * Everything below was written for sets of a movement, and applied to a
+   * 40-minute run it produced three separate absurdities:
+   *
+   *   * The two-set floor made a long run read `sets: 2`. The prescription text
+   *     hides it — "75 min" — but anything reading the number saw two sets of a
+   *     seventy-five minute run.
+   *   * The RPE floor of 5 clamped a recovery run's RPE 2 up to 5, so the one
+   *     movement in the catalogue whose entire purpose is being easy was
+   *     prescribed at moderate effort. It stopped being a recovery run.
+   *   * Lift rep-scaling took a 75-minute long run to 105 by week 3 — a 40%
+   *     jump inside one block, which is roughly four times what a runner should
+   *     add and exactly how people buy an injury.
+   *
+   * So a run progresses in DURATION only, gently, and its effort never moves:
+   * an easy run is easy in week 1 and week 4. That is what a zone means.
+   */
+  const continuous = base.unit === "minutes";
+  if (continuous) {
+    // Deliberately tighter than the 10%-a-week rule allows, because this is one
+    // conditioning slot inside someone else's strength block, not a run plan.
+    const growth = clamp(shape.repFactor, 0.7, 1.12);
+    return { ...base, sets: base.sets, reps: Math.max(1, Math.round(base.reps * growth)) };
+  }
+
   const sets = Math.max(wi === 3 ? 1 : 2, Math.round(base.sets * volumeScale) + shape.setsDelta);
-  const reps = Math.max(1, Math.round(base.reps * shape.repFactor));
-  const rpe = base.rpe != null ? clamp(Math.round((base.rpe + RPE_DELTA[wi]) * 2) / 2, 5, 10) : undefined;
+  // Seconds land on multiples of five. Scaling produced "9 × 81s", which is
+  // inside the sensible band and still reads as something a machine wrote —
+  // nobody has ever coached an eighty-one second hill.
+  const scaled = base.reps * shape.repFactor;
+  const reps = base.unit === "secs"
+    ? Math.max(5, Math.round(scaled / 5) * 5)
+    : Math.max(1, Math.round(scaled));
+  // The floor is 5 for gym work — nothing below that is worth a set — but a
+  // movement that STARTS easier than that is meant to be, so it keeps its own.
+  const floor = Math.min(5, base.rpe ?? 5);
+  const rpe = base.rpe != null ? clamp(Math.round((base.rpe + RPE_DELTA[wi]) * 2) / 2, floor, 10) : undefined;
   return { ...base, sets, reps, rpe };
 }
 
@@ -568,14 +606,21 @@ export function buildBlock(input: EngineInput): ProgramPlan {
         const fixed = slot === "warmup" || slot === "cooldown";
         for (const m of chosen) {
           const dose = doseForWeek(m.dose, m.prog, wi, volumeScale, fixed);
+          // A run's zone IS the instruction, and "40 min" on its own is the
+          // single most common way an easy day gets run too hard. Every other
+          // surface in the app speaks in zones; the programme was the one that
+          // didn't. The talk test goes on the cue, because a number without it
+          // coaches nobody who hasn't got a heart-rate strap on.
+          const zone = runZoneLabel(m.id);
+          const feel = runZoneFeel(m.id);
           drills.push({
             name: m.name,
             sets: dose.sets,
             reps: dose.reps,
-            cue: m.cue,
+            cue: feel ? `${zone} — ${feel}` : m.cue,
             reason: reasonFor(m, slot, ctx),
             progression: fixed ? undefined : WEEK_PROGRESSION[m.prog][wi],
-            prescription: prescriptionText(dose),
+            prescription: zone ? `${prescriptionText(dose)} · ${zone}` : prescriptionText(dose),
             slot,
             rest: dose.rest,
             intensity: dose.rpe != null ? `RPE ${dose.rpe}` : undefined,

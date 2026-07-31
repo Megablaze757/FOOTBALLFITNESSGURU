@@ -1038,3 +1038,49 @@ export function easyShare(runs: { type: RunTypeId; km?: number | null; minutes?:
       : `${hardPct}% of your week was hard running. Aim for 20%: the fix is slowing the easy days down, not cutting the sessions.`,
   };
 }
+
+// --- Naming a run inside somebody else's programme ---------------------------
+
+/**
+ * The library exercise ids that ARE runs, joined to the run type they are.
+ *
+ * lib/movements.ts carries a run's slot, its joint cost and its dose; it has no
+ * idea what a zone is, because it describes squats and sled pushes too. This is
+ * the join, and it is what lets the general engine — the one building a
+ * footballer's strength block — print "Zone 2 (Easy)" beside a run it selected
+ * for entirely unrelated reasons.
+ *
+ * Keyed by exercise id so a rename of the display name can't quietly unhook it.
+ */
+export const RUN_MOVEMENTS: Record<string, RunTypeId> = {
+  recovery_run: "recovery",
+  easy_run: "easy",
+  long_run: "long",
+  threshold_run: "tempo",
+  vo2_intervals: "vo2",
+  fartlek_run: "fartlek",
+  progression_run: "progression",
+  hill_repeats: "hills",
+  strides: "strides",
+};
+
+/**
+ * "Zone 2 (Easy)" for a run, null for anything that isn't one.
+ *
+ * The zone is the instruction. A run prescribed as "40 min" and nothing else
+ * is the single most common way an easy day gets run too hard — and every
+ * other surface in the app already speaks in zones, so a programme that didn't
+ * was the odd one out.
+ */
+export function runZoneLabel(movementId: string): string | null {
+  const t = RUN_MOVEMENTS[movementId];
+  if (!t) return null;
+  const z = ZONES[runType(t)!.primaryZone];
+  return `Zone ${z.id} (${z.name})`;
+}
+
+/** The talk-test line for a run, so the zone isn't just a number. */
+export function runZoneFeel(movementId: string): string | null {
+  const t = RUN_MOVEMENTS[movementId];
+  return t ? ZONES[runType(t)!.primaryZone].feel : null;
+}

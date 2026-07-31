@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { recommendDrills, buildProgram, analyzeProgress, painByArea, goalsForSport } from "./coach";
 import { MOVEMENTS } from "./movements";
+import type { ProgramPlan } from "./engine";
 import type { TrainingLog } from "./types";
 
 test("goalsForSport tailors goals per sport", () => {
@@ -304,5 +305,80 @@ test("'no running' still empties the runs out of a strength block", () => {
   const names = plan.weeks.flatMap((w) => w.sessions.flatMap((s) => s.drills.map((d) => d.name)));
   for (const banned of ["Easy run", "Long run", "Recovery run", "Hill repeats"]) {
     assert.ok(!names.includes(banned), `"${banned}" survived a "no running" note`);
+  }
+});
+
+// --- Are the runs actually reasonable? ---------------------------------------
+
+const RUN_NAMES = [
+  "Recovery run", "Easy run", "Long run", "Threshold run",
+  "VO2 max intervals", "Fartlek run", "Progression run", "Hill repeats", "Strides",
+];
+const runsIn = (plan: ProgramPlan) =>
+  plan.weeks.flatMap((w) => w.sessions.flatMap((s) => s.drills)).filter((d) => RUN_NAMES.includes(d.name));
+
+test("every run in a program names its zone", () => {
+  // The zone is the instruction. "40 min" on its own is the commonest way an
+  // easy day gets run too hard, and the programme was the only surface in the
+  // app not speaking in zones.
+  for (const sport of ["football", "rugby", "gym", "weightlifting"] as const) {
+    for (const goal of ["endurance", "strength"] as const) {
+      const plan = buildProgram({ goal, painMap: {}, sport, daysPerWeek: 4 });
+      for (const d of runsIn(plan)) {
+        assert.match(d.prescription ?? "", /Zone [1-5] \(/, `${sport}/${goal}: ${d.name} has no zone`);
+        // And the talk test, so the number coaches someone with no HR strap.
+        assert.ok((d.cue ?? "").length > 20, `${d.name} has no effort description`);
+      }
+    }
+  }
+});
+
+test("a continuous run is one effort, not a set of them", () => {
+  // The two-set floor made a long run read `sets: 2` — the prescription text
+  // hid it, but anything reading the number saw two sets of a 75-minute run.
+  for (const d of runsIn(buildProgram({ goal: "strength", painMap: {}, sport: "football", daysPerWeek: 4 }))) {
+    if ((d.prescription ?? "").includes(" min")) {
+      assert.equal(d.sets, 1, `${d.name} prescribed as ${d.sets} sets`);
+    }
+  }
+});
+
+test("a recovery run stays a recovery run all block", () => {
+  // The RPE floor of 5 clamped its RPE 2 up to 5, so the one movement whose
+  // entire purpose is being easy was prescribed at moderate effort.
+  for (const d of runsIn(buildProgram({ goal: "strength", painMap: {}, sport: "football", daysPerWeek: 4 }))) {
+    if (d.name === "Recovery run") {
+      const rpe = Number(/RPE ([\d.]+)/.exec(d.intensity ?? "")?.[1] ?? 99);
+      assert.ok(rpe <= 3, `a recovery run at RPE ${rpe} is not a recovery run`);
+      assert.match(d.prescription ?? "", /Zone 1/);
+    }
+  }
+});
+
+test("run durations grow at a survivable rate", () => {
+  // Lift rep-scaling took a 75-minute long run to 105 by week 3 — a 40% jump
+  // inside one block, roughly four times what a runner should add.
+  // Weeks 1-3 only. Week 4 is the deload and is MEANT to come down, so folding
+  // it in would count the block working correctly as a swing.
+  const plan = buildProgram({ goal: "endurance", painMap: {}, sport: "football", daysPerWeek: 4 });
+  const byName = new Map<string, number[]>();
+  for (const w of plan.weeks.slice(0, 3)) {
+    for (const d of w.sessions.flatMap((s) => s.drills)) {
+      if (!RUN_NAMES.includes(d.name)) continue;
+      const mins = Number(/^(\d+) min/.exec(d.prescription ?? "")?.[1] ?? 0);
+      if (mins) byName.set(d.name, [...(byName.get(d.name) ?? []), mins]);
+    }
+  }
+  assert.ok(byName.size > 0, "no timed runs found to check");
+  for (const [name, mins] of byName) {
+    const grown = Math.max(...mins) / Math.min(...mins);
+    assert.ok(grown <= 1.25, `${name} climbs ${Math.round((grown - 1) * 100)}% across the build weeks`);
+  }
+});
+
+test("timed intervals are prescribed in round numbers", () => {
+  for (const d of runsIn(buildProgram({ goal: "endurance", painMap: {}, sport: "football", daysPerWeek: 4 }))) {
+    const secs = Number(/× (\d+)s/.exec(d.prescription ?? "")?.[1] ?? 0);
+    if (secs) assert.equal(secs % 5, 0, `${d.name}: ${secs}s is not a number anyone would say`);
   }
 });
