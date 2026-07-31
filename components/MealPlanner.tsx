@@ -73,9 +73,23 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
   }, []);
 
   async function generate() {
-    const next = Math.floor(Math.random() * 3);
+    /**
+     * REGENERATION BARELY REGENERATED.
+     *
+     * This was `Math.random() * 3`, so the app could produce exactly three
+     * weeks, ever — and "Regenerate week" had a one-in-three chance of handing
+     * back the identical plan. buildWeek rotates each slot's pool with
+     * `(idx + seed + nth) % list.length`, so the seed is useful right up to the
+     * size of the pool; capping it at 3 threw nearly all of that away.
+     *
+     * Also never returns the seed they're already on. A regenerate that
+     * silently no-ops reads as a broken button, and at 1-in-3 it happened
+     * constantly.
+     */
+    let next = seed;
+    for (let i = 0; i < 20 && next === seed; i++) next = Math.floor(Math.random() * 997);
     setSeed(next);
-    setWeek(buildWeek(targets, next, effectivePrefs, schedule));
+    setWeek(buildWeek(targets, next!, effectivePrefs, schedule));
     setOpenDay(0);
     // Remember the stats AND which plan it was, so neither has to be redone.
     const supabase = createClient();
@@ -87,7 +101,7 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
       diet_avoid: prefs.avoid,
       meals_per_day: prefs.mealsPerDay,
       diet_notes: notes.trim() || null,
-      meal_plan_seed: next,
+      meal_plan_seed: next!,
     }).eq("id", userId);
     if (!error) {
       // The nutrition page caches its loader; without this the restored plan

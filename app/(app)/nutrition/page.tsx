@@ -266,6 +266,7 @@ function NutritionTabs({ userId, today, log, targets, stats, prefs, dietNotes, m
           stats={stats}
           prefs={prefs}
           dietNotes={dietNotes}
+          mealSeed={mealSeed}
           onAddStats={() => setTab("plan")}
         />
       ) : (
@@ -287,9 +288,11 @@ function Header() {
   );
 }
 
-function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietNotes, onAddStats }: {
+function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietNotes, mealSeed, onAddStats }: {
   userId: string; today: string; initial: any; targets: NutritionTargets | null;
   stats: Partial<BodyStats> | null; prefs: Partial<MealPrefs> | null; dietNotes: string | null;
+  /** Which plan they're on, so today's tick-list is THAT plan and not another. */
+  mealSeed: number | null;
   /** Sends them to the tab that collects height/age/sex, so the estimate sharpens. */
   onAddStats: () => void;
 }) {
@@ -362,7 +365,7 @@ function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietN
   return (
     // Header and width live on the tab shell now, so they don't render twice.
     <div className="animate-fade-up space-y-5">
-      <MealCheckIn stats={stats} prefs={prefs} dietNotes={dietNotes} onAdd={addEaten} />
+      <MealCheckIn stats={stats} prefs={prefs} dietNotes={dietNotes} seed={mealSeed} onAdd={addEaten} />
 
       {/* No weight, no targets — say so instead of hiding the card silently. */}
       {!targets && (

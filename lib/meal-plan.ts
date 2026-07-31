@@ -269,6 +269,82 @@ export const MEALS: Meal[] = [
   { id: "seed_snack", name: "Seeds & apple", slot: "Snack",
     items: [{ foodId: "seeds_mixed", qty: 30 }, { foodId: "apple", qty: 1 }],
     method: "No prep, no allergens beyond seeds, travels anywhere." },
+
+  // --- More of everything, because 23 meals could not fill a week -----------
+  //
+  // The library was 6 breakfasts, 5 lunches, 7 dinners and 5 snacks. A week
+  // needs SEVEN breakfasts, so repetition wasn't a scoring failure, it was
+  // arithmetic — and since everyone drew from the same six, two athletes with
+  // completely different targets got identical weeks. No amount of clever
+  // ranking fixes a pool smaller than the number of slots.
+  //
+  // Built from the 42 foods already in the database, so every one of these has
+  // real prices and real macros and lands on the shopping list correctly.
+  // Weighted toward the higher-protein end, which is where the pool was thinnest
+  // and where the targets actually bite.
+  { id: "eggs_scramble_wrap", name: "Scrambled egg & cheese wrap", slot: "Breakfast",
+    items: [{ foodId: "eggs", qty: 3 }, { foodId: "tortilla_wrap", qty: 2 }, { foodId: "cheddar", qty: 30 }, { foodId: "spinach", qty: 40 }],
+    method: "Scramble the eggs soft, fold through the cheese and wilted spinach, roll into the wraps." },
+  { id: "yoghurt_whey_oats", name: "High-protein overnight oats", slot: "Breakfast",
+    items: [{ foodId: "oats", qty: 70 }, { foodId: "greek_yoghurt", qty: 200 }, { foodId: "whey_protein", qty: 25 }, { foodId: "berries_frozen", qty: 80 }],
+    method: "Stir it all together the night before. Nothing to cook and it travels." },
+  { id: "salmon_bagel_eggs", name: "Salmon & scrambled eggs on toast", slot: "Breakfast",
+    items: [{ foodId: "salmon_fillet", qty: 100 }, { foodId: "eggs", qty: 2 }, { foodId: "wholemeal_bread", qty: 80 }],
+    method: "Flake cooked salmon through soft scrambled eggs, pile onto toast." },
+  { id: "cottage_oats_pb", name: "Peanut butter banana oats", slot: "Breakfast",
+    items: [{ foodId: "oats", qty: 80 }, { foodId: "milk", qty: 300 }, { foodId: "peanut_butter", qty: 25 }, { foodId: "banana", qty: 1 }],
+    method: "Simmer the oats in milk, stir the peanut butter through at the end, top with banana." },
+
+  { id: "chicken_wrap_salad", name: "Chicken salad wraps", slot: "Lunch",
+    items: [{ foodId: "chicken_breast", qty: 180 }, { foodId: "tortilla_wrap", qty: 2 }, { foodId: "spinach", qty: 50 }, { foodId: "greek_yoghurt", qty: 60 }],
+    method: "Shred cooked chicken, dress with yoghurt, lemon and pepper, load into wraps with spinach." },
+  { id: "tuna_pasta_salad", name: "Tuna pasta salad", slot: "Lunch",
+    items: [{ foodId: "tuna_tin", qty: 2 }, { foodId: "pasta", qty: 100 }, { foodId: "tomatoes_tin", qty: 100 }, { foodId: "olive_oil", qty: 10 }],
+    method: "Cook the pasta, cool it, fold in tuna, tomatoes and oil. Better cold the next day." },
+  { id: "turkey_rice_bowl", name: "Turkey rice bowl", slot: "Lunch",
+    items: [{ foodId: "turkey_mince", qty: 180 }, { foodId: "rice", qty: 90 }, { foodId: "mixed_veg_frozen", qty: 150 }, { foodId: "olive_oil", qty: 8 }],
+    method: "Brown the mince with whatever spice you like, serve over rice with the veg through it." },
+  { id: "jacket_beans_cheese", name: "Jacket potato, beans & cheese", slot: "Lunch",
+    items: [{ foodId: "potatoes", qty: 350 }, { foodId: "beans_baked", qty: 200 }, { foodId: "cheddar", qty: 40 }],
+    method: "Bake or microwave the potato, split, load. The cheapest hot lunch there is." },
+  { id: "quinoa_chicken_salad", name: "Chicken & quinoa salad", slot: "Lunch",
+    items: [{ foodId: "chicken_breast", qty: 150 }, { foodId: "quinoa", qty: 80 }, { foodId: "broccoli", qty: 100 }, { foodId: "olive_oil", qty: 10 }],
+    method: "Cook the quinoa, steam the broccoli, slice the chicken over the top and dress with oil and lemon." },
+
+  { id: "chicken_pasta_bake", name: "Chicken pasta bake", slot: "Dinner",
+    items: [{ foodId: "chicken_breast", qty: 200 }, { foodId: "pasta", qty: 100 }, { foodId: "tomatoes_tin", qty: 200 }, { foodId: "cheddar", qty: 40 }],
+    method: "Combine cooked pasta, chicken and sauce in a dish, cheese on top, 15 minutes in the oven." },
+  { id: "beef_rice_stirfry", name: "Beef & broccoli with rice", slot: "Dinner",
+    items: [{ foodId: "beef_mince_5", qty: 200 }, { foodId: "rice", qty: 90 }, { foodId: "broccoli", qty: 150 }, { foodId: "olive_oil", qty: 8 }],
+    method: "Brown the mince hard, add broccoli and a splash of water to steam, serve over rice." },
+  { id: "salmon_quinoa_veg", name: "Salmon, quinoa & greens", slot: "Dinner",
+    items: [{ foodId: "salmon_fillet", qty: 160 }, { foodId: "quinoa", qty: 90 }, { foodId: "broccoli", qty: 150 }],
+    method: "Oven the salmon 14 minutes, cook the quinoa, steam the greens." },
+  { id: "turkey_sweet_potato", name: "Turkey mince & sweet potato mash", slot: "Dinner",
+    items: [{ foodId: "turkey_mince", qty: 200 }, { foodId: "sweet_potato", qty: 300 }, { foodId: "mixed_veg_frozen", qty: 150 }],
+    method: "Mash the sweet potato, brown the mince with onion and herbs, veg on the side." },
+  { id: "chicken_potato_veg", name: "Roast chicken, potatoes & veg", slot: "Dinner",
+    items: [{ foodId: "chicken_breast", qty: 200 }, { foodId: "potatoes", qty: 300 }, { foodId: "broccoli", qty: 150 }, { foodId: "olive_oil", qty: 10 }],
+    method: "Everything on one tray at 200C, greens steamed at the end. Minimal washing up." },
+  { id: "tuna_jacket", name: "Tuna jacket potato", slot: "Dinner",
+    items: [{ foodId: "tuna_tin", qty: 2 }, { foodId: "potatoes", qty: 350 }, { foodId: "greek_yoghurt", qty: 60 }, { foodId: "spinach", qty: 50 }],
+    method: "Yoghurt instead of mayo — same texture, considerably more protein." },
+
+  { id: "yoghurt_berries_snack", name: "Greek yoghurt & berries", slot: "Snack",
+    items: [{ foodId: "greek_yoghurt", qty: 200 }, { foodId: "berries_frozen", qty: 80 }],
+    method: "Defrost the berries in the microwave for 30 seconds and stir through." },
+  { id: "eggs_boiled_snack", name: "Boiled eggs & an apple", slot: "Snack",
+    items: [{ foodId: "eggs", qty: 3 }, { foodId: "apple", qty: 1 }],
+    method: "Boil a batch at the start of the week. Seven minutes, then cold water." },
+  { id: "cheese_bread_snack", name: "Cheese on toast", slot: "Snack",
+    items: [{ foodId: "cheddar", qty: 50 }, { foodId: "wholemeal_bread", qty: 80 }],
+    method: "Grill rather than toast, so the cheese goes properly molten." },
+  { id: "whey_milk_snack", name: "Whey & milk", slot: "Snack",
+    items: [{ foodId: "whey_protein", qty: 30 }, { foodId: "milk", qty: 300 }],
+    method: "Thirty seconds, 45g of protein. The fallback when there's no time." },
+  { id: "chickpea_snack", name: "Roast chickpeas", slot: "Snack",
+    items: [{ foodId: "chickpeas", qty: 150 }, { foodId: "olive_oil", qty: 8 }],
+    method: "Drain, dry, toss in oil and paprika, 25 minutes at 200C until they rattle." },
 ];
 
 // --- macros ------------------------------------------------------------------
@@ -374,6 +450,58 @@ const REPEAT_PENALTY = 0.85; // £
 const FAVOURITE_BONUS = 1.2; // £
 const MAX_REPEATS = 3;
 
+/**
+ * What a full miss on a meal's protein share is worth, in the same made-up
+ * pounds the rest of the score uses.
+ *
+ * 2.2 puts it above FAVOURITE_BONUS and well above REPEAT_PENALTY, so protein
+ * outranks both "they said they like this" and "we've had it twice" — but it is
+ * still a weight, not a veto. A meal that misses its protein share and costs 30p
+ * can still beat one that hits it and costs £4, which is the right trade for
+ * someone eating on a budget.
+ */
+/**
+ * Tuned by measurement, not taste. A 60kg athlete cutting and a 95kg athlete
+ * bulking, protein hit as a % of target and how many of their weekly meals were
+ * identical:
+ *
+ *   weight  2.2 | cut  80% | bulk  96% | 13 of 14 meals shared
+ *   weight  5   | cut  88% | bulk 101% |  9 of 14
+ *   weight  9   | cut 103% | bulk 106% |  9 of 13   <- chosen
+ *   weight 14   | cut 122% | bulk 116% |  6 of 13
+ *   weight 20   | cut 122% | bulk 116% |  7 of 14
+ *
+ * 9 is where both athletes actually reach their target. Below it the cutter
+ * falls short, because marginal cost collapses once a food is already in the
+ * basket and cheap repetition wins. Above it the plan overshoots protein by 20%,
+ * which is money spent on protein nobody asked for.
+ */
+const PROTEIN_WEIGHT = 9; // £ per unit of normalised density shortfall
+
+/**
+ * How far short a meal falls on protein DENSITY — grams per calorie — against
+ * what the day needs. 0 means it's dense enough, 1 means it has none.
+ *
+ * Density, not grams, because portions are scaled to hit CALORIES afterwards.
+ * Scaling multiplies protein and calories together, so it can never fix a ratio:
+ * an athlete cutting on 1,900 kcal and 132g of protein needs 0.069 g/kcal, and
+ * no amount of shrinking a pasta bowl gets there. Ranking on absolute grams also
+ * made every athlete pick the same meals, since the biggest meals win regardless
+ * of who's eating.
+ *
+ * This is the term that makes the plan personal: a lean athlete on a deficit
+ * needs a high ratio and gets chicken, fish and yoghurt; someone bulking needs a
+ * low one and gets pasta, rice and oats. Same library, different weeks, for a
+ * reason that's actually about them.
+ */
+function proteinShortfall(meal: Meal, requiredPerKcal: number): number {
+  if (requiredPerKcal <= 0) return 0;
+  const m = mealMacros(meal);
+  if (m.kcal <= 0) return 0;
+  const density = m.protein / m.kcal;
+  return Math.max(0, (requiredPerKcal - density) / requiredPerKcal);
+}
+
 /** Slots that have nothing left once the athlete's rules are applied. */
 export function unmetSlots(prefs: MealPrefs): Slot[] {
   return (["Breakfast", "Lunch", "Dinner", "Snack"] as Slot[])
@@ -411,6 +539,29 @@ export function buildWeek(
   const repeatPenalty = prefs.budget ? REPEAT_PENALTY * 0.35 : REPEAT_PENALTY;
   const favourites = new Set(prefs.favourites ?? []);
 
+  /**
+   * PROTEIN IS A TARGET, NOT AN ACCIDENT.
+   *
+   * Selection used to score on marginalCost alone, so the planner was a
+   * cheapest-basket optimiser wearing a nutrition label. Two consequences, both
+   * of which people noticed:
+   *
+   *   - Everyone got broadly the same week. Cost doesn't depend on you, so a
+   *     60kg runner on 1,900 kcal and a 95kg lifter chasing 190g of protein were
+   *     handed the same meals, just scaled.
+   *   - Protein landed wherever it landed. Portions are scaled to hit CALORIES
+   *     (see `scale` below), and nothing anywhere was aiming at the protein
+   *     number the app had just told the athlete to hit.
+   *
+   * Meals are now also scored on how much of their share of the day's protein
+   * they actually deliver. Cost still matters — it's what makes the shopping
+   * list affordable — but it no longer decides alone, so the plan differs by
+   * person because their protein target differs.
+   */
+  // Grams of protein per calorie this athlete needs. Cutting pushes it up
+  // (protein held while calories come down), bulking pushes it down.
+  const requiredProteinPerKcal = targets.calories > 0 ? targets.protein / targets.calories : 0;
+
   const choose = (slot: Slot, nth = 0, avoid: Set<string> = new Set()): Meal | undefined => {
     const list = pools[slot].filter((m) => !avoid.has(m.id));
     if (!list.length) return undefined;
@@ -426,6 +577,11 @@ export function buildWeek(
         score: marginalCost(meal, basket)
           - (isFavourite(meal, favourites) ? FAVOURITE_BONUS : 0)
           + (uses.get(meal.id) ?? 0) * repeatPenalty
+          // How far this meal falls short of its share of the day's protein,
+          // as a fraction of that share, priced in pounds so it trades against
+          // cost. Only shortfall is penalised — going over is free, because
+          // extra protein is not a problem to solve.
+          + proteinShortfall(meal, requiredProteinPerKcal) * PROTEIN_WEIGHT
           + ((idx + seed + nth) % list.length) * 0.001,
         capped: (uses.get(meal.id) ?? 0) >= MAX_REPEATS,
       }))

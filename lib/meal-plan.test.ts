@@ -136,3 +136,60 @@ test("a favourite is a nudge, not a takeover", () => {
   const withEgg = meals.filter((m) => m.meal.items.some((i) => i.foodId === "eggs")).length;
   assert.ok(withEgg < meals.length, "not every meal should contain the favourite");
 });
+
+// --- protein is a target, not an accident -----------------------------------
+// Selection scored on marginalCost alone, so the planner was a cheapest-basket
+// optimiser wearing a nutrition label: everyone got broadly the same week, and
+// protein landed wherever it landed. These pin the fix.
+
+const CUTTER = { sex: "female" as const, age: 22, heightCm: 165, weightKg: 60, activity: "high" as const, goal: "cut" as const };
+const BULKER = { sex: "male" as const, age: 28, heightCm: 188, weightKg: 95, activity: "high" as const, goal: "build" as const };
+
+const weekFor = (s: BodyStats) => buildWeek(planTargets(s), 7, DEFAULT_PREFS);
+const avgProtein = (wk: ReturnType<typeof buildWeek>) =>
+  wk.reduce((a, d) => a + d.macros.protein, 0) / wk.length;
+const mealIds = (wk: ReturnType<typeof buildWeek>) =>
+  new Set(wk.flatMap((d) => d.meals.map((m) => m.meal.id)));
+
+test("a plan actually reaches the protein target it set", () => {
+  for (const s of [CUTTER, BULKER]) {
+    const t = planTargets(s);
+    const hit = avgProtein(weekFor(s)) / t.protein;
+    assert.ok(hit >= 0.9, `only ${Math.round(hit * 100)}% of the ${t.protein}g protein target`);
+    // Overshoot is money spent on protein nobody asked for.
+    assert.ok(hit <= 1.35, `${Math.round(hit * 100)}% of target — overshooting protein costs money`);
+  }
+});
+
+test("two very different athletes do not get the same week", () => {
+  // The complaint that started this: "the same meals repasted no matter your
+  // needs". A cutter and a bulker have different protein densities to hit, so
+  // their weeks should visibly differ.
+  const a = mealIds(weekFor(CUTTER));
+  const b = mealIds(weekFor(BULKER));
+  const shared = [...a].filter((x) => b.has(x)).length;
+  assert.ok(
+    shared <= a.size * 0.8,
+    `${shared} of ${a.size} meals identical between a cutting 60kg runner and a bulking 95kg lifter`
+  );
+});
+
+test("the library is big enough to fill a week without forced repeats", () => {
+  // 7 breakfasts a week from a pool of 6 is repetition by arithmetic, not by
+  // scoring — no ranking change can fix a pool smaller than the slot count.
+  for (const slot of ["Breakfast", "Lunch", "Dinner", "Snack"] as const) {
+    const n = MEALS.filter((m) => m.slot === slot).length;
+    assert.ok(n >= 7, `only ${n} ${slot} meals — a week needs 7, so some must repeat`);
+  }
+});
+
+test("calories are still hit while chasing protein", () => {
+  // Protein must not be bought at the cost of the thing portions are scaled for.
+  for (const s of [CUTTER, BULKER]) {
+    const t = planTargets(s);
+    const wk = weekFor(s);
+    const kcal = wk.reduce((a, d) => a + d.macros.kcal, 0) / wk.length;
+    const hit = kcal / t.calories;
+    assert.ok(hit >= 0.85 && hit <= 1.15, `calories at ${Math.round(hit * 100)}% of target`);
+  }
+});

@@ -14,6 +14,19 @@ interface Props {
   stats: Partial<BodyStats> | null;
   prefs: Partial<MealPrefs> | null;
   dietNotes: string | null;
+  /**
+   * The seed of the plan they're actually on.
+   *
+   * THIS IS THE BUG THIS PROP EXISTS TO FIX. This component used to call
+   * buildWeek with a hard-coded seed of 0 and targets it estimated itself — so
+   * "tick off today's meals" listed food from a plan that existed nowhere else.
+   * Someone generated a week on the Meal plan tab, came to Today, and was shown
+   * different meals entirely. The old comment said seed 0 was "so it's stable
+   * between visits", which it was: stably wrong.
+   *
+   * Null means they've never generated a plan, and there is nothing to tick.
+   */
+  seed: number | null;
   /** Adds the eaten macros into the day's running totals. */
   onAdd: (m: Macros) => void;
 }
@@ -27,7 +40,7 @@ const DAY_INDEX = () => (new Date().getDay() + 6) % 7; // JS weeks start Sunday;
  *
  * Both feed the same daily totals, which the tracker above then saves.
  */
-export function MealCheckIn({ stats, prefs, dietNotes, onAdd }: Props) {
+export function MealCheckIn({ stats, prefs, dietNotes, seed, onAdd }: Props) {
   const [ticked, setTicked] = useState<Set<string>>(new Set());
   const [text, setText] = useState("");
   const [estimate, setEstimate] = useState<FoodEstimate | null>(null);
@@ -37,9 +50,23 @@ export function MealCheckIn({ stats, prefs, dietNotes, onAdd }: Props) {
   const [busy, setBusy] = useState(false);
   const [added, setAdded] = useState<string | null>(null);
 
-  // Rebuild today's row of the plan. Seed 0 so it's stable between visits —
-  // a plan you can't find again is not one you can tick off.
+  /**
+   * Today's row of THEIR plan — same seed, same targets, same preferences as the
+   * Meal plan tab, so the two agree.
+   *
+   * buildWeek is pure, so given the stored seed it reproduces the exact week they
+   * generated. That's the whole mechanism: the plan isn't stored meal by meal,
+   * it's stored as one number and rebuilt. Which is fine, and was being fed the
+   * wrong number here.
+   *
+   * Targets stay on planTargets(body) rather than the page's richer
+   * nutritionTargets, because planTargets is what MealPlanner feeds buildWeek.
+   * Using the "better" number here would reintroduce the same bug in a subtler
+   * form: two plans that disagree, for a more defensible reason. The fallback
+   * defaults below are deliberately identical to MealPlanner's.
+   */
   const todaysMeals = useMemo<PlannedMeal[]>(() => {
+    if (seed === null) return [];
     const body: BodyStats = {
       sex: stats?.sex ?? "male",
       age: stats?.age ?? 20,
@@ -48,9 +75,9 @@ export function MealCheckIn({ stats, prefs, dietNotes, onAdd }: Props) {
       activity: stats?.activity ?? "moderate",
       goal: stats?.goal ?? "maintain",
     };
-    const week = buildWeek(planTargets(body), 0, { ...DEFAULT_PREFS, ...(prefs ?? {}) }, parseSchedule(dietNotes));
+    const week = buildWeek(planTargets(body), seed, { ...DEFAULT_PREFS, ...(prefs ?? {}) }, parseSchedule(dietNotes));
     return week[DAY_INDEX()]?.meals ?? [];
-  }, [stats, prefs, dietNotes]);
+  }, [stats, prefs, dietNotes, seed]);
 
   // Instant on-device preview as they type; the AI call refines it on request.
   const preview = useMemo(() => estimateMeal(text), [text]);
@@ -105,6 +132,16 @@ export function MealCheckIn({ stats, prefs, dietNotes, onAdd }: Props) {
   return (
     <div className="card p-5">
       <h2 className="field-label">What have you eaten today?</h2>
+
+      {/* No plan yet. This used to render nothing at all — the section simply
+          wasn't there, so there was no way to tell "you haven't made a plan"
+          apart from "the plan is empty" or "this is broken". */}
+      {seed === null && (
+        <p className="mb-4 rounded-2xl bg-white/[0.03] px-4 py-3 text-xs text-slate-400">
+          Build a week on the <b className="text-slate-200">Meal plan</b> tab and today&apos;s meals
+          appear here to tick off — with the exact macros, so nothing has to be estimated.
+        </p>
+      )}
 
       {/* 1. Off the plan */}
       {todaysMeals.length > 0 && (
