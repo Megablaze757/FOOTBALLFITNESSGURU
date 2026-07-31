@@ -17,7 +17,14 @@
 /** Coarse training regions a drill can belong to. */
 export type Region =
   | "legs" | "chest" | "back" | "shoulders" | "arms" | "core"
-  | "conditioning" | "impact" | "skill";
+  | "conditioning" | "impact" | "skill"
+  // Running as a CATEGORY, distinct from "conditioning". Needed once actual
+  // runs entered the library: the movement-word rule below drops anything with
+  // "run" in its name, which catches "Easy run" and misses "Fartlek",
+  // "Strides" and "Hill repeats" — all unmistakably running. Someone with
+  // shins who says "no running" must lose all of them and keep the bike, and
+  // only a region can express that.
+  | "running";
 
 export interface Constraints {
   /** Regions the athlete does not want trained at all. */
@@ -51,6 +58,11 @@ const REGION_WORDS: { region: Region; label: string; words: RegExp }[] = [
   // movements now (below), so the specific thing is dropped and a substitute
   // survives.
   { region: "conditioning", label: "cardio & conditioning", words: /\b(cardio|conditioning|endurance|aerobic)\b/i },
+  // Deliberately BEFORE the impact rule and separate from conditioning: this
+  // drops every run in the library while leaving the bike, rower and skipping
+  // to fill the conditioning slot — which is what someone with shin splints
+  // actually wants. The named-movement rule below still fires too; they agree.
+  { region: "running", label: "running", words: /\b(running|jogging|jog|runs)\b/i },
   { region: "impact", label: "jumping & high-impact work", words: /\b(jump|jumps|jumping|plyo|plyos|plyometric|plyometrics|impact|box jump|hop|hops|hopping)\b/i },
 ];
 

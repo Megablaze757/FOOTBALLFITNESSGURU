@@ -133,3 +133,87 @@ test("weighted lifts wave reps down toward the peak", () => {
   }
   assert.ok(compared > 0, "no load lift appeared in both week 1 and week 3 to compare");
 });
+
+// --- Running handoff ---------------------------------------------------------
+
+test("a runner chasing endurance gets runs, not a drill list", () => {
+  const plan = buildProgram({ goal: "endurance", painMap: {}, sport: "running", daysPerWeek: 5 });
+  const names = plan.weeks.flatMap((w) => w.sessions.flatMap((s) => s.drills.map((d) => d.name)));
+  assert.ok(names.some((n) => /run|tempo|interval|threshold|VO2/i.test(n)), `got: ${[...new Set(names)].join(", ")}`);
+  // The tell that it went to the wrong engine: a runner's plan full of sleds,
+  // shuttles and bike intervals, which is what happened before this existed.
+  assert.ok(!names.some((n) => /sled|shuttle|bike/i.test(n)), `gym conditioning leaked in: ${names.join(", ")}`);
+});
+
+test("every run in a runner's plan names its zone", () => {
+  const plan = buildProgram({ goal: "endurance", painMap: {}, sport: "running", daysPerWeek: 4 });
+  for (const w of plan.weeks) {
+    for (const s of w.sessions) {
+      assert.match(s.drills[0].prescription ?? "", /Zone [1-5]/, `${s.title} has no zone`);
+    }
+  }
+});
+
+test("a runner asking for strength still gets the gym", () => {
+  // "Runner's strength" is leg durability work — hijacking it into a run block
+  // would remove the very thing that keeps them running.
+  const plan = buildProgram({ goal: "strength", painMap: {}, sport: "running", daysPerWeek: 3 });
+  const names = plan.weeks.flatMap((w) => w.sessions.flatMap((s) => s.drills.map((d) => d.name)));
+  assert.ok(!names.every((n) => /run$/i.test(n)), "expected gym work, got a run block");
+});
+
+test("a runner coming back from injury gets rehab, not mileage", () => {
+  const plan = buildProgram({ goal: "injury_recovery", painMap: { knee_left: 6 }, sport: "running", daysPerWeek: 3 });
+  assert.notEqual(plan.goal, "endurance");
+});
+
+test("a footballer is unaffected by the running handoff", () => {
+  const plan = buildProgram({ goal: "endurance", painMap: {}, sport: "football", daysPerWeek: 4 });
+  const names = plan.weeks.flatMap((w) => w.sessions.flatMap((s) => s.drills.map((d) => d.name)));
+  assert.ok(names.length > plan.weeks.length * 4, "expected a full drill list, not one run per day");
+});
+
+test("a sore runner's easy days drop to recovery pace", () => {
+  const sore = buildProgram({
+    goal: "endurance", painMap: { knee_left: 6 }, sport: "running", daysPerWeek: 5,
+  });
+  const fresh = buildProgram({ goal: "endurance", painMap: {}, sport: "running", daysPerWeek: 5 });
+  const zone1 = (p: typeof sore) =>
+    p.weeks.flatMap((w) => w.sessions).filter((s) => /Zone 1/.test(s.drills[0].prescription ?? "")).length;
+  assert.ok(zone1(sore) > zone1(fresh), "a sore knee should pull the easy days back to Zone 1");
+});
+
+test("runs are available to every sport, not just runners", () => {
+  // The requirement is plain: a footballer or a gym athlete doing conditioning
+  // should be able to be told to go for a run. Before the run entries existed,
+  // a conditioning slot could only be filled by a sled, a shuttle or a bike.
+  const RUNS = ["Easy run", "Long run", "Threshold run", "Recovery run", "Fartlek run", "Hill repeats"];
+  for (const sport of ["football", "rugby", "basketball", "gym", "weightlifting"] as const) {
+    const names = new Set(
+      recommendDrills({ goal: "endurance", painMap: {}, sport }).map((d) => d.name),
+    );
+    assert.ok([...names].some((n) => RUNS.includes(n)), `${sport} was offered no runs: ${[...names].join(", ")}`);
+  }
+});
+
+test("a recovery run is reachable as recovery work in any sport", () => {
+  const names = recommendDrills({ goal: "injury_recovery", painMap: {}, sport: "gym" }).map((d) => d.name);
+  assert.ok(names.length > 0);
+});
+
+test("'no running' drops every run but keeps the bike", () => {
+  // The four that don't have "run" in the name — Fartlek, Strides, Hill
+  // repeats, VO2 max intervals — are why running had to become a region. The
+  // name-stem rule alone would have let all four through.
+  const plan = buildProgram({
+    goal: "endurance", painMap: {}, sport: "football", daysPerWeek: 4,
+    notes: "no running, my shins are wrecked",
+  });
+  const names = plan.weeks.flatMap((w) => w.sessions.flatMap((s) => s.drills.map((d) => d.name)));
+  for (const banned of ["Easy run", "Long run", "Fartlek run", "Hill repeats", "Strides", "VO2 max intervals"]) {
+    assert.ok(!names.includes(banned), `"${banned}" survived a "no running" note`);
+  }
+  // …and the point of making it a region rather than banning cardio outright:
+  // conditioning must still be fillable.
+  assert.ok(plan.constraints.some((c) => /running/i.test(c)), "the exclusion should be shown back to the athlete");
+});

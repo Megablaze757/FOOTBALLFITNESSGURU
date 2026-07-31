@@ -39,11 +39,20 @@ export const NAV_ITEMS = [
 // Was Home / Coach / Journal / Playbook / Train — two of the five primary tabs
 // were reference content and video analysis, while Progress was buried in the
 // sheet. The daily loop is: see the plan, do it, check in, watch it move.
+// `short` is the tab-bar label; `label` is used everywhere the space is real
+// (the More sheet, the sidebar). SIX tabs on a 320px phone gives each one 45px,
+// and at that width "Check in" and "Progress" rendered edge to edge with no
+// gutter between them — the bar read as "Check in Progress", one phrase. The
+// labels weren't wrong, there just wasn't room for them side by side.
+//
+// So the tab bar gets the shortest form that still says what it is, and the
+// full wording survives in the two places that can fit it. "Plan" and "Check"
+// are what you'd say out loud anyway.
 export const MOBILE_NAV = [
-  { href: "/home", label: "Home", icon: "home" },
-  { href: "/coach", label: "My plan", icon: "coach" },
-  { href: "/journal", label: "Check in", icon: "journal" },
-  { href: "/dashboard", label: "Progress", icon: "stats" },
+  { href: "/home", label: "Home", short: "Home", icon: "home" },
+  { href: "/coach", label: "My plan", short: "Plan", icon: "coach" },
+  { href: "/journal", label: "Check in", short: "Check", icon: "journal" },
+  { href: "/dashboard", label: "Progress", short: "Progress", icon: "stats" },
   // Promoted out of the More sheet. Told twice it was unfindable, and "open
   // More, then look" is not findable when something hurts — which is the one
   // moment this page exists for.
@@ -53,7 +62,7 @@ export const MOBILE_NAV = [
   // each about 57px, which "Injury" clears and "Injury & mobility" does not.
   // Mobility is named in the page's own lead and has its own section there —
   // a short label people can find beats a complete one they can't.
-  { href: "/injury", label: "Injury", icon: "injury" },
+  { href: "/injury", label: "Injury", short: "Injury", icon: "injury" },
 ] as const;
 
 /**

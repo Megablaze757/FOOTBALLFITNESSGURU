@@ -15,6 +15,7 @@ import { positionLabel } from "./positions";
 import { sportTerms } from "./sport-terms";
 import { MOVEMENTS, regionOfMovement, type Movement, type GoalType, type BodyArea } from "./movements";
 import { buildBlock, painByArea, type ProgramPlan, type TrainingFocus } from "./engine";
+import { buildRunProgram, type RunnerLevel } from "./running";
 
 // The catalogue lives in ./movements and the block builder in ./engine. This
 // module keeps the athlete-facing API — the goal lists, the recommendations and
@@ -285,7 +286,40 @@ export interface BuildProgramInput {
   /** Movement ids a coach picked from the library. A strong preference that
    *  still passes through the pain filter and the athlete's exclusions. */
   mustInclude?: string[];
+
+  // --- Running. Ignored unless the athlete's sport is running. --------------
+  /** Current weekly mileage. The block is built from where they ARE. */
+  weeklyKm?: number | null;
+  runnerLevel?: RunnerLevel;
+  /** A RACE_GOALS id — "5k", "half", "marathon"… */
+  raceGoalId?: string;
+  /** Threshold pace in sec/km, normally from `thresholdPaceFromBenchmarks`. */
+  thresholdSecPerKm?: number | null;
 }
+
+/**
+ * Whether this athlete should get a RUN block rather than a gym block.
+ *
+ * Same shape as `wantsHypertrophy` and the same rehab carve-out. The goal test
+ * matters: a runner's four options are endurance, speed, injury recovery and
+ * "Runner's strength", and only the first two are actually running. Sending the
+ * strength goal here would take away the leg-durability work that keeps them
+ * running, which is the opposite of helping.
+ */
+function wantsRunPlan(input: BuildProgramInput): boolean {
+  if (input.goal === "injury_recovery" || input.focus === "rehab") return false;
+  if (input.sport !== "running") return false;
+  return input.goal === "endurance" || input.goal === "speed";
+}
+
+/**
+ * Weekly mileage to build from when the athlete hasn't told us.
+ *
+ * 8km per running day is a modest, safe starting point — deliberately an
+ * underestimate, because the cost of starting someone too low is a fortnight of
+ * easy weeks and the cost of starting them too high is an injury.
+ */
+const DEFAULT_KM_PER_DAY = 8;
 
 /**
  * Whether this athlete should get a bodybuilding split rather than an S&C block.
@@ -320,6 +354,25 @@ export function buildProgram(input: BuildProgramInput): ProgramPlan {
   // and returns untouched. Overwriting them here with the S&C wording told a
   // bodybuilder they were on a "strength & power block" when they were on
   // push/pull/legs.
+  // A runner's plan is a set of runs in zones, not a set of drills in sets and
+  // reps. Same handoff pattern as hypertrophy below, and for the same reason:
+  // the shape of the training is different, not just its contents.
+  if (wantsRunPlan(input)) {
+    const days = input.daysPerWeek ?? 4;
+    return buildRunProgram({
+      weeklyKm: input.weeklyKm ?? days * DEFAULT_KM_PER_DAY,
+      daysPerWeek: days,
+      level: input.runnerLevel ?? "intermediate",
+      goal: input.goal as "endurance" | "speed",
+      goalId: input.raceGoalId,
+      block,
+      thresholdSecPerKm: input.thresholdSecPerKm ?? null,
+      // Sore anywhere that running loads means the filler days drop to recovery
+      // pace. The engine can't take the impact away, so it takes the intensity.
+      recoveryBias: sore.some((a) => ["knee", "ankle", "hamstring", "hip"].includes(a)),
+    });
+  }
+
   if (wantsHypertrophy(input)) {
     return buildHypertrophyProgram({
       painMap: input.painMap,
