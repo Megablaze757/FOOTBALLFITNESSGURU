@@ -217,3 +217,41 @@ test("'no running' drops every run but keeps the bike", () => {
   // conditioning must still be fillable.
   assert.ok(plan.constraints.some((c) => /running/i.test(c)), "the exclusion should be shown back to the athlete");
 });
+
+test("a runner's own numbers drive the block", () => {
+  // The mileage input is the one variable that decides whether a block builds
+  // someone or injures them, so it has to actually reach the engine.
+  const small = buildProgram({
+    goal: "endurance", painMap: {}, sport: "running", daysPerWeek: 5, weeklyKm: 20,
+  });
+  const big = buildProgram({
+    goal: "endurance", painMap: {}, sport: "running", daysPerWeek: 5, weeklyKm: 80,
+  });
+  const km = (p: typeof small) => Number(/([\d.]+)km target/.exec(p.weeks[0].focusNote)![1]);
+  assert.equal(km(small), 20);
+  assert.equal(km(big), 80);
+});
+
+test("runner level caps the hard sessions", () => {
+  const beginner = buildProgram({
+    goal: "endurance", painMap: {}, sport: "running", daysPerWeek: 5,
+    weeklyKm: 40, runnerLevel: "beginner",
+  });
+  const advanced = buildProgram({
+    goal: "endurance", painMap: {}, sport: "running", daysPerWeek: 5,
+    weeklyKm: 40, runnerLevel: "advanced",
+  });
+  const hard = (p: typeof beginner) =>
+    p.weeks[1].sessions.filter((s) => /Threshold|VO2|Cruise|repeat|Fartlek|Steady|Progression/i.test(s.title)).length;
+  assert.equal(hard(beginner), 1);
+  assert.ok(hard(advanced) > hard(beginner), `advanced ${hard(advanced)} vs beginner ${hard(beginner)}`);
+});
+
+test("a logged race turns the plan's zones into real paces", () => {
+  const withRace = buildProgram({
+    goal: "endurance", painMap: {}, sport: "running", daysPerWeek: 4,
+    weeklyKm: 40, thresholdSecPerKm: 255,
+  });
+  const p = withRace.weeks[0].sessions[0].drills[0].prescription!;
+  assert.match(p, /\d+:\d\d–\d+:\d\d\/km/, `expected a pace range, got: ${p}`);
+});

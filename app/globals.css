@@ -6,16 +6,55 @@
   color-scheme: dark;
 }
 
+/* --- Overscroll ------------------------------------------------------------
+   THE FLOATING NAV COMING LOOSE ON AN INSTALLED IPHONE APP IS THIS.
+
+   Scroll past the end of the document on iOS and the whole page rubber-bands.
+   In a standalone PWA that bounce drags `position: fixed` elements with it, so
+   the bottom bar visibly detaches, slides, and snaps back when the bounce
+   settles — the bar itself is positioned correctly the whole time, which is why
+   nothing shows up when you inspect it or test it in a desktop browser.
+
+   `overscroll-behavior-y: none` on the scrolling element removes the bounce at
+   the document level, which removes the thing doing the dragging. It also
+   disables pull-to-refresh, which for an installed app is not a gesture that
+   exists anyway, and in a browser tab it stops an accidental downward drag
+   throwing away an unsaved check-in. Individual scrollers that need their own
+   containment set it themselves. */
+html {
+  overscroll-behavior-y: none;
+}
+
 body {
   @apply text-slate-100 antialiased;
   background:
     radial-gradient(1100px 520px at 50% -12%, rgba(227, 181, 63, 0.10), transparent 62%),
     #09090a;
-  background-attachment: fixed;
+  overscroll-behavior-y: none;
   /* dvh, not vh: on mobile the URL bar counts toward 100vh, so a full-height
      page jumped by ~60px every time the bar hid or reappeared on scroll. */
   min-height: 100vh;
   min-height: 100dvh;
+}
+
+/* The gradient has to stay put while the page scrolls, and `background-attachment:
+   fixed` is the obvious way to do that and the wrong one on iOS: Safari can't
+   composite a fixed background, so it repaints the gradient on every frame of
+   every scroll. That is the jankiest thing on the page, and dropped frames are
+   exactly when a browser starts mishandling everything else that's fixed —
+   including the nav.
+
+   A fixed pseudo-element behind the content gets the identical look for the
+   cost of one composited layer that never repaints. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(1100px 520px at 50% -12%, rgba(227, 181, 63, 0.10), transparent 62%),
+    #09090a;
 }
 
 /* --- Focus -----------------------------------------------------------------

@@ -21,6 +21,10 @@ import { templatesForSport } from "@/lib/programs";
 import { assessReadiness } from "@/lib/readiness";
 import { computeACWR } from "@/lib/load";
 import { invokeAI } from "@/lib/api";
+import {
+  RACE_GOALS, thresholdPaceFromBenchmarks, paceZones, formatPace, formatPaceRange,
+  ZONE_LIST, type RunnerLevel,
+} from "@/lib/running";
 import { track } from "@/lib/funnel";
 import { METRIC_CATALOG, metricDef, benchmarkProgress } from "@/lib/benchmarks";
 import { RingProgress } from "@/components/RingProgress";
@@ -196,6 +200,11 @@ function GoalBuilder({ painMap, latestBench, sport, initialPositions, initialFoc
   const [metric, setMetric] = useState("");
   const [targetValue, setTargetValue] = useState("");
   const [notes, setNotes] = useState("");
+  // Runner inputs. Only asked for when they'd change the block — see the form
+  // below — and defaulted so a runner who ignores them still gets a sane plan.
+  const [raceGoalId, setRaceGoalId] = useState("general");
+  const [weeklyKm, setWeeklyKm] = useState("");
+  const [runnerLevel, setRunnerLevel] = useState<RunnerLevel>("intermediate");
   const [creating, setCreating] = useState(false);
   const [buildingId, setBuildingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -223,6 +232,33 @@ function GoalBuilder({ painMap, latestBench, sport, initialPositions, initialFoc
   async function buildAndSave(g: GoalType, f: TrainingFocus, pos: string[], style?: SplitStyle, days?: number) {
     const supabase = createClient();
 
+    // Paces come from whatever race they've actually logged, so the plan is
+    // written in their numbers rather than in zone names alone.
+    const thresholdSecPerKm = thresholdPaceFromBenchmarks(latestBench);
+    const runInput = {
+      weeklyKm: weeklyKm ? Number(weeklyKm) : null,
+      runnerLevel,
+      raceGoalId,
+      thresholdSecPerKm,
+    };
+
+    /**
+     * A RUNNER'S BLOCK IS BUILT LOCALLY, NOT BY THE MODEL.
+     *
+     * generate-program knows about sets, reps and drills; it has never been
+     * told what a threshold session is, so it answers a runner with a gym block
+     * and the local engine's run plan never gets a look in. The on-device
+     * engine is the one that understands this sport, so for runs it isn't the
+     * fallback — it's the answer.
+     */
+    if (sport === "running" && (g === "endurance" || g === "speed")) {
+      const plan = buildProgram({
+        goal: g, painMap, isInSeason: inSeason, sport, position: pos, focus: f,
+        daysPerWeek: days ?? daysPerWeek, notes, ...runInput,
+      });
+      return await savePlan(plan, g, f, pos);
+    }
+
     // Prefer the AI backend (Cloudflare Worker / Edge Function); fall back to the
     // local engine (works offline / on Pages).
     let plan: ProgramPlan;
@@ -244,8 +280,15 @@ function GoalBuilder({ painMap, latestBench, sport, initialPositions, initialFoc
       }
       // `notes` matters as much here as on the AI path — without it the local
       // engine ignored "I don't train legs" and prescribed squats anyway.
-      plan = buildProgram({ goal: g, painMap, isInSeason: inSeason, sport, position: pos, focus: f, daysPerWeek: days ?? daysPerWeek, notes, style });
+      plan = buildProgram({ goal: g, painMap, isInSeason: inSeason, sport, position: pos, focus: f, daysPerWeek: days ?? daysPerWeek, notes, style, ...runInput });
     }
+
+    return await savePlan(plan, g, f, pos);
+  }
+
+  /** Persist a built block. Split out so the run path and the gym path share it. */
+  async function savePlan(plan: ProgramPlan, g: GoalType, f: TrainingFocus, pos: string[]) {
+    const supabase = createClient();
 
     // Remember the athlete's positions + focus for next time.
     await supabase.from("profiles").update({ positions: pos, position: pos[0] ?? null, training_focus: f }).eq("id", userId);
@@ -371,6 +414,79 @@ function GoalBuilder({ painMap, latestBench, sport, initialPositions, initialFoc
         ))}
         </div>
       </div>
+
+      {/* RUNNER INPUTS.
+          Only for a running block, and only three of them. A runner's plan
+          hangs almost entirely on two numbers — what they're training for and
+          how far they currently run in a week — and without them the engine has
+          to assume, which for mileage means guessing at the one variable that
+          decides whether a block builds someone or injures them.
+
+          Shown after the goal so it appears once the goal makes it relevant,
+          rather than as a permanent block of running questions a footballer has
+          to scroll past. */}
+      {sport === "running" && (goal === "endurance" || goal === "speed") && (
+        <div className="card space-y-4 p-4">
+          <div>
+            <span className="field-label">What are you training for?</span>
+            <select
+              className="field [color-scheme:dark]"
+              value={raceGoalId}
+              onChange={(e) => setRaceGoalId(e.target.value)}
+            >
+              {RACE_GOALS.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
+            </select>
+            <span className="mt-1 block text-xs text-slate-500">
+              {RACE_GOALS.find((r) => r.id === raceGoalId)?.note}
+            </span>
+          </div>
+
+          <div>
+            <span className="field-label">Current weekly mileage</span>
+            <input
+              type="number" inputMode="decimal" min={0} max={250} step="1"
+              value={weeklyKm}
+              onChange={(e) => setWeeklyKm(e.target.value)}
+              placeholder="e.g. 40"
+              className="field"
+            />
+            <span className="mt-1 block text-xs text-slate-500">
+              What you&apos;re running NOW, not what you&apos;d like to be. The block builds from here and
+              never adds more than 10% a week. Leave it blank and we&apos;ll start conservatively.
+            </span>
+          </div>
+
+          <div>
+            <span className="field-label">How long have you been running?</span>
+            <div className="flex gap-2">
+              {([
+                ["beginner", "Under a year", "1 hard session a week"],
+                ["intermediate", "A year or two", "2 hard sessions"],
+                ["advanced", "Longer", "3 hard sessions"],
+              ] as const).map(([id, label, sub]) => (
+                <button
+                  key={id}
+                  onClick={() => setRunnerLevel(id)}
+                  className={`flex-1 rounded-xl border p-2.5 text-center transition ${
+                    runnerLevel === id
+                      ? "border-pitch-400/50 bg-pitch-400/10 text-pitch-400"
+                      : "border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.06]"
+                  }`}
+                >
+                  <span className="block text-xs font-bold">{label}</span>
+                  <span className="mt-0.5 block text-[10px] text-slate-500">{sub}</span>
+                </button>
+              ))}
+            </div>
+            <span className="mt-1 block text-xs text-slate-500">
+              This caps hard sessions, and the cap is recovery rather than willpower — the adaptation
+              happens between them, not during.
+            </span>
+          </div>
+
+          <RunnerPaces latestBench={latestBench} />
+        </div>
+      )}
 
       <div>
         <span className="field-label">Days per week</span>
@@ -901,6 +1017,51 @@ function ActiveProgram({
       {tab === "program" && (
         <ProgramCalendar weeks={plan.weeks} completed={program.completed_sessions} onToggle={toggleSession} />
       )}
+    </div>
+  );
+}
+
+/**
+ * The paces this athlete's block will actually be written in.
+ *
+ * Shown at build time rather than only inside the finished plan, because the
+ * honest answer changes what someone does next: with a logged race they get
+ * real minute-per-kilometre targets, and without one they get zone names and a
+ * pointer to the twenty minutes of testing that would fix it. Saying that
+ * before the block exists is worth more than saying it after.
+ */
+function RunnerPaces({ latestBench }: { latestBench: Record<string, number> }) {
+  const threshold = thresholdPaceFromBenchmarks(latestBench);
+
+  if (!threshold) {
+    return (
+      <p className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-3 text-xs text-slate-400">
+        Your sessions will be prescribed as <b className="text-slate-200">zones and effort</b>, which works
+        without a watch. Log a <b className="text-slate-200">5k or 10k time</b> on Benchmarks and every run
+        gets a real pace instead — and they move on their own as you get fitter.
+      </p>
+    );
+  }
+
+  const zones = paceZones(threshold);
+  return (
+    <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-3">
+      <span className="stat-label">Your paces</span>
+      <p className="mb-2 mt-0.5 text-xs text-slate-500">
+        From your logged race times — threshold {formatPace(threshold)}/km, the pace you could hold for
+        about an hour.
+      </p>
+      <ul className="space-y-1">
+        {ZONE_LIST.map((z) => (
+          <li key={z.id} className="flex items-center gap-2 text-xs">
+            <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: z.colour }} />
+            <span className="w-20 shrink-0 text-slate-400">{z.name}</span>
+            <span className="tabular-nums text-slate-200">
+              {formatPaceRange(zones.find((p) => p.zone === z.id)!)}/km
+            </span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
