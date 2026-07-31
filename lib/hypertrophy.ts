@@ -23,6 +23,7 @@ import type { PainMap } from "./types";
 import type { Exercise } from "./exercises";
 import { IMPORTED_EXERCISES } from "./exercise-catalog";
 import { isExcluded, type Constraints, type Region } from "./constraints";
+import { MOVEMENTS } from "./movements";
 // From ./engine, not ./coach: coach.ts imports this module, so taking the
 // program shapes from there made the two files import each other.
 import type { ProgramPlan, ProgramWeek, ProgramSession, ProgramDrill, BodyArea } from "./engine";
@@ -372,6 +373,14 @@ export function buildHypertrophyProgram(input: HypertrophyInput): ProgramPlan {
       const movements = pickForSession(day.groups, di + wi, pain, input.constraints);
       const drills = movements.map((m) => drillFrom(m, wi, blockScale * seasonScale));
       const covered = [...new Set(movements.map((m) => GROUP_LABEL[m.group]))];
+      // A finisher, and the only aerobic work a bodybuilding split had. Without
+      // it "gym + build muscle" — the most common pair in the app — was the one
+      // combination that could never prescribe a run, however much someone
+      // wanted the conditioning. Kept to ONE, at the end, and easy on the down
+      // week, because it is a finisher on a hypertrophy day and not the point
+      // of it.
+      const finisher = cardioFinisher(di + wi, wi === 3, input.constraints);
+      if (finisher && drills.length) drills.push(finisher);
       return {
         day: di + 1,
         title: `Day ${di + 1} · ${day.name}${covered.length ? ` — ${covered.join(", ")}` : ""}`,
@@ -398,5 +407,45 @@ export function buildHypertrophyProgram(input: HypertrophyInput): ProgramPlan {
     constraints: input.constraints.summary,
     weeks,
     block,
+  };
+}
+
+/**
+ * One easy conditioning movement to close a hypertrophy session.
+ *
+ * Drawn from the shared movement catalogue rather than a private list, so it is
+ * the same runs, bike and rower the rest of the app knows about, and the same
+ * "no running" note excludes them here as everywhere else.
+ *
+ * Rotated by session so it isn't the identical twenty minutes twelve times, and
+ * held to recovery effort on the deload week. Deliberately capped at RPE 7: a
+ * VO2 session on top of a leg day is not a finisher, it is a second workout,
+ * and it would eat the recovery the hypertrophy block is spending.
+ */
+function cardioFinisher(offset: number, deload: boolean, constraints: Constraints): ProgramDrill | null {
+  const ceiling = deload ? 4 : 7;
+  const pool = MOVEMENTS.filter(
+    (m) => m.slot === "conditioning" &&
+      (m.dose.rpe ?? 10) <= ceiling &&
+      !isExcluded(constraints, m.region, m.name),
+  );
+  if (!pool.length) return null;
+
+  const m = pool[offset % pool.length];
+  return {
+    name: m.name,
+    sets: m.dose.sets,
+    reps: m.dose.reps,
+    cue: m.cue,
+    reason: deload
+      ? "Easy aerobic work on a down week — moves blood without adding to the bill."
+      : "Keeps the engine going alongside the lifting, at an effort that won't cost you the next session.",
+    prescription: `${m.dose.sets} × ${m.dose.reps} ${m.dose.unit}`,
+    progression: deload
+      ? "Hold it easy. The down week is where the last three turn into muscle."
+      : "Add a couple of minutes a week, or keep it flat — this is a finisher, not a session to chase.",
+    slot: "conditioning",
+    rest: m.dose.rest,
+    intensity: m.dose.rpe ? `RPE ${m.dose.rpe}` : undefined,
   };
 }

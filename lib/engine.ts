@@ -123,13 +123,29 @@ export function painByArea(painMap: PainMap): Partial<Record<BodyArea, number>> 
  * endurance day is built around the conditioning block.
  */
 const BLUEPRINTS: Record<GoalType, Partial<Record<Slot, number>>> = {
-  strength:        { warmup: 2, primary: 1, secondary: 2, accessory: 2, cooldown: 1 },
-  speed:           { warmup: 2, primary: 2, secondary: 1, accessory: 1, cooldown: 1 },
+  // A strength block used to end at the cool-down with no aerobic work in it at
+  // all — which meant that for the goal most athletes actually pick, no program
+  // in any sport could ever prescribe going for a run. That isn't a defensible
+  // strength block either: some easy aerobic work is in every serious one,
+  // because it's what lets you recover between the heavy days.
+  strength:        { warmup: 2, primary: 1, secondary: 2, accessory: 2, conditioning: 1, cooldown: 1 },
+  speed:           { warmup: 2, primary: 2, secondary: 1, accessory: 1, conditioning: 1, cooldown: 1 },
   agility:         { warmup: 2, primary: 1, secondary: 2, accessory: 1, conditioning: 1, cooldown: 1 },
   endurance:       { warmup: 2, secondary: 1, accessory: 1, conditioning: 2, cooldown: 1 },
   injury_recovery: { warmup: 3, secondary: 1, accessory: 3, conditioning: 1, cooldown: 1 },
-  skill:           { warmup: 2, primary: 1, secondary: 1, accessory: 1, cooldown: 1 },
+  skill:           { warmup: 2, primary: 1, secondary: 1, accessory: 1, conditioning: 1, cooldown: 1 },
 };
+
+/**
+ * Above this RPE a conditioning movement isn't recovery work.
+ *
+ * Used on the deload week, where the whole point is that the work comes down.
+ * Filling that week's conditioning slot from the same ranked list as Peak week
+ * put hill repeats and VO2 intervals into the down week, which is the one week
+ * they must not be in — and it was also why the recovery run, the easiest thing
+ * in the catalogue, was never selected anywhere.
+ */
+const RECOVERY_RPE_CEILING = 5;
 
 const SLOT_ORDER: Slot[] = ["warmup", "primary", "secondary", "accessory", "skill", "conditioning", "cooldown"];
 
@@ -532,7 +548,18 @@ export function buildBlock(input: EngineInput): ProgramPlan {
         const want = blueprint[slot] ?? 0;
         if (want <= 0) continue;
 
-        const ranked = rankSlot(slot, ctx);
+        let ranked = rankSlot(slot, ctx);
+
+        // Week 4 is the deload. Conditioning on a down week has to BE a down
+        // week — otherwise the same ranking that puts hill repeats in Peak
+        // puts them here too, and the week stops doing the one job it has.
+        // Falls back to the full list if nothing easy survived the athlete's
+        // exclusions, because a deload with no conditioning is still better
+        // than a crash.
+        if (slot === "conditioning" && wi === 3) {
+          const easy = ranked.filter((r) => (r.m.dose.rpe ?? 10) <= RECOVERY_RPE_CEILING);
+          if (easy.length) ranked = easy;
+        }
         // Patterns only need to be unique within the training blocks; a warm-up
         // and a cool-down sharing "mobility" is fine and in fact correct.
         const patternGuard = slot === "warmup" || slot === "cooldown" ? new Set<Pattern>() : usedPatterns;

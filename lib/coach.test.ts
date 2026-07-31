@@ -255,3 +255,54 @@ test("a logged race turns the plan's zones into real paces", () => {
   const p = withRace.weeks[0].sessions[0].drills[0].prescription!;
   assert.match(p, /\d+:\d\d–\d+:\d\d\/km/, `expected a pace range, got: ${p}`);
 });
+
+test("every sport and every goal can prescribe an actual run", () => {
+  // The ask was "running in the programs", not "running available to the
+  // programs". Those came apart: the run entries existed in the catalogue and
+  // scored fine, and a strength block still contained none, because the
+  // strength blueprint had no conditioning slot at all — so for the goal most
+  // athletes pick, nothing in any sport could ever tell them to go for a run.
+  const RUNS = [
+    "Recovery run", "Easy run", "Long run", "Threshold run",
+    "VO2 max intervals", "Fartlek run", "Progression run", "Hill repeats",
+  ];
+  for (const sport of ["football", "rugby", "basketball", "gym", "weightlifting"] as const) {
+    for (const goal of ["endurance", "speed", "strength"] as const) {
+      const plan = buildProgram({ goal, painMap: {}, sport, daysPerWeek: 4 });
+      const names = plan.weeks.flatMap((w) => w.sessions.flatMap((s) => s.drills.map((d) => d.name)));
+      assert.ok(
+        names.some((n) => RUNS.includes(n)),
+        `${sport}/${goal} contains no runs at all`,
+      );
+    }
+  }
+});
+
+test("the deload week gets recovery running, not hill repeats", () => {
+  // Filling week 4's conditioning from the same ranked list as Peak week put
+  // hill repeats into the down week — the one week they must not be in. It was
+  // also why the recovery run, the easiest thing in the catalogue, was never
+  // selected anywhere in the app.
+  for (const sport of ["football", "gym", "weightlifting"] as const) {
+    const plan = buildProgram({ goal: "strength", painMap: {}, sport, daysPerWeek: 4 });
+    const deload = plan.weeks[3].sessions.flatMap((s) => s.drills.map((d) => d.name));
+    assert.ok(!deload.includes("Hill repeats"), `${sport}: hill repeats in the deload week`);
+    assert.ok(!deload.includes("VO2 max intervals"), `${sport}: VO2 intervals in the deload week`);
+  }
+  // And it actually reaches for the recovery run somewhere across a block.
+  const names = buildProgram({ goal: "strength", painMap: {}, sport: "football", daysPerWeek: 4 })
+    .weeks.flatMap((w) => w.sessions.flatMap((s) => s.drills.map((d) => d.name)));
+  assert.ok(names.includes("Recovery run"), "recovery runs are still unreachable");
+});
+
+test("'no running' still empties the runs out of a strength block", () => {
+  // The new conditioning slot must not become a back door around the athlete's
+  // own exclusions.
+  const plan = buildProgram({
+    goal: "strength", painMap: {}, sport: "gym", daysPerWeek: 4, notes: "no running",
+  });
+  const names = plan.weeks.flatMap((w) => w.sessions.flatMap((s) => s.drills.map((d) => d.name)));
+  for (const banned of ["Easy run", "Long run", "Recovery run", "Hill repeats"]) {
+    assert.ok(!names.includes(banned), `"${banned}" survived a "no running" note`);
+  }
+});
