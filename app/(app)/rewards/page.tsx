@@ -25,13 +25,30 @@ export default function RewardsPage() {
   const { data, loading } = useAsync(async () => {
     const supabase = createClient();
     const head = { count: "exact" as const, head: true };
-    const [checks, training, programs, benchC, videoC, nutrition] = await Promise.all([
-      supabase.from("daily_check_ins").select("check_in_date").eq("user_id", user.id),
-      supabase.from("training_logs").select("log_date").eq("user_id", user.id),
+    /**
+     * Counts are counted, not downloaded.
+     *
+     * This pulled every check-in, every training log and every nutrition log the
+     * athlete had ever written — to produce three integers, a streak and a
+     * seven-day tally. The XP number at the top of this page was costing a full
+     * table scan of three tables on every visit.
+     *
+     * The streak and "did I do it today" both need real dates, but only recent
+     * ones: a streak is broken by the first missing day, so 60 days is far more
+     * than any streak this app can display, and today's activity is in there by
+     * definition.
+     */
+    const since60 = new Date(Date.now() - 59 * 86400_000).toISOString().slice(0, 10);
+    const [checks, training, programs, benchC, videoC, nutrition, checkC, trainC, nutriC] = await Promise.all([
+      supabase.from("daily_check_ins").select("check_in_date").eq("user_id", user.id).gte("check_in_date", since60),
+      supabase.from("training_logs").select("log_date").eq("user_id", user.id).gte("log_date", since60),
       supabase.from("programs").select("completed_sessions, status").eq("user_id", user.id),
       supabase.from("strength_benchmarks").select("id", head).eq("user_id", user.id),
       supabase.from("ai_plans").select("id", head).eq("user_id", user.id),
-      supabase.from("nutrition_logs").select("log_date").eq("user_id", user.id),
+      supabase.from("nutrition_logs").select("log_date").eq("user_id", user.id).gte("log_date", since60),
+      supabase.from("daily_check_ins").select("id", head).eq("user_id", user.id),
+      supabase.from("training_logs").select("id", head).eq("user_id", user.id),
+      supabase.from("nutrition_logs").select("id", head).eq("user_id", user.id),
     ]);
 
     const checkDates = (checks.data ?? []).map((r) => r.check_in_date as string);
@@ -40,14 +57,14 @@ export default function RewardsPage() {
     const progs = (programs.data ?? []) as { completed_sessions: string[] | null; status: string }[];
 
     const stats: ActivityStats = {
-      checkIns: checkDates.length,
+      checkIns: checkC.count ?? 0,
       streak: checkInStreak(checkDates),
-      trainingSessions: trainDates.length,
+      trainingSessions: trainC.count ?? 0,
       completedSessions: progs.reduce((n, p) => n + (p.completed_sessions?.length ?? 0), 0),
       completedBlocks: progs.filter((p) => p.status === "archived").length,
       benchmarks: benchC.count ?? 0,
       videos: videoC.count ?? 0,
-      nutritionLogs: nutriDates.length,
+      nutritionLogs: nutriC.count ?? 0,
       checkInsLast7: checkDates.filter((d) => d >= since7).length,
     };
     const state: DailyState = {

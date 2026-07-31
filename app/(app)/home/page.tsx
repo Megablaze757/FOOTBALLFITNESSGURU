@@ -26,31 +26,71 @@ export default function HomePage() {
   const { data, loading } = useAsync(async () => {
     const supabase = createClient();
     const since = new Date(Date.now() - 40 * 86400_000).toISOString().slice(0, 10);
-    const [{ data: profile }, { data: checkIn }, { data: streakRows }, { data: trainToday }, { data: nutriToday }] = await Promise.all([
+    /**
+     * ONE ROUND TRIP FOR EVERYTHING THAT DOESN'T DEPEND ON ANYTHING.
+     *
+     * This was FIVE sequential awaits — a batch, then biometrics, then insights,
+     * then another batch, then another. Each one waits for the last, so on a
+     * phone on 4G the page cost five times the latency before it could render,
+     * and only two of the five had a real dependency.
+     *
+     * It also ran five queries with no date filter and no limit: every check-in,
+     * every training log, every nutrition log and every program this user has
+     * ever created, transferred in full — to produce four integers and a 7-day
+     * window. Fine at 22 accounts and a fortnight of data. A user two seasons in
+     * would be downloading a thousand rows to render a homepage.
+     *
+     * Counts are now head-counts (no rows cross the wire at all), and the only
+     * rows fetched are the 28 days ACWR actually needs.
+     */
+    const head = { count: "exact" as const, head: true };
+    const since28 = new Date(Date.now() - 27 * 86400_000).toISOString().slice(0, 10);
+    const [
+      { data: profile }, { data: checkIn }, { data: streakRows },
+      { data: trainToday }, { data: nutriToday }, { data: bio },
+      { data: activeProgram }, { data: progs },
+      { data: recentTraining },
+      { count: videoCount }, { count: benchCount }, { count: aiPlanCount },
+      { count: checkInCount }, { count: trainingCount }, { count: nutritionCount },
+    ] = await Promise.all([
       supabase.from("profiles").select("full_name, onboarded, sport").eq("id", user.id).maybeSingle(),
       supabase.from("daily_check_ins").select("*").eq("user_id", user.id).eq("check_in_date", today).maybeSingle(),
+      // 40 days covers the streak; the 7-day count is taken from the same rows
+      // rather than a second full scan.
       supabase.from("daily_check_ins").select("check_in_date").eq("user_id", user.id).gte("check_in_date", since),
       supabase.from("training_logs").select("log_date").eq("user_id", user.id).eq("log_date", today).maybeSingle(),
       supabase.from("nutrition_logs").select("log_date").eq("user_id", user.id).eq("log_date", today).maybeSingle(),
+      supabase.from("biometrics").select("*").eq("user_id", user.id)
+        .gte("metric_date", since28).order("metric_date", { ascending: true }),
+      supabase.from("programs").select("plan, completed_sessions").eq("user_id", user.id)
+        .eq("status", "active").order("created_at", { ascending: false }).limit(1).maybeSingle(),
+      supabase.from("programs").select("completed_sessions, status").eq("user_id", user.id),
+      // intensity and drills come along so the readiness verdict can account for
+      // training load — without them sessionLoad has nothing to work with and
+      // ACWR silently reads as "building" forever. 28 days is exactly ACWR's
+      // chronic window, so pulling more was never useful.
+      supabase.from("training_logs").select("log_date, total_minutes, intensity, drills, contact_minutes, distance_km")
+        .eq("user_id", user.id).gte("log_date", since28),
+      supabase.from("videos").select("id", head).eq("user_id", user.id),
+      supabase.from("strength_benchmarks").select("id", head).eq("user_id", user.id),
+      supabase.from("ai_plans").select("id", head).eq("user_id", user.id),
+      supabase.from("daily_check_ins").select("id", head).eq("user_id", user.id),
+      supabase.from("training_logs").select("id", head).eq("user_id", user.id),
+      supabase.from("nutrition_logs").select("id", head).eq("user_id", user.id),
     ]);
-    const { data: bio } = await supabase.from("biometrics").select("*").eq("user_id", user.id)
-      .gte("metric_date", new Date(Date.now() - 28 * 86400_000).toISOString().slice(0, 10)).order("metric_date", { ascending: true });
+
     const bioHistory = (bio ?? []) as Biometric[];
     const bioSignal = biometricSignal(bioHistory.find((b) => b.metric_date === today) ?? null, bioHistory);
+
+    // The one genuine dependency: the insight is keyed on the check-in's id, so
+    // it can't be fetched until we have it. Skipped entirely when there's no
+    // check-in, which is the common case first thing in the morning.
     let insight: DailyInsight | null = null;
     if (checkIn) {
       const { data: ins } = await supabase
         .from("daily_insights").select("*").eq("user_id", user.id).eq("check_in_id", checkIn.id).maybeSingle();
       insight = (ins ?? null) as DailyInsight | null;
     }
-    // Cheap existence checks so "Getting started" can show real progress.
-    // The plan itself, not just a count — home can't name the one thing worth
-    // doing without knowing which session is next.
-    const [{ data: activeProgram }, { count: videoCount }] = await Promise.all([
-      supabase.from("programs").select("plan, completed_sessions").eq("user_id", user.id)
-        .eq("status", "active").order("created_at", { ascending: false }).limit(1).maybeSingle(),
-      supabase.from("videos").select("id", { count: "exact", head: true }).eq("user_id", user.id),
-    ]);
     const programCount = activeProgram ? 1 : 0;
 
     // First session in the block that isn't ticked off. Walked in order because
@@ -71,31 +111,22 @@ export default function HomePage() {
     // Rank + week-at-a-glance. Home used to show none of this, so an athlete
     // who hadn't checked in yet landed on a single empty-state card with
     // nothing to look at and no reason to stay.
-    const head = { count: "exact" as const, head: true };
-    const [allChecks, allTraining, progs, benchC, videoC, allNutrition] = await Promise.all([
-      supabase.from("daily_check_ins").select("check_in_date").eq("user_id", user.id),
-      // intensity and drills come along so the readiness verdict can account for
-      // training load — without them sessionLoad has nothing to work with and
-      // ACWR silently reads as "building" forever.
-      supabase.from("training_logs").select("log_date, total_minutes, intensity, drills").eq("user_id", user.id),
-      supabase.from("programs").select("completed_sessions, status").eq("user_id", user.id),
-      supabase.from("strength_benchmarks").select("id", head).eq("user_id", user.id),
-      supabase.from("ai_plans").select("id", head).eq("user_id", user.id),
-      supabase.from("nutrition_logs").select("log_date").eq("user_id", user.id),
-    ]);
     const since7 = new Date(Date.now() - 6 * 86400_000).toISOString().slice(0, 10);
-    const checkDates = (allChecks.data ?? []).map((r) => r.check_in_date as string);
-    const trainRows = (allTraining.data ?? []) as { log_date: string; total_minutes: number | null }[];
-    const programs = (progs.data ?? []) as { completed_sessions: string[] | null; status: string }[];
+    const checkDates = (streakRows ?? []).map((r) => r.check_in_date as string);
+    const trainRows = (recentTraining ?? []) as { log_date: string; total_minutes: number | null }[];
+    const programs = (progs ?? []) as { completed_sessions: string[] | null; status: string }[];
     const stats: ActivityStats = {
-      checkIns: checkDates.length,
+      // Lifetime totals come from head-counts — the row data was only ever
+      // being counted, so there was no reason to transfer it.
+      checkIns: checkInCount ?? 0,
       streak,
-      trainingSessions: trainRows.length,
+      trainingSessions: trainingCount ?? 0,
       completedSessions: programs.reduce((n, p) => n + (p.completed_sessions?.length ?? 0), 0),
       completedBlocks: programs.filter((p) => p.status === "archived").length,
-      benchmarks: benchC.count ?? 0,
-      videos: videoC.count ?? 0,
-      nutritionLogs: (allNutrition.data ?? []).length,
+      benchmarks: benchCount ?? 0,
+      videos: videoCount ?? 0,
+      nutritionLogs: nutritionCount ?? 0,
+      // From the 40-day streak rows already in hand.
       checkInsLast7: checkDates.filter((d) => d >= since7).length,
     };
     const week = {
@@ -108,10 +139,10 @@ export default function HomePage() {
     // the dead every morning they hadn't — a first-run card nagging month-old
     // users, which is precisely the tone this app was accused of.
     const setup = {
-      checkedIn: checkDates.length > 0,
-      hasProgram: (programCount ?? 0) > 0,
+      checkedIn: (checkInCount ?? 0) > 0,
+      hasProgram: programCount > 0,
       hasVideo: (videoCount ?? 0) > 0,
-      loggedNutrition: (allNutrition.data ?? []).length > 0,
+      loggedNutrition: (nutritionCount ?? 0) > 0,
     };
 
     const acwr = computeACWR(trainRows as unknown as TrainingLog[]);

@@ -52,17 +52,42 @@ export default function SquadPage() {
     const ids = acceptedIds;
 
     const since7 = new Date(Date.now() - 6 * 86400_000).toISOString().slice(0, 10);
-    const [{ data: profiles }, { data: checkIns }, { data: programs }, { data: training }, { data: nutrition }, { data: benches }] = await Promise.all([
+    /**
+     * EVERY COST HERE IS MULTIPLIED BY THE SIZE OF THE SQUAD.
+     *
+     * This was the heaviest query in the app and the least obviously so. It
+     * pulled `select("*")` on daily_check_ins for every athlete with no date
+     * bound — every column of every check-in they had ever written — plus
+     * `select("*")` on programs, which carries the entire four-week plan as
+     * JSON. A 25-player roster with a season of history was tens of thousands of
+     * rows and 25 full plan documents, to render a list of names and a colour.
+     *
+     * Now: check-ins bounded to 60 days and only the columns readiness reads;
+     * the plan JSON fetched only for ACTIVE programs; training bounded to ACWR's
+     * own 28-day window. Nothing on screen changes.
+     */
+    const since60 = new Date(Date.now() - 59 * 86400_000).toISOString().slice(0, 10);
+    const since28 = new Date(Date.now() - 27 * 86400_000).toISOString().slice(0, 10);
+    const [{ data: profiles }, { data: checkIns }, { data: activePrograms }, { data: allProgramStatuses }, { data: training }, { data: nutrition }, { data: benches }] = await Promise.all([
       supabase.from("profiles").select("id, full_name, sport, position, positions").in("id", ids),
-      supabase.from("daily_check_ins").select("*").in("user_id", ids).order("check_in_date", { ascending: false }),
-      supabase.from("programs").select("*").in("user_id", ids),
+      supabase.from("daily_check_ins")
+        .select("user_id, check_in_date, pain_map, fatigue_score, sleep_quality, nutrition_quality, weight_kg, is_match_day, match_minutes_played")
+        .in("user_id", ids).gte("check_in_date", since60).order("check_in_date", { ascending: false }),
+      // The plan document is the expensive part, and only the active one is read.
+      supabase.from("programs").select("user_id, goal_type, status, completed_sessions, plan")
+        .in("user_id", ids).eq("status", "active"),
+      // Archived blocks are only ever counted, so the plan isn't needed for them.
+      supabase.from("programs").select("user_id, status").in("user_id", ids),
       // intensity and drills come too, so each athlete's acute:chronic ratio can
       // feed their readiness. Without them sessionLoad is 0 for everyone and the
       // squad list shows greens next to load spikes it can't see.
-      supabase.from("training_logs").select("user_id, log_date, total_minutes, intensity, drills").in("user_id", ids),
+      supabase.from("training_logs").select("user_id, log_date, total_minutes, intensity, drills, contact_minutes")
+        .in("user_id", ids).gte("log_date", since28),
       supabase.from("nutrition_logs").select("user_id").in("user_id", ids),
       supabase.from("strength_benchmarks").select("user_id").in("user_id", ids),
     ]);
+    // Recombined so the code below sees the same shape it always did.
+    const programs = [...(activePrograms ?? []), ...(allProgramStatuses ?? []).filter((p) => p.status !== "active")];
 
     const checkDatesByUser = new Map<string, string[]>();
     const latestCheck = new Map<string, DailyCheckIn>();
