@@ -14,6 +14,10 @@
 // it at bundle time, so the code that decides what someone is owed is the same
 // code the unit tests cover — a second copy would be the one that goes wrong.
 import { splitCommission, estimateStripeFee } from "../../lib/affiliate";
+// Same reasoning as the commission maths above: this is the code that decides
+// what an athlete's readiness is built from, so it should be the code the unit
+// tests cover rather than a second copy that drifts.
+import { parseOuraSleep, parseIngestPayload } from "../../lib/biometrics";
 
 export interface Env {
   // AI
@@ -72,6 +76,11 @@ export default {
       if (pathname.endsWith("/delete-account")) return await deleteAccount(req, env);
       if (pathname.endsWith("/stripe-webhook")) return await stripeWebhook(req, env);
       if (pathname.endsWith("/admin-create-user")) return await adminCreateUser(req, env);
+      if (pathname.endsWith("/connect-wearable")) return await connectWearable(req, env);
+      if (pathname.endsWith("/ingest-token")) return await mintIngestToken(req, env);
+      // NOT session-authenticated — see the function. An Apple Shortcut cannot
+      // hold a Supabase JWT, so this one carries its own bearer token.
+      if (pathname.endsWith("/wearable-ingest")) return await wearableIngest(req, env);
       // WORKER_VERSION is bumped whenever this file changes in a way that
       // matters. The Worker is pasted into the dashboard by hand, so "is the
       // fix actually live?" was previously unanswerable without an authorised
@@ -93,6 +102,7 @@ export default {
     // this, one bad email address could abort the whole run, and the retention
     // sweep would simply never happen.
     for (const job of [
+      () => syncWearables(env),
       () => sendPushReminders(env),
       () => approveDueCommissions(env),
       () => sendDailyReminders(env),
@@ -906,6 +916,194 @@ async function estimateFood(req: Request, env: Env): Promise<Response> {
   const items = parseFoodItems(raw);
   if (!items) return json({ error: "could not read that meal" }, 422); // validate passed, so unreachable
   return json({ items, model });
+}
+
+// =============================================================================
+// Wearables that upload themselves.
+//
+// See migration 0065 for what each vendor actually permits — it decides the
+// shape of all of this. The short version: Oura can be connected today with a
+// token the athlete generates, Apple Health can push from a Shortcut, and Whoop
+// and Garmin both need an application to be approved before a single line of
+// their integration can run.
+// =============================================================================
+
+/**
+ * Store a provider token and pull straight away.
+ *
+ * The immediate sync is the point. A "Connected ✓" that shows no data until
+ * tomorrow's cron is indistinguishable from a broken one, and the athlete has
+ * no way to tell which they're looking at.
+ */
+async function connectWearable(req: Request, env: Env): Promise<Response> {
+  const u = await authUser(req, env);
+  if (!u) return json({ error: "unauthorized" }, 401);
+  const { provider, token } = (await req.json()) as { provider?: string; token?: string };
+
+  if (provider !== "oura") {
+    // Said plainly rather than as a generic 400. Whoop and Garmin are not
+    // "unsupported" — they are waiting on a registration only the operator can
+    // complete, and the UI repeats this so nobody keeps trying.
+    return json({
+      error: provider === "whoop" || provider === "garmin"
+        ? `${provider} needs a developer application to be approved before it can be connected. Import a CSV export for now.`
+        : "unknown provider",
+    }, 400);
+  }
+
+  const access = (token ?? "").trim();
+  if (access.length < 20) return json({ error: "that doesn't look like an Oura personal access token" }, 400);
+
+  // Verify BEFORE storing. Saving an unverified token gives someone a
+  // connection that looks live and silently returns nothing every night.
+  let rows: ReturnType<typeof parseOuraSleep>;
+  try {
+    rows = await fetchOura(access);
+  } catch (e) {
+    return json({ error: `Oura rejected that token — ${e instanceof Error ? e.message : String(e)}` }, 400);
+  }
+
+  const saved = await saveBiometrics(env, u.id, rows);
+  await supa(env, "/rest/v1/wearable_connections?on_conflict=user_id,provider", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Prefer: "resolution=merge-duplicates" },
+    body: JSON.stringify({
+      user_id: u.id, provider: "oura", access_token: access,
+      last_sync_at: new Date().toISOString(), last_error: null,
+    }),
+  });
+
+  return json({ ok: true, days: saved });
+}
+
+/**
+ * Mint (or rotate) the athlete's push token.
+ *
+ * A UUID rather than a JWT because the holder is an Apple Shortcut, which has
+ * no way to refresh anything. Rotating is just calling this again — the old
+ * token stops working the moment the new one is written.
+ */
+async function mintIngestToken(req: Request, env: Env): Promise<Response> {
+  const u = await authUser(req, env);
+  if (!u) return json({ error: "unauthorized" }, 401);
+  const token = crypto.randomUUID();
+  const r = await supa(env, `/rest/v1/profiles?id=eq.${u.id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ingest_token: token }),
+  });
+  if (!r.ok) return json({ error: "could not create a token" }, 500);
+  return json({ token, url: `${new URL(req.url).origin}${new URL(req.url).pathname.replace(/\/ingest-token$/, "/wearable-ingest")}` });
+}
+
+/**
+ * Accept a push from something that has no Supabase session.
+ *
+ * AUTHENTICATED BY THE INGEST TOKEN, not a user JWT — that is the whole reason
+ * this endpoint is separate. The token identifies the athlete, and a token that
+ * matches nobody is a 401 rather than a silent no-op, so a misconfigured
+ * Shortcut fails visibly instead of appearing to work for weeks.
+ */
+async function wearableIngest(req: Request, env: Env): Promise<Response> {
+  const auth = req.headers.get("Authorization") ?? "";
+  const token = auth.replace(/^Bearer\s+/i, "").trim();
+  // Format-check before querying: a malformed value can't match anything, and
+  // PostgREST errors on a non-uuid comparison rather than returning empty.
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(token)) {
+    return json({ error: "unauthorized" }, 401);
+  }
+
+  const r = await supa(env, `/rest/v1/profiles?ingest_token=eq.${token}&select=id`);
+  const found = r.ok ? ((await r.json()) as { id: string }[]) : [];
+  if (!found.length) return json({ error: "unauthorized" }, 401);
+
+  const rows = parseIngestPayload(await req.json().catch(() => null));
+  if (!rows.length) {
+    return json({ error: "nothing usable in that payload — send hrv, restingHR and/or sleepHours" }, 400);
+  }
+
+  const saved = await saveBiometrics(env, found[0].id, rows);
+  return json({ ok: true, days: saved });
+}
+
+/** Oura's v2 sleep collection for the last `days` days, parsed. */
+async function fetchOura(accessToken: string, days = 7) {
+  const end = new Date();
+  const start = new Date(end.getTime() - days * 86400_000);
+  const url = "https://api.ouraring.com/v2/usercollection/sleep" +
+    `?start_date=${start.toISOString().slice(0, 10)}&end_date=${end.toISOString().slice(0, 10)}`;
+
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 15_000);
+  try {
+    const r = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` }, signal: ctrl.signal });
+    if (r.status === 401 || r.status === 403) throw new Error("token rejected or expired");
+    if (!r.ok) throw new Error(`${r.status}`);
+    const body = (await r.json()) as { data?: unknown[] };
+    return parseOuraSleep((body.data ?? []) as Parameters<typeof parseOuraSleep>[0]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Upsert biometrics, without trampling anything typed in by hand.
+ *
+ * `source=neq.manual` is doing real work: someone who corrects a bad night's
+ * sleep reading should not have the correction overwritten by the next sync of
+ * the same day. The ring is the default, the human is the override.
+ */
+async function saveBiometrics(env: Env, userId: string, rows: { metric_date: string }[]): Promise<number> {
+  if (!rows.length) return 0;
+
+  const existing = await supa(
+    env,
+    `/rest/v1/biometrics?user_id=eq.${userId}&source=eq.manual&select=metric_date` +
+    `&metric_date=in.(${rows.map((r) => r.metric_date).join(",")})`,
+  );
+  const manual = new Set(
+    existing.ok ? ((await existing.json()) as { metric_date: string }[]).map((r) => r.metric_date) : [],
+  );
+  const writable = rows.filter((r) => !manual.has(r.metric_date));
+  if (!writable.length) return 0;
+
+  const r = await supa(env, "/rest/v1/biometrics?on_conflict=user_id,metric_date", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Prefer: "resolution=merge-duplicates" },
+    body: JSON.stringify(writable.map((row) => ({ ...row, user_id: userId }))),
+  });
+  return r.ok ? writable.length : 0;
+}
+
+/**
+ * Nightly pull for every connected ring.
+ *
+ * Runs first in the cron list, before the reminder emails, so the readiness a
+ * morning notification is based on already includes last night's sleep.
+ *
+ * A failure is WRITTEN TO THE ROW rather than only logged. A connection that
+ * quietly stopped working is worse than no connection at all, because readiness
+ * carries on reporting on stale data as though it were current — so the athlete
+ * needs to be able to see that it broke.
+ */
+async function syncWearables(env: Env): Promise<void> {
+  const r = await supa(env, "/rest/v1/wearable_connections?provider=eq.oura&access_token=not.is.null&select=user_id,access_token");
+  if (!r.ok) return;
+  const conns = (await r.json()) as { user_id: string; access_token: string }[];
+
+  for (const c of conns) {
+    let error: string | null = null;
+    try {
+      await saveBiometrics(env, c.user_id, await fetchOura(c.access_token));
+    } catch (e) {
+      error = (e instanceof Error ? e.message : String(e)).slice(0, 200);
+    }
+    await supa(env, `/rest/v1/wearable_connections?user_id=eq.${c.user_id}&provider=eq.oura`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ last_sync_at: new Date().toISOString(), last_error: error }),
+    });
+  }
 }
 
 // --- Injury rehab plans ------------------------------------------------------

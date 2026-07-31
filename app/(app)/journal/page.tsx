@@ -7,6 +7,7 @@ import { JournalForm } from "@/components/JournalForm";
 import { nextSession } from "@/lib/next-session";
 import type { ProgramPlan } from "@/lib/coach";
 import { WearableImport } from "@/components/WearableImport";
+import { WearableConnect } from "@/components/WearableConnect";
 import type { TrainingState } from "@/components/TrainingLogInput";
 import type { Biometric } from "@/lib/biometrics";
 import type { CheckInInput, TrainingLog } from "@/lib/types";
@@ -74,7 +75,11 @@ export default function JournalPage() {
       </header>
       <JournalForm initial={initial} initialTraining={initialTraining} sport={data?.sport} planned={data?.planned ?? []} />
 
-      <div className="mt-5">
+      {/* Connecting comes FIRST, then the manual fallback. Someone typing HRV
+          into a box every morning is the person most worth showing that they
+          don't have to. */}
+      <div className="mt-5 space-y-5">
+        <WearableConnect userId={user.id} />
         <WearableImport
           userId={user.id}
           today={today}

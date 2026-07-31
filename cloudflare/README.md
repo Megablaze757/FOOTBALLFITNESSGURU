@@ -58,6 +58,31 @@ Deploy prints your Worker URL, e.g. `https://apex-api.<you>.workers.dev`.
    `model` field naming the rung that served them — handy for checking whether
    the free tier is actually carrying the load.
 5. **Email**: verify your sending domain in Resend and set `REMINDER_FROM` to an address on it.
+6. **Meal photos** use their own chain, `OPENROUTER_VISION_MODELS`, because none of
+   the text rungs can see an image. Check the live one with
+   `curl "$API/health"` — it reports `vision` alongside `model`.
+
+## Wearables
+
+Three routes, and what each vendor permits decides the shape of all of them:
+
+| Provider | How | Works today? |
+|---|---|---|
+| **Oura** | Athlete pastes a Personal Access Token from cloud.ouraring.com. The Worker verifies it against Oura, imports a week of history, then re-pulls nightly on the cron. | **Yes** — no registration needed |
+| **Apple Health** | No web API exists and there will not be one; HealthKit data never leaves the phone except through an installed app. A **Shortcut** can read Health and POST to `/wearable-ingest` on a daily automation, authenticated by a per-user token from `/ingest-token`. | **Yes** — the athlete builds the Shortcut |
+| **Whoop** | A real OAuth 2.0 API, but it requires registering an application to be issued a client id and secret. | **No** — blocked on that registration |
+| **Garmin** | The Health API is behind the Connect Developer Program: an application and a commercial agreement, not a signup form. | **No** — blocked on approval |
+
+The UI shows the last two as blocked, with the reason, rather than as buttons
+that fail. Both fall back to the CSV import, which already parses their exports.
+
+Tokens live in `wearable_connections`, which the client **cannot read** — there
+is no select policy on it, and status comes from the `wearable_status` view
+instead. Nothing in the browser ever needs a third-party health token back.
+
+A sync failure is written to `last_error` and shown to the athlete. A connection
+that quietly stopped working is worse than none, because readiness carries on
+reporting stale data as though it were current.
 
 ## Notes
 

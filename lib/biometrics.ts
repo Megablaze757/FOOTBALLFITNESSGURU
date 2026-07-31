@@ -116,3 +116,134 @@ export function parseBiometricCsv(text: string): Biometric[] {
   }
   return [...byDate.values()].sort((a, b) => a.metric_date.localeCompare(b.metric_date));
 }
+
+// =============================================================================
+// Connected wearables.
+//
+// The CSV path above is user-initiated, and the honest thing to say about a
+// daily habit that needs a manual export is that it happens once. These are the
+// two shapes that can arrive on their own.
+//
+// Parsing lives here rather than in the Worker for the same reason the
+// commission maths does: this is the code that decides what someone's readiness
+// is built from, so it should be the code the unit tests cover. The Worker
+// imports it and esbuild inlines it.
+// =============================================================================
+
+/** Oura's documented v2 sleep record — only the fields we read. */
+export interface OuraSleepRecord {
+  day?: string;
+  average_hrv?: number | null;
+  lowest_heart_rate?: number | null;
+  average_heart_rate?: number | null;
+  total_sleep_duration?: number | null; // seconds
+  type?: string;
+}
+
+/**
+ * Oura `/v2/usercollection/sleep` → daily biometrics.
+ *
+ * Two things this has to get right:
+ *
+ *   NAPS. Oura returns one record per sleep PERIOD, not per day, so an
+ *   afternoon nap arrives as a second record for the same date. Taking the last
+ *   one would report a 40-minute nap as the night's sleep and read its HRV as
+ *   the day's baseline. The longest period for each date wins.
+ *
+ *   RESTING HEART RATE. `lowest_heart_rate` during sleep is what Oura shows as
+ *   resting HR and what the rest of this module means by it. `average_heart_rate`
+ *   over a night is several beats higher, and mixing the two across days would
+ *   show a rising trend that is really just a change of field.
+ */
+export function parseOuraSleep(records: OuraSleepRecord[] | null | undefined): Biometric[] {
+  const byDate = new Map<string, { b: Biometric; seconds: number }>();
+
+  for (const r of records ?? []) {
+    const date = toISODate(r?.day ?? "");
+    if (!date) continue;
+    // Oura marks naps and rest periods; only real sleep should set a baseline.
+    if (r.type && !/long_sleep|sleep/i.test(r.type)) continue;
+
+    const seconds = Number(r.total_sleep_duration) || 0;
+    const existing = byDate.get(date);
+    if (existing && existing.seconds >= seconds) continue;
+
+    const hrv = numOrNull(r.average_hrv);
+    const rhr = numOrNull(r.lowest_heart_rate ?? r.average_heart_rate);
+    const b: Biometric = {
+      metric_date: date,
+      hrv_ms: hrv,
+      resting_hr: rhr == null ? null : Math.round(rhr),
+      sleep_hours: seconds > 0 ? +(seconds / 3600).toFixed(2) : null,
+      source: "oura",
+    };
+    if (b.hrv_ms == null && b.resting_hr == null && b.sleep_hours == null) continue;
+    byDate.set(date, { b, seconds });
+  }
+
+  return [...byDate.values()]
+    .map((v) => v.b)
+    .sort((a, b) => a.metric_date.localeCompare(b.metric_date));
+}
+
+/**
+ * A pushed payload — an Apple Shortcut, a Tasker job, a script.
+ *
+ * Deliberately forgiving about key names and shape. The thing on the other end
+ * is a Shortcut someone assembled by dragging boxes around, and a strict schema
+ * would fail on `restingHR` vs `resting_hr` with no way for them to debug it.
+ * Accepts one object or an array, and ignores anything it doesn't recognise
+ * rather than rejecting the batch.
+ *
+ * Returns [] when nothing usable was found; the caller answers 400 so the
+ * Shortcut shows a failure rather than reporting success on an empty push.
+ */
+export function parseIngestPayload(body: unknown): Biometric[] {
+  const rows = Array.isArray(body) ? body : [body];
+  const out = new Map<string, Biometric>();
+
+  for (const raw of rows) {
+    if (!raw || typeof raw !== "object") continue;
+    const r = raw as Record<string, unknown>;
+    const pick = (keys: string[]): unknown => {
+      for (const k of Object.keys(r)) {
+        const norm = k.toLowerCase().replace(/[^a-z]/g, "");
+        if (keys.includes(norm)) return r[k];
+      }
+      return undefined;
+    };
+
+    // No date means today — a Shortcut running at 7am is reporting this
+    // morning, and making people compute a date string is how it goes wrong.
+    const date = toISODate(String(pick(["date", "day", "metricdate", "startdate"]) ?? "")) ??
+      new Date().toISOString().slice(0, 10);
+
+    const hrv = numOrNull(pick(["hrv", "hrvms", "heartratevariability", "sdnn"]));
+    const rhr = numOrNull(pick(["restinghr", "restingheartrate", "rhr", "lowestheartrate"]));
+    let sleep = numOrNull(pick(["sleep", "sleephours", "hoursofsleep", "asleep"]));
+    // Apple reports sleep in minutes as often as hours. Nobody sleeps 400
+    // hours, and nobody sleeps 7 minutes — the units are unambiguous from the
+    // magnitude, which is safer than trusting a key name we didn't choose.
+    const sleepMinutes = numOrNull(pick(["sleepminutes", "sleepmins", "minutesasleep"]));
+    if (sleep == null && sleepMinutes != null) sleep = +(sleepMinutes / 60).toFixed(2);
+    else if (sleep != null && sleep > 24) sleep = +(sleep / 60).toFixed(2);
+
+    const b: Biometric = {
+      metric_date: date,
+      hrv_ms: hrv,
+      resting_hr: rhr == null ? null : Math.round(rhr),
+      sleep_hours: sleep,
+      source: "apple_health",
+    };
+    if (b.hrv_ms == null && b.resting_hr == null && b.sleep_hours == null) continue;
+    out.set(date, b); // a later row for the same date wins
+  }
+
+  return [...out.values()].sort((a, b) => a.metric_date.localeCompare(b.metric_date));
+}
+
+/** Number, or null for anything that isn't a usable one (including 0 and NaN). */
+function numOrNull(v: unknown): number | null {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
