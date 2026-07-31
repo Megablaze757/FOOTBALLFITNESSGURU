@@ -215,3 +215,35 @@ export function fromAiItems(
   const total = items.reduce((s, i) => addMacros(s, i.macros), { kcal: 0, protein: 0, carbs: 0, fats: 0 });
   return { items, total: roundMacros(total), unmatched: [] };
 }
+
+// --- Meal photos -------------------------------------------------------------
+
+/**
+ * The longest edge a meal photo is scaled down to before it's sent.
+ *
+ * A phone camera produces 3–5MB and 4000px across. None of that helps a model
+ * identify a chicken breast, and all of it costs: the upload is the slowest
+ * part of the whole round trip on a gym's signal, and image tokens are charged
+ * by area, so a full-resolution photo is several times the price for the same
+ * answer. 768px is comfortably enough to read a plate.
+ */
+export const PHOTO_MAX_EDGE = 768;
+
+/** JPEG quality for the same. Food photos are noisy, so this is invisible. */
+export const PHOTO_QUALITY = 0.7;
+
+/**
+ * Scale (w, h) so the longest edge is at most `max`, preserving aspect ratio.
+ *
+ * Never scales UP — a small photo is left alone rather than being interpolated
+ * into a bigger file that carries no more detail.
+ */
+export function fitDimensions(w: number, h: number, max = PHOTO_MAX_EDGE): { width: number; height: number } {
+  if (!(w > 0) || !(h > 0)) return { width: 0, height: 0 };
+  const longest = Math.max(w, h);
+  if (longest <= max) return { width: Math.round(w), height: Math.round(h) };
+  const scale = max / longest;
+  // At least 1px on the short edge: a very wide panorama would otherwise round
+  // its height to zero and produce a canvas nothing can be drawn on.
+  return { width: Math.max(1, Math.round(w * scale)), height: Math.max(1, Math.round(h * scale)) };
+}

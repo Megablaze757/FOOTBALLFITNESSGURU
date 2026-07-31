@@ -20,6 +20,7 @@ export interface Env {
   OPENROUTER_API_KEY: string;
   OPENROUTER_MODEL: string; // paid model — the last rung before the on-device engine
   OPENROUTER_FREE_MODELS: string; // comma-separated ":free" slugs, tried first
+  OPENROUTER_VISION_MODELS: string; // comma-separated vision slugs, for the meal-photo path
   // Auth (verify the caller's Supabase session)
   SUPABASE_URL: string;
   SUPABASE_ANON_KEY: string;
@@ -77,7 +78,7 @@ export default {
       // request — and I twice reasoned about behaviour from source that wasn't
       // deployed. curl the health route and you know.
       if (pathname.endsWith("/health")) {
-        return json({ ok: true, version: WORKER_VERSION, model: modelChain(env)[0] });
+        return json({ ok: true, version: WORKER_VERSION, model: modelChain(env)[0], vision: visionChain(env)[0] });
       }
       return json({ error: "not found" }, 404);
     } catch (e) {
@@ -339,7 +340,7 @@ function overBudget(state: BudgetState): Response {
 // nobody is watching a spinner and the budget can be what the work actually
 // needs. Callers pass their own client-side timeout to match.
 // Bump on every paste into the Cloudflare dashboard. GET /health reports it.
-const WORKER_VERSION = "2026-07-29.1";
+const WORKER_VERSION = "2026-07-31.1";
 
 const CHAIN_BUDGET_MS = 55_000;
 const ATTEMPT_TIMEOUT_MS = 30_000;
@@ -377,6 +378,32 @@ function modelChain(env: Env): string[] {
   const fallbacks = configured.length ? configured : DEFAULT_FALLBACK_MODELS;
   const primary = (env.OPENROUTER_MODEL || "deepseek/deepseek-chat").trim();
   return [primary, ...fallbacks].filter((m, i, all) => m && all.indexOf(m) === i);
+}
+
+/**
+ * Models that can actually look at a photo.
+ *
+ * A SEPARATE CHAIN, because none of the text rungs can. Sending an image to
+ * deepseek/deepseek-chat doesn't error usefully — it answers about nothing, or
+ * fails, and then the request walks the rest of the chain doing the same thing
+ * until the budget runs out. So the photo path never touches the text models.
+ *
+ * Same reasoning as DEFAULT_FALLBACK_MODELS for hard-coding a default: this
+ * Worker gets pasted into the Cloudflare dashboard, which applies nothing from
+ * wrangler.toml, so a var that is only set there is unset in production.
+ *
+ * Vision slugs get retired like any other. `/health` reports which one is
+ * configured, and estimateFood says plainly when the whole chain failed rather
+ * than pretending the photo was unreadable.
+ */
+const DEFAULT_VISION_MODELS = [
+  "google/gemini-2.5-flash",
+  "openai/gpt-4.1-mini",
+];
+
+function visionChain(env: Env): string[] {
+  const configured = (env.OPENROUTER_VISION_MODELS || "").split(",").map((s) => s.trim()).filter(Boolean);
+  return (configured.length ? configured : DEFAULT_VISION_MODELS).filter((m, i, all) => all.indexOf(m) === i);
 }
 
 // Price of the paid rung, in USD per MILLION tokens, for deepseek/deepseek-chat
@@ -428,7 +455,9 @@ function costOf(
 interface Attempt { text: string; cost: number }
 
 async function openRouterOnce(
-  env: Env, model: string, system: string, user: string, maxTokens: number, json_mode = false
+  env: Env, model: string, system: string, user: string, maxTokens: number, json_mode = false,
+  /** A data: URL. Present only for the photo path — see `estimateFood`. */
+  image?: string | null,
 ): Promise<Attempt> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), ATTEMPT_TIMEOUT_MS);
@@ -453,7 +482,15 @@ async function openRouterOnce(
         ...(json_mode ? { response_format: { type: "json_object" } } : {}),
         messages: [
           { role: "system", content: system },
-          { role: "user", content: user },
+          // A plain string when there's no picture, so the text path is byte
+          // for byte what it was. The array form is the multimodal shape and
+          // some providers reject it when it holds only text.
+          {
+            role: "user",
+            content: image
+              ? [{ type: "text", text: user }, { type: "image_url", image_url: { url: image } }]
+              : user,
+          },
         ],
       }),
       signal: ctrl.signal,
@@ -490,6 +527,8 @@ async function complete(
     validate?: (text: string) => boolean; json?: boolean;
     /** Gold's "priority AI": skip the free rungs entirely. */
     priority?: boolean;
+    /** A data: URL. Switches the chain to the vision models. */
+    image?: string | null;
   }
 ): Promise<{ text: string; model: string; cost: number }> {
   const started = Date.now();
@@ -500,13 +539,16 @@ async function complete(
   let spent = 0;
 
   const attempt = async (model: string) => {
-    const { text, cost } = await openRouterOnce(env, model, opts.system, opts.user, opts.maxTokens, opts.json);
+    const { text, cost } = await openRouterOnce(env, model, opts.system, opts.user, opts.maxTokens, opts.json, opts.image);
     spent += cost;
     if (opts.validate && !opts.validate(text)) throw new Error("unusable output");
     return { text, model, cost: 0 };
   };
 
-  const chain = modelChain(env);
+  // A picture needs a model that can see. The text chain's primary is
+  // text-only, so sending an image down it fails on every rung and the athlete
+  // waits out the whole budget to be told nothing worked.
+  const chain = opts.image ? visionChain(env) : modelChain(env);
   // Priority AI is Gold's, and it's a real difference rather than a label: the
   // free rungs are rate-limited shared capacity with no SLA, so skipping them
   // is the difference between a program in ~3s and one that sometimes takes 15
@@ -556,7 +598,10 @@ async function complete(
 async function meteredComplete(
   env: Env,
   userId: string,
-  opts: { system: string; user: string; maxTokens: number; validate?: (text: string) => boolean; json?: boolean }
+  opts: {
+    system: string; user: string; maxTokens: number;
+    validate?: (text: string) => boolean; json?: boolean; image?: string | null;
+  }
 ): Promise<{ text: string; model: string }> {
   try {
     // Paying skips the free queue. This said `=== "gold"`, which quietly meant
@@ -807,12 +852,33 @@ async function estimateFood(req: Request, env: Env): Promise<Response> {
   if (gate) return gate;
   const budget = await checkBudget(env, u.id);
   if (!budget.allowed) return overBudget(budget);
-  const { text } = (await req.json()) as { text?: string };
+  const { text, image } = (await req.json()) as { text?: string; image?: string };
   const meal = (text ?? "").trim().slice(0, 300);
-  if (meal.length < 2) return json({ error: "text required" }, 400);
+
+  // A photo of the plate, as a data: URL. The client downscales to ~768px and
+  // re-encodes as JPEG before sending — a modern phone camera produces 3-5MB
+  // per shot, which is slow to upload on a gym's signal and costs a great many
+  // image tokens for detail no model needs to identify a chicken breast.
+  //
+  // The ceiling here is the backstop for a client that didn't, or a caller
+  // that isn't ours. Base64 is ~4/3 of the bytes it encodes, so this is roughly
+  // a 1.1MB image.
+  const MAX_IMAGE_CHARS = 1_500_000;
+  const photo = typeof image === "string" && image.startsWith("data:image/") ? image : null;
+  if (image && !photo) return json({ error: "image must be a data: URL" }, 400);
+  if (photo && photo.length > MAX_IMAGE_CHARS) {
+    return json({ error: "that photo is too large — try again, or describe the meal instead" }, 413);
+  }
+  if (!photo && meal.length < 2) return json({ error: "text or image required" }, 400);
 
   const sys =
-    "You estimate the nutrition of a meal an athlete describes in plain language. " +
+    (photo
+      ? "You estimate the nutrition of a meal an athlete has photographed. Identify each food you can " +
+        "see and estimate its portion from the picture, using the plate, cutlery or hand for scale. " +
+        "Judge portions conservatively. If part of the plate is unclear, still include it with your best " +
+        "estimate and say so in the name (e.g. \"Rice (part hidden, estimated)\"). " +
+        "Do NOT invent foods that are not visible. "
+      : "You estimate the nutrition of a meal an athlete describes in plain language. ") +
     "Output ONLY valid minified JSON: {items:[{name:string,qty:number,unit:\"g\"|\"ml\"|\"each\",kcal:number,protein:number,carbs:number,fats:number}]}. " +
     "One entry per distinct food. If no portion is stated, assume a normal adult serving and say so in the name " +
     "(e.g. \"Chicken breast (medium portion)\"). Use UK supermarket foods and typical home cooking. " +
@@ -824,10 +890,18 @@ async function estimateFood(req: Request, env: Env): Promise<Response> {
 
   const { text: raw, model } = await meteredComplete(env, u.id, {
     system: sys,
-    user: `The athlete ate: ${meal}`,
-    maxTokens: 700,
+    user: photo
+      ? meal
+        ? `Estimate this meal. The athlete also says: ${meal}`
+        : "Estimate this meal from the photo."
+      : `The athlete ate: ${meal}`,
+    // A photo produces more items than a typed sentence usually does, so it
+    // needs a little more room to finish the JSON — but not so much that a
+    // rambling model burns the latency budget.
+    maxTokens: photo ? 900 : 700,
     json: true,
     validate: (t) => parseFoodItems(t) !== null,
+    image: photo,
   });
   const items = parseFoodItems(raw);
   if (!items) return json({ error: "could not read that meal" }, 422); // validate passed, so unreachable

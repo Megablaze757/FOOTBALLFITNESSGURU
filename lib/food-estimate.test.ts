@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { estimateMeal, fromAiItems } from "./food-estimate";
+import { estimateMeal, fromAiItems, fitDimensions } from "./food-estimate";
 
 const names = (t: string) => estimateMeal(t).items.map((i) => i.name.toLowerCase());
 
@@ -133,4 +133,28 @@ test("malformed AI payloads don't throw", () => {
   assert.equal(fromAiItems([]).items.length, 0);
   assert.equal(fromAiItems([{}]).items.length, 0);
   assert.equal(fromAiItems([{ name: "  " }]).items.length, 0);
+});
+
+// --- Meal photos -------------------------------------------------------------
+
+test("fitDimensions caps the longest edge and keeps the aspect ratio", () => {
+  const landscape = fitDimensions(4000, 3000, 768);
+  assert.equal(landscape.width, 768);
+  assert.equal(landscape.height, 576); // 4:3 preserved
+  const portrait = fitDimensions(3000, 4000, 768);
+  assert.equal(portrait.width, 576);
+  assert.equal(portrait.height, 768);
+});
+
+test("fitDimensions never scales a small photo up", () => {
+  assert.deepEqual(fitDimensions(320, 240, 768), { width: 320, height: 240 });
+  // Exactly at the cap is left alone too.
+  assert.deepEqual(fitDimensions(768, 768, 768), { width: 768, height: 768 });
+});
+
+test("fitDimensions survives degenerate input", () => {
+  assert.deepEqual(fitDimensions(0, 0), { width: 0, height: 0 });
+  assert.deepEqual(fitDimensions(NaN, 100), { width: 0, height: 0 });
+  // A panorama must not round its short edge to a canvas of zero height.
+  assert.ok(fitDimensions(10000, 3, 768).height >= 1);
 });

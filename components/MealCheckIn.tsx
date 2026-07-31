@@ -1,13 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { invokeAI } from "@/lib/api";
 import {
   planTargets, buildWeek, mealMacros, DEFAULT_PREFS,
   type BodyStats, type MealPrefs, type PlannedMeal,
 } from "@/lib/meal-plan";
 import { parseSchedule } from "@/lib/meal-schedule";
-import { estimateMeal, fromAiItems, roundMacros, type FoodEstimate } from "@/lib/food-estimate";
+import { estimateMeal, fromAiItems, roundMacros, fitDimensions, PHOTO_MAX_EDGE, PHOTO_QUALITY, type FoodEstimate } from "@/lib/food-estimate";
 import type { Macros } from "@/lib/meal-plan";
 import type { TargetContext } from "@/lib/nutrition";
 
@@ -37,11 +37,42 @@ interface Props {
 const DAY_INDEX = () => (new Date().getDay() + 6) % 7; // JS weeks start Sunday; ours start Monday
 
 /**
- * Two ways to log what you actually ate:
- *   1. Tick meals off today's plan — exact, since every gram is known.
- *   2. Describe it — estimated, via the AI endpoint with an on-device fallback.
+ * Read a camera file, scale its longest edge to PHOTO_MAX_EDGE and re-encode as
+ * JPEG. Returns a data: URL.
  *
- * Both feed the same daily totals, which the tracker above then saves.
+ * createImageBitmap rather than an <img> with an object URL: it decodes off the
+ * main thread, so a 12-megapixel photo doesn't freeze the page mid-tap, and it
+ * honours EXIF orientation so a portrait shot doesn't arrive on its side.
+ * The sizing maths is in lib/food-estimate.ts, where it can be tested without a
+ * DOM.
+ */
+async function shrinkImage(file: File): Promise<string> {
+  const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
+  try {
+    const { width, height } = fitDimensions(bitmap.width, bitmap.height, PHOTO_MAX_EDGE);
+    if (!width || !height) throw new Error("That file didn't look like a photo.");
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Your browser wouldn't let us read that photo.");
+    ctx.drawImage(bitmap, 0, 0, width, height);
+    return canvas.toDataURL("image/jpeg", PHOTO_QUALITY);
+  } finally {
+    // Frees the decoded pixels immediately rather than at the next GC. These
+    // are tens of megabytes on a phone that may not have them spare.
+    bitmap.close();
+  }
+}
+
+/**
+ * Three ways to log what you actually ate:
+ *   1. Tick meals off today's plan — exact, since every gram is known.
+ *   2. Photograph the plate — estimated by a vision model. Best at portions,
+ *      which is the part a typed sentence is worst at.
+ *   3. Describe it — estimated, via the AI endpoint with an on-device fallback.
+ *
+ * All three feed the same daily totals, which the tracker above then saves.
  */
 export function MealCheckIn({ stats, prefs, dietNotes, seed, context, onAdd }: Props) {
   const [ticked, setTicked] = useState<Set<string>>(new Set());
@@ -52,6 +83,11 @@ export function MealCheckIn({ stats, prefs, dietNotes, seed, context, onAdd }: P
   const [aiError, setAiError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [added, setAdded] = useState<string | null>(null);
+  /** The downscaled data: URL being shown back to them. Null = no photo. */
+  const [photo, setPhoto] = useState<string | null>(null);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   /**
    * Today's row of THEIR plan — same seed, same targets, same preferences as the
@@ -87,6 +123,56 @@ export function MealCheckIn({ stats, prefs, dietNotes, seed, context, onAdd }: P
   // Instant on-device preview as they type; the AI call refines it on request.
   const preview = useMemo(() => estimateMeal(text), [text]);
   const shown = estimate ?? (text.trim().length > 2 ? preview : null);
+
+  /**
+   * Shrink the photo before it leaves the phone, then estimate from it.
+   *
+   * The downscale is not a nicety — it is most of why this feels quick. A
+   * modern camera hands us 3–5MB at 4000px across; on a gym's signal the
+   * upload alone is the bulk of the wait, and image tokens are charged by area
+   * so the full-resolution version costs several times as much to read a plate
+   * no better. 768px JPEG is typically 60–90KB.
+   *
+   * There is no on-device fallback here, unlike the text path: nothing in the
+   * browser can look at a picture and name the food. So a failure says so
+   * plainly and leaves the typing box, rather than silently showing a guess
+   * that had nothing to do with the photo.
+   */
+  async function onPhoto(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (fileRef.current) fileRef.current.value = ""; // so the same file re-triggers
+    if (!file) return;
+
+    setPhotoBusy(true);
+    setPhotoError(null);
+    setAiError(null);
+    try {
+      const dataUrl = await shrinkImage(file);
+      setPhoto(dataUrl);
+      const res = await invokeAI<{ items?: Parameters<typeof fromAiItems>[0] }>("estimate-food", {
+        image: dataUrl,
+        // Anything already typed is context, not a separate meal — "with olive
+        // oil" is exactly the sort of thing a photo can't show.
+        text: text.trim() || undefined,
+      });
+      const parsed = fromAiItems(res?.items ?? []);
+      if (parsed.items.length === 0) throw new Error("I couldn't identify any food in that photo.");
+      setEstimate(parsed);
+      setSource("ai");
+    } catch (err) {
+      setPhotoError(
+        `${err instanceof Error ? err.message : String(err)} — try a clearer shot, or describe the meal below.`,
+      );
+    } finally {
+      setPhotoBusy(false);
+    }
+  }
+
+  function clearPhoto() {
+    setPhoto(null);
+    setPhotoError(null);
+    setEstimate(null);
+  }
 
   function toggle(pm: PlannedMeal) {
     const key = pm.meal.id;
@@ -178,7 +264,41 @@ export function MealCheckIn({ stats, prefs, dietNotes, seed, context, onAdd }: P
         </div>
       )}
 
-      {/* 2. Free text */}
+      {/* 2. A photo of the plate.
+          Faster than typing and better at portions than a sentence is — "rice"
+          could be 60g or 200g, and a picture of it isn't ambiguous in the same
+          way. Offered ABOVE the text box because on a phone it's one tap to the
+          camera, and the typing is the fallback rather than the other way round. */}
+      <div className="mb-4">
+        <span className="mb-2 block text-xs text-slate-500">Snap the plate and I&apos;ll work it out</span>
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="btn-ghost w-auto cursor-pointer px-4 py-2 text-sm">
+            {photoBusy ? "Reading the photo…" : photo ? "Use a different photo" : "📷 Photo of your meal"}
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              // Opens the camera directly on a phone rather than the photo
+              // library — this is nearly always a meal in front of you.
+              capture="environment"
+              onChange={onPhoto}
+              disabled={photoBusy}
+              className="hidden"
+            />
+          </label>
+          {photo && !photoBusy && (
+            <button onClick={clearPhoto} className="chip text-slate-400 hover:text-slate-200">Remove</button>
+          )}
+        </div>
+
+        {photo && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={photo} alt="Your meal" className="mt-3 max-h-48 rounded-2xl border border-white/10 object-cover" />
+        )}
+        {photoError && <p className="mt-2 text-xs text-amber-300">{photoError}</p>}
+      </div>
+
+      {/* 3. Free text */}
       <div>
         <span className="mb-2 block text-xs text-slate-500">Or just tell me — &ldquo;chicken, rice and broccoli&rdquo;</span>
         <textarea
@@ -230,9 +350,11 @@ export function MealCheckIn({ stats, prefs, dietNotes, seed, context, onAdd }: P
               <button onClick={addEstimate} disabled={shown.items.length === 0} className="btn-primary w-auto px-4 py-2 text-sm disabled:opacity-40">
                 Add to today
               </button>
-              <button onClick={askAi} disabled={busy} className="btn-ghost w-auto px-4 py-2 text-sm">
-                {busy ? "Working it out…" : "Estimate with AI"}
-              </button>
+              {text.trim().length > 2 && (
+                <button onClick={askAi} disabled={busy} className="btn-ghost w-auto px-4 py-2 text-sm">
+                  {busy ? "Working it out…" : "Estimate with AI"}
+                </button>
+              )}
             </div>
           </div>
         )}
