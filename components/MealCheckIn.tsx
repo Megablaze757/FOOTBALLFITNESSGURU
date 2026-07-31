@@ -9,6 +9,7 @@ import {
 import { parseSchedule } from "@/lib/meal-schedule";
 import { estimateMeal, fromAiItems, roundMacros, type FoodEstimate } from "@/lib/food-estimate";
 import type { Macros } from "@/lib/meal-plan";
+import type { TargetContext } from "@/lib/nutrition";
 
 interface Props {
   stats: Partial<BodyStats> | null;
@@ -27,6 +28,8 @@ interface Props {
    * Null means they've never generated a plan, and there is nothing to tick.
    */
   seed: number | null;
+  /** The same sport goal and logged-training figures the daily card used. */
+  context: TargetContext;
   /** Adds the eaten macros into the day's running totals. */
   onAdd: (m: Macros) => void;
 }
@@ -40,7 +43,7 @@ const DAY_INDEX = () => (new Date().getDay() + 6) % 7; // JS weeks start Sunday;
  *
  * Both feed the same daily totals, which the tracker above then saves.
  */
-export function MealCheckIn({ stats, prefs, dietNotes, seed, onAdd }: Props) {
+export function MealCheckIn({ stats, prefs, dietNotes, seed, context, onAdd }: Props) {
   const [ticked, setTicked] = useState<Set<string>>(new Set());
   const [text, setText] = useState("");
   const [estimate, setEstimate] = useState<FoodEstimate | null>(null);
@@ -59,11 +62,13 @@ export function MealCheckIn({ stats, prefs, dietNotes, seed, onAdd }: Props) {
    * it's stored as one number and rebuilt. Which is fine, and was being fed the
    * wrong number here.
    *
-   * Targets stay on planTargets(body) rather than the page's richer
-   * nutritionTargets, because planTargets is what MealPlanner feeds buildWeek.
-   * Using the "better" number here would reintroduce the same bug in a subtler
-   * form: two plans that disagree, for a more defensible reason. The fallback
-   * defaults below are deliberately identical to MealPlanner's.
+   * Targets used to stay on a SECOND, simpler calculation here, deliberately,
+   * because that was what MealPlanner fed buildWeek — so at least the plan and
+   * the tick-list agreed with each other while both disagreed with the number
+   * on the card above them. planTargets is now a thin adapter over the same
+   * nutritionTargets the card uses, and `context` carries the sport goal and
+   * logged training the card was computed from, so all three agree by
+   * construction. The fallback defaults below stay identical to MealPlanner's.
    */
   const todaysMeals = useMemo<PlannedMeal[]>(() => {
     if (seed === null) return [];
@@ -75,9 +80,9 @@ export function MealCheckIn({ stats, prefs, dietNotes, seed, onAdd }: Props) {
       activity: stats?.activity ?? "moderate",
       goal: stats?.goal ?? "maintain",
     };
-    const week = buildWeek(planTargets(body), seed, { ...DEFAULT_PREFS, ...(prefs ?? {}) }, parseSchedule(dietNotes));
+    const week = buildWeek(planTargets(body, context), seed, { ...DEFAULT_PREFS, ...(prefs ?? {}) }, parseSchedule(dietNotes));
     return week[DAY_INDEX()]?.meals ?? [];
-  }, [stats, prefs, dietNotes, seed]);
+  }, [stats, prefs, dietNotes, seed, context]);
 
   // Instant on-device preview as they type; the AI call refines it on request.
   const preview = useMemo(() => estimateMeal(text), [text]);

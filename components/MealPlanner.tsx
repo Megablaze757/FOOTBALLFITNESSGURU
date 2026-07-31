@@ -10,6 +10,7 @@ import {
   type MealPrefs, type DietPattern, type Avoidance,
 } from "@/lib/meal-plan";
 import { parseSchedule } from "@/lib/meal-schedule";
+import type { TargetContext } from "@/lib/nutrition";
 import { SUPERMARKETS, PRICES_REVIEWED, productLink, FOOD_BY_ID as FOOD_LOOKUP } from "@/lib/food-db";
 
 interface Props {
@@ -19,9 +20,18 @@ interface Props {
   initialNotes?: string | null;
   /** Seed of the plan they're already on. Null means they've never generated one. */
   initialSeed?: number | null;
+  /**
+   * The sport goal and logged training the daily card was computed from.
+   *
+   * Without this the planner reached the same function by a different route —
+   * no sport goal, no measured training — and produced a different calorie
+   * target from the one shown at the top of the page. Same function, same
+   * inputs, or they disagree again.
+   */
+  context?: TargetContext;
 }
 
-export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initialSeed }: Props) {
+export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initialSeed, context }: Props) {
   const [sex, setSex] = useState<Sex>(initial?.sex ?? "male");
   const [age, setAge] = useState(String(initial?.age ?? 20));
   const [heightCm, setHeightCm] = useState(String(initial?.heightCm ?? 178));
@@ -49,7 +59,7 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
     heightCm: Number(heightCm) || 178,
     weightKg: Number(weightKg) || 75,
   };
-  const targets = useMemo(() => planTargets(stats), [sex, age, heightCm, weightKg, activity, goal]);
+  const targets = useMemo(() => planTargets(stats, context ?? {}), [sex, age, heightCm, weightKg, activity, goal, context]);
   const list = useMemo(() => (week ? shoppingList(week) : null), [week]);
   // If someone excludes enough, a meal slot can end up with nothing in it —
   // better to say so than to quietly hand back a short day.

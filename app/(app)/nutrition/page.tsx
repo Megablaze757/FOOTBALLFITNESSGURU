@@ -10,7 +10,8 @@ import { FeatureLock } from "@/components/FeatureLock";
 import { MealPlanner } from "@/components/MealPlanner";
 import { MealCheckIn } from "@/components/MealCheckIn";
 import { Tabs } from "@/components/Tabs";
-import { nutritionTargets, type NutritionTargets } from "@/lib/nutrition";
+import { RingProgress } from "@/components/RingProgress";
+import { nutritionTargets, type NutritionTargets, type TargetContext } from "@/lib/nutrition";
 import { sportProfile, type SportProfile } from "@/lib/sport-profile";
 import type { BodyStats, MealPrefs } from "@/lib/meal-plan";
 import type { GoalType } from "@/lib/coach";
@@ -80,11 +81,30 @@ export default function NutritionPage() {
   // The header renders immediately. A bare grey box told you nothing about where
   // you were, and the title then popped in and shoved the content down — the
   // page title is the one thing we already know before any query returns.
+  // A skeleton shaped like the page, not one grey slab.
+  //
+  // The single h-80 box was the same height as nothing in particular, so when
+  // the data landed the verdict card, the tabs and the tracker all appeared at
+  // once and pushed each other around. Matching the real layout means the only
+  // thing that changes on load is the content of the boxes.
   if (loading) {
     return (
       <div className="mx-auto max-w-2xl space-y-5">
         <Header />
-        <div className="card h-80 animate-pulse" />
+        <div className="card flex items-center gap-4 border-l-4 border-l-white/10 p-4">
+          <div className="h-[78px] w-[78px] shrink-0 animate-pulse rounded-full bg-white/[0.06]" />
+          <div className="min-w-0 flex-1 space-y-2">
+            <div className="h-2.5 w-16 animate-pulse rounded bg-white/[0.06]" />
+            <div className="h-5 w-44 animate-pulse rounded bg-white/[0.06]" />
+            <div className="h-3 w-52 animate-pulse rounded bg-white/[0.06]" />
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <div className="h-9 w-28 animate-pulse rounded-full bg-white/[0.06]" />
+          <div className="h-9 w-28 animate-pulse rounded-full bg-white/[0.04]" />
+        </div>
+        <div className="card h-56 animate-pulse" />
+        <div className="card h-40 animate-pulse" />
       </div>
     );
   }
@@ -133,6 +153,14 @@ export default function NutritionPage() {
       dietNotes={data?.dietNotes ?? null}
       mealSeed={data?.mealSeed ?? null}
       sport={data?.sport ?? sportProfile(null)}
+      // The SAME inputs the card above was computed from. Both the planner and
+      // the meal check-in recompute with these, so all three agree by
+      // construction rather than by anyone remembering to keep them in step.
+      context={{
+        goal: data?.goal ?? null,
+        avgTrainingMinutes: data?.avgMinutes ?? 0,
+        trainingDaysLogged: data?.trainingDays ?? 0,
+      }}
     />
   );
 }
@@ -205,9 +233,27 @@ function FuelVerdict({ targets, eaten, waterMl, sport }: {
 
   return (
     <div className="card border-l-4 p-4" style={{ borderLeftColor: v.tone }}>
-      <span className="eyebrow" style={{ color: v.tone }}>{v.eyebrow}</span>
-      <h2 className="mt-1 text-lg font-extrabold">{v.headline}</h2>
-      <p className="mt-1 max-w-prose text-sm text-slate-400">{v.body}</p>
+      <div className="flex items-center gap-4">
+        {/* The ring is the point of the card. "You're 600 under" is the answer,
+            but a number on its own doesn't show how far through the day you
+            are — and that is the thing people actually glance for. */}
+        <RingProgress
+          pct={(eaten / targets.calories) * 100}
+          color={v.tone}
+          size={78}
+          stroke={7}
+          label={`${Math.round((eaten / targets.calories) * 100)}%`}
+          sub="of target"
+        />
+        <div className="min-w-0 flex-1">
+          <span className="eyebrow" style={{ color: v.tone }}>{v.eyebrow}</span>
+          <h2 className="mt-0.5 text-lg font-extrabold leading-tight">{v.headline}</h2>
+          <p className="mt-1 text-xs text-slate-500">
+            {targets.protein}g protein · {targets.carbs}g carbs · {targets.fats}g fat
+          </p>
+        </div>
+      </div>
+      <p className="mt-3 max-w-prose text-sm text-slate-400">{v.body}</p>
       {thirsty && (
         <p className="mt-2 text-sm text-amber-200">
           💧 {(waterMl / 1000).toFixed(1)}L of {(targets.water_ml / 1000).toFixed(1)}L — worth catching up on.
@@ -240,10 +286,10 @@ const NUTRITION_TABS = [
   { id: "plan" as const, label: "Meal plan", icon: "🛒" },
 ];
 
-function NutritionTabs({ userId, today, log, targets, stats, prefs, dietNotes, mealSeed, sport }: {
+function NutritionTabs({ userId, today, log, targets, stats, prefs, dietNotes, mealSeed, sport, context }: {
   userId: string; today: string; log: any; targets: NutritionTargets | null;
   stats: Partial<BodyStats> | null; prefs: Partial<MealPrefs> | null; dietNotes: string | null;
-  mealSeed: number | null; sport: SportProfile;
+  mealSeed: number | null; sport: SportProfile; context: TargetContext;
 }) {
   const [tab, setTab] = useState<"today" | "plan">("today");
   return (
@@ -267,10 +313,11 @@ function NutritionTabs({ userId, today, log, targets, stats, prefs, dietNotes, m
           prefs={prefs}
           dietNotes={dietNotes}
           mealSeed={mealSeed}
+          context={context}
           onAddStats={() => setTab("plan")}
         />
       ) : (
-        <MealPlanner userId={userId} initial={stats} initialPrefs={prefs} initialNotes={dietNotes} initialSeed={mealSeed} />
+        <MealPlanner userId={userId} initial={stats} initialPrefs={prefs} initialNotes={dietNotes} initialSeed={mealSeed} context={context} />
       )}
     </div>
   );
@@ -288,9 +335,11 @@ function Header() {
   );
 }
 
-function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietNotes, mealSeed, onAddStats }: {
+function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietNotes, mealSeed, context, onAddStats }: {
   userId: string; today: string; initial: any; targets: NutritionTargets | null;
   stats: Partial<BodyStats> | null; prefs: Partial<MealPrefs> | null; dietNotes: string | null;
+  /** Shared with the planner so today?s tick-list matches the plan exactly. */
+  context: TargetContext;
   /** Which plan they're on, so today's tick-list is THAT plan and not another. */
   mealSeed: number | null;
   /** Sends them to the tab that collects height/age/sex, so the estimate sharpens. */
@@ -365,7 +414,7 @@ function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietN
   return (
     // Header and width live on the tab shell now, so they don't render twice.
     <div className="animate-fade-up space-y-5">
-      <MealCheckIn stats={stats} prefs={prefs} dietNotes={dietNotes} seed={mealSeed} onAdd={addEaten} />
+      <MealCheckIn stats={stats} prefs={prefs} dietNotes={dietNotes} seed={mealSeed} context={context} onAdd={addEaten} />
 
       {/* No weight, no targets — say so instead of hiding the card silently. */}
       {!targets && (

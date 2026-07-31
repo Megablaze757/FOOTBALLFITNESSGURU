@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { nutritionTargets, activityFactor, basalRate, type TargetInput } from "./nutrition";
+import { nutritionTargets, activityFactor, basalRate, planTargets, type TargetInput, type BodyStats } from "./nutrition";
 
 // A fully-described adult, so the measured path is in play.
 const ADULT: TargetInput = {
@@ -157,4 +157,62 @@ test("targets land on tidy numbers people can actually aim at", () => {
   assert.equal(t.calories % 10, 0);
   assert.equal(t.water_ml % 50, 0);
   assert.equal(t.protein, Math.round(t.protein));
+});
+
+// --- One number, everywhere --------------------------------------------------
+
+test("the meal planner and the daily card agree on calories", () => {
+  // THE BUG THIS PINS. planTargets was a second, simpler calculation: no
+  // resting-rate floor, no under-18 guard, no sport weighting, different
+  // protein per kg. So the Today tab said one number, the meal plan was built
+  // to another, and MealCheckIn had been deliberately pinned to the wrong one
+  // so that at least the tick-list matched the plan.
+  const stats: BodyStats = {
+    sex: "male", age: 24, heightCm: 180, weightKg: 78,
+    activity: "high", goal: "maintain",
+  };
+  const context = { goal: "endurance" as const, avgTrainingMinutes: 55, trainingDaysLogged: 12 };
+
+  const card = nutritionTargets({
+    weightKg: stats.weightKg, heightCm: stats.heightCm, age: stats.age, sex: stats.sex,
+    activity: stats.activity, dietGoal: stats.goal,
+    goal: context.goal, avgTrainingMinutes: context.avgTrainingMinutes,
+    trainingDaysLogged: context.trainingDaysLogged,
+  })!;
+  const plan = planTargets(stats, context);
+
+  assert.equal(plan.calories, card.calories);
+  assert.equal(plan.protein, card.protein);
+  assert.equal(plan.carbs, card.carbs);
+  assert.equal(plan.fats, card.fats);
+});
+
+test("planTargets inherits the safety floors it used to lack", () => {
+  // A 16-year-old asking to cut must not be put in a deficit, and nobody is
+  // targeted below their resting metabolic rate. The old planTargets did
+  // neither, so a meal plan could be built to a number the daily card would
+  // have refused to show.
+  const teen: BodyStats = {
+    sex: "female", age: 16, heightCm: 165, weightKg: 55,
+    activity: "high", goal: "cut",
+  };
+  const t = planTargets(teen);
+  assert.ok(t.calories >= t.bmr, `${t.calories} kcal is below a resting rate of ${t.bmr}`);
+
+  const maintaining = planTargets({ ...teen, goal: "maintain" });
+  assert.ok(
+    t.calories >= maintaining.calories,
+    "a growing athlete asking to cut should not be given fewer calories than maintaining",
+  );
+});
+
+test("the macros never contradict the headline calories", () => {
+  for (const goal of ["cut", "maintain", "build"] as const) {
+    const t = planTargets({ sex: "male", age: 30, heightCm: 175, weightKg: 70, activity: "light", goal });
+    const macroKcal = t.protein * 4 + t.carbs * 4 + t.fats * 9;
+    assert.ok(
+      Math.abs(macroKcal - t.calories) <= 20,
+      `${goal}: macros come to ${macroKcal} kcal but the target says ${t.calories}`,
+    );
+  }
 });
