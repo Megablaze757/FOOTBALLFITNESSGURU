@@ -222,14 +222,20 @@ export function JournalForm({ initial, initialTraining, sport, planned = [] }: {
     // distance and contact count as "something was logged" in their own right —
     // a runner who enters 8km and nothing else has told us about a session, and
     // dropping it because there were no drills or minutes would lose the entry.
+    // A run type on its own is a logged session too — someone who picks
+    // "Recovery run" and nothing else has told us what they did, and the 80/20
+    // report needs that row to exist.
     const trainingRow = (cleanDrills.length || training.total_minutes || training.intensity ||
-                         training.distance_km || training.contact_minutes)
+                         training.distance_km || training.contact_minutes || training.run_type)
       ? {
           drills: cleanDrills,
           total_minutes: training.total_minutes,
           intensity: training.intensity,
           distance_km: training.distance_km ?? null,
           contact_minutes: training.contact_minutes ?? null,
+          run_type: training.run_type ?? null,
+          zone: training.zone ?? null,
+          avg_hr: training.avg_hr ?? null,
         }
       : null;
 

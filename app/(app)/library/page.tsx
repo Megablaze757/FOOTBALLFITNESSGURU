@@ -6,6 +6,7 @@ import { useCurrentUser } from "@/lib/auth";
 import { EXERCISES, EXERCISE_CATEGORIES, SPORTS, DIFFICULTIES, EQUIPMENT_BUCKETS, getExercisesForSport, demoImplement, rowToExercise, exerciseEquip, withinLevel, type Exercise, type ExerciseCategory, type SportId, type Difficulty } from "@/lib/exercises";
 import { ExerciseDemo } from "@/components/ExerciseDemo";
 import { ExerciseModal } from "@/components/ExerciseDetail";
+import { ZoneGuide, RunTypeGuide } from "@/components/ZoneGuide";
 
 // How many cards to render at once. Every card carries an animated SVG demo, so
 // showing all 300+ was both a 44-screen page and a scrolling performance issue.
@@ -24,19 +25,37 @@ export default function LibraryPage() {
   const [open, setOpen] = useState<Exercise | null>(null);
   const [custom, setCustom] = useState<Exercise[]>([]);
   const [shown, setShown] = useState(PAGE);
+  // Feeds the zone guide so it shows THIS athlete's paces and heart rates
+  // rather than a generic table. All optional — the guide degrades to the
+  // standard bands and says so.
+  const [benchmarks, setBenchmarks] = useState<Record<string, number> | null>(null);
+  const [athlete, setAthlete] = useState<{ age: number | null; restingHr: number | null }>({ age: null, restingHr: null });
 
   // Default to the athlete's sport + level, and pull in coach-authored exercises.
   useEffect(() => {
     let active = true;
     const supabase = createClient();
-    supabase.from("profiles").select("sport, level").eq("id", user.id).maybeSingle().then(({ data }) => {
-      const p = data as { sport?: string; level?: string } | null;
-      if (active && p?.sport && SPORTS.some((sp) => sp.id === p.sport)) setSport(p.sport as SportId);
-      if (active && (p?.level === "easy" || p?.level === "medium" || p?.level === "advanced")) setLevel(p.level);
+    supabase.from("profiles").select("sport, level, birth_year").eq("id", user.id).maybeSingle().then(({ data }) => {
+      const p = data as { sport?: string; level?: string; birth_year?: number | null } | null;
+      if (!active) return;
+      if (p?.sport && SPORTS.some((sp) => sp.id === p.sport)) setSport(p.sport as SportId);
+      if (p?.level === "easy" || p?.level === "medium" || p?.level === "advanced") setLevel(p.level);
+      if (p?.birth_year) setAthlete((a) => ({ ...a, age: new Date().getFullYear() - p.birth_year! }));
     });
     supabase.from("custom_exercises").select("*").then(({ data }) => {
       if (active && data) setCustom(data.map(rowToExercise));
     });
+    // Latest test only — zones should follow current fitness, not a personal
+    // best from two seasons ago.
+    supabase.from("strength_benchmarks").select("metrics").order("test_date", { ascending: false }).limit(1)
+      .then(({ data }) => {
+        if (active && data?.[0]) setBenchmarks((data[0] as { metrics: Record<string, number> }).metrics);
+      });
+    supabase.from("biometrics").select("resting_hr").not("resting_hr", "is", null)
+      .order("metric_date", { ascending: false }).limit(1)
+      .then(({ data }) => {
+        if (active && data?.[0]) setAthlete((a) => ({ ...a, restingHr: (data[0] as { resting_hr: number }).resting_hr }));
+      });
     return () => { active = false; };
   }, [user.id]);
 
@@ -86,6 +105,28 @@ export default function LibraryPage() {
       </header>
 
       <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search exercises or muscles…" className="field" />
+
+      {/* Running zones — the reference every run prescription points back at.
+          Collapsed by default: it's a page of reading, and the library's job is
+          still to find a movement. Not gated on the athlete's sport, because
+          runs are now programmed in every sport and a footballer told to do a
+          Zone 2 run needs to know what that means as much as a runner does. */}
+      <details className="group card overflow-hidden">
+        <summary className="flex cursor-pointer list-none items-center justify-between p-4 text-sm font-semibold text-slate-200">
+          <span>
+            Running zones
+            <span className="ml-2 text-xs font-normal text-slate-500">what Zone 1–5 actually mean</span>
+          </span>
+          <span className="text-xs text-slate-500 transition group-open:rotate-180">▾</span>
+        </summary>
+        <div className="space-y-4 border-t border-white/[0.08] p-4">
+          <ZoneGuide metrics={benchmarks} age={athlete.age} restingHr={athlete.restingHr} />
+          <div>
+            <h3 className="field-label">The runs themselves</h3>
+            <RunTypeGuide />
+          </div>
+        </div>
+      </details>
 
       {/* Sport stays visible — it's the filter people change most. The other
           three used to sit under it as three more horizontal scrollers, which

@@ -158,6 +158,12 @@ export interface TrainingLog {
   distance_km?: number | null;
   /** Contact work, weighted above running minutes in sessionLoad. */
   contact_minutes?: number | null;
+  /** Which of the fourteen run types this was — see lib/running.ts, migration 0064. */
+  run_type?: import("./running").RunTypeId | null;
+  /** The zone actually run, 1–5. May differ from the one the run type prescribes. */
+  zone?: import("./running").ZoneId | null;
+  /** Average heart rate from a watch. */
+  avg_hr?: number | null;
   created_at: string;
 }
 

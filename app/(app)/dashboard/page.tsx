@@ -10,6 +10,7 @@ import { useAsync } from "@/lib/use-async";
 import { summarizeTrends, type Trend } from "@/lib/trends";
 import { resolveInsight, actionLabel } from "@/lib/insights";
 import { computeACWR, weeklyReport, tonnage, totalDistanceKm, type LoadZone } from "@/lib/load";
+import { easyShare } from "@/lib/running";
 import { sportProfile, type SportProfile } from "@/lib/sport-profile";
 import { TrendChart } from "@/components/TrendChart";
 import type { DailyCheckIn, DailyInsight, NutritionLog, TrainingLog } from "@/lib/types";
@@ -197,6 +198,16 @@ export default function DashboardPage() {
   const weekTonnage = tonnage(thisWeek);
   const weekContact = thisWeek.reduce((n, t) => n + (Number(t.contact_minutes) || 0), 0);
 
+  // The 80/20 split, over a fortnight rather than a week — one week is too few
+  // runs for the percentage to mean anything, and a single hard session in a
+  // light week would read as a warning when it isn't one.
+  const since14 = new Date(Date.now() - 13 * 86400_000).toISOString().slice(0, 10);
+  const runSplit = easyShare(
+    data!.training
+      .filter((t) => t.log_date >= since14 && t.run_type)
+      .map((t) => ({ type: t.run_type!, km: t.distance_km, minutes: t.total_minutes })),
+  );
+
   return (
     <div className="animate-fade-up space-y-5">
       <Header source={resolved.source} />
@@ -227,6 +238,29 @@ export default function DashboardPage() {
       {resolved.focusBodyPart && (
         <div className="card flex items-center gap-2 px-4 py-3 text-sm text-readiness-red">
           ⚠️ <span className="font-medium text-slate-200">Risk zone:</span> {resolved.focusBodyPart}
+        </div>
+      )}
+
+      {/* Only when there are runs to report on. This is the whole reason the
+          check-in asks which run it was — without it the split can't be known,
+          and it's the number that most often explains why someone is tired. */}
+      {runSplit && (
+        <div className="card p-5">
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <span className="stat-label">Easy vs hard · last 14 days</span>
+            <span className={`chip ${runSplit.meetsTarget ? "text-readiness-green" : "text-readiness-amber"}`}>
+              {runSplit.easyPct}% easy
+            </span>
+          </div>
+          <div className="flex h-2.5 overflow-hidden rounded-full bg-white/[0.06]">
+            <div className="bg-readiness-green" style={{ width: `${runSplit.easyPct}%` }} />
+            <div className="bg-readiness-amber" style={{ width: `${runSplit.hardPct}%` }} />
+          </div>
+          <p className="mt-2 text-sm text-slate-300">{runSplit.note}</p>
+          <p className="mt-1 text-xs text-slate-500">
+            Measured in time at intensity, not by session — a threshold run is mostly easy running
+            either side of the hard part.
+          </p>
         </div>
       )}
 
