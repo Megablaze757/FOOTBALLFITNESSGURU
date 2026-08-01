@@ -374,200 +374,221 @@ function GoalBuilder({ painMap, latestBench, sport, initialPositions, initialFoc
             );
           })}
         </div>
-        <div className="mt-4 flex items-center gap-3 text-xs text-slate-500">
-          <span className="h-px flex-1 bg-white/10" /> or build your own <span className="h-px flex-1 bg-white/10" />
-        </div>
       </div>
 
-      {/* Position / event */}
-      <PositionPicker sport={sport} value={positions} onChange={setPositions} />
+      {/* SIX QUESTIONS, BEHIND ONE TAP.
+          The quick-start tiles above already build a programme in a single tap,
+          and everything down here was permanently open underneath them — so a
+          new athlete met a seven-question form and never registered that the
+          tiles were the answer. ROADMAP calls this out: the quiz between "build
+          my program" and an actual program is what decides whether a new
+          account ever sees the product work.
 
-      {/* Training focus */}
-      <div>
-        <span className="field-label">What are you training for?</span>
-        <div className="grid grid-cols-2 gap-2">
-          {FOCI.map((f) => (
-            <button
-              key={f.id}
-              onClick={() => setFocus(focus === f.id ? initialFocus : f.id)}
-              className={`card p-3 text-left transition ${focus === f.id ? "ring-2 ring-pitch-400/70 shadow-glow" : "card-hover"}`}
-            >
-              <div className="text-sm font-bold text-slate-100">{f.label}</div>
-              <div className="mt-0.5 text-xs text-slate-400">{f.blurb}</div>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div>
-        <span className="field-label">Your main goal</span>
-        <div className="grid grid-cols-2 gap-3">
-          {goals.map((g) => (
-          <button
-            key={g.id}
-            onClick={() => setGoal(goal === g.id ? null : g.id)}
-            className={`card p-4 text-left transition ${goal === g.id ? "ring-2 ring-pitch-400/70 shadow-glow" : "card-hover"}`}
-          >
-            <div className="font-bold text-slate-100">{g.label}</div>
-            <div className="mt-0.5 text-xs text-slate-400">{g.blurb}</div>
-          </button>
-        ))}
-        </div>
-      </div>
-
-      {/* RUNNER INPUTS.
-          Only for a running block, and only three of them. A runner's plan
-          hangs almost entirely on two numbers — what they're training for and
-          how far they currently run in a week — and without them the engine has
-          to assume, which for mileage means guessing at the one variable that
-          decides whether a block builds someone or injures them.
-
-          Shown after the goal so it appears once the goal makes it relevant,
-          rather than as a permanent block of running questions a footballer has
-          to scroll past. */}
-      {sport === "running" && (goal === "endurance" || goal === "speed") && (
-        <div className="card space-y-4 p-4">
-          <div>
-            <span className="field-label">What are you training for?</span>
-            <select
-              className="field [color-scheme:dark]"
-              value={raceGoalId}
-              onChange={(e) => setRaceGoalId(e.target.value)}
-            >
-              {RACE_GOALS.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
-            </select>
-            <span className="mt-1 block text-xs text-slate-500">
-              {RACE_GOALS.find((r) => r.id === raceGoalId)?.note}
-            </span>
-          </div>
-
-          <div>
-            <span className="field-label">Current weekly mileage</span>
-            <input
-              type="number" inputMode="decimal" min={0} max={250} step="1"
-              value={weeklyKm}
-              onChange={(e) => setWeeklyKm(e.target.value)}
-              placeholder="e.g. 40"
-              className="field"
-            />
-            <span className="mt-1 block text-xs text-slate-500">
-              What you run now, not what you&apos;d like to. Leave it blank and we&apos;ll start easy.
-            </span>
-          </div>
-
-          <div>
-            <span className="field-label">How long have you been running?</span>
-            <div className="flex gap-2">
-              {([
-                ["beginner", "Under a year", "1 hard session a week"],
-                ["intermediate", "A year or two", "2 hard sessions"],
-                ["advanced", "Longer", "3 hard sessions"],
-              ] as const).map(([id, label, sub]) => (
-                <button
-                  key={id}
-                  onClick={() => setRunnerLevel(id)}
-                  className={`flex-1 rounded-xl border p-2.5 text-center transition ${
-                    runnerLevel === id
-                      ? "border-pitch-400/50 bg-pitch-400/10 text-pitch-400"
-                      : "border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.06]"
-                  }`}
-                >
-                  <span className="block text-xs font-bold">{label}</span>
-                  <span className="mt-0.5 block text-[10px] text-slate-500">{sub}</span>
-                </button>
-              ))}
-            </div>
-            <span className="mt-1 block text-xs text-slate-500">
-              You get fitter between hard sessions, not during them.
-            </span>
-          </div>
-
-          <RunnerPaces latestBench={latestBench} />
-        </div>
-      )}
-
-      <div>
-        <span className="field-label">Days per week</span>
-        <div className="flex gap-2">
-          {[2, 3, 4, 5].map((n) => (
-            <button
-              key={n}
-              onClick={() => setDaysPerWeek(n)}
-              className={`flex-1 rounded-xl border py-2.5 text-sm font-bold transition ${
-                daysPerWeek === n
-                  ? "border-pitch-400/50 bg-pitch-400/10 text-pitch-400"
-                  : "border-white/10 bg-white/[0.03] text-slate-300"
-              }`}
-            >
-              {n}
-            </button>
-          ))}
-        </div>
-        <p className="mt-1 text-xs text-slate-500">How many sessions we&apos;ll schedule each week.</p>
-      </div>
-
-      <SeasonToggle inSeason={inSeason} onChange={setInSeason} />
-
-      {/* THE THREE OPTIONAL FIELDS, COLLAPSED.
-          This is the form standing between "build my program" and a program —
-          the one stretch that decides whether a new account ever sees the
-          product work. Eight visible inputs read as a long form even when five
-          of them are the only ones that matter; a target date, a benchmark
-          target and a free-text note are all refinements you'd add on a second
-          block, not things to ask before anyone has trained once.
-          Collapsed, not removed: someone with a trial date in mind still wants
-          them, and open is one tap. */}
-      <details className="rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-3">
-        <summary className="tap-target cursor-pointer text-sm font-medium text-slate-300">
-          Add a deadline or a target <span className="text-xs text-slate-500">— optional</span>
+          Nothing is removed, and anyone who wants the control is one tap from
+          all of it. */}
+      <details className="group card overflow-hidden">
+        <summary className="flex cursor-pointer list-none items-center justify-between p-4 text-sm font-semibold text-slate-200">
+          <span>
+            Build your own
+            <span className="ml-2 text-xs font-normal text-slate-500">pick the goal, days and focus yourself</span>
+          </span>
+          <span className="text-xs text-slate-500 transition group-open:rotate-180">▾</span>
         </summary>
+        <div className="space-y-5 border-t border-white/[0.08] p-4">
+        {/* Position / event */}
+        <PositionPicker sport={sport} value={positions} onChange={setPositions} />
 
-        <div className="mt-4 space-y-4">
-          <label className="block">
-            <span className="field-label">Target date</span>
-            <input type="date" className="field [color-scheme:dark]" value={targetDate} onChange={(e) => setTargetDate(e.target.value)} />
-          </label>
-
-      {/* Measurable benchmark target */}
-      <div>
-        <span className="field-label">Measurable target</span>
-        <div className="grid grid-cols-2 gap-2">
-          <select className="field [color-scheme:dark]" value={metric} onChange={(e) => setMetric(e.target.value)}>
-            <option value="">No metric</option>
-            {METRIC_CATALOG.map((m) => (
-              <option key={m.key} value={m.key}>{m.label}{latestBench[m.key] != null ? ` (now ${latestBench[m.key]})` : ""}</option>
+        {/* Training focus */}
+        <div>
+          {/* Was also "What are you training for?" — the same words as the race
+              question further down, so the page asked one question twice and
+              meant two different things by it. */}
+          <span className="field-label">What kind of training?</span>
+          <div className="grid grid-cols-2 gap-2">
+            {FOCI.map((f) => (
+              <button
+                key={f.id}
+                onClick={() => setFocus(focus === f.id ? initialFocus : f.id)}
+                className={`card p-3 text-left transition ${focus === f.id ? "ring-2 ring-pitch-400/70 shadow-glow" : "card-hover"}`}
+              >
+                <div className="text-sm font-bold text-slate-100">{f.label}</div>
+                <div className="mt-0.5 text-xs text-slate-400">{f.blurb}</div>
+              </button>
             ))}
-          </select>
-          <input
-            type="number" step="any" inputMode="decimal" disabled={!metric}
-            className="field text-center disabled:opacity-40"
-            value={targetValue} onChange={(e) => setTargetValue(e.target.value)}
-            placeholder={metric ? `target ${metricDef(metric).unit}` : "—"}
-          />
+          </div>
         </div>
-        {metric && latestBench[metric] != null && (
-          <p className="mt-1 text-xs text-slate-500">Baseline from your latest test: {latestBench[metric]} {metricDef(metric).unit}</p>
-        )}
-      </div>
 
-          <label className="block">
-            <span className="field-label">Anything specific?</span>
-            <input className="field" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. improve my first 5 metres" />
-          </label>
+        <div>
+          <span className="field-label">Your main goal</span>
+          <div className="grid grid-cols-2 gap-3">
+            {goals.map((g) => (
+            <button
+              key={g.id}
+              onClick={() => setGoal(goal === g.id ? null : g.id)}
+              className={`card p-4 text-left transition ${goal === g.id ? "ring-2 ring-pitch-400/70 shadow-glow" : "card-hover"}`}
+            >
+              <div className="font-bold text-slate-100">{g.label}</div>
+              <div className="mt-0.5 text-xs text-slate-400">{g.blurb}</div>
+            </button>
+          ))}
+          </div>
+        </div>
+
+        {/* RUNNER INPUTS.
+            Only for a running block, and only three of them. A runner's plan
+            hangs almost entirely on two numbers — what they're training for and
+            how far they currently run in a week — and without them the engine has
+            to assume, which for mileage means guessing at the one variable that
+            decides whether a block builds someone or injures them.
+
+            Shown after the goal so it appears once the goal makes it relevant,
+            rather than as a permanent block of running questions a footballer has
+            to scroll past. */}
+        {sport === "running" && (goal === "endurance" || goal === "speed") && (
+          <div className="card space-y-4 p-4">
+            <div>
+              <span className="field-label">Which distance?</span>
+              <select
+                className="field [color-scheme:dark]"
+                value={raceGoalId}
+                onChange={(e) => setRaceGoalId(e.target.value)}
+              >
+                {RACE_GOALS.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
+              </select>
+              <span className="mt-1 block text-xs text-slate-500">
+                {RACE_GOALS.find((r) => r.id === raceGoalId)?.note}
+              </span>
+            </div>
+
+            <div>
+              <span className="field-label">Current weekly mileage</span>
+              <input
+                type="number" inputMode="decimal" min={0} max={250} step="1"
+                value={weeklyKm}
+                onChange={(e) => setWeeklyKm(e.target.value)}
+                placeholder="e.g. 40"
+                className="field"
+              />
+              <span className="mt-1 block text-xs text-slate-500">
+                What you run now, not what you&apos;d like to. Leave it blank and we&apos;ll start easy.
+              </span>
+            </div>
+
+            <div>
+              <span className="field-label">How long have you been running?</span>
+              <div className="flex gap-2">
+                {([
+                  ["beginner", "Under a year", "1 hard session a week"],
+                  ["intermediate", "A year or two", "2 hard sessions"],
+                  ["advanced", "Longer", "3 hard sessions"],
+                ] as const).map(([id, label, sub]) => (
+                  <button
+                    key={id}
+                    onClick={() => setRunnerLevel(id)}
+                    className={`flex-1 rounded-xl border p-2.5 text-center transition ${
+                      runnerLevel === id
+                        ? "border-pitch-400/50 bg-pitch-400/10 text-pitch-400"
+                        : "border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.06]"
+                    }`}
+                  >
+                    <span className="block text-xs font-bold">{label}</span>
+                    <span className="mt-0.5 block text-[10px] text-slate-500">{sub}</span>
+                  </button>
+                ))}
+              </div>
+              <span className="mt-1 block text-xs text-slate-500">
+                You get fitter between hard sessions, not during them.
+              </span>
+            </div>
+
+            <RunnerPaces latestBench={latestBench} />
+          </div>
+        )}
+
+        <div>
+          <span className="field-label">Days per week</span>
+          <div className="flex gap-2">
+            {[2, 3, 4, 5].map((n) => (
+              <button
+                key={n}
+                onClick={() => setDaysPerWeek(n)}
+                className={`flex-1 rounded-xl border py-2.5 text-sm font-bold transition ${
+                  daysPerWeek === n
+                    ? "border-pitch-400/50 bg-pitch-400/10 text-pitch-400"
+                    : "border-white/10 bg-white/[0.03] text-slate-300"
+                }`}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+          <p className="mt-1 text-xs text-slate-500">How many sessions we&apos;ll schedule each week.</p>
+        </div>
+
+        <SeasonToggle inSeason={inSeason} onChange={setInSeason} />
+
+        {/* THE THREE OPTIONAL FIELDS, COLLAPSED.
+            This is the form standing between "build my program" and a program —
+            the one stretch that decides whether a new account ever sees the
+            product work. Eight visible inputs read as a long form even when five
+            of them are the only ones that matter; a target date, a benchmark
+            target and a free-text note are all refinements you'd add on a second
+            block, not things to ask before anyone has trained once.
+            Collapsed, not removed: someone with a trial date in mind still wants
+            them, and open is one tap. */}
+        <details className="rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-3">
+          <summary className="tap-target cursor-pointer text-sm font-medium text-slate-300">
+            Add a deadline or a target <span className="text-xs text-slate-500">— optional</span>
+          </summary>
+
+          <div className="mt-4 space-y-4">
+            <label className="block">
+              <span className="field-label">Target date</span>
+              <input type="date" className="field [color-scheme:dark]" value={targetDate} onChange={(e) => setTargetDate(e.target.value)} />
+            </label>
+
+        {/* Measurable benchmark target */}
+        <div>
+          <span className="field-label">Measurable target</span>
+          <div className="grid grid-cols-2 gap-2">
+            <select className="field [color-scheme:dark]" value={metric} onChange={(e) => setMetric(e.target.value)}>
+              <option value="">No metric</option>
+              {METRIC_CATALOG.map((m) => (
+                <option key={m.key} value={m.key}>{m.label}{latestBench[m.key] != null ? ` (now ${latestBench[m.key]})` : ""}</option>
+              ))}
+            </select>
+            <input
+              type="number" step="any" inputMode="decimal" disabled={!metric}
+              className="field text-center disabled:opacity-40"
+              value={targetValue} onChange={(e) => setTargetValue(e.target.value)}
+              placeholder={metric ? `target ${metricDef(metric).unit}` : "—"}
+            />
+          </div>
+          {metric && latestBench[metric] != null && (
+            <p className="mt-1 text-xs text-slate-500">Baseline from your latest test: {latestBench[metric]} {metricDef(metric).unit}</p>
+          )}
+        </div>
+
+            <label className="block">
+              <span className="field-label">Anything specific?</span>
+              <input className="field" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. improve my first 5 metres" />
+            </label>
+          </div>
+        </details>
+
+        {error && <p className="text-sm text-readiness-red">{error}</p>}
+        <button onClick={() => goal && createProgram(goal, focus, positions)} disabled={!goal || creating} className="btn-primary">
+          {creating ? "Building your program…" : "Generate my program"}
+        </button>
+        {/* A dead button with no reason is the most common way a form traps
+            someone: they tap, nothing happens, and there's nothing on screen
+            saying why. The goal select starts empty, so this is the default state
+            of the page, not an edge case. */}
+        {!goal && !creating && (
+          <p className="text-xs text-slate-500">Pick your main goal above and this turns on.</p>
+        )}
         </div>
       </details>
-
-      {error && <p className="text-sm text-readiness-red">{error}</p>}
-      <button onClick={() => goal && createProgram(goal, focus, positions)} disabled={!goal || creating} className="btn-primary">
-        {creating ? "Building your program…" : "Generate my program"}
-      </button>
-      {/* A dead button with no reason is the most common way a form traps
-          someone: they tap, nothing happens, and there's nothing on screen
-          saying why. The goal select starts empty, so this is the default state
-          of the page, not an edge case. */}
-      {!goal && !creating && (
-        <p className="text-xs text-slate-500">Pick your main goal above and this turns on.</p>
-      )}
     </div>
   );
 }

@@ -51,13 +51,13 @@ export default function BodyPage() {
         <>
           {weightSeries.length > 0 && (
             <div className="card p-5">
-              <h2 className="field-label">Weight (kg)</h2>
+              <h2 className="field-label">Weight over time</h2>
               <MiniBars data={weightSeries} color="#e3b53f" unit=" kg" emptyLabel="Add a weight below and this fills in. Two entries a week is enough to see a trend." />
             </div>
           )}
           {bfSeries.length > 0 && (
             <div className="card p-5">
-              <h2 className="field-label">Body fat (%)</h2>
+              <h2 className="field-label">Body fat over time</h2>
               <MiniBars data={bfSeries} color="#fbbf24" unit="%" height={72} emptyLabel="Optional — only if you measure body fat. Weight alone is plenty." />
             </div>
           )}

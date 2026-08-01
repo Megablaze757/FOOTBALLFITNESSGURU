@@ -10,6 +10,101 @@ fortnight while everyone assumes it shipped.
 
 ---
 
+## 2026-08-01 (later) — Simpler pages
+
+### What the Worker still needs
+
+The front-end is merged and deployed. **These are the outstanding steps**, and
+until they're done the app runs on its on-device fallbacks — which is intended
+behaviour, not breakage, and each screen says so where it matters.
+
+| # | Step | Why |
+|---|---|---|
+| 1 | Paste the bundled Worker (`2026-08-01.1`) into Cloudflare | Live is still `2026-07-29.1` — confirmed via `/health` |
+| 2 | Set the GitHub repo **Variable** `NEXT_PUBLIC_API_URL` to the Worker URL | Read at build time; without it the app can't reach the Worker at all |
+| 3 | Re-run *Deploy to GitHub Pages* (it has `workflow_dispatch`) | The variable is baked in at build, so it needs a rebuild |
+
+**Paste the bundle, not `cloudflare/src/index.ts`.** The source imports from
+`lib/affiliate` and `lib/biometrics`, which resolve at bundle time — the
+dashboard editor has no bundler and the raw file fails on load. Regenerate with:
+
+```bash
+cd cloudflare && npx esbuild src/index.ts --bundle --format=esm \
+  --target=es2022 --platform=neutral --outfile=worker.js
+```
+
+**Verifying the paste took** — `/health` should report `2026-08-01.1` and gain a
+`vision` field, and these three routes should go from `404` to `401`
+(route exists, correctly demanding auth):
+
+```bash
+for r in wearable-ingest ingest-token connect-wearable; do
+  curl -s -o /dev/null -w "$r %{http_code}\n" -X POST \
+    "$API/$r" -H 'Content-Type: application/json' -d '{}'
+done
+```
+
+A route still on `404` means the paste truncated — the realistic failure mode at
+74KB.
+
+**New endpoints in this version:** `/connect-wearable`, `/ingest-token`,
+`/wearable-ingest`, plus a vision path on `/estimate-food` and a nightly
+wearable sync added to the cron handler.
+
+**New optional config:** `OPENROUTER_VISION_MODELS` (comma-separated). Defaults
+are compiled in, so nothing breaks if it's unset. No new secrets are required —
+the wearable sync uses the service-role key the Worker already holds.
+
+### Changed
+
+**Home is the day, not a homepage.** Eleven stacked sections with the daily job
+third — including a second navigation grid on a page that already has a nav bar,
+and the same three actions repeated lower down as "daily quests". Seven now,
+four of which render on a typical day.
+
+The quests *were* the day: `dailyQuests()` returns exactly check in, train, eat.
+They're one card, and each row carries its own substance — the session's real
+name and "Week 2 · 6 exercises", the calories actually left, the readiness
+verdict. Rank and XP progress close the card, so the reward sits underneath the
+work rather than two panels below it.
+
+Two render branches became one. There was a separate "not checked in yet" page
+maintaining its own copy of the greeting, notifications and tool grid, and the
+two had drifted.
+
+**The programme builder asks one question, not seven.** The quick-start tiles
+already built a programme in a single tap, and six further questions sat
+permanently open beneath them — so a new athlete met a form and never registered
+that the tiles were the answer. `ROADMAP.md` names this as the thing that decides
+whether a new account ever sees the product work. Everything is behind one
+"Build your own" tap. 13 top-level blocks → 4.
+
+**Nutrition is no longer buried.** It was seventh of seven tiles for football,
+rugby and basketball, and behind the More sheet on a phone — the one paid feature
+with a daily job was the hardest thing to reach. Home leads with today's fuel,
+and it moved up the tool grid in every sport. Cost no extra query: Home was
+already fetching the row and using only its existence.
+
+**Less lecturing.** `/coach` carried 1,109 characters of prose, nearly 3× any
+other page, explaining physiology behind choices the controls had already made
+clear. Down to 780, longest block 177 → 88.
+
+### Fixed
+
+- **`/coach` asked "What are you training for?" twice**, meaning two different
+  things — training focus, and race distance.
+- **`/body` labelled a chart and an input field identically** — "Weight (kg)"
+  appeared twice meaning a history and a box to type in.
+
+### Notes
+
+Pages checked and found structurally fine, left alone rather than churned:
+`/body`, `/pricing`, `/train`, `/benchmarks`, `/dashboard`, `/essentials`,
+`/report`, `/profile`, `/journal`, `/injury`. `/rewards` is dense deliberately —
+it's the gamification destination, not a daily-path page.
+
+---
+
 ## 2026-08-01 — Running, meal photos, connected wearables
 
 Sixteen commits, 39 files, ~4,900 lines. Merged to `main` as `fb9cca5`.
