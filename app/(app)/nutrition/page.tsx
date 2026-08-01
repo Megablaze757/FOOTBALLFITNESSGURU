@@ -364,7 +364,9 @@ function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietN
 
   useEffect(() => { setSaved(false); }, [calories, macros, water, eaten]);
 
-  const macroKcal = MACROS.reduce((sum, m) => sum + (Number(macros[m.key]) || 0) * m.kcal, 0);
+  // macroKcal used to be here, feeding a second 4xl headline number that
+  // competed with the calorie one. Both claimed to be "today", and they
+  // disagreed whenever someone logged with both. Macros are progress rows now.
   const waterGoal = targets?.water_ml ?? 3000;
 
   function applyTargets() {
@@ -430,145 +432,158 @@ function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietN
         </div>
       )}
 
-      {/* Coach-set smart targets */}
-      {targets && (
-        <div className="card p-5">
-          <div className="mb-1 flex items-center justify-between">
-            <h2 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-pitch-400">
-              <span className="h-1.5 w-1.5 rounded-full bg-pitch-400" /> Coach targets
-            </h2>
-            <button onClick={applyTargets} className="text-xs font-medium text-pitch-400 hover:underline">Apply to today</button>
-          </div>
-          <p className="text-xs text-slate-400">{targets.rationale}</p>
-
-          {/* The working, when we have enough to show it. */}
-          {targets.bmr != null && targets.tdee != null && (
-            <p className="mt-1 text-[11px] text-slate-500">
-              Resting {targets.bmr.toLocaleString()} kcal · with training {targets.tdee.toLocaleString()} kcal
-            </p>
-          )}
-
-          {/* A floor moved the number — say which, rather than showing a figure
-              that doesn't match the maths above it. */}
-          {targets.guard && (
-            <p className="mt-2 rounded-xl bg-pitch-400/10 px-3 py-2 text-[11px] text-pitch-400">{targets.guard}</p>
-          )}
-
-          {/* Ask for what's missing, once, where the imprecision actually shows. */}
-          {targets.basis === "estimated" && targets.missing.length > 0 && (
-            <button
-              onClick={onAddStats}
-              className="mt-2 w-full rounded-xl bg-white/[0.04] px-3 py-2 text-left text-[11px] text-slate-400 transition hover:bg-white/[0.07] hover:text-slate-200"
-            >
-              Add your {listWords(targets.missing)} to swap this estimate for a proper
-              metabolic calculation →
-            </button>
-          )}
-          {/* Two up on a phone — four across 375px clips the numbers. */}
-          <div className="mt-3 grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
-            {[
-              { label: "kcal", val: targets.calories, logged: macroKcal, color: "#e3b53f" },
-              { label: "Protein", val: targets.protein, logged: Number(macros.protein) || 0, color: "#e3b53f" },
-              { label: "Carbs", val: targets.carbs, logged: Number(macros.carbs) || 0, color: "#38bdf8" },
-              { label: "Fats", val: targets.fats, logged: Number(macros.fats) || 0, color: "#fbbf24" },
-            ].map((t) => (
-              <div key={t.label} className="rounded-2xl bg-white/[0.04] p-2">
-                <div className="text-[10px] uppercase tracking-wide text-slate-500">{t.label}</div>
-                <div className="text-sm font-bold text-slate-100">{t.val.toLocaleString()}</div>
-                <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-white/10">
-                  <div className="h-full rounded-full" style={{ width: `${Math.min(100, (t.logged / t.val) * 100)}%`, background: t.color }} />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Direct calorie logging */}
-      <div className="card p-5">
-        <div className="flex items-baseline justify-between">
-          <span className="field-label !mb-0">🍽️ Calories eaten today</span>
-          {calories && <span className="text-xs text-slate-400">target {Number(calories).toLocaleString()}</span>}
-        </div>
-        <div className="mt-2 text-center text-4xl font-extrabold text-pitch-400">{eaten.toLocaleString()}<span className="ml-1 text-base font-normal text-slate-500">kcal</span></div>
-        {calories ? (
-          <div className="mt-3 h-2.5 w-full overflow-hidden rounded-full bg-white/10">
-            <div className="h-full rounded-full bg-gradient-to-r from-pitch-400 to-pitch-600 transition-all" style={{ width: `${Math.min(100, (eaten / Number(calories)) * 100)}%` }} />
-          </div>
-        ) : null}
-        <div className="mt-3 flex flex-wrap gap-2">
-          {[200, 400, 600].map((kc) => (
-            <button key={kc} onClick={() => setEaten((c) => c + kc)} className="btn-ghost flex-1 py-2">+{kc}</button>
-          ))}
-          <input type="number" inputMode="numeric" value={eaten || ""} onChange={(e) => setEaten(Number(e.target.value) || 0)} className="field w-24 text-center" placeholder="edit" />
-          <button onClick={() => setEaten(0)} className="btn-ghost w-auto px-4 py-2 text-slate-400">Reset</button>
-        </div>
-        {calories && eaten > 0 && (
-          <p className="mt-2 text-xs text-slate-400">{Number(calories) - eaten > 0 ? `${(Number(calories) - eaten).toLocaleString()} kcal left today` : `${(eaten - Number(calories)).toLocaleString()} kcal over target`}</p>
-        )}
-      </div>
-
-      {/* Calories from macros */}
-      <div className="card p-5 text-center">
-        <div className="stat-label">Or track by macros</div>
-        <div className="mt-1 text-4xl font-extrabold text-pitch-400">{macroKcal.toLocaleString()}<span className="ml-1 text-base font-normal text-slate-500">kcal</span></div>
-        {calories && (
-          <div className="mt-1 text-xs text-slate-400">Target {Number(calories).toLocaleString()} kcal · {Math.round((macroKcal / Number(calories)) * 100) || 0}%</div>
-        )}
-        {/* macro split bar */}
-        <div className="mt-4 flex h-3 w-full overflow-hidden rounded-full bg-white/10">
-          {MACROS.map((m) => {
-            const kcal = (Number(macros[m.key]) || 0) * m.kcal;
-            const pct = macroKcal ? (kcal / macroKcal) * 100 : 0;
-            return <div key={m.key} style={{ width: `${pct}%`, background: m.color }} />;
-          })}
-        </div>
-        <div className="mt-2 flex justify-center gap-4 text-xs text-slate-400">
-          {MACROS.map((m) => (
-            <span key={m.key} className="flex items-center gap-1">
-              <span className="inline-block h-2 w-2 rounded-full" style={{ background: m.color }} />{m.label}
-            </span>
-          ))}
-        </div>
-      </div>
-
-      {/* Inputs */}
+      {/* TODAY, IN ONE CARD.
+          This was five: a targets card, a big "calories eaten" number, a second
+          equally big "or track by macros" number, a manual inputs card and a
+          water card. The calorie figure appeared FOUR times on one screen
+          counting the verdict above, twice at 4xl, and the two headline numbers
+          disagreed with each other whenever someone used both. A busy athlete
+          opening this after training has one question — am I on track — and had
+          to assemble the answer from four places that each claimed to be it. */}
       <div className="card space-y-4 p-5">
-        <label className="block">
-          <span className="field-label">Daily calorie target</span>
-          <input type="number" inputMode="numeric" value={calories} onChange={(e) => setCalories(e.target.value)} placeholder="e.g. 2800" className="field" />
-        </label>
-        <div className="grid grid-cols-3 gap-3">
-          {MACROS.map((m) => (
-            <label key={m.key} className="block">
-              <span className="field-label" style={{ color: m.color }}>{m.label} (g)</span>
-              <input type="number" inputMode="numeric" value={macros[m.key]} onChange={(e) => setMacros((p) => ({ ...p, [m.key]: e.target.value }))} className="field text-center" />
-            </label>
+        <div className="flex items-baseline justify-between">
+          <span className="field-label !mb-0">Today so far</span>
+          {targets && (
+            <span className="text-xs text-slate-400">
+              {Math.max(0, targets.calories - eaten).toLocaleString()} kcal left
+            </span>
+          )}
+        </div>
+
+        <div>
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-3xl font-extrabold text-pitch-400">{eaten.toLocaleString()}</span>
+            <span className="text-sm text-slate-500">
+              / {targets ? targets.calories.toLocaleString() : (calories || "—")} kcal
+            </span>
+          </div>
+          {targets && (
+            <div className="mt-2 h-2.5 w-full overflow-hidden rounded-full bg-white/10">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-pitch-400 to-pitch-600 transition-all"
+                style={{ width: `${Math.min(100, (eaten / targets.calories) * 100)}%` }}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Quick-add stays: it is the fastest way to log a coffee and a banana
+            without describing them to anything. */}
+        <div className="flex flex-wrap gap-2">
+          {[200, 400, 600].map((kc) => (
+            <button key={kc} onClick={() => setEaten((c) => c + kc)} className="btn-ghost flex-1 py-2 text-sm">+{kc}</button>
           ))}
+          <input
+            type="number" inputMode="numeric" value={eaten || ""}
+            onChange={(e) => setEaten(Number(e.target.value) || 0)}
+            className="field w-20 text-center" placeholder="edit"
+            aria-label="Calories eaten today"
+          />
+          <button onClick={() => setEaten(0)} className="btn-ghost w-auto px-3 py-2 text-sm text-slate-400">Reset</button>
+        </div>
+
+        {/* Macros as three progress rows rather than a second headline number
+            competing with the first. Same information, no rival answer. */}
+        {targets && (
+          <div className="space-y-2">
+            {MACROS.map((m) => {
+              const logged = Number(macros[m.key]) || 0;
+              const target = m.key === "protein" ? targets.protein : m.key === "carbs" ? targets.carbs : targets.fats;
+              return (
+                <div key={m.key}>
+                  <div className="flex items-baseline justify-between text-xs">
+                    <span className="text-slate-400">{m.label}</span>
+                    <span className="tabular-nums text-slate-300">{logged}g <span className="text-slate-600">/ {target}g</span></span>
+                  </div>
+                  <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+                    <div className="h-full rounded-full" style={{ width: `${Math.min(100, (logged / target) * 100)}%`, background: m.color }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Water, same card. It is one number and a button; it never needed its
+            own panel. */}
+        <div>
+          <div className="flex items-baseline justify-between text-xs">
+            <span className="text-slate-400">Water</span>
+            <span className="tabular-nums text-sky-300">{(water / 1000).toFixed(1)}L <span className="text-slate-600">/ {(waterGoal / 1000).toFixed(1)}L</span></span>
+          </div>
+          <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+            <div className="h-full rounded-full bg-sky-400 transition-all" style={{ width: `${Math.min(100, (water / waterGoal) * 100)}%` }} />
+          </div>
+          <div className="mt-2 flex gap-2">
+            {[250, 500].map((ml) => (
+              <button key={ml} onClick={() => setWater((w) => w + ml)} className="btn-ghost flex-1 py-1.5 text-xs">+{ml}ml</button>
+            ))}
+            <button onClick={() => setWater(0)} className="btn-ghost w-auto px-3 py-1.5 text-xs text-slate-400">Reset</button>
+          </div>
         </div>
       </div>
 
-      {/* Water */}
-      <div className="card p-5">
-        <div className="flex items-baseline justify-between">
-          <span className="field-label">Hydration</span>
-          <span className="text-sm font-bold text-sky-300">{(water / 1000).toFixed(2)} L / {(waterGoal / 1000).toFixed(1)} L</span>
+      {/* EVERYTHING THAT ISN'T THE DAILY JOB, folded away.
+          The rationale, the resting-rate working and the manual overrides are
+          all worth having and none of them is why someone opened this page
+          after training. Closed by default; one tap when they want it. */}
+      <details className="group card overflow-hidden">
+        <summary className="flex cursor-pointer list-none items-center justify-between p-4 text-sm font-semibold text-slate-200">
+          <span>
+            Targets
+            <span className="ml-2 text-xs font-normal text-slate-500">
+              {targets ? "how these were worked out, and how to change them" : "set your own"}
+            </span>
+          </span>
+          <span className="text-xs text-slate-500 transition group-open:rotate-180">▾</span>
+        </summary>
+
+        <div className="space-y-4 border-t border-white/[0.08] p-4">
+          {targets && (
+            <div>
+              <p className="text-xs text-slate-400">{targets.rationale}</p>
+              {targets.bmr != null && targets.tdee != null && (
+                <p className="mt-1 text-[11px] text-slate-500">
+                  Resting {targets.bmr.toLocaleString()} kcal · with training {targets.tdee.toLocaleString()} kcal
+                </p>
+              )}
+              {/* A floor moved the number — say which, rather than showing a
+                  figure that doesn't match the maths above it. */}
+              {targets.guard && (
+                <p className="mt-2 rounded-xl bg-pitch-400/10 px-3 py-2 text-[11px] text-pitch-400">{targets.guard}</p>
+              )}
+              {/* Ask for what's missing, once, where the imprecision shows. */}
+              {targets.basis === "estimated" && targets.missing.length > 0 && (
+                <button
+                  onClick={onAddStats}
+                  className="mt-2 w-full rounded-xl bg-white/[0.04] px-3 py-2 text-left text-[11px] text-slate-400 transition hover:bg-white/[0.07] hover:text-slate-200"
+                >
+                  Add your {listWords(targets.missing)} to swap this estimate for a proper
+                  metabolic calculation →
+                </button>
+              )}
+              <button onClick={applyTargets} className="mt-3 text-xs font-semibold text-pitch-400 hover:underline">
+                Reset my numbers to these
+              </button>
+            </div>
+          )}
+
+          <div className="space-y-3">
+            <label className="block">
+              <span className="field-label">Daily calorie target</span>
+              <input type="number" inputMode="numeric" value={calories} onChange={(e) => setCalories(e.target.value)} placeholder="e.g. 2800" className="field" />
+            </label>
+            <div className="grid grid-cols-3 gap-3">
+              {MACROS.map((m) => (
+                <label key={m.key} className="block">
+                  <span className="field-label" style={{ color: m.color }}>{m.label} (g)</span>
+                  <input type="number" inputMode="numeric" value={macros[m.key]} onChange={(e) => setMacros((p) => ({ ...p, [m.key]: e.target.value }))} className="field text-center" />
+                </label>
+              ))}
+            </div>
+          </div>
         </div>
-        {targets && (
-          <p className="-mt-1 mb-1 text-[11px] text-slate-500">
-            Set from your body weight plus sweat loss for the training you&apos;ve logged.
-          </p>
-        )}
-        <div className="mt-2 h-3 w-full overflow-hidden rounded-full bg-white/10">
-          <div className="h-full rounded-full bg-gradient-to-r from-sky-400 to-sky-300 transition-all" style={{ width: `${Math.min(100, (water / waterGoal) * 100)}%` }} />
-        </div>
-        <div className="mt-3 flex gap-2">
-          {[250, 500].map((ml) => (
-            <button key={ml} onClick={() => setWater((w) => w + ml)} className="btn-ghost flex-1 py-2">+{ml} ml</button>
-          ))}
-          <button onClick={() => setWater(0)} className="btn-ghost w-auto px-4 py-2 text-slate-400">Reset</button>
-        </div>
-      </div>
+      </details>
 
       {error && <p className="text-sm text-readiness-red">{error}</p>}
       <button onClick={save} disabled={saving} className="btn-primary">{saving ? "Saving…" : saved ? "Saved ✓" : "Save today's nutrition"}</button>
