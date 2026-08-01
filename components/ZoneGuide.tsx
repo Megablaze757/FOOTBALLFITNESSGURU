@@ -34,9 +34,8 @@ export function ZoneGuide({ metrics, age, restingHr, maxHr }: {
   return (
     <div className="space-y-3">
       <p className="text-sm text-slate-400">
-        Every run in your plan is prescribed as a zone. The zone is the whole instruction — how hard,
-        for how long — and the effort description matters more than the numbers, because it still
-        works on a hot day, up a hill, or with no watch at all.
+        Every run in your plan has a zone. Go by how it feels, not the numbers — that works on a hot
+        day, up a hill, and with no watch.
       </p>
 
       <ul className="space-y-2">

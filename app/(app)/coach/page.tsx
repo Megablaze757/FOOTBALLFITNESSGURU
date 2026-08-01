@@ -451,8 +451,7 @@ function GoalBuilder({ painMap, latestBench, sport, initialPositions, initialFoc
               className="field"
             />
             <span className="mt-1 block text-xs text-slate-500">
-              What you&apos;re running NOW, not what you&apos;d like to be. The block builds from here and
-              never adds more than 10% a week. Leave it blank and we&apos;ll start conservatively.
+              What you run now, not what you&apos;d like to. Leave it blank and we&apos;ll start easy.
             </span>
           </div>
 
@@ -479,8 +478,7 @@ function GoalBuilder({ painMap, latestBench, sport, initialPositions, initialFoc
               ))}
             </div>
             <span className="mt-1 block text-xs text-slate-500">
-              This caps hard sessions, and the cap is recovery rather than willpower — the adaptation
-              happens between them, not during.
+              You get fitter between hard sessions, not during them.
             </span>
           </div>
 
@@ -958,14 +956,12 @@ function ActiveProgram({
             )}
             {loggedToday && (
               <p className="mb-2 mt-1 text-xs text-slate-400">
-                You&apos;ve already logged training today. This is what&apos;s next whenever you&apos;re ready —
-                there&apos;s no need to do it now.
+                Already trained today. Here&apos;s what&apos;s next, whenever you&apos;re ready.
               </p>
             )}
             {readiness?.status === "Yellow" && (
               <p className="mb-2 mt-1 text-xs text-amber-300">
-                Readiness is moderate — a set has come off the working movements and the effort
-                targets are eased.
+                Readiness is moderate, so today is lighter — a set off, and easier targets.
               </p>
             )}
             <div className="mt-2">
@@ -1036,9 +1032,8 @@ function RunnerPaces({ latestBench }: { latestBench: Record<string, number> }) {
   if (!threshold) {
     return (
       <p className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-3 text-xs text-slate-400">
-        Your sessions will be prescribed as <b className="text-slate-200">zones and effort</b>, which works
-        without a watch. Log a <b className="text-slate-200">5k or 10k time</b> on Benchmarks and every run
-        gets a real pace instead — and they move on their own as you get fitter.
+        Sessions come as <b className="text-slate-200">zones and effort</b>, so you don&apos;t need a watch.
+        Log a <b className="text-slate-200">5k or 10k</b> on Benchmarks to get real paces too.
       </p>
     );
   }
