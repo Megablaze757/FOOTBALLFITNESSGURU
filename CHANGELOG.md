@@ -89,6 +89,14 @@ already fetching the row and using only its existence.
 other page, explaining physiology behind choices the controls had already made
 clear. Down to 780, longest block 177 → 88.
 
+**Whoop and Garmin are no longer listed as connections.** They each had a
+greyed-out row explaining the developer programme in the way. All true, and none
+of it the athlete's problem — two dead entries in a list of four made the whole
+feature look half-built, and someone with a Whoop wants to know what to do, not
+why they can't do the other thing. One line now points at the CSV importer
+directly below it, which already reads their exports. The rows can come back the
+day those applications are approved.
+
 ### Fixed
 
 - **`/coach` asked "What are you training for?" twice**, meaning two different

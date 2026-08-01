@@ -27,8 +27,13 @@ import { useAsync } from "@/lib/use-async";
  *   Garmin — gated behind the Connect Developer Program, which is an
  *            application and a commercial agreement.
  *
- * The last two are shown as what they are rather than as buttons that fail.
- * A disabled control with a reason is more use than one that looks live.
+ * The last two are NOT listed. They each had a greyed-out row explaining the
+ * developer programme in the way — all true, and none of it the athlete's
+ * problem. Two dead entries in a list of four made the whole feature look
+ * half-built, and someone with a Whoop wants to know what to do rather than why
+ * they can't do the other thing. They get one line pointing at the CSV importer,
+ * which reads their exports today. The rows can come back the day the
+ * applications are approved.
  */
 export function WearableConnect({ userId }: { userId: string }) {
   const [open, setOpen] = useState<"oura" | "apple" | null>(null);
@@ -93,21 +98,19 @@ export function WearableConnect({ userId }: { userId: string }) {
           />
           {open === "apple" && <AppleSetup token={data?.ingestToken ?? null} onDone={reload} />}
 
-          {/* Not buttons. Both are waiting on an application only the operator
-              can file, and a control that looks live and always fails is worse
-              than one that explains itself. */}
-          <Row
-            name="Whoop"
-            icon="⌚"
-            state="blocked"
-            detail="Needs a developer application approved by Whoop before it can be switched on. Import a CSV export below for now."
-          />
-          <Row
-            name="Garmin"
-            icon="⌚"
-            state="blocked"
-            detail="Garmin's health data is behind their Connect Developer Program, which has to be applied for. Import a CSV export below for now."
-          />
+          {/* EVERYTHING ELSE IS A CSV, and that's all this needs to say.
+              Whoop and Garmin used to sit here as their own rows, greyed out,
+              each explaining the developer programme standing in the way. All
+              true, and none of it the athlete's problem — two dead entries in a
+              list of four made the whole feature look half-built, and a person
+              with a Whoop wants to know what to do, not why they can't do the
+              other thing. The answer is one line, and the importer is directly
+              below it. */}
+          <li className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-3 text-xs text-slate-400">
+            <span className="font-semibold text-slate-300">Whoop, Garmin, anything else?</span>{" "}
+            Export your data from their app and use <span className="text-slate-200">Import CSV</span> just
+            below — it reads sleep, HRV and resting heart rate from most exports.
+          </li>
         </ul>
       )}
     </div>
@@ -117,14 +120,13 @@ export function WearableConnect({ userId }: { userId: string }) {
 function Row({ name, icon, state, detail, onClick, action }: {
   name: string;
   icon: string;
-  state: "connected" | "available" | "error" | "blocked";
+  state: "connected" | "available" | "error";
   detail: string;
   onClick?: () => void;
   action?: string;
 }) {
   const dot = state === "connected" ? "bg-readiness-green"
-    : state === "error" ? "bg-readiness-red"
-    : state === "blocked" ? "bg-slate-600" : "bg-slate-500";
+    : state === "error" ? "bg-readiness-red" : "bg-slate-500";
 
   return (
     <li className="flex items-center gap-3 rounded-2xl border border-white/[0.08] bg-white/[0.02] p-3">
