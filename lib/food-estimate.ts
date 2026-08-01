@@ -198,17 +198,37 @@ export function fromAiItems(
   for (const r of raw ?? []) {
     const name = (r.name ?? "").trim();
     if (!name) continue;
-    const kcal = Number(r.kcal) || 0;
+    const stated = Number(r.kcal) || 0;
     // A food with no calories is a parse failure, not a zero-calorie food.
-    if (kcal <= 0) continue;
+    if (stated <= 0) continue;
+
+    const protein = Math.max(0, Number(r.protein) || 0);
+    const carbs = Math.max(0, Number(r.carbs) || 0);
+    const fats = Math.max(0, Number(r.fats) || 0);
+
+    /**
+     * Reconcile the headline calories against the macros.
+     *
+     * The two come from the same answer and are supposed to agree — protein and
+     * carbs are 4 kcal/g, fat is 9 — and when a model gets one of them wrong it
+     * is almost always the kcal, because that is the number it writes first and
+     * least carefully. A meal listed as 30g protein, 60g carbs and 20g fat is
+     * 540 kcal whatever the model then claimed.
+     *
+     * Only when they disagree by more than a fifth, so ordinary rounding and
+     * the genuine slack in food data (fibre, sugar alcohols) pass through
+     * untouched. Below that threshold the stated figure is kept, because it may
+     * well be the better one.
+     */
+    const fromMacros = protein * 4 + carbs * 4 + fats * 9;
+    const kcal = fromMacros > 0 && Math.abs(stated - fromMacros) / fromMacros > 0.2 ? fromMacros : stated;
+
     items.push({
       foodId: null,
       name,
       qty: Math.max(1, Math.round(Number(r.qty) || 1)),
       unit: r.unit === "ml" ? "ml" : r.unit === "each" ? "each" : "g",
-      macros: roundMacros({
-        kcal, protein: Number(r.protein) || 0, carbs: Number(r.carbs) || 0, fats: Number(r.fats) || 0,
-      }),
+      macros: roundMacros({ kcal, protein, carbs, fats }),
       explicit: true,
     });
   }

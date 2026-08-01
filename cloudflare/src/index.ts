@@ -350,7 +350,7 @@ function overBudget(state: BudgetState): Response {
 // nobody is watching a spinner and the budget can be what the work actually
 // needs. Callers pass their own client-side timeout to match.
 // Bump on every paste into the Cloudflare dashboard. GET /health reports it.
-const WORKER_VERSION = "2026-07-31.1";
+const WORKER_VERSION = "2026-08-01.1";
 
 const CHAIN_BUDGET_MS = 55_000;
 const ATTEMPT_TIMEOUT_MS = 30_000;
@@ -881,21 +881,58 @@ async function estimateFood(req: Request, env: Env): Promise<Response> {
   }
   if (!photo && meal.length < 2) return json({ error: "text or image required" }, 400);
 
+  // =========================================================================
+  // THE PORTION IS THE WHOLE PROBLEM.
+  //
+  // Naming the food is easy and a model does it well. Deciding whether that is
+  // 90g of rice or 250g is where nearly all the error lives, and a calorie
+  // estimate that is confidently 160% of the truth is worse than no estimate —
+  // someone eats to it for a month and cannot work out why nothing moved.
+  //
+  // So the prompt spends its length on portions, and on three specific ways
+  // this was going wrong:
+  //
+  //   * No scale. "A plate of pasta" is 300 kcal or 900 depending on the plate.
+  //     Photos get explicit reference objects; text gets UK household measures,
+  //     because "two handfuls" is how people actually describe food.
+  //   * False confidence. An unhedged number reads as measured. Uncertainty
+  //     belongs in the name, where the athlete can see it and correct it — the
+  //     UI makes every quantity editable precisely for this.
+  //   * Cooked vs dry. 75g of dry rice is 250g cooked, and the app's own food
+  //     table is dry weight, so mixing them silently triples someone's carbs.
+  // =========================================================================
   const sys =
     (photo
-      ? "You estimate the nutrition of a meal an athlete has photographed. Identify each food you can " +
-        "see and estimate its portion from the picture, using the plate, cutlery or hand for scale. " +
-        "Judge portions conservatively. If part of the plate is unclear, still include it with your best " +
-        "estimate and say so in the name (e.g. \"Rice (part hidden, estimated)\"). " +
-        "Do NOT invent foods that are not visible. "
-      : "You estimate the nutrition of a meal an athlete describes in plain language. ") +
+      ? "You estimate the nutrition of a meal an athlete has photographed. " +
+        "Work out the portion from the picture before you estimate anything else. Use whatever is in " +
+        "shot for scale: a dinner plate is about 27cm across and a side plate about 20cm, a fork is " +
+        "about 19cm long, a standard mug holds about 300ml, and a closed fist is roughly 150-200g of " +
+        "a dense food. State which reference you used in the name, e.g. \"Rice (fills a third of a " +
+        "27cm plate)\". " +
+        "Estimate the FOOD, not the container — a half-empty bowl is a half portion. " +
+        "If something is stacked or partly hidden, say so in the name and estimate the visible part " +
+        "plus a conservative allowance, e.g. \"Chips (pile, lower layer hidden — estimated)\". " +
+        "Never invent a food you cannot see. If the picture is too dark or blurred to identify " +
+        "anything, return an empty items array rather than guessing. "
+      : "You estimate the nutrition of a meal an athlete describes in plain language. " +
+        "Where they give a household measure, convert it: a heaped tablespoon is about 15g dry rice " +
+        "or 20g peanut butter, a slice of medium bread about 40g, a mug of dry oats about 90g, a " +
+        "supermarket chicken breast about 170g, a large egg about 58g, a tin of tuna about 145g " +
+        "drained. If they give no quantity at all, use a normal adult portion and say so in the name. ") +
     "Output ONLY valid minified JSON: {items:[{name:string,qty:number,unit:\"g\"|\"ml\"|\"each\",kcal:number,protein:number,carbs:number,fats:number}]}. " +
-    "One entry per distinct food. If no portion is stated, assume a normal adult serving and say so in the name " +
-    "(e.g. \"Chicken breast (medium portion)\"). Use UK supermarket foods and typical home cooking. " +
+    "One entry per distinct food. Use UK supermarket products and typical British home cooking. " +
     // Weights of cooked grains vary hugely with water; the app's own database is
-    // dry-weight, so mixing the two silently doubles someone's carbs.
-    "For rice, pasta and oats give the DRY weight. " +
-    "kcal must be the total for the stated qty, not per 100g, and must be greater than zero. " +
+    // dry-weight, so mixing the two silently multiplies someone's carbs.
+    "For rice, pasta, couscous and oats give the DRY weight, and say \"(dry)\" in the name. " +
+    "Include cooking fat if the dish obviously used it — a fried egg or a stir fry carries oil the " +
+    "athlete did not mention and it is often 100+ kcal. " +
+    // Round numbers read as estimates, which is what these are. A model that
+    // answers 187g invites the reader to treat a guess as a measurement.
+    "Round quantities to something a person would say: to the nearest 10g under 200g, nearest 25g " +
+    "above. Never give a quantity to the gram. " +
+    "Put any real uncertainty in the name, in brackets, in plain words. Do not hedge in the numbers. " +
+    "kcal must be the total for the stated qty, not per 100g, and must be greater than zero, and must " +
+    "be consistent with the macros you give (protein and carbs 4 kcal/g, fat 9 kcal/g, within 10%). " +
     "No prose outside the JSON.";
 
   const { text: raw, model } = await meteredComplete(env, u.id, {

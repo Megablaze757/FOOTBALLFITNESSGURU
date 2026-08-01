@@ -235,23 +235,58 @@ function AppleSetup({ token, onDone }: { token: string | null; onDone: () => voi
         </>
       ) : (
         <>
-          <ol className="list-decimal space-y-1.5 pl-4 text-xs text-slate-400">
-            <li>Open <span className="text-slate-200">Shortcuts</span> → new shortcut.</li>
-            <li>Add <span className="text-slate-200">Find Health Samples</span> for Heart Rate Variability, Resting Heart Rate and Sleep.</li>
-            <li>
-              Add <span className="text-slate-200">Get Contents of URL</span>, set to <b>POST</b>, JSON, with:
-              <ul className="mt-1 space-y-0.5 pl-3 text-slate-500">
-                <li>a header <span className="text-slate-300">Authorization</span> = <span className="text-slate-300">Bearer {"<"}your token{">"}</span></li>
-                <li>fields <span className="text-slate-300">hrv</span>, <span className="text-slate-300">restingHR</span>, <span className="text-slate-300">sleepHours</span></li>
-              </ul>
-            </li>
-            <li>Under <span className="text-slate-200">Automation</span>, run it daily at 8am.</li>
+          {/* HONEST ABOUT THE COST UP FRONT.
+              This is a five-minute job and it is fiddly, and pretending
+              otherwise is how someone starts it on a bus and gives up halfway.
+              Saying "once" is the important half: they never do it again. */}
+          <p className="mb-3 rounded-xl bg-white/[0.03] px-3 py-2 text-xs text-slate-300">
+            About 5 minutes, once. After that it sends by itself every morning and you never
+            think about it again. Do it on your <b>iPhone</b>, not a laptop.
+          </p>
+
+          <div className="mb-3 space-y-2">
+            <Copyable label="URL" value={shown.url} copied={copied === "URL"} onCopy={() => copy("URL", shown.url)} />
+            <Copyable label="Header" value={`Bearer ${shown.token}`} copied={copied === "Header"} onCopy={() => copy("Header", `Bearer ${shown.token}`)} secret />
+          </div>
+
+          <ol className="space-y-3 text-xs text-slate-400">
+            <Step n={1} title="Open Shortcuts and start a new one">
+              It&apos;s the app with the two coloured squares — already on your phone. Tap
+              <b className="text-slate-200"> + </b> in the top right.
+            </Step>
+            <Step n={2} title="Add your sleep">
+              Search <b className="text-slate-200">Find Health Samples</b> and tap it. Set
+              <b className="text-slate-200"> Sleep Analysis</b>, sort by
+              <b className="text-slate-200"> Start Date</b>, limit <b className="text-slate-200">1</b>.
+            </Step>
+            <Step n={3} title="Add HRV and resting heart rate">
+              Two more <b className="text-slate-200">Find Health Samples</b> actions, the same way — one for
+              <b className="text-slate-200"> Heart Rate Variability</b>, one for
+              <b className="text-slate-200"> Resting Heart Rate</b>.
+            </Step>
+            <Step n={4} title="Send it">
+              Add <b className="text-slate-200">Get Contents of URL</b> and paste the URL above. Tap
+              <b className="text-slate-200"> Show More</b>, set Method to <b className="text-slate-200">POST</b>.
+              Under <b className="text-slate-200">Headers</b> add a key called
+              <b className="text-slate-200"> Authorization</b> and paste the Header value above.
+              Set Request Body to <b className="text-slate-200">JSON</b> and add three fields —
+              <b className="text-slate-200"> sleepHours</b>, <b className="text-slate-200">hrv</b> and
+              <b className="text-slate-200"> restingHR</b> — each set to the matching Health result.
+            </Step>
+            <Step n={5} title="Make it run itself">
+              Name it, then go to the <b className="text-slate-200">Automation</b> tab →
+              <b className="text-slate-200"> +</b> → <b className="text-slate-200">Time of Day</b> → 8am, daily,
+              and pick your shortcut. Turn <b className="text-slate-200">Ask Before Running</b> off, or it
+              will just sit there waiting for you.
+            </Step>
           </ol>
 
-          <div className="mt-3 space-y-2">
-            <Copyable label="URL" value={shown.url} copied={copied === "URL"} onCopy={() => copy("URL", shown.url)} />
-            <Copyable label="Token" value={shown.token} copied={copied === "Token"} onCopy={() => copy("Token", shown.token)} secret />
-          </div>
+          <p className="mt-3 text-xs text-slate-500">
+            Tap Play once to test it. If it worked, today&apos;s numbers appear on your check-in
+            straight away. Field names are flexible — <span className="text-slate-400">sleep</span>,
+            <span className="text-slate-400"> restingHeartRate</span> and similar all work, and minutes
+            or hours are both understood.
+          </p>
 
           <button onClick={mint} disabled={busy} className="mt-3 text-xs font-semibold text-slate-400 hover:text-slate-200">
             {busy ? "Creating…" : "Create a new token (stops the old one working)"}
@@ -277,5 +312,27 @@ function Copyable({ label, value, copied, onCopy, secret }: {
       </code>
       <button onClick={onCopy} className="chip shrink-0 text-pitch-400">{copied ? "Copied" : "Copy"}</button>
     </div>
+  );
+}
+
+/**
+ * One numbered step.
+ *
+ * The whole guide used to be a four-item list where step three carried a nested
+ * list of headers and JSON fields — which is accurate, and unfollowable on a
+ * phone with one hand. Each step is now one action with its own heading, so
+ * someone can find their place again after looking away.
+ */
+function Step({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
+  return (
+    <li className="flex gap-2.5">
+      <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-pitch-400/15 text-[10px] font-extrabold text-pitch-400">
+        {n}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-xs font-bold text-slate-200">{title}</span>
+        <span className="mt-0.5 block leading-relaxed">{children}</span>
+      </span>
+    </li>
   );
 }

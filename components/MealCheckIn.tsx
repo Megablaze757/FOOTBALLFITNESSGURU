@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { invokeAI } from "@/lib/api";
+import { useJobs } from "@/lib/jobs";
 import {
   planTargets, buildWeek, mealMacros, DEFAULT_PREFS,
   type BodyStats, type MealPrefs, type PlannedMeal,
@@ -84,13 +85,44 @@ export function MealCheckIn({ stats, prefs, dietNotes, seed, context, onAdd }: P
   const [source, setSource] = useState<"local" | "ai">("local");
   /** Why the AI estimate didn't happen. Null when it did, or wasn't asked for. */
   const [aiError, setAiError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
   const [added, setAdded] = useState<string | null>(null);
   /** The downscaled data: URL being shown back to them. Null = no photo. */
   const [photo, setPhoto] = useState<string | null>(null);
-  const [photoBusy, setPhotoBusy] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  /**
+   * Estimating runs above the router so it outlives this component.
+   *
+   * A vision call on a gym's signal is ten to twenty seconds. Held in local
+   * state it died the moment you switched tabs, so logging a sandwich meant
+   * standing still watching a spinner. The tray reports it either way now.
+   */
+  const { start: startJob, latest } = useJobs();
+  const job = latest("meal-estimate");
+  const busy = job?.status === "running";
+  /** So a finished job is applied once, not on every re-render. */
+  const applied = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!job || job.status === "running" || applied.current === job.id) return;
+    applied.current = job.id;
+    if (job.status === "done") {
+      setEstimate(job.result as FoodEstimate);
+      setSource("ai");
+      return;
+    }
+    // A photo has no on-device fallback — nothing in a browser can look at a
+    // picture and name the food — so it says so plainly. Typed text does have
+    // one, and falls back to it while naming why the AI answer didn't arrive.
+    if (photo) {
+      setPhotoError(`${job.error ?? "That didn't work."} — try a clearer shot, or describe the meal below.`);
+    } else {
+      setEstimate(estimateMeal(text));
+      setSource("local");
+      setAiError(job.error ?? "The AI estimate didn't come back.");
+    }
+  }, [job, photo, text]);
 
   /**
    * Today's row of THEIR plan — same seed, same targets, same preferences as the
@@ -146,12 +178,32 @@ export function MealCheckIn({ stats, prefs, dietNotes, seed, context, onAdd }: P
     if (fileRef.current) fileRef.current.value = ""; // so the same file re-triggers
     if (!file) return;
 
-    setPhotoBusy(true);
     setPhotoError(null);
     setAiError(null);
+
+    // Shrink FIRST, on the main thread, so the preview appears immediately and
+    // the job carries a payload that is already small.
+    let dataUrl: string;
     try {
-      const dataUrl = await shrinkImage(file);
+      dataUrl = await shrinkImage(file);
       setPhoto(dataUrl);
+    } catch (err) {
+      setPhotoError(err instanceof Error ? err.message : String(err));
+      return;
+    }
+
+    /**
+     * The estimate itself runs as a BACKGROUND JOB.
+     *
+     * A vision call on a gym's signal is ten to twenty seconds, and it used to
+     * live in this component's state — so switching to the Meal plan tab, or
+     * anywhere else, unmounted the component and threw the work away. You had
+     * to stand still and watch a spinner to log a sandwich.
+     *
+     * useJobs runs it above the router, so it survives navigation and the tray
+     * says when it lands. Same mechanism the program builder uses.
+     */
+    startJob("meal-estimate", "Working out your meal", async () => {
       const res = await invokeAI<{ items?: Parameters<typeof fromAiItems>[0] }>("estimate-food", {
         image: dataUrl,
         // Anything already typed is context, not a separate meal — "with olive
@@ -160,15 +212,8 @@ export function MealCheckIn({ stats, prefs, dietNotes, seed, context, onAdd }: P
       });
       const parsed = fromAiItems(res?.items ?? []);
       if (parsed.items.length === 0) throw new Error("I couldn't identify any food in that photo.");
-      setEstimate(parsed);
-      setSource("ai");
-    } catch (err) {
-      setPhotoError(
-        `${err instanceof Error ? err.message : String(err)} — try a clearer shot, or describe the meal below.`,
-      );
-    } finally {
-      setPhotoBusy(false);
-    }
+      return parsed;
+    });
   }
 
   function clearPhoto() {
@@ -191,27 +236,18 @@ export function MealCheckIn({ stats, prefs, dietNotes, seed, context, onAdd }: P
     setTicked(next);
   }
 
-  async function askAi() {
+  // Success and the fall back to the local guess are both handled where the job
+  // lands, so both paths behave the same whether or not you stayed on the page.
+  function askAi() {
     if (text.trim().length < 3) return;
-    setBusy(true);
     setAiError(null);
-    try {
+    startJob("meal-estimate", "Working out your meal", async () => {
       const res = await invokeAI<{ items?: Parameters<typeof fromAiItems>[0] }>("estimate-food", { text: text.trim() });
       const parsed = fromAiItems(res?.items ?? []);
       // An AI answer with nothing usable in it is worse than the local guess.
       if (parsed.items.length === 0) throw new Error("The AI didn't recognise any food in that.");
-      setEstimate(parsed);
-      setSource("ai");
-    } catch (e) {
-      // Falling back to the local estimate is right — but doing it SILENTLY is
-      // how this looked like a working AI feature while never once calling the
-      // AI successfully. The fallback still happens; it just says why now.
-      setEstimate(preview);
-      setSource("local");
-      setAiError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
-    }
+      return parsed;
+    });
   }
 
   /**
@@ -301,7 +337,7 @@ export function MealCheckIn({ stats, prefs, dietNotes, seed, context, onAdd }: P
         <span className="mb-2 block text-xs text-slate-500">Snap the plate and I&apos;ll work it out</span>
         <div className="flex flex-wrap items-center gap-2">
           <label className="btn-ghost w-auto cursor-pointer px-4 py-2 text-sm">
-            {photoBusy ? "Reading the photo…" : photo ? "Use a different photo" : "📷 Photo of your meal"}
+            {busy ? "Reading the photo…" : photo ? "Use a different photo" : "📷 Photo of your meal"}
             <input
               ref={fileRef}
               type="file"
@@ -310,11 +346,11 @@ export function MealCheckIn({ stats, prefs, dietNotes, seed, context, onAdd }: P
               // library — this is nearly always a meal in front of you.
               capture="environment"
               onChange={onPhoto}
-              disabled={photoBusy}
+              disabled={busy}
               className="hidden"
             />
           </label>
-          {photo && !photoBusy && (
+          {photo && !busy && (
             <button onClick={clearPhoto} className="chip text-slate-400 hover:text-slate-200">Remove</button>
           )}
         </div>
