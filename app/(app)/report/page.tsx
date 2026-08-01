@@ -7,8 +7,25 @@ import { useAsync } from "@/lib/use-async";
 import { Logo } from "@/components/Logo";
 import { assessReadiness } from "@/lib/readiness";
 import { summarizeTrends } from "@/lib/trends";
-import { computeACWR, weeklyReport, checkInStreak } from "@/lib/load";
+import { computeACWR, weeklyReport, checkInStreak, type LoadZone } from "@/lib/load";
+
 import type { CheckInInput, DailyCheckIn, NutritionLog, Program, TrainingLog } from "@/lib/types";
+
+/**
+ * Plain words for the load zones, matching Progress exactly.
+ *
+ * Duplicated deliberately rather than exported from the dashboard page: a page
+ * component is not a module to import from, and the alternative — a raw ratio
+ * labelled with an acronym — is what this replaces.
+ */
+const ZONE_LABEL: Record<LoadZone, string> = {
+  building: "Building baseline",
+  detraining: "Detraining",
+  optimal: "Sweet spot",
+  caution: "Climbing",
+  danger: "Spike — risk",
+};
+
 
 export default function ReportPage() {
   const user = useCurrentUser();
@@ -96,7 +113,11 @@ export default function ReportPage() {
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Kpi label="Sessions" value={`${report.sessions}`} />
           <Kpi label="Check-ins" value={`${report.checkIns}/7`} />
-          <Kpi label="Load (ACWR)" value={acwr.ratio != null ? `${acwr.ratio}` : "—"} />
+          {/* The ratio on its own is a number nobody can act on, and the
+              acronym is worse. The zone is the answer — the same wording
+              Progress uses, so the two pages don't describe the same figure in
+              two different vocabularies. */}
+          <Kpi label="Training load" value={acwr.ratio != null ? ZONE_LABEL[acwr.zone] : "—"} />
           <Kpi label="Streak" value={`${streak}🔥`} />
           <Kpi label="Avg sleep" value={summary.avgSleep != null ? `${summary.avgSleep}/10` : "—"} />
           <Kpi label="Weight Δ" value={summary.weightDeltaKg == null ? "—" : `${summary.weightDeltaKg > 0 ? "+" : ""}${summary.weightDeltaKg}kg`} />

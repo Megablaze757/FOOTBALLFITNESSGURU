@@ -450,7 +450,12 @@ function HeroMock() {
       <div className="mt-5 flex items-center gap-5">
         <Ring value={82} />
         <div className="flex-1 space-y-2">
-          <MiniStat label="Load (ACWR)" value="1.12" tone="text-readiness-green" />
+          {/* Not "Load (ACWR)". This is the LOGGED-OUT landing page — the one
+              audience guaranteed not to know what an acute:chronic workload
+              ratio is, being shown it as the headline proof the app works.
+              The dashboard has said "Sweet spot" for a while; this now agrees
+              with it. */}
+          <MiniStat label="Training load" value="Sweet spot" tone="text-readiness-green" />
           <MiniStat label="Sleep" value="7.8 h" tone="text-slate-100" />
           <MiniStat label="Streak" value="🔥 14 days" tone="text-slate-100" />
         </div>
