@@ -199,7 +199,31 @@ function AppleSetup({ token, onDone }: { token: string | null; onDone: () => voi
   const [err, setErr] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
 
-  const shown = minted ?? (token ? { token, url: `${process.env.NEXT_PUBLIC_API_URL ?? ""}/wearable-ingest` } : null);
+  /**
+   * The endpoint a Shortcut posts to.
+   *
+   * NEXT_PUBLIC_API_URL is EMPTY unless the Worker is configured, and this line
+   * used to interpolate it regardless — so on any revisit, once a token already
+   * existed, the URL rendered as the relative path "/wearable-ingest". Pasted
+   * into a Shortcut that sends the morning's sleep precisely nowhere, silently,
+   * forever. A freshly minted one was fine because the Worker returns an
+   * absolute URL, which is why it looked like it worked when it was set up.
+   *
+   * No Worker means no push endpoint at all — it isn't deployed as a Supabase
+   * function — so say that instead of handing over an address that can't work.
+   */
+  const apiBase = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/+$/, "");
+  const shown = minted ?? (token && apiBase ? { token, url: `${apiBase}/wearable-ingest` } : null);
+
+  if (!apiBase && !minted) {
+    return (
+      <li className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-3 text-xs text-slate-400">
+        Pushing from a Shortcut needs the backend to be deployed — it isn&apos;t configured for this
+        build, so there is nowhere for your phone to send to yet. Until then, the CSV import below
+        takes an Apple Health export.
+      </li>
+    );
+  }
 
   async function mint() {
     setBusy(true); setErr(null);

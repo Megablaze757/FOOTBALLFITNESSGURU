@@ -369,10 +369,28 @@ function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietN
   // disagreed whenever someone logged with both. Macros are progress rows now.
   const waterGoal = targets?.water_ml ?? 3000;
 
+  /**
+   * The target the athlete is actually being measured against.
+   *
+   * Their own number wins. My first pass at the new card read `targets.calories`
+   * directly, which quietly ignored the manual override — someone could set
+   * 2,400 in the box and watch the bar keep filling towards the computed 2,900.
+   */
+  const targetKcal = Number(calories) || targets?.calories || 0;
+
+  /**
+   * Adopt the computed calorie target as your own.
+   *
+   * It used to write the target MACROS into `macros` as well — and `macros` is
+   * what addEaten accumulates INTAKE into. One field, two meanings, depending
+   * on which control you last touched. It was survivable while macros were a
+   * row of input boxes; as progress bars it is not, because tapping this filled
+   * all three to 100% and told the athlete they had eaten a day's food they
+   * hadn't touched. `macros` means eaten, and only eaten.
+   */
   function applyTargets() {
     if (!targets) return;
     setCalories(String(targets.calories));
-    setMacros({ protein: String(targets.protein), carbs: String(targets.carbs), fats: String(targets.fats) });
   }
 
   /**
@@ -443,9 +461,9 @@ function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietN
       <div className="card space-y-4 p-5">
         <div className="flex items-baseline justify-between">
           <span className="field-label !mb-0">Today so far</span>
-          {targets && (
+          {targetKcal > 0 && (
             <span className="text-xs text-slate-400">
-              {Math.max(0, targets.calories - eaten).toLocaleString()} kcal left
+              {Math.max(0, targetKcal - eaten).toLocaleString()} kcal left
             </span>
           )}
         </div>
@@ -454,14 +472,14 @@ function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietN
           <div className="flex items-baseline gap-1.5">
             <span className="text-3xl font-extrabold text-pitch-400">{eaten.toLocaleString()}</span>
             <span className="text-sm text-slate-500">
-              / {targets ? targets.calories.toLocaleString() : (calories || "—")} kcal
+              / {targetKcal ? targetKcal.toLocaleString() : "—"} kcal
             </span>
           </div>
-          {targets && (
+          {targetKcal > 0 && (
             <div className="mt-2 h-2.5 w-full overflow-hidden rounded-full bg-white/10">
               <div
                 className="h-full rounded-full bg-gradient-to-r from-pitch-400 to-pitch-600 transition-all"
-                style={{ width: `${Math.min(100, (eaten / targets.calories) * 100)}%` }}
+                style={{ width: `${Math.min(100, (eaten / targetKcal) * 100)}%` }}
               />
             </div>
           )}
@@ -573,10 +591,16 @@ function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietN
               <span className="field-label">Daily calorie target</span>
               <input type="number" inputMode="numeric" value={calories} onChange={(e) => setCalories(e.target.value)} placeholder="e.g. 2800" className="field" />
             </label>
+            {/* These are what you ATE, not what you are aiming for — the
+                targets are computed above. Logging a meal fills them in; this
+                is for correcting the number by hand. The old label just said
+                "Protein (g)" under a heading about targets, which is how the
+                same field came to mean two things. */}
+            <span className="field-label !mb-1">Macros eaten today (g)</span>
             <div className="grid grid-cols-3 gap-3">
               {MACROS.map((m) => (
                 <label key={m.key} className="block">
-                  <span className="field-label" style={{ color: m.color }}>{m.label} (g)</span>
+                  <span className="text-[11px] font-semibold" style={{ color: m.color }}>{m.label}</span>
                   <input type="number" inputMode="numeric" value={macros[m.key]} onChange={(e) => setMacros((p) => ({ ...p, [m.key]: e.target.value }))} className="field text-center" />
                 </label>
               ))}
