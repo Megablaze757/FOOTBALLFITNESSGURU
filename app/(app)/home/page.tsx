@@ -59,7 +59,11 @@ export default function HomePage() {
       // rather than a second full scan.
       supabase.from("daily_check_ins").select("check_in_date").eq("user_id", user.id).gte("check_in_date", since),
       supabase.from("training_logs").select("log_date").eq("user_id", user.id).eq("log_date", today).maybeSingle(),
-      supabase.from("nutrition_logs").select("log_date").eq("user_id", user.id).eq("log_date", today).maybeSingle(),
+      // Widened from select("log_date"). The row was already being fetched and
+      // only its EXISTENCE used, to tick a quest — so Home knew whether you had
+      // eaten and threw away what you had eaten. The fuel card below costs no
+      // extra round trip because of that.
+      supabase.from("nutrition_logs").select("log_date, calories_eaten, daily_calorie_target").eq("user_id", user.id).eq("log_date", today).maybeSingle(),
       supabase.from("biometrics").select("*").eq("user_id", user.id)
         .gte("metric_date", since28).order("metric_date", { ascending: true }),
       supabase.from("programs").select("plan, completed_sessions").eq("user_id", user.id)
@@ -149,6 +153,7 @@ export default function HomePage() {
     return {
       profile, checkIn, insight, streak, quests, bioSignal, setup, stats, week, acwr,
       nextSession, hasProgram: programCount > 0, trainedToday: !!trainToday,
+      nutriToday: (nutriToday ?? null) as { calories_eaten: number | null; daily_calorie_target: number | null } | null,
     };
   }, [user.id], `home:${user.id}`);
 
@@ -244,6 +249,12 @@ export default function HomePage() {
           not look — so when they've told us something hurts, we bring it to
           them instead. */}
       <SorenessCard painMap={data.checkIn.pain_map ?? {}} focus={readiness.focus_body_part} />
+
+      {/* FUEL. Nutrition was the seventh of seven tiles for football, rugby and
+          basketball, and behind the More sheet on a phone — so the one paid
+          feature with a DAILY job was the hardest thing in the app to reach.
+          Home already had today's row in hand. */}
+      <FuelCard nutri={data!.nutriToday} />
 
       <ToolGrid tools={sport.tools} exclude="/coach" />
 
@@ -624,5 +635,64 @@ function Skeleton() {
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Today's fuel, on the front page.
+ *
+ * Nutrition was the seventh of seven tiles in the tool grid for football, rugby
+ * and basketball, and on a phone it sat behind the More sheet — so the one paid
+ * feature with a job to do EVERY DAY was the hardest thing in the app to reach.
+ * You cannot build a habit out of something that takes three taps to find.
+ *
+ * Reads the saved target rather than recomputing one. Three places already
+ * calculated calories and two of them disagreed; adding a fourth here would
+ * reintroduce exactly the bug that took a day to unpick. This is the number the
+ * athlete themselves is working to.
+ */
+function FuelCard({ nutri }: { nutri: { calories_eaten: number | null; daily_calorie_target: number | null } | null }) {
+  const eaten = nutri?.calories_eaten ?? 0;
+  const target = nutri?.daily_calorie_target ?? 0;
+
+  // Nothing set up yet — an invitation, not an empty progress bar reading 0%.
+  if (!target) {
+    return (
+      <Link href="/nutrition" className="card card-hover flex items-center gap-3 p-4">
+        <span className="text-lg" aria-hidden>🍽️</span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-bold text-slate-100">What should I eat today?</span>
+          <span className="block text-xs text-slate-400">Calorie and protein targets from your body and training.</span>
+        </span>
+        <span className="shrink-0 text-pitch-400">→</span>
+      </Link>
+    );
+  }
+
+  const left = target - eaten;
+  const pct = Math.min(100, Math.round((eaten / target) * 100));
+  // "600 left" is the actionable phrasing; "you are 600 over" is the honest one
+  // once they have passed it. Neither is a telling-off.
+  const headline = left > 0
+    ? `${left.toLocaleString()} kcal left today`
+    : left === 0 ? "Bang on target" : `${Math.abs(left).toLocaleString()} kcal over`;
+
+  return (
+    <Link href="/nutrition" className="card card-hover block p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="stat-label">🍽️ Today&apos;s fuel</div>
+          <div className="mt-0.5 text-lg font-extrabold text-slate-100">{headline}</div>
+          <div className="text-xs text-slate-500">{eaten.toLocaleString()} of {target.toLocaleString()} kcal</div>
+        </div>
+        <span className="shrink-0 text-pitch-400">→</span>
+      </div>
+      <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-white/10">
+        <div
+          className="h-full rounded-full bg-gradient-to-r from-pitch-400 to-pitch-600 transition-all"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </Link>
   );
 }
