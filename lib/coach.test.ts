@@ -382,3 +382,32 @@ test("timed intervals are prescribed in round numbers", () => {
     if (secs) assert.equal(secs % 5, 0, `${d.name}: ${secs}s is not a number anyone would say`);
   }
 });
+
+test("no run is prescribed on a badly painful lower limb", () => {
+  // The engine refuses a movement when pain >= 7 AND its load on that joint is
+  // >= 2. I had the runs' joint loads too low, so a torn hamstring at 8/10 was
+  // still being handed a 75-minute long run and an 8/10 knee got strides —
+  // near-maximal sprinting. Running is the classic hamstring re-injury
+  // mechanism; an app must not prescribe it on a limb that hurts this much.
+  // The bike, rower and pool are still there to fill the conditioning slot.
+  for (const area of ["hamstring_left", "knee_left", "ankle_left"]) {
+    for (const goal of ["endurance", "strength", "injury_recovery"] as const) {
+      const plan = buildProgram({ goal, painMap: { [area]: 8 }, sport: "football", daysPerWeek: 4 });
+      const runs = runsIn(plan).map((d) => d.name);
+      assert.deepEqual(runs, [], `${area} 8/10 on a ${goal} block still got: ${[...new Set(runs)].join(", ")}`);
+    }
+  }
+});
+
+test("a healthy athlete still gets plenty of running", () => {
+  // The guard above must not have quietly emptied running out of the app.
+  const plan = buildProgram({ goal: "strength", painMap: {}, sport: "football", daysPerWeek: 4 });
+  assert.ok(runsIn(plan).length >= 4, `only ${runsIn(plan).length} runs in a healthy block`);
+});
+
+test("mild soreness discourages running without banning it", () => {
+  // 4/10 is sore, not injured. It should bias selection, not empty the slot —
+  // otherwise every twinge costs someone their aerobic work.
+  const plan = buildProgram({ goal: "endurance", painMap: { knee_left: 4 }, sport: "football", daysPerWeek: 4 });
+  assert.ok(runsIn(plan).length > 0, "mild soreness should not ban running outright");
+});

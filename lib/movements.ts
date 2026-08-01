@@ -179,16 +179,16 @@ const META: Record<string, MovementMeta> = {
   // a run is one continuous effort — the minutes are in `reps`, and the zone
   // and pacing live in lib/running.ts, which is where the prescription is
   // written for the athlete.
-  recovery_run: { slot: "conditioning", pattern: "conditioning", targets: ["injury_recovery", "endurance"], load: { knee: 1, ankle: 1 }, level: 1, prog: "time", dose: d(1, 30, REST.none, { unit: "minutes", rpe: 2 }), region: "running" },
-  easy_run: { slot: "conditioning", pattern: "conditioning", targets: ["endurance"], load: { knee: 1, ankle: 1, hamstring: 1 }, level: 1, prog: "time", dose: d(1, 40, REST.none, { unit: "minutes", rpe: 4 }), region: "running" },
-  long_run: { slot: "conditioning", pattern: "conditioning", targets: ["endurance"], load: { knee: 2, ankle: 2, hamstring: 1 }, level: 2, prog: "time", dose: d(1, 75, REST.none, { unit: "minutes", rpe: 5 }), region: "running" },
-  threshold_run: { slot: "conditioning", pattern: "conditioning", targets: ["endurance"], load: { knee: 2, ankle: 1, hamstring: 2 }, level: 2, prog: "time", dose: d(1, 30, REST.none, { unit: "minutes", rpe: 8 }), region: "running" },
+  recovery_run: { slot: "conditioning", pattern: "conditioning", targets: ["injury_recovery", "endurance"], load: { knee: 2, ankle: 2, hamstring: 2 }, level: 1, prog: "time", dose: d(1, 30, REST.none, { unit: "minutes", rpe: 2 }), region: "running" },
+  easy_run: { slot: "conditioning", pattern: "conditioning", targets: ["endurance"], load: { knee: 2, ankle: 2, hamstring: 2, hip: 1 }, level: 1, prog: "time", dose: d(1, 40, REST.none, { unit: "minutes", rpe: 4 }), region: "running" },
+  long_run: { slot: "conditioning", pattern: "conditioning", targets: ["endurance"], load: { knee: 2, ankle: 2, hamstring: 2, hip: 1 }, level: 2, prog: "time", dose: d(1, 75, REST.none, { unit: "minutes", rpe: 5 }), region: "running" },
+  threshold_run: { slot: "conditioning", pattern: "conditioning", targets: ["endurance"], load: { knee: 2, ankle: 2, hamstring: 2 }, level: 2, prog: "time", dose: d(1, 30, REST.none, { unit: "minutes", rpe: 8 }), region: "running" },
   vo2_intervals: { slot: "conditioning", pattern: "conditioning", targets: ["endurance"], load: { knee: 2, ankle: 2, hamstring: 2 }, level: 3, prog: "time", dose: d(5, 3, REST.long, { unit: "minutes", rpe: 9 }), region: "running" },
-  fartlek_run: { slot: "conditioning", pattern: "conditioning", targets: ["endurance", "speed"], load: { knee: 2, ankle: 1, hamstring: 2 }, level: 2, prog: "time", dose: d(1, 50, REST.none, { unit: "minutes", rpe: 7 }), region: "running" },
-  progression_run: { slot: "conditioning", pattern: "conditioning", targets: ["endurance"], load: { knee: 2, ankle: 1, hamstring: 1 }, level: 2, prog: "time", dose: d(1, 50, REST.none, { unit: "minutes", rpe: 6 }), region: "running" },
-  hill_repeats: { slot: "conditioning", pattern: "conditioning", targets: ["endurance", "strength"], load: { knee: 1, ankle: 1, hamstring: 2 }, level: 2, prog: "reps", dose: d(8, 60, REST.moderate, { unit: "secs", rpe: 8 }), region: "running" },
+  fartlek_run: { slot: "conditioning", pattern: "conditioning", targets: ["endurance", "speed"], load: { knee: 2, ankle: 2, hamstring: 2 }, level: 2, prog: "time", dose: d(1, 50, REST.none, { unit: "minutes", rpe: 7 }), region: "running" },
+  progression_run: { slot: "conditioning", pattern: "conditioning", targets: ["endurance"], load: { knee: 2, ankle: 2, hamstring: 2 }, level: 2, prog: "time", dose: d(1, 50, REST.none, { unit: "minutes", rpe: 6 }), region: "running" },
+  hill_repeats: { slot: "conditioning", pattern: "conditioning", targets: ["endurance", "strength"], load: { knee: 2, ankle: 2, hamstring: 2 }, level: 2, prog: "reps", dose: d(8, 60, REST.moderate, { unit: "secs", rpe: 8 }), region: "running" },
   // A primer, not a session — which is why it warms up rather than conditions.
-  strides: { slot: "warmup", pattern: "sprint", targets: ["speed"], load: { hamstring: 1 }, level: 1, prog: "reps", dose: d(5, 20, REST.short, { unit: "secs", rpe: 6 }), region: "running" },
+  strides: { slot: "warmup", pattern: "sprint", targets: ["speed"], load: { knee: 2, ankle: 2, hamstring: 2 }, level: 1, prog: "reps", dose: d(5, 20, REST.short, { unit: "secs", rpe: 6 }), region: "running" },
   bike_intervals: { slot: "conditioning", pattern: "conditioning", targets: ["endurance", "injury_recovery"], load: {}, level: 2, prog: "time", dose: d(8, 40, REST.short, { unit: "secs", rpe: 8 }), region: "conditioning" },
   rowing_intervals: { slot: "conditioning", pattern: "conditioning", targets: ["endurance"], load: { lower_back: 1 }, level: 2, prog: "time", dose: d(6, 60, REST.moderate, { unit: "secs", rpe: 8 }), region: "conditioning" },
   ski_erg: { slot: "conditioning", pattern: "conditioning", targets: ["endurance"], load: { shoulder: 1 }, level: 2, prog: "time", dose: d(6, 45, REST.moderate, { unit: "secs", rpe: 8 }), region: "conditioning" },

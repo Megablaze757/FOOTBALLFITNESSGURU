@@ -73,14 +73,11 @@ export function TabBar() {
           entirely until the scroll settles. `inset-x-4 mx-auto` with the same
           max-width centres identically with no transform at all.
 
-          bottom uses max(1rem, safe-area) rather than a bare 1rem. Today that
-          is exactly 1rem — without viewport-fit=cover the inset resolves to
-          zero, so this changes nothing now — but it means the bar cannot end up
-          under the home indicator if cover is ever turned on. */}
-      <nav
-        className="fixed inset-x-4 z-[60] mx-auto max-w-[26rem] lg:hidden"
-        style={{ bottom: "max(1rem, env(safe-area-inset-bottom))" }}
-      >
+          `bottom` lives in the .tab-bar rule in globals.css, not here, because
+          it needs a fallback and an inline style can only hold one value per
+          property. See the note there — a dropped `bottom` on a fixed element
+          is not a slightly-wrong bar, it's the bar back in normal flow. */}
+      <nav className="tab-bar fixed inset-x-4 z-[60] mx-auto max-w-[26rem] lg:hidden">
         {/* gap-0.5 buys each label a gutter, and min-w-0 lets a flex item shrink
             below its own text width — without it the label sets the floor and
             neighbouring tabs are pushed until they touch. `truncate` is the

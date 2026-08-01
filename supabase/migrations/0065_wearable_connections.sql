@@ -114,12 +114,25 @@ grant select on public.wearable_status to authenticated;
 
 -- Track where a biometric row came from, so a manual correction isn't silently
 -- overwritten by the next sync and the UI can say "from your Oura ring".
+--
+-- 'import' IS IN THIS LIST BECAUSE THAT IS WHAT THE CODE ACTUALLY WRITES.
+-- parseBiometricCsv has always stamped rows 'import'; a list built from what the
+-- values ought to be called rather than from what they are would have failed to
+-- apply against any existing CSV data, and then rejected every future CSV
+-- import — silently breaking a working feature to tidy up a string.
+--
+-- Deliberately NOT validated against existing rows, for the same reason: a
+-- constraint that refuses to install because of historic data leaves the column
+-- with no constraint at all, which is worse than one that accepts a legacy
+-- value. NOT VALID checks new writes only; the old rows are already written and
+-- nothing reads `source` in a way that a stray value could break.
 do $$
 begin
   if not exists (select 1 from pg_constraint where conname = 'biometrics_source_check') then
     alter table public.biometrics
       add constraint biometrics_source_check
-      check (source in ('manual', 'csv', 'oura', 'whoop', 'garmin', 'apple_health'));
+      check (source in ('manual', 'import', 'csv', 'oura', 'whoop', 'garmin', 'apple_health'))
+      not valid;
   end if;
 end $$;
 

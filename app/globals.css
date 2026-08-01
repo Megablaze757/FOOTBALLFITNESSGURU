@@ -27,9 +27,11 @@ html {
 
 body {
   @apply text-slate-100 antialiased;
-  background:
-    radial-gradient(1100px 520px at 50% -12%, rgba(227, 181, 63, 0.10), transparent 62%),
-    #09090a;
+  /* The flat colour only. The gradient moved to the fixed layer below, and
+     leaving a copy here painted it twice — once anchored to the viewport and
+     once stretched down the whole scrollable document, so on a long page you
+     saw a second glow slide past. */
+  background: #09090a;
   overscroll-behavior-y: none;
   /* dvh, not vh: on mobile the URL bar counts toward 100vh, so a full-height
      page jumped by ~60px every time the bar hid or reappeared on scroll. */
@@ -52,9 +54,24 @@ body::before {
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  background:
-    radial-gradient(1100px 520px at 50% -12%, rgba(227, 181, 63, 0.10), transparent 62%),
-    #09090a;
+  /* Gradient only — body already paints the base colour underneath, and
+     repeating it here would hide nothing but cost a second full-viewport fill. */
+  background: radial-gradient(1100px 520px at 50% -12%, rgba(227, 181, 63, 0.10), transparent 62%);
+}
+
+/* --- The floating tab bar ---------------------------------------------------
+   Its position lives here rather than in an inline style because it needs a
+   FALLBACK, and an inline style can only carry one value per property.
+
+   `max(1rem, env(safe-area-inset-bottom))` is dropped whole by any engine that
+   doesn't understand env() or max() — and a dropped `bottom` on a fixed element
+   isn't a slightly-wrong bar, it's `bottom: auto`, which drops the thing back to
+   where it would have sat in normal flow. That is precisely the "nav is at the
+   bottom of the page instead of the screen" failure. The plain 1rem below is
+   what those engines use; anything modern overrides it on the next line. */
+.tab-bar {
+  bottom: 1rem;
+  bottom: max(1rem, env(safe-area-inset-bottom));
 }
 
 /* --- Focus -----------------------------------------------------------------
