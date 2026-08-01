@@ -10,6 +10,59 @@ fortnight while everyone assumes it shipped.
 
 ---
 
+## 2026-08-01 (latest) — Nutrition, redesigned
+
+No operator action. Front-end only — no schema change, no Worker change. The
+three outstanding steps from the section below still stand and are unaffected.
+
+### Changed
+
+**Nutrition is a primary tab.** It replaces Progress in the bottom bar, labelled
+"Food" because six slots on a 320px phone give each about 45px. The daily loop
+is check in / train / eat, and eating was the only one of the three behind the
+More sheet — a poor place for the one paid feature with a job every single day.
+Progress is a review surface rather than an action, and Home already carries the
+parts of it you'd want daily; it's one tap away in More. Injury was not
+displaced: it was promoted after being reported unfindable twice, and "open More,
+then look" is no way to reach it when something hurts.
+
+**Today's fuelling is four rings, not a stack of boxes.** The page was a verdict
+card, a calories card, macro bars and a water bar — every element a bordered
+rectangle of the same weight, and two of them reporting the same number in
+different words. It read as a form to fill in rather than something to look at,
+which for the one screen someone opens after training is the wrong way round.
+
+Calories, protein, carbs and fat as concentric rings answer "am I on track" in
+one glance and no reading, in a shape this audience already knows from their
+watch. The verdict is a single line inside the same card, saying only the part a
+ring can't: what to do about the gap, in this sport's terms. Water rides along
+the bottom as a slim bar — it was one number and two buttons and never justified
+a panel of its own.
+
+**The rings lead the page.** They used to open below the meal tick-list, so the
+first thing on screen was a list of things to do and the answer to "where am I"
+was a scroll away. Look, then act.
+
+### Fixed
+
+- **The same macro was two different colours on one screen** — protein was gold
+  in the input labels and sky in the rings, carbs sky in one and green in the
+  other. One palette now, shared between the two.
+- **The calorie ring could be identical to a macro ring.** It took the sport
+  accent, and two of the six accents are exactly the green and blue used for
+  carbs and protein — a footballer would have seen two indistinguishable rings.
+  The ring palette is fixed; colour there means "which macro", and that has to
+  hold on every account.
+- **The headline number overlapped the inner rings.** Four rings at a 15px
+  stroke leave a 64px hole and "2,800" at 36px is about 100px wide. Caught by
+  rendering it rather than reasoning about it.
+- **"Coach targets" was a whole bordered panel to deliver one sentence and a
+  link.** It's the hero's empty state now.
+- **The loading skeleton was shaped like the old page**, so the layout jumped
+  when data landed — the thing a skeleton exists to prevent.
+
+---
+
 ## 2026-08-01 (later) — Simpler pages
 
 ### What the Worker still needs

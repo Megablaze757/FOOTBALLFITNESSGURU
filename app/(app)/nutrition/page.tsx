@@ -10,17 +10,22 @@ import { FeatureLock } from "@/components/FeatureLock";
 import { MealPlanner } from "@/components/MealPlanner";
 import { MealCheckIn } from "@/components/MealCheckIn";
 import { Tabs } from "@/components/Tabs";
-import { RingProgress } from "@/components/RingProgress";
+import { FuelRings } from "@/components/FuelRings";
 import { nutritionTargets, type NutritionTargets, type TargetContext } from "@/lib/nutrition";
 import { sportProfile, type SportProfile } from "@/lib/sport-profile";
 import type { BodyStats, MealPrefs } from "@/lib/meal-plan";
 import type { GoalType } from "@/lib/coach";
 import type { Subscription, Tier, TrainingLog } from "@/lib/types";
 
+// Same colours as the rings, in the same order — see RING_COLOURS in
+// components/FuelRings.tsx. They disagreed before: protein was gold here and
+// sky in the rings, carbs sky here and green there — the same macro in two
+// colours on one screen, which is worse than no colour coding at all. Gold
+// belongs to the calorie ring alone.
 const MACROS = [
-  { key: "protein", label: "Protein", color: "#e3b53f", kcal: 4 },
-  { key: "carbs", label: "Carbs", color: "#38bdf8", kcal: 4 },
-  { key: "fats", label: "Fats", color: "#fbbf24", kcal: 9 },
+  { key: "protein", label: "Protein", color: "#38bdf8", kcal: 4 },
+  { key: "carbs", label: "Carbs", color: "#4ade80", kcal: 4 },
+  { key: "fats", label: "Fats", color: "#c084fc", kcal: 9 },
 ] as const;
 
 export default function NutritionPage() {
@@ -91,20 +96,28 @@ export default function NutritionPage() {
     return (
       <div className="mx-auto max-w-2xl space-y-5">
         <Header />
-        <div className="card flex items-center gap-4 border-l-4 border-l-white/10 p-4">
-          <div className="h-[78px] w-[78px] shrink-0 animate-pulse rounded-full bg-white/[0.06]" />
-          <div className="min-w-0 flex-1 space-y-2">
-            <div className="h-2.5 w-16 animate-pulse rounded bg-white/[0.06]" />
-            <div className="h-5 w-44 animate-pulse rounded bg-white/[0.06]" />
-            <div className="h-3 w-52 animate-pulse rounded bg-white/[0.06]" />
-          </div>
-        </div>
         <div className="flex gap-2">
           <div className="h-9 w-28 animate-pulse rounded-full bg-white/[0.06]" />
           <div className="h-9 w-28 animate-pulse rounded-full bg-white/[0.04]" />
         </div>
+        {/* The hero: rings, then the legend beside them on a wide screen. */}
+        <div className="card p-5">
+          <div className="flex flex-col items-center gap-4 sm:flex-row sm:gap-6">
+            <div className="h-[208px] w-[208px] shrink-0 animate-pulse rounded-full bg-white/[0.06]" />
+            <div className="w-full space-y-3">
+              {[0, 1, 2, 3].map((i) => (
+                <div key={i} className="h-3 animate-pulse rounded bg-white/[0.06]" />
+              ))}
+            </div>
+          </div>
+          <div className="mt-5 flex gap-2">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="h-9 flex-1 animate-pulse rounded-xl bg-white/[0.04]" />
+            ))}
+          </div>
+        </div>
         <div className="card h-56 animate-pulse" />
-        <div className="card h-40 animate-pulse" />
+        <div className="card h-14 animate-pulse" />
       </div>
     );
   }
@@ -166,35 +179,27 @@ export default function NutritionPage() {
 }
 
 /**
- * Whether today is going well, said once, at the top.
+ * Whether today is going well, in one sentence.
  *
- * The page showed a target, a macro breakdown, a water figure, a log form and a
- * meal planner — and never once said whether you were on track. Everything
- * needed to answer that was already on screen; nothing did the subtraction.
- * "You're 600 under" is the whole point of a calorie target.
+ * This was a card of its own — an eyebrow, a headline, a ring and a paragraph —
+ * sitting directly above a second card carrying the same total with a bar under
+ * it. Two bordered rectangles, one number, different words. That duplication is
+ * most of why the page read as a form to fill in.
+ *
+ * The rings answer "am I on track" without anyone reading a word, so the only
+ * job left for prose is the part a ring can't do: what to do about the gap, in
+ * this sport's terms. One line, inside the same card.
+ *
+ * Returns null when there is nothing honest to say. An empty log is not "you're
+ * 2,600 under" — that would be alarming and wrong first thing in the morning.
  */
-function FuelVerdict({ targets, eaten, waterMl, sport }: {
-  targets: NutritionTargets | null;
-  eaten: number | null;
-  waterMl: number | null;
-  sport: SportProfile;
-}) {
-  if (!targets) return null;
-
-  // Nothing logged yet is not "you're 2,600 under" — it's an empty log, and
-  // saying otherwise would be alarming and wrong first thing in the morning.
-  if (!eaten) {
-    return (
-      <div className="card border-l-4 border-l-white/15 p-4">
-        <span className="eyebrow">Today</span>
-        <h2 className="mt-1 text-lg font-extrabold">Target {targets.calories.toLocaleString()} kcal</h2>
-        <p className="mt-1 text-sm text-slate-400">
-          {targets.protein}g protein, {targets.carbs}g carbs, {targets.fats}g fat.
-          Log what you&apos;ve eaten and this becomes a running total.
-        </p>
-      </div>
-    );
-  }
+function fuelVerdict(
+  targets: NutritionTargets | null,
+  eaten: number,
+  waterMl: number,
+  sport: SportProfile
+): { tone: string; headline: string; body: string } | null {
+  if (!targets || !eaten) return null;
 
   const diff = eaten - targets.calories;
   // A calorie target is an estimate, so treating a 100 kcal miss as a failure
@@ -202,7 +207,6 @@ function FuelVerdict({ targets, eaten, waterMl, sport }: {
   // gap is worth doing something about.
   const TOLERANCE = 250;
   const short = -diff;
-  const thirsty = waterMl != null && waterMl < targets.water_ml * 0.6;
 
   const priority = sport.id === "weightlifting" || sport.id === "gym"
     ? `Protein is the one to protect — aim for the ${targets.protein}g.`
@@ -210,57 +214,31 @@ function FuelVerdict({ targets, eaten, waterMl, sport }: {
       ? `Carbs are what you run on — the ${targets.carbs}g matters more than the total.`
       : `Get the ${targets.protein}g protein in and the rest looks after itself.`;
 
-  const v = short > TOLERANCE
-    ? {
-        tone: "#fbbf24",
-        eyebrow: "Worth topping up",
-        headline: `You're ${short.toLocaleString()} kcal short`,
-        body: `Under-eating on training days is how people stall and get injured, not how they get lean. ${priority}`,
-      }
-    : diff > TOLERANCE
-      ? {
-          tone: "#38bdf8",
-          eyebrow: "Over target",
-          headline: `You're ${diff.toLocaleString()} kcal over`,
-          body: `One day doesn't undo a week — it's the pattern that counts. ${priority}`,
-        }
-      : {
-          tone: sport.accent,
-          eyebrow: "On target",
-          headline: `${eaten.toLocaleString()} of ${targets.calories.toLocaleString()} kcal`,
-          body: `Within range for today. ${priority}`,
-        };
+  // The water bar shows the shortfall; this says it's worth acting on. Only
+  // when they're properly behind, so it isn't a permanent scold.
+  const water = waterMl < targets.water_ml * 0.6
+    ? ` Water's behind too — ${(waterMl / 1000).toFixed(1)}L of ${(targets.water_ml / 1000).toFixed(1)}L.`
+    : "";
 
-  return (
-    <div className="card border-l-4 p-4" style={{ borderLeftColor: v.tone }}>
-      <div className="flex items-center gap-4">
-        {/* The ring is the point of the card. "You're 600 under" is the answer,
-            but a number on its own doesn't show how far through the day you
-            are — and that is the thing people actually glance for. */}
-        <RingProgress
-          pct={(eaten / targets.calories) * 100}
-          color={v.tone}
-          size={78}
-          stroke={7}
-          label={`${Math.round((eaten / targets.calories) * 100)}%`}
-          sub="of target"
-        />
-        <div className="min-w-0 flex-1">
-          <span className="eyebrow" style={{ color: v.tone }}>{v.eyebrow}</span>
-          <h2 className="mt-0.5 text-lg font-extrabold leading-tight">{v.headline}</h2>
-          <p className="mt-1 text-xs text-slate-500">
-            {targets.protein}g protein · {targets.carbs}g carbs · {targets.fats}g fat
-          </p>
-        </div>
-      </div>
-      <p className="mt-3 max-w-prose text-sm text-slate-400">{v.body}</p>
-      {thirsty && (
-        <p className="mt-2 text-sm text-amber-200">
-          💧 {(waterMl / 1000).toFixed(1)}L of {(targets.water_ml / 1000).toFixed(1)}L — worth catching up on.
-        </p>
-      )}
-    </div>
-  );
+  if (short > TOLERANCE) {
+    return {
+      tone: "#fbbf24",
+      headline: `${short.toLocaleString()} kcal short`,
+      body: `Under-eating on training days is how people stall and get injured, not how they get lean. ${priority}${water}`,
+    };
+  }
+  if (diff > TOLERANCE) {
+    return {
+      tone: "#38bdf8",
+      headline: `${diff.toLocaleString()} kcal over`,
+      body: `One day doesn't undo a week — it's the pattern that counts. ${priority}${water}`,
+    };
+  }
+  return {
+    tone: sport.accent,
+    headline: "On target",
+    body: `Within range for today. ${priority}${water}`,
+  };
 }
 
 /** ["height","age","sex"] -> "height, age and sex" */
@@ -295,13 +273,10 @@ function NutritionTabs({ userId, today, log, targets, stats, prefs, dietNotes, m
   return (
     <div className="mx-auto max-w-2xl space-y-5">
       <Header />
-      {/* Above the tabs, so the answer is there whichever half you're looking at. */}
-      <FuelVerdict
-        targets={targets}
-        eaten={log?.calories_eaten ?? null}
-        waterMl={log?.daily_water_intake_ml ?? null}
-        sport={sport}
-      />
+      {/* The verdict used to sit here, above the tabs, "so the answer is there
+          whichever half you're looking at". It moved inside the Today card with
+          the rings: the two halves ask different questions, and "you're 600
+          short today" is noise on the tab about next week's shop. */}
       <Tabs tabs={NUTRITION_TABS} active={tab} onChange={setTab} label="Nutrition sections" />
       {tab === "today" ? (
         <NutritionTracker
@@ -313,6 +288,7 @@ function NutritionTabs({ userId, today, log, targets, stats, prefs, dietNotes, m
           prefs={prefs}
           dietNotes={dietNotes}
           mealSeed={mealSeed}
+          sport={sport}
           context={context}
           onAddStats={() => setTab("plan")}
         />
@@ -335,13 +311,15 @@ function Header() {
   );
 }
 
-function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietNotes, mealSeed, context, onAddStats }: {
+function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietNotes, mealSeed, sport, context, onAddStats }: {
   userId: string; today: string; initial: any; targets: NutritionTargets | null;
   stats: Partial<BodyStats> | null; prefs: Partial<MealPrefs> | null; dietNotes: string | null;
   /** Shared with the planner so today?s tick-list matches the plan exactly. */
   context: TargetContext;
   /** Which plan they're on, so today's tick-list is THAT plan and not another. */
   mealSeed: number | null;
+  /** Colours the rings and frames the verdict in this sport's terms. */
+  sport: SportProfile;
   /** Sends them to the tab that collects height/age/sex, so the estimate sharpens. */
   onAddStats: () => void;
 }) {
@@ -377,6 +355,8 @@ function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietN
    * 2,400 in the box and watch the bar keep filling towards the computed 2,900.
    */
   const targetKcal = Number(calories) || targets?.calories || 0;
+
+  const verdict = fuelVerdict(targets, eaten, water, sport);
 
   /**
    * Adopt the computed calorie target as your own.
@@ -434,60 +414,60 @@ function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietN
   return (
     // Header and width live on the tab shell now, so they don't render twice.
     <div className="animate-fade-up space-y-5">
-      <MealCheckIn stats={stats} prefs={prefs} dietNotes={dietNotes} seed={mealSeed} context={context} onAdd={addEaten} />
+      {/* ONE HERO, NOT A STACK OF BOXES.
+          Even after collapsing five cards into two, the two that were left both
+          reported the same number in different words — a verdict card with a
+          ring, and a "Today so far" card with the same total and a bar under
+          it. Every element was a bordered rectangle of equal weight, which is
+          what made it read as a form rather than something to look at.
 
-      {/* No weight, no targets — say so instead of hiding the card silently. */}
-      {!targets && (
-        <div className="card p-5">
-          <h2 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-pitch-400">
-            <span className="h-1.5 w-1.5 rounded-full bg-pitch-400" /> Coach targets
-          </h2>
-          <p className="mt-2 text-xs text-slate-400">
-            Log your weight in the daily check-in and we&apos;ll work out your calories, macros
-            and hydration for you.
+          Four rings say "am I on track" in one glance and no reading, in a
+          shape this audience already knows from their watch. Everything else on
+          the card is an action, not another readout.
+
+          It leads now. It used to open below the meal tick-list, so the first
+          thing on the page was a list of things to do and the answer to "where
+          am I" was a scroll away. Look, then act. */}
+      <div className="card p-5">
+        <FuelRings
+          eaten={eaten}
+          targetKcal={targetKcal}
+          macros={{
+            protein: Number(macros.protein) || 0,
+            carbs: Number(macros.carbs) || 0,
+            fats: Number(macros.fats) || 0,
+          }}
+          targets={targets}
+        />
+
+        {/* The one thing the rings can't say: what to do about the gap. A line,
+            not a card — this used to be its own bordered panel above the tabs
+            repeating the same total in words. */}
+        {verdict ? (
+          <p className="mt-4 text-sm leading-relaxed text-slate-400">
+            <span className="font-bold" style={{ color: verdict.tone }}>{verdict.headline}.</span>{" "}
+            {verdict.body}
           </p>
-          <Link href="/home" className="btn-ghost mt-3 inline-flex w-auto px-4 py-2 text-sm">Daily check-in →</Link>
-        </div>
-      )}
+        ) : targets ? (
+          <p className="mt-4 text-sm text-slate-500">
+            Nothing logged yet. Tick off a meal below, photograph your plate, or tap a number.
+          </p>
+        ) : (
+          // No weight logged, so there is no target to fill towards. This was a
+          // "Coach targets" card of its own saying the same thing — a whole
+          // bordered panel to deliver one sentence and a link.
+          <p className="mt-4 text-sm text-slate-500">
+            No targets yet.{" "}
+            <Link href="/home" className="font-semibold text-pitch-400 hover:underline">
+              Log your weight in the daily check-in
+            </Link>{" "}
+            and your calories, macros and hydration work themselves out.
+          </p>
+        )}
 
-      {/* TODAY, IN ONE CARD.
-          This was five: a targets card, a big "calories eaten" number, a second
-          equally big "or track by macros" number, a manual inputs card and a
-          water card. The calorie figure appeared FOUR times on one screen
-          counting the verdict above, twice at 4xl, and the two headline numbers
-          disagreed with each other whenever someone used both. A busy athlete
-          opening this after training has one question — am I on track — and had
-          to assemble the answer from four places that each claimed to be it. */}
-      <div className="card space-y-4 p-5">
-        <div className="flex items-baseline justify-between">
-          <span className="field-label !mb-0">Today so far</span>
-          {targetKcal > 0 && (
-            <span className="text-xs text-slate-400">
-              {Math.max(0, targetKcal - eaten).toLocaleString()} kcal left
-            </span>
-          )}
-        </div>
-
-        <div>
-          <div className="flex items-baseline gap-1.5">
-            <span className="text-3xl font-extrabold text-pitch-400">{eaten.toLocaleString()}</span>
-            <span className="text-sm text-slate-500">
-              / {targetKcal ? targetKcal.toLocaleString() : "—"} kcal
-            </span>
-          </div>
-          {targetKcal > 0 && (
-            <div className="mt-2 h-2.5 w-full overflow-hidden rounded-full bg-white/10">
-              <div
-                className="h-full rounded-full bg-gradient-to-r from-pitch-400 to-pitch-600 transition-all"
-                style={{ width: `${Math.min(100, (eaten / targetKcal) * 100)}%` }}
-              />
-            </div>
-          )}
-        </div>
-
-        {/* Quick-add stays: it is the fastest way to log a coffee and a banana
-            without describing them to anything. */}
-        <div className="flex flex-wrap gap-2">
+        {/* Quick-add: the fastest way to log a coffee and a banana without
+            describing them to anything. */}
+        <div className="mt-5 flex flex-wrap items-center gap-2">
           {[200, 400, 600].map((kc) => (
             <button key={kc} onClick={() => setEaten((c) => c + kc)} className="btn-ghost flex-1 py-2 text-sm">+{kc}</button>
           ))}
@@ -500,46 +480,34 @@ function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietN
           <button onClick={() => setEaten(0)} className="btn-ghost w-auto px-3 py-2 text-sm text-slate-400">Reset</button>
         </div>
 
-        {/* Macros as three progress rows rather than a second headline number
-            competing with the first. Same information, no rival answer. */}
-        {targets && (
-          <div className="space-y-2">
-            {MACROS.map((m) => {
-              const logged = Number(macros[m.key]) || 0;
-              const target = m.key === "protein" ? targets.protein : m.key === "carbs" ? targets.carbs : targets.fats;
-              return (
-                <div key={m.key}>
-                  <div className="flex items-baseline justify-between text-xs">
-                    <span className="text-slate-400">{m.label}</span>
-                    <span className="tabular-nums text-slate-300">{logged}g <span className="text-slate-600">/ {target}g</span></span>
-                  </div>
-                  <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
-                    <div className="h-full rounded-full" style={{ width: `${Math.min(100, (logged / target) * 100)}%`, background: m.color }} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Water, same card. It is one number and a button; it never needed its
-            own panel. */}
-        <div>
-          <div className="flex items-baseline justify-between text-xs">
-            <span className="text-slate-400">Water</span>
-            <span className="tabular-nums text-sky-300">{(water / 1000).toFixed(1)}L <span className="text-slate-600">/ {(waterGoal / 1000).toFixed(1)}L</span></span>
-          </div>
-          <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
-            <div className="h-full rounded-full bg-sky-400 transition-all" style={{ width: `${Math.min(100, (water / waterGoal) * 100)}%` }} />
-          </div>
-          <div className="mt-2 flex gap-2">
+        {/* Water rides along the bottom as a slim bar. It is one number and two
+            buttons and never justified a panel of its own. */}
+        <div className="mt-4 border-t border-white/[0.06] pt-3">
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-slate-400">💧 Water</span>
+            <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10">
+              <span
+                className="block h-full rounded-full bg-sky-400 transition-all"
+                style={{ width: `${Math.min(100, (water / waterGoal) * 100)}%` }}
+              />
+            </span>
+            <span className="shrink-0 text-xs tabular-nums text-sky-300">
+              {(water / 1000).toFixed(1)}<span className="text-slate-600">/{(waterGoal / 1000).toFixed(1)}L</span>
+            </span>
             {[250, 500].map((ml) => (
-              <button key={ml} onClick={() => setWater((w) => w + ml)} className="btn-ghost flex-1 py-1.5 text-xs">+{ml}ml</button>
+              <button
+                key={ml}
+                onClick={() => setWater((w) => w + ml)}
+                className="chip shrink-0 text-sky-300 hover:bg-white/[0.08]"
+              >
+                +{ml}
+              </button>
             ))}
-            <button onClick={() => setWater(0)} className="btn-ghost w-auto px-3 py-1.5 text-xs text-slate-400">Reset</button>
           </div>
         </div>
       </div>
+
+      <MealCheckIn stats={stats} prefs={prefs} dietNotes={dietNotes} seed={mealSeed} context={context} onAdd={addEaten} />
 
       {/* EVERYTHING THAT ISN'T THE DAILY JOB, folded away.
           The rationale, the resting-rate working and the manual overrides are

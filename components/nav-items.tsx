@@ -52,7 +52,19 @@ export const MOBILE_NAV = [
   { href: "/home", label: "Home", short: "Home", icon: "home" },
   { href: "/coach", label: "My plan", short: "Plan", icon: "coach" },
   { href: "/journal", label: "Check in", short: "Check", icon: "journal" },
-  { href: "/dashboard", label: "Progress", short: "Progress", icon: "stats" },
+  // FOOD TAKES PROGRESS'S SLOT, and the swap is the daily loop against the
+  // review surface. Home's Today card is check in / train / eat — three actions
+  // you take — and eating was the only one of them behind the More sheet, which
+  // is a poor place for the one paid feature with a job every single day.
+  //
+  // Progress is where you go to reflect, not to act, and Home now carries the
+  // parts of it you'd want daily: readiness, the streak, rank. It stays one tap
+  // away in More.
+  //
+  // Not Injury: that was promoted here after being reported unfindable twice,
+  // and "open More, then look" is no way to reach it when something hurts.
+  // "Food", not "Nutrition" — six slots on a 320px phone give each about 45px.
+  { href: "/nutrition", label: "Nutrition", short: "Food", icon: "nutrition" },
   // Promoted out of the More sheet. Told twice it was unfindable, and "open
   // More, then look" is not findable when something hurts — which is the one
   // moment this page exists for.
@@ -82,9 +94,9 @@ export const COACH_NAV = [
 
 // Everything else. Reached from the mobile "More" sheet.
 export const MOBILE_MORE = [
+  { href: "/dashboard", label: "Progress", icon: "stats" },
   { href: "/train", label: "Video analysis", icon: "train" },
   { href: "/library", label: "Exercises", icon: "library" },
-  { href: "/nutrition", label: "Nutrition", icon: "nutrition" },
   // Injury lives in MOBILE_NAV now, as a primary tab, so it must not also be
   // here — a route in both lists reads as two different places.
   { href: "/essentials", label: "Guides", icon: "playbook" },
