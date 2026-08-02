@@ -10,6 +10,67 @@ fortnight while everyone assumes it shipped.
 
 ---
 
+## Deployment status — checked 2026-08-02
+
+Verified against the live site and Worker rather than assumed. This supersedes
+the per-release tables further down, two of which are now out of date.
+
+| # | Step | State |
+|---|---|---|
+| 1 | **Paste the Worker bundle (`2026-08-01.1`)** | ❌ **outstanding** |
+| 2 | Set the `NEXT_PUBLIC_API_URL` repo Variable | ✅ done |
+| 3 | Deploy the front-end | ✅ done — current with `0d2338a` |
+| 4 | Apply migrations `0064` + `0065` | ✅ done |
+
+**How each was checked**, so it can be re-checked rather than trusted:
+
+```bash
+# 1. Worker version — reports 2026-07-29.1, i.e. the OLD bundle
+curl -s https://apex-api.fitnessguru.workers.dev/health
+
+# ...and its three new routes 404 (they should 401 once pasted)
+for r in wearable-ingest ingest-token connect-wearable; do
+  curl -s -o /dev/null -w "$r %{http_code}\n" -X POST \
+    "https://apex-api.fitnessguru.workers.dev/$r" \
+    -H 'Content-Type: application/json' -d '{}'
+done
+
+# 2 + 3. The live site is pocketathlete.com (github.io 301s to it).
+# The Worker URL is compiled into the deployed bundle, and the newest
+# UI strings are present in the route chunks.
+curl -sL https://pocketathlete.com/nutrition/ | grep -o 'src="[^"]*\.js"'
+```
+
+A caution learned the hard way here: when grepping deployed chunks, **check the
+fetch returned 200 first**. GitHub Pages answers a bad asset path with a 9KB
+HTML 404 page, and grepping that for a missing string returns "not found" just
+as convincingly as a real absence does.
+
+### The only remaining step
+
+Paste `cloudflare/worker.js` (73.7KB, regenerate with the command below) into the
+Cloudflare dashboard editor. **Not `cloudflare/src/index.ts`** — the source
+imports from `lib/affiliate` and `lib/biometrics`, which resolve at bundle time;
+the dashboard has no bundler and the raw file fails on load.
+
+```bash
+cd cloudflare && npx esbuild src/index.ts --bundle --format=esm \
+  --target=es2022 --platform=neutral --outfile=worker.js
+```
+
+Until it's pasted the app runs on its on-device fallbacks — intended behaviour,
+not breakage, and each screen says so where it matters. What stays dark: meal
+photo estimation (no vision model), Oura and Apple Health sync (`/connect-wearable`,
+`/ingest-token`, `/wearable-ingest` don't exist yet), and the nightly wearable
+cron. The AI coach and rehab planner already work on the old bundle.
+
+Nothing in the last four releases needs a Worker change — the nutrition, injury,
+shopping list, Guides and meal-planner work is all front-end and pure logic, and
+the meal-plan audit changed only `lib/meal-plan.ts`, which ships in the
+front-end bundle.
+
+---
+
 ## 2026-08-02 (audit) — Meal plans actually scale to the athlete
 
 No operator action. Front-end and pure logic only.
