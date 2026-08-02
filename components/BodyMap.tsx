@@ -22,8 +22,16 @@ const REGIONS: { key: string; label: string; cx: number; cy: number; r: number }
   { key: "head", label: "Head / neck", cx: 80, cy: 36, r: 10 },
 ];
 
+// Untouched regions used to be slate-300 — a bright, solid dot. Fifteen of
+// them, all shouting, so the one area you'd actually marked was the quietest
+// thing on the figure and the map read as a column of beads rather than a body.
+// A dim fill with a legible edge still says "tap me" without competing with an
+// answer.
+const UNSET_FILL = "rgba(255,255,255,0.10)";
+const UNSET_STROKE = "rgba(255,255,255,0.32)";
+
 function painColor(level: number): string {
-  if (level <= 0) return "#cbd5e1"; // slate-300
+  if (level <= 0) return UNSET_FILL;
   if (level >= 7) return "#dc2626"; // red
   if (level >= 4) return "#eab308"; // yellow
   return "#fb923c"; // orange (mild)
@@ -54,8 +62,10 @@ export function BodyMap({
   return (
     <div>
       <svg viewBox="0 0 160 320" className="mx-auto h-72" role="img" aria-label="Body pain map">
-        {/* Silhouette */}
-        <g fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.12)" strokeWidth="1.5">
+        {/* Silhouette. Lifted from 0.06/0.12 — at that weight the figure was
+            invisible next to the region dots, and "tap where it hurts" needs a
+            body to point at. */}
+        <g fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5">
           <circle cx="80" cy="36" r="18" /> {/* head */}
           <rect x="60" y="56" width="40" height="70" rx="14" /> {/* torso */}
           <rect x="46" y="60" width="12" height="60" rx="6" /> {/* L arm */}
@@ -67,16 +77,19 @@ export function BodyMap({
         {REGIONS.map((region) => {
           const level = value[region.key] ?? 0;
           const isSel = selected === region.key;
+          const marked = level > 0;
           return (
             <circle
               key={region.key}
               cx={region.cx}
               cy={region.cy}
-              r={region.r}
+              // A marked area grows slightly. On a phone the fill colour alone
+              // is easy to miss mid-tap; size is legible at a glance.
+              r={marked ? region.r + 1.5 : region.r}
               fill={painColor(level)}
-              stroke={isSel ? "#e3b53f" : "rgba(255,255,255,0.25)"}
+              stroke={isSel ? "#e3b53f" : marked ? "rgba(255,255,255,0.5)" : UNSET_STROKE}
               strokeWidth={isSel ? 2.5 : 1.5}
-              className="cursor-pointer"
+              className="cursor-pointer transition-all"
               onClick={() => {
                 setSelected(region.key);
                 if (mode === "select") {
@@ -93,14 +106,34 @@ export function BodyMap({
         })}
       </svg>
 
+      {/* Select mode gets chips, not a panel. A full-width rounded box to hold
+          the words "Selected: L knee" was more furniture than content, and the
+          chips double as a way to see and undo what you've picked. */}
+      {mode === "select" ? (
+        <div className="mt-3 flex flex-wrap justify-center gap-2">
+          {Object.keys(value).length === 0 ? (
+            <p className="text-sm text-slate-500">Tap where it hurts.</p>
+          ) : (
+            Object.keys(value).map((k) => (
+              <button
+                key={k}
+                onClick={() => {
+                  const next = { ...value };
+                  delete next[k];
+                  onChange(next);
+                }}
+                className="flex items-center gap-1.5 rounded-full border border-pitch-400/40 bg-pitch-400/10 px-3 py-1.5 text-xs font-semibold text-pitch-400 transition hover:bg-pitch-400/20"
+              >
+                {REGIONS.find((r) => r.key === k)?.label ?? k}
+                <span className="text-pitch-400/60" aria-hidden>×</span>
+                <span className="sr-only">Remove</span>
+              </button>
+            ))
+          )}
+        </div>
+      ) : (
       <div className="mt-3 rounded-2xl bg-white/[0.04] p-3">
-        {mode === "select" ? (
-          <p className="text-center text-sm text-slate-400">
-            {Object.keys(value).length
-              ? `Selected: ${Object.keys(value).map((k) => REGIONS.find((r) => r.key === k)?.label ?? k).join(", ")}`
-              : "Tap where it hurts."}
-          </p>
-        ) : selected ? (
+        {selected ? (
           <>
             <div className="mb-2 flex items-center justify-between text-sm">
               <span className="font-medium text-slate-200">{selectedLabel}</span>
@@ -119,6 +152,7 @@ export function BodyMap({
           <p className="text-center text-sm text-slate-500">Tap a body part to log pain.</p>
         )}
       </div>
+      )}
     </div>
   );
 }

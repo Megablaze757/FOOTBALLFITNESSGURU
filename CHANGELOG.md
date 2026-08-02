@@ -10,6 +10,56 @@ fortnight while everyone assumes it shipped.
 
 ---
 
+## 2026-08-02 — Injury, redesigned
+
+No operator action. Front-end only.
+
+### Changed
+
+**The injury page asks one set of questions, once.** There were two textareas on
+one screen wanting the same thing in almost the same words — "What's going on?"
+in the planner, "Or describe it in your own words" in the card below it — one
+feeding the AI plan, the other keyword-matching the static guides, and nothing
+saying why. Someone in pain had to describe their injury twice to get everything
+the page offered.
+
+It's one card of three numbered steps now: where is it, what does it feel like,
+how long has it been going on. Each ticks itself off, so a "Build my plan" button
+that won't light up tells you which part you haven't done instead of just
+refusing.
+
+**A rehab plan shows one stage at a time.** Rehab is sequential — you are in
+exactly one stage — and three stacked open was a very long page of exercises you
+must not do yet. The others show their name and timeframe. "Move on when…" moved
+inside each stage; it used to be its own card at the bottom, three stages away
+from the one you're actually in.
+
+**The body map reads as a body.** Fifteen bright slate dots on a nearly invisible
+silhouette meant the one area you'd marked was the quietest thing on the figure.
+Untouched regions are dim with a legible edge, a marked one grows and takes its
+pain colour, and the selection is chips you can tap to undo rather than a
+full-width panel holding the words "Selected: L knee".
+
+### Fixed
+
+- **The body map was rendered below the component that read from it.** The
+  planner's `area` came from a map further down the page, so filling the form top
+  to bottom — what everyone does — sent no area at all. You had to scroll past,
+  tap, and scroll back.
+- **Arriving dumped the whole guide catalogue.** With nothing selected the page
+  rendered every protocol, so "something hurts, help" opened on a dozen cards
+  about other people's injuries. Matching guides only; the rest is behind one tap.
+- **The disclaimer rendered up to three times**, two of them on screen together.
+- **The page knew where it hurt and asked anyway.** It fetched the last
+  check-in's pain map, used it to pick protocols, then started the map empty. It
+  now carries over — but only from a check-in in the last three days, since
+  pre-filling a knee from three weeks ago would be a confident lie that then
+  feeds the rehab plan.
+- **The loading skeleton was less than half the real card's height**, so the page
+  jumped when the query landed.
+
+---
+
 ## 2026-08-01 (latest) — Nutrition, redesigned
 
 No operator action. Front-end only — no schema change, no Worker change. The
