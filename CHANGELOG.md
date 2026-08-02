@@ -46,27 +46,150 @@ fetch returned 200 first**. GitHub Pages answers a bad asset path with a 9KB
 HTML 404 page, and grepping that for a missing string returns "not found" just
 as convincingly as a real absence does.
 
-### The only remaining step
+### The only remaining step — Worker deploy spec
 
-Paste `cloudflare/worker.js` (73.7KB, regenerate with the command below) into the
-Cloudflare dashboard editor. **Not `cloudflare/src/index.ts`** — the source
-imports from `lib/affiliate` and `lib/biometrics`, which resolve at bundle time;
-the dashboard has no bundler and the raw file fails on load.
+Written for whoever does the deploy. **No code needs writing.** The source is
+already in the repo, tested and committed at `cloudflare/src/index.ts`; the job
+is to bundle it, set one optional variable, and paste. Everything below is
+verifiable from the source or with `curl`.
+
+#### 0. What is currently live
+
+`GET /health` → `{"ok":true,"version":"2026-07-29.1","model":"deepseek/deepseek-chat"}`
+
+That is the bundle from 29 July. The repo is on `2026-08-01.1`. Three route
+handlers and a vision path exist in source and not in production.
+
+#### 1. Build the bundle
 
 ```bash
-cd cloudflare && npx esbuild src/index.ts --bundle --format=esm \
+cd cloudflare
+npx esbuild src/index.ts --bundle --format=esm \
   --target=es2022 --platform=neutral --outfile=worker.js
+# -> worker.js  73.7kb
 ```
 
-Until it's pasted the app runs on its on-device fallbacks — intended behaviour,
-not breakage, and each screen says so where it matters. What stays dark: meal
-photo estimation (no vision model), Oura and Apple Health sync (`/connect-wearable`,
-`/ingest-token`, `/wearable-ingest` don't exist yet), and the nightly wearable
-cron. The AI coach and rehab planner already work on the old bundle.
+**Paste `worker.js`, never `src/index.ts`.** The source has
+`import { ... } from "../lib/biometrics"` and `"../lib/affiliate"` — those are
+resolved by esbuild at bundle time. The Cloudflare dashboard editor has no
+bundler, so the raw TypeScript throws on module load and every route 500s.
 
-Nothing in the last four releases needs a Worker change — the nutrition, injury,
-shopping list, Guides and meal-planner work is all front-end and pure logic, and
-the meal-plan audit changed only `lib/meal-plan.ts`, which ships in the
+`--platform=neutral` matters: `node` would inject Node built-in shims that
+workerd does not provide.
+
+#### 2. Environment
+
+One **new, optional** variable. Everything else is already set — the wearable
+sync reuses the service-role key the Worker holds.
+
+| Binding | Type | Required | Notes |
+|---|---|---|---|
+| `OPENROUTER_VISION_MODELS` | plaintext var | no | Comma-separated OpenRouter slugs for the meal-photo path. Unset falls back to the compiled default chain: `google/gemini-2.5-flash`, then `openai/gpt-4.1-mini`. See `visionChain()` — configured values replace the defaults rather than appending, and duplicates are stripped. |
+
+No new secrets. If you set nothing at all, the vision path still works.
+
+#### 3. Database
+
+Migrations `0064` and `0065` (`supabase/migrations/`) are **already applied** —
+verified per-column against the live project. The new handlers depend on:
+
+- `profiles.ingest_token uuid` (nullable, unique index
+  `profiles_ingest_token_idx`) — written by `/ingest-token`, looked up by
+  `/wearable-ingest`.
+- `wearable_connections` (`user_id`, `provider`, `access_token`,
+  `last_sync_at`, `last_error`) with `primary key (user_id, provider)` — the
+  upsert relies on it via `?on_conflict=user_id,provider` plus
+  `Prefer: resolution=merge-duplicates`, so without that PK every reconnect
+  would insert a duplicate row instead of updating.
+
+Nothing to run. Listed so a 500 can be diagnosed against the right schema.
+
+#### 4. What the new routes do
+
+All three are in the `fetch` dispatch (`src/index.ts` ~line 79-83) and all
+return JSON.
+
+**`POST /connect-wearable`** — auth: Supabase user JWT in `Authorization`.
+Body `{ provider: "oura", token: "<personal access token>" }`.
+
+Verifies the token against `https://api.ouraring.com/v2/usercollection/sleep`
+*before* storing it, then backfills 7 days and upserts the connection.
+`{ ok: true, days: n }` on success. Rejects tokens under 20 chars with 400.
+`provider: "whoop" | "garmin"` returns a 400 whose message names the developer
+application as the blocker — the UI mirrors that wording, so don't make it
+generic. Any other provider is `"unknown provider"`.
+
+> Storing before verifying was the bug this avoids: it produces a connection
+> that looks live in the UI and silently returns nothing every night.
+
+**`POST /ingest-token`** — auth: Supabase user JWT. No body.
+
+Mints a `crypto.randomUUID()` into `profiles.ingest_token` and returns
+`{ token, url }`, where `url` is this Worker's origin + `/wearable-ingest`,
+derived from the request URL. Calling it again rotates — the previous token
+stops working immediately. A UUID rather than a JWT deliberately: the holder is
+an Apple Shortcut with no way to refresh anything.
+
+**`POST /wearable-ingest`** — auth: **the ingest token**, as
+`Authorization: Bearer <uuid>`. *Not* a user JWT — that separation is the entire
+point of the endpoint.
+
+The token is regex-checked as a UUID before it hits PostgREST (a non-uuid
+comparison errors rather than returning empty), then resolved to a user.
+No match → 401, deliberately, so a misconfigured Shortcut fails visibly instead
+of appearing to work for weeks. Body is parsed by `parseIngestPayload` in
+`lib/biometrics.ts`; accepts `hrv`, `restingHR`, `sleepHours`. Nothing usable →
+400 naming the three fields.
+
+#### 5. Vision path on `/estimate-food`
+
+Same route, same auth (user JWT), same `silver` tier gate and per-user budget
+check. The body gains an optional `image`: a `data:image/*` URL.
+
+- Client downscales to ~768px JPEG before sending (`lib/food-estimate.ts`).
+- Worker enforces `MAX_IMAGE_CHARS = 1_500_000` — base64 is ~4/3 of the bytes,
+  so about a 1.1MB image. Over that → **413**, not 400.
+- An `image` that isn't a `data:` URL → 400.
+- Text-only requests behave exactly as before.
+
+#### 6. Cron
+
+`syncWearables(env)` is prepended to the existing `scheduled` job list. It pulls
+every Oura connection, refetches 7 days, and writes `last_sync_at` /
+`last_error` per connection. Each cron job is already wrapped in its own
+try/catch, so a failing sync cannot stop reminders or the retention sweep.
+
+**The existing cron trigger is unchanged** — no new schedule to add.
+
+#### 7. Verify the paste took
+
+```bash
+API=https://apex-api.fitnessguru.workers.dev
+
+# Expect version 2026-08-01.1 and a "vision" field.
+curl -s $API/health
+
+# Expect 401 on all three (route exists, correctly demanding auth).
+# 404 means the paste truncated — the realistic failure mode at 73.7KB.
+for r in wearable-ingest ingest-token connect-wearable; do
+  curl -s -o /dev/null -w "$r %{http_code}\n" -X POST "$API/$r" \
+    -H 'Content-Type: application/json' -d '{}'
+done
+```
+
+A route still on `404` after pasting means the editor silently cut the file.
+Re-paste; don't debug the handler.
+
+#### 8. Until it's done
+
+The app runs on its on-device fallbacks. That is intended behaviour, not
+breakage, and each screen says so where it matters. Dark until the paste: meal
+photo estimation, Oura and Apple Health sync, and the nightly wearable cron. The
+AI coach, rehab planner and all billing already work on the old bundle.
+
+**Nothing in the last four releases needs a Worker change.** The nutrition,
+injury, shopping-list, Guides and meal-planner work is front-end and pure logic;
+the meal-plan audit touched only `lib/meal-plan.ts`, which ships in the
 front-end bundle.
 
 ---
