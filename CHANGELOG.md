@@ -10,6 +10,40 @@ fortnight while everyone assumes it shipped.
 
 ---
 
+## 2026-08-02 (latest) — The meal planner
+
+No operator action. Front-end only.
+
+### Changed
+
+**The meal planner asks nothing and builds a week.** It opened on eleven stacked
+controls — age, height, weight, sex, training load, goal, diet pattern, things to
+avoid, meals a day, a budget tick and a notes box — with the button that actually
+does something below all of it. On the tab you opened to *see a meal plan*.
+
+Almost every one of those answers was already in the profile; the nutrition page
+loads them and passes them straight in. The form was mostly asking the athlete to
+retype what the app had just read. It now leads with the calorie and macro
+targets, one line saying what they were worked out from, and one button.
+Everything else is behind "Adjust". This is the same fix the programme builder on
+`/coach` got, which had the same shape and the same problem.
+
+**The day strip carries each day's calories.** Seven identical three-letter pills
+meant the only way to find the big day before a match was to tap through all
+seven.
+
+**A day's total is two bars, not a sentence.** It read
+`2,841 kcal · 158g protein (target 2,850 / 165g)` — four numbers in one line, and
+you did the comparison yourself. Whether a day lands is the question the whole
+screen exists to answer.
+
+**Meals look like they open.** Each meal is a disclosure and had no marker and no
+chevron, so nothing indicated there was a recipe, a method and a macro breakdown
+inside. The ingredient list now right-aligns its quantities instead of running
+them into the names with a dash.
+
+---
+
 ## 2026-08-02 (later) — Shopping list and Guides
 
 No operator action. Front-end only.

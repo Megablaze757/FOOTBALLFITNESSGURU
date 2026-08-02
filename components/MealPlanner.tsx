@@ -121,16 +121,80 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
     }
   }
 
+  const activityLabel = ACTIVITY_LEVELS.find((a) => a.id === activity)?.label ?? activity;
+  const goalLabel = DIET_GOALS.find((g) => g.id === goal)?.label ?? goal;
+  const patternLabel = DIET_PATTERNS.find((d) => d.id === prefs.pattern)?.label;
+
   return (
     <section className="space-y-4">
-      <div className="card-premium space-y-4 p-6">
-        <div>
-          <h2 className="text-xl font-extrabold">Meal plan &amp; shopping list</h2>
-          <p className="mt-1 text-sm text-slate-400">
-            Your stats set the calories — we build the week and the shop to match.
-          </p>
+      {/* ONE BUTTON, NOT NINE QUESTIONS.
+          This screen opened on eight stacked controls — age, height, weight,
+          sex, training load, goal, diet pattern, avoidances, meals a day, a
+          budget tick and a notes box — and the button that actually does
+          something was below all of it. On the tab you opened to see a meal
+          plan.
+
+          Nearly every one of those answers is already in the profile: the
+          nutrition page loads them, and passes them in here as `initial`. So
+          the form was mostly asking the athlete to retype what the app had
+          just read. It says what it's using instead, and the controls are one
+          tap away for when it's wrong.
+
+          Same fix as the programme builder on /coach, which had the same shape
+          and the same problem. */}
+      <div className="card-premium p-6">
+        <h2 className="text-xl font-extrabold">Your meal week</h2>
+        <p className="mt-1 text-sm text-slate-400">
+          Seven days of meals built to your calories, and a shop that covers them.
+        </p>
+
+        <div className="mt-4 rounded-2xl border border-pitch-400/25 bg-pitch-400/[0.05] p-4">
+          {/* Four macro tiles across a 375px phone leaves ~80px each, which
+              wraps "Protein" onto two lines and clips the numbers. */}
+          <div className="grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
+            <Metric label="kcal" value={targets.calories} accent />
+            <Metric label="Protein" value={`${targets.protein}g`} />
+            <Metric label="Carbs" value={`${targets.carbs}g`} />
+            <Metric label="Fats" value={`${targets.fats}g`} />
+          </div>
+          <p className="mt-3 text-xs text-slate-400">{targets.rationale}</p>
         </div>
 
+        {/* What it's working from, in one line. Someone whose weight is stale
+            can see that at a glance rather than by opening a form to check. */}
+        <p className="mt-3 text-xs text-slate-500">
+          From {age} yrs · {heightCm}cm · {weightKg}kg · {activityLabel.toLowerCase()} training · {goalLabel.toLowerCase()}
+          {patternLabel && patternLabel.toLowerCase() !== "anything" ? ` · ${patternLabel.toLowerCase()}` : ""}
+          {prefs.avoid.length > 0 ? ` · avoiding ${prefs.avoid.length}` : ""}
+          {" — "}
+          <span className="text-slate-400">change it below</span>
+        </p>
+
+        {gaps.length > 0 && (
+          <div className="mt-3 rounded-xl border border-amber-400/30 bg-amber-400/[0.06] px-3 py-2 text-sm text-amber-200">
+            Nothing left for {gaps.join(" or ").toLowerCase()} with those rules — we&apos;ll build the rest of the
+            day and skip {gaps.length > 1 ? "those meals" : "that meal"}. Try lifting one restriction.
+          </div>
+        )}
+
+        <button onClick={generate} className="btn-primary mt-4">
+          {week ? "Regenerate week" : "Build my week"}
+        </button>
+        {saved && <p className="mt-2 text-xs text-readiness-green">✓ Stats saved to your profile.</p>}
+      </div>
+
+      <details className="group card overflow-hidden">
+        <summary className="flex cursor-pointer list-none items-center justify-between p-4 text-sm font-semibold text-slate-200">
+          <span>
+            Adjust
+            <span className="ml-2 text-xs font-normal text-slate-500">
+              your stats, how you eat, anything to avoid
+            </span>
+          </span>
+          <span className="text-xs text-slate-500 transition group-open:rotate-180">▾</span>
+        </summary>
+
+        <div className="space-y-4 border-t border-white/[0.08] p-5">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Field label="Age" value={age} onChange={setAge} suffix="yrs" />
           <Field label="Height" value={heightCm} onChange={setHeightCm} suffix="cm" />
@@ -257,46 +321,41 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
           ))}
         </label>
 
-        {gaps.length > 0 && (
-          <div className="rounded-xl border border-amber-400/30 bg-amber-400/[0.06] px-3 py-2 text-sm text-amber-200">
-            Nothing left for {gaps.join(" or ").toLowerCase()} with those rules — we&apos;ll build the rest of the
-            day and skip {gaps.length > 1 ? "those meals" : "that meal"}. Try lifting one restriction.
-          </div>
-        )}
-
-        <div className="rounded-2xl border border-pitch-400/25 bg-pitch-400/[0.05] p-4">
-          {/* Four macro tiles across a 375px phone leaves ~80px each, which
-              wraps "Protein" onto two lines and clips the numbers. */}
-          <div className="grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
-            <Metric label="kcal" value={targets.calories} accent />
-            <Metric label="Protein" value={`${targets.protein}g`} />
-            <Metric label="Carbs" value={`${targets.carbs}g`} />
-            <Metric label="Fats" value={`${targets.fats}g`} />
-          </div>
-          <p className="mt-3 text-xs text-slate-400">{targets.rationale}</p>
         </div>
-
-        <button onClick={generate} className="btn-primary">
-          {week ? "Regenerate week" : "Build my week"}
-        </button>
-        {saved && <p className="text-xs text-readiness-green">✓ Stats saved to your profile.</p>}
-      </div>
+      </details>
 
       {week && (
         <>
-          <div className="card p-5">
-            <div className="stat-label mb-3">Your week</div>
-            <div className="no-scrollbar mb-3 flex gap-2 overflow-x-auto pb-1">
-              {week.map((d, i) => (
-                <button
-                  key={d.day}
-                  onClick={() => setOpenDay(i)}
-                  className={`shrink-0 rounded-full border px-3 py-1.5 text-sm transition ${i === openDay ? "border-pitch-400/50 bg-pitch-400/10 text-pitch-400" : "border-white/10 bg-white/[0.03] text-slate-300"}`}
-                >
-                  {d.day.slice(0, 3)}
-                </button>
-              ))}
+          <div className="card overflow-hidden">
+            {/* The day strip carries each day's calories. It was seven identical
+                three-letter pills, so the only way to find the big day before
+                a match was to tap through all seven. */}
+            <div className="no-scrollbar flex gap-2 overflow-x-auto border-b border-white/[0.08] p-4">
+              {week.map((d, i) => {
+                const on = i === openDay;
+                return (
+                  <button
+                    key={d.day}
+                    onClick={() => setOpenDay(i)}
+                    aria-pressed={on}
+                    className={`shrink-0 rounded-2xl border px-3.5 py-2 text-center transition ${
+                      on
+                        ? "border-pitch-400/50 bg-pitch-400/10"
+                        : "border-white/10 bg-white/[0.02] hover:border-white/20"
+                    }`}
+                  >
+                    <span className={`block text-sm font-bold ${on ? "text-pitch-400" : "text-slate-300"}`}>
+                      {d.day.slice(0, 3)}
+                    </span>
+                    <span className={`block text-[11px] tabular-nums ${on ? "text-pitch-400/70" : "text-slate-600"}`}>
+                      {Math.round(d.macros.kcal)}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
+
+            <div className="p-5">
 
             <div className="space-y-3">
               {/* Meals we're deliberately not planning. Shown rather than
@@ -308,39 +367,52 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
                 </div>
               ))}
               {week[openDay].meals.map((pm) => (
-                <details key={pm.meal.id} className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
-                  <summary className="flex cursor-pointer items-center gap-2 list-none">
+                <details key={pm.meal.id} className="group/meal rounded-2xl border border-white/[0.08] bg-white/[0.02] transition open:bg-white/[0.04]">
+                  <summary className="flex cursor-pointer list-none items-center gap-3 p-3.5">
                     <span className="min-w-0 flex-1">
                       <span className="block text-[11px] uppercase tracking-wide text-slate-500">{pm.meal.slot}</span>
                       <span className="block text-sm font-bold text-slate-100">{pm.meal.name}</span>
                     </span>
-                    <span className="shrink-0 text-xs text-slate-400">{Math.round(pm.macros.kcal)} kcal</span>
+                    <span className="shrink-0 text-right">
+                      <span className="block text-sm font-bold tabular-nums text-slate-300">{Math.round(pm.macros.kcal)}</span>
+                      <span className="block text-[10px] uppercase tracking-wide text-slate-600">kcal</span>
+                    </span>
+                    {/* There was no affordance at all — a summary with no marker
+                        and no chevron, so nothing said these opened. */}
+                    <span className="shrink-0 text-xs text-slate-600 transition group-open/meal:rotate-180">▾</span>
                   </summary>
-                  <ul className="mt-2 space-y-1 text-sm text-slate-300">
-                    {pm.meal.items.map((it) => {
-                      const f = FOOD_LOOKUP[it.foodId];
-                      if (!f) return null;
-                      const q = Math.round(it.qty * pm.scale);
-                      return (
-                        <li key={it.foodId} className="flex gap-2">
-                          <span className="text-pitch-400">·</span>
-                          {f.name} — {f.unit === "each" ? `${Math.max(1, q)}` : `${q}${f.unit}`}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                  <p className="mt-2 text-sm text-slate-400">{pm.meal.method}</p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    {Math.round(pm.macros.protein)}g protein · {Math.round(pm.macros.carbs)}g carbs · {Math.round(pm.macros.fats)}g fats
-                  </p>
+
+                  <div className="border-t border-white/[0.06] p-3.5">
+                    <ul className="space-y-1 text-sm text-slate-300">
+                      {pm.meal.items.map((it) => {
+                        const f = FOOD_LOOKUP[it.foodId];
+                        if (!f) return null;
+                        const q = Math.round(it.qty * pm.scale);
+                        return (
+                          <li key={it.foodId} className="flex justify-between gap-3">
+                            <span>{f.name}</span>
+                            <span className="shrink-0 tabular-nums text-slate-500">
+                              {f.unit === "each" ? `${Math.max(1, q)}` : `${q}${f.unit}`}
+                            </span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                    <p className="mt-3 border-t border-white/[0.06] pt-3 text-sm text-slate-400">{pm.meal.method}</p>
+                    <p className="mt-2 text-xs text-slate-500">
+                      {Math.round(pm.macros.protein)}g protein · {Math.round(pm.macros.carbs)}g carbs · {Math.round(pm.macros.fats)}g fats
+                    </p>
+                  </div>
                 </details>
               ))}
             </div>
 
-            <div className="mt-3 rounded-xl bg-white/[0.03] p-3 text-center text-sm">
-              <span className="font-bold text-slate-100">{Math.round(week[openDay].macros.kcal)} kcal</span>
-              <span className="text-slate-400"> · {Math.round(week[openDay].macros.protein)}g protein</span>
-              <span className="text-slate-500"> (target {targets.calories} / {targets.protein}g)</span>
+            {/* The day's total against the target, as two bars rather than a
+                sentence with the target in brackets. Whether a day lands is the
+                question the whole screen exists to answer. */}
+            <div className="mt-4 space-y-2.5 rounded-2xl bg-white/[0.03] p-3.5">
+              <DayBar label="Calories" value={week[openDay].macros.kcal} target={targets.calories} colour="#e3b53f" unit="" />
+              <DayBar label="Protein" value={week[openDay].macros.protein} target={targets.protein} colour="#38bdf8" unit="g" />
             </div>
 
             {/* Plant-based days in particular tend to land on calories but fall
@@ -352,6 +424,7 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
                 one thing that will hold your results back.
               </div>
             )}
+            </div>
           </div>
 
           {list && <ShoppingList list={list} seed={seed} />}
@@ -378,6 +451,30 @@ function Field({ label, value, onChange, suffix }: {
         <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">{suffix}</span>
       </div>
     </label>
+  );
+}
+
+/** One day's total against its target, as a bar you can read without arithmetic. */
+function DayBar({ label, value, target, colour, unit }: {
+  label: string; value: number; target: number; colour: string; unit: string;
+}) {
+  const v = Math.round(value);
+  // Capped at the full width — a bar overflowing its track reads as broken, and
+  // the number beside it already says how far over the day went.
+  const pct = target > 0 ? Math.min(100, (v / target) * 100) : 0;
+  return (
+    <div>
+      <div className="flex items-baseline justify-between text-xs">
+        <span className="text-slate-400">{label}</span>
+        <span className="tabular-nums text-slate-300">
+          <span className="font-bold">{v.toLocaleString()}{unit}</span>
+          <span className="text-slate-600"> / {target.toLocaleString()}{unit}</span>
+        </span>
+      </div>
+      <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-white/[0.07]">
+        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: colour }} />
+      </div>
+    </div>
   );
 }
 
