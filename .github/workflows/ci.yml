@@ -5,10 +5,13 @@ name: Tests
 # here matters more than it looks: the app degrades to them whenever the AI
 # backend is unavailable, and a wrong plan fails quietly rather than loudly.
 #
-# Deploys are NOT gated on this yet — wire `needs: test` into deploy.yml if you
-# want a failing test to stop the site shipping.
+# Deploys ARE gated on this: deploy.yml calls this workflow via `workflow_call`
+# and its build job `needs: test`, so a red run here stops the site shipping.
 
 on:
+  # Callable from deploy.yml, so the deploy gate runs exactly these checks
+  # rather than a copy of them that can drift.
+  workflow_call:
   push:
     # Every branch, not just main — the point of the tests is to catch a broken
     # engine before it reaches main, which means running them where the work is.
@@ -36,4 +39,20 @@ jobs:
       # everything else in the push. This is the same check, thirty seconds
       # after the push instead.
       - run: npm run typecheck
-      - run: npm test
+      # Coverage is ENFORCED, not just reported. lib/ is the deterministic
+      # engine layer — readiness, training load, calorie targets, rehab
+      # constraints — and it is what the app falls back to whenever the AI
+      # backend is unavailable. Thresholds sit just under the current figures
+      # (98.5 line / 88.8 branch / 93.8 func) so this ratchets rather than
+      # rubber-stamps: new engine code without tests drops the number and fails.
+      - run: npm run test:coverage
+
+      # Advisory, not blocking. Every current `npm audit` high is a Next.js
+      # server-side advisory — Image Optimizer, Server Components, Middleware,
+      # rewrites, Server Actions, Edge runtime — and this app is
+      # `output: "export"`, a static bundle on GitHub Pages with no Next server
+      # at runtime, so none of them is reachable in production. Failing the
+      # build on unreachable advisories trains people to ignore the step; a
+      # visible log they can read does not. See docs/PRODUCTION-READINESS.md.
+      - name: Dependency audit (advisory)
+        run: npm audit --omit=dev || true
