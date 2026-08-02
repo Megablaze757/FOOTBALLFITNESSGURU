@@ -180,7 +180,30 @@ done
 A route still on `404` after pasting means the editor silently cut the file.
 Re-paste; don't debug the handler.
 
-#### 8. Until it's done
+#### 8. Worker hardening — do this at the same time
+
+Not required to make the paste work, and both come out of the production
+readiness audit (`docs/PRODUCTION-READINESS.md`, items 6 and 11). Neither needs
+a code change.
+
+**a) Add a Cloudflare Rate Limiting rule.** There is no per-IP limit on
+unauthenticated requests. Everything expensive already requires a JWT and is
+capped per user by `AI_DAILY_LIMIT` and `checkBudget()`, so the exposure is
+request volume rather than spend — but `/stripe-webhook` and the auth-check path
+on every route can be hit anonymously.
+
+> Cloudflare dashboard → the Worker's zone → Security → WAF → Rate limiting
+> rules. Suggested: **100 requests / minute / IP** on `apex-api.*`, action
+> *Block*, duration 60s. Exclude nothing — legitimate app traffic is nowhere
+> near that, since a single athlete's whole day is a handful of calls.
+
+**b) Confirm and record Supabase backup retention.** This is the one open item
+with an unrecoverable failure mode, and it is a lookup, not a project: RTO and
+RPO can't be stated until someone reads the retention window off the current
+plan. Then do one restore into a scratch project — an untested backup is not a
+backup — and write both numbers into `docs/PRODUCTION-READINESS.md` items 23/24.
+
+#### 9. Until it's done
 
 The app runs on its on-device fallbacks. That is intended behaviour, not
 breakage, and each screen says so where it matters. Dark until the paste: meal
@@ -191,6 +214,86 @@ AI coach, rehab planner and all billing already work on the old bundle.
 injury, shopping-list, Guides and meal-planner work is front-end and pure logic;
 the meal-plan audit touched only `lib/meal-plan.ts`, which ships in the
 front-end bundle.
+
+---
+
+## 2026-08-02 (hardening) — Production readiness audit
+
+**Operator action: two items, both listed in the Worker deploy spec above** —
+a Cloudflare rate-limiting rule, and confirming Supabase backup retention.
+Neither needs a code change and neither blocks the Worker paste.
+
+Audited all 26 items of a standard production checklist against the code,
+migrations, live site and Worker. Full result in
+`docs/PRODUCTION-READINESS.md`, with ✅ / ⚠️ / ➖ and the specific gap named for
+every partial — an item that doesn't apply is not a pass.
+
+### Fixed
+
+**Deploys were not gated on tests.** `deploy.yml` shipped regardless of a red
+suite; `ci.yml`'s own comment invited someone to wire it up one day. It now
+calls `ci.yml` via `workflow_call` with `needs: test`, so the gate can't drift
+from the checks it enforces. `lib/` is what the app degrades to whenever the AI
+backend is unavailable, and a wrong training plan or calorie target fails
+quietly — exactly what a green pipeline must not wave through.
+
+**Linting had never run.** `npm run lint` was `next lint` with no config, which
+drops into an interactive setup prompt — so it hung in CI and nobody got past it
+locally. Nothing in this repo had ever been linted. `.eslintrc.json` is committed
+with the rule choices explained in `.eslintrc.README.md`, and lint is now a
+**blocking** CI step, which is only reasonable because the tree came back clean
+apart from one warning. That warning was fixed rather than suppressed:
+`MealPlanner` rebuilt `stats` on every render and hand-enumerated its six fields
+in a second deps array — two lists of the same six fields, one edit from
+disagreeing. `stats` is memoised and `targets` depends on the object.
+
+**One colour failed WCAG AA.** `text-slate-700` measures 1.86:1 on these
+surfaces — below AA even for large text. Its three uses were struck-through
+shopping-list items added earlier the same day; they're `slate-600` (4.76:1) now
+and the token is documented in `tailwind.config.ts` as not-for-text.
+
+### Added
+
+- **Coverage thresholds enforced in CI** — 95% line / 85% branch / 90% function
+  over `lib/`, against actuals of 98.53 / 88.79 / 93.75, so it ratchets rather
+  than rubber-stamps. Verified the flags actually fail a run by setting an
+  impossible threshold, rather than trusting a green run to mean the gate works.
+- **Dependabot** for the app, the Worker (separate lockfile, and it holds the
+  service-role key) and GitHub Actions. Patch/minor grouped into one PR each —
+  fourteen separate bumps is a queue nobody reads.
+- **`npm audit` in CI**, advisory. Every current high is a Next.js *server-side*
+  advisory — Image Optimizer, Server Components, Middleware, rewrites, Server
+  Actions, Edge runtime — and this app is `output: "export"` with no Next server
+  in production, so none is reachable. `npm audit fix --force` would install
+  `next@16`, a breaking major, to fix nothing exploitable. Failing a build on
+  unreachable advisories trains people to ignore the step.
+
+### Notes — what the audit got wrong first time
+
+Recorded because the method matters more than the verdict:
+
+- **Contrast was called "the most likely real failure". It wasn't.** I measured
+  against stock Tailwind hexes without reading `tailwind.config.ts`, which
+  already overrides `slate-500` and `slate-600` for exactly this reason. Every
+  token in use passes AA on both the page and the card surface; only the
+  un-overridden `slate-700` failed.
+- **A sloppy regex made three tables look like they had no RLS.** All 29 have
+  it. The pattern required a single space before `enable row level security` and
+  the migrations align that column with several.
+- Three claims in the first draft of the readiness doc were wrong and were
+  corrected after checking: `dangerouslySetInnerHTML` *is* used (four times, all
+  JSON-LD through an escaping helper), `useAsync` guards with an `active` flag
+  rather than a `cancelled` one, and `aria-live` lives in `JobTray.tsx`.
+
+### Still open, and honestly so
+
+No end-to-end tests. No screen-reader pass. RTO/RPO undefined because Supabase
+backup retention hasn't been confirmed, and no restore drill has been done —
+the one item here whose failure mode is unrecoverable. No architecture diagram.
+No GDPR data *export* (deletion exists). Audit trails aren't tamper-evident.
+HIPAA is marked not-applicable with reasons rather than claimed — a consumer
+fitness app is not a covered entity, and GDPR special-category is the standard
+that actually binds.
 
 ---
 

@@ -170,8 +170,8 @@ export function ShoppingList({ list, seed }: { list: List; seed: number | null }
                         <span className="min-w-0 flex-1">
                           <span className={`block text-sm transition ${isTicked ? "text-slate-600 line-through" : "text-slate-200"}`}>
                             {l.food.name}
-                            <span className={isTicked ? "text-slate-700" : "text-slate-500"}>
-                              {" "}× {l.packs} <span className={isTicked ? "text-slate-700" : "text-slate-600"}>({l.food.packLabel})</span>
+                            <span className={isTicked ? "text-slate-600" : "text-slate-500"}>
+                              {" "}× {l.packs} <span className="text-slate-600">({l.food.packLabel})</span>
                             </span>
                           </span>
                           {/* One bag across six meals is the whole point of
@@ -181,7 +181,7 @@ export function ShoppingList({ list, seed }: { list: List; seed: number | null }
                             <span className="block text-[11px] text-slate-500">covers {l.meals} meals this week</span>
                           )}
                         </span>
-                        <span className={`shrink-0 tabular-nums text-sm transition ${isTicked ? "text-slate-700" : "text-slate-400"}`}>
+                        <span className={`shrink-0 tabular-nums text-sm transition ${isTicked ? "text-slate-600" : "text-slate-400"}`}>
                           ~£{l.cost.toFixed(2)}
                         </span>
                       </button>

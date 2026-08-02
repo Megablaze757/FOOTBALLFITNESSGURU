@@ -316,9 +316,14 @@ someone to wire it up. It now calls `ci.yml` via `workflow_call` and
 
 - No branch protection on `main` and no required PR review — single maintainer
   pushing directly. That is a process decision, not something code can fix.
-- **`npm run lint` has never worked.** It drops into `next lint`'s interactive
-  setup prompt, so nothing in this repo has ever been linted. Long-standing;
-  worth fixing with an explicit `.eslintrc` before more people touch the code.
+- ~~`npm run lint` has never worked.~~ **Fixed in this pass.** It dropped into
+  `next lint`'s interactive setup prompt, so it hung in CI and nothing had ever
+  been linted. `.eslintrc.json` is committed with the rule choices explained in
+  `.eslintrc.README.md`, and `npm run lint` now runs in CI as a **blocking**
+  step — possible because the tree came back clean apart from one warning, which
+  was fixed rather than suppressed (`MealPlanner` rebuilt `stats` every render
+  and hand-enumerated its six fields in a second deps array; `stats` is memoised
+  and `targets` depends on the object, so the two lists can no longer disagree).
 
 ### 18. Error handling and graceful degradation ✅
 
@@ -426,22 +431,45 @@ project, and write down the steps. Untested backups are not backups.
 ### 25. Accessibility ⚠️
 
 **What's there:** semantic HTML throughout, `aria-live="polite"` on the job
-tray (`components/JobTray.tsx`), `aria-pressed` on toggles, `aria-expanded` on disclosures, `sr-only` text
-on icon-only controls, `role="img"` + `aria-label` on the body map, labelled
-form fields, focus-visible styling, and a `Tabs` component built once with
-roles, `aria-selected` and arrow-key support specifically because hand-rolled
-copies across four pages had none of it.
+tray (`components/JobTray.tsx`), `aria-pressed` on toggles, `aria-expanded` on
+disclosures, `sr-only` text on icon-only controls, `role="img"` + `aria-label`
+on the body map, labelled form fields, focus-visible styling, and a `Tabs`
+component built once with roles, `aria-selected` and arrow-key support
+specifically because hand-rolled copies across four pages had none of it.
 
-**The gaps:**
+**Contrast: measured, and it passes.** My first draft of this document called
+contrast "the most likely real failure". That was wrong, and worth recording
+why: I measured against *stock Tailwind* hexes without checking
+`tailwind.config.ts`, which already overrides `slate-500` and `slate-600`
+precisely because the defaults failed. Re-measured against the real palette, on
+both the page (`#09090a`) and the `.card` surface (`ink-800` at 70%, the worse
+of the two):
 
+| token | ratio on card | AA normal (4.5) |
+|---|---|---|
+| slate-100 / 200 / 300 | 17.6 / 15.7 / 13.0 | pass |
+| slate-400 | 7.53 | pass |
+| slate-500 | 6.03 | pass |
+| slate-600 | 4.76 | pass |
+| pitch-400 | 10.06 | pass |
+| sky-300 | 11.57 | pass |
+| readiness red / green / yellow | 6.32 / 10.04 / 11.56 | pass |
+| **slate-700** | **1.86** | **fail** |
+
+`slate-700` was the one real failure — below AA even for large text. Its three
+uses were struck-through shopping-list items, which I had introduced; they are
+`slate-600` now and the token is documented in `tailwind.config.ts` as
+not-for-text. **Zero `slate-700` text usages remain.**
+
+**The gaps that are still real:**
+
+- **No automated a11y check in CI.** The contrast numbers above are a
+  point-in-time measurement, not a regression guard. axe-core in a Playwright
+  run would cover it — but that needs the e2e suite that doesn't exist yet
+  (item 12), so the two are one piece of work.
+- **No screen-reader pass** on the daily flow.
 - 30 of 79 components carry explicit ARIA attributes. Many legitimately need
   none, but that ratio hasn't been individually justified.
-- **No automated a11y check in CI** (axe-core would be a small addition).
-- **No contrast audit.** The dark theme leans on `text-slate-500`/`600` for
-  secondary text, and some of those pairings are likely below WCAG AA on the
-  `#09090a` background. This is the most likely real failure and it is
-  measurable — worth running before launch.
-- No screen-reader pass on the daily flow.
 
 ### 26. Architecture diagrams, ADRs ⚠️
 
@@ -470,17 +498,22 @@ diagram in `README.md` would close most of it.
    when breached.
 3. **`npm audit` runs in CI**, advisory, with the reasoning recorded above.
 4. **Dependabot added** for the app, the Worker and GitHub Actions.
-5. **This document.**
+5. **Linting works for the first time**, is clean, and is blocking in CI.
+6. **Contrast measured** against the real palette; the one failing token
+   (`slate-700`, 1.86:1) removed from all text usage.
+7. **This document.**
 
 ## Ranked, if you only do a few before launch
 
 1. **Confirm Supabase backup retention and do one restore drill** (items 23/24).
    The only item here where the bad outcome is unrecoverable.
-2. **Contrast audit** (item 25). Cheap, measurable, and the most likely real
-   accessibility failure.
-3. **Rotate the database password.** Deferred to post-beta by decision; it is in
+2. **Rotate the database password.** Deferred to post-beta by decision; it is in
    git history.
-4. **Cloudflare rate-limiting rule** on the Worker (item 6). One dashboard rule.
-5. **Fix `npm run lint`** (item 17). Nothing has ever been linted.
-6. **A GDPR data export** (item 10).
-7. **One Playwright smoke test in CI** — sign in, check in, see a plan (item 12).
+3. **Cloudflare rate-limiting rule** on the Worker (item 6). One dashboard rule,
+   no code change.
+4. **A GDPR data export** (item 10). Deletion exists; portability doesn't.
+5. **One Playwright smoke test in CI** — sign in, check in, see a plan — with
+   axe-core attached, which closes the e2e gap (item 12) and the a11y
+   regression gap (item 25) together.
+
+~~Contrast audit~~ and ~~fix `npm run lint`~~ were on this list and are done.

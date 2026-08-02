@@ -78,13 +78,19 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
     initial?.sex == null && !touched.sex ? "sex" : null,
   ].filter((x): x is string => x !== null);
 
-  const stats: BodyStats = {
+  // Memoised so it has a stable identity, which is what lets `targets` below
+  // depend on the object rather than re-listing its six inputs. The old version
+  // rebuilt `stats` every render and then enumerated its parts in the targets
+  // deps array — correct, but only by hand, and the linter could not verify it.
+  // Two lists of the same six fields is one edit away from disagreeing.
+  const stats: BodyStats = useMemo(() => ({
     sex, goal, activity,
     age: Number(age) || 20,
     heightCm: Number(heightCm) || 178,
     weightKg: Number(weightKg) || 75,
-  };
-  const targets = useMemo(() => planTargets(stats, context ?? {}), [sex, age, heightCm, weightKg, activity, goal, context]);
+  }), [sex, goal, activity, age, heightCm, weightKg]);
+
+  const targets = useMemo(() => planTargets(stats, context ?? {}), [stats, context]);
   const list = useMemo(() => (week ? shoppingList(week) : null), [week]);
   // If someone excludes enough, a meal slot can end up with nothing in it —
   // better to say so than to quietly hand back a short day.

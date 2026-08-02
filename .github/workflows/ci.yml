@@ -39,6 +39,14 @@ jobs:
       # everything else in the push. This is the same check, thirty seconds
       # after the push instead.
       - run: npm run typecheck
+
+      # Linting had never run before 2026-08-02: `next lint` with no config
+      # drops into an interactive setup prompt, so it hung in CI and nobody got
+      # past it locally. Config is committed (.eslintrc.json, rationale in
+      # .eslintrc.README.md) and the tree is clean, so this can be blocking from
+      # day one rather than accumulating a backlog nobody will ever clear.
+      - run: npm run lint
+
       # Coverage is ENFORCED, not just reported. lib/ is the deterministic
       # engine layer — readiness, training load, calorie targets, rehab
       # constraints — and it is what the app falls back to whenever the AI
