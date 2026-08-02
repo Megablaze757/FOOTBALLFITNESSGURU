@@ -52,6 +52,32 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
   // us planning (and shopping for) a Tuesday dinner.
   const schedule = useMemo(() => parseSchedule(notes), [notes]);
 
+  /**
+   * WHICH OF THESE FOUR ARE ACTUALLY THEIRS.
+   *
+   * Height, age, weight and sex are the parameters the whole plan is computed
+   * from, and each falls back to a hard-coded default when the profile hasn't
+   * got it — 178cm, 20 years, 75kg, male. That was survivable while they sat in
+   * an open form where you could see what they were set to. It stopped being
+   * survivable when the form moved behind "Adjust" and I put a summary line on
+   * the front reading "From 20 yrs · 178cm · 75kg", which states invented
+   * numbers as though the athlete had given them.
+   *
+   * A field counts as theirs once it arrives from the profile OR they type into
+   * it here. Anything else is named as an assumption.
+   */
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [adjustOpen, setAdjustOpen] = useState(false);
+  function touch(field: string) {
+    setTouched((t) => (t[field] ? t : { ...t, [field]: true }));
+  }
+  const assumed = [
+    initial?.weightKg == null && !touched.weight ? "weight" : null,
+    initial?.heightCm == null && !touched.height ? "height" : null,
+    initial?.age == null && !touched.age ? "age" : null,
+    initial?.sex == null && !touched.sex ? "sex" : null,
+  ].filter((x): x is string => x !== null);
+
   const stats: BodyStats = {
     sex, goal, activity,
     age: Number(age) || 20,
@@ -121,6 +147,26 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
     }
   }
 
+  /**
+   * When the built week can't reach the target, say so.
+   *
+   * A 115kg forward building on 4,370 kcal was handed 3,010 across three meals
+   * — 69% — and nothing on screen said a word about it. Portions cap at 1.6x on
+   * purpose (past that you get servings nobody would put on a plate), so above
+   * a certain target the only honest answers are "eat more often" or "this is
+   * as far as the recipe list goes". Silently under-feeding the one athlete
+   * whose goal is to gain is the worst of the three.
+   *
+   * 8% is the tolerance: a calorie target is an estimate, and flagging a 3%
+   * miss would be false precision on top of it.
+   */
+  const weekAvgKcal = week && week.length
+    ? week.reduce((s, d) => s + d.macros.kcal, 0) / week.length
+    : null;
+  const shortBy = weekAvgKcal != null && targets.calories > 0 && weekAvgKcal < targets.calories * 0.92
+    ? Math.round(targets.calories - weekAvgKcal)
+    : null;
+
   const activityLabel = ACTIVITY_LEVELS.find((a) => a.id === activity)?.label ?? activity;
   const goalLabel = DIET_GOALS.find((g) => g.id === goal)?.label ?? goal;
   const patternLabel = DIET_PATTERNS.find((d) => d.id === prefs.pattern)?.label;
@@ -148,6 +194,35 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
           Seven days of meals built to your calories, and a shop that covers them.
         </p>
 
+        {/* THE GOAL BELONGS ON THE FRONT, NOT IN A DRAWER.
+            It moves the calorie target by ~1,100 kcal between lean down and
+            build — more than any other control here — and burying it in
+            "Adjust" with the stats made the one choice an athlete actually
+            wants to make the hardest to find. Everything else in there is a
+            detail; this is the question. */}
+        <div className="mt-4">
+          <span className="field-label">What are you doing?</span>
+          <div className="grid grid-cols-3 gap-2">
+            {DIET_GOALS.map((g) => (
+              <button
+                key={g.id}
+                onClick={() => setGoal(g.id)}
+                aria-pressed={goal === g.id}
+                className={`rounded-2xl border p-3 text-left transition ${
+                  goal === g.id
+                    ? "border-pitch-400/60 bg-pitch-400/10"
+                    : "border-white/10 bg-white/[0.02] hover:border-white/20"
+                }`}
+              >
+                <span className={`block text-sm font-bold ${goal === g.id ? "text-pitch-400" : "text-slate-200"}`}>
+                  {g.label}
+                </span>
+                <span className="mt-0.5 block text-[11px] leading-snug text-slate-500">{g.blurb}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div className="mt-4 rounded-2xl border border-pitch-400/25 bg-pitch-400/[0.05] p-4">
           {/* Four macro tiles across a 375px phone leaves ~80px each, which
               wraps "Protein" onto two lines and clips the numbers. */}
@@ -166,14 +241,55 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
           From {age} yrs · {heightCm}cm · {weightKg}kg · {activityLabel.toLowerCase()} training · {goalLabel.toLowerCase()}
           {patternLabel && patternLabel.toLowerCase() !== "anything" ? ` · ${patternLabel.toLowerCase()}` : ""}
           {prefs.avoid.length > 0 ? ` · avoiding ${prefs.avoid.length}` : ""}
-          {" — "}
-          <span className="text-slate-400">change it below</span>
         </p>
+
+        {/* Say which of those numbers we made up. Every calorie on this screen,
+            the macro split, the week and the shopping bill all come off these
+            four, and a plan built on a default 75kg is wrong in a way nothing
+            else on the page would reveal. */}
+        {assumed.length > 0 ? (
+          <button
+            onClick={() => setAdjustOpen(true)}
+            className="mt-2 w-full rounded-xl border border-amber-400/30 bg-amber-400/[0.06] px-3 py-2 text-left text-xs text-amber-200 transition hover:bg-amber-400/[0.1]"
+          >
+            We&apos;ve assumed your {listWords(assumed)} — everything here is built on{" "}
+            {assumed.length > 1 ? "those" : "that"}. Set {assumed.length > 1 ? "them" : "it"} →
+          </button>
+        ) : (
+          <button
+            onClick={() => setAdjustOpen((o) => !o)}
+            className="mt-1 text-xs font-semibold text-slate-400 hover:text-pitch-400"
+          >
+            Change any of this →
+          </button>
+        )}
 
         {gaps.length > 0 && (
           <div className="mt-3 rounded-xl border border-amber-400/30 bg-amber-400/[0.06] px-3 py-2 text-sm text-amber-200">
             Nothing left for {gaps.join(" or ").toLowerCase()} with those rules — we&apos;ll build the rest of the
             day and skip {gaps.length > 1 ? "those meals" : "that meal"}. Try lifting one restriction.
+          </div>
+        )}
+
+        {shortBy != null && (
+          <div className="mt-3 rounded-xl border border-amber-400/30 bg-amber-400/[0.06] px-3 py-2 text-sm text-amber-200">
+            This week averages about {shortBy.toLocaleString()} kcal a day under your{" "}
+            {targets.calories.toLocaleString()} target — portions are capped so you don&apos;t get
+            servings nobody could eat.
+            {prefs.mealsPerDay < 5 ? (
+              <>
+                {" "}
+                <button
+                  onClick={() => { setPrefs((p) => ({ ...p, mealsPerDay: 5 })); setAdjustOpen(true); }}
+                  className="font-semibold underline underline-offset-2 hover:text-amber-100"
+                >
+                  Spread it over 5 meals
+                </button>{" "}
+                and rebuild — that&apos;s how anyone eats this much anyway.
+              </>
+            ) : (
+              " Add a shake or a second helping on top; at this size the recipe list is the limit."
+            )}
           </div>
         )}
 
@@ -183,7 +299,11 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
         {saved && <p className="mt-2 text-xs text-readiness-green">✓ Stats saved to your profile.</p>}
       </div>
 
-      <details className="group card overflow-hidden">
+      <details
+        open={adjustOpen}
+        onToggle={(e) => setAdjustOpen((e.currentTarget as HTMLDetailsElement).open)}
+        className="group card overflow-hidden"
+      >
         <summary className="flex cursor-pointer list-none items-center justify-between p-4 text-sm font-semibold text-slate-200">
           <span>
             Adjust
@@ -196,12 +316,12 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
 
         <div className="space-y-4 border-t border-white/[0.08] p-5">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Field label="Age" value={age} onChange={setAge} suffix="yrs" />
-          <Field label="Height" value={heightCm} onChange={setHeightCm} suffix="cm" />
-          <Field label="Weight" value={weightKg} onChange={setWeightKg} suffix="kg" />
+          <Field label="Age" value={age} onChange={(v) => { touch("age"); setAge(v); }} suffix="yrs" />
+          <Field label="Height" value={heightCm} onChange={(v) => { touch("height"); setHeightCm(v); }} suffix="cm" />
+          <Field label="Weight" value={weightKg} onChange={(v) => { touch("weight"); setWeightKg(v); }} suffix="kg" />
           <label className="block">
             <span className="field-label">Sex</span>
-            <select value={sex} onChange={(e) => setSex(e.target.value as Sex)} className="field [color-scheme:dark]">
+            <select value={sex} onChange={(e) => { touch("sex"); setSex(e.target.value as Sex); }} className="field [color-scheme:dark]">
               <option value="male">Male</option>
               <option value="female">Female</option>
             </select>
@@ -214,22 +334,6 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
             {ACTIVITY_LEVELS.map((a) => <option key={a.id} value={a.id}>{a.label} — {a.blurb}</option>)}
           </select>
         </label>
-
-        <div>
-          <span className="field-label">Goal</span>
-          <div className="grid grid-cols-3 gap-2">
-            {DIET_GOALS.map((g) => (
-              <button
-                key={g.id}
-                onClick={() => setGoal(goal === g.id ? "maintain" : g.id)}
-                className={`card p-3 text-left transition ${goal === g.id ? "ring-2 ring-pitch-400/70" : "card-hover"}`}
-              >
-                <div className="text-sm font-bold text-slate-100">{g.label}</div>
-                <div className="mt-0.5 text-xs text-slate-400">{g.blurb}</div>
-              </button>
-            ))}
-          </div>
-        </div>
 
         <div>
           <span className="field-label">How you eat</span>
@@ -452,6 +556,12 @@ function Field({ label, value, onChange, suffix }: {
       </div>
     </label>
   );
+}
+
+/** ["height","age","sex"] -> "height, age and sex" */
+function listWords(words: string[]): string {
+  if (words.length <= 1) return words[0] ?? "";
+  return `${words.slice(0, -1).join(", ")} and ${words[words.length - 1]}`;
 }
 
 /** One day's total against its target, as a bar you can read without arithmetic. */

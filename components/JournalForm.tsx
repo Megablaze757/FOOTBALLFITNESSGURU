@@ -415,6 +415,35 @@ export function JournalForm({ initial, initialTraining, sport, planned = [] }: {
                 </div>
               )}
             </div>
+
+            {/* WEIGHT IS IN THE QUICK CHECK-IN NOW.
+                It was full-mode only, and full mode is the one almost nobody
+                picks — so for most accounts the app never got a weight after
+                sign-up. Weight is the single input the rest of the product leans
+                on hardest: calorie targets, macro splits, the meal plan and its
+                shopping list are all computed from it, and without one they run
+                on a 75kg default.
+
+                One optional field costs a quick check-in almost nothing, and
+                skipping it stays free — there's no validation and no nag. */}
+            <label className="block">
+              <span className="field-label">Weight today</span>
+              <div className="relative">
+                <input
+                  type="number"
+                  step="0.1"
+                  inputMode="decimal"
+                  value={weight}
+                  onChange={(e) => setWeight(e.target.value)}
+                  placeholder="optional — skip it and nothing breaks"
+                  className="field pr-10"
+                />
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">kg</span>
+              </div>
+              <p className="mt-1 text-xs text-slate-500">
+                Your calorie targets and meal plan are worked out from this.
+              </p>
+            </label>
           </section>
 
           <button
@@ -422,7 +451,7 @@ export function JournalForm({ initial, initialTraining, sport, planned = [] }: {
             onClick={() => chooseMode(true)}
             className="w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-slate-300 transition hover:border-pitch-400/40 hover:text-pitch-400"
           >
-            + Add weight, {terms.eventToday.toLowerCase().replace(/\?$/, "")} and today&apos;s training
+            + Add {terms.eventToday.toLowerCase().replace(/\?$/, "")} and today&apos;s training
           </button>
         </>
       ) : (

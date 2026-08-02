@@ -195,6 +195,57 @@ export interface Meal {
 }
 
 export const MEALS: Meal[] = [
+  // ---------------------------------------------------------------------------
+  // BIG MEALS, AND VEGAN MEALS THAT ACTUALLY CARRY PROTEIN.
+  //
+  // An audit across body types x goals x diets found two failures the pool
+  // caused on its own, neither of which any amount of portion scaling can fix:
+  //
+  //   1. Big athletes were under-fed. A 115kg forward building at 4,370 kcal
+  //      was handed 3,508 — 80% of target, 862 kcal short every day, for the
+  //      one athlete whose entire goal is gaining. The heaviest dinner in the
+  //      pool was 777 kcal and portions cap at 1.6x, so the ceiling was
+  //      arithmetic, not preference.
+  //
+  //   2. Vegan plans collapsed on protein: 58-63% of target on a cut. Losing
+  //      weight on 60% of your protein is how you lose muscle instead of fat.
+  //      Vegan meals existed but were built from lentils and beans alone.
+  //
+  // These are deliberately calorie-dense and protein-dense rather than merely
+  // larger portions of the same thing.
+  { id: "big_oats_pb", name: "Bulking oats, peanut butter & banana", slot: "Breakfast",
+    items: [{ foodId: "oats", qty: 120 }, { foodId: "milk", qty: 400 }, { foodId: "peanut_butter", qty: 40 }, { foodId: "whey_protein", qty: 30 }, { foodId: "banana", qty: 1 }],
+    method: "Simmer the oats in the milk, stir the peanut butter through while hot, add the protein once it cools slightly, top with banana. Around 1,000 kcal without feeling like a challenge." },
+  { id: "tofu_scramble", name: "Tofu scramble on toast", slot: "Breakfast",
+    items: [{ foodId: "tofu", qty: 200 }, { foodId: "wholemeal_bread", qty: 80 }, { foodId: "spinach", qty: 60 }, { foodId: "seeds_mixed", qty: 20 }, { foodId: "olive_oil", qty: 10 }],
+    method: "Crumble the tofu into hot oil, season hard (turmeric and black salt if you have them), wilt the spinach in, serve on toast with the seeds over." },
+  { id: "pea_protein_oats", name: "Seeded overnight oats", slot: "Breakfast",
+    items: [{ foodId: "oats", qty: 100 }, { foodId: "soy_milk", qty: 350 }, { foodId: "pea_protein", qty: 30 }, { foodId: "seeds_mixed", qty: 25 }, { foodId: "berries_frozen", qty: 80 }],
+    method: "Stir everything but the berries together the night before. Top with berries in the morning. No cooking at all." },
+
+  { id: "big_chicken_rice", name: "Double chicken & rice bowl", slot: "Lunch",
+    items: [{ foodId: "chicken_breast", qty: 250 }, { foodId: "rice", qty: 150 }, { foodId: "olive_oil", qty: 15 }, { foodId: "mixed_veg_frozen", qty: 150 }, { foodId: "cheddar", qty: 30 }],
+    method: "The batch-cook staple, sized for someone big. Pan-fry the chicken in the oil, boil the rice, steam the veg, cheese over the top." },
+  { id: "tofu_quinoa_bowl", name: "Tofu & quinoa power bowl", slot: "Lunch",
+    items: [{ foodId: "tofu", qty: 250 }, { foodId: "quinoa", qty: 100 }, { foodId: "black_beans", qty: 150 }, { foodId: "olive_oil", qty: 15 }, { foodId: "spinach", qty: 60 }],
+    method: "Roast the tofu hard so it crisps, boil the quinoa, warm the beans through, toss it all with the oil and spinach." },
+
+  { id: "big_beef_pasta", name: "Loaded beef pasta", slot: "Dinner",
+    items: [{ foodId: "beef_mince_5", qty: 250 }, { foodId: "pasta", qty: 175 }, { foodId: "tomatoes_tin", qty: 200 }, { foodId: "cheddar", qty: 40 }, { foodId: "olive_oil", qty: 15 }],
+    method: "Brown the mince, add the tomatoes and reduce, boil the pasta, cheese over the top. Makes two portions if you are not building." },
+  { id: "big_salmon_potato", name: "Salmon, potatoes & greens", slot: "Dinner",
+    items: [{ foodId: "salmon_fillet", qty: 220 }, { foodId: "potatoes", qty: 400 }, { foodId: "broccoli", qty: 150 }, { foodId: "olive_oil", qty: 20 }],
+    method: "Roast the potatoes in most of the oil, bake the salmon for the last 15 minutes, steam the broccoli." },
+  { id: "lentil_tofu_curry", name: "Lentil & tofu curry with rice", slot: "Dinner",
+    items: [{ foodId: "red_lentils", qty: 120 }, { foodId: "tofu", qty: 200 }, { foodId: "rice", qty: 120 }, { foodId: "tomatoes_tin", qty: 200 }, { foodId: "olive_oil", qty: 15 }],
+    method: "Simmer the lentils with the tomatoes until they break down, fry the tofu separately so it holds its shape, fold together and serve on rice." },
+
+  { id: "pb_shake", name: "Peanut butter mass shake", slot: "Snack",
+    items: [{ foodId: "milk", qty: 400 }, { foodId: "peanut_butter", qty: 40 }, { foodId: "oats", qty: 50 }, { foodId: "whey_protein", qty: 30 }, { foodId: "banana", qty: 1 }],
+    method: "Blend. The easiest 800 kcal you will ever eat, and the answer when a big target won't fit into solid food." },
+  { id: "vegan_shake", name: "Soya, seed & pea protein shake", slot: "Snack",
+    items: [{ foodId: "soy_milk", qty: 400 }, { foodId: "pea_protein", qty: 30 }, { foodId: "peanut_butter", qty: 30 }, { foodId: "banana", qty: 1 }],
+    method: "Blend. Covers the protein a plant-based day usually misses." },
   { id: "oats_berries", name: "Protein porridge & berries", slot: "Breakfast",
     items: [{ foodId: "oats", qty: 80 }, { foodId: "milk", qty: 300 }, { foodId: "whey_protein", qty: 30 }, { foodId: "berries_frozen", qty: 80 }],
     method: "Simmer the oats in the milk for 4–5 minutes, take off the heat, stir the protein through once it's cooled slightly, then top with the berries." },
@@ -476,7 +527,46 @@ const MAX_REPEATS = 3;
  * basket and cheap repetition wins. Above it the plan overshoots protein by 20%,
  * which is money spent on protein nobody asked for.
  */
-const PROTEIN_WEIGHT = 9; // £ per unit of normalised density shortfall
+const PROTEIN_WEIGHT = 35; // £ per unit of normalised density shortfall
+
+/**
+ * How the day's calories divide between meals.
+ *
+ * Portion scaling used to work off one flat `targets.calories / mealCount`,
+ * which treats a snack as a third of a dinner's equal — so a snack got pushed
+ * to 1.6× to reach a "per-meal" target it was never meant to hit, and dinner
+ * got the same multiplier as breakfast.
+ *
+ * Normalised over whichever slots are actually planned, so three meals a day
+ * still totals the target rather than landing 12% short.
+ */
+const SLOT_SHARE: Record<Slot, number> = {
+  Breakfast: 0.25, Lunch: 0.30, Dinner: 0.33, Snack: 0.12,
+};
+
+/**
+ * MEALS ARE CHOSEN BY SIZE, NOT JUST BY PRICE AND PROTEIN.
+ *
+ * A 105kg forward on 3,720 kcal and a 52kg athlete on 1,740 were handed
+ * identical dishes and told apart only by a portion multiplier — and that
+ * multiplier is clamped at 1.6, so the big athlete finished 8% under target
+ * with a Greek yoghurt bowl scaled to 811 kcal. Scaling is for fine adjustment;
+ * it cannot turn a snack into a footballer's dinner, and pretending otherwise
+ * produces portions nobody would serve.
+ *
+ * Scoring the gap between a meal's own calories and its slot's share means big
+ * targets pull in inherently bigger meals, small targets pull in lighter ones,
+ * and the scale needed afterwards stays near 1.
+ *
+ * Weighted below protein deliberately: being handed a meal that misses the
+ * protein target matters more than one that needs scaling to 1.2×.
+ */
+const SIZE_WEIGHT = 4; // £ per unit of normalised calorie mismatch
+
+function sizeMismatch(meal: Meal, slotKcal: number): number {
+  if (slotKcal <= 0) return 0;
+  return Math.abs(mealMacros(meal).kcal - slotKcal) / slotKcal;
+}
 
 /**
  * How far short a meal falls on protein DENSITY — grams per calorie — against
@@ -562,6 +652,24 @@ export function buildWeek(
   // (protein held while calories come down), bulking pushes it down.
   const requiredProteinPerKcal = targets.calories > 0 ? targets.protein / targets.calories : 0;
 
+  // The slots for a day. Constant across the week — mealsPerDay doesn't vary by
+  // day — so it's hoisted out of the map to give `choose` its size target.
+  const wanted: { slot: Slot; nth: number }[] = [
+    { slot: "Breakfast", nth: 0 }, { slot: "Lunch", nth: 0 }, { slot: "Dinner", nth: 0 },
+    ...(prefs.mealsPerDay >= 4 ? [{ slot: "Snack" as Slot, nth: 0 }] : []),
+    ...(prefs.mealsPerDay >= 5 ? [{ slot: "Snack" as Slot, nth: 1 }] : []),
+  ];
+  const shareTotal = wanted.reduce((s, w) => s + SLOT_SHARE[w.slot], 0);
+  /**
+   * The calories this slot should carry.
+   *
+   * Deliberately computed from the FULL day, including meals being eaten out.
+   * Scaling only the remaining meals would inflate breakfast to cover a
+   * restaurant dinner, which is not what anyone wants.
+   */
+  const slotKcal = (slot: Slot): number =>
+    shareTotal > 0 ? targets.calories * (SLOT_SHARE[slot] / shareTotal) : 0;
+
   const choose = (slot: Slot, nth = 0, avoid: Set<string> = new Set()): Meal | undefined => {
     const list = pools[slot].filter((m) => !avoid.has(m.id));
     if (!list.length) return undefined;
@@ -582,6 +690,10 @@ export function buildWeek(
           // cost. Only shortfall is penalised — going over is free, because
           // extra protein is not a problem to solve.
           + proteinShortfall(meal, requiredProteinPerKcal) * PROTEIN_WEIGHT
+          // How far this meal's own calories sit from what this slot should
+          // carry, so a big athlete is offered big meals rather than a small
+          // one scaled past the point of sense.
+          + sizeMismatch(meal, slotKcal(slot)) * SIZE_WEIGHT
           + ((idx + seed + nth) % list.length) * 0.001,
         capped: (uses.get(meal.id) ?? 0) >= MAX_REPEATS,
       }))
@@ -595,13 +707,6 @@ export function buildWeek(
   };
 
   return DAYS.map((day, i) => {
-    // Three meals means no snack; five means a second one.
-    const wanted: { slot: Slot; nth: number }[] = [
-      { slot: "Breakfast", nth: 0 }, { slot: "Lunch", nth: 0 }, { slot: "Dinner", nth: 0 },
-      ...(prefs.mealsPerDay >= 4 ? [{ slot: "Snack" as Slot, nth: 0 }] : []),
-      ...(prefs.mealsPerDay >= 5 ? [{ slot: "Snack" as Slot, nth: 1 }] : []),
-    ];
-
     const skipped: SkippedMeal[] = [];
     const picks: Meal[] = [];
     // A 5-meal day has two snack slots; without this they'd both resolve to the
@@ -619,16 +724,22 @@ export function buildWeek(
       if (m) { picks.push(m); usedToday.add(m.id); }
     }
 
-    // Portion sizes are set from the athlete's FULL day, including any meal
-    // they're eating out. Scaling only the remaining meals would inflate
-    // breakfast to cover a restaurant dinner, which is not what anyone wants.
-    const fullDay = wanted.length;
-    const perMealTarget = fullDay > 0 ? targets.calories / fullDay : targets.calories;
-    const base = picks.length ? picks.reduce((s, m) => s + mealMacros(m).kcal, 0) / picks.length : 0;
-    const raw = base > 0 ? perMealTarget / base : 1;
-    const scale = Math.round(Math.min(1.6, Math.max(0.6, raw)) * 20) / 20; // 0.05 steps
-
-    const meals = picks.map((meal) => ({ meal, scale, macros: mealMacros(meal, scale) }));
+    /**
+     * Each meal is scaled to its own slot, not to one figure for the whole day.
+     *
+     * The old version averaged every pick's calories and applied a single
+     * multiplier to all of them, so a light breakfast and a heavy dinner moved
+     * together — and the snack, whose "fair share" was a quarter of the day,
+     * was dragged towards a main meal's size. Scaling per slot keeps each meal
+     * near a portion a person would actually serve.
+     */
+    const meals = picks.map((meal) => {
+      const want = slotKcal(meal.slot);
+      const base = mealMacros(meal).kcal;
+      const raw = base > 0 ? want / base : 1;
+      const scale = Math.round(Math.min(1.6, Math.max(0.6, raw)) * 20) / 20; // 0.05 steps
+      return { meal, scale, macros: mealMacros(meal, scale) };
+    });
     const macros = meals.reduce(
       (s, m) => ({
         kcal: s.kcal + m.macros.kcal, protein: s.protein + m.macros.protein,

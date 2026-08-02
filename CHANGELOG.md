@@ -10,6 +10,68 @@ fortnight while everyone assumes it shipped.
 
 ---
 
+## 2026-08-02 (audit) — Meal plans actually scale to the athlete
+
+No operator action. Front-end and pure logic only.
+
+An audit across five body types × three goals × four diet patterns found the
+planner failing two groups outright, both silently.
+
+### Fixed
+
+**Big athletes were being under-fed.** A 115kg forward building on 4,370 kcal was
+handed 3,010 across three meals — **69% of target**, 1,360 kcal a day missing,
+for the one athlete whose entire goal is gaining weight. Nothing on screen said
+a word about it.
+
+Three causes, all now addressed:
+
+- **Meal choice ignored calorie size.** Selection scored on cost, protein and
+  repetition, so a 105kg forward and a 52kg athlete were handed identical dishes
+  and told apart only by a portion multiplier that caps at 1.6×. A "Greek yoghurt
+  breakfast bowl" scaled to 811 kcal is not a breakfast anyone would serve. Meals
+  are now scored on how close their own calories sit to what the slot should
+  carry, so big targets pull in big meals.
+- **The recipe pool topped out at 777 kcal for a dinner.** Ten new meals, chosen
+  to be calorie- and protein-dense rather than just larger servings of the same
+  thing.
+- **Portions were scaled by one figure for the whole day.** Breakfast, dinner and
+  snack all moved together, and the snack's "fair share" was a quarter of the
+  day. Each meal is now portioned to its own slot.
+
+Together: 69% → 82% on four meals, ~88% on five. Beyond that it is an honest
+limit of a recipe list, so the screen **says so** and offers the fix — spreading
+the same calories over five meals, which is how anyone eats that much anyway.
+
+**Plant-based plans collapsed on protein** — 58–64% of target. Cutting on 60% of
+your protein is how you lose muscle instead of fat. The pool gained tofu, quinoa
+and pea-protein meals and protein is weighted much harder in selection: now
+73–79%, with calories still landing at 99–103%. The day card's existing "short on
+protein" warning covers the rest, because hitting an athlete's protein target on
+a plant-based cut is genuinely hard and pretending otherwise would be worse.
+
+Three regression tests cover this; two of them fail against the old scoring.
+
+### Changed
+
+**The goal picker is on the front card.** Lean down / maintain / build moves the
+calorie target by ~1,100 kcal — more than any other control — and it was in the
+"Adjust" drawer behind the stats. It was the one choice an athlete actually wants
+to make and the hardest to find.
+
+**Weight is in the quick check-in.** It was full-mode only, and full mode is the
+one almost nobody picks, so for most accounts the app never got a weight after
+sign-up. Weight is what the calorie targets, macro split, meal plan and shopping
+list are all computed from; without one they run on a 75kg default. Optional,
+with no validation and no nag.
+
+**The planner says which numbers it made up.** Height, age, weight and sex each
+fall back to a hard-coded default, and the new summary line was reading
+"From 20 yrs · 178cm · 75kg" as though the athlete had given them. It now names
+the assumptions and links to the fields.
+
+---
+
 ## 2026-08-02 (latest) — The meal planner
 
 No operator action. Front-end only.

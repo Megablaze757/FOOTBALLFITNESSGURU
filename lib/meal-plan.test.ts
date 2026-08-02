@@ -193,3 +193,65 @@ test("calories are still hit while chasing protein", () => {
     assert.ok(hit >= 0.85 && hit <= 1.15, `calories at ${Math.round(hit * 100)}% of target`);
   }
 });
+
+// --- body size actually changes what you're served ---------------------------
+//
+// These three cover an audit sweep of body type x goal x diet pattern that
+// found the planner failing two groups outright. Both failures were invisible
+// on screen, which is what made them worth pinning down in tests.
+
+test("a big athlete is served bigger meals, not the same ones scaled up", () => {
+  // Selection scored on cost, protein and repetition — never on how many
+  // calories a meal actually carries. So a 105kg forward on 3,700 kcal and a
+  // 52kg athlete on 1,740 got identical dishes and were told apart only by a
+  // portion multiplier, which caps at 1.6x.
+  const big = { sex: "male" as const, age: 24, heightCm: 195, weightKg: 105, activity: "high" as const, goal: "maintain" as const };
+  const small = { sex: "female" as const, age: 17, heightCm: 158, weightKg: 52, activity: "light" as const, goal: "maintain" as const };
+
+  const baseKcal = (s: BodyStats) => {
+    const wk = buildWeek(planTargets(s), 7, DEFAULT_PREFS, EMPTY_SCHEDULE);
+    const all = wk.flatMap((d) => d.meals.map((m) => mealMacros(m.meal).kcal));
+    return all.reduce((a, b) => a + b, 0) / all.length;
+  };
+
+  assert.ok(
+    baseKcal(big) > baseKcal(small) * 1.15,
+    `big athlete's meals should be inherently larger — got ${Math.round(baseKcal(big))} vs ${Math.round(baseKcal(small))} kcal`
+  );
+});
+
+test("every meal is portioned to its own slot, not one figure for the day", () => {
+  // A single day-wide multiplier dragged snacks towards a main meal's size,
+  // because their "fair share" was calories/mealCount regardless of slot.
+  const wk = buildWeek(planTargets(BULKER), 7, { ...DEFAULT_PREFS, mealsPerDay: 4 }, EMPTY_SCHEDULE);
+  const day = wk[0];
+  const snack = day.meals.find((m) => m.meal.slot === "Snack");
+  const dinner = day.meals.find((m) => m.meal.slot === "Dinner");
+  assert.ok(snack && dinner, "expected a snack and a dinner");
+  assert.ok(
+    snack!.macros.kcal < dinner!.macros.kcal,
+    `a snack should be smaller than dinner — got ${Math.round(snack!.macros.kcal)} vs ${Math.round(dinner!.macros.kcal)}`
+  );
+});
+
+test("plant-based plans still deliver most of the protein target", () => {
+  // Vegan weeks were landing at 58-64% of the protein target. Cutting on 60%
+  // of your protein is how you lose muscle rather than fat, and nothing said
+  // so. The pool gained tofu, quinoa and pea-protein meals and protein was
+  // weighted harder in selection.
+  //
+  // 70%, not 100%: hitting an athlete's protein target on a plant-based cut is
+  // genuinely hard, and the day card already warns below 85%. This asserts the
+  // planner tries, not that the diet is easy.
+  for (const goal of ["cut", "maintain", "build"] as const) {
+    for (const s of [
+      { sex: "male" as const, age: 22, heightCm: 180, weightKg: 78, activity: "high" as const, goal },
+      { sex: "female" as const, age: 20, heightCm: 166, weightKg: 62, activity: "moderate" as const, goal },
+    ]) {
+      const t = planTargets(s);
+      const wk = buildWeek(t, 7, { ...DEFAULT_PREFS, pattern: "vegan" }, EMPTY_SCHEDULE);
+      const hit = avgProtein(wk) / t.protein;
+      assert.ok(hit >= 0.7, `vegan ${s.sex}/${goal} protein at ${Math.round(hit * 100)}% of target`);
+    }
+  }
+});
