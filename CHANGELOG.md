@@ -10,6 +10,58 @@ fortnight while everyone assumes it shipped.
 
 ---
 
+## 2026-08-02 (later) — Shopping list and Guides
+
+No operator action. Front-end only.
+
+### Changed
+
+**The shopping list is a shopping list now.** It had no checkboxes — which is the
+entire job. You are standing in an aisle holding a phone, and the one thing you
+need is to mark what's in the trolley; it was a read-only table of prices, so the
+only way to use it was to remember where you'd got to.
+
+Every row ticks. Ticked items strike through and dim, each aisle shows its own
+count, and a bar across the top tracks the shop. The total is joined by what's
+left to buy, which is the number that matters once you're halfway round. Ticks
+are kept against the plan's seed and survive the app being backgrounded — a shop
+takes forty minutes with the phone in a pocket, and losing them at that moment
+would make the feature worthless exactly when it's in use. Regenerating the week
+gets a clean list, because it's a different shop.
+
+**Tapping an item no longer throws you out of the app.** Every food name was a
+link to a supermarket search opening in a new tab, and the name was the only tap
+target in the row — so the most natural gesture while shopping, tapping the thing
+you just picked up, launched Tesco's website. The row is the tick; a small,
+separate search icon does the searching. The store picker moved above the list,
+since it decides what that icon does — it used to sit underneath, after a
+sentence telling you to tap items you'd already scrolled past.
+
+**Guides lost a layer of boxes.** The position card had two bordered panels
+inside a bordered card inside a bordered page — three frames around a bulleted
+list. The lists keep their headings and get a coloured marker each; they don't
+need boxes to be told apart. The position was also both a chip and the heading.
+
+**The matchday timeline reads as a timeline.** Each step was a card, which boxed
+every hour of the day separately and broke the run of it. The rail is the only
+frame now.
+
+**Recovery protocols were three full cards side by side** — each with a
+checklist, red flags and exercise chips — squeezed into a third of the width at
+three different heights. One column, collapsed, tap to open.
+
+### Fixed
+
+- **The matchday timeline's icons sat on top of their own headings.** A 36px
+  emoji centred on the rail reaches 18px into the text column, and the padding
+  didn't clear it. It only ever looked right because each step was wrapped in a
+  card whose padding pushed the text out of the way; removing the card exposed
+  it. Caught by measuring the gap in a real render, not by reading the classes.
+- **`tab === "fuel"` was tested twice in a row**, with a separate section under
+  each — one condition, two places to keep in step.
+
+---
+
 ## 2026-08-02 — Injury, redesigned
 
 No operator action. Front-end only.

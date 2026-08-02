@@ -4,14 +4,15 @@ import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { invalidate } from "@/lib/use-async";
 import {
-  planTargets, buildWeek, shoppingList, shoppingListText, unmetSlots, dislikedFoodIds, favouriteFoodIds,
+  planTargets, buildWeek, shoppingList, unmetSlots, dislikedFoodIds, favouriteFoodIds,
   ACTIVITY_LEVELS, DIET_GOALS, DIET_PATTERNS, AVOIDANCES, DEFAULT_PREFS,
   type BodyStats, type Sex, type ActivityLevel, type DietGoal, type PlannedDay,
   type MealPrefs, type DietPattern, type Avoidance,
 } from "@/lib/meal-plan";
 import { parseSchedule } from "@/lib/meal-schedule";
 import type { TargetContext } from "@/lib/nutrition";
-import { SUPERMARKETS, PRICES_REVIEWED, productLink, FOOD_BY_ID as FOOD_LOOKUP } from "@/lib/food-db";
+import { FOOD_BY_ID as FOOD_LOOKUP } from "@/lib/food-db";
+import { ShoppingList } from "@/components/ShoppingList";
 
 interface Props {
   userId: string;
@@ -41,9 +42,7 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
   const [week, setWeek] = useState<PlannedDay[] | null>(null);
   const [seed, setSeed] = useState<number | null>(initialSeed ?? null);
   const [openDay, setOpenDay] = useState(0);
-  const [copied, setCopied] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [store, setStore] = useState(SUPERMARKETS[0]);
   const [prefs, setPrefs] = useState<MealPrefs>({ ...DEFAULT_PREFS, ...(initialPrefs ?? {}) });
   const [notes, setNotes] = useState(initialNotes ?? "");
   const noteDislikes = useMemo(() => dislikedFoodIds(notes), [notes]);
@@ -120,15 +119,6 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     }
-  }
-
-  async function copyList() {
-    if (!list) return;
-    try {
-      await navigator.clipboard.writeText(shoppingListText(list));
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch { /* clipboard blocked — the list is on screen anyway */ }
   }
 
   return (
@@ -364,79 +354,7 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
             )}
           </div>
 
-          {list && (
-            <div className="card p-5">
-              <div className="flex items-center justify-between">
-                <div className="stat-label">Shopping list</div>
-                <button onClick={copyList} className="text-xs text-pitch-400 hover:underline">
-                  {copied ? "Copied ✓" : "Copy list"}
-                </button>
-              </div>
-
-              <div className="mt-3 space-y-4">
-                {list.byAisle.map((group) => (
-                  <div key={group.aisle}>
-                    <div className="mb-1.5 flex items-center justify-between">
-                      <span className="text-xs font-bold uppercase tracking-wide text-slate-400">{group.aisle}</span>
-                      <span className="text-xs text-slate-500">~£{group.cost.toFixed(2)}</span>
-                    </div>
-                    <ul className="space-y-1.5">
-                      {group.lines.map((l) => (
-                        <li key={l.food.id} className="flex items-center gap-2 text-sm">
-                          <span className="min-w-0 flex-1">
-                            {/* Each item searches the chosen store directly — no
-                                API needed, and it can't go stale. */}
-                            <a
-                              href={productLink(l.food, store)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-slate-200 underline-offset-2 hover:text-pitch-400 hover:underline"
-                            >
-                              {l.food.name}
-                            </a>
-                            <span className="text-slate-500"> × {l.packs} <span className="text-slate-600">({l.food.packLabel})</span></span>
-                            {/* One bag across six meals is the whole point of
-                                buying the bag — say so, or it reads as £1.45
-                                spent on a single dinner. */}
-                            {l.meals > 1 && (
-                              <span className="block text-[11px] text-slate-500">covers {l.meals} meals this week</span>
-                            )}
-                          </span>
-                          <span className="shrink-0 tabular-nums text-slate-400">~£{l.cost.toFixed(2)}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
-              </div>
-
-              <div className="mt-4 flex items-center justify-between border-t border-white/10 pt-3">
-                <span>
-                  <span className="block text-sm font-bold text-slate-100">Estimated weekly shop</span>
-                  <span className="block text-xs text-slate-500">
-                    ~£{list.costPerMeal.toFixed(2)} a meal across {list.mealsPlanned} planned meals
-                  </span>
-                </span>
-                <span className="text-lg font-extrabold text-pitch-400">~£{list.total.toFixed(2)}</span>
-              </div>
-
-              <p className="mt-2 text-xs text-slate-500">
-                Estimates from typical UK supermarket prices (reviewed {PRICES_REVIEWED}) — not live pricing,
-                so your actual basket will differ. Tap any item to search it in:
-              </p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {SUPERMARKETS.map((sm) => (
-                  <button
-                    key={sm.id}
-                    onClick={() => setStore(sm)}
-                    className={`chip transition ${store.id === sm.id ? "border-pitch-400/50 text-pitch-400" : "hover:text-slate-200"}`}
-                  >
-                    {sm.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+          {list && <ShoppingList list={list} seed={seed} />}
         </>
       )}
     </section>

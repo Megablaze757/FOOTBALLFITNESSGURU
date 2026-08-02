@@ -102,20 +102,24 @@ export default function EssentialsPage() {
         <section key={position || "all"} className="card-premium p-6">
           <div className="flex items-center gap-2">
             <span className="chip text-pitch-400">{sportLabel}</span>
-            <span className="chip">{position || "All-round"}</span>
             {i === 0 && guides.length > 1 && <span className="chip text-slate-400">main</span>}
           </div>
-          <h2 className="mt-3 text-xl font-extrabold">
-            {position ? `${position} essentials` : "Your position essentials"}
+          {/* The position was a chip AND the heading. One of them was enough. */}
+          <h2 className="mt-3 text-2xl font-extrabold">
+            {position ? `Playing ${position}` : "Your position essentials"}
           </h2>
           <p className="mt-1 text-sm text-slate-300">{guide.summary}</p>
 
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <Col title="Prioritise physically" items={guide.physical} icon="⚡" />
-            <Col title="Sharpen technically" items={guide.skills} icon="🎯" />
+          {/* Two bordered panels inside a bordered card inside a bordered page
+              is three frames around a bulleted list. The lists carry their own
+              heading and a coloured marker; they don't need boxes to be told
+              apart. */}
+          <div className="mt-5 grid gap-5 sm:grid-cols-2">
+            <Col title="Prioritise physically" items={guide.physical} icon="⚡" colour="#e3b53f" />
+            <Col title="Sharpen technically" items={guide.skills} icon="🎯" colour="#38bdf8" />
           </div>
 
-          <div className="mt-4">
+          <div className="mt-5 border-t border-white/[0.07] pt-4">
             <div className="stat-label mb-2">Key drills for you</div>
             <div className="flex flex-wrap gap-2">
               {guide.keyDrills.map((id) => {
@@ -141,39 +145,50 @@ export default function EssentialsPage() {
           this is where they find out how to actually practise it. */}
       {tab === "skills" && <SkillDrills sport={sport} position={positions} />}
 
-      {/* Gameday nutrition timeline */}
+      {/* One block, not two. `tab === "fuel"` was tested twice in a row with a
+          separate section under each — same condition, same tab, two places to
+          keep in step. */}
       {tab === "fuel" && (
-      <section>
-        <h2 className="field-label mb-3">{gameday} nutrition</h2>
-        <ol className="relative space-y-3 border-l border-white/10 pl-5">
-          {GAMEDAY_NUTRITION.map((ph) => (
-            <li key={ph.when} className="relative">
-              <span className="absolute -left-[27px] grid h-9 w-9 place-items-center rounded-full border border-white/10 bg-ink-800 text-base">{ph.icon}</span>
-              <div className="card p-4">
-                <div className="flex items-baseline justify-between gap-2">
+      <div className="space-y-6">
+        <section>
+          <h2 className="field-label mb-3">{gameday} nutrition</h2>
+          {/* The timeline is the point of this section — what to eat and when,
+              in order — so the cards lost their borders and the rail became the
+              only frame. A card per step boxed each hour of the day separately
+              and broke the run of it. */}
+          {/* The 36px icon is centred on the rail, so it reaches 18px into the
+              text column — the padding has to clear that. It was pl-6 against a
+              -left-[27px] icon, which only ever looked right because each step
+              sat inside a `card p-4` whose own padding pushed the text clear.
+              Drop the card and the emoji lands on top of the heading. */}
+          <ol className="relative space-y-5 border-l border-white/[0.12] pl-8">
+            {GAMEDAY_NUTRITION.map((ph) => (
+              <li key={ph.when} className="relative">
+                <span className="absolute -left-[50px] grid h-9 w-9 place-items-center rounded-full border border-white/10 bg-ink-800 text-base">{ph.icon}</span>
+                <div className="flex flex-wrap items-baseline gap-x-2">
                   <span className="font-bold text-slate-100">{ph.title}</span>
-                  <span className="chip text-pitch-400">{ph.when}</span>
+                  <span className="text-xs font-semibold text-pitch-400">{ph.when}</span>
                 </div>
-                <ul className="mt-2 space-y-1 text-sm text-slate-300">
-                  {ph.tips.map((t) => <li key={t} className="flex gap-2"><span className="text-slate-500">•</span>{t}</li>)}
+                <ul className="mt-1.5 space-y-1 text-sm text-slate-300">
+                  {ph.tips.map((t) => <li key={t} className="flex gap-2"><span className="text-slate-600">•</span>{t}</li>)}
                 </ul>
-              </div>
-            </li>
-          ))}
-        </ol>
-      </section>
+              </li>
+            ))}
+          </ol>
+        </section>
 
-      )}
-
-      {/* General recovery protocols */}
-      {tab === "fuel" && (
-      <section>
-        <h2 className="field-label mb-3">Recovery protocols</h2>
-        <div className="grid gap-3 sm:grid-cols-3">
-          {RECOVERY_GENERAL.map((p) => <ProtocolCard key={p.id} p={p} />)}
-        </div>
-      </section>
-
+        <section>
+          <h2 className="field-label mb-1">Recovery protocols</h2>
+          <p className="mb-3 text-xs text-slate-500">Tap one to open the steps.</p>
+          {/* Was three fully-expanded protocol cards side by side — each with a
+              checklist, red flags and exercise chips — squeezed into a third of
+              the width and all of different heights. Collapsed, in one column,
+              they're a list you can scan and open. */}
+          <div className="space-y-2">
+            {RECOVERY_GENERAL.map((p) => <ProtocolCard key={p.id} p={p} collapsed />)}
+          </div>
+        </section>
+      </div>
       )}
 
       {open && <ExerciseModal ex={open} onClose={() => setOpen(null)} />}
@@ -181,12 +196,19 @@ export default function EssentialsPage() {
   );
 }
 
-function Col({ title, items, icon }: { title: string; items: string[]; icon: string }) {
+function Col({ title, items, icon, colour }: {
+  title: string; items: string[]; icon: string; colour: string;
+}) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+    <div>
       <div className="stat-label mb-2">{icon} {title}</div>
-      <ul className="space-y-1.5 text-sm text-slate-200">
-        {items.map((i) => <li key={i} className="flex gap-2"><span className="text-pitch-400">›</span>{i}</li>)}
+      <ul className="space-y-2 text-sm text-slate-200">
+        {items.map((i) => (
+          <li key={i} className="flex gap-2.5">
+            <span className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: colour }} />
+            {i}
+          </li>
+        ))}
       </ul>
     </div>
   );
