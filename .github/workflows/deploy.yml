@@ -72,7 +72,7 @@ jobs:
           # the next deploy. Copy it in.
           if [ -f CNAME ]; then cp CNAME out/CNAME; fi
 
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: out
 
