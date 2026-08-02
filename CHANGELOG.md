@@ -333,8 +333,8 @@ behaviour, not breakage, and each screen says so where it matters.
 | # | Step | Why |
 |---|---|---|
 | 1 | Paste the bundled Worker (`2026-08-01.1`) into Cloudflare | Live is still `2026-07-29.1` — confirmed via `/health` |
-| 2 | Set the GitHub repo **Variable** `NEXT_PUBLIC_API_URL` to the Worker URL | Read at build time; without it the app can't reach the Worker at all |
-| 3 | Re-run *Deploy to GitHub Pages* (it has `workflow_dispatch`) | The variable is baked in at build, so it needs a rebuild |
+| 2 | ~~Set the GitHub repo **Variable** `NEXT_PUBLIC_API_URL`~~ | **done** — verified in the deployed bundle 2026-08-02 |
+| 3 | ~~Re-run *Deploy to GitHub Pages*~~ | **done** — the deploy runs on push and is current |
 
 **Paste the bundle, not `cloudflare/src/index.ts`.** The source imports from
 `lib/affiliate` and `lib/biometrics`, which resolve at bundle time — the
@@ -435,7 +435,7 @@ Sixteen commits, 39 files, ~4,900 lines. Merged to `main` as `fb9cca5`.
 |---|---|
 | Apply migrations `0064` + `0065` | **done** — verified against the live project |
 | Paste the Worker bundle (`2026-08-01.1`) into Cloudflare | **outstanding** — live still reports `2026-07-29.1` |
-| Set the `NEXT_PUBLIC_API_URL` repo Variable, then re-run the Pages deploy | **outstanding** |
+| Set the `NEXT_PUBLIC_API_URL` repo Variable, then re-run the Pages deploy | **done** — see the status block at the top |
 
 Until the last two are done the site runs on its on-device fallbacks: the AI
 coach uses the local engine, meal photos can't reach a vision model, and the
