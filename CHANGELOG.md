@@ -217,69 +217,55 @@ front-end bundle.
 
 ---
 
-## 2026-08-02 (iOS) — An App Store build, and the native features that justify it
+## 2026-08-02 (iOS) — A native Swift app, in `ios/`
 
-**Operator action: everything in `mobile/` needs a Mac.** Nothing here changes
-the web app's behaviour — the native code paths no-op in every browser.
+**Operator action: needs a Mac.** Nothing in `ios/` affects the web app —
+`tsconfig.json` and `.eslintrc.json` exclude it, so `npm run build`, `npm test`
+and `npm run lint` never see it. The two share a Supabase project and nothing
+else.
 
-### Added
+Superseded an earlier Capacitor scaffold from the same day. A webview wrapper
+was the wrong answer to "put it on the App Store": it invites Guideline 4.2, and
+it isn't what was asked for.
 
-**`mobile/` — an iOS shell, ready to build.** Capacitor around the existing
-static export, so there is nothing to port. Config, the four commands you run,
-an App Store icon (1024×1024, opaque, no alpha — Apple rejects transparency) and
-2732×2732 splash screens, all generated from the existing logo onto `#0a0a0b`.
+### Added — `ios/`, native SwiftUI
 
-I can't build or sign it from here: that needs macOS with Xcode and a paid Apple
-Developer membership. `mobile/README.md` is the runbook.
+The daily loop, end to end: sign in → check in → readiness verdict, with Apple
+Health filling in what it can.
 
-**`lib/native.ts` — the bridge, and the reason the app isn't "a repackaged
-website".** Guideline 4.2 rejects wrappers, and you don't argue past it, you
-either have native capability or you don't:
+- **`Readiness.swift`** — the scoring engine, a faithful port of
+  `lib/readiness.ts`. Same weights, hard limits, ACWR caps and advice strings.
+- **`ReadinessTests.swift`** — the TypeScript suite ported case for case. It
+  exists because two implementations of one engine drift silently: someone tunes
+  a weight on the web, the phone keeps the old one, and the same athlete is told
+  "train" on one device and "rest" on the other. Plus one Swift-only case — Swift
+  dictionaries have no insertion order, so a tie on pain would otherwise name a
+  different joint per launch.
+- **`HealthKitManager.swift`** — sleep, HRV and resting heart rate. Only counts
+  time actually asleep (`.inBed` includes lying awake reading, and counting it
+  turns a bad night into a good one), attributes a night to the day it ended, and
+  sums fragments rather than taking the longest.
+- **`Supabase.swift`** — auth and PostgREST over `URLSession`, no SDK. Refresh
+  token in the Keychain, not UserDefaults. Writes `source: "apple_health"`,
+  because `biometrics_source_check` does not permit `'healthkit'` and the
+  best-effort write would have failed silently.
+- **`CheckInView.swift` / `BodyMap.swift`** — tap scales rather than sliders,
+  soreness behind a yes/no, and the same fifteen body regions and coordinates as
+  the web so a left knee marked on the phone is a left knee on the site.
 
-- **Apple Health.** Sleep, HRV and resting heart rate read straight from
-  HealthKit. On the web this is a five-step Shortcut most people never finish;
-  natively it's one permission prompt. Readiness is the number this app is built
-  around, and its two best inputs are the two an athlete is worst at
-  self-reporting.
-- **APNs push.** iOS web push needs the site installed to the home screen, drops
-  subscriptions silently, and can't wake a closed app.
-- **Haptics.**
+### Not built, and it is not a small remainder
 
-Everything no-ops on the web. The plugin specifiers are built at runtime so
-neither `tsc` nor the bundler can follow them — no native code is bundled for
-the browser, only the package names as strings.
+The programme builder and engine, nutrition, the meal planner, the shopping
+list, video pose analysis, injury and rehab, guides, progress, the exercise
+library, coach/squad, and sign-up with billing. The web app is ~50 tested engine
+modules and 20 screens; porting it is a multi-month project. The daily loop is
+the right first slice — it is what people open every day and the part that gains
+most from being native.
 
-**It's wired in, not just written.** The check-in gains a "Fill from Apple
-Health" pill on iOS only, which sets the sleep answer and stores HRV and resting
-heart rate for the Progress trends. An entitlement you declare and never use is
-worse than not having it.
-
-### Changed
-
-**The service worker and the install prompt are skipped in the native build**
-(`NEXT_PUBLIC_NATIVE=1`). The worker caches nothing that isn't already local and
-its navigation fallback fights Capacitor's file serving — a blank screen on
-second launch, the worst thing to hit in review. And telling a reviewer to add
-the app to their home screen is the clearest possible way to say "this is a
-website".
-
-### Notes — what I can't promise
-
-**Approval.** Nobody can. `mobile/README.md` has the pre-submission checklist and
-the things that actually get wrappers rejected — chief among them **payments**:
-a subscription unlocking in-app features must use In-App Purchase (15–30% to
-Apple), and the current Stripe checkout is a 3.1.1 violation if it's reachable
-from the iOS build. Three legal options are written up; that decision is yours
-and it has real money attached.
-
-Also outstanding for native: the password-reset redirect uses
-`window.location.origin`, which on native is `capacitor://localhost` — it needs
-a custom scheme registered with Supabase. The Worker needs nothing: its CORS is
-already `*`.
-
-None of the native code has run on a device. It's written to fail safe — every
-path returns empty or null rather than throwing — but the first Mac build is the
-real test.
+**None of it has run on a device.** It cannot, from here. `ios/README.md` has
+the Xcode steps and the pre-submission checklist, including the one that costs
+money: the moment a paid tier appears in this build it must use In-App Purchase,
+not Stripe.
 
 ---
 

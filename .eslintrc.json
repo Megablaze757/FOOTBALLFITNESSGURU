@@ -15,6 +15,6 @@
     "cloudflare/worker.js",
     "*.config.js",
     "*.config.mjs",
-    "mobile/"
+    "ios/"
   ]
 }
