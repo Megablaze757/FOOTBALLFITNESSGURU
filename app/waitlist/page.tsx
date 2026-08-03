@@ -122,12 +122,12 @@ export default function WaitlistPage() {
         )}
 
         <p className="mt-10 text-xs text-slate-600">
-          Already have access? <Link href="/login" className="text-slate-400 hover:text-pitch-400">Sign in</Link>
+          Already have access? <Link href="/login" className="text-slate-400 underline underline-offset-2 hover:text-pitch-400">Sign in</Link>
         </p>
         {/* Required before collecting an email address, not decoration. */}
         <p className="mt-3 text-xs text-slate-600">
           We&apos;ll only email you about early access. See our{" "}
-          <Link href="/privacy" className="text-slate-400 hover:text-pitch-400">privacy policy</Link>.
+          <Link href="/privacy" className="text-slate-400 underline underline-offset-2 hover:text-pitch-400">privacy policy</Link>.
         </p>
       </div>
     </main>

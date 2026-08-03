@@ -281,7 +281,10 @@ export default function Landing() {
         <div className="mt-12 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           {STEPS.map((s) => (
             <div key={s.n} className="card p-6">
-              <div className="text-3xl font-black text-pitch-400/30">{s.n}</div>
+              {/* /30 measured 1.9:1 — a step number you cannot read is not a
+                  subtle watermark, it's a missing step. /60 is 4.2:1 and still
+                  sits behind the heading. */}
+              <div className="text-3xl font-black text-pitch-400/60">{s.n}</div>
               <h3 className="mt-2 font-bold text-slate-100">{s.title}</h3>
               <p className="mt-1 text-sm text-slate-400">{s.body}</p>
             </div>
@@ -300,7 +303,17 @@ export default function Landing() {
             Including the two things a coach in the room does better than any app.
           </p>
         </div>
-        <div className="mt-12 overflow-x-auto">
+        {/* tabIndex makes the scroll region reachable by keyboard. A container
+            that scrolls but cannot be focused is unreachable without a mouse —
+            the table is wider than a phone, so its right-hand columns were
+            simply unavailable. Needs an accessible name too, or a screen reader
+            announces an unlabelled group. */}
+        <div
+          className="mt-12 overflow-x-auto"
+          tabIndex={0}
+          role="region"
+          aria-label="How PocketAthlete compares"
+        >
           <table className="w-full min-w-[34rem] border-collapse text-sm">
             <thead>
               <tr className="border-b border-white/10">

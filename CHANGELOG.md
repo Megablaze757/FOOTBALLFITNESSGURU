@@ -217,6 +217,66 @@ front-end bundle.
 
 ---
 
+## 2026-08-02 (e2e) — Smoke tests, and five accessibility bugs they found
+
+No operator action. Front-end and CI only.
+
+### Added
+
+**End-to-end smoke tests.** `e2e/smoke.spec.ts` — Playwright on a Pixel 7 and
+Desktop Chrome, running against the **real static export in `out/`**, not
+`next dev`. That is the artefact that ships, and dev mode differs from it in
+exactly the ways that hide bugs.
+
+31 checks across seven public routes: loads without a 4xx, body non-empty,
+**hydrates** (the export prerenders markup, so a page can look perfect and be
+completely dead), no unexpected console errors, exactly one non-empty `h1`, no
+horizontal document scroll on a phone, and **no WCAG 2.1 A/AA violations** via
+axe-core.
+
+Everything in `lib/` is unit-tested to 98%, and none of it would notice a
+provider throwing on mount or a white screen. Both run as sibling CI jobs and
+both gate the deploy.
+
+No signed-in journeys, deliberately: faking a Supabase session in CI means
+either shipping a test account's credentials or stubbing until the test stops
+resembling the app.
+
+### Fixed — all five found by the suite on its first run
+
+**Pinch-zoom was disabled on every page.** `maximumScale: 1` in the viewport —
+a WCAG 1.4.4 failure, and it lands hardest on exactly the people who most need
+to zoom: anyone reading a 10px macro label or a rehab instruction outdoors.
+
+That setting is almost always added to stop iOS zooming when a text input is
+focused, and the real cause of *that* is a font-size under 16px on the input.
+`.field` was 14px. It is now 16px on phones and 14px from `sm` up, so the cause
+is gone and zoom stays enabled for everyone.
+
+**A landing-page heading at 1.9:1.** The "01 / 02 / 03 / 04" step numbers were
+`text-pitch-400/30`. A step number you cannot read is not a subtle watermark,
+it's a missing step. `/60` — 4.2:1, still visibly behind the heading.
+
+**`/login` had no `h1`** — a styled `<div>` — so a screen reader announced no
+page title on the one screen where knowing where you are matters most.
+
+**Inline links on `/waitlist` were distinguished by colour alone** (WCAG 1.4.1).
+Underlined.
+
+**The comparison table scrolled but could not be focused.** It is wider than a
+phone, so its right-hand columns were unreachable without a mouse. `tabIndex`,
+a `role` and an accessible name.
+
+### Notes
+
+The h1 check initially failed on `/pricing` for the wrong reason: it asserted on
+`domcontentloaded`, and that page's heading only exists after hydration — the
+prerendered HTML is a loading state. The test measures the hydrated page now.
+Worth recording because a test that fails for the wrong reason is one edit away
+from being "fixed" by deleting the assertion.
+
+---
+
 ## 2026-08-02 (hardening) — Production readiness audit
 
 **Operator action: two items, both listed in the Worker deploy spec above** —

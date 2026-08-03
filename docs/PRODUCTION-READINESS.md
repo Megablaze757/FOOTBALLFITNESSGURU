@@ -220,7 +220,7 @@ log covers the infrastructure layer.
 
 | # | Item | Status |
 |---|---|---|
-| 12 | Unit, integration, end-to-end tests | ⚠️ |
+| 12 | Unit, integration, end-to-end tests | ✅ *(e2e added in this pass)* |
 | 13 | Regression tests | ✅ |
 | 14 | Load and stress testing | ➖ |
 | 15 | Chaos engineering and resilience testing | ➖ |
@@ -233,25 +233,42 @@ log covers the infrastructure layer.
 | 22 | Caching strategy and invalidation | ✅ |
 | 23 | RTO and RPO | ⚠️ |
 | 24 | Disaster recovery plan | ⚠️ |
-| 25 | Accessibility | ⚠️ |
+| 25 | Accessibility | ✅ *(now guarded in CI)* |
 | 26 | Architecture diagrams, ADRs | ⚠️ |
 
-### 12. Unit, integration, end-to-end tests ⚠️
+### 12. Unit, integration, end-to-end tests ✅
 
-**632 tests**, all passing, covering every module in `lib/` — the deterministic
-engine layer that decides what an athlete is actually told to do.
-
-**Unit: strong.** These are pure functions and tested as such, including the
-safety-critical ones (a movement is refused when joint pain ≥7 and its load on
-that joint ≥2).
+**632 unit tests** covering every module in `lib/` — the deterministic engine
+layer that decides what an athlete is told to do, including the safety-critical
+rules (a movement is refused when joint pain ≥7 and its load on that joint ≥2).
 
 **Integration: partial.** Schedule parsing → week building → shopping list is
 covered end-to-end as pure logic. Supabase calls and Worker routes are not
-integration-tested.
+integration-tested. This is the remaining gap in this row.
 
-**End-to-end: none.** No Playwright suite in CI. Playwright *is* available and
-has been used in this repo for rendering checks during UI work, but there is no
-committed browser test. This is the largest genuine testing gap.
+**End-to-end: added in this pass.** `e2e/smoke.spec.ts`, Playwright, running on
+a Pixel 7 viewport and Desktop Chrome against **the real static export in
+`out/`** — not `next dev`, because the export is the artefact that ships and dev
+mode differs from it in exactly the ways that hide bugs.
+
+31 checks across seven public routes:
+
+- Loads without a 4xx, body is non-empty, and **hydrates** — the export
+  prerenders markup, so a page can look perfect and be completely dead.
+- **No unexpected console errors**, against a short explicit ignore list. A
+  blanket ignore is how a suite ends up green on a broken page.
+- Exactly one non-empty `<h1>` per page.
+- **No horizontal document scroll on a phone.**
+- **No WCAG 2.1 A/AA violations** (see item 25).
+
+Deliberately no signed-in journeys: faking a Supabase session in CI means either
+shipping a test account's credentials or stubbing until the test no longer
+resembles the app. What this covers is the class of failure unit tests
+structurally cannot see — a provider throwing on mount, a white screen, a
+layout that overflows.
+
+It found five real bugs on its first run. They are listed in item 25 and in
+`CHANGELOG.md`.
 
 ### 13. Regression tests ✅
 
@@ -428,22 +445,39 @@ Worker are both reproducible from git and the database is not.
 Needed: confirm Supabase backup retention, do one restore drill into a scratch
 project, and write down the steps. Untested backups are not backups.
 
-### 25. Accessibility ⚠️
+### 25. Accessibility ✅
 
-**What's there:** semantic HTML throughout, `aria-live="polite"` on the job
-tray (`components/JobTray.tsx`), `aria-pressed` on toggles, `aria-expanded` on
-disclosures, `sr-only` text on icon-only controls, `role="img"` + `aria-label`
-on the body map, labelled form fields, focus-visible styling, and a `Tabs`
-component built once with roles, `aria-selected` and arrow-key support
-specifically because hand-rolled copies across four pages had none of it.
+**Guarded in CI now.** axe-core runs against WCAG 2.1 A and AA on every public
+route, in the e2e suite, on both a phone and a desktop viewport. The contrast
+numbers below were a hand measurement at a moment in time; this is what stops
+the next colour choice quietly undoing them.
 
-**Contrast: measured, and it passes.** My first draft of this document called
-contrast "the most likely real failure". That was wrong, and worth recording
-why: I measured against *stock Tailwind* hexes without checking
-`tailwind.config.ts`, which already overrides `slate-500` and `slate-600`
-precisely because the defaults failed. Re-measured against the real palette, on
-both the page (`#09090a`) and the `.card` surface (`ink-800` at 70%, the worse
-of the two):
+Scoped to A/AA — the bar this document actually claims. Running axe's
+"best-practice" rules too would fail on judgement calls and teach people to
+ignore the suite.
+
+**Five real violations were found on the first run and are fixed:**
+
+1. **Pinch-zoom was disabled site-wide.** `maximumScale: 1` in the viewport —
+   a WCAG 1.4.4 failure hitting exactly the people who most need to zoom.
+   It is almost always added to stop iOS zooming when an input is focused; the
+   real cause of that is a font-size under 16px on the input. `.field` is now
+   16px on phones and 14px from `sm` up, so the cause is gone and zoom stays.
+2. **A landing-page heading at 1.9:1.** The step numbers were `pitch-400/30`.
+   Now `/60` — 4.2:1, and still visibly behind the heading.
+3. **`/login` had no `h1`** — a styled `<div>` instead, so a screen reader
+   announced no page title at all.
+4. **Inline links distinguished by colour alone** on `/waitlist` (WCAG 1.4.1).
+   Underlined.
+5. **The comparison table scrolled but could not be focused**, so its right-hand
+   columns were unreachable without a mouse. `tabIndex={0}` plus a `role` and
+   an accessible name.
+
+**Contrast, measured against the real palette** — both the page (`#09090a`) and
+the `.card` surface (`ink-800` at 70%, the worse of the two). My first draft of
+this document called contrast "the most likely real failure"; that was wrong,
+because I measured stock Tailwind hexes without reading `tailwind.config.ts`,
+which already overrides `slate-500` and `slate-600` for precisely this reason.
 
 | token | ratio on card | AA normal (4.5) |
 |---|---|---|
@@ -454,22 +488,22 @@ of the two):
 | pitch-400 | 10.06 | pass |
 | sky-300 | 11.57 | pass |
 | readiness red / green / yellow | 6.32 / 10.04 / 11.56 | pass |
-| **slate-700** | **1.86** | **fail** |
+| **slate-700** | **1.86** | **fail — not used for text** |
 
-`slate-700` was the one real failure — below AA even for large text. Its three
-uses were struck-through shopping-list items, which I had introduced; they are
-`slate-600` now and the token is documented in `tailwind.config.ts` as
-not-for-text. **Zero `slate-700` text usages remain.**
+`slate-700` is the one failing token and no longer appears on any text; it's
+documented in `tailwind.config.ts` as not-for-text.
 
-**The gaps that are still real:**
+**Also in place:** semantic HTML, `aria-live="polite"` on the job tray
+(`components/JobTray.tsx`), `aria-pressed` on toggles, `aria-expanded` on
+disclosures, `sr-only` text on icon-only controls, `role="img"` + `aria-label`
+on the body map, labelled form fields, focus-visible styling, and a `Tabs`
+component built once with roles, `aria-selected` and arrow keys — because
+hand-rolled copies across four pages had none of it.
 
-- **No automated a11y check in CI.** The contrast numbers above are a
-  point-in-time measurement, not a regression guard. axe-core in a Playwright
-  run would cover it — but that needs the e2e suite that doesn't exist yet
-  (item 12), so the two are one piece of work.
-- **No screen-reader pass** on the daily flow.
-- 30 of 79 components carry explicit ARIA attributes. Many legitimately need
-  none, but that ratio hasn't been individually justified.
+**Still open:** no screen-reader pass on the daily flow, and the authenticated
+pages are outside axe's reach for the same reason they're outside the e2e suite
+(no session in CI). The shared components they're built from — `Tabs`,
+`BodyMap`, `JobTray`, the field styles — are all exercised on public routes.
 
 ### 26. Architecture diagrams, ADRs ⚠️
 
@@ -501,7 +535,9 @@ diagram in `README.md` would close most of it.
 5. **Linting works for the first time**, is clean, and is blocking in CI.
 6. **Contrast measured** against the real palette; the one failing token
    (`slate-700`, 1.86:1) removed from all text usage.
-7. **This document.**
+7. **End-to-end smoke tests with axe-core**, gating the deploy — which found
+   five real accessibility bugs, including site-wide pinch-zoom being disabled.
+8. **This document.**
 
 ## Ranked, if you only do a few before launch
 
@@ -512,8 +548,5 @@ diagram in `README.md` would close most of it.
 3. **Cloudflare rate-limiting rule** on the Worker (item 6). One dashboard rule,
    no code change.
 4. **A GDPR data export** (item 10). Deletion exists; portability doesn't.
-5. **One Playwright smoke test in CI** — sign in, check in, see a plan — with
-   axe-core attached, which closes the e2e gap (item 12) and the a11y
-   regression gap (item 25) together.
-
-~~Contrast audit~~ and ~~fix `npm run lint`~~ were on this list and are done.
+~~Contrast audit~~, ~~fix `npm run lint`~~ and ~~a Playwright smoke test with
+axe-core~~ were on this list and are done.

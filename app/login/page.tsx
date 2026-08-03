@@ -215,9 +215,13 @@ export default function LoginPage() {
       <div className="w-full max-w-sm animate-scale-in">
         <div className="mb-8 text-center">
           <Logo size={64} className="mx-auto mb-4" />
-          <div className="text-4xl font-extrabold tracking-tight">
+          {/* An h1, not a styled div. This is the page's title and the only
+              thing on it that names where you are — a screen reader announcing
+              "heading level 1, PocketAthlete" is the difference between landing
+              here and being lost. Caught by the e2e h1 check. */}
+          <h1 className="text-4xl font-extrabold tracking-tight">
             <span className="text-pitch-400">PocketAthlete</span>
-          </div>
+          </h1>
           <p className="mt-2 text-sm text-slate-400">
             {mode === "sign_in" ? "Welcome back, athlete." : mode === "sign_up" ? "Create your athlete account." : "Reset your password."}
           </p>

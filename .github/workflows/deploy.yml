@@ -29,6 +29,8 @@ jobs:
     uses: ./.github/workflows/ci.yml
 
   build:
+    # Both the unit suite and the e2e smoke tests, since ci.yml runs them as
+    # sibling jobs and `needs` on the caller waits for the whole workflow.
     needs: test
     runs-on: ubuntu-latest
     steps:

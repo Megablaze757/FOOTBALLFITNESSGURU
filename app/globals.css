@@ -164,9 +164,21 @@ h1 { letter-spacing: -0.02em; }
            px-4 py-3 font-medium text-slate-200 transition hover:bg-white/[0.07] active:scale-[0.98];
   }
 
+  /* 16px on a phone, 14px from `sm` up.
+   *
+   * Not a style preference — iOS Safari zooms the page when you focus an input
+   * whose font-size is under 16px, and it does not zoom back out. The old fix
+   * for that was `maximumScale: 1` in the viewport, which stops the annoyance
+   * by disabling pinch-zoom for everyone, on every page, forever. That is a
+   * WCAG 1.4.4 failure and it lands hardest on the people who most need to
+   * zoom.
+   *
+   * Sizing the input correctly removes the cause, so zoom can stay enabled.
+   * Desktop keeps 14px, where no such behaviour exists and the denser field
+   * looks better. */
   .field {
-    @apply w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-slate-100
-           outline-none transition placeholder:text-slate-500
+    @apply w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-base text-slate-100
+           outline-none transition placeholder:text-slate-500 sm:text-sm
            focus:border-pitch-400/60 focus:bg-white/[0.06] focus:ring-2 focus:ring-pitch-400/20;
   }
   /* On phones the generous desktop spacing makes every page feel like a scroll

@@ -70,7 +70,15 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
+  // NO maximumScale. It was 1, which silently disables pinch-zoom — a WCAG 1.4.4
+  // failure, and one that hits exactly the people who most need it: anyone
+  // reading a 10px macro label or a rehab instruction with less than perfect
+  // eyesight, on a phone, outdoors.
+  //
+  // It is almost always added to stop iOS zooming when a text input is focused.
+  // The actual cause of that is a font-size below 16px on the input, and the
+  // fix is to size the input properly (see `.field` in globals.css), not to
+  // take zoom away from everyone. Caught by axe in the e2e suite.
   themeColor: "#0a0a0b",
 };
 
