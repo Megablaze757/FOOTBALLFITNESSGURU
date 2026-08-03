@@ -321,7 +321,9 @@ export default function HomePage() {
 
       {/* Both conditional — they render nothing when there is nothing to say. */}
       <SorenessCard painMap={data!.checkIn?.pain_map ?? {}} focus={readiness.focus_body_part} />
-      <GettingStarted setup={data!.setup} />
+      {/* Same condition as the NextUp card above, so the two can never both be
+          telling you to build a program. */}
+      <GettingStarted setup={data!.setup} showingProgramCta={!data!.hasProgram || !data!.nextSession} />
     </div>
   );
 }
@@ -446,26 +448,53 @@ function CheckInNudge() {
 
 
 
-function GettingStarted({ setup }: { setup: { checkedIn: boolean; hasProgram: boolean; hasVideo: boolean; loggedNutrition: boolean } }) {
+/**
+ * The things this app does that aren't part of the daily loop.
+ *
+ * IT USED TO BE THE SAME LIST TWICE. Home already shows "Today" — check in,
+ * train, eat — and, when there's no program, a full-width gold card saying
+ * BUILD IT. This checklist then repeated three of those four as its own to-do
+ * list, several thousand pixels down the same screen. Someone with a ten-day
+ * streak and today's check-in still to do was shown "Check in" in Today and
+ * "Try a check-in" down here, under a heading that said "Things you haven't
+ * tried yet" — which was, for them, simply false.
+ *
+ * Three stacked to-do lists is not three times the guidance. It's the reader
+ * having to work out which list is the real one.
+ *
+ * So anything the day already asks for is filtered out, and what's left is what
+ * this card is genuinely for: the parts of the app you'd otherwise never find.
+ */
+function GettingStarted({ setup, showingProgramCta }: {
+  setup: { checkedIn: boolean; hasProgram: boolean; hasVideo: boolean; loggedNutrition: boolean };
+  /** The gold "build your program" card is on screen — don't say it again. */
+  showingProgramCta: boolean;
+}) {
   const steps = [
-    { done: setup.checkedIn, href: "/journal", title: "Try a check-in", sub: "Three taps — it tunes your session to how you feel" },
-    { done: setup.hasProgram, href: "/coach", title: "Build your training program", sub: "The AI coach periodises it to your goal" },
-    { done: setup.hasVideo, href: "/train", title: "Analyse a video", sub: "Upload a clip for a technique breakdown" },
-    { done: setup.loggedNutrition, href: "/nutrition", title: "Set your nutrition", sub: "Calorie & macro targets, meal plan" },
-  ];
+    // Checking in and logging food are daily quests in the card above. They are
+    // deliberately NOT repeated here; a permanent row telling you to do a thing
+    // you do every morning stops being information after day one.
+    { done: setup.hasProgram, href: "/coach", title: "Build your training program", sub: "The AI coach periodises it to your goal", hide: showingProgramCta },
+    { done: setup.hasVideo, href: "/train", title: "Analyse a video", sub: "Upload a clip for a technique breakdown", hide: false },
+  ].filter((s) => !s.hide);
+
   const doneCount = steps.filter((s) => s.done).length;
   const [hidden, setHidden] = useState(false);
 
   // Once the core loop is set up, this disappears for good.
-  if (doneCount === steps.length || hidden) return null;
+  if (!steps.length || doneCount === steps.length || hidden) return null;
   const next = steps.find((s) => !s.done);
 
   return (
-    <section className="card-premium p-5 sm:p-6">
+    /* A plain card, not `card-premium`. The premium treatment is a gold glow,
+       and the "build your program" hero at the top of this page is the other
+       thing wearing it. Two glowing gold cards on one screen means neither is
+       the primary — and this one, by definition, is the optional extras. */
+    <section className="card p-5 sm:p-6">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <span className="eyebrow">Worth a look · {doneCount}/{steps.length}</span>
-          <h2 className="mt-1 text-lg font-extrabold">Things you haven&apos;t tried yet</h2>
+          <span className="eyebrow">Worth a look</span>
+          <h2 className="mt-1 text-lg font-extrabold">More the app can do</h2>
         </div>
         <button onClick={() => setHidden(true)} className="tap-target shrink-0 text-xs text-slate-500 hover:text-slate-300">Hide</button>
       </div>

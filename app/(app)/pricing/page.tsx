@@ -102,12 +102,10 @@ function PricingInner() {
 
   return (
     <div className="animate-fade-up space-y-5">
-      <header className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-extrabold tracking-tight">Plans</h1>
-          <p className="mt-1 text-sm text-slate-400">For individual athletes — plus a Team plan for clubs &amp; coaches.</p>
-        </div>
+      <header className="flex flex-col">
         <BackLink href="/profile" label="Profile" />
+        <h1 className="text-3xl font-extrabold tracking-tight">Plans</h1>
+        <p className="mt-1 text-sm text-slate-400">For individual athletes — plus a Team plan for clubs &amp; coaches.</p>
       </header>
 
       {activation === "waiting" && (

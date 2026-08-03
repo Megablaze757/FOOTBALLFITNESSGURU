@@ -535,7 +535,15 @@ export function JournalForm({ initial, initialTraining, sport, planned = [] }: {
                 <span className="block text-sm font-bold text-slate-100">Trained today?</span>
                 <span className="block text-xs text-slate-500">Log the session — it feeds your training load and progress.</span>
               </span>
-              <span className="shrink-0 text-sm text-pitch-400" aria-hidden>+</span>
+              {/* Was a lone "+" in 14px gold at the far edge of a card that
+                  otherwise looks exactly like the read-only info panels
+                  elsewhere in the app. Nothing about it said "this whole row is
+                  a button", which matters because logging a session is the
+                  thing this screen was specifically asked to make findable. A
+                  worded action reads as an action; a punctuation mark doesn't. */}
+              <span className="shrink-0 whitespace-nowrap text-xs font-bold text-pitch-400">
+                Log it <span aria-hidden>→</span>
+              </span>
             </button>
           ) : (
             <section className="card p-5">

@@ -217,6 +217,70 @@ front-end bundle.
 
 ---
 
+## 2026-08-03 (looking) — Four screens redesigned by looking at them
+
+**Operator action: none.** Front-end only.
+
+The audit below this entry made the app *pass* things. It could not tell you
+whether a screen was any good, because none of what it measures is what makes a
+UI good. So this pass rendered the signed-in screens and looked at them.
+
+**Coach is the app's best screen** and became the reference: an icon tile, a
+bold title, one line of description, as a tappable card. Where something needed
+rebuilding, it was rebuilt to look like that.
+
+### Check-in — the daily screen had two primary buttons
+
+`/journal/` is opened every morning, and about sixty per cent of it was wearable
+setup sitting *below* the submit button — including a second full-width gold
+"Save today", identical in weight to "Submit check-in" and lower on the page.
+The eye reads the last big button as the finish line.
+
+Connecting a watch is a once-ever job and typing HRV by hand is a never job for
+most people, so neither gets daily real estate. Both are behind one row that
+says whether last night synced. **The page went from 3966px to 2360px and now
+ends where the check-in ends.**
+
+"Trained today?" — the row this app was specifically asked to make findable —
+had a lone 14px `+` as its only affordance, on a card otherwise identical to the
+read-only info panels. It says **Log it →** now.
+
+### Nutrition — the hero was the part with no information
+
+With no weight logged there is no target, so all four rings render as empty grey
+circles round a `0`, above four rows of `0g —`. Roughly seven hundred pixels,
+the entire first screen, saying nothing — and the one instruction that fixes it
+was small print underneath, linking to `/home` rather than to the check-in, so
+the app's most valuable unlock cost an extra hop and a hunt.
+
+The rings now appear only when they can show something. In their place, the
+prompt is the hero and the action is a button that goes where it says. The
+calorie quick-add buttons hide in that state too: with the ring gone their only
+label went with it, and adding 200 towards a target that doesn't exist moves a
+bar that isn't there.
+
+### Home — three to-do lists on one screen
+
+Home showed a gold "build your program" hero, a "Today" quest list, and a
+checklist headed **"Things you haven't tried yet"** repeating three of the same
+four items. An athlete on a ten-day streak was told they hadn't tried a check-in.
+
+Anything the day already asks for is filtered out, the program row disappears
+while the hero is showing it, and the card lost its gold glow so the hero is the
+only glowing thing on the page.
+
+### Back links
+
+`← Back` sat in a `justify-between` header opposite a two-line subtitle, and on
+Nutrition the two overlapped — measured, 12×12px. It's on its own row above the
+title now, in all six pages, where it cannot collide and where every other
+mobile app puts it.
+
+632 unit tests, 31 e2e tests, and the audit below still at zero across all
+seventeen routes.
+
+---
+
 ## 2026-08-03 (playbook) — A UI/UX audit of the signed-in app, and what it found
 
 **Operator action: none.** Front-end and CSS only — no migration, no Worker

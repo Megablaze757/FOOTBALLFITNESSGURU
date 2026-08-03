@@ -65,6 +65,10 @@ export default function JournalPage() {
     ? { drills: data.training.drills ?? [], total_minutes: data.training.total_minutes, intensity: data.training.intensity }
     : undefined;
 
+  // Did anything actually arrive from a watch today? Decides whether the row
+  // below offers to set one up or confirms it already worked.
+  const hasBio = !!(data?.bio && (data.bio.hrv_ms != null || data.bio.resting_hr != null || data.bio.sleep_hours != null));
+
   return (
     <div className="animate-fade-up mx-auto max-w-2xl">
       <header className="mb-5">
@@ -75,18 +79,49 @@ export default function JournalPage() {
       </header>
       <JournalForm initial={initial} initialTraining={initialTraining} sport={data?.sport} planned={data?.planned ?? []} />
 
-      {/* Connecting comes FIRST, then the manual fallback. Someone typing HRV
-          into a box every morning is the person most worth showing that they
-          don't have to. */}
-      <div className="mt-5 space-y-5">
-        <WearableConnect userId={user.id} />
-        <WearableImport
-          userId={user.id}
-          today={today}
-          initial={data?.bio ? { hrv_ms: data.bio.hrv_ms, resting_hr: data.bio.resting_hr, sleep_hours: data.bio.sleep_hours } : undefined}
-          onSaved={reload}
-        />
-      </div>
+      {/* WHY THIS IS BEHIND A DISCLOSURE NOW.
+       *
+       * Both wearable blocks used to sit open under the form, and together they
+       * were about sixty percent of the page — on the one screen an athlete
+       * opens every single morning. Worse, the manual entry card carries its own
+       * full-width gold "Save today" button, so the daily screen had TWO primary
+       * actions of identical weight, the second one *below* the real one. The
+       * eye reads the last big button as the finish line, which is exactly the
+       * wrong thing here.
+       *
+       * Connecting a watch is a thing you do once. Typing HRV in by hand is a
+       * thing you do only if you have no watch. Neither is the daily job, so
+       * neither gets daily-job real estate. One row, one tap, and the check-in
+       * now ends where the check-in ends.
+       *
+       * The summary says whether anything arrived, so a connected athlete can
+       * confirm last night synced without opening it. */}
+      <details className="card group mt-5 overflow-hidden">
+        <summary className="tap-target flex w-full cursor-pointer list-none items-center gap-3 p-4 text-left">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/[0.04] text-lg" aria-hidden>⌚</span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-bold text-slate-100">Sleep &amp; HRV from a watch</span>
+            <span className="block text-xs text-slate-500">
+              {hasBio
+                ? "Synced for today — tap to check or change it."
+                : "Connect Oura, Whoop, Garmin or Apple Health, or type it in."}
+            </span>
+          </span>
+          <span className="shrink-0 text-xs text-slate-500 transition group-open:rotate-180" aria-hidden>▾</span>
+        </summary>
+        {/* Connecting comes FIRST, then the manual fallback. Someone typing HRV
+            into a box every morning is the person most worth showing that they
+            don't have to. */}
+        <div className="space-y-5 border-t border-white/[0.08] p-4">
+          <WearableConnect userId={user.id} />
+          <WearableImport
+            userId={user.id}
+            today={today}
+            initial={data?.bio ? { hrv_ms: data.bio.hrv_ms, resting_hr: data.bio.resting_hr, sleep_hours: data.bio.sleep_hours } : undefined}
+            onSaved={reload}
+          />
+        </div>
+      </details>
     </div>
   );
 }

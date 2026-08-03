@@ -61,12 +61,10 @@ function VideoDetailInner() {
 
   return (
     <div className="animate-fade-up mx-auto max-w-3xl space-y-5">
-      <header className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-extrabold capitalize tracking-tight">{video.session_type ?? "Session"}</h1>
-          <p className="text-sm text-slate-400">{video.created_at.slice(0, 10)}</p>
-        </div>
+      <header className="flex flex-col">
         <BackLink href="/train" label="Video analysis" />
+        <h1 className="text-2xl font-extrabold capitalize tracking-tight">{video.session_type ?? "Session"}</h1>
+        <p className="text-sm text-slate-400">{video.created_at.slice(0, 10)}</p>
       </header>
 
       {!unlocked ? (

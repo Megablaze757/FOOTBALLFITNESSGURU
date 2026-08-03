@@ -255,13 +255,11 @@ export default function SquadPage() {
 
 function Header() {
   return (
-    <header className="flex items-center justify-between">
-      <div>
+    <header className="flex flex-col">
+        <BackLink href="/profile" label="Profile" />
         <h1 className="text-3xl font-extrabold tracking-tight">Squad</h1>
         <p className="mt-1 text-sm text-slate-400">Who is fit, who is carrying something, and who has stopped checking in.</p>
-      </div>
-      <BackLink href="/profile" label="Profile" />
-    </header>
+      </header>
   );
 }
 

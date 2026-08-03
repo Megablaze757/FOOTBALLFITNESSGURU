@@ -304,13 +304,11 @@ function NutritionTabs({ userId, today, log, targets, stats, prefs, dietNotes, m
 
 function Header() {
   return (
-    <header className="flex items-center justify-between">
-      <div>
+    <header className="flex flex-col">
+        <BackLink href="/dashboard" label="Progress" />
         <h1 className="text-3xl font-extrabold tracking-tight">Nutrition</h1>
         <p className="mt-1 text-sm text-slate-400">What to eat today, worked out from your body and how much you are training.</p>
-      </div>
-      <BackLink href="/dashboard" label="Progress" />
-    </header>
+      </header>
   );
 }
 
@@ -432,16 +430,30 @@ function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietN
           thing on the page was a list of things to do and the answer to "where
           am I" was a scroll away. Look, then act. */}
       <div className="card p-5">
-        <FuelRings
-          eaten={eaten}
-          targetKcal={targetKcal}
-          macros={{
-            protein: Number(macros.protein) || 0,
-            carbs: Number(macros.carbs) || 0,
-            fats: Number(macros.fats) || 0,
-          }}
-          targets={targets}
-        />
+        {/* THE RINGS ONLY EXIST IF THERE IS SOMETHING TO FILL.
+            A ring shows progress towards a target. With no weight logged there
+            is no target, so all four render as empty grey circles with a 0 in
+            the middle and four rows of "0g —" beneath — about seven hundred
+            pixels, the whole first screen, saying nothing. And the prompt that
+            would fix it sat underneath all of it.
+
+            That is the hierarchy exactly inverted: the biggest, most colourful
+            thing on the page was the part with no information, and the one
+            instruction that matters was below the fold. In this state the
+            prompt IS the hero. The rings come back the moment they can say
+            something. */}
+        {targets ? (
+          <FuelRings
+            eaten={eaten}
+            targetKcal={targetKcal}
+            macros={{
+              protein: Number(macros.protein) || 0,
+              carbs: Number(macros.carbs) || 0,
+              fats: Number(macros.fats) || 0,
+            }}
+            targets={targets}
+          />
+        ) : null}
 
         {/* The one thing the rings can't say: what to do about the gap. A line,
             not a card — this used to be its own bordered panel above the tabs
@@ -456,21 +468,42 @@ function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietN
             Nothing logged yet. Tick off a meal below, photograph your plate, or tap a number.
           </p>
         ) : (
-          // No weight logged, so there is no target to fill towards. This was a
-          // "Coach targets" card of its own saying the same thing — a whole
-          // bordered panel to deliver one sentence and a link.
-          <p className="mt-4 text-sm text-slate-500">
-            No targets yet.{" "}
-            <Link href="/home" className="font-semibold text-pitch-400 hover:underline">
-              Log your weight in the daily check-in
-            </Link>{" "}
-            and your calories, macros and hydration work themselves out.
-          </p>
+          /* NO WEIGHT LOGGED — so every ring above is empty and every number on
+             this page is zero. This is the state a new athlete actually opens
+             the page in, and it was a grey sentence with an inline text link
+             underneath a large dead graphic. Two things were wrong with it:
+
+             The link went to /home, not to the check-in. So the app's single
+             most important unlock — one number that turns on calories, macros,
+             hydration and the whole meal planner — cost an extra hop and a hunt.
+
+             And it was styled as small print. The rings above are 208px of gold
+             and colour saying nothing; the one instruction that makes them mean
+             something was the quietest thing on the card. Now it is the loudest
+             thing in this state, and it is a button. */
+          <div className="rounded-2xl border border-pitch-400/25 bg-pitch-400/[0.06] p-4">
+            <p className="text-sm font-bold text-slate-100">Add your weight to get your targets</p>
+            <p className="mt-1 text-sm leading-relaxed text-slate-400">
+              Log your weight and your calories, macros and hydration targets work themselves
+              out — from your height, age, sport and how much you&apos;re training.
+            </p>
+            <Link href="/journal" className="btn-primary mt-3 w-auto px-5">
+              Log my weight →
+            </Link>
+          </div>
         )}
 
         {/* Quick-add: the fastest way to log a coffee and a banana without
-            describing them to anything. */}
-        <div className="mt-5 flex flex-wrap items-center gap-2">
+            describing them to anything.
+
+            Hidden until there are targets. These are calorie buttons whose only
+            label was the ring above them saying "kcal eaten" — with the ring
+            suppressed they became three bare numbers and an "edit" box floating
+            under a prompt about weight. They are also pointless in that state:
+            adding 200 towards a target that doesn't exist yet moves a bar that
+            isn't there. Water stays, because it carries its own label and its
+            own goal, neither of which depends on a weight. */}
+        <div className={`mt-5 flex-wrap items-center gap-2 ${targets ? "flex" : "hidden"}`}>
           {[200, 400, 600].map((kc) => (
             <button key={kc} onClick={() => setEaten((c) => c + kc)} className="btn-ghost flex-1 py-2 text-sm">+{kc}</button>
           ))}

@@ -35,12 +35,10 @@ export default function BodyPage() {
 
   return (
     <div className="animate-fade-up mx-auto max-w-3xl space-y-5">
-      <header className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-extrabold tracking-tight">Body</h1>
-          <p className="mt-1 text-sm text-slate-400">Weight, body fat and photos over time. Feeds your calorie targets.</p>
-        </div>
+      <header className="flex flex-col">
         <BackLink href="/dashboard" label="Progress" />
+        <h1 className="text-3xl font-extrabold tracking-tight">Body</h1>
+        <p className="mt-1 text-sm text-slate-400">Weight, body fat and photos over time. Feeds your calorie targets.</p>
       </header>
 
       <BodyForm userId={user.id} today={today} onSaved={reload} />
