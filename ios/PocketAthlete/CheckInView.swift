@@ -20,6 +20,9 @@ struct CheckInView: View {
     @State private var healthSummary: String?
     @State private var saving = false
     @State private var error: String?
+    @State private var showSettings = false
+    /// Read once for the header, refreshed whenever the snapshot is republished.
+    @State private var streak = SharedStore.load()?.streak ?? 0
 
     private let sleepOptions = [("😵", "Barely", 2), ("😴", "Poorly", 4), ("😐", "OK", 6), ("🙂", "Well", 8), ("🤩", "Great", 10)]
     private let bodyOptions  = [("⚡", "Fresh", 2), ("💪", "Good", 4), ("😐", "OK", 6), ("🥱", "Heavy", 8), ("🪫", "Wrecked", 10)]
@@ -27,6 +30,27 @@ struct CheckInView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
+                // Streak on the left, settings on the right. The streak is the
+                // one piece of state worth seeing before you decide whether to
+                // bother today, and it is the only reason the read path exists.
+                HStack {
+                    if streak > 0 {
+                        Text("🔥 \(streak)-day streak")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(Color.accentColor)
+                    }
+                    Spacer()
+                    Button { showSettings = true } label: {
+                        Image(systemName: "gearshape")
+                            .font(.system(size: 17))
+                            .foregroundStyle(.secondary)
+                            // 44pt, because a 17pt glyph is a 17pt target.
+                            .frame(width: 44, height: 44)
+                    }
+                    .accessibilityLabel("Settings")
+                }
+                .padding(.bottom, -8)
+
                 if let result {
                     VerdictCard(result: result)
                         .transition(.scale.combined(with: .opacity))
@@ -64,6 +88,10 @@ struct CheckInView: View {
         .task {
             await health.requestAuthorisation()
             await pullHealth()   // silent on launch; the button is for retrying
+            streak = SharedStore.load()?.streak ?? 0
+        }
+        .sheet(isPresented: $showSettings) {
+            SettingsView().preferredColorScheme(.dark)
         }
         .animation(.snappy, value: result)
     }
@@ -133,14 +161,52 @@ struct CheckInView: View {
                 self.error = "Saved on this phone — couldn't sync yet. \(error.localizedDescription)"
             }
             saving = false
+
+            // Publish today's answer to the home-screen widget and stand the
+            // reminder down. Doing this here rather than only on foreground
+            // matters: checking in and immediately swiping home is the single
+            // most likely next action, and seeing yesterday's score there would
+            // read as the check-in not having worked.
+            //
+            // Written from the local verdict first so the widget is right even
+            // if the upload failed, then reconciled from the server.
+            let previous = SharedStore.load()
+            // Today already counted? Then the streak is unchanged (this is a
+            // re-submit). Otherwise today extends it by one.
+            let optimisticStreak = (previous?.checkedInToday ?? false)
+                ? (previous?.streak ?? 1)
+                : (previous?.streak ?? 0) + 1
+            SharedStore.save(DailySnapshot(
+                date: Self.iso(Date()),
+                score: verdict.score,
+                status: verdict.status.rawValue,
+                advice: verdict.advice,
+                streak: optimisticStreak,
+                checkedInToday: true
+            ))
+            await PocketAthleteApp.syncDailyState()
+            streak = SharedStore.load()?.streak ?? streak
         }
     }
 
-    private static func iso(_ d: Date) -> String {
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd"
-        f.timeZone = .current
-        return f.string(from: d)
+    /// UTC, because that is what the web app writes.
+    ///
+    /// THIS USED TO BE `.current` AND THAT WAS A BUG. The web computes the
+    /// check-in date as `new Date().toISOString().slice(0, 10)` — always UTC.
+    /// This wrote the phone's local date. East of UTC the two disagree for part
+    /// of every day: an athlete in Sydney checking in at 9am gets `2026-08-03`
+    /// from the phone and `2026-08-02` from the browser. The upsert conflict
+    /// target is `(user_id, check_in_date)`, so those are two rows for one
+    /// morning — a duplicated day, a broken streak, and two different readiness
+    /// scores for the same check-in.
+    ///
+    /// Matching the web is the fix available here. Whether BOTH should move to
+    /// the athlete's local day is a real question — arguably your "today" is
+    /// wherever you are standing — but that changes the meaning of every
+    /// existing row and belongs in one deliberate migration across both
+    /// clients, not in a quiet difference between them.
+    static func iso(_ d: Date) -> String {
+        Streak.formatter.string(from: d)
     }
 
     // MARK: - Bits

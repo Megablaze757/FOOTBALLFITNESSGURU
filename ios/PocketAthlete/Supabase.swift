@@ -109,7 +109,53 @@ actor Supabase {
         try await upsert("/rest/v1/biometrics?on_conflict=user_id,metric_date", body)
     }
 
+    // MARK: - Reads
+
+    /// The last `limit` check-ins, newest first.
+    ///
+    /// THE CLIENT HAD NO READ PATH AT ALL until now — it could submit a check-in
+    /// and never see one again. That is fine for a form and useless for an app:
+    /// no streak, no history, and reopening the app on a day you had already
+    /// logged showed an empty form as if you hadn't.
+    ///
+    /// No `user_id` filter is sent. RLS on `daily_check_ins` already restricts
+    /// every row to the authenticated user, and adding a client-side filter
+    /// would imply the security lives here, which it does not.
+    func recentCheckIns(limit: Int = 30) async throws -> [CheckInRow] {
+        try await get("/rest/v1/daily_check_ins?select=check_in_date,sleep_quality,fatigue_score,nutrition_quality,pain_map&order=check_in_date.desc&limit=\(limit)")
+    }
+
+    /// A check-in row, in the shape the scoring engine wants.
+    struct CheckInRow: Decodable {
+        let check_in_date: String
+        let sleep_quality: Int?
+        let fatigue_score: Int?
+        let nutrition_quality: Int?
+        /// Stored as a JSON object of body part -> 0-10. Absent on older rows.
+        let pain_map: [String: Int]?
+
+        var input: CheckInInput {
+            CheckInInput(sleepQuality: sleep_quality,
+                         fatigueScore: fatigue_score,
+                         nutritionQuality: nutrition_quality,
+                         painMap: pain_map ?? [:])
+        }
+    }
+
     // MARK: - Transport
+
+    private func get<R: Decodable>(_ path: String) async throws -> R {
+        var req = URLRequest(url: URL(string: url.absoluteString + path)!)
+        req.setValue(anonKey, forHTTPHeaderField: "apikey")
+        req.setValue("Bearer \(accessToken ?? anonKey)", forHTTPHeaderField: "Authorization")
+
+        let (data, response) = try await URLSession.shared.data(for: req)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            let text = String(data: data, encoding: .utf8) ?? "no body"
+            throw AuthError(message: "Supabase refused the read: \(text)")
+        }
+        return try JSONDecoder().decode(R.self, from: data)
+    }
 
     private func upsert(_ path: String, _ body: [String: Any]) async throws {
         // Built by string rather than appendingPathComponent, which escapes the
