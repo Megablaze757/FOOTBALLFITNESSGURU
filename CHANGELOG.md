@@ -217,6 +217,100 @@ front-end bundle.
 
 ---
 
+## 2026-08-03 (playbook) — A UI/UX audit of the signed-in app, and what it found
+
+**Operator action: none.** Front-end and CSS only — no migration, no Worker
+change. Ships with the next front-end deploy.
+
+Applied a UI/UX playbook across the app. The point of this entry is less the
+redesign than **how the problems were found**, because the same method finds the
+next batch.
+
+### The gap
+
+`e2e/smoke.spec.ts` covers seven public routes and stops at the login gate — a
+deliberate choice, documented in its header. Everything behind login, which is
+the app people open every day, had never been measured by anything. Opinions
+about it, yes. Measurements, no.
+
+So `scripts/ui-audit.mjs` (`npm run audit:ui`) gets past the gate by seeding a
+session into localStorage and route-stubbing Supabase, then measures all
+seventeen signed-in routes for tap-target size, line length, centred prose,
+dead-end empty states, `<h1>` count, horizontal overflow, and full axe
+WCAG 2.1 A/AA.
+
+**First run, against pages that looked fine:**
+
+| Finding | Count |
+|---|---|
+| Tap targets under 44px | **89** |
+| axe A/AA violations | **5 rules, 29 nodes** |
+| Centred paragraphs over 90 chars | 4 |
+| Dead-end empty states | 2 |
+| Pages with no `<h1>` | 1 |
+
+After: **0 of every one of them**, on all seventeen routes.
+
+### The root cause behind 70 of the 89
+
+There was no shared "selectable option" control. The same
+`rounded-full border px-3 py-1 text-xs` was hand-written in six places — the
+library filters, skill-drill filters, injury symptom and duration pickers, the
+position picker, the leaderboard switcher — each slightly different, all of them
+26–38px tall. Fixing seventy call sites individually would have left the
+seventy-first to be written wrong next week.
+
+So: one `.chip-option` class. Selected state is driven off `aria-pressed` /
+`aria-selected` rather than a className, which also fixed a quieter bug — **three
+of the six copies had no ARIA state at all**, so they looked selected and
+announced as an ordinary button. Twenty-eight of them on the library page alone.
+
+Likewise `← Back`, written out identically in eight files at 40×33px, is now
+`components/BackLink.tsx` — and it names its destination ("← Progress") instead
+of saying "back" about a link that goes somewhere fixed.
+
+### Four accessibility bugs no unit test could see
+
+- **`aria-controls` pointed at nothing.** All four pages using `<Tabs>` promised
+  `aria-controls="panel-x"`; `TabPanel` was exported and used by **nobody**.
+  Critical axe failure on four pages. The component's own comment called this
+  "a promise the markup has to keep" — it wasn't being kept.
+- **Twenty AA contrast failures on Rewards.** Locked badges were dimmed with
+  `opacity-45` on the whole card, which multiplied straight through the
+  carefully calibrated palette in `tailwind.config.ts` and took the badge name
+  to 4.21:1 and its description to **2.10:1**. The dimming moved onto the parts
+  that aren't text.
+- **Seven `aria-label`s going nowhere.** The Home week strip put `aria-label` on
+  bare `<span>`s, where it is prohibited and browsers may drop it — so the
+  screen-reader text for all seven days was silently discarded.
+- **`/report/` had no `<h1>`.** Its only heading lives inside the report sheet,
+  so a new athlete with no check-ins got a page with no heading at all, one grey
+  sentence, and no way to reach the thing that would fill it.
+
+### Empty states
+
+`components/EmptyState.tsx`: icon, then what would specifically fill this, then
+a way to do it. Applied to Report, Squad and Benchmarks; Home's week strip now
+says "Log a session in your check-in and these fill in" instead of "Nothing
+logged yet this week."
+
+### On trusting the numbers
+
+A selector-based audit that matches nothing reports a perfect score — identical
+output to a perfect app. Every clean result here was confirmed by injecting a
+known-bad element into the built page (a 20px button, a 2000px paragraph, an
+`<img>` with no alt, a second `<h1>`) and checking it got flagged. It was, all
+eight of them, **after** the false-positive carve-outs were added.
+
+Two findings were investigated and dismissed as probe artefacts rather than
+fixed: a 20×20 checkbox whose `<label>` is the real target, and the `—`
+placeholder in labelled stat cells. Both carve-outs are re-validated against a
+deliberately undersized case.
+
+632 unit tests and 31 e2e tests still pass.
+
+---
+
 ## 2026-08-02 (iOS) — A native Swift app, in `ios/`
 
 **Operator action: needs a Mac.** Nothing in `ios/` affects the web app —

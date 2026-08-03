@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { Tabs } from "@/components/Tabs";
+import { Tabs, TabPanel } from "@/components/Tabs";
 import { ProgressPanel } from "@/components/ProgressPanel";
 import { useCurrentUser } from "@/lib/auth";
 import { useAsync } from "@/lib/use-async";
@@ -220,9 +220,9 @@ export default function DashboardPage() {
       <Header source={resolved.source} />
       <Tabs tabs={TABS} active={tab} onChange={setTab} label="Progress sections" />
 
-      {tab === "progress" && <ProgressPanel userId={user.id} />}
+      {tab === "progress" && <TabPanel id="progress"><ProgressPanel userId={user.id} /></TabPanel>}
 
-      {tab === "recovery" && <>
+      {tab === "recovery" && <TabPanel id="recovery">
       <Verdict
         acwr={acwr}
         riskScore={resolved.riskScore}
@@ -407,7 +407,7 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
-      </>}
+      </TabPanel>}
     </div>
   );
 }

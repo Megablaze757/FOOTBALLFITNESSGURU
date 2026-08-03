@@ -314,7 +314,7 @@ function AppleSetup({ token, onDone }: { token: string | null; onDone: () => voi
             or hours are both understood.
           </p>
 
-          <button onClick={mint} disabled={busy} className="mt-3 text-xs font-semibold text-slate-400 hover:text-slate-200">
+          <button onClick={mint} disabled={busy} className="tap-target mt-3 text-xs font-semibold text-slate-400 hover:text-slate-200">
             {busy ? "Creating…" : "Create a new token (stops the old one working)"}
           </button>
           {err && <p className="mt-2 text-sm text-readiness-red">{err}</p>}

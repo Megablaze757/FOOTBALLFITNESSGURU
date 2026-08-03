@@ -39,16 +39,20 @@ export function WeekStrip({ days, sessions, minutes, accent, complete }: {
           <h2 className="text-sm font-bold text-slate-100">
             {complete ? "That's today done" : "Your last 7 days"}
           </h2>
+          {/* An empty week gets told what fills it, not that it's empty. Seven
+              blank dots and "nothing logged yet" is the first thing a new
+              athlete sees on Home, and it reads as a broken feature rather than
+              a habit waiting to start. */}
           <p className="mt-0.5 text-xs text-slate-500">
             {sessions === 0
-              ? "Nothing logged yet this week."
+              ? "Log a session in your check-in and these fill in."
               : `${sessions} session${sessions === 1 ? "" : "s"}${
                   minutes > 0 ? ` · ${hours > 0 ? `${hours}h ` : ""}${mins}m` : ""
                 }`}
           </p>
         </div>
-        <Link href="/dashboard" className="shrink-0 text-xs font-semibold text-slate-400 hover:text-pitch-400">
-          Progress →
+        <Link href="/dashboard" className="tap-target -mr-2 shrink-0 gap-1 px-2 text-xs font-semibold text-slate-400 hover:text-pitch-400">
+          Progress <span aria-hidden>→</span>
         </Link>
       </div>
 
@@ -67,6 +71,11 @@ export function WeekStrip({ days, sessions, minutes, accent, complete }: {
                   background: d.trained ? `${accent}22` : "rgba(255,255,255,0.02)",
                 }}
                 // The visual carries three states; a screen reader needs them said.
+                // `role="img"` is required, not decoration: aria-label is
+                // prohibited on a bare <span> and browsers are free to drop it,
+                // so all seven labels were silently going nowhere. A dot that
+                // means "trained" IS a graphic, so this is also the honest role.
+                role="img"
                 aria-label={`${d.iso}: ${d.trained ? "trained" : "no session"}${d.checkedIn ? ", checked in" : ""}`}
               >
                 <span

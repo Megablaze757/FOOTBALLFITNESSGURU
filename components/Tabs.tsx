@@ -72,13 +72,12 @@ export function Tabs<T extends string>({ tabs, active, onChange, label = "Sectio
             // One tab stop for the strip; arrows move inside it.
             tabIndex={selected ? 0 : -1}
             onClick={() => onChange(t.id)}
-            className={`shrink-0 rounded-full border px-3.5 py-2 text-sm font-medium transition ${
-              selected
-                ? "border-pitch-400/50 bg-pitch-400/10 text-pitch-400"
-                : "border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.06]"
-            }`}
+            // Styling and the 44px floor come from `aria-selected`, which this
+            // already sets. Before, the strip was 38px tall and the selected
+            // look was a separate className that could disagree with the ARIA.
+            className="chip-option"
           >
-            {t.icon && <span className="mr-1">{t.icon}</span>}
+            {t.icon && <span aria-hidden>{t.icon}</span>}
             {t.label}
           </button>
         );

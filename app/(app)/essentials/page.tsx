@@ -11,7 +11,7 @@ import { positionList } from "@/lib/positions";
 import { getExercise, SPORTS, type Exercise, type SportId } from "@/lib/exercises";
 import { ExerciseModal } from "@/components/ExerciseDetail";
 import { SkillDrills } from "@/components/SkillDrills";
-import { Tabs } from "@/components/Tabs";
+import { Tabs, TabPanel } from "@/components/Tabs";
 import { ProtocolCard } from "@/components/ProtocolCard";
 import { FuelTimeline } from "@/components/FuelTimeline";
 
@@ -98,6 +98,7 @@ export default function EssentialsPage() {
 
       {/* Position essentials */}
       {tab === "position" && (
+      <TabPanel id="position">
       <div className="space-y-4">
         {guides.map(({ position, guide }, i) => (
         <section key={position || "all"} className="card-premium p-6">
@@ -127,8 +128,8 @@ export default function EssentialsPage() {
                 const ex = getExercise(id);
                 if (!ex) return null;
                 return (
-                  <button key={id} onClick={() => setOpen(ex)} className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-sm text-slate-200 transition hover:border-pitch-400/40 hover:bg-pitch-400/[0.06]">
-                    {ex.name} ›
+                  <button key={id} onClick={() => setOpen(ex)} className="chip-option text-slate-200 hover:border-pitch-400/40">
+                    {ex.name} <span aria-hidden>›</span>
                   </button>
                 );
               })}
@@ -140,16 +141,18 @@ export default function EssentialsPage() {
         </section>
         ))}
       </div>
+      </TabPanel>
       )}
 
       {/* Technical work. The position guide says a centre back needs heading;
           this is where they find out how to actually practise it. */}
-      {tab === "skills" && <SkillDrills sport={sport} position={positions} />}
+      {tab === "skills" && <TabPanel id="skills"><SkillDrills sport={sport} position={positions} /></TabPanel>}
 
       {/* One block, not two. `tab === "fuel"` was tested twice in a row with a
           separate section under each — same condition, same tab, two places to
           keep in step. */}
       {tab === "fuel" && (
+      <TabPanel id="fuel">
       <div className="space-y-6">
         <section>
           <h2 className="field-label mb-1">{gameday} fuelling</h2>
@@ -174,6 +177,7 @@ export default function EssentialsPage() {
           </div>
         </section>
       </div>
+      </TabPanel>
       )}
 
       {open && <ExerciseModal ex={open} onClose={() => setOpen(null)} />}

@@ -98,7 +98,7 @@ export function ShoppingList({ list, seed }: { list: List; seed: number | null }
           </div>
           <div className="flex shrink-0 flex-col items-end gap-1">
             <span className="text-lg font-extrabold text-pitch-400">~£{list.total.toFixed(2)}</span>
-            <button onClick={copy} className="text-xs text-slate-400 hover:text-pitch-400">
+            <button onClick={copy} className="tap-target text-xs text-slate-400 hover:text-pitch-400">
               {copied ? "Copied ✓" : "Copy"}
             </button>
           </div>
@@ -216,7 +216,7 @@ export function ShoppingList({ list, seed }: { list: List; seed: number | null }
           supermarket prices, reviewed {PRICES_REVIEWED} — not live, so your basket will differ.
         </p>
         {done > 0 && (
-          <button onClick={clear} className="mt-2 text-xs text-slate-500 hover:text-slate-300">
+          <button onClick={clear} className="tap-target mt-2 text-xs text-slate-500 hover:text-slate-300">
             Reset ticks
           </button>
         )}

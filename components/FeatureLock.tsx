@@ -33,7 +33,12 @@ export function FeatureLock({ capability, title, blurb }: {
     <div className="card p-6 text-center">
       <div className="text-3xl" aria-hidden="true">🔒</div>
       <h2 className="mt-2 text-lg font-extrabold">{title}</h2>
-      <p className="mx-auto mt-1 max-w-sm text-sm text-slate-400">{blurb}</p>
+      {/* Left-aligned inside a centred card. The blurbs run 160–190 characters
+          over three or four lines, and centring a paragraph gives every line a
+          different starting x — the eye has to hunt for the start of each one.
+          Short things (title, price, button) stay centred, where the ragged
+          edge costs nothing and the symmetry reads as deliberate. */}
+      <p className="mx-auto mt-1 max-w-sm text-left text-sm text-slate-400">{blurb}</p>
       <p className="mt-3 text-sm">
         <span className="font-bold text-pitch-400">{plan.name}</span>
         <span className="text-slate-400"> · {plan.priceLabel}</span>

@@ -2,6 +2,7 @@
 
 import { Suspense } from "react";
 import Link from "next/link";
+import { BackLink } from "@/components/BackLink";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { can } from "@/lib/subscription";
@@ -65,7 +66,7 @@ function VideoDetailInner() {
           <h1 className="text-2xl font-extrabold capitalize tracking-tight">{video.session_type ?? "Session"}</h1>
           <p className="text-sm text-slate-400">{video.created_at.slice(0, 10)}</p>
         </div>
-        <Link href="/train" className="text-sm text-slate-400 hover:text-pitch-400">← Back</Link>
+        <BackLink href="/train" label="Video analysis" />
       </header>
 
       {!unlocked ? (

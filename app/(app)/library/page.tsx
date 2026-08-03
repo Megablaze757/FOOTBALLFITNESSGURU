@@ -172,7 +172,11 @@ export default function LibraryPage() {
       </div>
 
       <details className="group rounded-2xl border border-white/10 bg-white/[0.02] px-3 py-2 open:pb-3">
-        <summary className="flex cursor-pointer list-none items-center justify-between text-sm font-semibold text-slate-200">
+        {/* min-h, because a `<summary>` shrinks to its line box — this one was
+            20px tall and full-width, which is a target you scrub at rather than
+            hit. The count badge is a <span>, so it stays a badge and does not
+            inherit the tappable-chip floor. */}
+        <summary className="flex min-h-[44px] cursor-pointer list-none items-center justify-between text-sm font-semibold text-slate-200">
           <span>
             Filters
             {activeFilters > 0 && <span className="ml-2 chip text-pitch-400">{activeFilters} on</span>}
@@ -321,9 +325,12 @@ function Pill({ label, active, onClick, small }: { label: string; active: boolea
   return (
     <button
       onClick={onClick}
-      className={`shrink-0 rounded-full border font-medium transition ${small ? "px-3 py-1 text-xs" : "px-4 py-1.5 text-sm"} ${
-        active ? "border-pitch-400/40 bg-pitch-400/10 text-pitch-400" : "border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.06]"
-      }`}
+      // `aria-pressed` is new and not cosmetic: this page has twenty-eight of
+      // these across five filter groups, and without it every one announced as
+      // a plain button, leaving a screen-reader user no way to tell which
+      // filters were on.
+      aria-pressed={active}
+      className={`chip-option ${small ? "chip-option-sm" : ""}`}
     >
       {label}
     </button>

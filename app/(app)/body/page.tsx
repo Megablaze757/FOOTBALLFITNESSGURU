@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { BackLink } from "@/components/BackLink";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/lib/auth";
@@ -40,7 +40,7 @@ export default function BodyPage() {
           <h1 className="text-3xl font-extrabold tracking-tight">Body</h1>
           <p className="mt-1 text-sm text-slate-400">Weight, body fat and photos over time. Feeds your calorie targets.</p>
         </div>
-        <Link href="/dashboard" className="text-sm text-slate-400 hover:text-pitch-400">← Back</Link>
+        <BackLink href="/dashboard" label="Progress" />
       </header>
 
       <BodyForm userId={user.id} today={today} onSaved={reload} />

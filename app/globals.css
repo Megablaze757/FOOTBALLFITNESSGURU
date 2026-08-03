@@ -232,6 +232,59 @@ h1 { letter-spacing: -0.02em; }
     @apply inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.05] px-3 py-1 text-xs font-medium;
   }
 
+  /* A chip you can TAP has to be tappable.
+   *
+   * `.chip` renders at 26px tall, which is fine for the decorative ones (a
+   * sport badge, a "Week 2" marker) and far too small for the many that are
+   * real controls — the supermarket picker, exercise shortcuts, duration
+   * buttons. The UI/UX playbook puts the floor at 48px on the basis of an
+   * average finger pad; this codebase already settled on 44 in `.tap-target`,
+   * so that is the number kept for consistency.
+   *
+   * Scoped by ELEMENT rather than by adding a class at every call site: a chip
+   * that is a <button> or an <a> is interactive by definition, and one that is
+   * a <span> is not. That makes it impossible to add a new tappable chip and
+   * forget. */
+  button.chip,
+  a.chip,
+  .chip[role="button"] {
+    min-height: 44px;
+  }
+
+  /* A SELECTABLE OPTION. One class for every "pick one of these" control.
+   *
+   * This markup was written out by hand in six places — the exercise library's
+   * sport and equipment filters, the skill-drill filters, the injury symptom
+   * and duration pickers, the position picker, the leaderboard switcher — each
+   * a slightly different `rounded-full border px-3 py-1 text-xs`. A measured
+   * audit of the signed-in pages found 89 controls under the 44px floor and
+   * roughly seventy of them were these. Fixing seventy call sites individually
+   * would have left the seventy-first to be written wrong next week.
+   *
+   * Selected state comes from `aria-pressed`/`aria-selected` rather than a
+   * className, so the thing a screen reader announces and the thing an eye sees
+   * cannot drift apart. Three of the six copies had no ARIA state at all — they
+   * looked selected and announced as an ordinary button. */
+  .chip-option {
+    @apply inline-flex shrink-0 items-center justify-center gap-1.5 rounded-full border
+           border-white/10 bg-white/[0.03] px-4 text-sm font-medium text-slate-300
+           transition hover:bg-white/[0.06];
+    min-height: 44px;
+  }
+  .chip-option[aria-pressed="true"],
+  .chip-option[aria-selected="true"] {
+    @apply border-pitch-400/50 bg-pitch-400/10 text-pitch-400;
+  }
+  .chip-option:disabled {
+    @apply cursor-not-allowed opacity-40 hover:bg-white/[0.03];
+  }
+  /* Dense variant: a long filter row on a 360px phone. Still 44px tall — only
+     the horizontal padding and type scale down, because the vertical dimension
+     is the one a thumb misses. */
+  .chip-option-sm {
+    @apply gap-1 px-3 text-xs;
+  }
+
   /* Any chip-sized control that is actually tappable. WCAG 2.5.8 (AA) sets the
      floor at 24×24; Apple's HIG and Material both say 44–48, and this is a
      phone-first app used with cold hands in a kit bag. The visual size is

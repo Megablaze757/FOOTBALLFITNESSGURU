@@ -77,7 +77,7 @@ function ProtocolBody({ p, onOpenExercise }: {
               const ex = getExercise(id);
               if (!ex) return null;
               return (
-                <button key={id} onClick={() => onOpenExercise?.(ex)} className="chip hover:border-pitch-500/50 hover:text-pitch-400">
+                <button key={id} onClick={() => onOpenExercise?.(ex)} className="chip-option chip-option-sm hover:border-pitch-500/50 hover:text-pitch-400">
                   {ex.name}
                 </button>
               );

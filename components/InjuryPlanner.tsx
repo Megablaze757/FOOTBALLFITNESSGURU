@@ -334,9 +334,10 @@ export function InjuryPlanner({ sport, hurt, onHurtChange, description, onDescri
                 onClick={() => onDescriptionChange(
                   description.trim() ? `${description.trim().replace(/[.,]$/, "")}, ${h}` : h
                 )}
-                className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-xs text-slate-400 transition hover:border-pitch-400/40 hover:text-pitch-400"
+                className="chip-option chip-option-sm text-slate-400 hover:border-pitch-400/40 hover:text-pitch-400"
               >
-                + {h}
+                <span aria-hidden>+</span> {h}
+                <span className="sr-only">Add &ldquo;{h}&rdquo; to the description</span>
               </button>
             ))}
           </div>
@@ -348,11 +349,8 @@ export function InjuryPlanner({ sport, hurt, onHurtChange, description, onDescri
               <button
                 key={d.label}
                 onClick={() => setWeeks(d.weeks)}
-                className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
-                  weeks === d.weeks
-                    ? "border-pitch-400/50 bg-pitch-400/10 text-pitch-400"
-                    : "border-white/10 bg-white/[0.03] text-slate-300 hover:border-white/20"
-                }`}
+                aria-pressed={weeks === d.weeks}
+                className="chip-option chip-option-sm"
               >
                 {d.label}
               </button>

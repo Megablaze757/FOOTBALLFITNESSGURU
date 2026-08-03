@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { BackLink } from "@/components/BackLink";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/lib/auth";
@@ -9,7 +10,7 @@ import { can } from "@/lib/subscription";
 import { FeatureLock } from "@/components/FeatureLock";
 import { MealPlanner } from "@/components/MealPlanner";
 import { MealCheckIn } from "@/components/MealCheckIn";
-import { Tabs } from "@/components/Tabs";
+import { Tabs, TabPanel } from "@/components/Tabs";
 import { FuelRings } from "@/components/FuelRings";
 import { nutritionTargets, type NutritionTargets, type TargetContext } from "@/lib/nutrition";
 import { sportProfile, type SportProfile } from "@/lib/sport-profile";
@@ -278,6 +279,7 @@ function NutritionTabs({ userId, today, log, targets, stats, prefs, dietNotes, m
           the rings: the two halves ask different questions, and "you're 600
           short today" is noise on the tab about next week's shop. */}
       <Tabs tabs={NUTRITION_TABS} active={tab} onChange={setTab} label="Nutrition sections" />
+      <TabPanel id={tab}>
       {tab === "today" ? (
         <NutritionTracker
           userId={userId}
@@ -295,6 +297,7 @@ function NutritionTabs({ userId, today, log, targets, stats, prefs, dietNotes, m
       ) : (
         <MealPlanner userId={userId} initial={stats} initialPrefs={prefs} initialNotes={dietNotes} initialSeed={mealSeed} context={context} />
       )}
+      </TabPanel>
     </div>
   );
 }
@@ -306,7 +309,7 @@ function Header() {
         <h1 className="text-3xl font-extrabold tracking-tight">Nutrition</h1>
         <p className="mt-1 text-sm text-slate-400">What to eat today, worked out from your body and how much you are training.</p>
       </div>
-      <Link href="/dashboard" className="text-sm text-slate-400 hover:text-pitch-400">← Back</Link>
+      <BackLink href="/dashboard" label="Progress" />
     </header>
   );
 }
@@ -548,7 +551,7 @@ function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietN
                   metabolic calculation →
                 </button>
               )}
-              <button onClick={applyTargets} className="mt-3 text-xs font-semibold text-pitch-400 hover:underline">
+              <button onClick={applyTargets} className="tap-target mt-3 text-xs font-semibold text-pitch-400 hover:underline">
                 Reset my numbers to these
               </button>
             </div>

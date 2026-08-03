@@ -211,9 +211,9 @@ export default function InjuryPage() {
               <button
                 key={id}
                 onClick={() => setOpen(ex)}
-                className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-sm text-slate-200 transition hover:border-pitch-400/40 hover:bg-pitch-400/[0.06]"
+                className="chip-option text-slate-200 hover:border-pitch-400/40"
               >
-                {ex.name} ›
+                {ex.name} <span aria-hidden>›</span>
               </button>
             );
           })}

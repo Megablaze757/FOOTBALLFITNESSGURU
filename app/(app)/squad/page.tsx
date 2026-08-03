@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { BackLink } from "@/components/BackLink";
+import { EmptyState } from "@/components/EmptyState";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/lib/auth";
@@ -185,7 +187,13 @@ export default function SquadPage() {
         </div>
       )}
       {!data.athletes.length ? (
-        <p className="card px-4 py-8 text-center text-sm text-slate-500">No athletes yet — add one by email above.</p>
+        <div className="card">
+          <EmptyState
+            icon="👥"
+            title="No athletes yet"
+            body="Invite one by email using the box above. Once they accept you'll see their readiness, check-in streak and training load here — and they'll see nothing of yours."
+          />
+        </div>
       ) : (
         <>
         <h2 className="field-label">🏆 Squad leaderboard</h2>
@@ -252,7 +260,7 @@ function Header() {
         <h1 className="text-3xl font-extrabold tracking-tight">Squad</h1>
         <p className="mt-1 text-sm text-slate-400">Who is fit, who is carrying something, and who has stopped checking in.</p>
       </div>
-      <Link href="/profile" className="text-sm text-slate-400 hover:text-pitch-400">← Back</Link>
+      <BackLink href="/profile" label="Profile" />
     </header>
   );
 }

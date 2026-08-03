@@ -28,7 +28,7 @@ import {
 import { track } from "@/lib/funnel";
 import { METRIC_CATALOG, metricDef, benchmarkProgress } from "@/lib/benchmarks";
 import { RingProgress } from "@/components/RingProgress";
-import { Tabs } from "@/components/Tabs";
+import { Tabs, TabPanel } from "@/components/Tabs";
 import { CoachChat } from "@/components/CoachChat";
 import { ProgramCalendar } from "@/components/ProgramCalendar";
 import { SessionDrills } from "@/components/SessionDrills";
@@ -856,7 +856,7 @@ function ActiveProgram({
             </button>
           ) : (
             <div className="flex items-center gap-2">
-              <button onClick={deleteProgram} disabled={deleting} className="text-xs font-semibold text-readiness-red disabled:opacity-50">
+              <button onClick={deleteProgram} disabled={deleting} className="tap-target text-xs font-semibold text-readiness-red disabled:opacity-50">
                 {deleting ? "…" : "Delete for good"}
               </button>
               <button onClick={() => setConfirmDelete(false)} className="text-xs text-slate-500">Cancel</button>
@@ -871,6 +871,13 @@ function ActiveProgram({
           of two "today" blocks to actually do. Grouped into tabs instead. */}
       {/* Shared strip, not a fourth copy of the same markup — see components/Tabs. */}
       <Tabs tabs={COACH_TABS} active={tab} onChange={setTab} label="Plan sections" />
+
+      {/* ONE panel wrapping every tab-conditional block below, keyed to the
+          active tab. Per-block panels would mean three elements sharing
+          `id="panel-program"`, because a tab here owns several sections
+          rather than one. This way the id the selected tab points at always
+          exists and is always unique. */}
+      <TabPanel id={tab}>
 
       {/* Deadline-near nudge */}
       {tab === "today" && deadline && deadline.daysLeft >= 0 && deadline.daysLeft <= 7 && (
@@ -1034,6 +1041,8 @@ function ActiveProgram({
       {tab === "program" && (
         <ProgramCalendar weeks={plan.weeks} completed={program.completed_sessions} onToggle={toggleSession} />
       )}
+
+      </TabPanel>
     </div>
   );
 }
