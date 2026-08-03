@@ -41,13 +41,22 @@ export const metadata: Metadata = {
   // Tells iOS to open from the home screen without Safari's chrome. iOS ignores
   // the manifest's display mode and reads this instead.
   appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "PocketAthlete" },
-  // Sized deliberately: the 512 is a 295KB brushed-gold texture that doesn't
-  // compress losslessly, so it's reserved for the install icon and link
-  // previews. The tab favicon — fetched on every single page — is the 5.7KB one.
+  // Sized deliberately: the tab favicon is fetched on every single page, so it
+  // is the 5.7KB 64px one. The heavier artwork is reserved for the install icon
+  // and link previews, which are fetched once.
   icons: {
     icon: `${base}/icon-64.png`,
     shortcut: `${base}/icon-64.png`,
-    apple: `${base}/logo.png`,
+    // THE HOME-SCREEN ICON MUST BE OPAQUE. This pointed at logo.png, which has
+    // a transparent background — and iOS composites transparency onto WHITE.
+    // So a gold mark designed for a near-black app sat on a white tile among
+    // the user's other icons, looking like a different product.
+    //
+    // apple-touch-icon.png is the same artwork flattened onto #0a0a0b, the
+    // app's own background and the manifest's, at 180px — the size iOS asks
+    // for — with 12% padding. iOS does not mask this icon, it rounds the
+    // corners, so artwork running to the edge gets clipped at the radius.
+    apple: `${base}/apple-touch-icon.png`,
   },
   // What shows up when someone shares the link — it was a bare URL before.
   openGraph: {
@@ -56,13 +65,16 @@ export const metadata: Metadata = {
     title: "PocketAthlete — AI Athlete Coach",
     description: "Daily readiness, position-specific programs and nutrition that fits how you actually eat.",
     url: "https://pocketathlete.com",
-    images: [{ url: `${base}/logo.png`, width: 512, height: 512, alt: "PocketAthlete" }],
+    // icon-512, not logo.png: the latter is transparent, and link-preview
+    // renderers composite that onto whatever they like — usually white, which
+    // is the same wrong-looking tile the home-screen icon had.
+    images: [{ url: `${base}/icon-512.png`, width: 512, height: 512, alt: "PocketAthlete" }],
   },
   twitter: {
     card: "summary",
     title: "PocketAthlete — AI Athlete Coach",
     description: "Daily readiness, position-specific programs and nutrition that fits how you actually eat.",
-    images: [`${base}/logo.png`],
+    images: [`${base}/icon-512.png`],
   },
   robots: { index: true, follow: true },
 };

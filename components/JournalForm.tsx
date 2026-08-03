@@ -101,27 +101,44 @@ export function JournalForm({ initial, initialTraining, sport, planned = [] }: {
    * Full is still one tap away, every day, for anyone who wants it — it just
    * has to be asked for each time. That is the right trade when one direction
    * costs a tap and the other costs the habit.
+   *
+   * RE-OPENING TODAY'S ENTRY DOES NOT FORCE FULL EITHER. It used to: `initial`
+   * is populated whenever a check-in exists for today, so checking in once and
+   * then glancing at the page again — the same day, the same entry — handed
+   * back sliders and an open body map. The justification was "they came back
+   * for a reason", which is a guess, and the common reason is looking at what
+   * you already put in.
+   *
+   * Quick covers everything they are likely to change: sleep, how the body
+   * feels, soreness, weight, training. Match day and the nutrition slider are
+   * the only full-only fields, and wanting those is one tap. `sore` is seeded
+   * from the saved pain map below, so an existing entry opens with its marks
+   * visible rather than looking like nothing was ever recorded.
    */
   const [detailed, setDetailed] = useState(false);
   const [modeLoaded, setModeLoaded] = useState(false);
   useEffect(() => {
-    // Editing an existing entry opens in full — they came back for a reason,
-    // and hiding the field they want to change would be its own annoyance.
-    if (initial) setDetailed(true);
     setModeLoaded(true);
 
     // Clear the old preference so anyone already stuck in full mode is let out
     // on their next visit. Without this the key sits there forever, read by
     // nothing, and the athlete it trapped would never know why.
     try { localStorage.removeItem("pa:checkin-mode"); } catch { /* ignore */ }
-  }, [initial]);
+  }, []);
 
   function chooseMode(full: boolean) {
     setDetailed(full);
   }
 
   // Only meaningful in quick mode, where the body map is hidden until asked for.
-  const [sore, setSore] = useState<boolean | null>(null);
+  //
+  // Seeded from the saved entry: re-opening a check-in that recorded a sore
+  // knee must show that knee. Starting at null would render "Anything hurting?"
+  // unanswered over a pain map that has marks in it — the form contradicting
+  // its own data.
+  const [sore, setSore] = useState<boolean | null>(
+    initial?.pain_map && Object.keys(initial.pain_map).length > 0 ? true : null
+  );
   // Has the weight pill been opened? Separate from `weight` so an entry that
   // already has one opens expanded, and clearing the box doesn't snap it shut
   // under the cursor mid-edit.
