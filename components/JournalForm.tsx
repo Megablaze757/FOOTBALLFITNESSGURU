@@ -104,6 +104,10 @@ export function JournalForm({ initial, initialTraining, sport, planned = [] }: {
 
   // Only meaningful in quick mode, where the body map is hidden until asked for.
   const [sore, setSore] = useState<boolean | null>(null);
+  // Has the weight pill been opened? Separate from `weight` so an entry that
+  // already has one opens expanded, and clearing the box doesn't snap it shut
+  // under the cursor mid-edit.
+  const [weighing, setWeighing] = useState(false);
 
   /**
    * Offline state, said BEFORE they fill the form in.
@@ -359,7 +363,7 @@ export function JournalForm({ initial, initialTraining, sport, planned = [] }: {
 
       {!modeLoaded ? null : !detailed ? (
         <>
-          <section className="card space-y-5 p-5">
+          <section className="card flex flex-col space-y-5 p-5">
             <TapScale
               label="How did you sleep?"
               value={sleep}
@@ -416,34 +420,54 @@ export function JournalForm({ initial, initialTraining, sport, planned = [] }: {
               )}
             </div>
 
-            {/* WEIGHT IS IN THE QUICK CHECK-IN NOW.
-                It was full-mode only, and full mode is the one almost nobody
-                picks — so for most accounts the app never got a weight after
-                sign-up. Weight is the single input the rest of the product leans
-                on hardest: calorie targets, macro splits, the meal plan and its
-                shopping list are all computed from it, and without one they run
-                on a 75kg default.
+            {/* WEIGHT, WITHOUT COSTING THE QUICK CHECK-IN ITS POINT.
+                It belongs here: full mode is the one almost nobody picks, so for
+                most accounts the app never got a weight after sign-up — and
+                weight is what the calorie targets, macro split, meal plan and
+                shopping list are all computed from. Without one they run on a
+                75kg default.
 
-                One optional field costs a quick check-in almost nothing, and
-                skipping it stays free — there's no validation and no nag. */}
-            <label className="block">
-              <span className="field-label">Weight today</span>
-              <div className="relative">
-                <input
-                  type="number"
-                  step="0.1"
-                  inputMode="decimal"
-                  value={weight}
-                  onChange={(e) => setWeight(e.target.value)}
-                  placeholder="optional — skip it and nothing breaks"
-                  className="field pr-10"
-                />
-                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">kg</span>
+                But my first version of this was a field-label, a full-width
+                input with a long placeholder and a helper sentence — three rows
+                of form on a screen whose entire selling point is three taps and
+                ten seconds. A daily habit dies of exactly that.
+
+                So it's a pill until you want it. Closed it costs one short row;
+                open it's a small inline number. Skipping stays free — no
+                validation, no nag, and no evidence on screen that you skipped. */}
+            {weight === "" && !weighing ? (
+              <button
+                type="button"
+                onClick={() => setWeighing(true)}
+                className="tap-target self-start rounded-full border border-white/10 bg-white/[0.03] px-3.5 py-2 text-xs font-semibold text-slate-400 transition hover:border-pitch-400/40 hover:text-pitch-400"
+              >
+                + Weight today
+              </button>
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-slate-400">Weight</span>
+                <div className="relative w-28">
+                  <input
+                    type="number"
+                    step="0.1"
+                    inputMode="decimal"
+                    autoFocus={weighing && weight === ""}
+                    value={weight}
+                    onChange={(e) => setWeight(e.target.value)}
+                    className="field !py-2 pr-8 text-center"
+                    aria-label="Weight today in kilograms"
+                  />
+                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">kg</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setWeight(""); setWeighing(false); }}
+                  className="tap-target text-xs text-slate-500 hover:text-slate-300"
+                >
+                  Skip
+                </button>
               </div>
-              <p className="mt-1 text-xs text-slate-500">
-                Your calorie targets and meal plan are worked out from this.
-              </p>
-            </label>
+            )}
           </section>
 
           <button

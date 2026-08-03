@@ -217,6 +217,61 @@ front-end bundle.
 
 ---
 
+## 2026-08-02 (later) — Injury guides, the quick check-in, and Home
+
+No operator action. Front-end only.
+
+### Fixed
+
+**The injury page opened ~350 words of rehab at you.** Measured, not guessed:
+each protocol carries five steps, four red flags, a four-stage return-to-play
+plan and five exercises — about 175 words — and the `highlight` variant rendered
+all of it open. The page used that variant for every area the last check-in had
+flagged, so a knee and an ankle put two full protocols on screen before the
+athlete had tapped anything.
+
+That came from a well-meant decision: if we know your ankle hurts, show you the
+ankle protocol. Knowing which one is relevant is the useful part; dumping it
+open is not. Relevance is a gold edge and a badge now — "from your check-in",
+"matches what you said" — and every card stays shut until asked.
+
+Three sections became one. "From your last check-in", "Matching guides" and a
+"Browse all" disclosure were three headings and three lists of the same card,
+needing a dedupe pass between them. One ranked list with a reason attached
+removes the overlap by construction. Six protocols plus the mobility chips now
+measure about 1.1 phone screens.
+
+Inside an opened card the order matches what it's for: steps and exercises
+first, return-to-play behind its own disclosure, red flags last but **not**
+hidden — everything else there can wait; a sign that means stop and get assessed
+cannot be behind a tap.
+
+**I had made the quick check-in worse.** Adding weight to it was right — full
+mode is the one almost nobody picks, so most accounts never gave a weight after
+sign-up, and it's what every calorie and macro figure is computed from. But I
+shipped it as a field label, a full-width input with a long placeholder and a
+helper sentence: three rows of form on the screen whose entire selling point is
+three taps and ten seconds. A daily habit dies of exactly that. It's a pill now
+— one short row closed, a small inline number open, and skipping stays free.
+
+### Changed
+
+**Home stopped getting emptier the more you did.** Cutting it to one card was
+right, but tick all three of the day's quests and the reward was a screen with
+less on it than when you arrived.
+
+It now shows your **last seven days as seven dots** — outline for a session
+logged, centre dot for a check-in — with the week's sessions and minutes and a
+link through to Progress. Per-day rather than three totals on purpose: "4
+sessions this week" is a fact, seven dots with a visible gap in them is a habit,
+and the gap is the thing that makes anyone train on the next Thursday.
+
+Cost no extra query. `week` was already being computed on Home and rendered
+nowhere — three numbers derived from rows the page had already paid to fetch and
+then thrown away.
+
+---
+
 ## 2026-08-02 (e2e) — Smoke tests, and five accessibility bugs they found
 
 No operator action. Front-end and CI only.

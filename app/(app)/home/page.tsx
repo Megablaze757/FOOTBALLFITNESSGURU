@@ -14,6 +14,7 @@ import { biometricSignal, type Biometric } from "@/lib/biometrics";
 import { sportProfile } from "@/lib/sport-profile";
 import { ReadinessGauge } from "@/components/ReadinessGauge";
 import { TodayCard } from "@/components/TodayCard";
+import { WeekStrip } from "@/components/WeekStrip";
 import { Notifications } from "@/components/Notifications";
 import type { CheckInInput, DailyInsight, TrainingLog } from "@/lib/types";
 import type { ProgramPlan } from "@/lib/engine";
@@ -133,10 +134,37 @@ export default function HomePage() {
       // From the 40-day streak rows already in hand.
       checkInsLast7: checkDates.filter((d) => d >= since7).length,
     };
+    /**
+     * The last seven days, day by day.
+     *
+     * `week` was already being computed here and rendered nowhere — three
+     * numbers derived from rows the page had already paid to fetch, thrown
+     * away. Home is thin once the day's three quests are ticked, which is
+     * exactly the moment an athlete has earned something to look at, so it
+     * gets shown now (see WeekStrip).
+     *
+     * Per-day rather than three totals: "4 sessions this week" is a fact, and
+     * seven dots you can see a gap in is a habit.
+     */
+    const checkSet = new Set(checkDates);
+    const trainSet = new Set(trainRows.map((r) => r.log_date));
+    const days = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(Date.now() - (6 - i) * 86400_000);
+      const iso = d.toISOString().slice(0, 10);
+      return {
+        iso,
+        // Single letter, in the athlete's own locale rather than a hard-coded
+        // English array.
+        letter: d.toLocaleDateString(undefined, { weekday: "narrow" }),
+        checkedIn: checkSet.has(iso),
+        trained: trainSet.has(iso),
+      };
+    });
     const week = {
       sessions: trainRows.filter((r) => r.log_date >= since7).length,
       minutes: trainRows.filter((r) => r.log_date >= since7).reduce((n, r) => n + (r.total_minutes ?? 0), 0),
       checkIns: stats.checkInsLast7,
+      days,
     };
     // "Getting started" asks whether they've EVER done each thing. It used to
     // ask whether they'd checked in TODAY, so the onboarding checklist rose from
@@ -254,6 +282,19 @@ export default function HomePage() {
         sessionSub={data!.nextSession ? `Week ${data!.nextSession.week} · ${data!.nextSession.drills} exercise${data!.nextSession.drills === 1 ? "" : "s"}` : null}
         kcalLeft={kcalLeft}
         readinessLabel={readinessLabel}
+      />
+
+      {/* THE PAGE GOT EMPTIER THE MORE YOU DID.
+          Home is one card by design, and that was right — but tick all three
+          quests and the reward was a screen with less on it than when you
+          arrived. The week strip is what the day adds up to, and the data was
+          already being fetched and thrown away. */}
+      <WeekStrip
+        days={data!.week.days}
+        sessions={data!.week.sessions}
+        minutes={data!.week.minutes}
+        accent={sport.accent}
+        complete={data!.quests.every((q) => q.done)}
       />
 
       {/* Only once they have checked in. A readiness gauge before any input is
