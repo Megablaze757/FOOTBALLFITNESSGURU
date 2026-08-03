@@ -1,0 +1,26 @@
+{
+  "name": "pocketathlete-ios",
+  "version": "0.1.0",
+  "private": true,
+  "description": "iOS shell around the PocketAthlete static export. See README.md.",
+  "scripts": {
+    "build:web": "cd .. && NEXT_PUBLIC_NATIVE=1 npm run build",
+    "sync": "npm run build:web && rm -rf www && cp -R ../out www && npx cap sync ios",
+    "assets": "npx @capacitor/assets generate --ios --iconBackgroundColor '#0a0a0b' --splashBackgroundColor '#0a0a0b'",
+    "ios:add": "npx cap add ios",
+    "ios:open": "npx cap open ios"
+  },
+  "dependencies": {
+    "@capacitor/app": "^6.0.0",
+    "@capacitor/core": "^6.0.0",
+    "@capacitor/ios": "^6.0.0",
+    "@capacitor/splash-screen": "^6.0.0",
+    "@capacitor/haptics": "^6.0.0",
+    "@capacitor/push-notifications": "^6.0.0",
+    "@perfood/capacitor-healthkit": "^1.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^6.0.0"
+  }
+}

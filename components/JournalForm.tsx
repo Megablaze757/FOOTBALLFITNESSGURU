@@ -10,6 +10,7 @@ import { SPORTS, type SportId } from "@/lib/exercises";
 import { assessReadiness } from "@/lib/readiness";
 import { computeACWR } from "@/lib/load";
 import { BodyMap } from "@/components/BodyMap";
+import { AppleHealthPill } from "@/components/AppleHealthPill";
 import { ReadinessGauge } from "@/components/ReadinessGauge";
 import { TrainingLogInput, type TrainingState } from "@/components/TrainingLogInput";
 import { enqueue, browserStore, queueCount } from "@/lib/offline-queue";
@@ -404,6 +405,10 @@ export function JournalForm({ initial, initialTraining, sport, planned = [] }: {
       {!modeLoaded ? null : !detailed ? (
         <>
           <section className="card flex flex-col space-y-5 p-5">
+            {/* iOS only — renders nothing on the web. It sits above the sleep
+                question because it answers it, and a watch remembers last night
+                better than anyone does at 6am. */}
+            <AppleHealthPill onSleep={setSleep} />
             <TapScale
               label="How did you sleep?"
               value={sleep}

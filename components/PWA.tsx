@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { invalidate } from "@/lib/use-async";
 import { flushQueue, browserStore, queueCount, type QueuedCheckIn } from "@/lib/offline-queue";
+import { NATIVE_BUILD } from "@/lib/native";
 
 /**
  * Everything that makes this an app rather than a web page: the service worker,
@@ -23,6 +24,11 @@ export function PWA() {
 function useServiceWorker() {
   useEffect(() => {
     if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
+    // NEVER inside the iOS shell. The bundle is already on the device, so the
+    // worker caches nothing that isn't local, and its navigation fallback
+    // fights Capacitor's own file serving — which surfaces as a blank screen
+    // on second launch, the worst possible bug to debug in review.
+    if (NATIVE_BUILD) return;
     // Registering during load competes with the page's own requests, so wait
     // until the app is interactive. Nothing here is needed on a first visit.
     const register = () => {
@@ -101,6 +107,10 @@ function InstallPrompt() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    // Inside the App Store build there is nothing to install, and telling a
+    // reviewer to "add this to your home screen" is the single clearest way to
+    // say "this is a website" — the exact judgement 4.2 turns on.
+    if (NATIVE_BUILD) return;
     // Already installed — nothing to ask for.
     const standalone = window.matchMedia("(display-mode: standalone)").matches ||
       (window.navigator as { standalone?: boolean }).standalone === true;

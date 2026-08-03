@@ -217,6 +217,72 @@ front-end bundle.
 
 ---
 
+## 2026-08-02 (iOS) — An App Store build, and the native features that justify it
+
+**Operator action: everything in `mobile/` needs a Mac.** Nothing here changes
+the web app's behaviour — the native code paths no-op in every browser.
+
+### Added
+
+**`mobile/` — an iOS shell, ready to build.** Capacitor around the existing
+static export, so there is nothing to port. Config, the four commands you run,
+an App Store icon (1024×1024, opaque, no alpha — Apple rejects transparency) and
+2732×2732 splash screens, all generated from the existing logo onto `#0a0a0b`.
+
+I can't build or sign it from here: that needs macOS with Xcode and a paid Apple
+Developer membership. `mobile/README.md` is the runbook.
+
+**`lib/native.ts` — the bridge, and the reason the app isn't "a repackaged
+website".** Guideline 4.2 rejects wrappers, and you don't argue past it, you
+either have native capability or you don't:
+
+- **Apple Health.** Sleep, HRV and resting heart rate read straight from
+  HealthKit. On the web this is a five-step Shortcut most people never finish;
+  natively it's one permission prompt. Readiness is the number this app is built
+  around, and its two best inputs are the two an athlete is worst at
+  self-reporting.
+- **APNs push.** iOS web push needs the site installed to the home screen, drops
+  subscriptions silently, and can't wake a closed app.
+- **Haptics.**
+
+Everything no-ops on the web. The plugin specifiers are built at runtime so
+neither `tsc` nor the bundler can follow them — no native code is bundled for
+the browser, only the package names as strings.
+
+**It's wired in, not just written.** The check-in gains a "Fill from Apple
+Health" pill on iOS only, which sets the sleep answer and stores HRV and resting
+heart rate for the Progress trends. An entitlement you declare and never use is
+worse than not having it.
+
+### Changed
+
+**The service worker and the install prompt are skipped in the native build**
+(`NEXT_PUBLIC_NATIVE=1`). The worker caches nothing that isn't already local and
+its navigation fallback fights Capacitor's file serving — a blank screen on
+second launch, the worst thing to hit in review. And telling a reviewer to add
+the app to their home screen is the clearest possible way to say "this is a
+website".
+
+### Notes — what I can't promise
+
+**Approval.** Nobody can. `mobile/README.md` has the pre-submission checklist and
+the things that actually get wrappers rejected — chief among them **payments**:
+a subscription unlocking in-app features must use In-App Purchase (15–30% to
+Apple), and the current Stripe checkout is a 3.1.1 violation if it's reachable
+from the iOS build. Three legal options are written up; that decision is yours
+and it has real money attached.
+
+Also outstanding for native: the password-reset redirect uses
+`window.location.origin`, which on native is `capacitor://localhost` — it needs
+a custom scheme registered with Supabase. The Worker needs nothing: its CORS is
+already `*`.
+
+None of the native code has run on a device. It's written to fail safe — every
+path returns empty or null rather than throwing — but the first Mac build is the
+real test.
+
+---
+
 ## 2026-08-02 (defaults) — Quick check-in stays quick, and the upload box comes back
 
 No operator action. Front-end only.
