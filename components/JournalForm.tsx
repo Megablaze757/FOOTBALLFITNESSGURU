@@ -82,24 +82,42 @@ export function JournalForm({ initial, initialTraining, sport, planned = [] }: {
    * something hurts, because most days nothing does.
    *
    * Nothing is lost: everything else stays one tap away, and someone who wants
-   * to log every set still can. The choice is remembered, so neither athlete
-   * has to keep re-making it.
+   * to log every set still can.
+   *
+   * QUICK IS ALWAYS THE DEFAULT, AND THE CHOICE IS NOT REMEMBERED.
+   *
+   * It used to be: tapping the full-mode button wrote `pa:checkin-mode: "full"`
+   * to localStorage, and every check-in after that opened in full — sliders
+   * instead of tap scales, the body map open every morning. So one athlete
+   * wanting to record a match day, once, silently converted their daily
+   * ten-second habit into the dozen-interaction form quick mode exists to
+   * replace. Nothing told them it had happened and the only way back was
+   * spotting a small "Use the quick check-in" link.
+   *
+   * A per-day action is not a preference. "I need the match-day fields today"
+   * says nothing about tomorrow, and the cost of guessing wrong is the thing
+   * most likely to make someone stop checking in at all.
+   *
+   * Full is still one tap away, every day, for anyone who wants it — it just
+   * has to be asked for each time. That is the right trade when one direction
+   * costs a tap and the other costs the habit.
    */
   const [detailed, setDetailed] = useState(false);
   const [modeLoaded, setModeLoaded] = useState(false);
   useEffect(() => {
     // Editing an existing entry opens in full — they came back for a reason,
     // and hiding the field they want to change would be its own annoyance.
-    if (initial) { setDetailed(true); setModeLoaded(true); return; }
-    try {
-      setDetailed(localStorage.getItem("pa:checkin-mode") === "full");
-    } catch { /* private mode — quick is the better default anyway */ }
+    if (initial) setDetailed(true);
     setModeLoaded(true);
+
+    // Clear the old preference so anyone already stuck in full mode is let out
+    // on their next visit. Without this the key sits there forever, read by
+    // nothing, and the athlete it trapped would never know why.
+    try { localStorage.removeItem("pa:checkin-mode"); } catch { /* ignore */ }
   }, [initial]);
 
   function chooseMode(full: boolean) {
     setDetailed(full);
-    try { localStorage.setItem("pa:checkin-mode", full ? "full" : "quick"); } catch { /* ignore */ }
   }
 
   // Only meaningful in quick mode, where the body map is hidden until asked for.

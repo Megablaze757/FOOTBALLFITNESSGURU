@@ -70,8 +70,10 @@ export function VideoUploader({ sport, onUploaded }: { sport?: string; onUploade
   const [preview, setPreview] = useState<{ url: string; seconds: number } | null>(null);
   const [done, setDone] = useState(false);
   const thumbFor = useRef<File | null>(null);
-  // Lets the movement tiles open the file picker, so picking what you want
-  // checked and picking the clip is one gesture rather than two decisions.
+  // Held so the label's hidden input can be reached if we ever need to open the
+  // picker programmatically. The tiles deliberately do NOT do that any more —
+  // a file dialog appearing when you tap "Squat / lift" is a surprise when
+  // there is a visible upload box directly below.
   const fileInput = useRef<HTMLInputElement>(null);
 
   // Build the preview as soon as a file is picked — that's the confirmation
@@ -214,7 +216,7 @@ export function VideoUploader({ sport, onUploaded }: { sport?: string; onUploade
               <button
                 key={m.id}
                 type="button"
-                onClick={() => { setMovement(m.id); setDone(false); fileInput.current?.click(); }}
+                onClick={() => { setMovement(m.id); setDone(false); }}
                 className={`rounded-2xl border p-3 text-left transition ${
                   movement === m.id
                     ? "border-pitch-400/50 bg-pitch-400/10"
@@ -230,16 +232,30 @@ export function VideoUploader({ sport, onUploaded }: { sport?: string; onUploade
             ))}
           </div>
 
-          <p className="mt-3 text-center text-xs text-slate-500">
-            MP4 / MOV, up to 30s — one or two reps reads best. It never leaves your phone.
-          </p>
-          <input
-            ref={fileInput}
-            type="file"
-            accept="video/*"
-            className="hidden"
-            onChange={(e) => { setDone(false); setFile(e.target.files?.[0] ?? null); }}
-          />
+          {/* THE UPLOAD BOX STAYS. My first pass replaced it with the tiles
+              alone — tapping one opened the picker, which is neat and entirely
+              invisible. Nothing on the screen said "this is where you put a
+              video", so the page went from under-explained to unusable.
+
+              The tiles refine WHAT gets checked; this is the thing you came to
+              do. Both, in that order. */}
+          <label className="mt-3 flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-white/15 px-4 py-7 text-center transition hover:border-pitch-400/50 hover:bg-white/[0.03]">
+            <span className="text-3xl" aria-hidden>🎬</span>
+            <span className="mt-2 text-sm font-semibold text-slate-100">Choose or drop a video</span>
+            <span className="mt-1 text-xs text-slate-500">
+              MP4 / MOV, up to 30s — one or two reps reads best.
+            </span>
+            <span className="mt-1 text-xs text-slate-500">
+              Analysed on your phone; the clip is never uploaded for processing.
+            </span>
+            <input
+              ref={fileInput}
+              type="file"
+              accept="video/*"
+              className="hidden"
+              onChange={(e) => { setDone(false); setFile(e.target.files?.[0] ?? null); }}
+            />
+          </label>
         </div>
       )}
 

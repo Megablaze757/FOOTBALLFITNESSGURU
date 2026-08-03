@@ -217,6 +217,38 @@ front-end bundle.
 
 ---
 
+## 2026-08-02 (defaults) — Quick check-in stays quick, and the upload box comes back
+
+No operator action. Front-end only.
+
+### Fixed
+
+**One tap on "add match day" put you in full mode forever.** `chooseMode(true)`
+wrote `pa:checkin-mode: "full"` to localStorage, and every check-in after that
+opened in full — sliders instead of tap scales, the body map open every morning.
+So an athlete who once wanted to record a match day silently converted their
+daily ten-second habit into the dozen-interaction form that quick mode exists to
+replace. Nothing said it had happened, and the only way out was noticing a small
+"Use the quick check-in" link.
+
+A per-day action is not a preference. "I need the match-day fields today" says
+nothing about tomorrow, and guessing wrong costs the habit. Quick is now always
+the default and the choice is not remembered; full is one tap away every day for
+anyone who wants it. The old localStorage key is deleted on load, so anyone
+already stuck in full mode is let out on their next visit rather than carrying a
+setting they never chose.
+
+**The video page lost its upload box.** Replacing it with movement tiles that
+opened the picker on tap was neat and completely invisible — nothing on screen
+said "this is where a video goes", so the page went from under-explained to
+unusable. My own change, same day.
+
+The tiles refine *what* gets checked; the box is the thing you came to do. Both,
+in that order, and tapping a tile no longer springs a file dialog — a surprise
+dialog is wrong when there's a visible drop zone right beneath it.
+
+---
+
 ## 2026-08-02 (walls) — Fuel tab, video analysis, injury description
 
 No operator action. Front-end only.
