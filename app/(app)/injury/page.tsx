@@ -128,17 +128,23 @@ export default function InjuryPage() {
     );
   }
 
-  const injuryProtocols = relevantInjuryProtocols(data.painMap);
+  const fromCheckIn = relevantInjuryProtocols(data.painMap);
 
-  // Seeding the map from the check-in means `matched` now derives from the very
-  // areas `injuryProtocols` was built from, so without this the same card
-  // renders twice — once under "From your last check-in" and again under
-  // "Matching guides", a few hundred pixels apart.
-  const alsoMatched = matched.filter((m) => !injuryProtocols.some((i) => i.id === m.id));
-
-  // Everything not already on screen, so browsing never repeats a card above it.
-  const browseable = RECOVERY_INJURY.filter(
-    (p) => !injuryProtocols.some((i) => i.id === p.id) && !alsoMatched.some((m) => m.id === p.id)
+  /**
+   * Every protocol, ranked, each appearing exactly once.
+   *
+   * Three overlapping lists used to be derived here and rendered as three
+   * sections, which needed a dedupe pass between them precisely because a
+   * carried-over check-in area matches the same protocol the body map does.
+   * One list with a reason attached removes the overlap by construction.
+   */
+  const relevantProtocols = RECOVERY_INJURY.flatMap((p) => {
+    if (fromCheckIn.some((i) => i.id === p.id)) return [{ p, reason: "from your check-in" }];
+    if (matched.some((m) => m.id === p.id)) return [{ p, reason: "matches what you said" }];
+    return [];
+  });
+  const otherProtocols = RECOVERY_INJURY.filter(
+    (p) => !relevantProtocols.some((r) => r.p.id === p.id)
   );
 
   return (
@@ -159,42 +165,36 @@ export default function InjuryPage() {
         seeded={Object.keys(data.recentPain).length > 0}
       />
 
-      {/* Already told us in a check-in — no need to say it twice. */}
-      {injuryProtocols.length > 0 && (
-        <section className="space-y-3">
-          <h2 className="field-label">From your last check-in</h2>
-          {injuryProtocols.map((p) => <ProtocolCard key={p.id} p={p} highlight onOpenExercise={setOpen} />)}
-        </section>
-      )}
+      {/* ONE LIST, NOT THREE.
+          There were three separate sections of the same card type — "From your
+          last check-in", "Matching guides", and a "Browse all" disclosure —
+          three headings and three lists to scan before reaching the mobility
+          work. They're one list now, with the ones that match what you've told
+          us at the top and badged.
 
-      {/* Matching guides only. This used to render EVERY protocol whenever
-          nothing was selected, so the page for "something hurts, help" opened on
-          a catalogue of a dozen cards about other people's injuries. The full
-          list is still here, behind one tap, where browsing belongs. */}
-      {alsoMatched.length > 0 && (
-        <section className="space-y-3">
-          <h2 className="field-label">
-            Matching guides
+          None of them opens on arrival. That was the wall: each protocol is
+          about 175 words of steps, red flags and a four-stage return-to-play
+          plan, and the relevant ones rendered fully expanded — so a check-in
+          flagging a knee and an ankle put ~350 words of rehab on screen before
+          the athlete had tapped anything. Knowing which protocol applies is the
+          useful part; dumping it open is not. */}
+      <section className="space-y-2">
+        <h2 className="field-label">
+          Rehab guides
+          {relevantProtocols.length > 0 && (
             <span className="ml-2 font-normal normal-case tracking-normal text-slate-500">
-              based on what you&apos;ve told us
+              {relevantProtocols.length} match{relevantProtocols.length === 1 ? "es" : ""} what you&apos;ve told us
             </span>
-          </h2>
-          {alsoMatched.map((p) => <ProtocolCard key={p.id} p={p} highlight onOpenExercise={setOpen} />)}
-        </section>
-      )}
+          )}
+        </h2>
 
-      <details className="group card overflow-hidden">
-        <summary className="flex cursor-pointer list-none items-center justify-between p-4 text-sm font-semibold text-slate-200">
-          <span>
-            Browse all rehab guides
-            <span className="ml-2 text-xs font-normal text-slate-500">{browseable.length} of them</span>
-          </span>
-          <span className="text-xs text-slate-500 transition group-open:rotate-180">▾</span>
-        </summary>
-        <div className="space-y-2 border-t border-white/[0.08] p-4">
-          {browseable.map((p) => <ProtocolCard key={p.id} p={p} collapsed onOpenExercise={setOpen} />)}
-        </div>
-      </details>
+        {relevantProtocols.map(({ p, reason }) => (
+          <ProtocolCard key={p.id} p={p} relevant reason={reason} onOpenExercise={setOpen} />
+        ))}
+        {otherProtocols.map((p) => (
+          <ProtocolCard key={p.id} p={p} onOpenExercise={setOpen} />
+        ))}
+      </section>
 
       {/* Prevention, not treatment — but it belongs with this, not under
           "Your position" where it was. */}

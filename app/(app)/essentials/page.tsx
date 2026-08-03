@@ -185,7 +185,7 @@ export default function EssentialsPage() {
               the width and all of different heights. Collapsed, in one column,
               they're a list you can scan and open. */}
           <div className="space-y-2">
-            {RECOVERY_GENERAL.map((p) => <ProtocolCard key={p.id} p={p} collapsed />)}
+            {RECOVERY_GENERAL.map((p) => <ProtocolCard key={p.id} p={p} />)}
           </div>
         </section>
       </div>
