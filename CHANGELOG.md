@@ -217,6 +217,47 @@ front-end bundle.
 
 ---
 
+## 2026-08-02 (findability) — Logging a session, and adding your own exercise
+
+No operator action. Front-end only.
+
+### Changed
+
+**Logging today's training is a thing you do, not a mode you switch to.** From
+the quick check-in the only route to it was a button that flipped the whole form
+to full — trading the tap scales for sliders and opening the body map — to reach
+one section at the bottom. So the athlete who had just trained, which is most
+athletes opening this screen, had to change how the entire page worked in order
+to say so. Plenty never found it at all.
+
+It's a card of its own now, in quick mode, with a plain "Trained today?" and a
+line saying why it matters (it feeds training load and progress). Opens in
+place; the quick check-in stays quick for anyone who skips it. Full mode is
+still there for the things quick genuinely omits — match day, pain detail, the
+sliders — and its button now says so instead of advertising training logging it
+no longer has a monopoly on.
+
+**You can add your own exercises, and now you can find out.** `CustomExerciseForm`
+was only ever rendered from `/squad`, which is coaches-only. The exercise library
+merged custom entries into the list *and* into search, and offered no route to
+creating one — so the feature existed, was visible in its results, and was
+unreachable for every athlete.
+
+The database was never the blocker: the RLS policy is
+`using (coach_id = auth.uid())`, which asks who owns the row rather than whether
+they're a coach, so any authenticated user has always been able to insert their
+own. Purely a missing button, now on the library page — the one place someone
+who can't find a movement actually is — with a count of how many you have.
+
+### Notes
+
+`custom_exercises.coach_id` means *owner*, not *coach*. Renaming it is a
+migration plus churn across three files for no behavioural gain, so it stays;
+recorded here and in the component because the name will otherwise mislead
+whoever reads it next.
+
+---
+
 ## 2026-08-02 (later) — Injury guides, the quick check-in, and Home
 
 No operator action. Front-end only.

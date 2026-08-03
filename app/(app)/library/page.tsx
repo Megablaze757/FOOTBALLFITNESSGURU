@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/lib/auth";
 import { EXERCISES, EXERCISE_CATEGORIES, SPORTS, DIFFICULTIES, EQUIPMENT_BUCKETS, getExercisesForSport, demoImplement, rowToExercise, exerciseEquip, withinLevel, type Exercise, type ExerciseCategory, type SportId, type Difficulty } from "@/lib/exercises";
 import { ExerciseDemo } from "@/components/ExerciseDemo";
 import { ExerciseModal } from "@/components/ExerciseDetail";
+import { CustomExerciseForm } from "@/components/CustomExerciseForm";
 import { ZoneGuide, RunTypeGuide } from "@/components/ZoneGuide";
 
 // How many cards to render at once. Every card carries an animated SVG demo, so
@@ -31,7 +32,20 @@ export default function LibraryPage() {
   const [benchmarks, setBenchmarks] = useState<Record<string, number> | null>(null);
   const [athlete, setAthlete] = useState<{ age: number | null; restingHr: number | null }>({ age: null, restingHr: null });
 
-  // Default to the athlete's sport + level, and pull in coach-authored exercises.
+  /**
+   * Re-read the athlete's own and their coach's exercises.
+   *
+   * Pulled out of the mount effect so the "add your own" form can call it —
+   * an exercise you just created not appearing in the list you created it from
+   * reads as the save having failed.
+   */
+  const reloadCustom = useCallback(async () => {
+    const { data } = await createClient().from("custom_exercises").select("*");
+    if (data) setCustom(data.map(rowToExercise));
+  }, []);
+
+  // Default to the athlete's sport + level, and pull in custom exercises —
+  // their own, and any their coach has authored.
   useEffect(() => {
     let active = true;
     const supabase = createClient();
@@ -42,9 +56,7 @@ export default function LibraryPage() {
       if (p?.level === "easy" || p?.level === "medium" || p?.level === "advanced") setLevel(p.level);
       if (p?.birth_year) setAthlete((a) => ({ ...a, age: new Date().getFullYear() - p.birth_year! }));
     });
-    supabase.from("custom_exercises").select("*").then(({ data }) => {
-      if (active && data) setCustom(data.map(rowToExercise));
-    });
+    void reloadCustom();
     // Latest test only — zones should follow current fitness, not a personal
     // best from two seasons ago.
     supabase.from("strength_benchmarks").select("metrics").order("test_date", { ascending: false }).limit(1)
@@ -57,7 +69,10 @@ export default function LibraryPage() {
         if (active && data?.[0]) setAthlete((a) => ({ ...a, restingHr: (data[0] as { resting_hr: number }).resting_hr }));
       });
     return () => { active = false; };
-  }, [user.id]);
+    // reloadCustom is a useCallback with no deps, so it is stable for the life
+    // of the component — listing it changes nothing and only adds a name the
+    // next reader has to check.
+  }, [user.id, reloadCustom]);
 
   const list = useMemo(() => {
     const all = [...custom, ...getExercisesForSport(sport)];
@@ -105,6 +120,22 @@ export default function LibraryPage() {
       </header>
 
       <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search exercises or muscles…" className="field" />
+
+      {/* ADDING YOUR OWN WAS INVISIBLE, NOT ABSENT.
+          The form existed but was rendered only from /squad, which is
+          coaches-only — so this page merged custom exercises into the list and
+          into search while offering no way to create one. The database never
+          blocked it: the RLS policy asks who owns the row, not whether they're
+          a coach. Purely a missing button, on the one page where someone who
+          can't find a movement actually is. */}
+      <div className="flex flex-wrap items-center gap-3">
+        <CustomExerciseForm coachId={user.id} onAdded={reloadCustom} scope="mine" />
+        {custom.length > 0 && (
+          <span className="text-xs text-slate-500">
+            {custom.length} custom exercise{custom.length === 1 ? "" : "s"} in your library
+          </span>
+        )}
+      </div>
 
       {/* Running zones — the reference every run prescription points back at.
           Collapsed by default: it's a page of reading, and the library's job is

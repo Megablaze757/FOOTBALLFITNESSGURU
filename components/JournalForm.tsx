@@ -108,6 +108,11 @@ export function JournalForm({ initial, initialTraining, sport, planned = [] }: {
   // already has one opens expanded, and clearing the box doesn't snap it shut
   // under the cursor mid-edit.
   const [weighing, setWeighing] = useState(false);
+  // Quick mode: is the training log open? Starts open when there is already
+  // something logged, so a restored draft doesn't hide the drills in it.
+  const [logTraining, setLogTraining] = useState(
+    (initialTraining?.drills.length ?? 0) > 0 || initialTraining?.total_minutes != null
+  );
 
   /**
    * Offline state, said BEFORE they fill the form in.
@@ -470,12 +475,56 @@ export function JournalForm({ initial, initialTraining, sport, planned = [] }: {
             )}
           </section>
 
+          {/* LOGGING YOUR SESSION IS A THING YOU DO, NOT A MODE YOU SWITCH TO.
+              The only route to it from here was a button that flipped the whole
+              form to full — trading the tap scales for sliders and opening the
+              body map — to reach one section at the bottom. So the athlete who
+              just trained, which is most athletes opening this, had to change
+              how the entire page works to say so. Plenty never found it.
+
+              It opens in place now, with its own card and its own heading, and
+              the quick check-in stays quick for anyone who doesn't want it. */}
+          {!logTraining ? (
+            <button
+              type="button"
+              onClick={() => setLogTraining(true)}
+              className="flex w-full items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-left transition hover:border-pitch-400/40"
+            >
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-pitch-400/10 text-lg" aria-hidden>🏋️</span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-bold text-slate-100">Trained today?</span>
+                <span className="block text-xs text-slate-500">Log the session — it feeds your training load and progress.</span>
+              </span>
+              <span className="shrink-0 text-sm text-pitch-400" aria-hidden>+</span>
+            </button>
+          ) : (
+            <section className="card p-5">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h2 className="field-label !mb-0">Today&apos;s training</h2>
+                <button
+                  type="button"
+                  onClick={() => { setLogTraining(false); setTraining({ drills: [], total_minutes: null, intensity: null }); }}
+                  className="tap-target shrink-0 text-xs text-slate-500 hover:text-slate-300"
+                >
+                  Didn&apos;t train
+                </button>
+              </div>
+              <TrainingLogInput
+                value={training}
+                onChange={setTraining}
+                planned={planned}
+                sport={(SPORTS.some((sp) => sp.id === sport) ? sport : "all") as SportId | "all"}
+              />
+            </section>
+          )}
+
+          {/* Full mode is now only about the things quick genuinely omits. */}
           <button
             type="button"
             onClick={() => chooseMode(true)}
             className="w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-slate-300 transition hover:border-pitch-400/40 hover:text-pitch-400"
           >
-            + Add {terms.eventToday.toLowerCase().replace(/\?$/, "")} and today&apos;s training
+            + {terms.eventToday.replace(/\?$/, "")}, pain detail and sliders
           </button>
         </>
       ) : (

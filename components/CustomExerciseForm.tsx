@@ -4,9 +4,33 @@ import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { EXERCISE_CATEGORIES, DEMO_PATTERNS, SPORTS } from "@/lib/exercises";
 
-// Lets a coach author a drill for their team. Stored in custom_exercises;
-// their accepted athletes see it in the library.
-export function CustomExerciseForm({ coachId, onAdded }: { coachId: string; onAdded: () => void }) {
+/**
+ * Author your own exercise.
+ *
+ * ATHLETES COULD ALREADY DO THIS AND HAD NO WAY TO. This form was only ever
+ * rendered from /squad, which is coaches-only — so the exercise library showed
+ * custom entries, merged them into search, and offered no route to creating
+ * one. The database was never the blocker: the RLS policy is
+ * `using (coach_id = auth.uid())`, which asks who owns the row and not whether
+ * they are a coach, so any authenticated user has always been able to insert
+ * their own.
+ *
+ * The column is named `coach_id` and means owner. Renaming it is a migration
+ * plus churn across three files for no behavioural gain, so it stays — noted
+ * here because the name will otherwise mislead the next person who reads it.
+ *
+ * `scope` only changes the wording. A coach is adding something their squad
+ * will see; an athlete is adding something for themselves. Same table, same
+ * policy, and a coach on their own library page is still just an owner.
+ */
+export function CustomExerciseForm({ coachId, onAdded, scope = "team" }: {
+  coachId: string;
+  onAdded: () => void;
+  scope?: "team" | "mine";
+}) {
+  const words = scope === "team"
+    ? { cta: "➕ Add a team exercise", title: "New team exercise" }
+    : { cta: "➕ Add your own exercise", title: "Your own exercise" };
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [category, setCategory] = useState("Strength");
@@ -44,13 +68,13 @@ export function CustomExerciseForm({ coachId, onAdded }: { coachId: string; onAd
   }
 
   if (!open) {
-    return <button onClick={() => setOpen(true)} className="btn-ghost">➕ Add a team exercise</button>;
+    return <button onClick={() => setOpen(true)} className="btn-ghost">{words.cta}</button>;
   }
 
   return (
     <div className="card space-y-3 p-5">
       <div className="flex items-center justify-between">
-        <h3 className="font-bold text-slate-100">New team exercise</h3>
+        <h3 className="font-bold text-slate-100">{words.title}</h3>
         <button onClick={() => setOpen(false)} className="text-sm text-slate-400 hover:text-pitch-400">Cancel</button>
       </div>
 
