@@ -13,6 +13,7 @@ import { ExerciseModal } from "@/components/ExerciseDetail";
 import { SkillDrills } from "@/components/SkillDrills";
 import { Tabs } from "@/components/Tabs";
 import { ProtocolCard } from "@/components/ProtocolCard";
+import { FuelTimeline } from "@/components/FuelTimeline";
 
 // The Playbook covers four unrelated topics. Stacked, that ran to six and a
 // half screens on a phone; split into tabs each view is about two.
@@ -151,30 +152,14 @@ export default function EssentialsPage() {
       {tab === "fuel" && (
       <div className="space-y-6">
         <section>
-          <h2 className="field-label mb-3">{gameday} nutrition</h2>
-          {/* The timeline is the point of this section — what to eat and when,
-              in order — so the cards lost their borders and the rail became the
-              only frame. A card per step boxed each hour of the day separately
-              and broke the run of it. */}
-          {/* The 36px icon is centred on the rail, so it reaches 18px into the
-              text column — the padding has to clear that. It was pl-6 against a
-              -left-[27px] icon, which only ever looked right because each step
-              sat inside a `card p-4` whose own padding pushed the text clear.
-              Drop the card and the emoji lands on top of the heading. */}
-          <ol className="relative space-y-5 border-l border-white/[0.12] pl-8">
-            {GAMEDAY_NUTRITION.map((ph) => (
-              <li key={ph.when} className="relative">
-                <span className="absolute -left-[50px] grid h-9 w-9 place-items-center rounded-full border border-white/10 bg-ink-800 text-base">{ph.icon}</span>
-                <div className="flex flex-wrap items-baseline gap-x-2">
-                  <span className="font-bold text-slate-100">{ph.title}</span>
-                  <span className="text-xs font-semibold text-pitch-400">{ph.when}</span>
-                </div>
-                <ul className="mt-1.5 space-y-1 text-sm text-slate-300">
-                  {ph.tips.map((t) => <li key={t} className="flex gap-2"><span className="text-slate-600">•</span>{t}</li>)}
-                </ul>
-              </li>
-            ))}
-          </ol>
+          <h2 className="field-label mb-1">{gameday} fuelling</h2>
+          <p className="mb-3 text-xs text-slate-500">Tap the point you&apos;re at.</p>
+          {/* Was six phases x three tips rendered at once — eighteen bullets and
+              180 words down a rail, all the same weight, with the reader left to
+              find their own place in it. There is no reason to read Friday's
+              dinner advice from the changing room ninety minutes before
+              kick-off. */}
+          <FuelTimeline phases={GAMEDAY_NUTRITION} label={gameday} />
         </section>
 
         <section>

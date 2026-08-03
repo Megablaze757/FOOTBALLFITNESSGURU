@@ -24,6 +24,24 @@ interface Plan {
   progressWhen: string;
 }
 
+/**
+ * The details that actually change a rehab plan, as taps.
+ *
+ * Ordered the way someone thinks about a niggle: when, what makes it worse,
+ * what it looks like, what they've already done about it.
+ */
+const DESCRIPTION_HINTS = [
+  "hurts on stairs",
+  "worse when I sprint",
+  "sore the next day",
+  "aches at rest",
+  "it swelled up",
+  "no swelling",
+  "I heard a pop",
+  "stretching helps",
+  "been resting it",
+];
+
 // Rough buckets rather than a number field — nobody knows whether it started 5
 // or 7 weeks ago, and the only distinction that changes the advice is whether
 // this is recent or long-standing.
@@ -291,14 +309,37 @@ export function InjuryPlanner({ sport, hurt, onHurtChange, description, onDescri
           <textarea
             value={description}
             onChange={(e) => onDescriptionChange(e.target.value)}
-            rows={4}
-            placeholder="e.g. outside of my right knee aches on stairs and after about 20 minutes of running. No swelling. Worse the day after. I've tried rolling it and it helps for an hour."
+            rows={3}
+            placeholder="Sharp? Dull? When does it bite?"
             className="field resize-none"
           />
-          <p className="mt-1.5 text-xs text-slate-500">
-            When it hurts, what makes it worse, what you&apos;ve tried. The more you say, the less
-            generic the plan.
-          </p>
+
+          {/* TAPS, NOT AN ESSAY PROMPT.
+              This was a 180-character worked example sitting in the box as grey
+              text, under a sentence of instructions — a paragraph of prose
+              asking for a paragraph of prose, on the page someone opens because
+              something hurts. It read as homework, and the honest outcome of
+              homework is three words and a worse plan.
+
+              These are the details that actually change a rehab plan: when it
+              hurts, what provokes it, whether it swelled, what's been tried.
+              Tapping appends the phrase, so a decent description gets built by
+              thumb in about four taps and can still be edited into real
+              sentences. */}
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {DESCRIPTION_HINTS.map((h) => (
+              <button
+                key={h}
+                type="button"
+                onClick={() => onDescriptionChange(
+                  description.trim() ? `${description.trim().replace(/[.,]$/, "")}, ${h}` : h
+                )}
+                className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-xs text-slate-400 transition hover:border-pitch-400/40 hover:text-pitch-400"
+              >
+                + {h}
+              </button>
+            ))}
+          </div>
         </Step>
 
         <Step n={3} title="How long has it been going on?" done={weeks !== null}>

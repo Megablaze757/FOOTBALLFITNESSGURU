@@ -217,6 +217,51 @@ front-end bundle.
 
 ---
 
+## 2026-08-02 (walls) — Fuel tab, video analysis, injury description
+
+No operator action. Front-end only.
+
+### Changed
+
+**The Guides fuel tab was eighteen bullets down a rail.** Six phases, three tips
+each, 180 words, every one on screen at once and all the same weight — the
+reader left to find their own place in it. The copy was fine; the problem was
+showing all of it. There is no reason to read Friday's dinner advice while
+sitting in the changing room ninety minutes before kick-off.
+
+It's a timeline you step through now: tap the point you're at, see three
+bullets. Same words, a sixth of the screen. Same interaction as the meal
+planner's day strip on purpose — two places that mean "pick a point in time, see
+what's at it" shouldn't be two different controls.
+
+**Video analysis opened on a dashed box.** For a feature that runs pose tracking
+on your own phone and can tell you your knee is collapsing, the first screen was
+"Choose or drop a video" and nothing else. Nobody uploads footage of themselves
+to find out what an app might do with it — and the one control that decides
+which checks can actually run was a dropdown *after* the file was picked.
+
+The nine movements it can read are the first thing now, as tiles that each say
+what they look at — depth and chest position, knee drive and stride, plant foot.
+Tapping one sets the movement and opens the picker, so choosing what you want
+checked and choosing the clip is one gesture. Session type and in-season moved
+behind a "Details" disclosure: they're for the training-load record, not the
+analysis, and they were two of the four things asked before you could press
+upload. The lead now also says the clip never leaves your phone, which is the
+question people actually have.
+
+**The injury page asked for an essay.** Step 2 was a 180-character worked
+example sitting in the box as grey placeholder, under a sentence of
+instructions — a paragraph of prose asking for a paragraph of prose, on the page
+someone opens because something hurts. It read as homework, and the honest
+outcome of homework is three words and a worse plan.
+
+Nine tappable phrases now, covering the details that actually change a rehab
+plan: when it hurts, what provokes it, whether it swelled, what's been tried.
+Tapping appends, so a usable description gets built by thumb in about four taps
+and can still be edited into sentences.
+
+---
+
 ## 2026-08-02 (findability) — Logging a session, and adding your own exercise
 
 No operator action. Front-end only.

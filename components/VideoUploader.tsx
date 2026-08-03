@@ -70,6 +70,9 @@ export function VideoUploader({ sport, onUploaded }: { sport?: string; onUploade
   const [preview, setPreview] = useState<{ url: string; seconds: number } | null>(null);
   const [done, setDone] = useState(false);
   const thumbFor = useRef<File | null>(null);
+  // Lets the movement tiles open the file picker, so picking what you want
+  // checked and picking the clip is one gesture rather than two decisions.
+  const fileInput = useRef<HTMLInputElement>(null);
 
   // Build the preview as soon as a file is picked — that's the confirmation
   // that it actually landed, rather than just a filename.
@@ -192,12 +195,52 @@ export function VideoUploader({ sport, onUploaded }: { sport?: string; onUploade
           <button type="button" onClick={() => setFile(null)} className="shrink-0 text-xs text-slate-400 hover:text-slate-200">Change</button>
         </div>
       ) : (
-        <label className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-white/15 px-4 py-8 text-center transition hover:border-pitch-400/50 hover:bg-white/[0.03]">
-          <span className="text-3xl">🎬</span>
-          <span className="mt-2 text-sm font-medium text-slate-200">{file ? `Reading ${file.name}…` : "Choose or drop a video"}</span>
-          <span className="mt-1 text-xs text-slate-500">MP4 / MOV — up to 30s. Short clips of one or two reps read best.</span>
-          <input type="file" accept="video/*" className="hidden" onChange={(e) => { setDone(false); setFile(e.target.files?.[0] ?? null); }} />
-        </label>
+        <div>
+          {/* WHAT DO YOU WANT CHECKED, NOT "CHOOSE A FILE".
+              The first thing here was a dashed box and nothing else, for a
+              feature that runs pose tracking on your own phone and can tell you
+              your knee is collapsing. Nobody uploads a video to find out what an
+              app might do with it — and the one control that decides which
+              checks can actually run was a <select> further down, after the
+              file was already picked.
+
+              The tiles ARE the explanation: nine things it can read, each
+              saying what it looks at. Tapping one sets the movement and opens
+              the picker, so choosing what you want checked and choosing the
+              clip is one gesture. */}
+          <span className="field-label">What do you want checked?</span>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {MOVEMENTS.map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => { setMovement(m.id); setDone(false); fileInput.current?.click(); }}
+                className={`rounded-2xl border p-3 text-left transition ${
+                  movement === m.id
+                    ? "border-pitch-400/50 bg-pitch-400/10"
+                    : "border-white/10 bg-white/[0.02] hover:border-white/25"
+                }`}
+              >
+                <span className="text-lg" aria-hidden>{m.icon}</span>
+                <span className={`mt-1 block text-xs font-bold ${movement === m.id ? "text-pitch-400" : "text-slate-200"}`}>
+                  {m.label}
+                </span>
+                <span className="mt-0.5 block text-[11px] leading-snug text-slate-500">{m.blurb}</span>
+              </button>
+            ))}
+          </div>
+
+          <p className="mt-3 text-center text-xs text-slate-500">
+            MP4 / MOV, up to 30s — one or two reps reads best. It never leaves your phone.
+          </p>
+          <input
+            ref={fileInput}
+            type="file"
+            accept="video/*"
+            className="hidden"
+            onChange={(e) => { setDone(false); setFile(e.target.files?.[0] ?? null); }}
+          />
+        </div>
       )}
 
       {file && file.size > HEAVY_UPLOAD_BYTES && (
@@ -221,28 +264,37 @@ export function VideoUploader({ sport, onUploaded }: { sport?: string; onUploade
             />
           </label>
 
-          {/* What the clip shows drives which checks we can actually run. */}
-          <label className="block">
-            <span className="field-label">What&apos;s in this clip?</span>
-            <select value={movement} onChange={(e) => setMovement(e.target.value as MovementType)} className="field [color-scheme:dark]">
-              {MOVEMENTS.map((m) => <option key={m.id} value={m.id}>{m.icon} {m.label} — {m.blurb}</option>)}
-            </select>
-          </label>
-
-          <div className="grid grid-cols-2 gap-3">
-            <label className="block">
-              <span className="field-label">Session</span>
-              <select value={sessionType} onChange={(e) => setSessionType(e.target.value as SessionType)} className="field [color-scheme:dark]">
-                <option value="training">Training</option>
-                <option value="match">{terms.eventLabel}</option>
-                <option value="recovery">Recovery</option>
-              </select>
-            </label>
-            <label className="flex items-end gap-2 pb-3">
-              <input type="checkbox" checked={isInSeason} onChange={(e) => setIsInSeason(e.target.checked)} className="h-5 w-5 accent-pitch-500" />
-              <span className="text-sm text-slate-300">In-season</span>
-            </label>
+          {/* The movement is already chosen — it's how you got here. Shown as a
+              fact with a way back, not asked again. */}
+          <div className="flex items-center gap-2 text-xs text-slate-400">
+            <span aria-hidden>{MOVEMENTS.find((m) => m.id === movement)?.icon}</span>
+            Checking <span className="font-semibold text-slate-200">{MOVEMENTS.find((m) => m.id === movement)?.label}</span>
+            <button type="button" onClick={() => setFile(null)} className="tap-target text-slate-500 hover:text-pitch-400">change</button>
           </div>
+
+          {/* Session type and in-season are for the training-load record, not
+              for the analysis. They were two of the four things asked before
+              you could press upload; they're one tap away instead. */}
+          <details className="group rounded-2xl border border-white/[0.08]">
+            <summary className="flex cursor-pointer list-none items-center justify-between p-3 text-xs font-semibold text-slate-400">
+              <span>Details <span className="font-normal text-slate-600">session type, in-season</span></span>
+              <span className="text-slate-600 transition group-open:rotate-180" aria-hidden>▾</span>
+            </summary>
+            <div className="grid grid-cols-2 gap-3 border-t border-white/[0.06] p-3">
+              <label className="block">
+                <span className="field-label">Session</span>
+                <select value={sessionType} onChange={(e) => setSessionType(e.target.value as SessionType)} className="field [color-scheme:dark]">
+                  <option value="training">Training</option>
+                  <option value="match">{terms.eventLabel}</option>
+                  <option value="recovery">Recovery</option>
+                </select>
+              </label>
+              <label className="flex items-end gap-2 pb-3">
+                <input type="checkbox" checked={isInSeason} onChange={(e) => setIsInSeason(e.target.checked)} className="h-5 w-5 accent-pitch-500" />
+                <span className="text-sm text-slate-300">In-season</span>
+              </label>
+            </div>
+          </details>
         </>
       )}
 
