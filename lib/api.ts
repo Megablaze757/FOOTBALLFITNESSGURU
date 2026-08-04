@@ -47,6 +47,19 @@ export async function invokeAI<T = unknown>(fn: string, body: unknown, timeoutMs
           const errBody = (await res.json()) as { error?: string };
           if (errBody?.error) msg = errBody.error;
         } catch { /* non-JSON body */ }
+        // A 404 from this API means the ROUTE IS NOT DEPLOYED, not that some
+        // record is missing: the only 404 the Worker produces is its route-table
+        // fallthrough, which answers a bare `{"error":"not found"}`. Surfaced
+        // raw, that reached athletes as the words "not found" sitting under a
+        // button, which reads as the app being broken in an unknowable way —
+        // and it happened for real, because the deployed bundle is missing the
+        // three wearable routes while every other route answers 401.
+        //
+        // Naming the function makes it diagnosable in a screenshot, which is
+        // how these get reported.
+        if (res.status === 404) {
+          msg = `This feature isn't switched on yet on the server (${fn}).`;
+        }
         // Carry the status. Callers fall back to the local engine when the
         // backend is unreachable, and they must be able to tell that apart
         // from the backend REFUSING them — a 402 means "this needs Pro", and

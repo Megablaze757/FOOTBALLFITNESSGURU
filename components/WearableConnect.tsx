@@ -200,6 +200,12 @@ function AppleSetup({ token, onDone }: { token: string | null; onDone: () => voi
   const [minted, setMinted] = useState<{ token: string; url: string } | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  // Tracked separately from the message, because "the route isn't deployed" and
+  // "your request was rejected" want completely different words and a different
+  // colour. `invokeAI` carries the HTTP status on the error for exactly this.
+  // Declared up here with the other hooks — there is an early return below, and
+  // a hook after it changes hook order between renders.
+  const [notDeployed, setNotDeployed] = useState(false);
 
   /**
    * The endpoint a Shortcut posts to.
@@ -228,11 +234,12 @@ function AppleSetup({ token, onDone }: { token: string | null; onDone: () => voi
   }
 
   async function mint() {
-    setBusy(true); setErr(null);
+    setBusy(true); setErr(null); setNotDeployed(false);
     try {
       setMinted(await invokeAI<{ token: string; url: string }>("ingest-token", {}));
       onDone();
     } catch (e) {
+      setNotDeployed((e as { status?: number })?.status === 404);
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
@@ -257,7 +264,28 @@ function AppleSetup({ token, onDone }: { token: string | null; onDone: () => voi
           <button onClick={mint} disabled={busy} className="btn-primary">
             {busy ? "Creating…" : "Create my upload link"}
           </button>
-          {err && <p className="mt-2 text-sm text-readiness-red">{err}</p>}
+          {/* A MISSING ENDPOINT IS NOT A USER ERROR, so it doesn't get the red
+              treatment that means "you did something wrong, try again". The
+              server simply hasn't had this route deployed yet, and no amount of
+              tapping the button will change that — so say so, say what still
+              works, and stop them spending five minutes on a Shortcut that
+              would post into a void.
+
+              This is a real state, not a hypothetical: the live Worker answers
+              404 on /ingest-token today. */}
+          {err && (
+            notDeployed
+              ? <div className="mt-2 rounded-xl border border-amber-400/25 bg-amber-400/[0.06] p-3">
+                  <p className="text-xs font-bold text-amber-300">Not switched on yet</p>
+                  <p className="mt-1 text-xs leading-relaxed text-slate-400">
+                    The morning sync isn&apos;t live on our server yet, so there&apos;s nothing to
+                    point a Shortcut at — building one now would just fail silently. Nothing
+                    else is affected: <b className="text-slate-200">type last night&apos;s numbers
+                    in below</b> and your readiness uses them exactly the same way.
+                  </p>
+                </div>
+              : <p className="mt-2 text-sm text-readiness-red">{err}</p>
+          )}
         </>
       ) : (
         <>
