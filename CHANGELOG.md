@@ -127,14 +127,67 @@ verify. In brief:
 | 1 | `npx esbuild src/index.ts --bundle --format=esm --target=es2022 --platform=neutral --outfile=worker.js` | **Paste `worker.js`, never `src/index.ts`.** The source imports from `../lib/*`; esbuild resolves those at bundle time and the dashboard editor has no bundler, so raw TS throws on module load and *every route 500s*. `--platform=neutral` matters too — `node` injects built-in shims workerd doesn't provide. |
 | 2 | One new **optional** env var | Everything else is already set; the wearable sync reuses the service-role key the Worker already holds. |
 | 3 | Paste into the Cloudflare dashboard | — |
-| 4 | `curl -s .../health` | Must report `2026-08-01.1`. It currently says **`2026-07-29.1`** — the 29 July bundle. Three route handlers and the vision path exist in source and not in production. |
+| 4 | `curl -s .../health` | See the warning immediately below — do **not** simply paste over what is live. |
 
 **Do the rate-limiting rule in the same sitting** (spec §8). It is a dashboard
 change, not a code one: the Worker's zone → Security → WAF → Rate limiting.
 
-**Nothing since has changed this.** Every release after `2026-08-01.1` — the
-nutrition and injury redesigns, the meal-plan audit, the UI/UX work, the iOS app
-— is front-end, pure logic or a separate target. The spec below is still current.
+### ⚠️ STOP — the repo and production have diverged, in both directions
+
+**Measured 2026-08-04, not assumed.** This supersedes the "Deployment status"
+table below it, which said live was `2026-07-29.1`. It isn't.
+
+```bash
+curl -s https://apex-api.fitnessguru.workers.dev/health
+# {"ok":true,"version":"2026-08-04.2",
+#  "model":"groq/openai/gpt-oss-120b",
+#  "providers":["groq","openrouter","nvidia"], "chain":[ …8 models… ]}
+```
+
+**Production is `2026-08-04.2`. The repo is `2026-08-01.1`.** Production is
+*newer*, and it is built from source this repository does not contain: there are
+zero occurrences of `groq` in `cloudflare/src/index.ts`, the repo's `modelChain`
+is OpenRouter-only, and the repo's `/health` does not even emit a `providers`
+field. Someone has done real provider work — a three-provider, eight-model
+fallback chain — outside this repo.
+
+**But production is missing the wearable feature entirely.** Probing every route
+in the repo's source against live:
+
+| Route | Live | |
+|---|---|---|
+| `/connect-wearable` | **404** | missing |
+| `/ingest-token` | **404** | missing |
+| `/wearable-ingest` | **404** | missing |
+| all 14 others | 401 / 200 / 400 | present (401 = route exists, auth required) |
+
+A 404 here means the route is absent from the deployed bundle, not that auth was
+refused — every other protected route answers 401.
+
+**This is why Apple Health does not work.** The Shortcut posts to
+`/wearable-ingest`, which does not exist in production, so every morning's sync
+404s silently. Same for the "Set up" button, which calls `/ingest-token` to mint
+the token in the first place.
+
+**So do NOT paste the repo bundle over production.** It would fix Apple Health
+and simultaneously delete the groq/nvidia provider chain, regressing every AI
+feature to a single OpenRouter model. Neither version is a superset of the other.
+
+**The fix is a merge, and it needs whoever owns `2026-08-04.2`:**
+
+1. Get that source into this repo — it is currently nowhere in version control,
+   which is its own problem: the thing serving production exists only in a
+   Cloudflare dashboard and on someone's machine.
+2. Port the wearable code onto it — `wearableIngest`, `ingestToken` and
+   `connectWearable` in `cloudflare/src/index.ts`, plus their route lines near
+   the top of `fetch`.
+3. Bundle, paste, then verify **both** halves:
+   ```bash
+   curl -s .../health                                    # providers still 3
+   curl -s -X POST .../wearable-ingest -d '{}'           # 401, not 404
+   ```
+   401 is the pass condition — it means the route exists and rejected an
+   unauthenticated body, which is exactly right.
 
 ## Still on you
 
@@ -143,9 +196,11 @@ Nothing above is blocked on these, but the first two are load-bearing:
 1. **Set GitHub Pages → Source → "GitHub Actions".** Until this is done the site
    intermittently serves a Jekyll build of `README.md` instead of the app. This
    has already happened once, on 28 July. Only the repo owner can change it.
-2. **Paste the Worker bundle `2026-08-01.1`** — see above. Until then the AI
-   features run on their on-device fallbacks, which is intended behaviour rather
-   than breakage, and each screen says so where it matters.
+2. **Get production's Worker source into this repo, then merge the wearable
+   routes into it** — see the divergence warning above. **Apple Health is broken
+   until this is done**, because `/wearable-ingest` and `/ingest-token` 404 in
+   production. Do not paste the repo bundle as a shortcut; it would regress the
+   provider chain that is live.
 3. Confirm Supabase backup retention and do a restore drill.
 4. **Rotate the Supabase database password** (deferred to post-beta, by choice —
    it is in git history).
@@ -154,12 +209,21 @@ Nothing above is blocked on these, but the first two are load-bearing:
 
 ## Deployment status — checked 2026-08-02
 
+> **⚠️ Row 1 is out of date — re-measured 2026-08-04.** Live is **not**
+> `2026-07-29.1`; it is `2026-08-04.2`, built from source that is not in this
+> repo, and it is missing the three wearable routes. See *"the repo and
+> production have diverged"* above. Rows 2–4 still hold.
+>
+> The lesson is the one this file already preaches and this row broke: a
+> deployment state that is written down is a claim with a timestamp, not a fact.
+> Re-run the `curl` below rather than believing the table.
+
 Verified against the live site and Worker rather than assumed. This supersedes
 the per-release tables further down, two of which are now out of date.
 
 | # | Step | State |
 |---|---|---|
-| 1 | **Paste the Worker bundle (`2026-08-01.1`)** | ❌ **outstanding** |
+| 1 | ~~Paste the Worker bundle (`2026-08-01.1`)~~ | ⚠️ **superseded — see above** |
 | 2 | Set the `NEXT_PUBLIC_API_URL` repo Variable | ✅ done |
 | 3 | Deploy the front-end | ✅ done — current with `0d2338a` |
 | 4 | Apply migrations `0064` + `0065` | ✅ done |
