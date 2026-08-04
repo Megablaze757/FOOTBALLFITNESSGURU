@@ -2,6 +2,10 @@
 
 A real SwiftUI app. Not a webview, not Capacitor, no HTML anywhere in it.
 
+**What changed and when: [`CHANGELOG.md`](CHANGELOG.md)** — versioned, not
+dated, because this ships as builds Apple approves rather than continuously.
+This file is how to build it; that one is what is in it.
+
 **Completely separate from the web app.** Nothing in `ios/` is imported by the
 Next.js build, and `ios/` is excluded from `tsconfig.json` and `.eslintrc.json`,
 so `npm run build`, `npm test` and `npm run lint` never see it. The only thing

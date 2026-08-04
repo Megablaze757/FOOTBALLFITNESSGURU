@@ -217,6 +217,43 @@ front-end bundle.
 
 ---
 
+## 2026-08-03 (iOS 0.2.0) — A widget, a reminder, and the ability to read
+
+**Operator action: none for the web.** `ios/` is excluded from `tsconfig.json`
+and `.eslintrc.json`, so `npm run build`, `npm test` and `npm run lint` never
+see it. The two share a Supabase project and nothing else.
+
+**Full detail now lives in [`ios/CHANGELOG.md`](ios/CHANGELOG.md)**, which is
+versioned rather than dated — this app ships as discrete builds a human submits
+and Apple approves, and users sit on old versions for weeks, so "which version
+has the widget" is a question someone will actually need answered. Summary:
+
+The app could write a check-in and never see one again — `Supabase.swift` had no
+GET at all. It reads now, which is what makes the rest possible: a home-screen
+**widget** showing today's readiness, and a **daily reminder that does not fire
+on days you have already checked in**. Those two are the only things in `ios/`
+that a website cannot do, and they are what guideline 4.2 wants to see.
+
+### One thing that matters to the web app too
+
+Porting the streak engine found a **cross-platform date bug**. `CheckInView`
+formatted the check-in date in the phone's **local** timezone; the web writes
+`new Date().toISOString().slice(0, 10)`, which is always **UTC**. East of UTC
+they disagree for part of every day — an athlete in Sydney checking in at 9am
+gets `2026-08-03` from the phone and `2026-08-02` from the browser — and since
+the upsert conflict target is `(user_id, check_in_date)`, that is two rows for
+one morning: a duplicated day, a broken streak, two scores for one check-in.
+
+The phone matches the web now, so nothing on this side needs changing today.
+**But the open question is a web question as much as an iOS one:** should the
+check-in date be the athlete's *local* day rather than UTC? Arguably yes — your
+"today" is wherever you are standing, and a UK user checking in at 00:30 BST
+currently writes it against the previous day. Changing it would alter the
+meaning of every row already in `daily_check_ins` and needs one deliberate
+migration across both clients. Flagged here so it is not lost.
+
+---
+
 ## 2026-08-03 (looking) — Four screens redesigned by looking at them
 
 **Operator action: none.** Front-end only.
