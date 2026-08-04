@@ -10,6 +10,148 @@ fortnight while everyone assumes it shipped.
 
 ---
 
+# Everything that changed, in one place
+
+The dated entries below are what happened *when*. This is what happened, full
+stop — by area, so you can find a thing without reading 1,200 lines. Dates in
+brackets point at the detailed entry.
+
+## The app people use
+
+**Nutrition** went from a stack of boxes to the daily loop's third pillar. It is
+a primary tab in the bottom bar (labelled "Food" — six slots on a 320px phone
+give each about 45px), it leads with four rings rather than a form, and the meal
+planner behind it builds a week you can shop for. *(08-01 latest, 08-02 latest,
+08-03 looking)*
+
+**Meal plans actually scale to the athlete.** They take height, weight, age and
+sex, and you can pick a goal — bulk, cut, maintain. A full audit found the plans
+were feeding a 115kg athlete 69% of their target; per-meal scaling and a
+re-weighted picker took that to ~88%, and where it still falls short the UI says
+so with a fix rather than quietly under-feeding. Vegan protein went from 58–64%
+to 73–79% by parameter sweep, not by guessing. *(08-02 audit)*
+
+**The shopping list became a shopping list.** It had no checkboxes — the one
+thing you need standing in an aisle — and tapping an item left the app for
+Tesco. The row is the tick now, ticks survive a backgrounded phone, and the
+running total is what's *left* to buy. *(08-02 later)*
+
+**Injury** was rebuilt twice, because the first attempt was still a wall of
+text. Nothing expands by default, red flags stay visible rather than hiding
+behind a disclosure, and the body map sits inside the planner that consumes it
+instead of below it. *(08-02, 08-02 walls)*
+
+**Guides** stopped being an AI wall of text — the fuel tab's eighteen bullets
+became a timeline you step through. *(08-02 walls)*
+
+**The check-in is quick by default** and stays quick. Weight is an opt-in pill,
+training logging is surfaced in the quick form rather than buried, and re-opening
+a day you already logged no longer forces the long version. *(08-02 defaults,
+08-02 findability, 08-03 looking)*
+
+**Home** earns its place once the day is done — a seven-day strip built from
+data that was already being fetched and thrown away — and no longer shows three
+competing to-do lists. *(08-02 later, 08-03 looking)*
+
+**Video analysis** got its upload box back, because tiles that open a picker on
+tap don't tell you where to put a file. *(08-02 walls)*
+
+**Running, meal photos and connected wearables** — zone/pace engine, photo
+calorie estimation as a background job, Oura/Whoop/Garmin/Apple Health.
+*(08-01)*
+
+## How it looks and how it feels
+
+**A measured UI/UX audit of the seventeen signed-in pages**, which nothing had
+ever checked — the e2e suite stops at the login gate. It found 89 tap targets
+under 44px, 29 axe WCAG violations, four centred paragraphs, two dead-end empty
+states and a page with no `<h1>`. All zero now. Seventy of the 89 had one cause:
+six hand-rolled copies of the same chip, three with no ARIA state at all. There
+is one `.chip-option` now. *(08-03 playbook)*
+
+**Then a second pass that looked at the screens instead of measuring them,**
+because passing checks is not the same as being good. The check-in had two
+identical gold primary buttons with 60% of the page below the real one (3966px →
+2360px). Nutrition led with 700px of empty rings and a `0` whenever no weight was
+logged, with the fix as small print linking to the wrong page. Home listed the
+same tasks twice. *(08-03 looking)*
+
+**Accessibility is enforced, not asserted.** Contrast is calibrated in
+`tailwind.config.ts` and re-measured against both surfaces; the maximum-scale
+viewport lock (a WCAG 1.4.4 failure) is gone; every page has one `<h1>`.
+
+## What keeps it working
+
+**632 unit tests**, coverage gated at 95/85/90 (actuals 98.5/88.8/93.8).
+
+**End-to-end smoke tests** over the public routes — load, hydrate, no console
+errors, single `<h1>`, no sideways scroll, no axe violations — because 632 unit
+tests and a green `next build` will all pass while the app serves a white
+screen. *(08-02 e2e)*
+
+**`npm run audit:ui`** measures the pages behind login by stubbing auth, which
+Playwright cannot otherwise reach. *(08-03 playbook)*
+
+**CI runs all of it** — lint, typecheck, coverage, `npm audit`, e2e — and deploy
+depends on CI passing.
+
+**A production-readiness pass**: security headers, a custom 404, icons and
+social images, and a repeatable deployment-status check. *(08-02 hardening)*
+
+## The iOS app
+
+Native SwiftUI in `ios/`, not a webview. The daily loop end to end — sign in,
+check in, readiness verdict — with HealthKit, a home-screen widget and a daily
+reminder that stays quiet on days you have already checked in. The scoring and
+streak engines are hand-ported from TypeScript with tests, because two
+implementations of one rule drift silently.
+
+**Detail lives in [`ios/CHANGELOG.md`](ios/CHANGELOG.md)** — versioned, not
+dated, because it ships as builds Apple approves. **None of it has been
+compiled.** *(08-02 iOS, 08-03 iOS 0.2.0)*
+
+## The Worker — what your dev has to do
+
+**Full spec is the next section down: [The only remaining step — Worker deploy
+spec](#the-only-remaining-step--worker-deploy-spec).** It is written for whoever
+does the deploy, and every claim in it is verifiable from the source or with
+`curl`. Sections 0–9 cover what is live, the build, environment, database,
+what each new route does, the vision path, cron, verification and hardening.
+
+**No code needs writing.** `cloudflare/src/index.ts` is already in the repo,
+tested and committed. The job is bundle → set one optional variable → paste →
+verify. In brief:
+
+| # | Step | The bit people get wrong |
+|---|---|---|
+| 1 | `npx esbuild src/index.ts --bundle --format=esm --target=es2022 --platform=neutral --outfile=worker.js` | **Paste `worker.js`, never `src/index.ts`.** The source imports from `../lib/*`; esbuild resolves those at bundle time and the dashboard editor has no bundler, so raw TS throws on module load and *every route 500s*. `--platform=neutral` matters too — `node` injects built-in shims workerd doesn't provide. |
+| 2 | One new **optional** env var | Everything else is already set; the wearable sync reuses the service-role key the Worker already holds. |
+| 3 | Paste into the Cloudflare dashboard | — |
+| 4 | `curl -s .../health` | Must report `2026-08-01.1`. It currently says **`2026-07-29.1`** — the 29 July bundle. Three route handlers and the vision path exist in source and not in production. |
+
+**Do the rate-limiting rule in the same sitting** (spec §8). It is a dashboard
+change, not a code one: the Worker's zone → Security → WAF → Rate limiting.
+
+**Nothing since has changed this.** Every release after `2026-08-01.1` — the
+nutrition and injury redesigns, the meal-plan audit, the UI/UX work, the iOS app
+— is front-end, pure logic or a separate target. The spec below is still current.
+
+## Still on you
+
+Nothing above is blocked on these, but the first two are load-bearing:
+
+1. **Set GitHub Pages → Source → "GitHub Actions".** Until this is done the site
+   intermittently serves a Jekyll build of `README.md` instead of the app. This
+   has already happened once, on 28 July. Only the repo owner can change it.
+2. **Paste the Worker bundle `2026-08-01.1`** — see above. Until then the AI
+   features run on their on-device fallbacks, which is intended behaviour rather
+   than breakage, and each screen says so where it matters.
+3. Confirm Supabase backup retention and do a restore drill.
+4. **Rotate the Supabase database password** (deferred to post-beta, by choice —
+   it is in git history).
+
+---
+
 ## Deployment status — checked 2026-08-02
 
 Verified against the live site and Worker rather than assumed. This supersedes
