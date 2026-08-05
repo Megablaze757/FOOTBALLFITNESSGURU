@@ -14,7 +14,11 @@ const plan = () => buildWeek(planTargets(ATHLETE), 0, DEFAULT_PREFS);
 // --- the bulk-buying idea ----------------------------------------------------
 
 test("a staple already in the basket is nearly free the second time", () => {
-  const riceMeal = MEALS.find((m) => m.id === "chicken_rice")!;
+  // Any rice-based meal. Was hard-coded to "chicken_rice", which is exactly the
+  // kind of fixture that breaks when the menu is rewritten — the behaviour under
+  // test is about bulk staples, not that one dish.
+  const riceMeal = MEALS.find((m) => m.items.some((i) => i.foodId === "rice"))!;
+  assert.ok(riceMeal, "no rice-based meal in the pool");
   const empty = marginalCost(riceMeal, new Map());
 
   // A 1kg bag of rice covers far more than one 90g portion, so once it's in the

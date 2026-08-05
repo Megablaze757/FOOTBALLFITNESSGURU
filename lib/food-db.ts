@@ -46,6 +46,62 @@ export type FoodTag =
   | "gluten" | "nuts" | "soy";
 
 export const FOODS: Food[] = [
+  // ===========================================================================
+  // THE FLAVOUR SHELF.
+  //
+  // The database was 38 foods and none of them was garlic. That is not a small
+  // omission — it is why every dinner in the planner read as "protein + starch
+  // + veg" with the protein swapped: chicken and rice, beef and pasta, turkey
+  // and sweet potato. There was literally nothing in the cupboard to make a
+  // dish taste of anywhere.
+  //
+  // Aromatics and spices carry almost no macros, which is exactly why they were
+  // missed by a database built protein-first. They decide whether someone cooks
+  // the plan twice. They also have to appear on the shopping list, or the
+  // recipe asks for something the athlete was never told to buy.
+  //
+  // Pack prices are the same maintained UK estimate as everything else here,
+  // reviewed July 2026.
+  // ===========================================================================
+
+  // --- Aromatics and spice -------------------------------------------------
+  { id: "garlic", name: "Garlic", aisle: "Fruit & veg", kcal: 149, protein: 6.4, carbs: 33, fats: 0.5, unit: "g", packSize: 150, packPrice: 0.85, packLabel: "3 bulbs", budget: "value" },
+  { id: "ginger", name: "Root ginger", aisle: "Fruit & veg", kcal: 80, protein: 1.8, carbs: 18, fats: 0.8, unit: "g", packSize: 150, packPrice: 0.90, packLabel: "150g", budget: "value" },
+  { id: "chilli_fresh", name: "Red chillies", aisle: "Fruit & veg", kcal: 40, protein: 1.9, carbs: 9, fats: 0.4, unit: "g", packSize: 60, packPrice: 0.75, packLabel: "60g pack", budget: "value" },
+  { id: "spice_mix", name: "Ground spices (cumin, paprika, turmeric)", aisle: "Cupboard", kcal: 300, protein: 14, carbs: 45, fats: 12, unit: "g", packSize: 150, packPrice: 3.00, packLabel: "3 jars", budget: "value" },
+  { id: "curry_paste", name: "Curry paste", aisle: "Cupboard", kcal: 180, protein: 3, carbs: 12, fats: 13, unit: "g", packSize: 180, packPrice: 1.60, packLabel: "180g jar" },
+  { id: "soy_sauce", name: "Soy sauce", aisle: "Cupboard", kcal: 66, protein: 8, carbs: 6, fats: 0.1, unit: "ml", packSize: 250, packPrice: 1.50, packLabel: "250ml", tags: ["soy", "gluten"] },
+  { id: "stock_cubes", name: "Stock cubes", aisle: "Cupboard", kcal: 240, protein: 10, carbs: 25, fats: 12, unit: "g", packSize: 120, packPrice: 1.20, packLabel: "12 cubes", budget: "value" },
+  { id: "lemon", name: "Lemons", aisle: "Fruit & veg", kcal: 29, protein: 1.1, carbs: 9, fats: 0.3, unit: "each", packSize: 4, packPrice: 1.10, packLabel: "4 pack", budget: "value" },
+  { id: "honey", name: "Honey", aisle: "Cupboard", kcal: 304, protein: 0.3, carbs: 82, fats: 0, unit: "g", packSize: 340, packPrice: 2.20, packLabel: "340g jar" },
+  { id: "pesto", name: "Green pesto", aisle: "Cupboard", kcal: 430, protein: 5, carbs: 6, fats: 43, unit: "g", packSize: 190, packPrice: 1.80, packLabel: "190g jar", tags: ["dairy", "nuts"] },
+  { id: "coconut_milk", name: "Coconut milk", aisle: "Cupboard", kcal: 169, protein: 1.6, carbs: 3, fats: 17, unit: "ml", packSize: 400, packPrice: 1.20, packLabel: "400ml tin" },
+  { id: "passata", name: "Passata", aisle: "Cupboard", kcal: 32, protein: 1.4, carbs: 6, fats: 0.2, unit: "g", packSize: 500, packPrice: 0.85, packLabel: "500g carton", budget: "value" },
+  { id: "hummus", name: "Hummus", aisle: "Dairy & eggs", kcal: 290, protein: 7.5, carbs: 12, fats: 23, unit: "g", packSize: 200, packPrice: 1.30, packLabel: "200g tub" },
+
+  // --- Vegetables that do something ----------------------------------------
+  { id: "peppers", name: "Mixed peppers", aisle: "Fruit & veg", kcal: 30, protein: 1, carbs: 6, fats: 0.3, unit: "g", packSize: 500, packPrice: 1.90, packLabel: "3 pack" },
+  { id: "mushrooms", name: "Chestnut mushrooms", aisle: "Fruit & veg", kcal: 22, protein: 3.1, carbs: 0.4, fats: 0.5, unit: "g", packSize: 250, packPrice: 1.10, packLabel: "250g pack", budget: "value" },
+  { id: "courgette", name: "Courgettes", aisle: "Fruit & veg", kcal: 17, protein: 1.2, carbs: 3, fats: 0.3, unit: "g", packSize: 400, packPrice: 1.20, packLabel: "2 pack", budget: "value" },
+  { id: "carrots", name: "Carrots", aisle: "Fruit & veg", kcal: 41, protein: 0.9, carbs: 9, fats: 0.2, unit: "g", packSize: 1000, packPrice: 0.70, packLabel: "1kg bag", budget: "value" },
+  { id: "sweetcorn", name: "Sweetcorn", aisle: "Cupboard", kcal: 86, protein: 3.2, carbs: 19, fats: 1.2, unit: "g", packSize: 340, packPrice: 0.75, packLabel: "340g tin", budget: "value" },
+  { id: "peas_frozen", name: "Frozen peas", aisle: "Frozen", kcal: 81, protein: 5.4, carbs: 14, fats: 0.4, unit: "g", packSize: 900, packPrice: 1.40, packLabel: "900g bag", budget: "value" },
+  { id: "cucumber", name: "Cucumber", aisle: "Fruit & veg", kcal: 15, protein: 0.7, carbs: 3.6, fats: 0.1, unit: "g", packSize: 300, packPrice: 0.85, packLabel: "1 cucumber", budget: "value" },
+  { id: "avocado", name: "Avocado", aisle: "Fruit & veg", kcal: 160, protein: 2, carbs: 9, fats: 15, unit: "each", packSize: 2, packPrice: 1.70, packLabel: "2 pack" },
+  { id: "tomatoes_fresh", name: "Cherry tomatoes", aisle: "Fruit & veg", kcal: 18, protein: 0.9, carbs: 3.9, fats: 0.2, unit: "g", packSize: 330, packPrice: 1.10, packLabel: "330g punnet" },
+
+  // --- Protein with a personality ------------------------------------------
+  { id: "feta", name: "Feta", aisle: "Dairy & eggs", kcal: 264, protein: 14, carbs: 1.5, fats: 22, unit: "g", packSize: 200, packPrice: 2.00, packLabel: "200g block", tags: ["dairy"] },
+  { id: "halloumi", name: "Halloumi", aisle: "Dairy & eggs", kcal: 321, protein: 22, carbs: 2.6, fats: 25, unit: "g", packSize: 225, packPrice: 2.50, packLabel: "225g block", tags: ["dairy"] },
+  { id: "cottage_cheese", name: "Cottage cheese", aisle: "Dairy & eggs", kcal: 78, protein: 11, carbs: 4, fats: 2, unit: "g", packSize: 300, packPrice: 1.30, packLabel: "300g tub", tags: ["dairy"] },
+  { id: "prawns", name: "Cooked king prawns", aisle: "Meat & fish", kcal: 76, protein: 17, carbs: 0.5, fats: 0.6, unit: "g", packSize: 180, packPrice: 3.25, packLabel: "180g pack", tags: ["fish"] },
+  { id: "edamame", name: "Frozen edamame", aisle: "Frozen", kcal: 121, protein: 12, carbs: 8, fats: 5, unit: "g", packSize: 500, packPrice: 2.40, packLabel: "500g bag", tags: ["soy"] },
+
+  // --- Carbs beyond rice and pasta -----------------------------------------
+  { id: "noodles", name: "Egg noodles", aisle: "Cupboard", kcal: 356, protein: 12, carbs: 71, fats: 2.5, unit: "g", packSize: 375, packPrice: 1.20, packLabel: "375g pack", tags: ["gluten", "egg"] },
+  { id: "couscous", name: "Couscous", aisle: "Cupboard", kcal: 358, protein: 12, carbs: 72, fats: 0.6, unit: "g", packSize: 500, packPrice: 1.10, packLabel: "500g box", tags: ["gluten"], budget: "value" },
+  { id: "pitta", name: "Wholemeal pittas", aisle: "Bakery", kcal: 253, protein: 9, carbs: 47, fats: 1.5, unit: "g", packSize: 300, packPrice: 0.90, packLabel: "6 pack", tags: ["gluten"], budget: "value" },
+
   // --- Meat & fish ---------------------------------------------------------
   { id: "chicken_breast", name: "Chicken breast fillets", aisle: "Meat & fish", kcal: 106, protein: 24, carbs: 0, fats: 1.1, unit: "g", packSize: 650, packPrice: 5.50, packLabel: "650g pack" , tags: ["meat"] },
   { id: "beef_mince_5", name: "Beef mince (5% fat)", aisle: "Meat & fish", kcal: 136, protein: 21, carbs: 0, fats: 5, unit: "g", packSize: 500, packPrice: 4.75, packLabel: "500g pack" , tags: ["meat"] },

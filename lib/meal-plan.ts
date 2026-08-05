@@ -302,434 +302,16 @@ function splitMethod(meal: Meal): { steps: string[]; note?: string } {
   return { steps, note: notes.length ? notes.join(" ") : undefined };
 }
 
-export const MEALS: Meal[] = [
-  // ===========================================================================
-  // RECIPE-FIRST MEALS, added to fill measured gaps in the pool.
-  //
-  // Not a general "more recipes" pass. A sweep of every diet pattern crossed
-  // with every avoidance found where the planner was actually starved of
-  // options, and the worst was stark: GLUTEN-FREE BREAKFAST HAD EXACTLY ONE
-  // MEAL. A coeliac athlete was handed the same breakfast seven mornings a
-  // week, and with MAX_REPEATS at 3 the planner could not even honour its own
-  // variety rule. Vegan lunch (5) and vegetarian dinner (6) were next.
-  //
-  // These are written recipes rather than ingredient piles — `steps`, a time,
-  // and a tip — because they are the first ones the new recipe view renders,
-  // and a feature is judged on what it shows first. All original, built from
-  // the existing food table on the archetypes athlete cooking actually uses:
-  // one pan, batchable, protein-led, nothing that needs a scale mid-cook.
-  // ===========================================================================
-
-  // --- Gluten-free breakfasts (the pool had one) -----------------------------
-  { id: "gf_potato_hash_eggs", name: "Potato hash & eggs", slot: "Breakfast",
-    items: [{ foodId: "potatoes", qty: 300 }, { foodId: "eggs", qty: 3 }, { foodId: "spinach", qty: 80 }, { foodId: "olive_oil", qty: 12 }, { foodId: "onion", qty: 60 }],
-    minutes: 20,
-    steps: [
-      "Dice the potatoes small — 1cm, or they will not cook through in time.",
-      "Fry them in the oil over a medium heat for 12 minutes, turning only every few minutes so they crust rather than steam.",
-      "Add the onion for the last 5 minutes, then the spinach for the last 1.",
-      "Push it all to one side, crack the eggs into the space, and cover the pan for 2 minutes.",
-    ],
-    tip: "Boil the potatoes the night before and this is a 7-minute breakfast.",
-    method: "Dice and fry the potatoes until crusted, add onion then spinach, and cook the eggs in the same pan." },
-  { id: "gf_quinoa_porridge", name: "Quinoa breakfast bowl", slot: "Breakfast",
-    items: [{ foodId: "quinoa", qty: 90 }, { foodId: "milk", qty: 300 }, { foodId: "whey_protein", qty: 30 }, { foodId: "berries_frozen", qty: 100 }, { foodId: "seeds_mixed", qty: 15 }],
-    minutes: 18,
-    steps: [
-      "Rinse the quinoa in a sieve until the water runs clear, or it tastes soapy.",
-      "Simmer it in the milk for 15 minutes until the grains uncurl and it goes creamy.",
-      "Take it off the heat and let it stop steaming before stirring the protein in — added to a boiling pan it goes lumpy.",
-      "Berries and seeds on top.",
-    ],
-    tip: "Cook the whole bag at the weekend. It reheats with a splash of milk.",
-    method: "Rinse the quinoa, simmer in milk for 15 minutes, cool slightly, stir protein through and top with berries and seeds." },
-  { id: "gf_yoghurt_stack", name: "Big yoghurt & fruit stack", slot: "Breakfast",
-    items: [{ foodId: "greek_yoghurt", qty: 400 }, { foodId: "berries_frozen", qty: 120 }, { foodId: "almonds", qty: 30 }, { foodId: "peanut_butter", qty: 20 }, { foodId: "banana", qty: 1 }],
-    minutes: 4,
-    steps: [
-      "Defrost the berries in the microwave for 40 seconds so they release their juice.",
-      "Layer yoghurt, berries and sliced banana in a bowl or a jar.",
-      "Peanut butter melted over the top, almonds last so they stay crunchy.",
-    ],
-    tip: "Built in a jar the night before, this travels to a morning session.",
-    method: "Defrost the berries, layer with yoghurt and banana, then peanut butter and almonds on top." },
-  { id: "gf_tofu_sweet_potato", name: "Tofu & sweet potato hash", slot: "Breakfast",
-    items: [{ foodId: "tofu", qty: 250 }, { foodId: "sweet_potato", qty: 250 }, { foodId: "spinach", qty: 80 }, { foodId: "olive_oil", qty: 12 }],
-    minutes: 22,
-    steps: [
-      "Cube the sweet potato and get it into the hot oil first — it takes twice as long as the tofu.",
-      "After 12 minutes, crumble the tofu in with plenty of turmeric, paprika and salt.",
-      "Fry another 6 minutes without stirring much, so it browns instead of scrambling.",
-      "Spinach in at the very end, off the heat.",
-    ],
-    tip: "Press the tofu under something heavy for 10 minutes first and it crisps properly.",
-    method: "Fry the sweet potato, add crumbled seasoned tofu, brown it, then wilt spinach in off the heat." },
-
-  // --- Vegan lunches and dinners (5 and 6 respectively) ----------------------
-  { id: "vg_burrito_bowl", name: "Black bean burrito bowl", slot: "Lunch",
-    items: [{ foodId: "black_beans", qty: 240 }, { foodId: "rice", qty: 90 }, { foodId: "tofu", qty: 150 }, { foodId: "tomatoes_tin", qty: 150 }, { foodId: "olive_oil", qty: 10 }],
-    minutes: 20,
-    steps: [
-      "Rice on. While it cooks, fry the tofu in the oil until the edges catch.",
-      "Add the beans and tomatoes with cumin, smoked paprika and a lot of black pepper.",
-      "Simmer 8 minutes until it thickens and stops looking like soup.",
-      "Over the rice, with lime if you have it.",
-    ],
-    tip: "Doubles cleanly and is better on day two.",
-    method: "Fry tofu, add beans, tomatoes and spices, simmer until thick, serve over rice." },
-  { id: "vg_peanut_noodle_tofu", name: "Peanut tofu noodles", slot: "Lunch",
-    items: [{ foodId: "tofu", qty: 250 }, { foodId: "pasta", qty: 100 }, { foodId: "peanut_butter", qty: 30 }, { foodId: "broccoli", qty: 150 }, { foodId: "soy_milk", qty: 80 }],
-    minutes: 18,
-    steps: [
-      "Pasta on. Drop the broccoli into the same water for the last 3 minutes.",
-      "Fry the tofu hard in a dry pan until it squeaks and colours.",
-      "Loosen the peanut butter with the soya milk and a splash of the pasta water into a sauce.",
-      "Everything into the pan together, tossed until it coats.",
-    ],
-    tip: "Any nut butter works. Thin the sauce more than feels right — it tightens off the heat.",
-    method: "Cook pasta and broccoli together, crisp the tofu, make a peanut sauce with soya milk and pasta water, toss it all through." },
-  { id: "vg_lentil_shepherds", name: "Lentil shepherd's pie", slot: "Dinner",
-    items: [{ foodId: "red_lentils", qty: 120 }, { foodId: "potatoes", qty: 350 }, { foodId: "mixed_veg_frozen", qty: 200 }, { foodId: "tomatoes_tin", qty: 200 }, { foodId: "olive_oil", qty: 12 }],
-    minutes: 40,
-    steps: [
-      "Potatoes on to boil, 20 minutes, then mash with half the oil and a lot of seasoning.",
-      "Meanwhile simmer the lentils with the tomatoes, veg and herbs for 20 minutes until thick.",
-      "Lentils into a dish, mash spread over the top, fork the surface so it crisps.",
-      "Under a hot grill for 6-8 minutes until the peaks brown.",
-    ],
-    tip: "Makes two portions. The second is better.",
-    method: "Boil and mash the potatoes, simmer the lentils with tomatoes and veg, top and grill until browned." },
-  { id: "vg_tofu_katsu", name: "Baked tofu katsu & rice", slot: "Dinner",
-    items: [{ foodId: "tofu", qty: 300 }, { foodId: "rice", qty: 100 }, { foodId: "mixed_veg_frozen", qty: 200 }, { foodId: "olive_oil", qty: 12 }, { foodId: "tomatoes_tin", qty: 100 }],
-    minutes: 35,
-    steps: [
-      "Oven to 200C. Press the tofu, slice into thick slabs, oil and season both sides.",
-      "Bake 25 minutes, turning once, until the edges are firm and golden.",
-      "Rice and veg on in the last 15 minutes.",
-      "Blitz or mash the tomatoes with curry powder and a little oil for the sauce, warmed through.",
-    ],
-    tip: "Baking beats frying here — the slabs hold together instead of falling apart.",
-    method: "Bake pressed, oiled tofu slabs at 200C for 25 minutes, serve with rice, veg and a quick curry sauce." },
-
-  /**
-   * The densest vegan lunch in the pool, added because 95kg/cut/vegan landed at
-   * 89% of protein — one point under the floor.
-   *
-   * The other new vegan lunches (burrito bowl, peanut noodles) are good meals
-   * and carry rice, pasta and peanut butter, which dilute density. A cutting
-   * athlete needs one option with almost nothing in it but protein, so this is
-   * tofu and lentils and greens, and no starch at all.
-   */
-  { id: "vg_tofu_lentil_no_starch", name: "Tofu, lentil & greens plate", slot: "Lunch",
-    items: [{ foodId: "tofu", qty: 320 }, { foodId: "red_lentils", qty: 70 }, { foodId: "broccoli", qty: 200 }, { foodId: "spinach", qty: 100 }, { foodId: "olive_oil", qty: 10 }],
-    minutes: 25,
-    steps: [
-      "Lentils on with double their volume of water and a stock cube, 20 minutes until they collapse.",
-      "Press the tofu, cube it, and fry hard in the oil until every side has colour — 10 minutes, and resist stirring it.",
-      "Steam the broccoli for 5 minutes, wilt the spinach into the lentils at the end.",
-      "Plate the lentils, tofu on top, greens alongside.",
-    ],
-    tip: "No rice, no bread. That is the point — it is the meal for a day when calories are tight and protein isn't.",
-    method: "Simmer the lentils, fry the tofu hard, steam the broccoli and wilt spinach through, then plate together." },
-
-  // --- Vegetarian dinner (6) ------------------------------------------------
-  { id: "vt_halloumi_traybake", name: "Egg & chickpea traybake", slot: "Dinner",
-    items: [{ foodId: "chickpeas", qty: 240 }, { foodId: "eggs", qty: 3 }, { foodId: "sweet_potato", qty: 250 }, { foodId: "spinach", qty: 80 }, { foodId: "olive_oil", qty: 15 }],
-    minutes: 35,
-    steps: [
-      "Oven to 200C. Cubed sweet potato and drained chickpeas onto a tray with the oil, paprika and cumin.",
-      "Roast 25 minutes, shaking the tray once.",
-      "Stir the spinach through, make three wells, and crack an egg into each.",
-      "Back in for 6-8 minutes until the whites set and the yolks still move.",
-    ],
-    tip: "One tray, one wash-up. The chickpeas go crunchy, which is the point.",
-    method: "Roast sweet potato and chickpeas at 200C, stir spinach through, bake eggs into wells for the last 8 minutes." },
-  { id: "vt_paneer_style_curry", name: "Cheese & chickpea curry", slot: "Dinner",
-    items: [{ foodId: "cheddar", qty: 80 }, { foodId: "chickpeas", qty: 240 }, { foodId: "tomatoes_tin", qty: 200 }, { foodId: "rice", qty: 90 }, { foodId: "spinach", qty: 100 }],
-    minutes: 25,
-    steps: [
-      "Rice on.",
-      "Tomatoes, chickpeas and curry powder into a pan, simmer 12 minutes until it thickens.",
-      "Spinach wilted in, then the cheese cubed and folded through off the heat so it softens rather than melts away.",
-    ],
-    tip: "Paneer if you can get it. Cheddar is what most people actually have in.",
-    method: "Simmer chickpeas with tomatoes and curry powder, wilt spinach in, fold cubed cheese through off the heat, serve with rice." },
-
-  // --- Dairy-free snacks (8) ------------------------------------------------
-  { id: "df_trail_pot", name: "Seed & fruit trail pot", slot: "Snack",
-    items: [{ foodId: "almonds", qty: 30 }, { foodId: "seeds_mixed", qty: 25 }, { foodId: "banana", qty: 1 }, { foodId: "peanut_butter", qty: 20 }],
-    minutes: 2,
-    steps: ["Everything in a pot or a bag.", "Peanut butter on the banana, nuts and seeds alongside."],
-    tip: "The one that survives a kit bag. Nothing here needs a fridge.",
-    method: "Combine the nuts and seeds, eat with the banana and peanut butter." },
-  { id: "df_bean_toast", name: "Beans on toast, properly", slot: "Snack",
-    items: [{ foodId: "beans_baked", qty: 250 }, { foodId: "wholemeal_bread", qty: 80 }, { foodId: "seeds_mixed", qty: 15 }],
-    minutes: 6,
-    steps: [
-      "Beans into a pan, not a microwave — 4 minutes over a medium heat reduces them and concentrates the flavour.",
-      "Toast under them, seeds and black pepper over.",
-    ],
-    tip: "A splash of vinegar in the beans is the difference between fine and good.",
-    method: "Reduce the beans in a pan for 4 minutes, serve on toast with seeds and pepper." },
-
-  // ---------------------------------------------------------------------------
-  // BIG MEALS, AND VEGAN MEALS THAT ACTUALLY CARRY PROTEIN.
-  //
-  // An audit across body types x goals x diets found two failures the pool
-  // caused on its own, neither of which any amount of portion scaling can fix:
-  //
-  //   1. Big athletes were under-fed. A 115kg forward building at 4,370 kcal
-  //      was handed 3,508 — 80% of target, 862 kcal short every day, for the
-  //      one athlete whose entire goal is gaining. The heaviest dinner in the
-  //      pool was 777 kcal and portions cap at 1.6x, so the ceiling was
-  //      arithmetic, not preference.
-  //
-  //   2. Vegan plans collapsed on protein: 58-63% of target on a cut. Losing
-  //      weight on 60% of your protein is how you lose muscle instead of fat.
-  //      Vegan meals existed but were built from lentils and beans alone.
-  //
-  // These are deliberately calorie-dense and protein-dense rather than merely
-  // larger portions of the same thing.
-  { id: "big_oats_pb", name: "Bulking oats, peanut butter & banana", slot: "Breakfast",
-    items: [{ foodId: "oats", qty: 120 }, { foodId: "milk", qty: 400 }, { foodId: "peanut_butter", qty: 40 }, { foodId: "whey_protein", qty: 30 }, { foodId: "banana", qty: 1 }],
-    method: "Simmer the oats in the milk, stir the peanut butter through while hot, add the protein once it cools slightly, top with banana. Around 1,000 kcal without feeling like a challenge." },
-  { id: "tofu_scramble", name: "Tofu scramble on toast", slot: "Breakfast",
-    items: [{ foodId: "tofu", qty: 200 }, { foodId: "wholemeal_bread", qty: 80 }, { foodId: "spinach", qty: 60 }, { foodId: "seeds_mixed", qty: 20 }, { foodId: "olive_oil", qty: 10 }],
-    method: "Crumble the tofu into hot oil, season hard (turmeric and black salt if you have them), wilt the spinach in, serve on toast with the seeds over." },
-  { id: "pea_protein_oats", name: "Seeded overnight oats", slot: "Breakfast",
-    items: [{ foodId: "oats", qty: 100 }, { foodId: "soy_milk", qty: 350 }, { foodId: "pea_protein", qty: 30 }, { foodId: "seeds_mixed", qty: 25 }, { foodId: "berries_frozen", qty: 80 }],
-    method: "Stir everything but the berries together the night before. Top with berries in the morning. No cooking at all." },
-
-  { id: "big_chicken_rice", name: "Double chicken & rice bowl", slot: "Lunch",
-    items: [{ foodId: "chicken_breast", qty: 250 }, { foodId: "rice", qty: 150 }, { foodId: "olive_oil", qty: 15 }, { foodId: "mixed_veg_frozen", qty: 150 }, { foodId: "cheddar", qty: 30 }],
-    method: "The batch-cook staple, sized for someone big. Pan-fry the chicken in the oil, boil the rice, steam the veg, cheese over the top." },
-  { id: "tofu_quinoa_bowl", name: "Tofu & quinoa power bowl", slot: "Lunch",
-    items: [{ foodId: "tofu", qty: 250 }, { foodId: "quinoa", qty: 100 }, { foodId: "black_beans", qty: 150 }, { foodId: "olive_oil", qty: 15 }, { foodId: "spinach", qty: 60 }],
-    method: "Roast the tofu hard so it crisps, boil the quinoa, warm the beans through, toss it all with the oil and spinach." },
-
-  { id: "big_beef_pasta", name: "Loaded beef pasta", slot: "Dinner",
-    items: [{ foodId: "beef_mince_5", qty: 250 }, { foodId: "pasta", qty: 175 }, { foodId: "tomatoes_tin", qty: 200 }, { foodId: "cheddar", qty: 40 }, { foodId: "olive_oil", qty: 15 }],
-    method: "Brown the mince, add the tomatoes and reduce, boil the pasta, cheese over the top. Makes two portions if you are not building." },
-  { id: "big_salmon_potato", name: "Salmon, potatoes & greens", slot: "Dinner",
-    items: [{ foodId: "salmon_fillet", qty: 220 }, { foodId: "potatoes", qty: 400 }, { foodId: "broccoli", qty: 150 }, { foodId: "olive_oil", qty: 20 }],
-    method: "Roast the potatoes in most of the oil, bake the salmon for the last 15 minutes, steam the broccoli." },
-  { id: "lentil_tofu_curry", name: "Lentil & tofu curry with rice", slot: "Dinner",
-    items: [{ foodId: "red_lentils", qty: 120 }, { foodId: "tofu", qty: 200 }, { foodId: "rice", qty: 120 }, { foodId: "tomatoes_tin", qty: 200 }, { foodId: "olive_oil", qty: 15 }],
-    method: "Simmer the lentils with the tomatoes until they break down, fry the tofu separately so it holds its shape, fold together and serve on rice." },
-
-  { id: "pb_shake", name: "Peanut butter mass shake", slot: "Snack",
-    items: [{ foodId: "milk", qty: 400 }, { foodId: "peanut_butter", qty: 40 }, { foodId: "oats", qty: 50 }, { foodId: "whey_protein", qty: 30 }, { foodId: "banana", qty: 1 }],
-    method: "Blend. The easiest 800 kcal you will ever eat, and the answer when a big target won't fit into solid food." },
-  /**
-   * HIGH-PROTEIN PLANT MEALS, added because the numbers said so.
-   *
-   * A 115kg athlete cutting needs 72g of protein per 1000 kcal. The vegan pool
-   * had 17 meals with a MEDIAN density of 53 — so most days simply could not
-   * reach the target no matter which meals were picked, and the measured result
-   * was 77-86% of protein on every vegetarian and vegan cut.
-   *
-   * No amount of scoring fixes a pool that does not contain the answer. These
-   * are built around the only plant foods dense enough to move it: tofu (104),
-   * pea protein (213) and soya milk (100), with starch kept deliberately low.
-   * Each clears 80g/1000kcal, and they are sized generously so they also serve
-   * the big athletes the size term is now looking after.
-   */
-  { id: "tofu_lentil_bowl", name: "Tofu, lentil & spinach bowl", slot: "Lunch",
-    items: [{ foodId: "tofu", qty: 300 }, { foodId: "red_lentils", qty: 80 }, { foodId: "spinach", qty: 100 }, { foodId: "tomatoes_tin", qty: 200 }, { foodId: "olive_oil", qty: 10 }],
-    method: "Simmer the lentils with the tomatoes and spices for 20 minutes. Fry the tofu hard until it colours, fold it through with the spinach at the end." },
-  { id: "tofu_stirfry_big", name: "Tofu & broccoli stir-fry", slot: "Dinner",
-    items: [{ foodId: "tofu", qty: 350 }, { foodId: "broccoli", qty: 200 }, { foodId: "rice", qty: 90 }, { foodId: "olive_oil", qty: 12 }, { foodId: "seeds_mixed", qty: 15 }],
-    method: "Press the tofu, cube it, fry until crisp on every side. Steam the broccoli, keep the rice modest, seeds over at the end for crunch." },
-  { id: "protein_soya_porridge", name: "Soya protein porridge", slot: "Breakfast",
-    items: [{ foodId: "oats", qty: 70 }, { foodId: "soy_milk", qty: 450 }, { foodId: "pea_protein", qty: 40 }, { foodId: "berries_frozen", qty: 80 }],
-    method: "Simmer the oats in the soya milk, take off the heat, then stir the protein through once it has cooled a little or it goes claggy." },
-  { id: "chickpea_tofu_curry", name: "Chickpea & tofu curry", slot: "Dinner",
-    items: [{ foodId: "tofu", qty: 250 }, { foodId: "chickpeas", qty: 240 }, { foodId: "tomatoes_tin", qty: 200 }, { foodId: "spinach", qty: 100 }, { foodId: "rice", qty: 70 }],
-    method: "Onion, spices, tomatoes, then the chickpeas and tofu. Twenty minutes. Spinach wilted in right at the end." },
-  { id: "pea_protein_shake_big", name: "Double pea protein shake", slot: "Snack",
-    items: [{ foodId: "soy_milk", qty: 500 }, { foodId: "pea_protein", qty: 50 }, { foodId: "banana", qty: 1 }],
-    method: "Blend. Deliberately light on fat so it tops up protein without eating into the day's calories." },
-
-  /**
-   * The same density, in a smaller portion.
-   *
-   * Adding big high-protein plant meals fixed the large athletes and left three
-   * cases behind: a 55-65kg woman cutting on a vegan diet, at 84-86% of protein.
-   * Density is scale-invariant, so scaling a dense meal down does not lose
-   * protein — but the size term now correctly penalises a 900 kcal bowl for a
-   * 1500 kcal day, so those meals stopped being picked for her at all.
-   *
-   * The pool therefore needs density at BOTH ends. Same foods, smaller plates.
-   */
-  { id: "tofu_salad_small", name: "Tofu & chickpea salad", slot: "Lunch",
-    items: [{ foodId: "tofu", qty: 180 }, { foodId: "chickpeas", qty: 120 }, { foodId: "spinach", qty: 80 }, { foodId: "olive_oil", qty: 8 }],
-    method: "Crisp the tofu in a dry pan, toss with the chickpeas and spinach, dress with the oil, lemon and plenty of pepper." },
-  { id: "soya_protein_pot", name: "Soya protein pot", slot: "Snack",
-    items: [{ foodId: "soy_milk", qty: 250 }, { foodId: "pea_protein", qty: 25 }, { foodId: "berries_frozen", qty: 60 }],
-    method: "Shake it up in a bottle. Under 250 kcal and most of it protein — the gap-filler for a day that is already near its calorie target." },
-  { id: "tofu_scramble_lean", name: "Lean tofu scramble", slot: "Breakfast",
-    items: [{ foodId: "tofu", qty: 200 }, { foodId: "spinach", qty: 80 }, { foodId: "tomatoes_tin", qty: 100 }, { foodId: "olive_oil", qty: 5 }],
-    method: "No toast. Crumble the tofu in with turmeric, add the tomatoes, wilt the spinach through at the end." },
-
-  { id: "vegan_shake", name: "Soya, seed & pea protein shake", slot: "Snack",
-    items: [{ foodId: "soy_milk", qty: 400 }, { foodId: "pea_protein", qty: 30 }, { foodId: "peanut_butter", qty: 30 }, { foodId: "banana", qty: 1 }],
-    method: "Blend. Covers the protein a plant-based day usually misses." },
-  { id: "oats_berries", name: "Protein porridge & berries", slot: "Breakfast",
-    items: [{ foodId: "oats", qty: 80 }, { foodId: "milk", qty: 300 }, { foodId: "whey_protein", qty: 30 }, { foodId: "berries_frozen", qty: 80 }],
-    method: "Simmer the oats in the milk for 4–5 minutes, take off the heat, stir the protein through once it's cooled slightly, then top with the berries." },
-  { id: "eggs_toast", name: "Scrambled eggs on wholemeal", slot: "Breakfast",
-    items: [{ foodId: "eggs", qty: 3 }, { foodId: "wholemeal_bread", qty: 80 }, { foodId: "spinach", qty: 50 }, { foodId: "olive_oil", qty: 5 }],
-    method: "Scramble the eggs low and slow, wilt the spinach in at the end, and serve on toast." },
-  { id: "yoghurt_bowl", name: "Greek yoghurt breakfast bowl", slot: "Breakfast",
-    items: [{ foodId: "greek_yoghurt", qty: 250 }, { foodId: "oats", qty: 40 }, { foodId: "banana", qty: 1 }, { foodId: "peanut_butter", qty: 20 }],
-    method: "Layer the yoghurt with oats, sliced banana and a spoon of peanut butter. No cooking — good for early starts." },
-
-  { id: "chicken_rice", name: "Chicken, rice & broccoli", slot: "Lunch",
-    items: [{ foodId: "chicken_breast", qty: 180 }, { foodId: "rice", qty: 90 }, { foodId: "broccoli", qty: 120 }, { foodId: "olive_oil", qty: 10 }],
-    method: "Pan-fry the chicken in the oil, boil the rice, steam the broccoli. The batch-cook staple — make three at once." },
-  { id: "tuna_wrap", name: "Tuna & salad wraps", slot: "Lunch",
-    items: [{ foodId: "tuna_tin", qty: 100 }, { foodId: "tortilla_wrap", qty: 2 }, { foodId: "spinach", qty: 40 }, { foodId: "cheddar", qty: 25 }],
-    method: "Drain the tuna, load the wraps with spinach and cheese, roll tight. Travels well in a kit bag." },
-  { id: "beans_toast", name: "Beans, eggs & toast", slot: "Lunch",
-    items: [{ foodId: "beans_baked", qty: 200 }, { foodId: "eggs", qty: 2 }, { foodId: "wholemeal_bread", qty: 80 }],
-    method: "Heat the beans, poach or fry the eggs, toast the bread. Cheap, fast and surprisingly well balanced." },
-
-  { id: "beef_pasta", name: "Beef bolognese & pasta", slot: "Dinner",
-    items: [{ foodId: "beef_mince_5", qty: 150 }, { foodId: "pasta", qty: 100 }, { foodId: "tomatoes_tin", qty: 200 }, { foodId: "onion", qty: 80 }],
-    method: "Brown the mince with the onion, add the tomatoes and simmer 20 minutes, serve over the pasta." },
-  { id: "salmon_potato", name: "Salmon, potatoes & greens", slot: "Dinner",
-    items: [{ foodId: "salmon_fillet", qty: 130 }, { foodId: "potatoes", qty: 300 }, { foodId: "broccoli", qty: 120 }, { foodId: "olive_oil", qty: 10 }],
-    method: "Roast the salmon 15 minutes at 200°C, boil or roast the potatoes, steam the greens." },
-  { id: "turkey_chilli", name: "Turkey chilli & rice", slot: "Dinner",
-    items: [{ foodId: "turkey_mince", qty: 160 }, { foodId: "chickpeas", qty: 150 }, { foodId: "tomatoes_tin", qty: 200 }, { foodId: "rice", qty: 80 }],
-    method: "Brown the turkey, add chickpeas and tomatoes, simmer 25 minutes and serve with rice. Freezes well." },
-  { id: "chicken_sweet_potato", name: "Chicken & sweet potato traybake", slot: "Dinner",
-    items: [{ foodId: "chicken_breast", qty: 180 }, { foodId: "sweet_potato", qty: 300 }, { foodId: "mixed_veg_frozen", qty: 150 }, { foodId: "olive_oil", qty: 10 }],
-    method: "Everything on one tray, 25 minutes at 200°C. Minimal washing up." },
-
-  { id: "shake_banana", name: "Protein shake & banana", slot: "Snack",
-    items: [{ foodId: "whey_protein", qty: 30 }, { foodId: "milk", qty: 300 }, { foodId: "banana", qty: 1 }],
-    method: "Blend or shake. The go-to within an hour of finishing training." },
-  { id: "yoghurt_almonds", name: "Yoghurt & almonds", slot: "Snack",
-    items: [{ foodId: "greek_yoghurt", qty: 200 }, { foodId: "almonds", qty: 25 }],
-    method: "Straight from the tub. Slow-digesting protein — good before bed." },
-  { id: "apple_pb", name: "Apple & peanut butter", slot: "Snack",
-    items: [{ foodId: "apple", qty: 1 }, { foodId: "peanut_butter", qty: 25 }],
-    method: "Slice the apple, dip. Easy carbs before a session." },
-
-  // --- Plant-based, so vegetarian and vegan plans aren't empty --------------
-  { id: "oats_soy", name: "Oats with soya milk & seeds", slot: "Breakfast",
-    items: [{ foodId: "oats", qty: 80 }, { foodId: "soy_milk", qty: 300 }, { foodId: "seeds_mixed", qty: 20 }, { foodId: "banana", qty: 1 }],
-    method: "Simmer the oats in soya milk, top with seeds and sliced banana." },
-  // Renamed from a SECOND "tofu_scramble". There were two different recipes
-  // under one id — 53 meals, 52 unique ids — so which one you got depended on
-  // array order, and the repeat counter treated them as the same meal. Kept
-  // rather than deleted: a lighter and a heavier version of the same dish is
-  // exactly what the size-aware picker wants, now that it can tell them apart.
-  { id: "tofu_scramble_light", name: "Tofu scramble on toast (lighter)", slot: "Breakfast",
-    items: [{ foodId: "tofu", qty: 150 }, { foodId: "wholemeal_bread", qty: 80 }, { foodId: "spinach", qty: 50 }, { foodId: "olive_oil", qty: 8 }],
-    method: "Crumble the tofu into a hot pan with turmeric and black pepper, wilt the spinach in, serve on toast." },
-  { id: "coconut_bowl", name: "Coconut yoghurt & seed bowl", slot: "Breakfast",
-    items: [{ foodId: "coconut_yoghurt", qty: 200 }, { foodId: "oats", qty: 40 }, { foodId: "berries_frozen", qty: 80 }, { foodId: "seeds_mixed", qty: 20 }],
-    method: "Layer it all up the night before and it's ready when you are." },
-  { id: "lentil_dhal", name: "Red lentil dhal & rice", slot: "Lunch",
-    items: [{ foodId: "red_lentils", qty: 100 }, { foodId: "tomatoes_tin", qty: 200 }, { foodId: "onion", qty: 80 }, { foodId: "rice", qty: 80 }],
-    method: "Soften the onion, add lentils, tomatoes and spices, simmer 25 minutes until thick. Cheap, high protein and it freezes." },
-  { id: "chickpea_wrap", name: "Chickpea & spinach wraps", slot: "Lunch",
-    items: [{ foodId: "chickpeas", qty: 200 }, { foodId: "tortilla_wrap", qty: 2 }, { foodId: "spinach", qty: 50 }, { foodId: "olive_oil", qty: 8 }],
-    method: "Crush the chickpeas roughly with oil and lemon, load into wraps with spinach." },
-  { id: "quinoa_beans", name: "Black bean & quinoa bowl", slot: "Dinner",
-    items: [{ foodId: "black_beans", qty: 200 }, { foodId: "quinoa", qty: 90 }, { foodId: "mixed_veg_frozen", qty: 150 }, { foodId: "olive_oil", qty: 10 }],
-    method: "Cook the quinoa, warm the beans with cumin and paprika, roast or steam the veg and combine." },
-  { id: "tofu_stirfry", name: "Tofu & veg stir-fry with rice", slot: "Dinner",
-    items: [{ foodId: "tofu", qty: 200 }, { foodId: "mixed_veg_frozen", qty: 200 }, { foodId: "rice", qty: 90 }, { foodId: "olive_oil", qty: 10 }],
-    method: "Press and cube the tofu, fry until golden, throw in the veg for the last few minutes, serve over rice." },
-  { id: "lentil_bolognese", name: "Lentil bolognese", slot: "Dinner",
-    items: [{ foodId: "red_lentils", qty: 100 }, { foodId: "tomatoes_tin", qty: 200 }, { foodId: "onion", qty: 80 }, { foodId: "pasta", qty: 100 }],
-    method: "Same method as a meat bolognese - soften the onion, add lentils and tomatoes, simmer until thick." },
-  { id: "pea_shake", name: "Plant protein shake", slot: "Snack",
-    items: [{ foodId: "pea_protein", qty: 30 }, { foodId: "soy_milk", qty: 300 }, { foodId: "banana", qty: 1 }],
-    method: "Blend. Straightforward post-training protein without dairy." },
-  { id: "seed_snack", name: "Seeds & apple", slot: "Snack",
-    items: [{ foodId: "seeds_mixed", qty: 30 }, { foodId: "apple", qty: 1 }],
-    method: "No prep, no allergens beyond seeds, travels anywhere." },
-
-  // --- More of everything, because 23 meals could not fill a week -----------
-  //
-  // The library was 6 breakfasts, 5 lunches, 7 dinners and 5 snacks. A week
-  // needs SEVEN breakfasts, so repetition wasn't a scoring failure, it was
-  // arithmetic — and since everyone drew from the same six, two athletes with
-  // completely different targets got identical weeks. No amount of clever
-  // ranking fixes a pool smaller than the number of slots.
-  //
-  // Built from the 42 foods already in the database, so every one of these has
-  // real prices and real macros and lands on the shopping list correctly.
-  // Weighted toward the higher-protein end, which is where the pool was thinnest
-  // and where the targets actually bite.
-  { id: "eggs_scramble_wrap", name: "Scrambled egg & cheese wrap", slot: "Breakfast",
-    items: [{ foodId: "eggs", qty: 3 }, { foodId: "tortilla_wrap", qty: 2 }, { foodId: "cheddar", qty: 30 }, { foodId: "spinach", qty: 40 }],
-    method: "Scramble the eggs soft, fold through the cheese and wilted spinach, roll into the wraps." },
-  { id: "yoghurt_whey_oats", name: "High-protein overnight oats", slot: "Breakfast",
-    items: [{ foodId: "oats", qty: 70 }, { foodId: "greek_yoghurt", qty: 200 }, { foodId: "whey_protein", qty: 25 }, { foodId: "berries_frozen", qty: 80 }],
-    method: "Stir it all together the night before. Nothing to cook and it travels." },
-  { id: "salmon_bagel_eggs", name: "Salmon & scrambled eggs on toast", slot: "Breakfast",
-    items: [{ foodId: "salmon_fillet", qty: 100 }, { foodId: "eggs", qty: 2 }, { foodId: "wholemeal_bread", qty: 80 }],
-    method: "Flake cooked salmon through soft scrambled eggs, pile onto toast." },
-  { id: "cottage_oats_pb", name: "Peanut butter banana oats", slot: "Breakfast",
-    items: [{ foodId: "oats", qty: 80 }, { foodId: "milk", qty: 300 }, { foodId: "peanut_butter", qty: 25 }, { foodId: "banana", qty: 1 }],
-    method: "Simmer the oats in milk, stir the peanut butter through at the end, top with banana." },
-
-  { id: "chicken_wrap_salad", name: "Chicken salad wraps", slot: "Lunch",
-    items: [{ foodId: "chicken_breast", qty: 180 }, { foodId: "tortilla_wrap", qty: 2 }, { foodId: "spinach", qty: 50 }, { foodId: "greek_yoghurt", qty: 60 }],
-    method: "Shred cooked chicken, dress with yoghurt, lemon and pepper, load into wraps with spinach." },
-  { id: "tuna_pasta_salad", name: "Tuna pasta salad", slot: "Lunch",
-    items: [{ foodId: "tuna_tin", qty: 2 }, { foodId: "pasta", qty: 100 }, { foodId: "tomatoes_tin", qty: 100 }, { foodId: "olive_oil", qty: 10 }],
-    method: "Cook the pasta, cool it, fold in tuna, tomatoes and oil. Better cold the next day." },
-  { id: "turkey_rice_bowl", name: "Turkey rice bowl", slot: "Lunch",
-    items: [{ foodId: "turkey_mince", qty: 180 }, { foodId: "rice", qty: 90 }, { foodId: "mixed_veg_frozen", qty: 150 }, { foodId: "olive_oil", qty: 8 }],
-    method: "Brown the mince with whatever spice you like, serve over rice with the veg through it." },
-  { id: "jacket_beans_cheese", name: "Jacket potato, beans & cheese", slot: "Lunch",
-    items: [{ foodId: "potatoes", qty: 350 }, { foodId: "beans_baked", qty: 200 }, { foodId: "cheddar", qty: 40 }],
-    method: "Bake or microwave the potato, split, load. The cheapest hot lunch there is." },
-  { id: "quinoa_chicken_salad", name: "Chicken & quinoa salad", slot: "Lunch",
-    items: [{ foodId: "chicken_breast", qty: 150 }, { foodId: "quinoa", qty: 80 }, { foodId: "broccoli", qty: 100 }, { foodId: "olive_oil", qty: 10 }],
-    method: "Cook the quinoa, steam the broccoli, slice the chicken over the top and dress with oil and lemon." },
-
-  { id: "chicken_pasta_bake", name: "Chicken pasta bake", slot: "Dinner",
-    items: [{ foodId: "chicken_breast", qty: 200 }, { foodId: "pasta", qty: 100 }, { foodId: "tomatoes_tin", qty: 200 }, { foodId: "cheddar", qty: 40 }],
-    method: "Combine cooked pasta, chicken and sauce in a dish, cheese on top, 15 minutes in the oven." },
-  { id: "beef_rice_stirfry", name: "Beef & broccoli with rice", slot: "Dinner",
-    items: [{ foodId: "beef_mince_5", qty: 200 }, { foodId: "rice", qty: 90 }, { foodId: "broccoli", qty: 150 }, { foodId: "olive_oil", qty: 8 }],
-    method: "Brown the mince hard, add broccoli and a splash of water to steam, serve over rice." },
-  { id: "salmon_quinoa_veg", name: "Salmon, quinoa & greens", slot: "Dinner",
-    items: [{ foodId: "salmon_fillet", qty: 160 }, { foodId: "quinoa", qty: 90 }, { foodId: "broccoli", qty: 150 }],
-    method: "Oven the salmon 14 minutes, cook the quinoa, steam the greens." },
-  { id: "turkey_sweet_potato", name: "Turkey mince & sweet potato mash", slot: "Dinner",
-    items: [{ foodId: "turkey_mince", qty: 200 }, { foodId: "sweet_potato", qty: 300 }, { foodId: "mixed_veg_frozen", qty: 150 }],
-    method: "Mash the sweet potato, brown the mince with onion and herbs, veg on the side." },
-  { id: "chicken_potato_veg", name: "Roast chicken, potatoes & veg", slot: "Dinner",
-    items: [{ foodId: "chicken_breast", qty: 200 }, { foodId: "potatoes", qty: 300 }, { foodId: "broccoli", qty: 150 }, { foodId: "olive_oil", qty: 10 }],
-    method: "Everything on one tray at 200C, greens steamed at the end. Minimal washing up." },
-  { id: "tuna_jacket", name: "Tuna jacket potato", slot: "Dinner",
-    items: [{ foodId: "tuna_tin", qty: 2 }, { foodId: "potatoes", qty: 350 }, { foodId: "greek_yoghurt", qty: 60 }, { foodId: "spinach", qty: 50 }],
-    method: "Yoghurt instead of mayo — same texture, considerably more protein." },
-
-  { id: "yoghurt_berries_snack", name: "Greek yoghurt & berries", slot: "Snack",
-    items: [{ foodId: "greek_yoghurt", qty: 200 }, { foodId: "berries_frozen", qty: 80 }],
-    method: "Defrost the berries in the microwave for 30 seconds and stir through." },
-  { id: "eggs_boiled_snack", name: "Boiled eggs & an apple", slot: "Snack",
-    items: [{ foodId: "eggs", qty: 3 }, { foodId: "apple", qty: 1 }],
-    method: "Boil a batch at the start of the week. Seven minutes, then cold water." },
-  { id: "cheese_bread_snack", name: "Cheese on toast", slot: "Snack",
-    items: [{ foodId: "cheddar", qty: 50 }, { foodId: "wholemeal_bread", qty: 80 }],
-    method: "Grill rather than toast, so the cheese goes properly molten." },
-  { id: "whey_milk_snack", name: "Whey & milk", slot: "Snack",
-    items: [{ foodId: "whey_protein", qty: 30 }, { foodId: "milk", qty: 300 }],
-    method: "Thirty seconds, 45g of protein. The fallback when there's no time." },
-  { id: "chickpea_snack", name: "Roast chickpeas", slot: "Snack",
-    items: [{ foodId: "chickpeas", qty: 150 }, { foodId: "olive_oil", qty: 8 }],
-    method: "Drain, dry, toss in oil and paprika, 25 minutes at 200C until they rattle." },
-];
+/**
+ * The recipes live in `meals-data.ts` now.
+ *
+ * Six hundred lines of dinners inside the scoring engine made both harder to
+ * read and impossible to review separately — the maths and the menu change for
+ * completely different reasons. Re-exported here because every caller already
+ * imports MEALS from this module.
+ */
+import { MEALS } from "./meals-data";
+export { MEALS };
 
 // --- macros ------------------------------------------------------------------
 
@@ -827,7 +409,18 @@ function addToBasket(meal: Meal, basket: Basket, scale = 1): void {
 // Eating the same thing all week is cheap and miserable. Each prior use of a
 // meal adds this much to its effective cost, so reuse has to genuinely save
 // money to win, and no meal may appear more than MAX_REPEATS times.
-const REPEAT_PENALTY = 0.85; // £
+/**
+ * What it costs to serve the same meal again, per previous use.
+ *
+ * ESCALATING, NOT LINEAR — see `repeatCost`. At the old flat 0.85 a repeat was
+ * nearly free next to a protein term weighted 35, so the planner simply picked
+ * its favourite three times: an average athlete's week contained TWELVE
+ * distinct meals across 28 slots, with Monday, Tuesday and Wednesday
+ * identical. Adding sixty recipes changes nothing if the scoring will not
+ * reach for them, which is why "the meals are repetitive" survived every
+ * previous attempt to fix it by adding more.
+ */
+const REPEAT_PENALTY = 4; // £
 // Discount applied to a meal containing a food they said they like. Sized to
 // beat a typical price gap between meals but not a large one, so a favourite
 // wins ties and near-ties without wrecking the shopping bill.
@@ -846,7 +439,7 @@ const REPEAT_PENALTY = 0.85; // £
  * sitting exactly on the edge, and keeps the original intent — a meal ~10%
  * off-size yields to a preference, one 20% off-size does not.
  */
-const FAVOURITE_BONUS = 3.0; // £
+const FAVOURITE_BONUS = 5.0; // £
 const MAX_REPEATS = 3;
 
 /**
@@ -940,6 +533,22 @@ const SIZE_WEIGHT = 8; // £ per unit of normalised calorie mismatch
  * protein unchanged.
  */
 const UNDERSIZE_BIAS = 3;
+
+/**
+ * Cost of an nth serving, rising faster than n.
+ *
+ * A second helping of something good across a week is fine — people cook in
+ * batches and eat the same dinner twice. A third is the app being lazy. Linear
+ * cost cannot express that difference: whatever value makes the third serving
+ * expensive also makes the second one unlikely, which produces a week of
+ * twenty-eight unrelated shopping lists.
+ *
+ * The exponent does the work instead. At weight 4: one repeat costs 4, two
+ * costs 14. The second serving stays affordable, the third rarely wins.
+ */
+function repeatCost(uses: number, weight: number): number {
+  return Math.pow(uses, 1.8) * weight;
+}
 
 function sizeMismatch(meal: Meal, slotKcal: number): number {
   if (slotKcal <= 0) return 0;
@@ -1083,7 +692,7 @@ export function buildWeek(
         // eggs at every meal, and the repeat penalty still applies on top.
         score: marginalCost(meal, basket) * costWeight
           - (isFavourite(meal, favourites) ? FAVOURITE_BONUS : 0)
-          + (uses.get(meal.id) ?? 0) * repeatPenalty
+          + repeatCost(uses.get(meal.id) ?? 0, repeatPenalty)
           // How far this meal falls short of its share of the day's protein,
           // as a fraction of that share, priced in pounds so it trades against
           // cost. Only shortfall is penalised — going over is free, because

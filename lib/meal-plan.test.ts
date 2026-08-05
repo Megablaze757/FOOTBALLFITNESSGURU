@@ -359,10 +359,15 @@ test("every meal produces at least one well-formed step", () => {
  * wrongness that makes a feature feel machine-generated.
  */
 test("trailing commentary becomes a note, not a step", () => {
-  const oats = MEALS.find((m) => m.id === "big_oats_pb");
-  assert.ok(oats, "fixture meal missing");
-  assert.equal(recipeSteps(oats!).length, 1);
-  assert.match(recipeNote(oats!) ?? "", /1,000 kcal/);
+  // A synthetic meal, deliberately. Every meal in the book now has hand-written
+  // steps, so pinning this to a real one would test nothing — and the fallback
+  // still has to work for any recipe added without them.
+  const m = {
+    id: "t", name: "t", slot: "Breakfast" as const, items: [],
+    method: "Simmer the oats in the milk and stir the protein through. Around 1,000 kcal without feeling like a challenge.",
+  };
+  assert.equal(recipeSteps(m).length, 1);
+  assert.match(recipeNote(m) ?? "", /1,000 kcal/);
 });
 
 test("a hand-written recipe is used verbatim, never re-split", () => {
@@ -375,4 +380,78 @@ test("a hand-written recipe is used verbatim, never re-split", () => {
 test("a method with no recognised cooking verb still yields a step", () => {
   const odd = { id: "x", name: "x", slot: "Snack" as const, items: [], method: "Nothing here looks like an instruction. Honestly it doesn't." };
   assert.ok(recipeSteps(odd).length >= 1);
+});
+
+/**
+ * Unit mismatches are silent and enormous.
+ *
+ * `tortilla_wrap` is priced and counted PER WRAP, not per 100g. Three new
+ * recipes gave it a gram-style quantity of 120, which the engine read as 120
+ * wraps — those meals came out at 35,000 kcal, and the planner dutifully served
+ * them, producing days at 606% of target. Nothing else in the suite noticed,
+ * because every downstream number was internally consistent with a 35,000 kcal
+ * breakfast.
+ *
+ * Two guards: nothing counted in units may have a bulk quantity, and no single
+ * meal may be absurd. The second catches the general case if a new "each" food
+ * is ever added without updating the first.
+ */
+test("per-unit foods are given counts, not gram weights", () => {
+  for (const m of MEALS) {
+    for (const it of m.items) {
+      const f = FOOD_BY_ID[it.foodId];
+      if (f?.unit !== "each") continue;
+      assert.ok(
+        it.qty <= 6,
+        `${m.id} asks for ${it.qty} x ${it.foodId} — that food is counted per unit, so this is a gram weight in a count field`
+      );
+    }
+  }
+});
+
+test("no meal has implausible calories", () => {
+  for (const m of MEALS) {
+    const kcal = mealMacros(m).kcal;
+    assert.ok(kcal > 100, `${m.id} is only ${Math.round(kcal)} kcal`);
+    assert.ok(kcal < 2200, `${m.id} is ${Math.round(kcal)} kcal — check the ingredient units`);
+  }
+});
+
+/**
+ * A WEEK HAS TO LOOK LIKE A WEEK.
+ *
+ * The complaint was "same old chicken and rice", and adding sixty recipes did
+ * not fix it on its own — with a flat repeat penalty the planner still picked
+ * its favourite three times running. An average athlete's week contained twelve
+ * distinct meals across twenty-eight slots, with Monday, Tuesday and Wednesday
+ * completely identical.
+ *
+ * This asserts the outcome a person actually notices, which no macro test can:
+ * how many different things they eat.
+ */
+test("a week is varied, not the same three days repeated", () => {
+  const week = buildWeek(planTargets(ATHLETE), 0, DEFAULT_PREFS);
+  const ids = week.flatMap((d) => d.meals.map((m) => m.meal.id));
+  const distinct = new Set(ids).size;
+  assert.ok(distinct >= 16, `only ${distinct} distinct meals across ${ids.length} slots — that is a repetitive week`);
+
+  const counts = new Map<string, number>();
+  for (const id of ids) counts.set(id, (counts.get(id) ?? 0) + 1);
+  const worst = Math.max(...counts.values());
+  assert.ok(worst <= 2, `one meal appears ${worst} times in a week`);
+
+  // And no two consecutive days identical, which is what made it obvious.
+  for (let i = 1; i < week.length; i++) {
+    const a = week[i - 1].meals.map((m) => m.meal.id).join("|");
+    const b = week[i].meals.map((m) => m.meal.id).join("|");
+    assert.notEqual(a, b, `${week[i - 1].day} and ${week[i].day} are the same day twice`);
+  }
+});
+
+test("every recipe is written out properly", () => {
+  for (const m of MEALS) {
+    assert.ok(m.steps?.length, `${m.id} has no hand-written steps`);
+    assert.ok(m.minutes != null && m.minutes > 0, `${m.id} has no cooking time`);
+    assert.ok((m.steps?.length ?? 0) >= 1, `${m.id} has an empty method`);
+  }
 });
