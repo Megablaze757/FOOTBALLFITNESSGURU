@@ -18,15 +18,16 @@ import { WeekStrip } from "@/components/WeekStrip";
 import { Notifications } from "@/components/Notifications";
 import type { CheckInInput, DailyInsight, TrainingLog } from "@/lib/types";
 import type { ProgramPlan } from "@/lib/engine";
+import { daysAgoLocal, todayLocal } from "@/lib/day";
 
 export default function HomePage() {
   const user = useCurrentUser();
   const router = useRouter();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayLocal();
 
   const { data, loading } = useAsync(async () => {
     const supabase = createClient();
-    const since = new Date(Date.now() - 40 * 86400_000).toISOString().slice(0, 10);
+    const since = daysAgoLocal(40);
     /**
      * ONE ROUND TRIP FOR EVERYTHING THAT DOESN'T DEPEND ON ANYTHING.
      *
@@ -45,7 +46,7 @@ export default function HomePage() {
      * rows fetched are the 28 days ACWR actually needs.
      */
     const head = { count: "exact" as const, head: true };
-    const since28 = new Date(Date.now() - 27 * 86400_000).toISOString().slice(0, 10);
+    const since28 = daysAgoLocal(27);
     const [
       { data: profile }, { data: checkIn }, { data: streakRows },
       { data: trainToday }, { data: nutriToday }, { data: bio },
@@ -116,7 +117,7 @@ export default function HomePage() {
     // Rank + week-at-a-glance. Home used to show none of this, so an athlete
     // who hadn't checked in yet landed on a single empty-state card with
     // nothing to look at and no reason to stay.
-    const since7 = new Date(Date.now() - 6 * 86400_000).toISOString().slice(0, 10);
+    const since7 = daysAgoLocal(6);
     const checkDates = (streakRows ?? []).map((r) => r.check_in_date as string);
     const trainRows = (recentTraining ?? []) as { log_date: string; total_minutes: number | null }[];
     const programs = (progs ?? []) as { completed_sessions: string[] | null; status: string }[];

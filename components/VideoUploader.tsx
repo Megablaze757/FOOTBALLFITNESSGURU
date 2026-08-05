@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { MOVEMENTS, type MovementType } from "@/lib/movement";
 import { sportTerms } from "@/lib/sport-terms";
 import { MAX_CLIP_SECONDS } from "@/components/InBrowserAnalysis";
+import { todayLocal } from "@/lib/day";
 
 // Must match the bucket's file_size_limit in migration 0036 — this copy exists
 // only to give a useful message before the upload starts.
@@ -108,7 +109,7 @@ export function VideoUploader({ sport, onUploaded }: { sport?: string; onUploade
       return;
     }
 
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayLocal();
     const { data: checkIn } = await supabase
       .from("daily_check_ins").select("id").eq("user_id", user.id).eq("check_in_date", today).maybeSingle();
 

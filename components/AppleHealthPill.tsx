@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { isNative, readHealth, haptic } from "@/lib/native";
+import { todayLocal } from "@/lib/day";
 
 /**
  * Pull last night out of Apple Health, on the check-in, in one tap.
@@ -37,7 +38,7 @@ export function AppleHealthPill({ onSleep }: {
   async function pull() {
     setState("reading");
     const rows = await readHealth(2);
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayLocal();
     // Last night's sleep is recorded against the day it ENDED, but a nap or a
     // late sync can leave today empty — so fall back to the most recent row
     // rather than reporting nothing when there is something.

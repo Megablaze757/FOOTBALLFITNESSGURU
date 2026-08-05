@@ -4,6 +4,8 @@
 // CSV parser for Garmin/Whoop/Apple-Health exports. Tested; runs on Pages.
 // =============================================================================
 
+import { todayLocal } from "./day";
+
 export interface Biometric {
   metric_date: string;         // YYYY-MM-DD
   hrv_ms: number | null;
@@ -215,8 +217,12 @@ export function parseIngestPayload(body: unknown): Biometric[] {
 
     // No date means today — a Shortcut running at 7am is reporting this
     // morning, and making people compute a date string is how it goes wrong.
+    //
+    // The LOCAL today, which matters most here of anywhere: a 7am Shortcut is
+    // exactly the case UTC got wrong. East of UTC, 7am local is still yesterday
+    // in UTC, so every morning's sleep was filed against the night before.
     const date = toISODate(String(pick(["date", "day", "metricdate", "startdate"]) ?? "")) ??
-      new Date().toISOString().slice(0, 10);
+      todayLocal();
 
     const hrv = numOrNull(pick(["hrv", "hrvms", "heartratevariability", "sdnn"]));
     const rhr = numOrNull(pick(["restinghr", "restingheartrate", "rhr", "lowestheartrate"]));

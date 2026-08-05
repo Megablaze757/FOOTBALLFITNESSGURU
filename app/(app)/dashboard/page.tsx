@@ -16,6 +16,7 @@ import type { Biometric } from "@/lib/biometrics";
 import { sportProfile, type SportProfile } from "@/lib/sport-profile";
 import { TrendChart } from "@/components/TrendChart";
 import type { DailyCheckIn, DailyInsight, NutritionLog, TrainingLog } from "@/lib/types";
+import { daysAgoLocal } from "@/lib/day";
 
 const ZONE_META: Record<LoadZone, { label: string; color: string }> = {
   building: { label: "Building baseline", color: "#94a3b8" },
@@ -128,7 +129,7 @@ export default function DashboardPage() {
 
   const { data, loading } = useAsync(async () => {
     const supabase = createClient();
-    const since = new Date(Date.now() - 28 * 86400_000).toISOString().slice(0, 10);
+    const since = daysAgoLocal(28);
     const [{ data: rows }, { data: insightRow }, { data: training }, { data: nutrition }, { data: weekCheck }, { data: prof }, { data: bio }] = await Promise.all([
       supabase.from("daily_check_ins").select("*").eq("user_id", user.id).order("check_in_date", { ascending: false }).limit(14),
       supabase.from("daily_insights").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(1).maybeSingle(),
@@ -199,7 +200,7 @@ export default function DashboardPage() {
   const sport = data!.sport;
 
   // This week only, for the sport-specific headline figure.
-  const since7 = new Date(Date.now() - 6 * 86400_000).toISOString().slice(0, 10);
+  const since7 = daysAgoLocal(6);
   const thisWeek = data!.training.filter((t) => t.log_date >= since7);
   const weekDistance = totalDistanceKm(thisWeek);
   const weekTonnage = tonnage(thisWeek);
@@ -208,7 +209,7 @@ export default function DashboardPage() {
   // The 80/20 split, over a fortnight rather than a week — one week is too few
   // runs for the percentage to mean anything, and a single hard session in a
   // light week would read as a warning when it isn't one.
-  const since14 = new Date(Date.now() - 13 * 86400_000).toISOString().slice(0, 10);
+  const since14 = daysAgoLocal(13);
   const runSplit = easyShare(
     data!.training
       .filter((t) => t.log_date >= since14 && t.run_type)

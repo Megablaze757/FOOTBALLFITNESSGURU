@@ -17,6 +17,7 @@ import { sportProfile, type SportProfile } from "@/lib/sport-profile";
 import type { BodyStats, MealPrefs } from "@/lib/meal-plan";
 import type { GoalType } from "@/lib/coach";
 import type { Subscription, Tier, TrainingLog } from "@/lib/types";
+import { daysAgoLocal, todayLocal } from "@/lib/day";
 
 // Same colours as the rings, in the same order — see RING_COLOURS in
 // components/FuelRings.tsx. They disagreed before: protein was gold here and
@@ -31,11 +32,11 @@ const MACROS = [
 
 export default function NutritionPage() {
   const user = useCurrentUser();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayLocal();
 
   const { data, loading } = useAsync(async () => {
     const supabase = createClient();
-    const since = new Date(Date.now() - 14 * 86400_000).toISOString().slice(0, 10);
+    const since = daysAgoLocal(14);
     const [{ data: sub }, { data: log }, { data: weightRow }, { data: program }, { data: training }, { data: profile }] = await Promise.all([
       supabase.from("subscriptions").select("*").eq("user_id", user.id).maybeSingle(),
       supabase.from("nutrition_logs").select("*").eq("user_id", user.id).eq("log_date", today).maybeSingle(),

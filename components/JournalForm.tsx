@@ -30,6 +30,7 @@ interface DraftShape {
   training: TrainingState;
 }
 import type { CheckInInput, PainMap, ReadinessResult, TrainingDrill, TrainingLog } from "@/lib/types";
+import { daysAgoLocal, todayLocal } from "@/lib/day";
 
 /**
  * Is this failure "no signal" rather than "the server said no"?
@@ -178,7 +179,7 @@ export function JournalForm({ initial, initialTraining, sport, planned = [] }: {
     };
   }, []);
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayLocal();
   const userId = useCurrentUser().id;
 
   /**
@@ -197,7 +198,7 @@ export function JournalForm({ initial, initialTraining, sport, planned = [] }: {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const since = new Date(Date.now() - 28 * 86400_000).toISOString().slice(0, 10);
+      const since = daysAgoLocal(28);
       const { data } = await createClient()
         .from("training_logs")
         .select("log_date, total_minutes, intensity, drills")

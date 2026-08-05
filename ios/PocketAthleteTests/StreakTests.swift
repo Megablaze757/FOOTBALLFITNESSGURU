@@ -69,16 +69,24 @@ final class StreakTests: XCTestCase {
         XCTAssertFalse(Streak.checkedInToday(dates: ["2026-08-02"], today: "2026-08-03"))
     }
 
-    /// The formatter must be UTC and fixed-locale, or a device set to a
-    /// non-Gregorian calendar produces dates Postgres cannot match. This is the
-    /// bug that made `CheckInView.iso` write local dates against the web's UTC
-    /// ones, so it is worth pinning.
-    func testFormatterIsUTC() {
-        let epoch = Date(timeIntervalSince1970: 0)
-        XCTAssertEqual(Streak.formatter.string(from: epoch), "1970-01-01")
-        // 23:30 UTC must still be the same UTC day, whatever the device thinks.
-        let lateUTC = Date(timeIntervalSince1970: 84_600)
-        XCTAssertEqual(Streak.formatter.string(from: lateUTC), "1970-01-01")
+    /// The formatter must use the DEVICE's day, and a fixed locale.
+    ///
+    /// Local is the decision (see `Streak.formatter`) — UTC is what lost
+    /// check-ins. The locale is separate and still matters: a device set to a
+    /// non-Gregorian calendar would otherwise format dates Postgres cannot
+    /// match.
+    func testFormatterUsesTheLocalCalendar() {
+        let d = Date(timeIntervalSince1970: 1_785_888_000) // some fixed instant
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = .current
+        let parts = cal.dateComponents([.year, .month, .day], from: d)
+        let expected = String(format: "%04d-%02d-%02d", parts.year!, parts.month!, parts.day!)
+        XCTAssertEqual(Streak.formatter.string(from: d), expected)
+    }
+
+    func testFormatterIsFixedLocale() {
+        XCTAssertEqual(Streak.formatter.locale.identifier, "en_US_POSIX")
+        XCTAssertEqual(Streak.formatter.dateFormat, "yyyy-MM-dd")
     }
 
     /// `CheckInView` writes the date it saves under; it must agree with the

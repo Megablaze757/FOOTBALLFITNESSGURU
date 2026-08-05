@@ -11,10 +11,11 @@ import { WearableConnect } from "@/components/WearableConnect";
 import type { TrainingState } from "@/components/TrainingLogInput";
 import type { Biometric } from "@/lib/biometrics";
 import type { CheckInInput, TrainingLog } from "@/lib/types";
+import { todayLocal } from "@/lib/day";
 
 export default function JournalPage() {
   const user = useCurrentUser();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayLocal();
 
   const { data, loading, reload } = useAsync(async () => {
     const supabase = createClient();

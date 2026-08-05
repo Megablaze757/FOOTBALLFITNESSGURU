@@ -34,6 +34,7 @@ import { ProgramCalendar } from "@/components/ProgramCalendar";
 import { SessionDrills } from "@/components/SessionDrills";
 import { WorkoutPlayer, type SessionResult } from "@/components/WorkoutPlayer";
 import type { CheckInInput, DailyCheckIn, Program, StrengthBenchmark, Tier, TrainingLog, TrainingDrill } from "@/lib/types";
+import { daysAgoLocal, todayLocal } from "@/lib/day";
 
 /** Latest recorded value per benchmark metric, newest test first. */
 function latestBenchmarks(rows: StrengthBenchmark[]): Record<string, number> {
@@ -90,11 +91,11 @@ const COACH_TABS: { id: CoachTab; label: string; icon: string }[] = [
 
 export default function CoachPage() {
   const user = useCurrentUser();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayLocal();
 
   const { data, loading, reload } = useAsync(async () => {
     const supabase = createClient();
-    const since = new Date(Date.now() - 30 * 86400_000).toISOString().slice(0, 10);
+    const since = daysAgoLocal(30);
     const [{ data: program }, { data: checkIn }, { data: training }, { data: checkHist }, { data: benches }, { data: profile }, { data: sub }] = await Promise.all([
       supabase.from("programs").select("*").eq("user_id", user.id).eq("status", "active").order("created_at", { ascending: false }).limit(1).maybeSingle(),
       supabase.from("daily_check_ins").select("*").eq("user_id", user.id).eq("check_in_date", today).maybeSingle(),

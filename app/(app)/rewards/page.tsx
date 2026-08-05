@@ -16,11 +16,12 @@ import { LevelUpModal } from "@/components/LevelUpModal";
 import { WeeklyChallenges } from "@/components/WeeklyChallenges";
 import { Leaderboards } from "@/components/Leaderboards";
 import { RankLadder } from "@/components/RankLadder";
+import { daysAgoLocal, todayLocal } from "@/lib/day";
 
 export default function RewardsPage() {
   const user = useCurrentUser();
-  const today = new Date().toISOString().slice(0, 10);
-  const since7 = new Date(Date.now() - 6 * 86400_000).toISOString().slice(0, 10);
+  const today = todayLocal();
+  const since7 = daysAgoLocal(6);
 
   const { data, loading } = useAsync(async () => {
     const supabase = createClient();
@@ -38,7 +39,7 @@ export default function RewardsPage() {
      * than any streak this app can display, and today's activity is in there by
      * definition.
      */
-    const since60 = new Date(Date.now() - 59 * 86400_000).toISOString().slice(0, 10);
+    const since60 = daysAgoLocal(59);
     const [checks, training, programs, benchC, videoC, nutrition, checkC, trainC, nutriC] = await Promise.all([
       supabase.from("daily_check_ins").select("check_in_date").eq("user_id", user.id).gte("check_in_date", since60),
       supabase.from("training_logs").select("log_date").eq("user_id", user.id).gte("log_date", since60),

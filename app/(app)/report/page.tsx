@@ -11,6 +11,7 @@ import { summarizeTrends } from "@/lib/trends";
 import { computeACWR, weeklyReport, checkInStreak, type LoadZone } from "@/lib/load";
 
 import type { CheckInInput, DailyCheckIn, NutritionLog, Program, TrainingLog } from "@/lib/types";
+import { daysAgoLocal } from "@/lib/day";
 
 /**
  * Plain words for the load zones, matching Progress exactly.
@@ -33,8 +34,8 @@ export default function ReportPage() {
 
   const { data, loading } = useAsync(async () => {
     const supabase = createClient();
-    const since = new Date(Date.now() - 28 * 86400_000).toISOString().slice(0, 10);
-    const week = new Date(Date.now() - 7 * 86400_000).toISOString().slice(0, 10);
+    const since = daysAgoLocal(28);
+    const week = daysAgoLocal(7);
     const [{ data: profile }, { data: checks }, { data: training }, { data: nutrition }, { data: prog }] = await Promise.all([
       supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle(),
       supabase.from("daily_check_ins").select("*").eq("user_id", user.id).gte("check_in_date", since).order("check_in_date", { ascending: true }),

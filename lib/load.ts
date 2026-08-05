@@ -4,6 +4,7 @@
 // =============================================================================
 
 import type { DailyCheckIn, NutritionLog, TrainingLog } from "./types";
+import { todayLocal } from "./day";
 
 /**
  * How much harder a minute of contact is than a minute of running.
@@ -112,7 +113,9 @@ export function computeACWR(logs: TrainingLog[], asOf = new Date()): ACWR {
 }
 
 /** Consecutive check-in days ending today (or yesterday). */
-export function checkInStreak(dates: string[], today = new Date().toISOString().slice(0, 10)): number {
+// The athlete's day, not UTC's — a streak is a human thing. See lib/day.ts for
+// the check-ins this lost before it was fixed.
+export function checkInStreak(dates: string[], today = todayLocal()): number {
   const set = new Set(dates);
   let streak = 0;
   let cursor = new Date(today);

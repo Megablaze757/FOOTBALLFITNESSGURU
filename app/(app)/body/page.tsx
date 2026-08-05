@@ -7,14 +7,15 @@ import { useCurrentUser } from "@/lib/auth";
 import { useAsync } from "@/lib/use-async";
 import { MiniBars } from "@/components/MiniBars";
 import type { BodyLog } from "@/lib/types";
+import { daysAgoLocal, todayLocal } from "@/lib/day";
 
 export default function BodyPage() {
   const user = useCurrentUser();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayLocal();
 
   const { data, loading, reload } = useAsync(async () => {
     const supabase = createClient();
-    const since = new Date(Date.now() - 120 * 86400_000).toISOString().slice(0, 10);
+    const since = daysAgoLocal(120);
     const { data: logs } = await supabase
       .from("body_logs").select("*").eq("user_id", user.id).gte("log_date", since).order("log_date", { ascending: true });
     const rows = (logs ?? []) as BodyLog[];

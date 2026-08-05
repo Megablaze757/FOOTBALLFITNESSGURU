@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { biometricSignal, parseBiometricCsv, parseOuraSleep, parseIngestPayload } from "./biometrics";
+import { todayLocal } from "./day";
 
 const hist = (hrv: number, days = 20) =>
   Array.from({ length: days }, (_, i) => ({
@@ -139,10 +140,15 @@ test("parseIngestPayload works out sleep units from the magnitude", () => {
   assert.equal(parseIngestPayload({ date: "2026-07-30", minutesAsleep: 450 })[0].sleep_hours, 7.5);
 });
 
-test("parseIngestPayload defaults an absent date to today", () => {
+test("parseIngestPayload defaults an absent date to the athlete's local today", () => {
   const rows = parseIngestPayload({ hrv: 60 });
   assert.equal(rows.length, 1);
-  assert.equal(rows[0].metric_date, new Date().toISOString().slice(0, 10));
+  // LOCAL, not `toISOString()`. This assertion used to be the UTC day, which
+  // meant it encoded the bug rather than catching it: a Shortcut firing at 7am
+  // in Sydney reports this morning's sleep, and UTC files it against last
+  // night. The test only started failing once the code was fixed — in
+  // America/Los_Angeles, where UTC is already tomorrow.
+  assert.equal(rows[0].metric_date, todayLocal());
 });
 
 test("parseIngestPayload takes an array or a single object", () => {

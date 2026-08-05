@@ -15,6 +15,7 @@ import { AssignProgram } from "@/components/AssignProgram";
 import { positionList } from "@/lib/positions";
 import type { SportId } from "@/lib/exercises";
 import type { DailyCheckIn, Profile, Program, TrainingLog } from "@/lib/types";
+import { daysAgoLocal, todayLocal } from "@/lib/day";
 
 interface AthleteRow {
   id: string;
@@ -34,7 +35,7 @@ interface AthleteRow {
 
 export default function SquadPage() {
   const user = useCurrentUser();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayLocal();
 
   const { data, loading, reload } = useAsync(async () => {
     const supabase = createClient();
@@ -53,7 +54,7 @@ export default function SquadPage() {
     if (!acceptedIds.length) return { isCoach: true, athletes: [] as AthleteRow[], pending };
     const ids = acceptedIds;
 
-    const since7 = new Date(Date.now() - 6 * 86400_000).toISOString().slice(0, 10);
+    const since7 = daysAgoLocal(6);
     /**
      * EVERY COST HERE IS MULTIPLIED BY THE SIZE OF THE SQUAD.
      *
@@ -68,8 +69,8 @@ export default function SquadPage() {
      * the plan JSON fetched only for ACTIVE programs; training bounded to ACWR's
      * own 28-day window. Nothing on screen changes.
      */
-    const since60 = new Date(Date.now() - 59 * 86400_000).toISOString().slice(0, 10);
-    const since28 = new Date(Date.now() - 27 * 86400_000).toISOString().slice(0, 10);
+    const since60 = daysAgoLocal(59);
+    const since28 = daysAgoLocal(27);
     const [{ data: profiles }, { data: checkIns }, { data: activePrograms }, { data: allProgramStatuses }, { data: training }, { data: nutrition }, { data: benches }] = await Promise.all([
       supabase.from("profiles").select("id, full_name, sport, position, positions").in("id", ids),
       supabase.from("daily_check_ins")

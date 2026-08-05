@@ -189,22 +189,17 @@ struct CheckInView: View {
         }
     }
 
-    /// UTC, because that is what the web app writes.
+    /// The athlete's LOCAL day — the same decision the web now makes.
     ///
-    /// THIS USED TO BE `.current` AND THAT WAS A BUG. The web computes the
-    /// check-in date as `new Date().toISOString().slice(0, 10)` — always UTC.
-    /// This wrote the phone's local date. East of UTC the two disagree for part
-    /// of every day: an athlete in Sydney checking in at 9am gets `2026-08-03`
-    /// from the phone and `2026-08-02` from the browser. The upsert conflict
-    /// target is `(user_id, check_in_date)`, so those are two rows for one
-    /// morning — a duplicated day, a broken streak, and two different readiness
-    /// scores for the same check-in.
+    /// This was `.current`, then briefly UTC to match the web, and is local
+    /// again because the web was the thing that was wrong. Both used UTC's day,
+    /// agreed with each other, and lost check-ins: 8am in Sydney filed under
+    /// yesterday, and by mid-morning the app queried today, found nothing and
+    /// showed an empty form. See `Streak.formatter` and `lib/day.ts`.
     ///
-    /// Matching the web is the fix available here. Whether BOTH should move to
-    /// the athlete's local day is a real question — arguably your "today" is
-    /// wherever you are standing — but that changes the meaning of every
-    /// existing row and belongs in one deliberate migration across both
-    /// clients, not in a quiet difference between them.
+    /// It delegates rather than formatting its own date, so the date a check-in
+    /// is SAVED under and the date the streak COUNTS can never diverge —
+    /// `testCheckInViewUsesTheSameDateAsTheStreakEngine` pins that.
     static func iso(_ d: Date) -> String {
         Streak.formatter.string(from: d)
     }
