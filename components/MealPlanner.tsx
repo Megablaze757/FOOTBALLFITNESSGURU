@@ -11,6 +11,7 @@ import {
 } from "@/lib/meal-plan";
 import { parseSchedule } from "@/lib/meal-schedule";
 import type { TargetContext } from "@/lib/nutrition";
+import { Recipe } from "@/components/Recipe";
 import { FOOD_BY_ID as FOOD_LOOKUP } from "@/lib/food-db";
 import { ShoppingList } from "@/components/ShoppingList";
 
@@ -493,25 +494,7 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
                   </summary>
 
                   <div className="border-t border-white/[0.06] p-3.5">
-                    <ul className="space-y-1 text-sm text-slate-300">
-                      {pm.meal.items.map((it) => {
-                        const f = FOOD_LOOKUP[it.foodId];
-                        if (!f) return null;
-                        const q = Math.round(it.qty * pm.scale);
-                        return (
-                          <li key={it.foodId} className="flex justify-between gap-3">
-                            <span>{f.name}</span>
-                            <span className="shrink-0 tabular-nums text-slate-500">
-                              {f.unit === "each" ? `${Math.max(1, q)}` : `${q}${f.unit}`}
-                            </span>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                    <p className="mt-3 border-t border-white/[0.06] pt-3 text-sm text-slate-400">{pm.meal.method}</p>
-                    <p className="mt-2 text-xs text-slate-500">
-                      {Math.round(pm.macros.protein)}g protein · {Math.round(pm.macros.carbs)}g carbs · {Math.round(pm.macros.fats)}g fats
-                    </p>
+                    <Recipe meal={pm.meal} scale={pm.scale} macros={pm.macros} />
                   </div>
                 </details>
               ))}

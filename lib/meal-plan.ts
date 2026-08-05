@@ -191,10 +191,287 @@ export interface Meal {
   name: string;
   slot: Slot;
   items: MealItem[];
+  /**
+   * How to cook it, as prose. Every meal has one.
+   *
+   * Kept as the source of truth so nothing had to be rewritten at once, but it
+   * is no longer what the UI renders directly — see `recipeSteps`. A paragraph
+   * is a fine way to STORE a method and a poor way to COOK from one: you are
+   * holding a phone with one hand and a pan with the other, and you need to
+   * know which line you are on.
+   */
   method: string;
+  /**
+   * The method as numbered steps, when it has been written out properly.
+   *
+   * Optional on purpose. `recipeSteps()` falls back to splitting `method` into
+   * sentences, so every meal gets a usable numbered list today and the good
+   * ones can be written by hand over time — rather than blocking the whole
+   * feature on rewriting sixty-one recipes in one go.
+   */
+  steps?: string[];
+  /** Hands-on time in minutes. Shown so a 40-minute dinner isn't a surprise. */
+  minutes?: number;
+  /** One thing worth knowing — batching, swaps, what goes wrong. */
+  tip?: string;
+}
+
+/**
+ * A meal's method as steps you can follow one at a time.
+ *
+ * Splits on SENTENCE boundaries only, never on commas. Comma-splitting looked
+ * tempting — most of these methods are comma-separated instructions — but it
+ * mangles the ones with an aside in them ("season hard (turmeric and black
+ * salt, if you have them)") and turns "Cheap, high protein and it freezes"
+ * into three imaginary steps. A conservative split is never wrong; an
+ * aggressive one is wrong in a way that makes the app look careless.
+ */
+export function recipeSteps(meal: Meal): string[] {
+  return splitMethod(meal).steps;
+}
+
+/**
+ * The bit of a method that is commentary rather than instruction.
+ *
+ * Most of these recipes end on an aside — "Cheap, high protein and it freezes",
+ * "Around 1,000 kcal without feeling like a challenge". True, useful, and not a
+ * step. Numbering it tells someone to go and do it, which is the kind of small
+ * wrongness that makes a whole feature feel machine-generated.
+ */
+export function recipeNote(meal: Meal): string | undefined {
+  return meal.tip ?? splitMethod(meal).note;
+}
+
+/**
+ * Verbs a cooking instruction actually starts with.
+ *
+ * A list, not a parts-of-speech guess. The set of imperatives used in a recipe
+ * is small and closed, and enumerating it is both more accurate than a
+ * heuristic and honest about where it will fail — a method starting with a verb
+ * that isn't here degrades to "treated as a note", which is safe, rather than
+ * to a mangled step.
+ */
+const COOK_VERBS = new Set([
+  "add", "assemble", "bake", "beat", "blend", "blitz", "boil", "bring", "build",
+  "chop", "combine", "cook", "cover", "crack", "crisp", "crumble", "cube", "cut",
+  "defrost", "dice", "drain", "dress", "drizzle", "everything", "fill", "finish",
+  "fold", "fork", "fry", "grate", "grill", "heat", "keep", "layer", "leave",
+  "let", "loosen", "mash", "meanwhile", "microwave", "mix", "oven", "pan",
+  "plate", "pour", "press", "push", "put", "reduce", "reheat", "rinse", "roast",
+  "scramble", "sear", "season", "serve", "shake", "simmer", "slice", "snap",
+  "soften", "spread", "sprinkle", "squeeze", "steam", "stir", "take", "toast",
+  "top", "toss", "turn", "warm", "wilt", "whisk", "spoon", "tip", "rice",
+  "pasta", "potatoes", "beans", "lentils", "oven's", "under",
+]);
+
+function isInstruction(sentence: string): boolean {
+  const first = sentence.trim().toLowerCase().replace(/^[^a-z]+/, "").split(/[\s,]/)[0] ?? "";
+  return COOK_VERBS.has(first);
+}
+
+/**
+ * Split a prose method into steps plus a trailing note.
+ *
+ * Sentence boundaries only — never commas. Comma-splitting was tempting, since
+ * most of these are comma-separated instructions, but it turns an aside like
+ * "season hard (turmeric and black salt, if you have them)" into two steps and
+ * "Cheap, high protein and it freezes" into three. A conservative split is
+ * never wrong; an aggressive one is wrong in a way that looks careless.
+ *
+ * Trailing sentences that don't begin with a cooking verb are lifted out as the
+ * note. Only TRAILING ones: a non-instruction in the middle is usually context
+ * for the step after it ("The tofu needs to be dry. Fry it hard...") and pulling
+ * that to the bottom would break the sequence.
+ */
+function splitMethod(meal: Meal): { steps: string[]; note?: string } {
+  if (meal.steps?.length) return { steps: meal.steps, note: meal.tip };
+
+  const sentences = meal.method
+    .split(/(?<=[.!?])\s+(?=[A-Z])/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const steps = [...sentences];
+  const notes: string[] = [];
+  // Peel commentary off the end, but never take the last instruction with it —
+  // a method must always have at least one step.
+  while (steps.length > 1 && !isInstruction(steps[steps.length - 1])) {
+    notes.unshift(steps.pop()!);
+  }
+
+  return { steps, note: notes.length ? notes.join(" ") : undefined };
 }
 
 export const MEALS: Meal[] = [
+  // ===========================================================================
+  // RECIPE-FIRST MEALS, added to fill measured gaps in the pool.
+  //
+  // Not a general "more recipes" pass. A sweep of every diet pattern crossed
+  // with every avoidance found where the planner was actually starved of
+  // options, and the worst was stark: GLUTEN-FREE BREAKFAST HAD EXACTLY ONE
+  // MEAL. A coeliac athlete was handed the same breakfast seven mornings a
+  // week, and with MAX_REPEATS at 3 the planner could not even honour its own
+  // variety rule. Vegan lunch (5) and vegetarian dinner (6) were next.
+  //
+  // These are written recipes rather than ingredient piles — `steps`, a time,
+  // and a tip — because they are the first ones the new recipe view renders,
+  // and a feature is judged on what it shows first. All original, built from
+  // the existing food table on the archetypes athlete cooking actually uses:
+  // one pan, batchable, protein-led, nothing that needs a scale mid-cook.
+  // ===========================================================================
+
+  // --- Gluten-free breakfasts (the pool had one) -----------------------------
+  { id: "gf_potato_hash_eggs", name: "Potato hash & eggs", slot: "Breakfast",
+    items: [{ foodId: "potatoes", qty: 300 }, { foodId: "eggs", qty: 3 }, { foodId: "spinach", qty: 80 }, { foodId: "olive_oil", qty: 12 }, { foodId: "onion", qty: 60 }],
+    minutes: 20,
+    steps: [
+      "Dice the potatoes small — 1cm, or they will not cook through in time.",
+      "Fry them in the oil over a medium heat for 12 minutes, turning only every few minutes so they crust rather than steam.",
+      "Add the onion for the last 5 minutes, then the spinach for the last 1.",
+      "Push it all to one side, crack the eggs into the space, and cover the pan for 2 minutes.",
+    ],
+    tip: "Boil the potatoes the night before and this is a 7-minute breakfast.",
+    method: "Dice and fry the potatoes until crusted, add onion then spinach, and cook the eggs in the same pan." },
+  { id: "gf_quinoa_porridge", name: "Quinoa breakfast bowl", slot: "Breakfast",
+    items: [{ foodId: "quinoa", qty: 90 }, { foodId: "milk", qty: 300 }, { foodId: "whey_protein", qty: 30 }, { foodId: "berries_frozen", qty: 100 }, { foodId: "seeds_mixed", qty: 15 }],
+    minutes: 18,
+    steps: [
+      "Rinse the quinoa in a sieve until the water runs clear, or it tastes soapy.",
+      "Simmer it in the milk for 15 minutes until the grains uncurl and it goes creamy.",
+      "Take it off the heat and let it stop steaming before stirring the protein in — added to a boiling pan it goes lumpy.",
+      "Berries and seeds on top.",
+    ],
+    tip: "Cook the whole bag at the weekend. It reheats with a splash of milk.",
+    method: "Rinse the quinoa, simmer in milk for 15 minutes, cool slightly, stir protein through and top with berries and seeds." },
+  { id: "gf_yoghurt_stack", name: "Big yoghurt & fruit stack", slot: "Breakfast",
+    items: [{ foodId: "greek_yoghurt", qty: 400 }, { foodId: "berries_frozen", qty: 120 }, { foodId: "almonds", qty: 30 }, { foodId: "peanut_butter", qty: 20 }, { foodId: "banana", qty: 1 }],
+    minutes: 4,
+    steps: [
+      "Defrost the berries in the microwave for 40 seconds so they release their juice.",
+      "Layer yoghurt, berries and sliced banana in a bowl or a jar.",
+      "Peanut butter melted over the top, almonds last so they stay crunchy.",
+    ],
+    tip: "Built in a jar the night before, this travels to a morning session.",
+    method: "Defrost the berries, layer with yoghurt and banana, then peanut butter and almonds on top." },
+  { id: "gf_tofu_sweet_potato", name: "Tofu & sweet potato hash", slot: "Breakfast",
+    items: [{ foodId: "tofu", qty: 250 }, { foodId: "sweet_potato", qty: 250 }, { foodId: "spinach", qty: 80 }, { foodId: "olive_oil", qty: 12 }],
+    minutes: 22,
+    steps: [
+      "Cube the sweet potato and get it into the hot oil first — it takes twice as long as the tofu.",
+      "After 12 minutes, crumble the tofu in with plenty of turmeric, paprika and salt.",
+      "Fry another 6 minutes without stirring much, so it browns instead of scrambling.",
+      "Spinach in at the very end, off the heat.",
+    ],
+    tip: "Press the tofu under something heavy for 10 minutes first and it crisps properly.",
+    method: "Fry the sweet potato, add crumbled seasoned tofu, brown it, then wilt spinach in off the heat." },
+
+  // --- Vegan lunches and dinners (5 and 6 respectively) ----------------------
+  { id: "vg_burrito_bowl", name: "Black bean burrito bowl", slot: "Lunch",
+    items: [{ foodId: "black_beans", qty: 240 }, { foodId: "rice", qty: 90 }, { foodId: "tofu", qty: 150 }, { foodId: "tomatoes_tin", qty: 150 }, { foodId: "olive_oil", qty: 10 }],
+    minutes: 20,
+    steps: [
+      "Rice on. While it cooks, fry the tofu in the oil until the edges catch.",
+      "Add the beans and tomatoes with cumin, smoked paprika and a lot of black pepper.",
+      "Simmer 8 minutes until it thickens and stops looking like soup.",
+      "Over the rice, with lime if you have it.",
+    ],
+    tip: "Doubles cleanly and is better on day two.",
+    method: "Fry tofu, add beans, tomatoes and spices, simmer until thick, serve over rice." },
+  { id: "vg_peanut_noodle_tofu", name: "Peanut tofu noodles", slot: "Lunch",
+    items: [{ foodId: "tofu", qty: 250 }, { foodId: "pasta", qty: 100 }, { foodId: "peanut_butter", qty: 30 }, { foodId: "broccoli", qty: 150 }, { foodId: "soy_milk", qty: 80 }],
+    minutes: 18,
+    steps: [
+      "Pasta on. Drop the broccoli into the same water for the last 3 minutes.",
+      "Fry the tofu hard in a dry pan until it squeaks and colours.",
+      "Loosen the peanut butter with the soya milk and a splash of the pasta water into a sauce.",
+      "Everything into the pan together, tossed until it coats.",
+    ],
+    tip: "Any nut butter works. Thin the sauce more than feels right — it tightens off the heat.",
+    method: "Cook pasta and broccoli together, crisp the tofu, make a peanut sauce with soya milk and pasta water, toss it all through." },
+  { id: "vg_lentil_shepherds", name: "Lentil shepherd's pie", slot: "Dinner",
+    items: [{ foodId: "red_lentils", qty: 120 }, { foodId: "potatoes", qty: 350 }, { foodId: "mixed_veg_frozen", qty: 200 }, { foodId: "tomatoes_tin", qty: 200 }, { foodId: "olive_oil", qty: 12 }],
+    minutes: 40,
+    steps: [
+      "Potatoes on to boil, 20 minutes, then mash with half the oil and a lot of seasoning.",
+      "Meanwhile simmer the lentils with the tomatoes, veg and herbs for 20 minutes until thick.",
+      "Lentils into a dish, mash spread over the top, fork the surface so it crisps.",
+      "Under a hot grill for 6-8 minutes until the peaks brown.",
+    ],
+    tip: "Makes two portions. The second is better.",
+    method: "Boil and mash the potatoes, simmer the lentils with tomatoes and veg, top and grill until browned." },
+  { id: "vg_tofu_katsu", name: "Baked tofu katsu & rice", slot: "Dinner",
+    items: [{ foodId: "tofu", qty: 300 }, { foodId: "rice", qty: 100 }, { foodId: "mixed_veg_frozen", qty: 200 }, { foodId: "olive_oil", qty: 12 }, { foodId: "tomatoes_tin", qty: 100 }],
+    minutes: 35,
+    steps: [
+      "Oven to 200C. Press the tofu, slice into thick slabs, oil and season both sides.",
+      "Bake 25 minutes, turning once, until the edges are firm and golden.",
+      "Rice and veg on in the last 15 minutes.",
+      "Blitz or mash the tomatoes with curry powder and a little oil for the sauce, warmed through.",
+    ],
+    tip: "Baking beats frying here — the slabs hold together instead of falling apart.",
+    method: "Bake pressed, oiled tofu slabs at 200C for 25 minutes, serve with rice, veg and a quick curry sauce." },
+
+  /**
+   * The densest vegan lunch in the pool, added because 95kg/cut/vegan landed at
+   * 89% of protein — one point under the floor.
+   *
+   * The other new vegan lunches (burrito bowl, peanut noodles) are good meals
+   * and carry rice, pasta and peanut butter, which dilute density. A cutting
+   * athlete needs one option with almost nothing in it but protein, so this is
+   * tofu and lentils and greens, and no starch at all.
+   */
+  { id: "vg_tofu_lentil_no_starch", name: "Tofu, lentil & greens plate", slot: "Lunch",
+    items: [{ foodId: "tofu", qty: 320 }, { foodId: "red_lentils", qty: 70 }, { foodId: "broccoli", qty: 200 }, { foodId: "spinach", qty: 100 }, { foodId: "olive_oil", qty: 10 }],
+    minutes: 25,
+    steps: [
+      "Lentils on with double their volume of water and a stock cube, 20 minutes until they collapse.",
+      "Press the tofu, cube it, and fry hard in the oil until every side has colour — 10 minutes, and resist stirring it.",
+      "Steam the broccoli for 5 minutes, wilt the spinach into the lentils at the end.",
+      "Plate the lentils, tofu on top, greens alongside.",
+    ],
+    tip: "No rice, no bread. That is the point — it is the meal for a day when calories are tight and protein isn't.",
+    method: "Simmer the lentils, fry the tofu hard, steam the broccoli and wilt spinach through, then plate together." },
+
+  // --- Vegetarian dinner (6) ------------------------------------------------
+  { id: "vt_halloumi_traybake", name: "Egg & chickpea traybake", slot: "Dinner",
+    items: [{ foodId: "chickpeas", qty: 240 }, { foodId: "eggs", qty: 3 }, { foodId: "sweet_potato", qty: 250 }, { foodId: "spinach", qty: 80 }, { foodId: "olive_oil", qty: 15 }],
+    minutes: 35,
+    steps: [
+      "Oven to 200C. Cubed sweet potato and drained chickpeas onto a tray with the oil, paprika and cumin.",
+      "Roast 25 minutes, shaking the tray once.",
+      "Stir the spinach through, make three wells, and crack an egg into each.",
+      "Back in for 6-8 minutes until the whites set and the yolks still move.",
+    ],
+    tip: "One tray, one wash-up. The chickpeas go crunchy, which is the point.",
+    method: "Roast sweet potato and chickpeas at 200C, stir spinach through, bake eggs into wells for the last 8 minutes." },
+  { id: "vt_paneer_style_curry", name: "Cheese & chickpea curry", slot: "Dinner",
+    items: [{ foodId: "cheddar", qty: 80 }, { foodId: "chickpeas", qty: 240 }, { foodId: "tomatoes_tin", qty: 200 }, { foodId: "rice", qty: 90 }, { foodId: "spinach", qty: 100 }],
+    minutes: 25,
+    steps: [
+      "Rice on.",
+      "Tomatoes, chickpeas and curry powder into a pan, simmer 12 minutes until it thickens.",
+      "Spinach wilted in, then the cheese cubed and folded through off the heat so it softens rather than melts away.",
+    ],
+    tip: "Paneer if you can get it. Cheddar is what most people actually have in.",
+    method: "Simmer chickpeas with tomatoes and curry powder, wilt spinach in, fold cubed cheese through off the heat, serve with rice." },
+
+  // --- Dairy-free snacks (8) ------------------------------------------------
+  { id: "df_trail_pot", name: "Seed & fruit trail pot", slot: "Snack",
+    items: [{ foodId: "almonds", qty: 30 }, { foodId: "seeds_mixed", qty: 25 }, { foodId: "banana", qty: 1 }, { foodId: "peanut_butter", qty: 20 }],
+    minutes: 2,
+    steps: ["Everything in a pot or a bag.", "Peanut butter on the banana, nuts and seeds alongside."],
+    tip: "The one that survives a kit bag. Nothing here needs a fridge.",
+    method: "Combine the nuts and seeds, eat with the banana and peanut butter." },
+  { id: "df_bean_toast", name: "Beans on toast, properly", slot: "Snack",
+    items: [{ foodId: "beans_baked", qty: 250 }, { foodId: "wholemeal_bread", qty: 80 }, { foodId: "seeds_mixed", qty: 15 }],
+    minutes: 6,
+    steps: [
+      "Beans into a pan, not a microwave — 4 minutes over a medium heat reduces them and concentrates the flavour.",
+      "Toast under them, seeds and black pepper over.",
+    ],
+    tip: "A splash of vinegar in the beans is the difference between fine and good.",
+    method: "Reduce the beans in a pan for 4 minutes, serve on toast with seeds and pepper." },
+
   // ---------------------------------------------------------------------------
   // BIG MEALS, AND VEGAN MEALS THAT ACTUALLY CARRY PROTEIN.
   //
@@ -729,6 +1006,26 @@ export function buildWeek(
   // single biggest lever on the bill, and someone who ticked "cheap staples" has
   // told us they'd rather eat the same thing than pay more.
   const repeatPenalty = prefs.budget ? REPEAT_PENALTY * 0.35 : REPEAT_PENALTY;
+  /**
+   * BUDGET MODE HAS TO ACTUALLY WEIGHT COST, and it didn't.
+   *
+   * The only thing ticking "cheap staples" changed was the repeat penalty
+   * above — a nudge toward eating the same thing twice. Cost itself was scored
+   * identically in both modes, so budget mode was competing against protein and
+   * size terms it had no extra leverage over. It mostly came out cheaper by
+   * luck, via the repetition.
+   *
+   * Adding twelve meals to the pool broke the luck: with more good-fitting
+   * options available, `budget mode produces a cheaper shop than the default`
+   * started failing at £68.90 against £63.90. Budget mode was producing the
+   * DEARER shop, which is the one thing it exists not to do.
+   *
+   * So cost gets a real multiplier. It is deliberately a multiplier on the term
+   * rather than a reduction of the others: someone on a budget still needs
+   * their protein, and this way cost outranks a marginal nutritional gain
+   * without ever overriding a large one.
+   */
+  const costWeight = prefs.budget ? 2.5 : 1;
   const favourites = new Set(prefs.favourites ?? []);
 
   /**
@@ -784,7 +1081,7 @@ export function buildWeek(
         // it wins ties and near-ties. Deliberately a nudge and not an
         // override: "I like eggs" should mean eggs turn up regularly, not
         // eggs at every meal, and the repeat penalty still applies on top.
-        score: marginalCost(meal, basket)
+        score: marginalCost(meal, basket) * costWeight
           - (isFavourite(meal, favourites) ? FAVOURITE_BONUS : 0)
           + (uses.get(meal.id) ?? 0) * repeatPenalty
           // How far this meal falls short of its share of the day's protein,

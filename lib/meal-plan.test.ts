@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   basalRate, planTargets, buildWeek, shoppingList, shoppingListText,
   mealMacros, MEALS, ACTIVITY_LEVELS, DEFAULT_PREFS,
-  dislikedFoodIds, favouriteFoodIds, type BodyStats,
+  dislikedFoodIds, favouriteFoodIds, recipeSteps, recipeNote, type BodyStats,
 } from "./meal-plan";
 import { EMPTY_SCHEDULE } from "./meal-schedule";
 import { FOOD_BY_ID } from "./food-db";
@@ -338,4 +338,41 @@ test("no two meals share an id", () => {
   const ids = MEALS.map((m) => m.id);
   assert.equal(new Set(ids).size, ids.length,
     "duplicate meal id — which recipe you get would depend on array order");
+});
+
+test("every meal produces at least one well-formed step", () => {
+  for (const m of MEALS) {
+    const steps = recipeSteps(m);
+    assert.ok(steps.length >= 1, `${m.id} has no steps`);
+    for (const s of steps) {
+      assert.match(s, /^[A-Z]/, `${m.id}: step doesn't start with a capital — "${s.slice(0, 40)}"`);
+      assert.ok(s.length > 3, `${m.id}: step is a fragment — "${s}"`);
+    }
+  }
+});
+
+/**
+ * Commentary must not be numbered as an instruction.
+ *
+ * "Around 1,000 kcal without feeling like a challenge" was rendering as step 2
+ * of a two-step recipe, telling the athlete to go and do it. That is the small
+ * wrongness that makes a feature feel machine-generated.
+ */
+test("trailing commentary becomes a note, not a step", () => {
+  const oats = MEALS.find((m) => m.id === "big_oats_pb");
+  assert.ok(oats, "fixture meal missing");
+  assert.equal(recipeSteps(oats!).length, 1);
+  assert.match(recipeNote(oats!) ?? "", /1,000 kcal/);
+});
+
+test("a hand-written recipe is used verbatim, never re-split", () => {
+  const written = MEALS.find((m) => m.steps?.length);
+  assert.ok(written, "no hand-written recipes found");
+  assert.deepEqual(recipeSteps(written!), written!.steps);
+});
+
+/** A method must never be reduced to nothing, however odd its prose. */
+test("a method with no recognised cooking verb still yields a step", () => {
+  const odd = { id: "x", name: "x", slot: "Snack" as const, items: [], method: "Nothing here looks like an instruction. Honestly it doesn't." };
+  assert.ok(recipeSteps(odd).length >= 1);
 });
