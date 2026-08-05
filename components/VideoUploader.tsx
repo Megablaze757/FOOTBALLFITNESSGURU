@@ -1,11 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { MOVEMENTS, type MovementType } from "@/lib/movement";
 import { sportTerms } from "@/lib/sport-terms";
 import { MAX_CLIP_SECONDS } from "@/components/InBrowserAnalysis";
 import { todayLocal } from "@/lib/day";
+import { VIDEO_QUOTA, planFor } from "@/lib/subscription";
+import type { Tier } from "@/lib/types";
 
 // Must match the bucket's file_size_limit in migration 0036 — this copy exists
 // only to give a useful message before the upload starts.
@@ -70,6 +73,8 @@ export function VideoUploader({ sport, onUploaded }: { sport?: string; onUploade
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<{ url: string; seconds: number } | null>(null);
   const [done, setDone] = useState(false);
+  // Turns the error into an upgrade route rather than a dead end.
+  const [atCap, setAtCap] = useState(false);
   const thumbFor = useRef<File | null>(null);
   // Held so the label's hidden input can be reached if we ever need to open the
   // picker programmatically. The tiles deliberately do NOT do that any more —
@@ -121,12 +126,58 @@ export function VideoUploader({ sport, onUploaded }: { sport?: string; onUploade
       return;
     }
 
+    /**
+     * THE MONTHLY CAP, CHECKED BEFORE THE BYTES MOVE.
+     *
+     * `videos: insert own` (migration 0036) counts this month's rows inside the
+     * RLS policy — 3 on free, 15 on Silver, 40 on Gold. That is the right place
+     * to enforce it, because a client-side check only stops honest users.
+     *
+     * But the ORDER here was wrong, and it is why "upload not working" had no
+     * useful symptom. The file went to storage first and the row second, so
+     * someone at their cap waited out a full 60MB upload on mobile data, then
+     * got `new row violates row-level security policy for table "videos"`,
+     * then had the upload silently deleted again. A database sentence about a
+     * policy, after a two-minute wait, for a limit nothing had mentioned.
+     *
+     * One cheap count first. It cannot replace the policy — a race or a direct
+     * REST call still hits the real check below — but it turns the common case
+     * into an instant, honest answer instead of a slow, cryptic one.
+     */
+    const monthStart = `${todayLocal().slice(0, 7)}-01T00:00:00.000Z`;
+    const [{ count: usedThisMonth }, { data: subRow }] = await Promise.all([
+      supabase.from("videos").select("id", { count: "exact", head: true })
+        .eq("user_id", user.id).gte("created_at", monthStart),
+      supabase.from("subscriptions").select("tier, status").eq("user_id", user.id).maybeSingle(),
+    ]);
+    const tier: Tier = subRow?.status === "active" && subRow.tier ? subRow.tier : "bronze";
+    const quota = VIDEO_QUOTA[tier];
+    if ((usedThisMonth ?? 0) >= quota) {
+      setError(
+        `You've used all ${quota} of this month's uploads on ${planFor(tier).name}. ` +
+        `The cap resets on the 1st — or a higher plan lifts it. Clips you've already ` +
+        `uploaded still analyse as many times as you like.`
+      );
+      setAtCap(true);
+      setBusy(false);
+      return;
+    }
+
     const ext = file.name.split(".").pop() || "mp4";
     const path = `${user.id}/${crypto.randomUUID()}.${ext}`;
 
     const { error: upErr } = await supabase.storage.from("videos").upload(path, file, { contentType: file.type || "video/mp4" });
     if (upErr) {
-      setError(upErr.message);
+      // The bucket's own limits speak in HTTP, not English. Both of these are
+      // things the athlete can act on, so say which one it was.
+      const m = upErr.message || "";
+      setError(
+        /mime|content type/i.test(m)
+          ? `That file type isn't supported — MP4, MOV, WebM or MKV. (${m})`
+          : /size|413|too large|exceeded/i.test(m)
+            ? `That clip is over the ${MAX_UPLOAD_MB}MB limit. Trim it to the movement itself and it'll go straight through.`
+            : `Upload failed: ${m}`
+      );
       setBusy(false);
       return;
     }
@@ -171,7 +222,18 @@ export function VideoUploader({ sport, onUploaded }: { sport?: string; onUploade
       const { error: cleanupErr } = await supabase.storage.from("videos").remove([path]);
       if (cleanupErr) console.warn("orphaned upload left in storage:", path, cleanupErr.message);
 
-      setError(`Upload failed: ${rowErr.message}`);
+      // The quota lives in the RLS policy, so hitting it arrives here as a
+      // generic row-level-security violation. Untranslated, that is the message
+      // an athlete was being shown for the entirely ordinary event of reaching
+      // a documented limit. The pre-flight count above catches this first
+      // almost always; this is the race and the direct-API case.
+      const isQuota = /row-level security|violates.*policy/i.test(rowErr.message);
+      if (isQuota) setAtCap(true);
+      setError(
+        isQuota
+          ? "That's this month's upload limit reached. It resets on the 1st, and a higher plan lifts it."
+          : `Upload failed: ${rowErr.message}`
+      );
       setBusy(false);
       return;
     }
@@ -315,7 +377,21 @@ export function VideoUploader({ sport, onUploaded }: { sport?: string; onUploade
         </>
       )}
 
-      {error && <p className="text-sm text-readiness-red">{error}</p>}
+      {/* A limit reached is not an error. Red says "you did something wrong,
+          try again", and trying again is precisely what cannot work here — so
+          the cap gets amber, a plain explanation, and the one thing that
+          actually resolves it. */}
+      {error && (
+        atCap
+          ? <div className="rounded-xl border border-amber-400/25 bg-amber-400/[0.06] p-3">
+              <p className="text-sm font-bold text-amber-300">Monthly upload limit reached</p>
+              <p className="mt-1 text-xs leading-relaxed text-slate-400">{error}</p>
+              <Link href="/pricing" className="chip-option chip-option-sm mt-2 border-pitch-400/40 text-pitch-400">
+                See plans
+              </Link>
+            </div>
+          : <p className="text-sm text-readiness-red">{error}</p>
+      )}
       {done && !file && (
         <p className="rounded-xl border border-readiness-green/30 bg-readiness-green/[0.06] px-3 py-2 text-sm text-readiness-green">
           ✓ Uploaded — tap it below to analyse.
