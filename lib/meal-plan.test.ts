@@ -255,3 +255,87 @@ test("plant-based plans still deliver most of the protein target", () => {
     }
   }
 });
+
+/**
+ * THE PLAN MUST ACTUALLY FEED THE ATHLETE.
+ *
+ * This is the regression guard for the complaint "meal plans not meeting
+ * goals". A measured sweep of 90 combinations — five body sizes, three goals,
+ * three diet patterns, four and five meals a day — found 31 of them missing:
+ * a 115kg athlete on a build ate 75% of his target because 23 of his 28 weekly
+ * meals were pinned at the portion-scaling ceiling, and every vegetarian or
+ * vegan cut fell 14-23% short on protein.
+ *
+ * Averages hid all of it, so this asserts on the WORST case, not the mean.
+ */
+test("every body size, goal and diet gets fed", () => {
+  const bodies: BodyStats[] = [
+    { weightKg: 55, heightCm: 162, age: 22, sex: "female", activity: "moderate", goal: "maintain" },
+    { weightKg: 65, heightCm: 168, age: 25, sex: "female", activity: "high", goal: "maintain" },
+    { weightKg: 78, heightCm: 180, age: 24, sex: "male", activity: "high", goal: "maintain" },
+    { weightKg: 95, heightCm: 188, age: 27, sex: "male", activity: "high", goal: "maintain" },
+    { weightKg: 115, heightCm: 196, age: 26, sex: "male", activity: "athlete", goal: "maintain" },
+  ];
+  const failures: string[] = [];
+
+  for (const body of bodies) {
+    for (const goal of ["cut", "maintain", "build"] as const) {
+      for (const pattern of ["omnivore", "vegetarian", "vegan"] as const) {
+        for (const mealsPerDay of [4, 5] as const) {
+          const targets = planTargets({ ...body, goal });
+          const week = buildWeek(targets, 0, { ...DEFAULT_PREFS, pattern, mealsPerDay });
+          const mean = (f: (d: (typeof week)[number]) => number) =>
+            week.reduce((s, d) => s + f(d), 0) / week.length;
+
+          const kcalPct = (mean((d) => d.macros.kcal) / targets.calories) * 100;
+          const proteinPct = (mean((d) => d.macros.protein) / targets.protein) * 100;
+          const where = `${body.weightKg}kg ${body.sex}/${goal}/${pattern}/${mealsPerDay}`;
+
+          // Calories: a cut that overshoots is as broken as a bulk that
+          // undershoots, so this is bounded on both sides.
+          if (kcalPct < 92 || kcalPct > 108) failures.push(`${where}: ${kcalPct.toFixed(0)}% of calories`);
+          // Protein: only a floor. Going over costs nothing and is not a
+          // problem worth solving.
+          if (proteinPct < 90) failures.push(`${where}: ${proteinPct.toFixed(0)}% of protein`);
+        }
+      }
+    }
+  }
+
+  assert.deepEqual(failures, [], `plans missing their targets:\n  ${failures.join("\n  ")}`);
+});
+
+/**
+ * Portion scaling is a last resort, not the mechanism.
+ *
+ * A plan can hit its calories while every meal is stretched to the ceiling,
+ * which means the picker chose badly and the athlete gets a plate of the wrong
+ * size. This asserts the SELECTION is doing the work.
+ */
+test("a big athlete is offered big meals, not small ones stretched", () => {
+  const targets = planTargets({
+    weightKg: 115, heightCm: 196, age: 26, sex: "male", activity: "athlete", goal: "build",
+  });
+  const week = buildWeek(targets, 0, { ...DEFAULT_PREFS, mealsPerDay: 4 });
+  const all = week.flatMap((d) => d.meals);
+  const atCeiling = all.filter((m) => m.scale >= 1.6).length;
+  // 23/28 before the size term was fixed, 11/28 after. The threshold is the
+  // measured reality plus headroom, NOT an aspiration — a test tuned to a
+  // number the code has never hit is a test that gets deleted.
+  //
+  // 11/28 is acceptable rather than ideal: this athlete eats 4,790 kcal a day,
+  // his plan now lands at 94%+ of that, and a 1.6x portion of a main meal is a
+  // real plate for someone that size. The remaining ceiling hits cost accuracy
+  // nothing — closing them further needs bigger base recipes in the pool, not
+  // more scoring pressure, which only starts trading protein away.
+  assert.ok(
+    atCeiling / all.length < 0.5,
+    `${atCeiling}/${all.length} meals pinned at the scaling ceiling — the picker is choosing meals that are too small`
+  );
+});
+
+test("no two meals share an id", () => {
+  const ids = MEALS.map((m) => m.id);
+  assert.equal(new Set(ids).size, ids.length,
+    "duplicate meal id — which recipe you get would depend on array order");
+});

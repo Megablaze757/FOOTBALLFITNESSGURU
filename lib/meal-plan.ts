@@ -243,6 +243,57 @@ export const MEALS: Meal[] = [
   { id: "pb_shake", name: "Peanut butter mass shake", slot: "Snack",
     items: [{ foodId: "milk", qty: 400 }, { foodId: "peanut_butter", qty: 40 }, { foodId: "oats", qty: 50 }, { foodId: "whey_protein", qty: 30 }, { foodId: "banana", qty: 1 }],
     method: "Blend. The easiest 800 kcal you will ever eat, and the answer when a big target won't fit into solid food." },
+  /**
+   * HIGH-PROTEIN PLANT MEALS, added because the numbers said so.
+   *
+   * A 115kg athlete cutting needs 72g of protein per 1000 kcal. The vegan pool
+   * had 17 meals with a MEDIAN density of 53 — so most days simply could not
+   * reach the target no matter which meals were picked, and the measured result
+   * was 77-86% of protein on every vegetarian and vegan cut.
+   *
+   * No amount of scoring fixes a pool that does not contain the answer. These
+   * are built around the only plant foods dense enough to move it: tofu (104),
+   * pea protein (213) and soya milk (100), with starch kept deliberately low.
+   * Each clears 80g/1000kcal, and they are sized generously so they also serve
+   * the big athletes the size term is now looking after.
+   */
+  { id: "tofu_lentil_bowl", name: "Tofu, lentil & spinach bowl", slot: "Lunch",
+    items: [{ foodId: "tofu", qty: 300 }, { foodId: "red_lentils", qty: 80 }, { foodId: "spinach", qty: 100 }, { foodId: "tomatoes_tin", qty: 200 }, { foodId: "olive_oil", qty: 10 }],
+    method: "Simmer the lentils with the tomatoes and spices for 20 minutes. Fry the tofu hard until it colours, fold it through with the spinach at the end." },
+  { id: "tofu_stirfry_big", name: "Tofu & broccoli stir-fry", slot: "Dinner",
+    items: [{ foodId: "tofu", qty: 350 }, { foodId: "broccoli", qty: 200 }, { foodId: "rice", qty: 90 }, { foodId: "olive_oil", qty: 12 }, { foodId: "seeds_mixed", qty: 15 }],
+    method: "Press the tofu, cube it, fry until crisp on every side. Steam the broccoli, keep the rice modest, seeds over at the end for crunch." },
+  { id: "protein_soya_porridge", name: "Soya protein porridge", slot: "Breakfast",
+    items: [{ foodId: "oats", qty: 70 }, { foodId: "soy_milk", qty: 450 }, { foodId: "pea_protein", qty: 40 }, { foodId: "berries_frozen", qty: 80 }],
+    method: "Simmer the oats in the soya milk, take off the heat, then stir the protein through once it has cooled a little or it goes claggy." },
+  { id: "chickpea_tofu_curry", name: "Chickpea & tofu curry", slot: "Dinner",
+    items: [{ foodId: "tofu", qty: 250 }, { foodId: "chickpeas", qty: 240 }, { foodId: "tomatoes_tin", qty: 200 }, { foodId: "spinach", qty: 100 }, { foodId: "rice", qty: 70 }],
+    method: "Onion, spices, tomatoes, then the chickpeas and tofu. Twenty minutes. Spinach wilted in right at the end." },
+  { id: "pea_protein_shake_big", name: "Double pea protein shake", slot: "Snack",
+    items: [{ foodId: "soy_milk", qty: 500 }, { foodId: "pea_protein", qty: 50 }, { foodId: "banana", qty: 1 }],
+    method: "Blend. Deliberately light on fat so it tops up protein without eating into the day's calories." },
+
+  /**
+   * The same density, in a smaller portion.
+   *
+   * Adding big high-protein plant meals fixed the large athletes and left three
+   * cases behind: a 55-65kg woman cutting on a vegan diet, at 84-86% of protein.
+   * Density is scale-invariant, so scaling a dense meal down does not lose
+   * protein — but the size term now correctly penalises a 900 kcal bowl for a
+   * 1500 kcal day, so those meals stopped being picked for her at all.
+   *
+   * The pool therefore needs density at BOTH ends. Same foods, smaller plates.
+   */
+  { id: "tofu_salad_small", name: "Tofu & chickpea salad", slot: "Lunch",
+    items: [{ foodId: "tofu", qty: 180 }, { foodId: "chickpeas", qty: 120 }, { foodId: "spinach", qty: 80 }, { foodId: "olive_oil", qty: 8 }],
+    method: "Crisp the tofu in a dry pan, toss with the chickpeas and spinach, dress with the oil, lemon and plenty of pepper." },
+  { id: "soya_protein_pot", name: "Soya protein pot", slot: "Snack",
+    items: [{ foodId: "soy_milk", qty: 250 }, { foodId: "pea_protein", qty: 25 }, { foodId: "berries_frozen", qty: 60 }],
+    method: "Shake it up in a bottle. Under 250 kcal and most of it protein — the gap-filler for a day that is already near its calorie target." },
+  { id: "tofu_scramble_lean", name: "Lean tofu scramble", slot: "Breakfast",
+    items: [{ foodId: "tofu", qty: 200 }, { foodId: "spinach", qty: 80 }, { foodId: "tomatoes_tin", qty: 100 }, { foodId: "olive_oil", qty: 5 }],
+    method: "No toast. Crumble the tofu in with turmeric, add the tomatoes, wilt the spinach through at the end." },
+
   { id: "vegan_shake", name: "Soya, seed & pea protein shake", slot: "Snack",
     items: [{ foodId: "soy_milk", qty: 400 }, { foodId: "pea_protein", qty: 30 }, { foodId: "peanut_butter", qty: 30 }, { foodId: "banana", qty: 1 }],
     method: "Blend. Covers the protein a plant-based day usually misses." },
@@ -293,7 +344,12 @@ export const MEALS: Meal[] = [
   { id: "oats_soy", name: "Oats with soya milk & seeds", slot: "Breakfast",
     items: [{ foodId: "oats", qty: 80 }, { foodId: "soy_milk", qty: 300 }, { foodId: "seeds_mixed", qty: 20 }, { foodId: "banana", qty: 1 }],
     method: "Simmer the oats in soya milk, top with seeds and sliced banana." },
-  { id: "tofu_scramble", name: "Tofu scramble on toast", slot: "Breakfast",
+  // Renamed from a SECOND "tofu_scramble". There were two different recipes
+  // under one id — 53 meals, 52 unique ids — so which one you got depended on
+  // array order, and the repeat counter treated them as the same meal. Kept
+  // rather than deleted: a lighter and a heavier version of the same dish is
+  // exactly what the size-aware picker wants, now that it can tell them apart.
+  { id: "tofu_scramble_light", name: "Tofu scramble on toast (lighter)", slot: "Breakfast",
     items: [{ foodId: "tofu", qty: 150 }, { foodId: "wholemeal_bread", qty: 80 }, { foodId: "spinach", qty: 50 }, { foodId: "olive_oil", qty: 8 }],
     method: "Crumble the tofu into a hot pan with turmeric and black pepper, wilt the spinach in, serve on toast." },
   { id: "coconut_bowl", name: "Coconut yoghurt & seed bowl", slot: "Breakfast",
@@ -498,7 +554,22 @@ const REPEAT_PENALTY = 0.85; // £
 // Discount applied to a meal containing a food they said they like. Sized to
 // beat a typical price gap between meals but not a large one, so a favourite
 // wins ties and near-ties without wrecking the shopping bill.
-const FAVOURITE_BONUS = 1.2; // £
+/**
+ * RAISED FROM 1.2 WHEN SIZE_WEIGHT WENT UP, and it had to be.
+ *
+ * These two constants compete for the same decision, so one cannot move alone.
+ * At SIZE_WEIGHT 8 with the undersize bias, a meal 10% under its slot already
+ * costs 2.4 — so a 1.2 bonus could no longer win anything, and "I like eggs"
+ * silently stopped producing eggs. `a favourite food shows up more often in the
+ * week` caught it, which is the entire reason that test exists.
+ *
+ * Swept against both constraints: 2.0 is the lowest value that passes, and
+ * every value from 2.0 to 6.0 leaves the macro audit identical (worst-case 94%
+ * calories, 92% protein, zero misses). 3.0 takes the headroom rather than
+ * sitting exactly on the edge, and keeps the original intent — a meal ~10%
+ * off-size yields to a preference, one 20% off-size does not.
+ */
+const FAVOURITE_BONUS = 3.0; // £
 const MAX_REPEATS = 3;
 
 /**
@@ -561,11 +632,42 @@ const SLOT_SHARE: Record<Slot, number> = {
  * Weighted below protein deliberately: being handed a meal that misses the
  * protein target matters more than one that needs scaling to 1.2×.
  */
-const SIZE_WEIGHT = 4; // £ per unit of normalised calorie mismatch
+const SIZE_WEIGHT = 8; // £ per unit of normalised calorie mismatch
+
+/**
+ * How far this meal's own calories sit from what the slot should carry.
+ *
+ * ASYMMETRIC ON PURPOSE, and this is the fix for the biggest complaint the
+ * planner had: too small is much worse than too big, because the two are not
+ * equally recoverable. Portions scale by `Math.min(1.6, max(0.6, want / base))`,
+ * so a meal that is twice the size it needs just gets served at 0.6 and lands
+ * near enough — while a meal at a third of the size hits the 1.6 ceiling and
+ * simply cannot reach the target, however hungry the athlete is.
+ *
+ * Measured, not guessed. A 115kg athlete on a build had 23 of his 28 weekly
+ * meals pinned at the 1.6 clamp and ate 75% of his target: the planner kept
+ * choosing a 507 kcal breakfast for a 1198 kcal slot when a 1099 kcal one was
+ * in the pool, because at SIZE_WEIGHT 4 a few pence of cost outweighed being
+ * half the required size.
+ *
+ * A grid over SIZE_WEIGHT × undersize bias, scored across 90 combinations of
+ * body size, goal, diet and meal count:
+ *
+ *     4 × 1 (was)   worst day 76% of calories, 35% of meals clamped
+ *     8 × 3 (now)   worst day 89% of calories, 21% of meals clamped
+ *    30 × 3         worst day 92%, but worst protein falls 77% → 65%
+ *
+ * Pushing size harder keeps buying calories and starts selling protein, because
+ * the two terms compete for the same choice. 8 × 3 is the corner: it takes the
+ * calorie floor from 76% to 89% and halves the clamping, with worst-case
+ * protein unchanged.
+ */
+const UNDERSIZE_BIAS = 3;
 
 function sizeMismatch(meal: Meal, slotKcal: number): number {
   if (slotKcal <= 0) return 0;
-  return Math.abs(mealMacros(meal).kcal - slotKcal) / slotKcal;
+  const diff = (mealMacros(meal).kcal - slotKcal) / slotKcal;
+  return diff < 0 ? -diff * UNDERSIZE_BIAS : diff;
 }
 
 /**
@@ -737,7 +839,21 @@ export function buildWeek(
       const want = slotKcal(meal.slot);
       const base = mealMacros(meal).kcal;
       const raw = base > 0 ? want / base : 1;
-      const scale = Math.round(Math.min(1.6, Math.max(0.6, raw)) * 20) / 20; // 0.05 steps
+      /**
+       * 0.55, not 0.6, at the bottom.
+       *
+       * The last failing case in the audit was a 55kg woman cutting on five
+       * meals a day: a ~1400 kcal target split five ways leaves about 280 kcal
+       * for a main, and the smallest meal in the pool at 0.6 still overshot —
+       * she was handed 110% of the calories she was trying to eat under, which
+       * defeats the entire point of a cut.
+       *
+       * A twentieth of a portion is the difference between the plan working and
+       * not, and 0.55 of a serving is still a serving. Going lower buys nothing
+       * measurable (0.5 and 0.45 score identically) and starts producing
+       * portions nobody would plate, so it stops here.
+       */
+      const scale = Math.round(Math.min(1.6, Math.max(0.55, raw)) * 20) / 20; // 0.05 steps
       return { meal, scale, macros: mealMacros(meal, scale) };
     });
     const macros = meals.reduce(
