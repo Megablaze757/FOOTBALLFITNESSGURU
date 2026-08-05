@@ -200,46 +200,60 @@ function AppleSetup({ token, onDone }: { token: string | null; onDone: () => voi
   const [minted, setMinted] = useState<{ token: string; url: string } | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
-  // Tracked separately from the message, because "the route isn't deployed" and
-  // "your request was rejected" want completely different words and a different
-  // colour. `invokeAI` carries the HTTP status on the error for exactly this.
-  // Declared up here with the other hooks — there is an early return below, and
-  // a hook after it changes hook order between renders.
-  const [notDeployed, setNotDeployed] = useState(false);
 
   /**
-   * The endpoint a Shortcut posts to.
+   * The endpoint a Shortcut posts to — the Supabase Edge Function.
    *
-   * NEXT_PUBLIC_API_URL is EMPTY unless the Worker is configured, and this line
-   * used to interpolate it regardless — so on any revisit, once a token already
-   * existed, the URL rendered as the relative path "/wearable-ingest". Pasted
-   * into a Shortcut that sends the morning's sleep precisely nowhere, silently,
-   * forever. A freshly minted one was fine because the Worker returns an
-   * absolute URL, which is why it looked like it worked when it was set up.
+   * IT USED TO BE THE CLOUDFLARE WORKER, AND THAT ROUTE DOES NOT EXIST. Live
+   * answers 404 on both /ingest-token and /wearable-ingest, so "Set up" failed
+   * and every configured Shortcut posted into a void. The Worker running in
+   * production is built from source that is not in this repo, so the fix could
+   * not be "deploy the repo's Worker" — that would delete the AI provider work
+   * that is live. The sync shares nothing with the AI routes, so it moved to a
+   * Supabase function that deploys on its own.
    *
-   * No Worker means no push endpoint at all — it isn't deployed as a Supabase
-   * function — so say that instead of handing over an address that can't work.
+   * Derived from NEXT_PUBLIC_SUPABASE_URL, which is always set — the app cannot
+   * function without it. So unlike the old NEXT_PUBLIC_API_URL, this can never
+   * render as a relative path that silently goes nowhere.
    */
-  const apiBase = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/+$/, "");
-  const shown = minted ?? (token && apiBase ? { token, url: `${apiBase}/wearable-ingest` } : null);
+  const fnBase = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").replace(/\/+$/, "");
+  const ingestUrl = `${fnBase}/functions/v1/wearable-ingest`;
+  const shown = minted ?? (token && fnBase ? { token, url: ingestUrl } : null);
 
-  if (!apiBase && !minted) {
-    return (
-      <li className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-3 text-xs text-slate-400">
-        Pushing from a Shortcut needs the backend to be deployed — it isn&apos;t configured for this
-        build, so there is nowhere for your phone to send to yet. Until then, the CSV import below
-        takes an Apple Health export.
-      </li>
-    );
-  }
-
+  /**
+   * Minted on the device, written straight to the athlete's own profile row.
+   *
+   * No server call at all. This used to POST to the Worker purely to have it
+   * generate a UUID and PATCH one column — work the browser can do, against a
+   * row RLS already lets this user update (`profiles: update own`, migration
+   * 0001). The token is random and grants exactly one thing: writing biometrics
+   * for this athlete. Who generated it is irrelevant to that.
+   *
+   * Removing the round trip removes the dependency on a Worker deploy, which is
+   * what was broken.
+   */
   async function mint() {
-    setBusy(true); setErr(null); setNotDeployed(false);
+    setBusy(true); setErr(null);
     try {
-      setMinted(await invokeAI<{ token: string; url: string }>("ingest-token", {}));
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not signed in.");
+
+      const fresh = crypto.randomUUID();
+      // Recorded at the same time so the sync can resolve a dateless payload to
+      // the right day — see migration 0066. Best effort: an older database
+      // without the column must not stop the token being issued.
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      let { error } = await supabase.from("profiles")
+        .update({ ingest_token: fresh, timezone: tz }).eq("id", user.id);
+      if (error && /timezone|column|schema cache/i.test(error.message)) {
+        ({ error } = await supabase.from("profiles").update({ ingest_token: fresh }).eq("id", user.id));
+      }
+      if (error) throw new Error(error.message);
+
+      setMinted({ token: fresh, url: ingestUrl });
       onDone();
     } catch (e) {
-      setNotDeployed((e as { status?: number })?.status === 404);
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
@@ -264,28 +278,7 @@ function AppleSetup({ token, onDone }: { token: string | null; onDone: () => voi
           <button onClick={mint} disabled={busy} className="btn-primary">
             {busy ? "Creating…" : "Create my upload link"}
           </button>
-          {/* A MISSING ENDPOINT IS NOT A USER ERROR, so it doesn't get the red
-              treatment that means "you did something wrong, try again". The
-              server simply hasn't had this route deployed yet, and no amount of
-              tapping the button will change that — so say so, say what still
-              works, and stop them spending five minutes on a Shortcut that
-              would post into a void.
-
-              This is a real state, not a hypothetical: the live Worker answers
-              404 on /ingest-token today. */}
-          {err && (
-            notDeployed
-              ? <div className="mt-2 rounded-xl border border-amber-400/25 bg-amber-400/[0.06] p-3">
-                  <p className="text-xs font-bold text-amber-300">Not switched on yet</p>
-                  <p className="mt-1 text-xs leading-relaxed text-slate-400">
-                    The morning sync isn&apos;t live on our server yet, so there&apos;s nothing to
-                    point a Shortcut at — building one now would just fail silently. Nothing
-                    else is affected: <b className="text-slate-200">type last night&apos;s numbers
-                    in below</b> and your readiness uses them exactly the same way.
-                  </p>
-                </div>
-              : <p className="mt-2 text-sm text-readiness-red">{err}</p>
-          )}
+          {err && <p className="mt-2 text-sm text-readiness-red">{err}</p>}
         </>
       ) : (
         <>

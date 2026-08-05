@@ -110,6 +110,33 @@ implementations of one rule drift silently.
 dated, because it ships as builds Apple approves. **None of it has been
 compiled.** *(08-02 iOS, 08-03 iOS 0.2.0)*
 
+## The morning sync — deploy this and Apple Health works
+
+**Two commands, and it does not touch the Cloudflare Worker.**
+
+```bash
+supabase db push                                             # migration 0066
+supabase functions deploy wearable-ingest --no-verify-jwt
+```
+
+`--no-verify-jwt` is required and is **not** a security hole. The caller is an
+Apple Shortcut with no Supabase session and no way to refresh one; it
+authenticates with the athlete's ingest token, which the function checks itself.
+With JWT verification on, Supabase rejects the request before the function runs
+and every morning silently 401s.
+
+**Why a Supabase function rather than the Worker route that already exists.**
+The Worker has this code and it has never been deployed — and production is
+running source that is not in this repo (see the divergence warning below), so
+pasting the repo's bundle would delete the live AI provider chain. The sync
+shares nothing with the AI routes but a database, so it ships on its own and
+goes live today rather than waiting on a merge nobody has scheduled.
+
+**The token no longer needs a server at all.** Minting was a POST to the Worker
+purely to generate a UUID and write one column — work the browser does directly
+against a row RLS already permits. That removed the last dependency on a Worker
+deploy.
+
 ## The Worker — what your dev has to do
 
 **Full spec is the next section down: [The only remaining step — Worker deploy
