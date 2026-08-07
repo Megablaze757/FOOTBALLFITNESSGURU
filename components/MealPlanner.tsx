@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { invalidate } from "@/lib/use-async";
 import {
   planTargets, buildWeek, shoppingList, unmetSlots, dislikedFoodIds, favouriteFoodIds,
+  swapKey, slotTargetKcal, type MealSwaps,
   ACTIVITY_LEVELS, DIET_GOALS, DIET_PATTERNS, AVOIDANCES, DEFAULT_PREFS,
   type BodyStats, type Sex, type ActivityLevel, type DietGoal, type PlannedDay,
   type MealPrefs, type DietPattern, type Avoidance,
@@ -12,6 +13,7 @@ import {
 import { parseSchedule } from "@/lib/meal-schedule";
 import type { TargetContext } from "@/lib/nutrition";
 import { Recipe } from "@/components/Recipe";
+import { MealSwap, type SwapTarget } from "@/components/MealSwap";
 import { FOOD_BY_ID as FOOD_LOOKUP } from "@/lib/food-db";
 import { ShoppingList } from "@/components/ShoppingList";
 
@@ -31,9 +33,11 @@ interface Props {
    * inputs, or they disagree again.
    */
   context?: TargetContext;
+  /** Hand-picked meals saved against the current plan. */
+  initialSwaps?: MealSwaps;
 }
 
-export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initialSeed, context }: Props) {
+export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initialSeed, initialSwaps, context }: Props) {
   const [sex, setSex] = useState<Sex>(initial?.sex ?? "male");
   const [age, setAge] = useState(String(initial?.age ?? 20));
   const [heightCm, setHeightCm] = useState(String(initial?.heightCm ?? 178));
@@ -43,6 +47,16 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
   const [week, setWeek] = useState<PlannedDay[] | null>(null);
   const [seed, setSeed] = useState<number | null>(initialSeed ?? null);
   const [openDay, setOpenDay] = useState(0);
+  /**
+   * Meals chosen by hand, on top of whatever the seed produced.
+   *
+   * Held here and persisted to the profile rather than recomputed, because the
+   * week is rebuilt from the seed on every visit — a swap that lived only in
+   * component state lasted until the next page load, which is worse than not
+   * offering one.
+   */
+  const [swaps, setSwaps] = useState<MealSwaps>(initialSwaps ?? {});
+  const [swapping, setSwapping] = useState<SwapTarget | null>(null);
   const [saved, setSaved] = useState(false);
   const [prefs, setPrefs] = useState<MealPrefs>({ ...DEFAULT_PREFS, ...(initialPrefs ?? {}) });
   const [notes, setNotes] = useState(initialNotes ?? "");
@@ -108,11 +122,42 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
   // the shopping list they'd already started buying against.
   useEffect(() => {
     if (seed === null || week) return;
-    setWeek(buildWeek(targets, seed, effectivePrefs, schedule));
+    setWeek(buildWeek(targets, seed, effectivePrefs, schedule, swaps));
     // Only on mount, and only to restore. Changing stats afterwards should not
     // silently rewrite the plan under them — that's what Generate is for.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /**
+   * Apply a hand-picked meal and remember it.
+   *
+   * Rebuilds the whole week rather than patching the one day, because the
+   * shopping list, the repeat counter and the basket costing all depend on what
+   * else is in the week — swapping Thursday's dinner changes what Friday's is
+   * scored against, and a patched day would leave the list disagreeing with the
+   * plan.
+   */
+  async function applySwap(mealId: string) {
+    if (!swapping || seed === null) return;
+    const next = { ...swaps, [swapKey(swapping.dayIndex, swapping.slot, swapping.nth)]: mealId };
+    setSwaps(next);
+    setWeek(buildWeek(targets, seed, effectivePrefs, schedule, next));
+    setSwapping(null);
+    // Best effort: the swap is already on screen, and an older database without
+    // the column must not make the feature look broken.
+    try {
+      await createClient().from("profiles").update({ meal_plan_swaps: next }).eq("id", userId);
+    } catch { /* ignore */ }
+  }
+
+  async function clearSwaps() {
+    if (seed === null) return;
+    setSwaps({});
+    setWeek(buildWeek(targets, seed, effectivePrefs, schedule, {}));
+    try {
+      await createClient().from("profiles").update({ meal_plan_swaps: {} }).eq("id", userId);
+    } catch { /* ignore */ }
+  }
 
   async function generate() {
     /**
@@ -131,7 +176,10 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
     let next = seed;
     for (let i = 0; i < 20 && next === seed; i++) next = Math.floor(Math.random() * 997);
     setSeed(next);
-    setWeek(buildWeek(targets, next!, effectivePrefs, schedule));
+    // A new seed is a new plan, so the old positions mean nothing — keeping the
+    // swaps would move someone's Thursday dinner onto an unrelated slot.
+    setSwaps({});
+    setWeek(buildWeek(targets, next!, effectivePrefs, schedule, {}));
     setOpenDay(0);
     // Remember the stats AND which plan it was, so neither has to be redone.
     const supabase = createClient();
@@ -144,6 +192,7 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
       meals_per_day: prefs.mealsPerDay,
       diet_notes: notes.trim() || null,
       meal_plan_seed: next!,
+      meal_plan_swaps: {},
     }).eq("id", userId);
     if (!error) {
       // The nutrition page caches its loader; without this the restored plan
@@ -468,6 +517,18 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
 
             <div className="p-5">
 
+            {Object.keys(swaps).length > 0 && (
+              <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-pitch-400/20 bg-pitch-400/[0.05] px-3 py-2">
+                <span className="text-xs text-slate-300">
+                  {Object.keys(swaps).length} meal{Object.keys(swaps).length === 1 ? "" : "s"} swapped this week
+                </span>
+                {/* An undo, not a regenerate. Regenerating rerolls all 28 meals
+                    and is a much bigger thing to do by accident. */}
+                <button onClick={clearSwaps} className="tap-target shrink-0 px-2 text-xs font-semibold text-slate-400 hover:text-pitch-400">
+                  Undo all
+                </button>
+              </div>
+            )}
             <div className="space-y-3">
               {/* Meals we're deliberately not planning. Shown rather than
                   silently missing, so the day doesn't just look incomplete. */}
@@ -477,11 +538,23 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
                   <span className="block text-sm font-semibold text-slate-400">{s.reason} — nothing to cook or buy</span>
                 </div>
               ))}
-              {week[openDay].meals.map((pm) => (
-                <details key={pm.meal.id} className="group/meal rounded-2xl border border-white/[0.08] bg-white/[0.02] transition open:bg-white/[0.04]">
+              {week[openDay].meals.map((pm, mi) => {
+                // Which occurrence of this slot today — a 5-meal day has two
+                // snacks, and they must swap independently.
+                const nth = week[openDay].meals.slice(0, mi).filter((x) => x.meal.slot === pm.meal.slot).length;
+                const swapped = !!swaps[swapKey(openDay, pm.meal.slot, nth)];
+                return (
+                <details key={`${pm.meal.slot}-${nth}-${pm.meal.id}`} className="group/meal rounded-2xl border border-white/[0.08] bg-white/[0.02] transition open:bg-white/[0.04]">
                   <summary className="flex cursor-pointer list-none items-center gap-3 p-3.5">
                     <span className="min-w-0 flex-1">
-                      <span className="block text-[11px] uppercase tracking-wide text-slate-500">{pm.meal.slot}</span>
+                      <span className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-slate-500">
+                        {pm.meal.slot}
+                        {/* Says the plan is theirs now. Without it a swapped
+                            meal is indistinguishable from one the app chose,
+                            and "did that save?" is the first thing anyone
+                            wonders after changing something. */}
+                        {swapped && <span className="rounded bg-pitch-400/15 px-1 text-[10px] font-bold normal-case text-pitch-400">your pick</span>}
+                      </span>
                       <span className="block text-sm font-bold text-slate-100">{pm.meal.name}</span>
                     </span>
                     <span className="shrink-0 text-right">
@@ -495,9 +568,28 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
 
                   <div className="border-t border-white/[0.06] p-3.5">
                     <Recipe meal={pm.meal} scale={pm.scale} macros={pm.macros} />
+                    {/* Inside the open card, not on the closed row. The row is
+                        already a tap target that opens the recipe, and a second
+                        control on it would make a one-handed tap a gamble
+                        between reading and replacing. Someone swapping has
+                        looked at the meal first. */}
+                    <button
+                      onClick={() => setSwapping({
+                        dayIndex: openDay,
+                        dayName: week[openDay].day,
+                        slot: pm.meal.slot,
+                        nth,
+                        current: pm.meal,
+                        slotKcal: slotTargetKcal(targets, effectivePrefs, pm.meal.slot),
+                      })}
+                      className="chip-option chip-option-sm mt-4 w-full justify-center"
+                    >
+                      <span aria-hidden>⇄</span> Swap this meal
+                    </button>
                   </div>
                 </details>
-              ))}
+                );
+              })}
             </div>
 
             {/* The day's total against the target, as two bars rather than a
@@ -522,6 +614,18 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
 
           {list && <ShoppingList list={list} seed={seed} />}
         </>
+      )}
+
+      {/* Last in the tree so it stacks above the plan, and mounted only when
+          asked for — a dialog kept mounted and hidden still traps focus in
+          some browsers. */}
+      {swapping && (
+        <MealSwap
+          target={swapping}
+          prefs={effectivePrefs}
+          onPick={applySwap}
+          onClose={() => setSwapping(null)}
+        />
       )}
     </section>
   );

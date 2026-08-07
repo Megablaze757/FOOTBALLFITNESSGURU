@@ -103,16 +103,46 @@ export function parseSchedule(notes: string | null | undefined): DietSchedule {
     }
   };
 
+  /**
+   * The intent from the previous clause, so a trailing day list inherits it.
+   *
+   * `clauses()` splits on "and", which is right for "I love chicken but no
+   * fish" and wrong for a list of days. "I eat out on Tuesdays and Thursdays"
+   * became "I eat out on Tuesdays" plus a bare "Thursdays" — the second had no
+   * eating-out phrase in it, so it was dropped, and Thursday's dinner was
+   * planned, shopped for and cooked anyway.
+   *
+   * That is the most natural way anyone would write it, and it silently cost
+   * them a meal's worth of food every week.
+   */
+  let carried: { out: boolean; fasting: boolean; namedSlot: Slot | null } | null = null;
+
   for (const clause of clauses(text)) {
-    const out = EATING_OUT.test(clause);
-    const fasting = FASTING.test(clause);
-    const namedSlot = slotIn(clause);
+    let out = EATING_OUT.test(clause);
+    let fasting = FASTING.test(clause);
+    let namedSlot = slotIn(clause);
     // A bare "no lunch on Fridays" only counts as skipping when a meal is named;
     // otherwise "no dairy" would wipe out someone's whole week.
-    const skipping = !out && !fasting && namedSlot !== null && SKIPPING.test(clause);
-    if (!out && !fasting && !skipping) continue;
+    let skipping = !out && !fasting && namedSlot !== null && SKIPPING.test(clause);
 
     const days = daysIn(clause);
+
+    /**
+     * A clause that is NOTHING BUT DAYS continues the one before it.
+     *
+     * Deliberately strict: the clause must contain days and no intent of its
+     * own. "I eat out Tuesdays and I skip breakfast" is unaffected, because the
+     * second half carries its own meaning and never reaches this.
+     */
+    if (!out && !fasting && !skipping && days.length > 0 && carried) {
+      out = carried.out;
+      fasting = carried.fasting;
+      namedSlot = carried.namedSlot;
+      skipping = !out && !fasting && namedSlot !== null;
+    }
+
+    if (!out && !fasting && !skipping) continue;
+    carried = { out, fasting, namedSlot };
     const everyDay = days.length === 0;
     const targetDays = everyDay ? [0, 1, 2, 3, 4, 5, 6] : days;
     const slot: Slot = namedSlot ?? (fasting ? "Breakfast" : "Dinner");

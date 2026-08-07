@@ -1465,4 +1465,210 @@ export const MEALS: Meal[] = [
     tip: "Packed frozen in the morning it is perfect by mid-afternoon and keeps the rest of the bag cold.",
     method: "Pack frozen berries with honey and seeds and let them thaw.",
   },
+
+  // ===========================================================================
+  // THE NARROW DIETS.
+  //
+  // Depth measured per diet crossed with each avoidance, and two combinations
+  // were effectively unusable: a vegan avoiding GLUTEN had 2 breakfasts, 4
+  // lunches and 5 dinners; a vegan avoiding SOY had 2, 2 and 3. With a repeat
+  // cap of three, that is not a plan — it is the same two meals until Friday.
+  //
+  // The soy case is the harder one and the reason it happened: nearly every
+  // vegan meal in the book leans on tofu, soya milk or edamame, because those
+  // are the dense plant proteins. These are built from lentils, chickpeas,
+  // beans, nuts, seeds, quinoa and coconut yoghurt instead — soy-free and
+  // gluten-free by construction, so they lift both thin corners at once.
+  // ===========================================================================
+  {
+    id: "vg_coconut_quinoa_bowl", name: "Coconut, quinoa & berry bowl", slot: "Breakfast", minutes: 20,
+    items: [
+      { foodId: "quinoa", qty: 80 }, { foodId: "coconut_yoghurt", qty: 180 }, { foodId: "berries_frozen", qty: 100 },
+      { foodId: "almonds", qty: 30 }, { foodId: "seeds_mixed", qty: 20 }, { foodId: "honey", qty: 12 },
+    ],
+    steps: [
+      "Rinse the quinoa until the water runs clear, then simmer in water for 15 minutes and let it cool a little.",
+      "Warm the berries 40 seconds so they release their juice.",
+      "Quinoa in the bowl, coconut yoghurt spooned over, berries and their syrup on top.",
+      "Nuts and seeds last so they stay crunchy.",
+    ],
+    tip: "Cook the quinoa in advance. Cold, it works just as well and takes two minutes to build.",
+    method: "Simmer rinsed quinoa, cool it, and layer with coconut yoghurt, warmed berries, nuts and seeds.",
+  },
+  {
+    id: "vg_pb_oat_pot", name: "Peanut butter oat pot", slot: "Breakfast", minutes: 5,
+    items: [
+      { foodId: "oats", qty: 90 }, { foodId: "coconut_yoghurt", qty: 150 }, { foodId: "peanut_butter", qty: 35 },
+      { foodId: "banana", qty: 1 }, { foodId: "seeds_mixed", qty: 20 },
+    ],
+    steps: [
+      "Mash half the banana into the coconut yoghurt — it sweetens it without any sugar going in.",
+      "Oats stirred through with a splash of water until it looks slightly too loose.",
+      "Peanut butter ribboned in, the rest of the banana sliced on top, seeds over.",
+      "Overnight in the fridge, or eat it straight away.",
+    ],
+    tip: "No soya, no dairy, no wheat if your oats are the gluten-free kind.",
+    method: "Mash banana into coconut yoghurt, stir in oats, and finish with peanut butter, banana and seeds.",
+  },
+  {
+    id: "vg_bean_avo_hash", name: "Black bean & avocado hash", slot: "Breakfast", minutes: 18,
+    items: [
+      { foodId: "black_beans", qty: 240 }, { foodId: "potatoes", qty: 250 }, { foodId: "avocado", qty: 1 },
+      { foodId: "peppers", qty: 100 }, { foodId: "spice_mix", qty: 8 }, { foodId: "olive_oil", qty: 12 },
+      { foodId: "lemon", qty: 1 },
+    ],
+    steps: [
+      "Dice the potatoes small and fry in the oil for 12 minutes, turning rarely so they crust.",
+      "Peppers in for 4 minutes, then the drained beans and spices for 2 more.",
+      "Mash the avocado with lemon and salt.",
+      "Hash into the bowl, avocado on top, more lemon over.",
+    ],
+    tip: "Mash a few beans against the pan and they bind the whole thing together.",
+    method: "Crust diced potatoes, add peppers, beans and spices, and top with lemony mashed avocado.",
+  },
+  {
+    id: "vg_chickpea_quinoa_salad", name: "Chickpea, quinoa & avocado salad", slot: "Lunch", minutes: 22,
+    items: [
+      { foodId: "chickpeas", qty: 240 }, { foodId: "quinoa", qty: 90 }, { foodId: "avocado", qty: 1 },
+      { foodId: "tomatoes_fresh", qty: 120 }, { foodId: "cucumber", qty: 100 }, { foodId: "lemon", qty: 1 },
+      { foodId: "olive_oil", qty: 12 }, { foodId: "seeds_mixed", qty: 15 },
+    ],
+    steps: [
+      "Rinse and simmer the quinoa 15 minutes, then spread it out to cool — hot quinoa turns avocado to soup.",
+      "Drain and dry the chickpeas, and crush about a third with a fork so they soak up the dressing.",
+      "Chop the tomato and cucumber, salt, and leave 5 minutes for the juices.",
+      "Everything folded together with oil and lemon, avocado last, seeds over.",
+    ],
+    tip: "Keeps two days in the fridge if the avocado goes in fresh each time.",
+    method: "Cool the cooked quinoa, crush some chickpeas, and fold with salted salad, oil, lemon and avocado.",
+  },
+  {
+    id: "vg_lentil_pepper_bowl", name: "Spiced lentil & roast pepper bowl", slot: "Lunch", minutes: 28,
+    items: [
+      { foodId: "red_lentils", qty: 110 }, { foodId: "peppers", qty: 200 }, { foodId: "spinach", qty: 100 },
+      { foodId: "stock_cubes", qty: 6 }, { foodId: "spice_mix", qty: 8 }, { foodId: "olive_oil", qty: 12 },
+      { foodId: "almonds", qty: 25 }, { foodId: "lemon", qty: 1 },
+    ],
+    steps: [
+      "Oven to 220C. Peppers in strips with oil and salt, 18 minutes until the edges blacken.",
+      "Simmer the lentils in stock with the spices for 18 minutes until they hold their shape but give.",
+      "Spinach wilted into the hot lentils off the heat.",
+      "Peppers folded through, lemon squeezed over, almonds roughly chopped on top.",
+    ],
+    tip: "Blackened peppers, not soft ones. That char is doing all the flavour work.",
+    method: "Roast peppers hot, simmer spiced lentils in stock, wilt spinach through, and combine with lemon and almonds.",
+  },
+  {
+    id: "vg_hummus_bean_wrap_gf", name: "Hummus & bean rice bowl", slot: "Lunch", minutes: 15,
+    items: [
+      { foodId: "hummus", qty: 100 }, { foodId: "black_beans", qty: 200 }, { foodId: "rice", qty: 90 },
+      { foodId: "peppers", qty: 120 }, { foodId: "cucumber", qty: 100 }, { foodId: "spice_mix", qty: 6 },
+      { foodId: "lemon", qty: 1 }, { foodId: "olive_oil", qty: 8 },
+    ],
+    steps: [
+      "Rice on.",
+      "Fry the peppers hard for 5 minutes so they char, then the beans and spices for 2 more.",
+      "Rice into the bowl, beans over, hummus in a spoonful on top, chopped cucumber alongside.",
+      "Lemon and a drizzle of oil over everything.",
+    ],
+    tip: "A bowl rather than a wrap, so it works for anyone avoiding wheat.",
+    method: "Char peppers, add spiced beans, and serve over rice with hummus, cucumber and lemon.",
+  },
+  {
+    id: "vg_chickpea_stew", name: "Chickpea, tomato & spinach stew", slot: "Dinner", minutes: 30,
+    items: [
+      { foodId: "chickpeas", qty: 300 }, { foodId: "tomatoes_tin", qty: 250 }, { foodId: "spinach", qty: 150 },
+      { foodId: "potatoes", qty: 250 }, { foodId: "onion", qty: 100 }, { foodId: "garlic", qty: 10 },
+      { foodId: "spice_mix", qty: 10 }, { foodId: "olive_oil", qty: 15 },
+    ],
+    steps: [
+      "Soften the onion in the oil for 8 minutes, then garlic and spices for one.",
+      "Cubed potato, tomatoes and a mug of water in. Simmer 18 minutes until the potato is soft enough to break.",
+      "Chickpeas in for the last 5, crushing a handful against the side to thicken it.",
+      "Spinach wilted through off the heat, and taste for salt twice.",
+    ],
+    tip: "Better the next day, freezes well, and nothing in it needs a fridge before you cook it.",
+    method: "Soften onion with garlic and spices, simmer potato and tomatoes, add chickpeas and crush some to thicken, then wilt spinach through.",
+  },
+  {
+    id: "vg_lentil_walnut_ragu", name: "Lentil & seed ragù with rice", slot: "Dinner", minutes: 35,
+    items: [
+      { foodId: "red_lentils", qty: 130 }, { foodId: "passata", qty: 300 }, { foodId: "mushrooms", qty: 200 },
+      { foodId: "rice", qty: 100 }, { foodId: "carrots", qty: 100 }, { foodId: "seeds_mixed", qty: 25 },
+      { foodId: "garlic", qty: 10 }, { foodId: "olive_oil", qty: 12 },
+    ],
+    steps: [
+      "Fry the mushrooms hard and dry first until they brown, then chop them small — this is what gives a meat-free ragù its body.",
+      "Oil, grated carrot and garlic, 6 minutes.",
+      "Lentils, passata and a mug of water. Simmer 25 minutes until thick enough to sit on a spoon.",
+      "Seeds toasted in a dry pan and scattered over at the end for bite.",
+      "Rice alongside, or pasta if wheat is fine.",
+    ],
+    tip: "Browning the mushrooms separately is the whole difference. Thrown in raw they just water it down.",
+    method: "Brown and chop the mushrooms, soften carrot and garlic, simmer lentils with passata until thick, and top with toasted seeds.",
+  },
+  {
+    id: "vg_bean_sweetpotato_chilli", name: "Bean & sweet potato chilli", slot: "Dinner", minutes: 35,
+    items: [
+      { foodId: "black_beans", qty: 240 }, { foodId: "chickpeas", qty: 150 }, { foodId: "sweet_potato", qty: 300 },
+      { foodId: "passata", qty: 300 }, { foodId: "peppers", qty: 120 }, { foodId: "rice", qty: 90 },
+      { foodId: "spice_mix", qty: 10 }, { foodId: "chilli_fresh", qty: 8 }, { foodId: "olive_oil", qty: 12 },
+    ],
+    steps: [
+      "Cube the sweet potato and fry in the oil for 8 minutes to get some colour on it before any liquid goes near it.",
+      "Peppers, spices and chopped chilli for 2 minutes.",
+      "Passata, beans and chickpeas, plus half a mug of water.",
+      "Lid ajar, 20 minutes. Ready when it is thick, not when it is hot.",
+      "Rice at the end.",
+    ],
+    tip: "Colouring the sweet potato first stops it collapsing into the sauce.",
+    method: "Brown cubed sweet potato, add peppers, spices and chilli, then simmer with passata, beans and chickpeas until thick.",
+  },
+  {
+    id: "gf_chicken_rice_salad", name: "Chicken, avocado & rice salad", slot: "Lunch", minutes: 20,
+    items: [
+      { foodId: "chicken_breast", qty: 220 }, { foodId: "rice", qty: 90 }, { foodId: "avocado", qty: 1 },
+      { foodId: "tomatoes_fresh", qty: 120 }, { foodId: "cucumber", qty: 100 }, { foodId: "lemon", qty: 1 },
+      { foodId: "olive_oil", qty: 10 }, { foodId: "spice_mix", qty: 5 },
+    ],
+    steps: [
+      "Rice on, then spread it out to cool so it does not steam the salad.",
+      "Flatten and season the chicken, sear 4 minutes a side, and rest before slicing.",
+      "Chop the tomato and cucumber, salt them, leave 5 minutes.",
+      "Rice, salad and juices, sliced chicken, avocado in chunks, lemon and oil over.",
+    ],
+    tip: "Everything gluten-free without trying, and it eats cold from a box the next day.",
+    method: "Cool the cooked rice, sear and rest the chicken, and combine with salted salad, avocado and lemon.",
+  },
+  {
+    id: "gf_prawn_rice_bowl", name: "Garlic prawn & rice bowl", slot: "Lunch", minutes: 15,
+    items: [
+      { foodId: "prawns", qty: 200 }, { foodId: "rice", qty: 100 }, { foodId: "peas_frozen", qty: 120 },
+      { foodId: "garlic", qty: 12 }, { foodId: "chilli_fresh", qty: 6 }, { foodId: "lemon", qty: 1 },
+      { foodId: "olive_oil", qty: 12 },
+    ],
+    steps: [
+      "Rice on, peas dropped in for the last 2 minutes.",
+      "Warm the oil gently with sliced garlic until it just turns pale gold — brown garlic is bitter and there is no saving it.",
+      "Prawns and chilli in for 90 seconds only.",
+      "Everything through the rice, lemon squeezed over off the heat.",
+    ],
+    tip: "Low and slow on the garlic, fast on the prawns. Getting those the wrong way round ruins it.",
+    method: "Cook rice with peas, infuse oil with garlic gently, add prawns briefly, and fold through with lemon.",
+  },
+  {
+    id: "gf_egg_potato_salad", name: "Egg, potato & pesto salad", slot: "Lunch", minutes: 20,
+    items: [
+      { foodId: "eggs", qty: 3 }, { foodId: "potatoes", qty: 300 }, { foodId: "pesto", qty: 30 },
+      { foodId: "peas_frozen", qty: 100 }, { foodId: "tomatoes_fresh", qty: 100 }, { foodId: "spinach", qty: 60 },
+    ],
+    steps: [
+      "Halve the potatoes and boil 15 minutes, adding the eggs for the last 7 and the peas for the last 2.",
+      "Cold water over the eggs so they peel cleanly.",
+      "Dress the potatoes with the pesto while they are still hot — warm potato drinks it in, cold potato just wears it.",
+      "Spinach, halved tomatoes and quartered eggs folded through.",
+    ],
+    tip: "One pan for all three. Dressing them hot is the trick that makes it taste like more than it is.",
+    method: "Boil potatoes with eggs and peas, dress the hot potatoes with pesto, and fold through spinach, tomatoes and eggs.",
+  },
 ];

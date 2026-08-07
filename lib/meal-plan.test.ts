@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import {
   basalRate, planTargets, buildWeek, shoppingList, shoppingListText,
   mealMacros, MEALS, ACTIVITY_LEVELS, DEFAULT_PREFS,
-  dislikedFoodIds, favouriteFoodIds, recipeSteps, recipeNote, type BodyStats,
+  dislikedFoodIds, favouriteFoodIds, recipeSteps, recipeNote, swapKey, slotTargetKcal,
+  mealAllowed, type BodyStats, type Slot,
 } from "./meal-plan";
 import { EMPTY_SCHEDULE } from "./meal-schedule";
 import { FOOD_BY_ID } from "./food-db";
@@ -453,5 +454,104 @@ test("every recipe is written out properly", () => {
     assert.ok(m.steps?.length, `${m.id} has no hand-written steps`);
     assert.ok(m.minutes != null && m.minutes > 0, `${m.id} has no cooking time`);
     assert.ok((m.steps?.length ?? 0) >= 1, `${m.id} has an empty method`);
+  }
+});
+
+// --- Hand-picked meals -------------------------------------------------------
+// The only control over the plan used to be "regenerate", which rerolls all 28
+// meals. Someone who liked their week except Thursday had to gamble the lot.
+
+test("a swap replaces exactly the slot asked for", () => {
+  const targets = planTargets(ATHLETE);
+  const before = buildWeek(targets, 3, DEFAULT_PREFS);
+  const wed = before[2].meals.find((m) => m.meal.slot === "Dinner")!;
+  const other = MEALS.find((m) => m.slot === "Dinner" && m.id !== wed.meal.id)!;
+
+  const after = buildWeek(targets, 3, DEFAULT_PREFS, EMPTY_SCHEDULE, {
+    [swapKey(2, "Dinner", 0)]: other.id,
+  });
+
+  assert.equal(after[2].meals.find((m) => m.meal.slot === "Dinner")!.meal.id, other.id);
+  // Other days are untouched — a swap is not a regenerate.
+  assert.equal(
+    after[0].meals.map((m) => m.meal.id).join(),
+    before[0].meals.map((m) => m.meal.id).join()
+  );
+});
+
+/**
+ * A swap the costing ignored would produce a shopping list that does not match
+ * the plan — which is worse than not offering swaps at all, because the athlete
+ * shops from it.
+ */
+test("a swapped meal reaches the shopping list", () => {
+  const targets = planTargets(ATHLETE);
+  const salmon = MEALS.find((m) => m.slot === "Dinner" && m.items.some((i) => i.foodId === "salmon_fillet"));
+  assert.ok(salmon, "fixture: no salmon dinner in the pool");
+
+  const week = buildWeek(targets, 3, DEFAULT_PREFS, EMPTY_SCHEDULE, {
+    [swapKey(0, "Dinner", 0)]: salmon!.id,
+    [swapKey(1, "Dinner", 0)]: salmon!.id,
+  });
+  const list = shoppingList(week);
+  assert.ok(
+    list.lines.some((l) => l.food.id === "salmon_fillet"),
+    "the swapped meal's ingredients are missing from the list"
+  );
+});
+
+test("the two snack slots swap independently", () => {
+  const targets = planTargets(ATHLETE);
+  const prefs = { ...DEFAULT_PREFS, mealsPerDay: 5 as const };
+  const snacks = MEALS.filter((m) => m.slot === "Snack");
+  const week = buildWeek(targets, 1, prefs, EMPTY_SCHEDULE, {
+    [swapKey(0, "Snack", 1)]: snacks[snacks.length - 1].id,
+  });
+  const todaySnacks = week[0].meals.filter((m) => m.meal.slot === "Snack");
+  assert.equal(todaySnacks.length, 2);
+  assert.equal(todaySnacks[1].meal.id, snacks[snacks.length - 1].id);
+  assert.notEqual(todaySnacks[0].meal.id, todaySnacks[1].meal.id, "both snacks became the same meal");
+});
+
+/**
+ * Someone picks a chicken dish, then switches to vegan. The swap must not
+ * override the diet — being served meat you have excluded is a trust failure,
+ * and it might be an allergy.
+ */
+test("a swap that no longer fits the diet is ignored, not served", () => {
+  const targets = planTargets(ATHLETE);
+  const chicken = MEALS.find((m) => m.slot === "Dinner" && m.items.some((i) => i.foodId === "chicken_breast"))!;
+  const vegan = { ...DEFAULT_PREFS, pattern: "vegan" as const };
+  const week = buildWeek(targets, 1, vegan, EMPTY_SCHEDULE, { [swapKey(0, "Dinner", 0)]: chicken.id });
+  const served = week[0].meals.find((m) => m.meal.slot === "Dinner")!;
+  assert.notEqual(served.meal.id, chicken.id);
+  assert.ok(mealAllowed(served.meal, vegan), "served a meal that breaks the diet");
+});
+
+test("an unknown meal id falls back to the planner rather than leaving a hole", () => {
+  const targets = planTargets(ATHLETE);
+  const week = buildWeek(targets, 1, DEFAULT_PREFS, EMPTY_SCHEDULE, {
+    [swapKey(0, "Dinner", 0)]: "no_such_meal",
+  });
+  assert.ok(week[0].meals.some((m) => m.meal.slot === "Dinner"), "the slot was left empty");
+});
+
+test("no swaps builds the identical week", () => {
+  const targets = planTargets(ATHLETE);
+  const a = buildWeek(targets, 5, DEFAULT_PREFS);
+  const b = buildWeek(targets, 5, DEFAULT_PREFS, EMPTY_SCHEDULE, {});
+  assert.deepEqual(a.map((d) => d.meals.map((m) => m.meal.id)), b.map((d) => d.meals.map((m) => m.meal.id)));
+});
+
+test("slotTargetKcal splits the day the same way the planner does", () => {
+  const targets = planTargets(ATHLETE);
+  for (const mealsPerDay of [3, 4, 5] as const) {
+    const prefs = { ...DEFAULT_PREFS, mealsPerDay };
+    const slots: Slot[] = mealsPerDay >= 4
+      ? ["Breakfast", "Lunch", "Dinner", "Snack"]
+      : ["Breakfast", "Lunch", "Dinner"];
+    const total = slots.reduce((s, sl) => s + slotTargetKcal(targets, prefs, sl) * (sl === "Snack" && mealsPerDay === 5 ? 2 : 1), 0);
+    // The shares are normalised, so the slots must account for the whole day.
+    assert.ok(Math.abs(total - targets.calories) < 2, `${mealsPerDay} meals summed to ${Math.round(total)} of ${targets.calories}`);
   }
 });

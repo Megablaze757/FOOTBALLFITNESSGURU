@@ -98,3 +98,63 @@ test("a skipped day still reports honest macros", () => {
   const summed = tue.meals.reduce((n, m) => n + m.macros.kcal, 0);
   assert.ok(Math.abs(summed - tue.macros.kcal) < 1, "day macros should count only what we planned");
 });
+
+/**
+ * "Tuesdays AND Thursdays" — the way anyone would actually write it.
+ *
+ * `clauses()` splits on "and", so this arrived as "I eat out on Tuesdays" plus
+ * a bare "Thursdays". The second had no eating-out phrase in it and was
+ * dropped, so Thursday's dinner was planned, shopped for and cooked anyway —
+ * silently, every week. The comma form worked, which is why it went unnoticed.
+ */
+test("a day list joined by 'and' skips every day in it", () => {
+  const s = parseSchedule("I eat out on Tuesdays and Thursdays");
+  const days = s.skips.filter((k) => k.slot === "Dinner").map((k) => k.day).sort();
+  assert.deepEqual(days, [1, 3], "both days should be skipped");
+});
+
+test("'and' works without the word 'on', and for three days", () => {
+  assert.deepEqual(
+    parseSchedule("eat out Tuesday and Thursday").skips.map((k) => k.day).sort(),
+    [1, 3]
+  );
+  assert.deepEqual(
+    parseSchedule("I eat out Mondays, Wednesdays and Fridays").skips.map((k) => k.day).sort(),
+    [0, 2, 4]
+  );
+});
+
+/**
+ * The carry-over must be strict. A clause with its own meaning has to keep it,
+ * or "I eat out Tuesdays and I skip breakfast" would skip Tuesday's breakfast
+ * and dinner both.
+ */
+test("a clause with its own meaning does not inherit the previous one", () => {
+  const s = parseSchedule("I eat out on Tuesdays and I skip breakfast");
+  const tueDinner = s.skips.some((k) => k.day === 1 && k.slot === "Dinner");
+  assert.ok(tueDinner, "Tuesday dinner should still be skipped");
+  // Breakfast is skipped every day, not just Tuesday — it named no day.
+  const breakfasts = s.skips.filter((k) => k.slot === "Breakfast").length;
+  assert.ok(breakfasts === 0 || breakfasts === 7, `breakfast skipped on ${breakfasts} days`);
+});
+
+test("a stray day with no intent anywhere before it changes nothing", () => {
+  assert.deepEqual(parseSchedule("Tuesdays and Thursdays").skips, []);
+});
+
+/**
+ * Cooking two fewer dinners must not cost MORE.
+ *
+ * It did: the escalating repeat penalty spread a shorter week across more
+ * distinct dishes, and the extra ingredients cost more in whole packs than the
+ * two dinners saved — £111 against £103. Variety now scales with how many slots
+ * there are to amortise a pack over.
+ */
+test("eating out makes the shop cheaper, not dearer", () => {
+  const normal = shoppingList(week(""));
+  const out = shoppingList(week("I eat out on Tuesdays and Thursdays"));
+  assert.ok(
+    out.total < normal.total,
+    `eating out twice cost £${out.total.toFixed(2)} against £${normal.total.toFixed(2)} for cooking every night`
+  );
+});

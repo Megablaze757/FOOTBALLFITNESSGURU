@@ -43,13 +43,13 @@ export default function NutritionPage() {
       supabase.from("daily_check_ins").select("weight_kg").eq("user_id", user.id).not("weight_kg", "is", null).order("check_in_date", { ascending: false }).limit(1).maybeSingle(),
       supabase.from("programs").select("goal_type").eq("user_id", user.id).eq("status", "active").maybeSingle(),
       supabase.from("training_logs").select("log_date, total_minutes").eq("user_id", user.id).gte("log_date", since),
-      supabase.from("profiles").select("height_cm, birth_year, sex, activity_level, diet_goal, diet_pattern, diet_avoid, meals_per_day, diet_notes, meal_plan_seed, sport").eq("id", user.id).maybeSingle(),
+      supabase.from("profiles").select("height_cm, birth_year, sex, activity_level, diet_goal, diet_pattern, diet_avoid, meals_per_day, diet_notes, meal_plan_seed, meal_plan_swaps, sport").eq("id", user.id).maybeSingle(),
     ]);
     const pr = profile as {
       height_cm?: number; birth_year?: number; sex?: string;
       activity_level?: string; diet_goal?: string;
       diet_pattern?: string; diet_avoid?: string[]; meals_per_day?: number; diet_notes?: string;
-      meal_plan_seed?: number | null; sport?: string;
+      meal_plan_seed?: number | null; meal_plan_swaps?: Record<string, string> | null; sport?: string;
     } | null;
     return {
       sub: (sub ?? null) as Subscription | null,
@@ -77,6 +77,9 @@ export default function NutritionPage() {
       },
       dietNotes: pr?.diet_notes ?? "",
       mealSeed: pr?.meal_plan_seed ?? null,
+      // Hand-picked meals, applied on top of the seed. An older database
+      // without the column simply yields no swaps rather than failing.
+      mealSwaps: pr?.meal_plan_swaps ?? {},
       // Frames the verdict in their sport's terms — carbs for a runner, protein
       // for a lifter, rather than one neutral sentence for everyone.
       sport: sportProfile(pr?.sport as string | undefined),
@@ -167,6 +170,7 @@ export default function NutritionPage() {
       prefs={data?.prefs ?? null}
       dietNotes={data?.dietNotes ?? null}
       mealSeed={data?.mealSeed ?? null}
+      mealSwaps={data?.mealSwaps ?? {}}
       sport={data?.sport ?? sportProfile(null)}
       // The SAME inputs the card above was computed from. Both the planner and
       // the meal check-in recompute with these, so all three agree by
@@ -266,10 +270,10 @@ const NUTRITION_TABS = [
   { id: "plan" as const, label: "Meal plan", icon: "🛒" },
 ];
 
-function NutritionTabs({ userId, today, log, targets, stats, prefs, dietNotes, mealSeed, sport, context }: {
+function NutritionTabs({ userId, today, log, targets, stats, prefs, dietNotes, mealSeed, mealSwaps, sport, context }: {
   userId: string; today: string; log: any; targets: NutritionTargets | null;
   stats: Partial<BodyStats> | null; prefs: Partial<MealPrefs> | null; dietNotes: string | null;
-  mealSeed: number | null; sport: SportProfile; context: TargetContext;
+  mealSeed: number | null; mealSwaps: Record<string, string>; sport: SportProfile; context: TargetContext;
 }) {
   const [tab, setTab] = useState<"today" | "plan">("today");
   return (
@@ -296,7 +300,7 @@ function NutritionTabs({ userId, today, log, targets, stats, prefs, dietNotes, m
           onAddStats={() => setTab("plan")}
         />
       ) : (
-        <MealPlanner userId={userId} initial={stats} initialPrefs={prefs} initialNotes={dietNotes} initialSeed={mealSeed} context={context} />
+        <MealPlanner userId={userId} initial={stats} initialPrefs={prefs} initialNotes={dietNotes} initialSeed={mealSeed} initialSwaps={mealSwaps} context={context} />
       )}
       </TabPanel>
     </div>

@@ -1,0 +1,148 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import {
+  MEALS, mealAllowed, mealMacros, recipeSteps,
+  type Meal, type MealPrefs, type Slot,
+} from "@/lib/meal-plan";
+
+/**
+ * Change one meal without regenerating the week.
+ *
+ * WHY THIS EXISTS. The only control over the plan was "regenerate", which
+ * rerolls all twenty-eight meals. Someone who likes their week except for
+ * Thursday's dinner had to gamble the whole thing to fix one slot — so nobody
+ * did, and the plan was take-it-or-leave-it. A meal plan you cannot edit is a
+ * suggestion, not a plan.
+ *
+ * THE UX DECISION THAT MATTERS: the alternatives are RANKED BY FIT, and each
+ * one shows what it costs you. A flat alphabetical list of eighty meals is not
+ * a choice, it is homework — and picking blind means the day silently stops
+ * hitting its targets, which is the one thing the planner is for.
+ *
+ * So each option carries its calories against this slot's target, its protein,
+ * and its cooking time, and the list opens with the ones that fit best. Someone
+ * who wants the 900 kcal option anyway can still have it; they just get to see
+ * that it is 900 rather than finding out from the day's total.
+ */
+
+export interface SwapTarget {
+  dayIndex: number;
+  dayName: string;
+  slot: Slot;
+  nth: number;
+  current: Meal;
+  /** Calories this slot is meant to carry, for the athlete. */
+  slotKcal: number;
+}
+
+export function MealSwap({ target, prefs, onPick, onClose }: {
+  target: SwapTarget;
+  prefs: MealPrefs;
+  onPick: (mealId: string) => void;
+  onClose: () => void;
+}) {
+  const [q, setQ] = useState("");
+
+  const options = useMemo(() => {
+    const pool = MEALS.filter(
+      (m) => m.slot === target.slot && mealAllowed(m, prefs) && m.id !== target.current.id
+    );
+    const scored = pool.map((meal) => {
+      const macros = mealMacros(meal);
+      // Portion scaling covers 0.55–1.6, so "fit" is really "can this be served
+      // at a sensible portion for this slot" rather than raw calorie distance.
+      const ratio = target.slotKcal > 0 ? macros.kcal / target.slotKcal : 1;
+      const fit = ratio < 0.55 ? 0.55 / ratio : ratio > 1.6 ? ratio / 1.6 : 1;
+      return { meal, macros, fit };
+    });
+    const needle = q.trim().toLowerCase();
+    const filtered = needle
+      ? scored.filter((s) => s.meal.name.toLowerCase().includes(needle))
+      : scored;
+    return filtered.sort((a, b) => a.fit - b.fit || b.macros.protein - a.macros.protein);
+  }, [target, prefs, q]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-0 sm:items-center sm:p-6"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Swap ${target.dayName} ${target.slot.toLowerCase()}`}
+      onClick={onClose}
+    >
+      {/* A sheet from the bottom on a phone, a centred dialog on a laptop. The
+          list can run to eighty rows, so it scrolls inside a fixed frame rather
+          than growing the page behind it. */}
+      <div
+        className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl border border-white/10 bg-ink-900 sm:rounded-3xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="shrink-0 border-b border-white/[0.08] p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <span className="stat-label">{target.dayName} · {target.slot}</span>
+              <h3 className="mt-0.5 truncate text-lg font-extrabold text-slate-100">
+                Swap {target.current.name}
+              </h3>
+              <p className="mt-0.5 text-xs text-slate-500">
+                Best fit first — around {Math.round(target.slotKcal)} kcal for this slot.
+              </p>
+            </div>
+            <button onClick={onClose} className="tap-target shrink-0 text-slate-400 hover:text-slate-200" aria-label="Close">
+              ✕
+            </button>
+          </div>
+
+          {options.length > 6 && (
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search meals…"
+              className="field mt-3"
+              aria-label="Search meals"
+            />
+          )}
+        </div>
+
+        <ul className="min-h-0 flex-1 divide-y divide-white/[0.05] overflow-y-auto">
+          {options.map(({ meal, macros, fit }) => {
+            // "Fits" is not a score anyone should have to interpret. It becomes
+            // one word, and only when it's a warning.
+            const stretch = fit > 1.25 ? (macros.kcal > target.slotKcal ? "big for this slot" : "small for this slot") : null;
+            return (
+              <li key={meal.id}>
+                <button
+                  onClick={() => onPick(meal.id)}
+                  className="flex w-full items-start gap-3 p-3.5 text-left transition hover:bg-white/[0.04]"
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-bold text-slate-100">{meal.name}</span>
+                    <span className="mt-0.5 block text-xs text-slate-500">
+                      {Math.round(macros.kcal)} kcal · {Math.round(macros.protein)}g protein
+                      {meal.minutes != null && ` · ${meal.minutes} min`}
+                      {` · ${recipeSteps(meal).length} steps`}
+                    </span>
+                    {stretch && (
+                      <span className="mt-1 inline-block rounded-md bg-amber-400/10 px-1.5 py-0.5 text-[11px] text-amber-300">
+                        {stretch}
+                      </span>
+                    )}
+                  </span>
+                  <span className="shrink-0 self-center text-xs font-bold text-pitch-400">Use</span>
+                </button>
+              </li>
+            );
+          })}
+          {!options.length && (
+            <li className="px-4 py-8 text-center text-sm text-slate-500">
+              {q.trim()
+                ? `Nothing called "${q.trim()}" for this slot.`
+                : "No other meals fit your diet for this slot yet."}
+            </li>
+          )}
+        </ul>
+      </div>
+    </div>
+  );
+}

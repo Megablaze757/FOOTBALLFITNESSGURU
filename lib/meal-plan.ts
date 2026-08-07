@@ -591,11 +591,47 @@ export function unmetSlots(prefs: MealPrefs): Slot[] {
  * then each day is scaled to land on the calorie target. Portions are clamped
  * so we never prescribe a comically small or huge plate.
  */
+/**
+ * Meals the athlete chose by hand, replacing what the planner picked.
+ *
+ * Keyed by POSITION — `"2:Dinner:0"` is Wednesday's dinner — rather than by the
+ * meal being replaced. That matters: a swap has to survive the plan being
+ * rebuilt, and `buildWeek` is re-run from the seed on every visit. Keying by
+ * the original meal's id would break the moment anything upstream changed what
+ * that slot would otherwise have held, which is exactly when someone's choice
+ * matters most.
+ */
+/**
+ * What one slot is meant to carry, for this athlete.
+ *
+ * Exported because the swap dialog has to show alternatives against the same
+ * number the planner scores them by — a UI that ranked meals on its own idea of
+ * "about right" would recommend things the engine would then scale oddly.
+ * Duplicating the share maths in the component is how those two drift.
+ */
+export function slotTargetKcal(targets: PlanTargets, prefs: MealPrefs, slot: Slot): number {
+  const wanted: Slot[] = [
+    "Breakfast", "Lunch", "Dinner",
+    ...(prefs.mealsPerDay >= 4 ? (["Snack"] as Slot[]) : []),
+    ...(prefs.mealsPerDay >= 5 ? (["Snack"] as Slot[]) : []),
+  ];
+  const total = wanted.reduce((sum, sl) => sum + SLOT_SHARE[sl], 0);
+  return total > 0 ? targets.calories * (SLOT_SHARE[slot] / total) : 0;
+}
+
+export type MealSwaps = Record<string, string>;
+
+/** The key a swap is stored under. Exported so the UI cannot invent its own. */
+export function swapKey(dayIndex: number, slot: Slot, nth: number): string {
+  return `${dayIndex}:${slot}:${nth}`;
+}
+
 export function buildWeek(
   targets: PlanTargets,
   seed = 0,
   prefs: MealPrefs = DEFAULT_PREFS,
-  schedule: DietSchedule = EMPTY_SCHEDULE
+  schedule: DietSchedule = EMPTY_SCHEDULE,
+  swaps: MealSwaps = {}
 ): PlannedDay[] {
   const pools: Record<Slot, Meal[]> = {
     Breakfast: bySlot("Breakfast", prefs), Lunch: bySlot("Lunch", prefs),
@@ -614,7 +650,25 @@ export function buildWeek(
   // Budget mode leans harder on repetition: reusing what's already bought is the
   // single biggest lever on the bill, and someone who ticked "cheap staples" has
   // told us they'd rather eat the same thing than pay more.
-  const repeatPenalty = prefs.budget ? REPEAT_PENALTY * 0.35 : REPEAT_PENALTY;
+  /**
+   * Variety is scaled to how many meals there are to spread it over.
+   *
+   * A flat penalty broke a real case: someone eating out twice a week got a
+   * MORE expensive shop than someone cooking every night — £111 against £103 —
+   * because the planner spread twenty-six slots across twenty-one different
+   * dishes and the extra ingredients cost more in whole packs than the two
+   * dinners saved. Cooking less and paying more is indefensible however varied
+   * the week is.
+   *
+   * The cause is that a repeat costs the same whether there are 28 slots or 18,
+   * while pack efficiency gets steadily more important as slots come out — a
+   * bag of rice has fewer meals to amortise over. So the pressure to vary now
+   * falls with the number of slots, and the scale is set against a full 4-meal
+   * week (28) so an ordinary plan is unaffected.
+   *
+   * Set in `weeklyRepeatPenalty` below, once `wanted` is known.
+   */
+  const budgetScale = prefs.budget ? 0.35 : 1;
   /**
    * BUDGET MODE HAS TO ACTUALLY WEIGHT COST, and it didn't.
    *
@@ -667,6 +721,16 @@ export function buildWeek(
     ...(prefs.mealsPerDay >= 4 ? [{ slot: "Snack" as Slot, nth: 0 }] : []),
     ...(prefs.mealsPerDay >= 5 ? [{ slot: "Snack" as Slot, nth: 1 }] : []),
   ];
+  // Slots actually COOKED this week, which is the number that matters. The
+  // first version of this multiplied `wanted` by seven and never changed,
+  // because days eaten out are skipped inside the day loop rather than removed
+  // from `wanted` — so the scaling silently did nothing. Counted properly here.
+  let weeklySlots = 0;
+  for (let d = 0; d < DAYS.length; d++) {
+    for (const w of wanted) if (!skipReason(schedule, d, w.slot)) weeklySlots++;
+  }
+  const repeatPenalty = REPEAT_PENALTY * budgetScale * Math.min(1, weeklySlots / 28);
+
   const shareTotal = wanted.reduce((s, w) => s + SLOT_SHARE[w.slot], 0);
   /**
    * The calories this slot should carry.
@@ -728,6 +792,29 @@ export function buildWeek(
         if (!skipped.some((s) => s.slot === slot)) skipped.push({ slot, reason });
         continue;
       }
+      /**
+       * A hand-picked meal wins outright.
+       *
+       * It still goes through `addToBasket` and the repeat counter, so the
+       * shopping list and the rest of the week account for it exactly as if the
+       * planner had chosen it — a swap that the costing ignored would produce a
+       * list that doesn't match the plan.
+       *
+       * An unknown or now-ineligible id (they went vegan since choosing it)
+       * falls through to the planner rather than erroring or leaving a hole.
+       */
+      const chosen = swaps[swapKey(i, slot, nth)];
+      const forced = chosen
+        ? pools[slot].find((x) => x.id === chosen && !usedToday.has(x.id))
+        : undefined;
+      if (forced) {
+        uses.set(forced.id, (uses.get(forced.id) ?? 0) + 1);
+        addToBasket(forced, basket);
+        picks.push(forced);
+        usedToday.add(forced.id);
+        continue;
+      }
+
       const m = choose(slot, nth, usedToday);
       if (m) { picks.push(m); usedToday.add(m.id); }
     }
