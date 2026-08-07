@@ -91,3 +91,29 @@ reporting stale data as though it were current.
   anything, so your keys can't be abused by anonymous traffic.
 - The `service_role` key is powerful — it only ever lives in the Worker's secrets, never in the app.
 - Cron runs at 08:00 UTC daily; adjust in `wrangler.toml`.
+
+
+## Is the deployed Worker the one in this repo?
+
+It is pasted into the dashboard by hand, so nothing makes the two agree. For a
+while they did not: production ran `2026-08-04.2` against a repo at
+`2026-08-01.1`, with an eight-model provider chain that existed nowhere in
+version control. Four separately-reported bugs traced back to that gap, and each
+one started with someone reading the wrong code.
+
+```
+npm run worker:drift -- https://apex-api.<subdomain>.workers.dev
+```
+
+Exit 0 they agree, 1 they don't, 2 the check couldn't run. 2 is deliberately
+distinct from 1 — "I could not tell" must never be reported as "they match".
+
+**When it reports drift, copy the DEPLOYED script back first.** The dashboard
+copy is normally the newer one:
+
+1. Cloudflare dashboard → Workers & Pages → `apex-api` → Edit code
+2. Select all, and paste it over `cloudflare/worker.js`
+3. Commit it
+
+Do **not** run `wrangler deploy` to close the gap. That pushes this repo's older
+script over production and loses whatever was changed in the dashboard.
