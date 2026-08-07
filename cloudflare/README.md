@@ -117,3 +117,36 @@ copy is normally the newer one:
 
 Do **not** run `wrangler deploy` to close the gap. That pushes this repo's older
 script over production and loses whatever was changed in the dashboard.
+
+
+## Three copies of this Worker exist. Two of them are usually wrong.
+
+1. `cloudflare/src/index.ts` — the TypeScript source. `wrangler deploy` builds
+   from this, because `wrangler.toml` says `main = "src/index.ts"`.
+2. `cloudflare/worker.js` — the bundled output. This is the file that gets
+   pasted into the dashboard.
+3. **The dashboard itself** — the code that is actually running, and the only
+   one users ever touch.
+
+Production is edited by hand in the dashboard, so (3) is normally ahead of both
+of the others. That makes `npm run deploy` in this directory a loaded gun: it
+builds (1) and ships it, silently discarding every hand-made change in (3).
+
+So `deploy` now has a `predeploy` guard that runs the drift check and refuses
+unless the deployed version matches the repo. **No URL configured also refuses**
+— deploying without knowing what you are about to overwrite is the exact risk,
+so "I could not check" has to block just as hard as "they differ".
+
+```
+WORKER_DEPLOY_OVERRIDE=1 npm run deploy     # only when you mean it
+```
+
+The override exists because a guard nobody can get past gets deleted; one that
+makes you say so on the command line does not.
+
+### Recovering the dashboard version
+
+Pasting the dashboard JS back into `worker.js` restores the running artifact
+exactly, but leaves `src/index.ts` — the file anyone would actually edit — still
+behind, and now diverged from the artifact next to it. Both need the change, or
+the next `wrangler deploy` reintroduces the same regression.

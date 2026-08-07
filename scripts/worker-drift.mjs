@@ -41,6 +41,14 @@ async function deployedVersion(base) {
   return body.version;
 }
 
+// Used as a deploy guard (see cloudflare/package.json), where refusing is the
+// whole point. An explicit override exists because a guard nobody can get past
+// gets deleted; one that makes you say so on the command line does not.
+if (process.env.WORKER_DEPLOY_OVERRIDE === "1") {
+  console.error("WORKER_DEPLOY_OVERRIDE=1 — skipping the drift check. You are on your own.");
+  process.exit(0);
+}
+
 const base = process.argv[2] || process.env.WORKER_URL;
 if (!base) {
   console.error(
