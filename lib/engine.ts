@@ -425,7 +425,12 @@ function sessionTitle(focus: GoalType, day: number): string {
     injury_recovery: "Rehab & activation",
     skill: "Ball skill",
   };
-  return `Day ${day + 1} · ${map[focus]}`;
+  // `focus` is typed GoalType and arrives from `programs.goal_type`, which is a
+  // bare text column — the app casts rather than checks. An unlisted value came
+  // out as the session being titled "Day 1 · undefined" on the athlete's plan.
+  // The day number is still true, so print that and drop the label rather than
+  // printing a word that means nothing.
+  return map[focus] ? `Day ${day + 1} · ${map[focus]}` : `Day ${day + 1}`;
 }
 
 function focusRotationFor(input: EngineInput): GoalType[] {

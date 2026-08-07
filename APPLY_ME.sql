@@ -27,6 +27,14 @@ alter table public.programs add constraint programs_goal_type_check
   check (goal_type = any (array['speed','agility','strength','endurance','injury_recovery','skill']))
   not valid;
 
+-- 0070b: profiles.training_focus, the same shape of bug one column along.
+-- lib/coach.ts looks this up to write the sentence at the top of the program,
+-- so an unlisted value printed "Weighted toward undefined." to the athlete.
+alter table public.profiles drop constraint if exists profiles_training_focus_check;
+alter table public.profiles add constraint profiles_training_focus_check
+  check (training_focus is null or training_focus = any (array['performance','fitness','aesthetics','rehab']))
+  not valid;
+
 notify pgrst, 'reload schema';
 
 -- Verify: this should return 4 rows.

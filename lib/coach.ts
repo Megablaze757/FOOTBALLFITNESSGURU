@@ -419,7 +419,13 @@ function programSummary(goal: GoalType, sore: BodyArea[], inSeason: boolean, blo
   const season = inSeason ? t.inSeason : t.offSeason;
   const who = [positionLabel(position), sport].filter(Boolean).join(" · ");
   const forWhom = who ? ` Tailored for a ${who}.` : "";
-  const focusNote = focus && focus !== "performance" ? ` Weighted toward ${FOCUS_LABEL[focus]}.` : "";
+  // `profiles.training_focus` is a bare text column whose permitted values live
+  // only in a SQL comment, and the app casts it to TrainingFocus on the way in.
+  // An unlisted value read back as "Weighted toward undefined." in the summary
+  // at the top of the athlete's program — the sentence describing what the
+  // block is FOR. Say nothing rather than say that.
+  const focusLabel = focus ? FOCUS_LABEL[focus] : undefined;
+  const focusNote = focusLabel && focus !== "performance" ? ` Weighted toward ${focusLabel}.` : "";
   const blockNote = block > 1 ? ` Block ${block} — volume stepped up ${Math.round((block - 1) * 8)}% from your last block.` : "";
   const note = sore.length ? ` Built around your sore ${sore.map(prettyArea).join(" & ")}, swapping in lower-impact options.` : "";
   return `A 4-week ${g.toLowerCase()} block, ${season}, progressing Base → Build → Peak → Deload.${forWhom}${focusNote}${blockNote}${note}`;

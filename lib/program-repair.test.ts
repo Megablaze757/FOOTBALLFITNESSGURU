@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { repairPlan, planStructureIssues } from "./program-repair";
+import { buildProgram } from "./coach";
 import { buildBlock, type ProgramPlan, type EngineInput } from "./engine";
 
 const INPUT: EngineInput = {
@@ -369,4 +370,42 @@ test("extra sessions are never removed", () => {
   const { plan, report } = repairPlan(generous, wants2);
   assert.equal(plan.weeks[0].sessions.length, 4);
   assert.deepEqual(report.toppedUp, []);
+});
+
+// --- values the database does not constrain ----------------------------------
+
+/**
+ * `programs.goal_type` and `profiles.training_focus` are both bare text columns
+ * whose permitted values exist only in a SQL comment, and the app casts rather
+ * than checks on the way in. Both were rendering the literal word "undefined"
+ * into the athlete's program: a session titled "Day 1 · undefined", and a
+ * summary reading "Weighted toward undefined." — the sentence that says what
+ * the block is for.
+ *
+ * Migration 0070 stops bad values getting in. This is the other half: whatever
+ * is already stored, the program must still read like a program.
+ */
+test("an unrecognised goal or focus never reaches the athlete as 'undefined'", () => {
+  const base = {
+    goal: "strength", painMap: {}, isInSeason: false, sport: "football",
+    position: ["Centre back"], focus: "performance", daysPerWeek: 4, notes: "",
+  };
+  const rogues: [string, unknown][] = [
+    ["goal", "power"], ["goal", ""], ["goal", "HYPERTROPHY"],
+    ["focus", "both"], ["focus", null], ["focus", "strength"],
+    ["sport", "netball"],
+  ];
+  for (const [field, value] of rogues) {
+    const plan = buildProgram({ ...base, [field]: value } as never);
+    assert.ok(
+      !JSON.stringify(plan).includes("undefined"),
+      `${field}=${JSON.stringify(value)} put the word "undefined" in the plan`
+    );
+    // And it is still a usable program, not just a quiet one.
+    assert.equal(plan.weeks.length, 4, `${field}=${JSON.stringify(value)}: not 4 weeks`);
+    for (const w of plan.weeks) {
+      assert.equal(w.sessions.length, 4, `${field}=${JSON.stringify(value)}: wrong session count`);
+      for (const s of w.sessions) assert.ok(s.drills.length > 0, "empty session");
+    }
+  }
 });

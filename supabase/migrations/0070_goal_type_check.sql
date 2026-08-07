@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0070: Constrain programs.goal_type to the values the app has numbers for.
+-- 0070: Constrain the two enum-ish text columns the app indexes lookup tables by.
 --
 -- It was declared `goal_type text not null` in 0007 with the permitted values
 -- written in a SQL COMMENT beside it, which is documentation, not a rule. The
@@ -39,5 +39,30 @@ comment on column public.programs.goal_type is
   'One of speed | agility | strength | endurance | injury_recovery | skill. '
   'Indexed directly into the protein and fat per-kg tables in lib/nutrition.ts, '
   'so an unlisted value produced NaN macros before this constraint existed.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- profiles.training_focus — the same shape of bug, one column along.
+--
+-- Declared `training_focus text` in 0015 with the permitted values in a trailing
+-- comment. lib/coach.ts looks the value up in FOCUS_LABEL to write the sentence
+-- at the top of the athlete's program, so an unlisted one rendered literally as
+-- "Weighted toward undefined." — in the line describing what the block is for.
+--
+-- The app no longer prints that whatever it reads. This stops the bad value
+-- getting in, which is the other half.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+alter table public.profiles drop constraint if exists profiles_training_focus_check;
+
+alter table public.profiles add constraint profiles_training_focus_check
+  check (training_focus is null or training_focus = any (array['performance', 'fitness', 'aesthetics', 'rehab']))
+  not valid;
+
+comment on column public.profiles.training_focus is
+  'One of performance | fitness | aesthetics | rehab, or null. Indexed into '
+  'FOCUS_LABEL in lib/coach.ts to describe the program, so an unlisted value '
+  'used to print the word "undefined" into the athlete''s plan summary.';
 
 notify pgrst, 'reload schema';
