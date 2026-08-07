@@ -7,7 +7,7 @@
 // for why live supermarket pricing isn't available. Pure + tested.
 // =============================================================================
 
-import { FOODS, FOOD_BY_ID, type Aisle, type Food, type FoodTag } from "./food-db";
+import { FOODS, FOOD_BY_ID, packPriceFor, isCorrected, type Aisle, type Food, type FoodTag, type PriceOverrides, type StoreId } from "./food-db";
 import { skipReason, EMPTY_SCHEDULE, type DietSchedule } from "./meal-schedule";
 import type { PlanTargets } from "./nutrition"; // used below; also re-exported
 
@@ -1255,6 +1255,13 @@ export interface ShoppingLine {
   meals: number;
   /** Fraction of the packs actually eaten — the rest is left over. */
   used: number;     // 0..1
+  /**
+   * True when the athlete told us this price rather than us estimating it.
+   *
+   * The UI marks these, because the difference between "we think" and "you told
+   * us" is the whole point of letting them correct it.
+   */
+  corrected: boolean;
 }
 
 export interface ShoppingList {
@@ -1267,7 +1274,20 @@ export interface ShoppingList {
   costPerMeal: number;
 }
 
-export function shoppingList(week: PlannedDay[]): ShoppingList {
+/**
+ * Options that decide what a pack COSTS, as opposed to how much of it is needed.
+ *
+ * Optional throughout: the planner's own scoring calls this to compare baskets
+ * and wants the baseline table, not one athlete's corrections, so that a plan
+ * built for a Tesco shopper and one built for an Aldi shopper are the same plan
+ * at different prices rather than two different plans.
+ */
+export interface PricingOptions {
+  store?: StoreId;
+  overrides?: PriceOverrides;
+}
+
+export function shoppingList(week: PlannedDay[], pricing: PricingOptions = {}): ShoppingList {
   const needed = new Map<string, number>();
   const mealCount = new Map<string, number>();
   for (const day of week) {
@@ -1284,11 +1304,13 @@ export function shoppingList(week: PlannedDay[]): ShoppingList {
     const food = FOOD_BY_ID[foodId];
     if (!food) continue;
     const packs = Math.max(1, Math.ceil(qty / food.packSize));
+    const unitPrice = packPriceFor(food, pricing);
     lines.push({
       food,
       needed: Math.round(qty),
       packs,
-      cost: Math.round(packs * food.packPrice * 100) / 100,
+      cost: Math.round(packs * unitPrice * 100) / 100,
+      corrected: isCorrected(food, pricing.overrides),
       meals: mealCount.get(foodId) ?? 0,
       used: Math.min(1, qty / (packs * food.packSize)),
     });

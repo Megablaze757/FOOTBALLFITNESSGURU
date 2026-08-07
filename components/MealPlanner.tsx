@@ -11,6 +11,7 @@ import {
   type MealPrefs, type DietPattern, type Avoidance,
 } from "@/lib/meal-plan";
 import { parseSchedule } from "@/lib/meal-schedule";
+import { SUPERMARKETS, type StoreId, type PriceOverrides } from "@/lib/food-db";
 import type { TargetContext } from "@/lib/nutrition";
 import { Recipe } from "@/components/Recipe";
 import { MealSwap, type SwapTarget } from "@/components/MealSwap";
@@ -126,7 +127,43 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
   }), [sex, goal, activity, age, heightCm, weightKg]);
 
   const targets = useMemo(() => planTargets(stats, context ?? {}), [stats, context]);
-  const list = useMemo(() => (week ? shoppingList(week) : null), [week]);
+  /**
+   * Where they shop, and any prices they've corrected.
+   *
+   * Both live here rather than in ShoppingList because the LIST is costed here,
+   * and a store picker that only changed the search links was quoting an Aldi
+   * shopper Tesco prices. Corrections are keyed by food and kept across weeks:
+   * what a pack costs is a fact about their supermarket, not about this plan.
+   */
+  const [store, setStore] = useState<StoreId>("tesco");
+  const [priceOverrides, setPriceOverrides] = useState<PriceOverrides>({});
+
+  useEffect(() => {
+    try {
+      const s = window.localStorage.getItem("shop:store");
+      if (s && SUPERMARKETS.some((x) => x.id === s)) setStore(s as StoreId);
+      const raw = window.localStorage.getItem("shop:prices");
+      if (raw) setPriceOverrides(JSON.parse(raw));
+    } catch { /* a corrupt or blocked store just means estimates */ }
+  }, []);
+
+  const chooseStore = (id: StoreId) => {
+    setStore(id);
+    try { window.localStorage.setItem("shop:store", id); } catch { /* ignore */ }
+  };
+  const correctPrice = (foodId: string, price: number | null) => {
+    setPriceOverrides((prev) => {
+      const next = { ...prev };
+      if (price === null) delete next[foodId]; else next[foodId] = price;
+      try { window.localStorage.setItem("shop:prices", JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+  };
+
+  const list = useMemo(
+    () => (week ? shoppingList(week, { store, overrides: priceOverrides }) : null),
+    [week, store, priceOverrides]
+  );
   // If someone excludes enough, a meal slot can end up with nothing in it —
   // better to say so than to quietly hand back a short day.
   // Foods named in the notes are excluded on top of the tapped preferences.
@@ -715,7 +752,7 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
             </div>
           </div>
 
-          {list && <ShoppingList list={list} seed={seed} />}
+          {list && <ShoppingList list={list} seed={seed} store={store} onStore={chooseStore} onCorrectPrice={correctPrice} />}
         </>
       )}
 

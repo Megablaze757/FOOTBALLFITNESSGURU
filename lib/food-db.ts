@@ -186,3 +186,53 @@ export function productLink(food: Food, store: { id: StoreId; search: (q: string
 }
 
 export const PRICES_REVIEWED = "July 2026";
+
+/**
+ * A COARSE PRICE LEVEL PER SUPERMARKET.
+ *
+ * The table above is one number per food, and one number cannot be right in
+ * four shops at once — the same basket differs by well over 10% between a
+ * discounter and a mid-market chain, which is more than most of the savings the
+ * planner works to find. Applying nothing at all meant an Aldi shopper was
+ * quoted Tesco prices and told that was what their week would cost.
+ *
+ * These are TIER adjustments, not per-item pricing: the baseline table reads as
+ * mid-market, and each store scales off it. That is a blunt instrument and is
+ * described as one wherever it appears — it will be wrong on any individual
+ * line, and it is closer than pretending every shop charges the same.
+ *
+ * The honest fix for a specific line is the athlete correcting it (see
+ * `PriceOverrides`), because they are standing in the shop and we are not.
+ */
+export const STORE_PRICE_INDEX: Record<StoreId, number> = {
+  tesco: 1,
+  sainsburys: 1.03,
+  asda: 0.95,
+  aldi: 0.85,
+};
+
+/**
+ * Prices the athlete has corrected themselves, keyed by food id, in £ per pack.
+ *
+ * Worth more than everything above put together: it is the one price in the app
+ * that is known rather than estimated. An override wins outright and is never
+ * scaled by the store index — they typed what they actually paid.
+ */
+export type PriceOverrides = Record<string, number>;
+
+/** What one pack of this food costs, best information first. */
+export function packPriceFor(
+  food: Food,
+  opts: { store?: StoreId; overrides?: PriceOverrides } = {}
+): number {
+  const own = opts.overrides?.[food.id];
+  if (own != null && Number.isFinite(own) && own > 0) return own;
+  const index = opts.store ? STORE_PRICE_INDEX[opts.store] ?? 1 : 1;
+  return Math.round(food.packPrice * index * 100) / 100;
+}
+
+/** True when this line's price came from the athlete rather than our table. */
+export function isCorrected(food: Food, overrides?: PriceOverrides): boolean {
+  const own = overrides?.[food.id];
+  return own != null && Number.isFinite(own) && own > 0;
+}

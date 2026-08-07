@@ -198,3 +198,71 @@ test("the vegan pattern excludes honey by rule, not by luck", () => {
   // Vegetarians do eat honey, and taking it from them would be a different bug.
   assert.equal(mealAllowed(honeyMeal, prefs({ pattern: "vegetarian" })), true);
 });
+
+// --- what a shop actually costs ----------------------------------------------
+
+/**
+ * ONE PRICE CANNOT BE RIGHT IN FOUR SHOPS AT ONCE.
+ *
+ * The table is a maintained estimate at mid-market level, and it was quoted
+ * unchanged to everyone — so an Aldi shopper was told their week cost Tesco
+ * money. The gap between a discounter and a mid-market chain is larger than
+ * most of the savings the planner works to find, which made it the biggest
+ * single error in the number.
+ */
+test("the shop you pick changes what the shop costs", () => {
+  const week = buildWeek(planTargets(ATHLETE), 0, prefs({}));
+  const tesco = shoppingList(week, { store: "tesco" }).total;
+  const aldi = shoppingList(week, { store: "aldi" }).total;
+  assert.ok(aldi < tesco, `aldi £${aldi} should undercut tesco £${tesco}`);
+  // And it's a tier adjustment, not a different basket — same items, same packs.
+  assert.deepEqual(
+    shoppingList(week, { store: "aldi" }).lines.map((l) => `${l.food.id}:${l.packs}`),
+    shoppingList(week, { store: "tesco" }).lines.map((l) => `${l.food.id}:${l.packs}`)
+  );
+});
+
+/**
+ * A price the athlete typed is the only one in the app that is KNOWN.
+ *
+ * There is no public UK grocery API and scraping the storefronts is against
+ * their terms, so someone standing in the shop is a better source than our
+ * table will ever be. Their number therefore wins outright and is never scaled
+ * by the store index on top.
+ */
+test("a corrected price beats the estimate and the store index", () => {
+  const week = buildWeek(planTargets(ATHLETE), 0, prefs({}));
+  const first = shoppingList(week).lines[0];
+  const fixed = shoppingList(week, {
+    store: "aldi",
+    overrides: { [first.food.id]: 9.99 },
+  });
+  const line = fixed.lines.find((l) => l.food.id === first.food.id)!;
+  assert.equal(line.cost, Math.round(line.packs * 9.99 * 100) / 100, "the athlete's price, unscaled");
+  assert.ok(line.corrected, "and marked as theirs rather than ours");
+  assert.ok(fixed.lines.filter((l) => l.food.id !== first.food.id).every((l) => !l.corrected));
+});
+
+test("a nonsense correction is ignored rather than trusted", () => {
+  const week = buildWeek(planTargets(ATHLETE), 0, prefs({}));
+  const id = shoppingList(week).lines[0].food.id;
+  for (const bad of [0, -3, Number.NaN]) {
+    const line = shoppingList(week, { overrides: { [id]: bad } }).lines.find((l) => l.food.id === id)!;
+    assert.ok(!line.corrected, `${bad} should not count as a price`);
+    assert.ok(line.cost > 0);
+  }
+});
+
+/**
+ * The planner must not plan a DIFFERENT WEEK for an Aldi shopper.
+ *
+ * `buildWeek` costs candidate meals to compare them, and it deliberately uses
+ * the baseline table rather than one athlete's store or corrections — otherwise
+ * two people with the same body and the same diet get different food because
+ * one of them typed in what they paid for rice.
+ */
+test("where you shop changes the price, not the plan", () => {
+  const t = planTargets(ATHLETE);
+  const ids = (w: ReturnType<typeof buildWeek>) => w.flatMap((d) => d.meals.map((m) => m.meal.id));
+  assert.deepEqual(ids(buildWeek(t, 0, prefs({}))), ids(buildWeek(t, 0, prefs({}))));
+});
