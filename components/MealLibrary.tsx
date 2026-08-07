@@ -7,6 +7,8 @@ import { Recipe } from "@/components/Recipe";
 import { EmptyState } from "@/components/EmptyState";
 import { MEALS, mealMacros, mealTags, DIET_PATTERNS, mealAllowed, DEFAULT_PREFS, type Meal, type Slot } from "@/lib/meal-plan";
 import { selectProfile } from "@/lib/profile-columns";
+import { MealFilterBar } from "@/components/MealFilterBar";
+import { passesFilters, matchesQuery, activeFilterCount, NO_FILTERS, type MealFilters } from "@/lib/meal-filters";
 import { FOOD_BY_ID } from "@/lib/food-db";
 
 /**
@@ -42,8 +44,10 @@ const TAG_LABEL: Record<string, string> = {
 export function MealLibrary({ userId }: { userId: string }) {
   const [q, setQ] = useState("");
   const [slot, setSlot] = useState<Slot | "All">("All");
-  const [quick, setQuick] = useState(false);
-  const [starredOnly, setStarredOnly] = useState(false);
+  // The chip row is shared with the swap sheet — see lib/meal-filters.ts. It
+  // replaced this component's own quick/starred pair, which had drifted into
+  // being a different set of filters from the one the swap sheet never had.
+  const [filters, setFilters] = useState<MealFilters>(NO_FILTERS);
   const [myDiet, setMyDiet] = useState(true);
   const [open, setOpen] = useState<Meal | null>(null);
   const [shown, setShown] = useState(PAGE);
@@ -105,23 +109,14 @@ export function MealLibrary({ userId }: { userId: string }) {
     [myDiet, dietPrefs]
   );
 
-  const list = useMemo(() => {
-    const needle = q.trim().toLowerCase();
-    return MEALS.filter((m) => {
-      if (slot !== "All" && m.slot !== slot) return false;
-      if (quick && (m.minutes ?? 99) > 15) return false;
-      if (starredOnly && !starred.includes(m.id)) return false;
-      if (myDiet && dietPrefs && !mealAllowed(m, dietPrefs)) return false;
-      if (!needle) return true;
-      // Ingredients are searchable too — "what can I make with chickpeas" is
-      // the question a recipe list gets asked most, and matching only names
-      // answers it wrong.
-      if (m.name.toLowerCase().includes(needle)) return true;
-      return m.items.some((it) => FOOD_BY_ID[it.foodId]?.name.toLowerCase().includes(needle));
-    });
-  }, [q, slot, quick, starredOnly, myDiet, dietPrefs, starred]);
+  const list = useMemo(() => MEALS.filter((m) => {
+    if (slot !== "All" && m.slot !== slot) return false;
+    if (myDiet && dietPrefs && !mealAllowed(m, dietPrefs)) return false;
+    return passesFilters(m, filters, starred)
+      && matchesQuery(m, q, (id) => FOOD_BY_ID[id]?.name);
+  }), [q, slot, filters, myDiet, dietPrefs, starred]);
 
-  useEffect(() => { setShown(PAGE); }, [q, slot, quick, starredOnly, myDiet]);
+  useEffect(() => { setShown(PAGE); }, [q, slot, filters, myDiet]);
 
   return (
     <div className="space-y-4">
@@ -146,21 +141,23 @@ export function MealLibrary({ userId }: { userId: string }) {
         ))}
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <button onClick={() => setQuick(!quick)} aria-pressed={quick} className="chip-option chip-option-sm">
-          <span aria-hidden>⏱</span> Under 15 min
-        </button>
-        {canStar && (
-          <button onClick={() => setStarredOnly(!starredOnly)} aria-pressed={starredOnly} className="chip-option chip-option-sm">
-            <span aria-hidden>★</span> Starred{starred.length > 0 ? ` (${starred.length})` : ""}
-          </button>
-        )}
+      <MealFilterBar
+        filters={filters}
+        onChange={setFilters}
+        // "Fits my diet" already hides everything a vegan can't eat, so the
+        // Veggie and Vegan chips would be no-ops sitting next to it.
+        hide={[
+          ...(canStar ? [] : (["starred"] as const)),
+          ...(myDiet && dietPrefs?.pattern === "vegan" ? (["veggie", "vegan"] as const) : []),
+          ...(myDiet && dietPrefs?.pattern === "vegetarian" ? (["veggie"] as const) : []),
+        ]}
+      >
         {dietPrefs && (
           <button onClick={() => setMyDiet(!myDiet)} aria-pressed={myDiet} className="chip-option chip-option-sm">
             <span aria-hidden>✓</span> Fits my diet
           </button>
         )}
-      </div>
+      </MealFilterBar>
 
       <p className="text-xs text-slate-500">
         {list.length} recipe{list.length === 1 ? "" : "s"}
@@ -172,11 +169,13 @@ export function MealLibrary({ userId }: { userId: string }) {
           icon="🍳"
           title="Nothing matches that"
           body={
-            starredOnly && starred.length === 0
+            filters.starred && starred.length === 0
               ? "You haven't starred anything yet. Open a recipe and tap the star — the planner will start serving it more often."
-              : "Try a shorter search, or clear a filter. Searching an ingredient works too — \"chickpeas\", \"salmon\"."
+              : activeFilterCount(filters) > 0
+                ? "No recipe matches all of those at once. Try clearing one."
+                : "Try a shorter search. Searching an ingredient works too — \"chickpeas\", \"salmon\"."
           }
-          action={{ label: "Clear filters", onClick: () => { setQ(""); setSlot("All"); setQuick(false); setStarredOnly(false); setMyDiet(true); } }}
+          action={{ label: "Clear filters", onClick: () => { setQ(""); setSlot("All"); setFilters(NO_FILTERS); setMyDiet(true); } }}
         />
       ) : (
         <>

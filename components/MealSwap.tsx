@@ -5,6 +5,9 @@ import {
   MEALS, mealAllowed, mealMacros, recipeSteps,
   type Meal, type MealPrefs, type Slot,
 } from "@/lib/meal-plan";
+import { FOOD_BY_ID } from "@/lib/food-db";
+import { MealFilterBar } from "@/components/MealFilterBar";
+import { passesFilters, matchesQuery, activeFilterCount, NO_FILTERS, type MealFilters } from "@/lib/meal-filters";
 
 /**
  * Change one meal without regenerating the week.
@@ -36,13 +39,16 @@ export interface SwapTarget {
   slotKcal: number;
 }
 
-export function MealSwap({ target, prefs, onPick, onClose }: {
+export function MealSwap({ target, prefs, starred = [], onPick, onClose }: {
   target: SwapTarget;
   prefs: MealPrefs;
+  /** Dishes the athlete starred, so the Starred chip means something here too. */
+  starred?: string[];
   onPick: (mealId: string) => void;
   onClose: () => void;
 }) {
   const [q, setQ] = useState("");
+  const [filters, setFilters] = useState<MealFilters>(NO_FILTERS);
 
   const options = useMemo(() => {
     const pool = MEALS.filter(
@@ -56,12 +62,19 @@ export function MealSwap({ target, prefs, onPick, onClose }: {
       const fit = ratio < 0.55 ? 0.55 / ratio : ratio > 1.6 ? ratio / 1.6 : 1;
       return { meal, macros, fit };
     });
-    const needle = q.trim().toLowerCase();
-    const filtered = needle
-      ? scored.filter((s) => s.meal.name.toLowerCase().includes(needle))
-      : scored;
+    // Search now covers ingredients as well as names — "chickpeas" is a
+    // reasonable thing to want from a swap list, and matching only the title
+    // answered it wrong. Same rule as the library, from lib/meal-filters.
+    const filtered = scored.filter((s) =>
+      matchesQuery(s.meal, q, (id) => FOOD_BY_ID[id]?.name) && passesFilters(s.meal, filters, starred));
     return filtered.sort((a, b) => a.fit - b.fit || b.macros.protein - a.macros.protein);
-  }, [target, prefs, q]);
+  }, [target, prefs, q, filters, starred]);
+
+  /** Every option for this slot, ignoring the search and chips. */
+  const poolSize = useMemo(
+    () => MEALS.filter((m) => m.slot === target.slot && mealAllowed(m, prefs) && m.id !== target.current.id).length,
+    [target, prefs]
+  );
 
   return (
     <div
@@ -94,14 +107,34 @@ export function MealSwap({ target, prefs, onPick, onClose }: {
             </button>
           </div>
 
-          {options.length > 6 && (
-            <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Search meals…"
-              className="field mt-3"
-              aria-label="Search meals"
-            />
+          {/* Keyed off the SLOT'S POOL, not the filtered result. Keying it off
+              `options` made the search box disappear the moment a search
+              narrowed the list to six — removing the control you were using,
+              mid-type, with no way to widen it again. */}
+          {poolSize > 6 && (
+            <>
+              <input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Search meals or ingredients…"
+                className="field mt-3"
+                aria-label="Search meals or ingredients"
+              />
+              <div className="mt-3">
+                <MealFilterBar
+                  filters={filters}
+                  onChange={setFilters}
+                  // The list is already restricted to this athlete's diet, so a
+                  // vegan filtering for "Vegan" would be filtering to
+                  // everything — a chip that cannot change the result.
+                  hide={[
+                    ...(prefs.pattern === "vegan" ? (["veggie", "vegan"] as const) : []),
+                    ...(prefs.pattern === "vegetarian" ? (["veggie"] as const) : []),
+                    ...(starred.length ? [] : (["starred"] as const)),
+                  ]}
+                />
+              </div>
+            </>
           )}
         </div>
 
@@ -147,9 +180,14 @@ export function MealSwap({ target, prefs, onPick, onClose }: {
           })}
           {!options.length && (
             <li className="px-4 py-8 text-center text-sm text-slate-500">
-              {q.trim()
-                ? `Nothing called "${q.trim()}" for this slot.`
-                : "No other meals fit your diet for this slot yet."}
+              {/* Says which of the three reasons it is, because "no results"
+                  with a search box AND five chips on screen leaves the athlete
+                  guessing which one to undo. */}
+              {activeFilterCount(filters) > 0
+                ? "Nothing matches those filters for this slot. Try clearing one."
+                : q.trim()
+                  ? `Nothing called "${q.trim()}" for this slot.`
+                  : "No other meals fit your diet for this slot yet."}
             </li>
           )}
         </ul>

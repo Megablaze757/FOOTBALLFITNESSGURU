@@ -620,7 +620,12 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
                     </span>
                     <span className="shrink-0 text-right">
                       <span className="block text-sm font-bold tabular-nums text-slate-300">{Math.round(pm.macros.kcal)}</span>
-                      <span className="block text-[10px] uppercase tracking-wide text-slate-600">kcal</span>
+                      {/* slate-500, not 600. At 10px the 600 measured 4.37:1
+                          against this card — under the 4.5 AA floor for small
+                          text. Invisible to the UI audit, which never opens a
+                          meal row, and it is the unit label on the only number
+                          in the row. */}
+                      <span className="block text-[10px] uppercase tracking-wide text-slate-500">kcal</span>
                     </span>
                     {/* There was no affordance at all — a summary with no marker
                         and no chevron, so nothing said these opened. */}
@@ -701,6 +706,7 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
           some browsers. */}
       {swapping && (
         <MealSwap
+          starred={starred}
           target={swapping}
           prefs={effectivePrefs}
           onPick={applySwap}
@@ -751,7 +757,9 @@ function DayBar({ label, value, target, colour, unit }: {
         <span className="text-slate-400">{label}</span>
         <span className="tabular-nums text-slate-300">
           <span className="font-bold">{v.toLocaleString()}{unit}</span>
-          <span className="text-slate-600"> / {target.toLocaleString()}{unit}</span>
+          {/* Same reason: 4.49:1 at 12px, a hair under AA, and it is the half
+              of "2,340 / 3,100" that says what you are aiming at. */}
+          <span className="text-slate-500"> / {target.toLocaleString()}{unit}</span>
         </span>
       </div>
       <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-white/[0.07]">
