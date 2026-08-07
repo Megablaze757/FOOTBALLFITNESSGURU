@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { invokeAI } from "@/lib/api";
+import { invokeAI, backendCapabilities } from "@/lib/api";
 import { useJobs } from "@/lib/jobs";
 import {
   planTargets, buildWeek, mealMacros, DEFAULT_PREFS,
@@ -90,6 +90,19 @@ export function MealCheckIn({ stats, prefs, dietNotes, seed, context, onAdd }: P
   const [photo, setPhoto] = useState<string | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  /**
+   * Whether the backend can actually read a photo.
+   *
+   * `null` until the probe answers, and the camera stays fully offered in that
+   * window — a capability check that briefly hides a working feature is a worse
+   * bug than the one it fixes.
+   */
+  const [visionOk, setVisionOk] = useState<boolean | null>(null);
+  useEffect(() => {
+    let live = true;
+    backendCapabilities().then((c) => { if (live) setVisionOk(c.vision); });
+    return () => { live = false; };
+  }, []);
 
   /**
    * Estimating runs above the router so it outlives this component.
@@ -116,13 +129,24 @@ export function MealCheckIn({ stats, prefs, dietNotes, seed, context, onAdd }: P
     // picture and name the food — so it says so plainly. Typed text does have
     // one, and falls back to it while naming why the AI answer didn't arrive.
     if (photo) {
-      setPhotoError(`${job.error ?? "That didn't work."} — try a clearer shot, or describe the meal below.`);
+      /**
+       * "Try a clearer shot" is only fair advice if a clearer shot could help.
+       *
+       * When the backend has no vision model, no photo works — and telling
+       * someone to retake it sends them round a loop that cannot end. The probe
+       * knows which situation this is, so the message can too.
+       */
+      setPhotoError(
+        visionOk === false
+          ? "The server can't read meal photos at the moment — describe the meal below instead and it'll work."
+          : `${job.error ?? "That didn't work."} — try a clearer shot, or describe the meal below.`
+      );
     } else {
       setEstimate(estimateMeal(text));
       setSource("local");
       setAiError(job.error ?? "The AI estimate didn't come back.");
     }
-  }, [job, photo, text]);
+  }, [job, photo, text, visionOk]);
 
   /**
    * Today's row of THEIR plan — same seed, same targets, same preferences as the
@@ -334,6 +358,25 @@ export function MealCheckIn({ stats, prefs, dietNotes, seed, context, onAdd }: P
           way. Offered ABOVE the text box because on a phone it's one tap to the
           camera, and the typing is the fallback rather than the other way round. */}
       <div className="mb-4">
+        {/* WHEN THE BACKEND CANNOT SEE, SAY SO — do not offer the camera.
+            Production has run a text-only model chain, so every photo was sent
+            to something that could not look at it and the app answered "I
+            couldn't identify any food in that photo". That blames the photo for
+            a server with no vision model, and invites the athlete to take
+            another one that also cannot work. Typing a meal in still works
+            perfectly, so it says that and points at the box below. */}
+        {visionOk === false ? (
+          <div className="rounded-xl border border-amber-400/25 bg-amber-400/[0.06] p-3">
+            <p className="text-xs font-bold text-amber-300">Photos are off right now</p>
+            <p className="mt-1 text-xs leading-relaxed text-slate-400">
+              The server isn&apos;t set up to read meal photos at the moment — no photo would
+              work, so we&apos;re not going to waste your time. <b className="text-slate-200">Type
+              what you ate below instead</b>; it reads &ldquo;chicken, rice and broccoli&rdquo;
+              just as well.
+            </p>
+          </div>
+        ) : (
+        <>
         <span className="mb-2 block text-xs text-slate-500">Snap the plate and I&apos;ll work it out</span>
         <div className="flex flex-wrap items-center gap-2">
           <label className="btn-ghost w-auto cursor-pointer px-4 py-2 text-sm">
@@ -360,6 +403,8 @@ export function MealCheckIn({ stats, prefs, dietNotes, seed, context, onAdd }: P
           <img src={photo} alt="Your meal" className="mt-3 max-h-48 rounded-2xl border border-white/10 object-cover" />
         )}
         {photoError && <p className="mt-2 text-xs text-amber-300">{photoError}</p>}
+        </>
+        )}
       </div>
 
       {/* 3. Free text */}

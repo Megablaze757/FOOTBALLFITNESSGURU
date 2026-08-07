@@ -81,3 +81,70 @@ export async function invokeAI<T = unknown>(fn: string, body: unknown, timeoutMs
   if (error) throw error;
   return data as T;
 }
+
+/**
+ * What the deployed backend can actually do.
+ *
+ * WHY THIS EXISTS. The photo estimator sends an image to `/estimate-food` and,
+ * when nothing comes back, tells the athlete "I couldn't identify any food in
+ * that photo." That sentence blames the photo. In production it has been wrong:
+ * the deployed Worker's model chain is `groq/openai/gpt-oss-120b`, which is
+ * text-only, and its `/health` reports no `vision` field at all — so the image
+ * was never looked at by anything that could see it. No photo would have
+ * worked, and the app kept inviting people to try another one.
+ *
+ * The Worker in production is built from source that is not in this repository,
+ * so its capabilities cannot be known at build time. They can be ASKED FOR at
+ * runtime: `/health` is unauthenticated, cheap, and already reports the model
+ * chain. Asking once per session and remembering the answer is the difference
+ * between a feature that fails honestly and one that gaslights.
+ */
+export interface BackendCapabilities {
+  /** `/health` answered. False means offline, or no Worker configured. */
+  reachable: boolean;
+  /** The backend advertises a vision model, so photos can be read. */
+  vision: boolean;
+  version?: string;
+}
+
+let capabilityProbe: Promise<BackendCapabilities> | null = null;
+
+export function backendCapabilities(): Promise<BackendCapabilities> {
+  // Cached as the PROMISE, not the result, so ten components mounting at once
+  // make one request rather than ten.
+  if (capabilityProbe) return capabilityProbe;
+
+  capabilityProbe = (async (): Promise<BackendCapabilities> => {
+    const base = process.env.NEXT_PUBLIC_API_URL;
+    // No Worker means the Supabase Edge Functions handle this, and those have
+    // their own vision path — assume capable rather than disabling a feature
+    // that may well work.
+    if (!base) return { reachable: false, vision: true };
+
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 6_000);
+      const res = await fetch(`${base.replace(/\/$/, "")}/health`, { signal: ctrl.signal });
+      clearTimeout(timer);
+      if (!res.ok) return { reachable: false, vision: true };
+      const body = (await res.json()) as { vision?: string; version?: string };
+      return {
+        reachable: true,
+        // Absent OR empty both mean no vision model configured.
+        vision: !!body.vision,
+        version: body.version,
+      };
+    } catch {
+      // A failed probe must never disable a working feature. Unknown is treated
+      // as capable, and the estimate itself will report any real failure.
+      return { reachable: false, vision: true };
+    }
+  })();
+
+  return capabilityProbe;
+}
+
+/** Testing seam — the probe is cached for the life of the tab. */
+export function resetBackendCapabilities(): void {
+  capabilityProbe = null;
+}

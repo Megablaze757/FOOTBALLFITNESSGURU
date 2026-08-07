@@ -200,6 +200,24 @@ the token in the first place.
 and simultaneously delete the groq/nvidia provider chain, regressing every AI
 feature to a single OpenRouter model. Neither version is a superset of the other.
 
+### Four features have now broken from this, not one
+
+Each was reported separately, as an unrelated bug, and each traced back here:
+
+| Reported as | Actually |
+|---|---|
+| "Apple health still not working" | `/wearable-ingest` and `/ingest-token` 404 — routes absent from the deployed bundle |
+| "The programs have changed, before they had warmups stretching running" | `/generate-program` returns sessions with no warm-up, conditioning or cool-down |
+| "Meal image estimator broken" | Live `/health` reports **no `vision` field** and runs `groq/openai/gpt-oss-120b`, which is **text-only** — every photo was sent to something that could not look at it |
+| AI features generally | Live carries a three-provider chain this repo has never seen |
+
+The app now degrades honestly for all four — the wearable card says the sync
+isn't live, programs get their scaffolding restored locally, and the photo
+button hides itself when `/health` advertises no vision model rather than
+telling athletes their photo was unclear. **None of that is a fix.** They are
+mitigations at the boundary, written because the boundary is the only place
+this repository controls.
+
 **The fix is a merge, and it needs whoever owns `2026-08-04.2`:**
 
 1. Get that source into this repo — it is currently nowhere in version control,
