@@ -836,7 +836,19 @@ export function buildWeek(
    * their protein, and this way cost outranks a marginal nutritional gain
    * without ever overriding a large one.
    */
-  const costWeight = prefs.budget ? 2.5 : 1;
+  /**
+   * How hard the MARGINAL cost of a meal counts — what the extra packs cost on
+   * top of what is already in the trolley.
+   *
+   * Dropped from 2.5 to 1.5 when the book went from 143 recipes to 195. Marginal
+   * cost reads near zero for anything whose ingredients are already in the
+   * basket, so weighting it heavily makes budget mode lock on: it bought one £9
+   * salmon pack and every further salmon dinner then looked free. Measured on a
+   * 95kg athlete building, budget mode came out at £106.55 against £93.95 for
+   * not using it at all. Sharing the weight with the pro-rata term below fixes
+   * it — see SERVING_COST_WEIGHT, which was swept jointly with this.
+   */
+  const costWeight = prefs.budget ? 1.5 : 1;
   /**
    * AND IT HAS TO WEIGHT WHAT A DISH COSTS, not only what it adds today.
    *
@@ -866,15 +878,24 @@ export function buildWeek(
    * £84.55. That is what `budget mode is cheaper for every athlete` exists to
    * catch, and it caught it.
    *
-   * At 3: no combination comes out dearer, average weekly saving £12.19,
-   * protein target missed on 3.6% of days.
+   * RE-SWEPT AGAIN at 195 recipes, this time JOINTLY with `costWeight` below,
+   * because the two spend against each other and sweeping either alone finds a
+   * false floor: at the old 2.5/3 pairing six of 96 athlete/diet combinations
+   * came out DEARER in budget mode, and no value of this weight alone fixed
+   * them — at 0 it was still three of sixteen, which is what proved the lock-in
+   * was coming from the marginal term rather than from here.
    *
-   * Going further is tempting, because the saving keeps climbing — £22 at 12.
-   * It gets bought with food. By 12 the planner misses the protein target on
-   * 39% of days, which is budget mode deciding the athlete would rather be
-   * cheap than fed. Nobody ticked that box.
+   * At 1.5/4: none of 96 combinations comes out dearer, average weekly saving
+   * £14.50. It is a plateau rather than a knife-edge — 1.5 paired with 4, 5 or 6
+   * is clean throughout — which is the difference between a calibration and a
+   * coincidence.
+   *
+   * Going further is tempting, because the saving keeps climbing. It gets
+   * bought with food: the protein target starts going missing, which is budget
+   * mode deciding the athlete would rather be cheap than fed. Nobody ticked
+   * that box.
    */
-  const SERVING_COST_WEIGHT = 3;
+  const SERVING_COST_WEIGHT = 4;
   const servingCostWeight = prefs.budget ? SERVING_COST_WEIGHT : 0;
   /**
    * Budget mode does not pay for variety.
@@ -935,7 +956,27 @@ export function buildWeek(
   for (let d = 0; d < DAYS.length; d++) {
     for (const w of wanted) if (!skipReason(schedule, d, w.slot)) weeklySlots++;
   }
-  const repeatPenalty = REPEAT_PENALTY * budgetScale * Math.min(1, weeklySlots / 28);
+  /**
+   * NO LONGER SCALED BY HOW MANY SLOTS THE WEEK HAS.
+   *
+   * It used to be `* min(1, weeklySlots / 28)`, added to stop a shorter week
+   * being spread across more distinct dishes than it could amortise packs
+   * over — the bug where telling the app you eat out twice made the shop
+   * DEARER, £104 against £100.
+   *
+   * Right diagnosis, wrong lever: it treated a pack-amortisation problem by
+   * suppressing variety, and it only half-worked even then. At 195 recipes it
+   * had stopped working altogether and started causing the inversion it was
+   * added to fix. Removing it is what actually fixes it — eating out on
+   * Tuesdays and Thursdays now costs £90.30 against £100.10 for cooking every
+   * night, which is the direction an athlete would expect.
+   *
+   * A global cost pass over the finished week was tried instead and dropped. It
+   * did save 6.5%, but it re-planned 20 of 28 slots when the athlete swapped a
+   * single dinner. A swap is not a regenerate, and nobody wants Monday's
+   * breakfast to move because they changed their mind about Wednesday.
+   */
+  const repeatPenalty = REPEAT_PENALTY * budgetScale;
 
   const shareTotal = wanted.reduce((s, w) => s + SLOT_SHARE[w.slot], 0);
   /**
@@ -1050,7 +1091,7 @@ export function buildWeek(
     return pick.meal;
   };
 
-  return DAYS.map((day, i) => {
+  const buildDay = (day: string, i: number): PlannedDay => {
     const skipped: SkippedMeal[] = [];
     const picks: Meal[] = [];
     // A 5-meal day has two snack slots; without this they'd both resolve to the
@@ -1129,7 +1170,9 @@ export function buildWeek(
       { kcal: 0, protein: 0, carbs: 0, fats: 0 }
     );
     return { day, meals, macros, skipped };
-  });
+  };
+
+  return DAYS.map(buildDay);
 }
 
 // --- shopping list -----------------------------------------------------------
