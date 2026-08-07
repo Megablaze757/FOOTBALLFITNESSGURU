@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { invokeAI, backendCapabilities } from "@/lib/api";
+import { invokeAI, estimateFood, backendCapabilities } from "@/lib/api";
 import { useJobs } from "@/lib/jobs";
 import {
   planTargets, buildWeek, mealMacros, DEFAULT_PREFS,
@@ -243,7 +243,9 @@ export function MealCheckIn({ stats, prefs, dietNotes, seed, swaps, recent, cont
      * says when it lands. Same mechanism the program builder uses.
      */
     startJob("meal-estimate", "Working out your meal", async () => {
-      const res = await invokeAI<{ items?: Parameters<typeof fromAiItems>[0] }>("estimate-food", {
+      // estimateFood, not invokeAI: the Worker in production runs a text-only
+      // model chain, so this picks whichever backend can actually see.
+      const res = await estimateFood<{ items?: Parameters<typeof fromAiItems>[0] }>({
         image: dataUrl,
         // Anything already typed is context, not a separate meal — "with olive
         // oil" is exactly the sort of thing a photo can't show.

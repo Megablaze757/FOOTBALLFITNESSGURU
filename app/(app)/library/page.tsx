@@ -8,6 +8,23 @@ import { ExerciseDemo } from "@/components/ExerciseDemo";
 import { ExerciseModal } from "@/components/ExerciseDetail";
 import { CustomExerciseForm } from "@/components/CustomExerciseForm";
 import { ZoneGuide, RunTypeGuide } from "@/components/ZoneGuide";
+import { Tabs, TabPanel } from "@/components/Tabs";
+import { MealLibrary } from "@/components/MealLibrary";
+import { MEALS } from "@/lib/meal-plan";
+
+/**
+ * The page holds two libraries now, so it needs a name that covers both.
+ *
+ * Movements and recipes are the two reference lists in the app — "how do I do
+ * a Bulgarian split squat" and "what's in the katsu curry" are the same kind of
+ * question, and the recipes could previously only be read inside whatever plan
+ * the app had generated for you. Tabs rather than one merged list, because
+ * nobody searches for a squat and a shakshuka in the same breath.
+ */
+const LIBRARY_TABS = [
+  { id: "moves", label: "Exercises", icon: "🏋" },
+  { id: "meals", label: "Recipes", icon: "🍳" },
+] as const;
 
 // How many cards to render at once. Every card carries an animated SVG demo, so
 // showing all 300+ was both a 44-screen page and a scrolling performance issue.
@@ -18,6 +35,7 @@ const DIFF_LABEL: Record<Difficulty, string> = { easy: "Beginner", medium: "Inte
 
 export default function LibraryPage() {
   const user = useCurrentUser();
+  const [tab, setTab] = useState<(typeof LIBRARY_TABS)[number]["id"]>("moves");
   const [sport, setSport] = useState<SportId | "all">("all");
   const [cat, setCat] = useState<ExerciseCategory | "All">("All");
   const [level, setLevel] = useState<Difficulty>("advanced");
@@ -115,10 +133,24 @@ export default function LibraryPage() {
   return (
     <div className="animate-fade-up space-y-4">
       <header>
-        <h1 className="text-3xl font-extrabold tracking-tight">Exercise library</h1>
-        <p className="mt-1 text-sm text-slate-400">Look up any movement — how to do it, what it works, and when to use it. {EXERCISES.length} in total.</p>
+        <h1 className="text-3xl font-extrabold tracking-tight">Library</h1>
+        <p className="mt-1 text-sm text-slate-400">
+          {tab === "moves"
+            ? `Look up any movement — how to do it, what it works, and when to use it. ${EXERCISES.length} in total.`
+            : `Every recipe the meal planner can serve — method, timings and macros. ${MEALS.length} in total.`}
+        </p>
       </header>
 
+      <Tabs tabs={LIBRARY_TABS} active={tab} onChange={setTab} label="Library sections" />
+
+      <TabPanel id={tab}>
+      {/* Unmounted rather than hidden. Every exercise card carries an animated
+          SVG demo — that's why the list pages at 24 — and leaving a screenful
+          of them running behind the recipes would spend the budget the
+          pagination exists to protect. The filter state lives up here, so
+          switching away and back doesn't lose your place. */}
+      {tab === "meals" ? <MealLibrary userId={user.id} /> : (
+      <div className="space-y-4">
       <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search exercises or muscles…" className="field" />
 
       {/* ADDING YOUR OWN WAS INVISIBLE, NOT ABSENT.
@@ -317,6 +349,9 @@ export default function LibraryPage() {
       )}
 
       {open && <ExerciseModal ex={open} onClose={() => setOpen(null)} />}
+      </div>
+      )}
+      </TabPanel>
     </div>
   );
 }

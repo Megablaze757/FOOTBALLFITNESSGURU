@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   planTargets, buildWeek, shoppingList, mealMacros, DEFAULT_PREFS,
+  MEALS, mealAllowed, mealTags,
   type BodyStats, type MealPrefs, type PlannedDay,
 } from "./meal-plan";
 
@@ -146,5 +147,93 @@ test("the same inputs still give back the same week", () => {
   assert.deepEqual(
     idsOf(buildWeek(t, 4, prefs(), undefined, {}, recent)),
     idsOf(buildWeek(t, 4, prefs(), undefined, {}, recent))
+  );
+});
+
+// --- starred dishes ----------------------------------------------------------
+
+/**
+ * Starring is the only preference signal in the app the athlete states outright
+ * rather than has inferred, so it has to be the one that visibly works.
+ */
+test("a starred dish shows up in the week", () => {
+  const t = planTargets(ATHLETES[0]);
+  const dinners = MEALS.filter((m) => m.slot === "Dinner" && mealAllowed(m, prefs()));
+  const served = (week: PlannedDay[], id: string) =>
+    week.flatMap((d) => d.meals).filter((m) => m.meal.id === id).length;
+
+  let honoured = 0;
+  for (const meal of dinners) {
+    if (served(buildWeek(t, 0, prefs({ starred: [meal.id] })), meal.id) > 0) honoured++;
+  }
+  // Not all of them: a 524 kcal stir-fry starred into a 1,026 kcal dinner slot
+  // can't be served without a portion nobody would plate, and no bonus should
+  // override that. Most of them, though — at the old weight a THIRD of stars
+  // were silently ignored, which reads as the button not working.
+  assert.ok(
+    honoured / dinners.length > 0.85,
+    `only ${honoured}/${dinners.length} starred dinners were ever served`
+  );
+});
+
+test("starring a dish makes it more frequent, not less", () => {
+  const t = planTargets(ATHLETES[0]);
+  const meal = MEALS.find((m) => m.slot === "Dinner" && mealAllowed(m, prefs()))!;
+  const count = (p: MealPrefs) =>
+    buildWeek(t, 0, p).flatMap((d) => d.meals).filter((m) => m.meal.id === meal.id).length;
+  assert.ok(
+    count(prefs({ starred: [meal.id] })) > count(prefs()),
+    `${meal.id} appeared no more often for being starred`
+  );
+});
+
+/**
+ * The two features have to not cancel out.
+ *
+ * Week-on-week variety pushes away whatever was served last week. A star says
+ * "keep giving me this". Left to fight, variety wins and the star silently
+ * stops working from the second week — which is exactly when someone would
+ * notice they'd bothered to set it.
+ */
+test("variety doesn't undo a star", () => {
+  // Checked over FOUR consecutive weeks and across the whole book, because one
+  // week and one dish doesn't reach it: with the bonus at 30 a starred meal is
+  // usually the only contender in its slot, so the variety rule never gets a
+  // say. The case that matters is the narrower one where something else is
+  // within the £3 window and equally good — then "had it last week" decides,
+  // and the star loses. Measured across 405 athlete/dish pairs, the exemption
+  // is the difference between 6 starred dishes going missing and 21.
+  let dropped = 0;
+  let tracked = 0;
+  for (const body of ATHLETES) {
+    const t = planTargets(body);
+    for (const meal of MEALS.filter((m) => mealAllowed(m, prefs()))) {
+      const p = prefs({ starred: [meal.id] });
+      let recent: string[] = [];
+      let servedOnce = false;
+      let vanished = false;
+      for (let wk = 0; wk < 4; wk++) {
+        const week = buildWeek(t, wk, p, undefined, {}, recent);
+        const n = week.flatMap((d) => d.meals).filter((m) => m.meal.id === meal.id).length;
+        if (wk === 0 && n > 0) servedOnce = true;
+        if (servedOnce && wk > 0 && n === 0) vanished = true;
+        recent = idsOf(week);
+      }
+      if (servedOnce) { tracked++; if (vanished) dropped++; }
+    }
+  }
+  assert.ok(
+    dropped / tracked < 0.03,
+    `${dropped}/${tracked} starred dishes were served once and then dropped by the variety rule`
+  );
+});
+
+test("a star can't override an allergy or a diet", () => {
+  const t = planTargets(ATHLETES[0]);
+  const meaty = MEALS.find((m) => mealTags(m).includes("meat"))!;
+  const week = buildWeek(t, 0, prefs({ pattern: "vegan", starred: [meaty.id] }));
+  assert.ok(
+    !week.flatMap((d) => d.meals).some((m) => m.meal.id === meaty.id),
+    `${meaty.id} is meat and was served to a vegan because it was starred`
   );
 });

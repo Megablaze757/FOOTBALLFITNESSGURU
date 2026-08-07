@@ -23,12 +23,19 @@ supabase secrets set \
   STRIPE_PRICE_SILVER="${STRIPE_PRICE_SILVER:-}" \
   STRIPE_PRICE_GOLD="${STRIPE_PRICE_GOLD:-}" \
   RESEND_API_KEY="${RESEND_API_KEY:-}" \
+  ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}" \
+  OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-}" \
+  OPENROUTER_VISION_MODELS="${OPENROUTER_VISION_MODELS:-}" \
   REMINDER_FROM="${REMINDER_FROM:-AI Coach <noreply@example.com>}" \
   APP_URL="${APP_URL:-http://localhost:3000}"
 
 # JWT-verified functions (called with a Supabase JWT / service key).
+# estimate-food reads meal photos. It is here because the Cloudflare Worker's
+# deployed model chain is text-only — see the header of its index.ts — so this
+# is what the photo path actually runs against until that is fixed. Needs
+# OPENROUTER_API_KEY, same key and same two vision models as the Worker uses.
 for fn in assess-readiness process-daily-state process-video create-checkout \
-          send-daily-reminders weekly-summary; do
+          send-daily-reminders weekly-summary coach-chat estimate-food; do
   echo "Deploying $fn…"
   supabase functions deploy "$fn"
 done

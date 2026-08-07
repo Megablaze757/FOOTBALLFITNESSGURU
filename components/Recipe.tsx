@@ -71,7 +71,14 @@ export function Recipe({ meal, scale, macros }: {
                 {/* The whole row is the target — the same decision the shopping
                     list made, for the same reason: you are tapping this with a
                     wet hand while something is on the hob. */}
-                <label className="flex cursor-pointer items-center gap-3 rounded-xl py-2 pl-1 pr-2 transition hover:bg-white/[0.03]">
+                {/* min-h-[44px], not just padding. These rows measured 36px —
+                    a 20px checkbox with py-2 around it — and had done since the
+                    recipe view was written, because the UI audit only ever sees
+                    a page's default state and nothing in it opens a recipe. The
+                    meal library put the same component behind a tap that IS
+                    reachable from a browse, which is how it finally got
+                    measured. You tick these with a wet hand, mid-cook. */}
+                <label className="flex min-h-[44px] cursor-pointer items-center gap-3 rounded-xl py-2 pl-1 pr-2 transition hover:bg-white/[0.03]">
                   <input
                     type="checkbox"
                     className="h-5 w-5 shrink-0 rounded-md accent-pitch-500"

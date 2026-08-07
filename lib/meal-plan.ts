@@ -50,6 +50,18 @@ export interface MealPrefs {
   dislikes: string[];   // food ids the athlete never wants to see
   /** Food ids they've said they like. A nudge toward, not a guarantee of. */
   favourites?: string[];
+  /**
+   * MEAL ids they've starred. A much stronger signal than `favourites`.
+   *
+   * The two are deliberately separate. `favourites` is ingredients, inferred
+   * from a sentence like "I like eggs", and it is a guess about a whole class
+   * of food. This is a specific dish the athlete tapped a star on, which is
+   * about as unambiguous as preference data gets — so it is worth more, and it
+   * also overrides the week-on-week variety rule. Somebody who starred the
+   * shakshuka wants the shakshuka again; being told they had it last week is
+   * not a reason to take it away from them.
+   */
+  starred?: string[];
 }
 
 
@@ -152,7 +164,7 @@ function foodIdsIn(notes: string, mood: RegExp): string[] {
 }
 
 export const DEFAULT_PREFS: MealPrefs = {
-  pattern: "omnivore", avoid: [], mealsPerDay: 4, budget: false, dislikes: [], favourites: [],
+  pattern: "omnivore", avoid: [], mealsPerDay: 4, budget: false, dislikes: [], favourites: [], starred: [],
 };
 
 /** Does this meal contain something the athlete said they like? */
@@ -506,6 +518,34 @@ const MAX_REPEATS = 3;
 const VARIETY_BUDGET = 3; // £ per meal
 
 /**
+ * What a starred dish is worth against everything else in the slot.
+ *
+ * Bigger than FAVOURITE_BONUS (5.0) because it is a far better signal: that one
+ * is inferred from a sentence and covers a whole ingredient class, while this is
+ * a dish the athlete deliberately tapped a star on.
+ *
+ * Swept by starring each of 339 athlete/meal combinations in turn and counting
+ * whether the star was honoured:
+ *
+ *      bonus   appearances/wk   stars ignored   worst day off target
+ *          8            0.92        156 (46%)                  10.0%
+ *         12            1.43        104 (31%)                  10.7%
+ *         30            2.80          11  (3%)                  15.6%
+ *         50            3.00           0  (0%)                  30.1%
+ *
+ * 30. Starring something and never once seeing it is the failure that matters —
+ * at 12 it happened to a third of stars, which would read as the button not
+ * working. Past 30 the last few percent are bought by forcing dishes into slots
+ * they do not fit, and a day 30% off its calorie target is not a plan.
+ *
+ * The 3% that stay unhonoured are meals whose size is hopeless for that slot: a
+ * 524 kcal stir-fry starred into a 1,026 kcal dinner. Portions scale 0.55x-1.6x
+ * and no bonus should override that, because the result is a plate nobody would
+ * serve.
+ */
+const STARRED_BONUS = 30; // £
+
+/**
  * What a full miss on a meal's protein share is worth, in the same made-up
  * pounds the rest of the score uses.
  *
@@ -848,6 +888,14 @@ export function buildWeek(
    */
   const varietyBudget = prefs.budget ? 0 : VARIETY_BUDGET;
   const favourites = new Set(prefs.favourites ?? []);
+  /**
+   * Dishes the athlete starred.
+   *
+   * Worth more than an inferred ingredient preference (see STARRED_BONUS) and,
+   * below, exempt from the had-it-last-week rule — a star is a request for the
+   * dish to keep coming back, so variety must not quietly undo it.
+   */
+  const starred = new Set(prefs.starred ?? []);
 
   /**
    * PROTEIN IS A TARGET, NOT AN ACCIDENT.
@@ -933,6 +981,7 @@ export function buildWeek(
           score: marginalCost(meal, basket) * costWeight
             + mealCost(meal) * servingCostWeight
             - (isFavourite(meal, favourites) ? FAVOURITE_BONUS : 0)
+            - (starred.has(meal.id) ? STARRED_BONUS : 0)
             + fit
             + ((idx + seed + nth) % list.length) * 0.001,
           capped: (uses.get(meal.id) ?? 0) >= MAX_REPEATS,
@@ -988,7 +1037,11 @@ export function buildWeek(
       && r.score <= best.score + varietyBudget);
     const pick = contenders.length > 1
       ? contenders.reduce((a, b) => {
-          const seenA = lastWeek.get(a.meal.id) ?? 0, seenB = lastWeek.get(b.meal.id) ?? 0;
+          // A starred dish counts as unseen however often it was served. The
+          // athlete asked for it; "you had this last week" is the reason they
+          // starred it, not a reason to withhold it.
+          const seenA = starred.has(a.meal.id) ? 0 : lastWeek.get(a.meal.id) ?? 0;
+          const seenB = starred.has(b.meal.id) ? 0 : lastWeek.get(b.meal.id) ?? 0;
           return seenB < seenA || (seenB === seenA && b.score < a.score) ? b : a;
         })
       : best;

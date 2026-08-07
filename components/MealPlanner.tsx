@@ -37,9 +37,11 @@ interface Props {
   initialSwaps?: MealSwaps;
   /** Meals the PREVIOUS plan served, so this one can move on from them. */
   initialRecent?: string[] | null;
+  /** Dishes they've starred, which the planner favours heavily. */
+  initialStarred?: string[] | null;
 }
 
-export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initialSeed, initialSwaps, initialRecent, context }: Props) {
+export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initialSeed, initialSwaps, initialRecent, initialStarred, context }: Props) {
   const [sex, setSex] = useState<Sex>(initial?.sex ?? "male");
   const [age, setAge] = useState(String(initial?.age ?? 20));
   const [heightCm, setHeightCm] = useState(String(initial?.heightCm ?? 178));
@@ -66,6 +68,14 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
    * rebuild silently produces a different plan from the one on screen.
    */
   const [recent, setRecent] = useState<string[]>(initialRecent ?? []);
+  /**
+   * Dishes they've starred.
+   *
+   * Unlike swaps, these SURVIVE a regenerate: a swap is positional and means
+   * nothing in a new plan, while a star is about the dish itself and should
+   * follow them until they take it off.
+   */
+  const [starred, setStarred] = useState<string[]>(initialStarred ?? []);
   const [swapping, setSwapping] = useState<SwapTarget | null>(null);
   const [saved, setSaved] = useState(false);
   const [prefs, setPrefs] = useState<MealPrefs>({ ...DEFAULT_PREFS, ...(initialPrefs ?? {}) });
@@ -121,8 +131,8 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
   // better to say so than to quietly hand back a short day.
   // Foods named in the notes are excluded on top of the tapped preferences.
   const effectivePrefs = useMemo(
-    () => ({ ...prefs, dislikes: [...prefs.dislikes, ...noteDislikes] }),
-    [prefs, noteDislikes]
+    () => ({ ...prefs, dislikes: [...prefs.dislikes, ...noteDislikes], starred }),
+    [prefs, noteDislikes, starred]
   );
   const gaps = useMemo(() => unmetSlots(effectivePrefs), [effectivePrefs]);
 
@@ -157,6 +167,27 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
     // the column must not make the feature look broken.
     try {
       await createClient().from("profiles").update({ meal_plan_swaps: next }).eq("id", userId);
+    } catch { /* ignore */ }
+  }
+
+  /**
+   * Star or unstar a dish.
+   *
+   * Deliberately does NOT rebuild the week. A star says "more of this in
+   * future", and rewriting the plan under someone the instant they tap a star
+   * would move meals they were reading and invalidate a shopping list they may
+   * already be buying against. It takes effect on the next regenerate, which
+   * is when they have asked for a new plan.
+   */
+  async function toggleStar(mealId: string) {
+    const next = starred.includes(mealId)
+      ? starred.filter((id) => id !== mealId)
+      : [...starred, mealId];
+    setStarred(next);
+    // Best effort, same as swaps: the star is already lit on screen, and an
+    // older database without the column must not make the button look broken.
+    try {
+      await createClient().from("profiles").update({ meal_plan_starred: next }).eq("id", userId);
     } catch { /* ignore */ }
   }
 
@@ -213,6 +244,8 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
       meal_plan_seed: next!,
       meal_plan_swaps: {},
       meal_plan_recent: justServed,
+      // Stars are about the dishes, not this plan, so they carry over.
+      meal_plan_starred: starred,
     }).eq("id", userId);
     if (!error) {
       // The nutrition page caches its loader; without this the restored plan
@@ -574,6 +607,14 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
                             and "did that save?" is the first thing anyone
                             wonders after changing something. */}
                         {swapped && <span className="rounded bg-pitch-400/15 px-1 text-[10px] font-bold normal-case text-pitch-400">your pick</span>}
+                        {/* A marker, not a control. The row is already one tap
+                            target that opens the recipe, and a second one on it
+                            makes a one-handed tap a gamble — the same reason the
+                            swap button lives inside the card. This just lets you
+                            see which dishes are starred while scanning the week. */}
+                        {starred.includes(pm.meal.id) && (
+                          <span className="text-amber-400" title="Starred — the planner picks this more often" aria-label="Starred">★</span>
+                        )}
                       </span>
                       <span className="block text-sm font-bold text-slate-100">{pm.meal.name}</span>
                     </span>
@@ -593,19 +634,38 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
                         control on it would make a one-handed tap a gamble
                         between reading and replacing. Someone swapping has
                         looked at the meal first. */}
-                    <button
-                      onClick={() => setSwapping({
-                        dayIndex: openDay,
-                        dayName: week[openDay].day,
-                        slot: pm.meal.slot,
-                        nth,
-                        current: pm.meal,
-                        slotKcal: slotTargetKcal(targets, effectivePrefs, pm.meal.slot),
-                      })}
-                      className="chip-option chip-option-sm mt-4 w-full justify-center"
-                    >
-                      <span aria-hidden>⇄</span> Swap this meal
-                    </button>
+                    <div className="mt-4 flex gap-2">
+                      {/* The two answers to "what do I think of this meal",
+                          side by side: more of it, or not this one. */}
+                      <button
+                        onClick={() => toggleStar(pm.meal.id)}
+                        aria-pressed={starred.includes(pm.meal.id)}
+                        className="chip-option chip-option-sm flex-1 justify-center"
+                      >
+                        <span aria-hidden className={starred.includes(pm.meal.id) ? "text-amber-400" : ""}>
+                          {starred.includes(pm.meal.id) ? "★" : "☆"}
+                        </span>
+                        {starred.includes(pm.meal.id) ? "Starred" : "Star this"}
+                      </button>
+                      <button
+                        onClick={() => setSwapping({
+                          dayIndex: openDay,
+                          dayName: week[openDay].day,
+                          slot: pm.meal.slot,
+                          nth,
+                          current: pm.meal,
+                          slotKcal: slotTargetKcal(targets, effectivePrefs, pm.meal.slot),
+                        })}
+                        className="chip-option chip-option-sm flex-1 justify-center"
+                      >
+                        <span aria-hidden>⇄</span> Swap this
+                      </button>
+                    </div>
+                    {starred.includes(pm.meal.id) && (
+                      <p className="mt-2 text-center text-[11px] text-slate-500">
+                        Starred dishes come round more often from your next plan on.
+                      </p>
+                    )}
                   </div>
                 </details>
                 );

@@ -211,12 +211,34 @@ Each was reported separately, as an unrelated bug, and each traced back here:
 | "Meal image estimator broken" | Live `/health` reports **no `vision` field** and runs `groq/openai/gpt-oss-120b`, which is **text-only** — every photo was sent to something that could not look at it |
 | AI features generally | Live carries a three-provider chain this repo has never seen |
 
-The app now degrades honestly for all four — the wearable card says the sync
-isn't live, programs get their scaffolding restored locally, and the photo
-button hides itself when `/health` advertises no vision model rather than
-telling athletes their photo was unclear. **None of that is a fix.** They are
-mitigations at the boundary, written because the boundary is the only place
-this repository controls.
+Three of the four now degrade honestly — the wearable card says the sync isn't
+live, and programs get their scaffolding restored locally. Those are mitigations
+at the boundary, not fixes, written because the boundary is the only place this
+repository controls.
+
+**The photo estimator is now actually fixed**, by routing around the Worker
+rather than waiting for it. `supabase/functions/estimate-food` is a vision route
+that lives in version control and deploys with one command:
+
+```bash
+supabase functions deploy estimate-food
+supabase secrets set OPENROUTER_API_KEY=...   # the key the Worker already uses
+```
+
+It runs the same two models as the Worker's own vision chain
+(`google/gemini-2.5-flash`, then `openai/gpt-4.1-mini`) with the Worker's prompt
+and parser copied verbatim, so the same plate gets the same numbers whichever
+backend answers. OpenRouter rather than Anthropic — that key already exists, the
+Worker already uses it, and reading a photo of a dinner does not need a frontier
+model on every meal an athlete logs. Groq is first in the live chain and cannot
+help: the models it runs are text-only, which is the bug.
+
+The client picks the route from what the backends say they can do. `/health`
+advertises a vision model → the Worker, as before. It doesn't → the Edge
+Function, if a CORS preflight says that's deployed. Neither → the camera is not
+offered, and the app says the server can't read photos instead of blaming the
+photograph. The day the Worker can see again it takes the traffic back on its
+own; there is no flag to switch and none to forget.
 
 **The fix is a merge, and it needs whoever owns `2026-08-04.2`:**
 
