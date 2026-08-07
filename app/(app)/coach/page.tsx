@@ -10,6 +10,7 @@ import {
   type GoalType, type ProgramPlan, type TrainingFocus,
 } from "@/lib/coach";
 import { adjustForReadiness, type ReadinessStatus } from "@/lib/engine";
+import { repairPlan } from "@/lib/program-repair";
 import { useJobs } from "@/lib/jobs";
 import { positionList } from "@/lib/positions";
 import { PositionPicker } from "@/components/PositionPicker";
@@ -266,7 +267,27 @@ function GoalBuilder({ painMap, latestBench, sport, initialPositions, initialFoc
     try {
       const data = await invokeAI<{ plan?: ProgramPlan }>("generate-program", { goal: g, pain_map: painMap, notes, in_season: inSeason, sport, position: pos, focus: f, days_per_week: days ?? daysPerWeek, split: style });
       if (!data?.plan) throw new Error("fallback");
-      plan = data.plan;
+      /**
+       * TRUST THE MODEL WITH THE TRAINING, NOT WITH THE SAFETY SCAFFOLDING.
+       *
+       * This used to be `plan = data.plan` — whatever came back was shown to
+       * the athlete verbatim. Programs that had always opened with mobility
+       * work and closed with a stretch started arriving as a bare list of
+       * lifts, and nothing here noticed, because the only check was that a
+       * `plan` key existed.
+       *
+       * The Worker's source is not in this repository, so a change to it
+       * cannot be caught in review. This is the boundary where that gets
+       * checked instead. See lib/program-repair.ts.
+       */
+      const repaired = repairPlan(data.plan, {
+        goal: g, painMap, isInSeason: inSeason, sport, position: pos, focus: f,
+        daysPerWeek: days ?? daysPerWeek,
+      });
+      if (repaired.report.repaired.length) {
+        console.warn("generate-program returned sessions without a warm-up or cool-down; repaired locally", repaired.report);
+      }
+      plan = repaired.plan;
     } catch (e) {
       // 402 is the server saying this needs Pro, and 403 that the account is
       // deactivated. Neither means "the backend is down", so neither may fall
