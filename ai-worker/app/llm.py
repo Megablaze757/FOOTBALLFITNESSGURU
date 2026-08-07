@@ -1,13 +1,26 @@
-"""LLM narrative generation via the Anthropic SDK.
+"""LLM narrative generation: Groq first, OpenRouter as the fallback.
 
 The numeric fields (risk_score, fatigue_trend, focus_body_part) come from
 analysis.py — deterministic and grounded. The LLM is asked only for the
 qualitative pieces: a short coaching tip and a recommended action from a closed
-set. This keeps the model from contradicting the math and guarantees parseable
-output via structured outputs.
+set. This keeps the model from contradicting the math.
 
-If ANTHROPIC_API_KEY is unset, a deterministic fallback narrative is used so the
-service runs end-to-end in dev without a key.
+WHY NOT ANTHROPIC. This service used to hold its own Anthropic client while the
+Cloudflare Worker and the Supabase Edge Functions each ran something else — three
+AI stacks in one product, three sets of credentials, three things to rotate, and
+three different ways for the same kind of failure to present. It now runs the
+same chain as everything else: Groq for speed, OpenRouter behind it for breadth,
+and a provider whose key is unset is skipped rather than attempted. See
+supabase/functions/_shared/llm.ts, which this deliberately mirrors.
+
+Structured output went with it. Anthropic's json_schema format has no equivalent
+that every model on the chain honours, so the schema is stated in the prompt and
+the reply is validated by parsing — a rung that answers with prose is a failed
+rung, and the next one is tried.
+
+With no key at all, a deterministic fallback narrative is used, so the service
+runs end-to-end in dev and degrades to something sensible in production rather
+than failing. That was already true and is the reason this conversion is safe.
 """
 
 from __future__ import annotations
@@ -15,7 +28,6 @@ from __future__ import annotations
 import json
 import logging
 import os
-from functools import lru_cache
 from typing import Optional
 
 from .analysis import Features
@@ -23,7 +35,27 @@ from .models import Insight, RecommendedAction
 
 logger = logging.getLogger("ai-worker.llm")
 
-MODEL = "claude-opus-4-8"
+# Endpoint, key variable and default models per provider, in preference order.
+# Both speak the OpenAI chat-completions shape, which is why this is one code
+# path and not two.
+_PROVIDERS: tuple[dict, ...] = (
+    {
+        "name": "groq",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "key_var": "GROQ_API_KEY",
+        "models_var": "GROQ_TEXT_MODELS",
+        "models": ("openai/gpt-oss-120b", "llama-3.3-70b-versatile"),
+    },
+    {
+        "name": "openrouter",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "key_var": "OPENROUTER_API_KEY",
+        "models_var": "OPENROUTER_TEXT_MODELS",
+        "models": ("deepseek/deepseek-chat", "google/gemini-2.5-flash"),
+    },
+)
+
+_TIMEOUT_S = 20.0
 
 _ACTIONS: tuple[RecommendedAction, ...] = (
     "rest",
@@ -34,8 +66,8 @@ _ACTIONS: tuple[RecommendedAction, ...] = (
     "heavy_sprint",
 )
 
-# Structured-outputs schema. Numeric min/max constraints aren't supported, so we
-# only constrain the enum here and clamp/derive the rest in code.
+# Stated in the prompt now rather than passed as an API parameter — see the
+# module docstring. Only the enum is constrained; the rest is clamped in code.
 _OUTPUT_SCHEMA = {
     "type": "object",
     "properties": {
@@ -51,17 +83,23 @@ _SYSTEM = (
     "You are given pre-computed metrics for one athlete over a recent window. "
     "Identify the weakest link and give one specific, actionable recovery tip in "
     "at most 25 words. Be concrete (name the body part and the action). Do not "
-    "invent numbers beyond those provided. Return only the requested JSON fields."
+    "invent numbers beyond those provided. "
+    "Return ONLY valid minified JSON matching exactly this schema, with no prose, "
+    "no markdown fence and no commentary:\n" + json.dumps(_OUTPUT_SCHEMA)
 )
 
 
-@lru_cache(maxsize=1)
-def _client():
-    # Imported lazily so the service can start (and run the fallback) without the SDK
-    # configured. Raises if no key is present — caught by generate_insight.
-    from anthropic import Anthropic
-
-    return Anthropic()
+def _chain() -> list[tuple[str, str, str, str]]:
+    """(provider, url, key, model) for each rung whose key is configured."""
+    out: list[tuple[str, str, str, str]] = []
+    for p in _PROVIDERS:
+        key = os.environ.get(p["key_var"])
+        if not key:
+            continue
+        configured = [m.strip() for m in os.environ.get(p["models_var"], "").split(",") if m.strip()]
+        for model in (configured or list(p["models"])):
+            out.append((p["name"], p["url"], key, model))
+    return out
 
 
 def generate_insight(features: Features, is_in_season: bool, training_note: Optional[str] = None) -> Insight:
@@ -76,38 +114,86 @@ def generate_insight(features: Features, is_in_season: bool, training_note: Opti
 
 
 def _narrative(features: Features, is_in_season: bool, training_note: Optional[str] = None) -> tuple[str, RecommendedAction]:
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        logger.info("ANTHROPIC_API_KEY unset — using deterministic fallback narrative")
+    chain = _chain()
+    if not chain:
+        logger.info("no GROQ_API_KEY or OPENROUTER_API_KEY — using deterministic fallback narrative")
         return _fallback(features, is_in_season)
 
     prompt = _build_prompt(features, is_in_season, training_note)
-    try:
-        resp = _client().messages.create(
-            model=MODEL,
-            max_tokens=1024,
-            thinking={"type": "adaptive"},
-            system=_SYSTEM,
-            output_config={"format": {"type": "json_schema", "schema": _OUTPUT_SCHEMA}},
-            messages=[{"role": "user", "content": prompt}],
-        )
-    except Exception:  # network/auth/etc — degrade gracefully rather than 500
-        logger.exception("Anthropic call failed; falling back")
-        return _fallback(features, is_in_season)
+    for provider, url, key, model in chain:
+        label = f"{provider}/{model}"
+        try:
+            text = _post(url, key, model, prompt)
+        except Exception:  # network/auth/rate-limit — try the next rung
+            logger.warning("%s failed; trying next rung", label, exc_info=True)
+            continue
 
-    if resp.stop_reason == "refusal":
-        logger.warning("Model refused; using fallback narrative")
-        return _fallback(features, is_in_season)
+        parsed = _parse(text)
+        if parsed is None:
+            # A model that answers with prose or an apology has not done the job.
+            # Falling through beats returning it: the caller cannot tell a bad
+            # answer from a good one, and the deterministic fallback below is
+            # genuinely better than a confident non-answer.
+            logger.warning("%s returned an unusable reply; trying next rung", label)
+            continue
+        return parsed
 
-    text = "".join(b.text for b in resp.content if b.type == "text").strip()
+    logger.warning("every model in the chain failed; using fallback narrative")
+    return _fallback(features, is_in_season)
+
+
+def _post(url: str, key: str, model: str, prompt: str) -> str:
+    """One chat-completions call. Raises on any non-2xx or transport error."""
+    # urllib rather than a new dependency: this is one POST of JSON, and adding
+    # an SDK for it would mean a third HTTP client in a service that already has
+    # what it needs in the standard library.
+    import urllib.error
+    import urllib.request
+
+    body = json.dumps({
+        "model": model,
+        "max_tokens": 1024,
+        "messages": [
+            {"role": "system", "content": _SYSTEM},
+            {"role": "user", "content": prompt},
+        ],
+    }).encode()
+    req = urllib.request.Request(
+        url,
+        data=body,
+        headers={
+            "Authorization": f"Bearer {key}",
+            "Content-Type": "application/json",
+            # OpenRouter attributes usage by these; Groq ignores what it doesn't know.
+            "HTTP-Referer": "https://pocketathlete.com",
+            "X-Title": "PocketAthlete",
+        },
+    )
+    with urllib.request.urlopen(req, timeout=_TIMEOUT_S) as resp:
+        payload = json.loads(resp.read())
+    return payload["choices"][0]["message"]["content"]
+
+
+def _parse(text: str) -> Optional[tuple[str, RecommendedAction]]:
+    """The summary and action, or None if the reply isn't usable."""
+    if not text or not text.strip():
+        return None
+    # Models wrap JSON in prose and markdown fences however firmly you ask them
+    # not to, so take the outermost object rather than trusting the whole string.
+    start, end = text.find("{"), text.rfind("}")
+    if start < 0 or end <= start:
+        return None
     try:
-        data = json.loads(text)
+        data = json.loads(text[start:end + 1])
         action = data["recommended_action"]
         if action not in _ACTIONS:
             raise ValueError(f"unexpected action {action!r}")
-        return str(data["ai_summary_text"]).strip(), action
-    except (json.JSONDecodeError, KeyError, ValueError):
-        logger.exception("Could not parse model output; using fallback")
-        return _fallback(features, is_in_season)
+        summary = str(data["ai_summary_text"]).strip()
+        if not summary:
+            raise ValueError("empty summary")
+        return summary, action
+    except (json.JSONDecodeError, KeyError, ValueError, TypeError):
+        return None
 
 
 def _build_prompt(features: Features, is_in_season: bool, training_note: Optional[str] = None) -> str:

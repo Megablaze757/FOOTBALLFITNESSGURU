@@ -225,13 +225,46 @@ supabase functions deploy estimate-food
 supabase secrets set OPENROUTER_API_KEY=...   # the key the Worker already uses
 ```
 
-It runs the same two models as the Worker's own vision chain
-(`google/gemini-2.5-flash`, then `openai/gpt-4.1-mini`) with the Worker's prompt
-and parser copied verbatim, so the same plate gets the same numbers whichever
-backend answers. OpenRouter rather than Anthropic — that key already exists, the
-Worker already uses it, and reading a photo of a dinner does not need a frontier
-model on every meal an athlete logs. Groq is first in the live chain and cannot
-help: the models it runs are text-only, which is the bug.
+It uses the Worker's prompt and parser verbatim, so the same plate gets the
+same numbers whichever backend answers.
+
+### One provider chain for the whole app: Groq, then OpenRouter
+
+Three Edge Functions each held their own Anthropic client, their own model id
+and their own error handling — while the Cloudflare Worker, serving most of the
+app's AI, ran a completely different provider chain. Two AI stacks in one
+product means two sets of credentials, two bills, two things to rotate, and
+features that fail differently for reasons nobody can hold in their head at
+once. **The Anthropic key is gone.** `supabase/functions/_shared/llm.ts` is the
+one chain, and `coach-chat`, `generate-program` and `estimate-food` all call it.
+
+Groq first, because it is by a distance the faster of the two and every one of
+these calls happens while somebody waits. OpenRouter second, because breadth is
+exactly what a fallback needs: when a Groq model is retired, rate-limited or
+down, the same request goes to a different company's hardware instead of
+failing. A provider whose key is unset is **skipped, not failed**, so either one
+alone is a working configuration.
+
+| | Groq | OpenRouter |
+|---|---|---|
+| Text | `openai/gpt-oss-120b`, `llama-3.3-70b-versatile` | `deepseek/deepseek-chat`, `google/gemini-2.5-flash` |
+| Vision | `qwen/qwen3.6-27b` | `google/gemini-2.5-flash`, `openai/gpt-4.1-mini` |
+
+**The vision list is short, and that asymmetry is the whole bug.** Most models
+cannot see. Groq's production chain — `gpt-oss-120b`, `llama-3.3-70b` — is
+text-only, so photos went to something incapable of looking at them. A model
+belongs in a vision list only once it has been checked to accept image input,
+and there is a test asserting the two lists don't overlap.
+
+Every list is overridable by env (`GROQ_VISION_MODELS` and friends), which is
+how a retired model slug gets fixed in a hurry rather than by a redeploy.
+
+`generate-program` lost Anthropic's `json_schema` output format in the move —
+Groq and OpenRouter have no equivalent every model honours — so the schema is
+stated in the prompt and the reply is validated by parsing it, which is what the
+Worker already does. A rung answering with prose or half an object is a failed
+rung, not a failed program. It was also **never in the deploy script**, which is
+its own small bug, now fixed.
 
 The client picks the route from what the backends say they can do. `/health`
 advertises a vision model → the Worker, as before. It doesn't → the Edge

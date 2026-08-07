@@ -39,7 +39,7 @@ Response (`Insight`):
 2. `llm.py` — asks `claude-opus-4-8` (adaptive thinking, `output_config.format`
    JSON schema) for only the **tip** + **recommended_action**; the numeric fields
    stay deterministic so the prose can't contradict the math.
-3. **No `ANTHROPIC_API_KEY`?** A deterministic fallback narrative is used, so the
+3. **No provider key?** A deterministic fallback narrative is used, so the
    service runs end-to-end in dev without a key.
 
 ## Run locally
@@ -48,7 +48,7 @@ Response (`Insight`):
 cd ai-worker
 python -m venv .venv && .venv/Scripts/activate   # or: source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env          # optionally set ANTHROPIC_API_KEY + WORKER_API_KEY
+cp .env.example .env          # optionally set GROQ_API_KEY / OPENROUTER_API_KEY + WORKER_API_KEY
 uvicorn app.main:app --reload
 ```
 
@@ -66,6 +66,7 @@ header and persists the result to `daily_insights`.
 
 ## Deploy
 
-`Procfile` (Railway/Render) and `Dockerfile` are provided. Set `ANTHROPIC_API_KEY`
+`Procfile` (Railway/Render) and `Dockerfile` are provided. Set `GROQ_API_KEY`
+(and `OPENROUTER_API_KEY` for the fallback)
 and `WORKER_API_KEY` in the host's environment; point the Edge Function's
 `AI_WORKER_URL` secret at the deployed URL.

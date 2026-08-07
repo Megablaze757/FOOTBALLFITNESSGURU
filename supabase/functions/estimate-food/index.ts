@@ -29,52 +29,19 @@
 // the photo path works as soon as this is deployed, and goes back to the Worker
 // on its own the day the Worker can see again. Nothing to switch over.
 //
-// WHY OPENROUTER AND NOT ANTHROPIC. Every other Edge Function in this repo
-// talks to Anthropic, so that was the path of least resistance and it was the
-// wrong one for this route. Three reasons:
+// The provider chain lives in ../_shared/llm.ts: Groq first for speed, then
+// OpenRouter for breadth. No Anthropic key anywhere in this app.
 //
-//   * The Worker's vision path is already OpenRouter, running the two models
-//     below. Two backends answering the same question with different models
-//     give the same athlete different calorie counts for the same plate
-//     depending on which one was up, and nobody would ever work out why.
-//   * The key already exists. The live Worker reports `openrouter` among its
-//     providers, so there is no new credential to obtain — only to copy.
-//   * Reading a photo of a plate is a cheap task, and gemini-2.5-flash costs a
-//     small fraction of a frontier model to do it just as well. This runs on
-//     every meal an athlete logs.
-//
-// Groq is first in the live Worker's chain and is not an option here: the
-// models it is running (gpt-oss-120b, llama-3.3-70b) are text-only, which is
-// the entire bug this route exists to work around.
-//
-// Secrets: OPENROUTER_API_KEY, SUPABASE_URL, SUPABASE_ANON_KEY
-// Optional: OPENROUTER_VISION_MODELS (comma-separated, overrides the default)
+// Secrets: GROQ_API_KEY and/or OPENROUTER_API_KEY, SUPABASE_URL, SUPABASE_ANON_KEY
 // Deploy:  supabase functions deploy estimate-food
 // =============================================================================
+
+import { complete, chain, ChainError } from "../_shared/llm.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, content-type",
 };
-
-/**
- * The same two models, in the same order, as the Worker's `visionChain`.
- *
- * If this list changes, change DEFAULT_VISION_MODELS in cloudflare/src/index.ts
- * to match. Vision slugs get retired like any other, which is why it is a chain
- * and not a single model, and why the env var can override it without a deploy.
- */
-const DEFAULT_VISION_MODELS = [
-  "google/gemini-2.5-flash",
-  "openai/gpt-4.1-mini",
-];
-
-function visionChain(): string[] {
-  const configured = (Deno.env.get("OPENROUTER_VISION_MODELS") || "")
-    .split(",").map((s) => s.trim()).filter(Boolean);
-  return (configured.length ? configured : DEFAULT_VISION_MODELS)
-    .filter((m, i, all) => all.indexOf(m) === i);
-}
 
 /**
  * Base64 is ~4/3 of the bytes it encodes, so this is roughly a 1.1MB image.
@@ -134,8 +101,7 @@ const COMMON_SYS =
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
 
-  const key = Deno.env.get("OPENROUTER_API_KEY");
-  if (!key) return json({ error: "AI not configured" }, 503);
+  if (!chain("vision").length) return json({ error: "AI not configured" }, 503);
 
   // Authenticated, like every other route that spends money. The Worker checks
   // the subscription tier and a per-user budget as well; this route cannot see
@@ -155,64 +121,31 @@ Deno.serve(async (req: Request) => {
   }
   if (!photo && meal.length < 2) return json({ error: "text or image required" }, 400);
 
-  const prompt = photo
-    ? (meal ? `Estimate this meal. The athlete also says: ${meal}` : "Estimate this meal from the photo.")
-    : `The athlete ate: ${meal}`;
-
-  // OpenRouter takes the data: URL as-is in an image_url block, so there is no
-  // need to split the base64 apart.
-  const content = photo
-    ? [{ type: "image_url", image_url: { url: photo } }, { type: "text", text: prompt }]
-    : prompt;
-
-  const errors: string[] = [];
-  for (const model of visionChain()) {
-    try {
-      const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${key}`,
-          "Content-Type": "application/json",
-          // OpenRouter attributes usage by these. Not required, but without them
-          // the dashboard cannot tell this route's spend from the Worker's.
-          "HTTP-Referer": "https://pocketathlete.com",
-          "X-Title": "PocketAthlete",
-        },
-        body: JSON.stringify({
-          model,
-          // A photo produces more items than a typed sentence usually does, so
-          // it needs a little more room to finish the JSON.
-          max_tokens: photo ? 900 : 700,
-          messages: [
-            { role: "system", content: (photo ? PHOTO_SYS : TEXT_SYS) + COMMON_SYS },
-            { role: "user", content },
-          ],
-        }),
-      });
-      if (!res.ok) {
-        errors.push(`${model}: ${res.status} ${(await res.text()).slice(0, 200)}`);
-        continue;
-      }
-      const body = await res.json() as { choices?: { message?: { content?: string } }[] };
-      const raw = body?.choices?.[0]?.message?.content ?? "";
-      const items = parseFoodItems(raw);
-      // An empty array is a real answer, not a failure: the prompt asks for one
-      // when the picture is too dark or blurred to read. But an unparseable
-      // reply is a failed model, so try the next rung before believing it.
-      if (items === null && raw.trim() && !looksLikeEmptyItems(raw)) {
-        errors.push(`${model}: unparseable reply`);
-        continue;
-      }
-      return json({ items: items ?? [], model }, 200);
-    } catch (e) {
-      errors.push(`${model}: ${e instanceof Error ? e.message : String(e)}`);
-    }
+  try {
+    const { text: raw, model, provider } = await complete({
+      system: (photo ? PHOTO_SYS : TEXT_SYS) + COMMON_SYS,
+      user: photo
+        ? (meal ? `Estimate this meal. The athlete also says: ${meal}` : "Estimate this meal from the photo.")
+        : `The athlete ate: ${meal}`,
+      image: photo,
+      // A photo produces more items than a typed sentence usually does, so it
+      // needs a little more room to finish the JSON.
+      maxTokens: photo ? 900 : 700,
+      // A rung that answers with prose, an apology or half a JSON object is a
+      // failed rung — fall through to the next rather than reporting "no food
+      // found", which is what an empty plate looks like and is not the same
+      // thing at all. A deliberate `{"items":[]}` passes, because the prompt
+      // asks for exactly that when the picture is too dark to read.
+      validate: (t) => parseFoodItems(t) !== null || looksLikeEmptyItems(t),
+    });
+    return json({ items: parseFoodItems(raw) ?? [], model: `${provider}/${model}` }, 200);
+  } catch (e) {
+    // Names WHICH models failed and why. The whole reason this route exists is
+    // that the old failure mode blamed the athlete's photo for a backend
+    // problem; repeating that with a vaguer message would be worse, not better.
+    if (e instanceof ChainError) return json({ error: e.message }, 502);
+    return json({ error: String(e) }, 500);
   }
-
-  // Says WHICH models failed and why. The whole reason this route exists is
-  // that the old failure mode blamed the athlete's photo for a backend problem;
-  // repeating that here with a vaguer message would be worse, not better.
-  return json({ error: `no vision model answered — ${errors.join("; ")}` }, 502);
 });
 
 /** Who is calling. Uses the caller's own JWT, so RLS and expiry both apply. */
