@@ -161,6 +161,22 @@ async function main() {
       continue;
     }
 
+    /**
+     * WAIT FOR FONTS BEFORE MEASURING ANYTHING.
+     *
+     * This tool reported two undersized tap targets on one run and zero on the
+     * next, with no code change in between — which makes every number it prints
+     * suspect. The cause was measuring mid-layout: a control whose height is
+     * exactly the 44px floor comes back as 43.99 while a fallback font is still
+     * in place, and rounds to "44" in the output, so the report looked like a
+     * contradiction rather than a timing bug.
+     *
+     * A flaky measuring instrument is worse than none: it trains you to ignore
+     * it.
+     */
+    await page.evaluate(() => document.fonts?.ready);
+    await page.waitForTimeout(150);
+
     // Did we actually get in, or bounce to /login?
     const landed = new URL(page.url()).pathname;
     const gated = landed.includes("/login");
@@ -191,8 +207,13 @@ async function main() {
           const lr = lab.getBoundingClientRect();
           if (lr.height >= 44 && lr.width >= 44) continue;
         }
-        if (r.height < 44 || r.width < 44) {
-          small.push({ h: Math.round(r.height), w: Math.round(r.width), t: text(el), tag: el.tagName });
+        // Half a pixel of tolerance. An element with `min-height: 44px` can
+        // measure 43.996 at a 2.625x device pixel ratio — that is layout
+        // rounding, not a design failure, and flagging it buries the real ones.
+        // Deliberately small: 2px of slack would start hiding genuine misses.
+        const FLOOR = 43.5;
+        if (r.height < FLOOR || r.width < FLOOR) {
+          small.push({ h: +r.height.toFixed(2), w: +r.width.toFixed(2), t: text(el), tag: el.tagName });
         }
       }
 

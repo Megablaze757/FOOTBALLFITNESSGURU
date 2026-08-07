@@ -1,4 +1,4 @@
-import { recipeSteps, recipeNote, type Meal, type Macros } from "@/lib/meal-plan";
+import { recipeSteps, recipeNote, recipeSearchUrl, type Meal, type Macros } from "@/lib/meal-plan";
 import { FOOD_BY_ID } from "@/lib/food-db";
 
 /**
@@ -112,9 +112,26 @@ export function Recipe({ meal, scale, macros }: {
         </p>
       )}
 
-      <p className="text-xs text-slate-500">
-        {Math.round(macros.protein)}g protein · {Math.round(macros.carbs)}g carbs · {Math.round(macros.fats)}g fats
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/[0.06] pt-3">
+        <p className="text-xs text-slate-500">
+          {Math.round(macros.protein)}g protein · {Math.round(macros.carbs)}g carbs · {Math.round(macros.fats)}g fats
+        </p>
+        {/* Deliberately small, and deliberately last. Someone who wants a
+            different take on this dish should be able to get one, but the
+            recipe above is the one whose macros the plan counted — sending
+            people off to a 900-calorie version by accident would quietly break
+            the day's numbers. Same reasoning as the shopping list's search
+            icon: leaving the app is a thing you sometimes want and never want
+            by accident. */}
+        <a
+          href={recipeSearchUrl(meal)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="tap-target -mr-2 gap-1 px-2 text-xs text-slate-500 transition hover:text-pitch-400"
+        >
+          Other versions <span aria-hidden>↗</span>
+        </a>
+      </div>
     </div>
   );
 }

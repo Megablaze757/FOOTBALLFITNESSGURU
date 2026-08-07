@@ -231,6 +231,33 @@ export function recipeSteps(meal: Meal): string[] {
 }
 
 /**
+ * Somewhere to look up another version of this dish.
+ *
+ * WHY A SEARCH LINK AND NOT THEIR RECIPE. BBC Good Food's recipes are
+ * copyrighted work owned by Immediate Media. The ingredient list alone is close
+ * to fact and thin on protection, but the method — the wording, the order, the
+ * asides — is exactly the creative expression copyright covers, and rewriting
+ * it lightly does not change that. So none of it is copied.
+ *
+ * A search link costs nothing, never goes stale, needs no licence, and is
+ * genuinely more useful than one borrowed recipe would be: someone who wants a
+ * different take on shakshuka gets fifty, from a source they already trust.
+ * It is the same decision `productLink` made about supermarket pricing — deep
+ * link out rather than scrape.
+ *
+ * The dish name is searched rather than our recipe title, so "Big tofu, bean
+ * and potato hash" doesn't return nothing. Anything in brackets or after a dash
+ * is ours, not the dish's.
+ */
+export function recipeSearchUrl(meal: Meal): string {
+  const dish = meal.name
+    .replace(/\s*\([^)]*\)/g, "")
+    .split(/\s+[—–-]\s+/)[0]
+    .trim();
+  return `https://www.bbcgoodfood.com/search?q=${encodeURIComponent(dish)}`;
+}
+
+/**
  * The bit of a method that is commentary rather than instruction.
  *
  * Most of these recipes end on an aside — "Cheap, high protein and it freezes",
