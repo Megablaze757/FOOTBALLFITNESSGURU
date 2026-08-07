@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { GOALS } from "./coach";
 import { nutritionTargets, activityFactor, basalRate, planTargets, type TargetInput, type BodyStats } from "./nutrition";
 
 // A fully-described adult, so the measured path is in play.
@@ -214,5 +215,67 @@ test("the macros never contradict the headline calories", () => {
       Math.abs(macroKcal - t.calories) <= 20,
       `${goal}: macros come to ${macroKcal} kcal but the target says ${t.calories}`,
     );
+  }
+});
+
+// --- targets must never be NaN -----------------------------------------------
+
+/**
+ * NaN IS THE WORST FAILURE THIS MODULE HAS, because it is silent until it is on
+ * a screen. It propagates through every subsequent sum, gets written into the
+ * rationale sentence ("with NaNg protein"), and is handed to the meal planner,
+ * which then scales a week of portions by NaN.
+ *
+ * The route in is a database column the type system only pretends to police.
+ * `programs.goal_type` is `text not null` with NO check constraint — the
+ * permitted values live in a SQL comment — and the app casts it to GoalType at
+ * the boundary. One unexpected string produced NaN protein, NaN fats and NaN
+ * carbs at once.
+ */
+test("an unrecognised sport goal falls back instead of producing NaN", () => {
+  for (const rogue of ["power", "hypertrophy", "", "SPEED", "cut"]) {
+    const t = nutritionTargets({
+      weightKg: 78, heightCm: 180, age: 22, sex: "male",
+      goal: rogue as never, avgTrainingMinutes: 60,
+    });
+    assert.ok(t, `${rogue}: returned null`);
+    for (const [k, v] of Object.entries({
+      calories: t.calories, protein: t.protein, carbs: t.carbs, fats: t.fats, water_ml: t.water_ml,
+    })) {
+      assert.ok(Number.isFinite(v), `${rogue}: ${k} was ${v}`);
+    }
+    assert.ok(!t.rationale.includes("NaN"), `${rogue}: rationale reads "${t.rationale}"`);
+  }
+});
+
+test("an unrecognised diet goal falls back to the sport ladder", () => {
+  const t = nutritionTargets({
+    weightKg: 78, heightCm: 180, age: 22, sex: "male",
+    goal: "strength", avgTrainingMinutes: 60, dietGoal: "lose" as never,
+  });
+  assert.ok(t);
+  assert.ok(Number.isFinite(t.protein), `protein was ${t.protein}`);
+  // "strength" asks 2.0 g/kg on its own, and a meaningless diet goal must not
+  // drag that down — it drops out of the comparison rather than winning it.
+  assert.equal(t.protein, Math.round(78 * 2.0));
+});
+
+test("every real goal combination produces finite targets", () => {
+  const bodies = [
+    { weightKg: 60, heightCm: 165, age: 28, sex: "female" as const },
+    { weightKg: 95, heightCm: 190, age: 35, sex: "male" as const },
+    { weightKg: 48, heightCm: 155, age: 15, sex: "female" as const },
+  ];
+  for (const body of bodies) {
+    for (const goal of GOALS.map((x) => x.id)) {
+      for (const dietGoal of [null, "cut", "maintain", "build"] as const) {
+        const t = nutritionTargets({ ...body, goal, dietGoal, avgTrainingMinutes: 45 });
+        assert.ok(t, `${goal}/${dietGoal}: null`);
+        assert.ok(
+          [t.calories, t.protein, t.carbs, t.fats].every(Number.isFinite),
+          `${goal}/${dietGoal}: ${JSON.stringify(t)}`
+        );
+      }
+    }
   }
 });

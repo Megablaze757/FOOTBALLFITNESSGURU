@@ -38,14 +38,18 @@ test("a second week differs from the first", () => {
     }
   }
 
-  // Nobody gets handed the identical week twice. The floor is low on purpose:
-  // a VEGAN CUTTING is the hardest athlete in the app to feed — 1,690 kcal at
-  // 0.078g of protein per calorie, with no animal products — and only tofu,
-  // edamame and pea protein clear that density. Lentils and chickpeas top out
-  // near 0.071. Their week moves by about a tenth and the honest fix is more
-  // lean vegan recipes, not a looser rule.
+  // Nobody gets handed the identical week twice, and the floor is set at what
+  // the HARDEST athlete in the app actually achieves rather than at whatever
+  // passes. That is a VEGAN CUTTING: 1,690 kcal at 0.078g of protein per
+  // calorie with no animal products, which almost nothing plant-based clears —
+  // lentils are 0.071, chickpeas 0.061, quinoa 0.038, all short before a drop
+  // of oil goes in. Only tofu, edamame and pea protein get there.
+  //
+  // They had ONE viable dinner in a 139-recipe book and 11% of their week
+  // moved. Four lean vegan recipes later it is three dinners and 21%. The fix
+  // was more recipes at that size and density; it was never a looser rule.
   for (const r of rates) {
-    assert.ok(r.rate > 0.05, `${r.who}: only ${Math.round(r.rate * 100)}% of the week changed`);
+    assert.ok(r.rate > 0.15, `${r.who}: only ${Math.round(r.rate * 100)}% of the week changed`);
   }
 
   // And for everyone else it should be most of the week, not a token slot.

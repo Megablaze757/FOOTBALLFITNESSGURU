@@ -156,3 +156,45 @@ test("notes only exclude foods inside a negated clause", () => {
   assert.deepEqual(dislikedFoodIds("I love chicken but no fish").sort(), ["salmon_fillet", "tuna_tin"]);
   assert.deepEqual(dislikedFoodIds("chicken and rice are great"), []);
 });
+
+/**
+ * HONEY IS NOT VEGAN, and this is here because the rule was already lost once.
+ *
+ * It went in as a `honey` FoodTag excluded by the vegan pattern, and a stray
+ * `git checkout lib/meal-plan.ts` during an unrelated measurement reverted it
+ * within the hour. Nothing failed. The tag was still on the food, the six
+ * recipes had already been moved to maple syrup, and the whole thing looked
+ * fine — the only symptom would have been a vegan athlete eventually being
+ * served honey again, months later, by whoever added the next honey recipe.
+ *
+ * The original bug: six vegan-passing meals contained honey and the vegan
+ * shopping list told people to go and buy a jar of it. A vegan reading their
+ * own plan would have known instantly that nobody had checked it.
+ */
+test("no vegan meal contains honey", () => {
+  const vegan = prefs({ pattern: "vegan" });
+  const offenders = MEALS
+    .filter((m) => mealAllowed(m, vegan))
+    .filter((m) => m.items.some((it) => it.foodId === "honey"))
+    .map((m) => m.id);
+  assert.deepEqual(offenders, [], `honey is an animal product: ${offenders.join(", ")}`);
+});
+
+test("the vegan pattern excludes honey by rule, not by luck", () => {
+  // Asserting the EXCLUSION, not just today's meal list. The test above passes
+  // if every recipe happens to avoid honey; this one fails the moment the rule
+  // itself goes missing, which is how it was lost the first time.
+  const vegan = DIET_PATTERNS.find((d) => d.id === "vegan")!;
+  assert.ok(vegan.excludes.includes("honey"), "vegan must exclude the honey tag");
+  assert.ok(FOOD_BY_ID.honey?.tags?.includes("honey"), "honey must carry the honey tag");
+
+  // And a synthetic honey meal must actually be filtered out, so the tag and
+  // the exclusion are verified to meet.
+  const honeyMeal = {
+    id: "t", name: "t", slot: "Snack" as const, method: "",
+    items: [{ foodId: "honey", qty: 20 }, { foodId: "oats", qty: 50 }],
+  };
+  assert.equal(mealAllowed(honeyMeal, prefs({ pattern: "vegan" })), false);
+  // Vegetarians do eat honey, and taking it from them would be a different bug.
+  assert.equal(mealAllowed(honeyMeal, prefs({ pattern: "vegetarian" })), true);
+});

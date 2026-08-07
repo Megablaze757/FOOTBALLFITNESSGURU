@@ -2347,4 +2347,92 @@ export const MEALS: Meal[] = [
     tip: "48g of protein in 570 calories with no starch at all. For a rest day in a cut.",
     method: "Season cooked lentils, dry-fry tofu golden, char flat-cut broccoli, and finish with garlic, chilli and wilted spinach.",
   },
+  // ===========================================================================
+  // THE LEANEST TIER: A VEGAN, CUTTING.
+  //
+  // Measured after the lean tier went in, this athlete still had ONE viable
+  // dinner in the entire book. 1,690 kcal a day at 0.078g of protein per
+  // calorie, with no animal products — a 558 kcal dinner carrying 44g of
+  // protein. Their plan was effectively fixed, and week-on-week rotation had
+  // nowhere to move it: 11% of slots changed against 61% for everyone else.
+  //
+  // Almost nothing plant-based clears that density. Lentils are 0.071 g/kcal,
+  // chickpeas 0.061, quinoa 0.038 — every one of them falls short before a drop
+  // of oil goes in. What clears it is tofu (0.104), edamame (0.099) and pea
+  // protein (0.213), padded out with the three vegetables dense enough in
+  // protein to help rather than dilute: mushrooms (0.141), spinach (0.116) and
+  // broccoli (0.082).
+  //
+  // So these are built protein-first with almost no starch and very little oil,
+  // and they lean on soy, because at this calorie ceiling there is no honest
+  // alternative. A vegan who ALSO avoids soy and is cutting hard cannot reach
+  // 2.2g/kg from whole foods in 1,690 kcal — pea protein powder is the only
+  // thing that gets them there, and it is why the shakes exist.
+  // ===========================================================================
+  {
+    id: "lean_vg_tofu_mushroom_stirfry", name: "Tofu & mushroom stir-fry", slot: "Dinner", minutes: 18,
+    items: [
+      { foodId: "tofu", qty: 250 }, { foodId: "mushrooms", qty: 200 }, { foodId: "peppers", qty: 120 },
+      { foodId: "spinach", qty: 80 }, { foodId: "garlic", qty: 10 }, { foodId: "soy_sauce", qty: 15 },
+      { foodId: "olive_oil", qty: 6 },
+    ],
+    steps: [
+      "Press the tofu properly — ten minutes under something heavy — then cube it and dry-fry on a high heat until three faces are golden.",
+      "Out onto a plate. Mushrooms into the same dry pan, hard, until they have given up their water and browned.",
+      "Only now the oil, then the peppers for 3 minutes so they blister rather than steam.",
+      "Tofu back in, garlic for 30 seconds, soy round the edge of the pan where it will catch and reduce.",
+      "Spinach on top, heat off, lid on for a minute.",
+    ],
+    tip: "48g of protein in about 540 calories, with no rice under it. Six grams of oil is not a typo — this is the plate that makes a vegan cut work.",
+    method: "Dry-fry pressed tofu until golden, brown mushrooms separately, blister peppers in oil, then glaze everything with garlic and soy and wilt spinach through.",
+  },
+  {
+    id: "lean_vg_edamame_tofu_bowl", name: "Edamame & tofu greens bowl", slot: "Dinner", minutes: 16,
+    items: [
+      { foodId: "tofu", qty: 200 }, { foodId: "edamame", qty: 120 }, { foodId: "broccoli", qty: 200 },
+      { foodId: "peppers", qty: 100 }, { foodId: "garlic", qty: 8 }, { foodId: "olive_oil", qty: 4 },
+      { foodId: "lemon", qty: 1 },
+    ],
+    steps: [
+      "Edamame from frozen into boiling water for 3 minutes, drained.",
+      "Broccoli florets cut flat on one side, flat face down in the oil, 4 minutes untouched until properly charred.",
+      "Pressed, cubed tofu dry-fried alongside in the same pan.",
+      "Peppers and garlic for the last minute only.",
+      "Everything into the bowl, all the lemon over, plenty of salt and pepper.",
+    ],
+    tip: "51g of protein for under 580 calories. Two soy sources rather than one because at this calorie ceiling nothing else plant-based gets there.",
+    method: "Boil edamame, char flat-cut broccoli, dry-fry tofu alongside, and finish with garlic, peppers and lemon.",
+  },
+  {
+    id: "lean_vg_tofu_pea_bowl", name: "Tofu, pea & mushroom bowl", slot: "Lunch", minutes: 15,
+    items: [
+      { foodId: "tofu", qty: 220 }, { foodId: "mushrooms", qty: 150 }, { foodId: "peas_frozen", qty: 100 },
+      { foodId: "spinach", qty: 100 }, { foodId: "soy_sauce", qty: 12 }, { foodId: "olive_oil", qty: 4 },
+      { foodId: "lemon", qty: 1 },
+    ],
+    steps: [
+      "Mushrooms into a dry pan first and left alone until browned — four minutes past when you want to stop.",
+      "Oil, then the pressed cubed tofu, turning only when each face releases itself.",
+      "Frozen peas straight in for 2 minutes.",
+      "Soy round the edge of the pan, spinach on top, heat off, lid on to wilt.",
+      "All the lemon at the table, not in the pan — it goes dull if it cooks.",
+    ],
+    tip: "47g of protein in 500 calories with no grain in it. Cold the next day it works as a salad.",
+    method: "Brown mushrooms dry, dry-fry tofu, cook peas through, and finish with soy, wilted spinach and lemon.",
+  },
+  {
+    id: "lean_vg_protein_shake_bowl", name: "Berry protein shake bowl", slot: "Breakfast", minutes: 3,
+    items: [
+      { foodId: "pea_protein", qty: 30 }, { foodId: "soy_milk", qty: 250 },
+      { foodId: "berries_frozen", qty: 100 }, { foodId: "banana", qty: 1 },
+      { foodId: "seeds_mixed", qty: 8 },
+    ],
+    steps: [
+      "Soya milk into the blender first, powder second. Powder first welds itself to the bottom.",
+      "Frozen berries and the banana in — frozen is what makes it thick enough to eat with a spoon rather than drink.",
+      "Blitz, then seeds over the top so there is something to chew.",
+    ],
+    tip: "36g of protein for under 390 calories, in three minutes. On a cut, breakfast is the meal there is least room for and this is the one that fits.",
+    method: "Blend pea protein with soya milk, frozen berries and banana, and top with seeds.",
+  },
 ];

@@ -239,7 +239,26 @@ export function nutritionTargets(input: TargetInput): NutritionTargets | null {
   const { weightKg, goal, avgTrainingMinutes } = input;
   if (!weightKg || weightKg <= 0) return null;
 
-  const g = goal ?? "speed";
+  /**
+   * The sport goal, GUARANTEED to be one this module has numbers for.
+   *
+   * `goal` is typed `GoalType | null`, and the type is a promise TypeScript
+   * cannot keep here: it arrives from `programs.goal_type`, which is
+   * `text not null` with NO check constraint — the permitted values exist only
+   * in a SQL comment. `programs.goal_type as GoalType` at the call site is a
+   * cast, not a check.
+   *
+   * An unrecognised value used to index straight into PROTEIN_PER_KG and
+   * FAT_PER_KG, both of which would hand back `undefined`, and `weightKg *
+   * undefined` is NaN. The athlete's protein, fats AND carbs all came out NaN
+   * together, and the rationale sentence rendered literally as "with NaNg
+   * protein (NaNg/kg)". One unexpected string in one row does that.
+   *
+   * Falling back to the same default an absent goal gets is right because the
+   * alternative — throwing — takes the whole nutrition page down over a value
+   * nothing validates on the way in.
+   */
+  const g: GoalType = goal && goal in PROTEIN_PER_KG ? goal : "speed";
   const age = input.age ?? null;
   const sex = input.sex ?? null;
   const heightCm = input.heightCm ?? null;
@@ -294,9 +313,16 @@ export function nutritionTargets(input: TargetInput): NutritionTargets | null {
   calories = Math.round(calories / 10) * 10;
 
   // Protein: whichever of the sport goal and the diet goal asks for more.
+  //
+  // `?? 0` on the diet ladder for the same reason `g` is validated above —
+  // `profiles.diet_goal` does carry a check constraint, but the value reaches
+  // here through `as never` and a constraint is only as good as the migration
+  // having been applied to the database you happen to be pointed at. Zero drops
+  // the diet ladder out of the Math.max and leaves the sport ladder deciding,
+  // which is exactly what happens when no diet goal is set at all.
   const proteinPerKg = Math.max(
     PROTEIN_PER_KG[g],
-    input.dietGoal ? DIET_PROTEIN_PER_KG[input.dietGoal] : 0
+    (input.dietGoal ? DIET_PROTEIN_PER_KG[input.dietGoal] : 0) ?? 0
   );
   const protein = Math.round(weightKg * proteinPerKg);
 
@@ -331,6 +357,24 @@ export function nutritionTargets(input: TargetInput): NutritionTargets | null {
     WATER_CAP_ML,
     Math.round((weightKg * WATER_PER_KG + avgTrainingMinutes * WATER_PER_TRAINING_MIN) / 50) * 50
   );
+
+  /**
+   * Last line: never hand back a number that isn't one.
+   *
+   * The two guards above fix the routes to NaN that are known about. This
+   * catches the ones that aren't — a new lookup table added later, a field that
+   * arrives as a string from somewhere, a division that meets a zero. NaN
+   * propagates silently through arithmetic and only becomes visible at the
+   * point it is rendered, which is the athlete's screen; by then it has already
+   * been written into a rationale sentence and passed to the meal planner,
+   * where `NaN` calorie targets produce a week of meals scaled by NaN.
+   *
+   * Returning null is what this function already does for "not enough
+   * information", and every caller handles it. A wrong-but-plausible number
+   * would be worse: it would be acted on.
+   */
+  const finite = [calories, protein, carbs, fats, water_ml].every(Number.isFinite);
+  if (!finite) return null;
 
   return {
     calories, protein, carbs, fats, water_ml,
