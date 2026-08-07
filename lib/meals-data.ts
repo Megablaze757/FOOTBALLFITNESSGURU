@@ -726,13 +726,13 @@ export const MEALS: Meal[] = [
     items: [
       { foodId: "tofu", qty: 300 }, { foodId: "rice", qty: 100 }, { foodId: "carrots", qty: 100 },
       { foodId: "onion", qty: 100 }, { foodId: "curry_paste", qty: 30 }, { foodId: "coconut_milk", qty: 120 },
-      { foodId: "olive_oil", qty: 12 }, { foodId: "honey", qty: 8 },
+      { foodId: "olive_oil", qty: 12 }, { foodId: "maple_syrup", qty: 8 },
     ],
     steps: [
       "Oven to 200C. Press the tofu properly, slice into thick slabs, oil and salt both sides.",
       "Bake 25 minutes, turning once, until the edges are firm and golden.",
       "Meanwhile soften the onion and carrot, add the curry paste for a minute, then coconut milk and a mug of water.",
-      "Simmer 12 minutes and blitz smooth. Honey to balance.",
+      "Simmer 12 minutes and blitz smooth. A spoon of maple to balance the heat.",
       "Rice, tofu slabs, sauce over.",
     ],
     tip: "Baking beats frying here — slabs hold together instead of collapsing.",
@@ -893,15 +893,15 @@ export const MEALS: Meal[] = [
     id: "pb_banana_toast", name: "Peanut butter & banana toast", slot: "Snack", minutes: 4,
     items: [
       { foodId: "wholemeal_bread", qty: 70 }, { foodId: "peanut_butter", qty: 35 },
-      { foodId: "banana", qty: 1 }, { foodId: "honey", qty: 8 },
+      { foodId: "banana", qty: 1 }, { foodId: "maple_syrup", qty: 8 },
     ],
     steps: [
       "Toast, then peanut butter on while it is hot so it melts in rather than sitting on top.",
       "Banana sliced thin and overlapped.",
-      "Honey and a pinch of salt. The salt is not optional.",
+      "Maple and a pinch of salt. The salt is not optional.",
     ],
     tip: "Pre-training, 45 minutes out, this is about as good as it gets.",
-    method: "Spread peanut butter onto hot toast, layer sliced banana over, and finish with honey and salt.",
+    method: "Spread peanut butter onto hot toast, layer sliced banana over, and finish with maple syrup and salt.",
   },
   {
     id: "df_trail_pot", name: "Seed & fruit trail pot", slot: "Snack", minutes: 2,
@@ -1195,15 +1195,15 @@ export const MEALS: Meal[] = [
     items: [
       { foodId: "coconut_yoghurt", qty: 200 }, { foodId: "berries_frozen", qty: 100 },
       { foodId: "oats", qty: 40 }, { foodId: "pea_protein", qty: 20 },
-      { foodId: "seeds_mixed", qty: 20 }, { foodId: "honey", qty: 10 },
+      { foodId: "seeds_mixed", qty: 20 }, { foodId: "maple_syrup", qty: 10 },
     ],
     steps: [
       "Stir the pea protein into the coconut yoghurt first, a spoon at a time, or it stays in lumps.",
       "Warm the berries 40 seconds until they bleed.",
-      "Layer yoghurt, oats and berries, seeds and honey over the top.",
+      "Layer yoghurt, oats and berries, seeds and maple over the top.",
     ],
-    tip: "Maple syrup instead of honey keeps it strictly vegan.",
-    method: "Beat pea protein into coconut yoghurt, warm the berries, and layer with oats, seeds and honey.",
+    tip: "The berry juice does most of the sweetening. Taste before you pour the maple.",
+    method: "Beat pea protein into coconut yoghurt, warm the berries, and layer with oats, seeds and maple syrup.",
   },
   {
     id: "vg_pb_overnight_oats", name: "Peanut butter overnight oats", slot: "Breakfast", minutes: 4,
@@ -1254,17 +1254,17 @@ export const MEALS: Meal[] = [
     id: "vg_tofu_rice_bowl", name: "Sticky tofu rice bowl", slot: "Lunch", minutes: 20,
     items: [
       { foodId: "tofu", qty: 250 }, { foodId: "rice", qty: 80 }, { foodId: "broccoli", qty: 150 },
-      { foodId: "soy_sauce", qty: 20 }, { foodId: "honey", qty: 12 }, { foodId: "garlic", qty: 8 },
+      { foodId: "soy_sauce", qty: 20 }, { foodId: "maple_syrup", qty: 12 }, { foodId: "garlic", qty: 8 },
       { foodId: "ginger", qty: 6 }, { foodId: "seeds_mixed", qty: 10 },
     ],
     steps: [
       "Press and cube the tofu, then dry-fry until golden on several sides.",
-      "Mix soy, honey, grated garlic and ginger.",
+      "Mix soy, maple, grated garlic and ginger.",
       "Pour it into the hot pan and toss for 60 seconds — it reduces almost immediately and coats every cube.",
       "Steam the broccoli 4 minutes. Rice, tofu, seeds over.",
     ],
-    tip: "The sauce catches fast because of the honey. Have the rice ready before it goes in.",
-    method: "Dry-fry pressed tofu until golden, toss in a reduced soy-honey-ginger glaze, and serve on rice with broccoli.",
+    tip: "The sauce catches fast because of the sugar in it. Have the rice ready before it goes in.",
+    method: "Dry-fry pressed tofu until golden, toss in a reduced soy-maple-ginger glaze, and serve on rice with broccoli.",
   },
   {
     id: "vg_lentil_feta_free_salad", name: "Lentil, avocado & tomato salad", slot: "Lunch", minutes: 25,
@@ -1456,14 +1456,14 @@ export const MEALS: Meal[] = [
   {
     id: "berry_seed_pot", name: "Berry & seed pot", slot: "Snack", minutes: 2,
     items: [
-      { foodId: "berries_frozen", qty: 150 }, { foodId: "seeds_mixed", qty: 15 }, { foodId: "honey", qty: 8 },
+      { foodId: "berries_frozen", qty: 150 }, { foodId: "seeds_mixed", qty: 15 }, { foodId: "maple_syrup", qty: 8 },
     ],
     steps: [
       "Berries into a pot straight from the freezer.",
-      "Honey and seeds over. They defrost in a couple of hours into their own syrup.",
+      "Maple and seeds over. They defrost in a couple of hours into their own syrup.",
     ],
     tip: "Packed frozen in the morning it is perfect by mid-afternoon and keeps the rest of the bag cold.",
-    method: "Pack frozen berries with honey and seeds and let them thaw.",
+    method: "Pack frozen berries with maple syrup and seeds and let them thaw.",
   },
 
   // ===========================================================================
@@ -1484,7 +1484,7 @@ export const MEALS: Meal[] = [
     id: "vg_coconut_quinoa_bowl", name: "Coconut, quinoa & berry bowl", slot: "Breakfast", minutes: 20,
     items: [
       { foodId: "quinoa", qty: 80 }, { foodId: "coconut_yoghurt", qty: 180 }, { foodId: "berries_frozen", qty: 100 },
-      { foodId: "almonds", qty: 30 }, { foodId: "seeds_mixed", qty: 20 }, { foodId: "honey", qty: 12 },
+      { foodId: "almonds", qty: 30 }, { foodId: "seeds_mixed", qty: 20 }, { foodId: "maple_syrup", qty: 12 },
     ],
     steps: [
       "Rinse the quinoa until the water runs clear, then simmer in water for 15 minutes and let it cool a little.",
@@ -1670,5 +1670,681 @@ export const MEALS: Meal[] = [
     ],
     tip: "One pan for all three. Dressing them hot is the trick that makes it taste like more than it is.",
     method: "Boil potatoes with eggs and peas, dress the hot potatoes with pesto, and fold through spinach, tomatoes and eggs.",
+  },
+  // ===========================================================================
+  // THE PLANT PANTRY.
+  //
+  // Re-measuring the narrow diets after the last pass showed the vegan corners
+  // were better but still not good: 4 breakfasts and 7 lunches without gluten,
+  // 5 and 5 without soy. Meanwhile an omnivore had 26 and 28. Everyone else
+  // could be given a week that never repeated a dish; a vegan avoiding soy was
+  // handed the same five lunches on rotation and told it was a plan.
+  //
+  // The root cause was the same one as last time and only half-fixed: the plant
+  // meals in this book are built on tofu, soya milk, edamame, oats, bread and
+  // nuts, so ticking one box takes out most of the pool. Nothing here uses any
+  // of them. Every meal below is vegan AND gluten-free AND soy-free AND
+  // nut-free at once, which is why twenty-one recipes lift four thin corners
+  // rather than one — they are in every vegan pool there is.
+  //
+  // The protein comes from red lentils, chickpeas, black beans, quinoa, seeds
+  // and pea protein powder. The pantry is deliberately narrow; the DISHES are
+  // not. A rösti, a skillet, a soup, a traybake, stuffed peppers, a coronation
+  // salad, a mushroom ragù over mash — the point of the exercise is that
+  // nobody eating from this list should be able to tell it was a constraint.
+  //
+  // Sizes are spread on purpose. The clean vegan pool used to run 736-1480
+  // kcal, so there was nothing to put in a small breakfast slot and nothing
+  // honest to put in a big one — the planner had to stretch a portion to 1.6x
+  // or shrink it to 0.55x and hope. There are 400 kcal pots and 1300 kcal
+  // bowls here for that reason.
+  // ===========================================================================
+  {
+    id: "vg_quinoa_coconut_porridge", name: "Quinoa & coconut porridge", slot: "Breakfast", minutes: 20,
+    items: [
+      { foodId: "quinoa", qty: 80 }, { foodId: "coconut_milk", qty: 120 }, { foodId: "pea_protein", qty: 25 },
+      { foodId: "berries_frozen", qty: 100 }, { foodId: "seeds_mixed", qty: 15 }, { foodId: "maple_syrup", qty: 10 },
+    ],
+    steps: [
+      "Rinse the quinoa hard in a sieve for a good 30 seconds — unrinsed quinoa tastes soapy and no amount of maple hides it.",
+      "Simmer it in the coconut milk and an equal splash of water, lid on, 15 minutes.",
+      "Off the heat, beat in the pea protein a spoon at a time. Straight into boiling liquid it seizes into lumps.",
+      "Berries on top while it is still hot so they collapse into it, then seeds and maple.",
+    ],
+    tip: "Porridge that isn't oats, for anyone who can't have them. It sets firmer than oats do, so leave it looser than looks right.",
+    method: "Simmer rinsed quinoa in coconut milk, beat in pea protein off the heat, and top with berries, seeds and maple.",
+  },
+  {
+    id: "vg_sweet_potato_rosti", name: "Sweet potato rösti & smashed avocado", slot: "Breakfast", minutes: 22,
+    items: [
+      { foodId: "sweet_potato", qty: 300 }, { foodId: "chickpeas", qty: 200 }, { foodId: "avocado", qty: 1 },
+      { foodId: "olive_oil", qty: 12 }, { foodId: "chilli_fresh", qty: 8 }, { foodId: "lemon", qty: 1 },
+    ],
+    steps: [
+      "Grate the sweet potato coarsely, then wring it out in a tea towel. Twist until nothing more comes — this is the whole difference between a rösti and a wet orange pancake.",
+      "Season it, press into the hot oiled pan in one layer and leave it completely alone for 7 minutes.",
+      "Flip in one go with a plate over the pan, 6 minutes on the other side.",
+      "Crisp the drained chickpeas in the gap at the edge of the pan while it cooks.",
+      "Smash the avocado with lemon, salt and the sliced chilli, and pile it on.",
+    ],
+    tip: "Squeeze harder than you think. A dry grate crisps; a damp one steams itself.",
+    method: "Wring out grated sweet potato, fry it undisturbed into a rösti on both sides, crisp chickpeas alongside, and top with chilli-lemon smashed avocado.",
+  },
+  {
+    id: "vg_chickpea_skillet", name: "Spiced chickpea & tomato skillet", slot: "Breakfast", minutes: 25,
+    items: [
+      { foodId: "chickpeas", qty: 300 }, { foodId: "tomatoes_tin", qty: 250 }, { foodId: "potatoes", qty: 200 },
+      { foodId: "peppers", qty: 120 }, { foodId: "onion", qty: 80 }, { foodId: "spice_mix", qty: 8 },
+      { foodId: "garlic", qty: 8 }, { foodId: "olive_oil", qty: 12 },
+    ],
+    steps: [
+      "Dice the potato small — 1cm, no bigger — and fry it in the oil for 10 minutes so it is nearly done before anything wet arrives.",
+      "Onion and peppers in for 5, then garlic and spices for one minute until the pan smells of cumin.",
+      "Tomatoes in, and simmer 6 minutes until it stops being watery.",
+      "Chickpeas last, crushing a handful against the pan so the sauce clings.",
+      "Salt it twice. Tinned tomatoes need more than you expect.",
+    ],
+    tip: "Shakshuka's shape without the eggs. It reheats better than the egg version ever did.",
+    method: "Fry diced potato until nearly done, soften onion and peppers with garlic and spices, simmer with tomatoes, and finish with part-crushed chickpeas.",
+  },
+  {
+    id: "vg_berry_coconut_protein_bowl", name: "Berry & coconut protein bowl", slot: "Breakfast", minutes: 4,
+    items: [
+      { foodId: "coconut_yoghurt", qty: 150 }, { foodId: "pea_protein", qty: 30 },
+      { foodId: "berries_frozen", qty: 120 }, { foodId: "banana", qty: 1 }, { foodId: "seeds_mixed", qty: 10 },
+    ],
+    steps: [
+      "Pea protein into the coconut yoghurt first, a third at a time, beaten smooth before the next third goes in.",
+      "Microwave the berries 40 seconds so they bleed, and stir half of them through — it turns the whole bowl purple and takes the chalk off the protein.",
+      "Banana sliced over, rest of the berries, seeds last.",
+    ],
+    tip: "Four minutes, no oats, no cooking. This is the one for the mornings you are already late.",
+    method: "Beat pea protein into coconut yoghurt, stir through warmed berries, and top with banana and seeds.",
+  },
+  {
+    id: "vg_bombay_potato_hash", name: "Bombay potato & spinach hash", slot: "Breakfast", minutes: 22,
+    items: [
+      { foodId: "potatoes", qty: 300 }, { foodId: "chickpeas", qty: 150 }, { foodId: "spinach", qty: 100 },
+      { foodId: "onion", qty: 80 }, { foodId: "spice_mix", qty: 10 }, { foodId: "garlic", qty: 8 },
+      { foodId: "chilli_fresh", qty: 6 }, { foodId: "olive_oil", qty: 14 },
+    ],
+    steps: [
+      "Boil the diced potato 8 minutes — just past resisting a knife — and drain it dry in the colander for a minute.",
+      "Into hot oil, and now leave it. Turning it every 30 seconds is why hash goes grey instead of golden.",
+      "Once it has a crust, onion and chilli for 4 minutes, then garlic and spices for one.",
+      "Chickpeas through, spinach on top, lid on for a minute to wilt it.",
+    ],
+    tip: "Boiling first is what gets you fluffy inside and crisp outside. Raw potato in a pan gives you neither.",
+    method: "Par-boil diced potato, crust it in hot oil, add onion, chilli, garlic and spices, then fold through chickpeas and wilt spinach on top.",
+  },
+  {
+    id: "vg_bean_rice_breakfast_bowl", name: "Big black bean breakfast bowl", slot: "Breakfast", minutes: 20,
+    items: [
+      { foodId: "black_beans", qty: 250 }, { foodId: "rice", qty: 110 }, { foodId: "avocado", qty: 1 },
+      { foodId: "sweetcorn", qty: 100 }, { foodId: "passata", qty: 120 }, { foodId: "spice_mix", qty: 8 },
+      { foodId: "olive_oil", qty: 12 }, { foodId: "lemon", qty: 1 },
+    ],
+    steps: [
+      "Rice on first.",
+      "Dry-fry the drained sweetcorn in a hot pan until it starts to pop and blacken in places. Do not stir it. Those black bits are the flavour.",
+      "Oil, spices and beans in for 3 minutes, then the passata for 4 more until it thickens.",
+      "Rice down, beans over, corn scattered, sliced avocado and a hard squeeze of lemon.",
+    ],
+    tip: "Built for the morning of a session. It is the biggest breakfast in the book that happens to be vegan.",
+    method: "Char sweetcorn in a dry pan, simmer spiced beans in passata, and serve over rice with corn, avocado and lemon.",
+  },
+  {
+    id: "vg_apple_quinoa_pot", name: "Apple, cinnamon & quinoa pot", slot: "Breakfast", minutes: 6,
+    items: [
+      { foodId: "quinoa", qty: 60 }, { foodId: "coconut_yoghurt", qty: 120 }, { foodId: "apple", qty: 1 },
+      { foodId: "pea_protein", qty: 20 }, { foodId: "seeds_mixed", qty: 12 }, { foodId: "spice_mix", qty: 3 },
+    ],
+    steps: [
+      "Uses quinoa you cooked earlier in the week. If you haven't, it is 15 minutes and worth doing three portions at once.",
+      "Grate the apple whole, skin on, and squeeze out the loose juice into the yoghurt.",
+      "Beat the pea protein and cinnamon into the yoghurt, then fold in the cold quinoa and apple.",
+      "Seeds over. Better after an hour in the fridge than straight away.",
+    ],
+    tip: "Make it the night before in the jar you are going to eat it out of. Grated apple browns a little and it does not matter.",
+    method: "Fold cold cooked quinoa and grated apple into cinnamon pea-protein coconut yoghurt, and top with seeds.",
+  },
+  {
+    id: "vg_coronation_chickpea", name: "Coronation chickpea bowl", slot: "Lunch", minutes: 18,
+    items: [
+      { foodId: "chickpeas", qty: 250 }, { foodId: "rice", qty: 80 }, { foodId: "coconut_yoghurt", qty: 80 },
+      { foodId: "curry_paste", qty: 15 }, { foodId: "apple", qty: 1 }, { foodId: "spinach", qty: 60 },
+      { foodId: "seeds_mixed", qty: 12 }, { foodId: "lemon", qty: 1 },
+    ],
+    steps: [
+      "Rice on, then cooled — this is a cold bowl and warm rice makes the dressing split.",
+      "Fry the curry paste in a dry pan for 45 seconds before it goes anywhere near the yoghurt. Raw paste tastes of raw paste.",
+      "Let it cool, then stir it into the coconut yoghurt with the lemon juice.",
+      "Fold in the drained chickpeas and coarsely grated apple, crushing a few chickpeas so the dressing has something to hold.",
+      "Over rice and spinach, seeds on top.",
+    ],
+    tip: "Grated apple is doing the job raisins do in the original. It keeps better and it isn't sweet enough to be a pudding.",
+    method: "Cook out the curry paste, cool it into coconut yoghurt with lemon, fold through chickpeas and grated apple, and serve over cold rice and spinach.",
+  },
+  {
+    id: "vg_smoky_bean_corn_bowl", name: "Smoky black bean & corn bowl", slot: "Lunch", minutes: 18,
+    items: [
+      { foodId: "black_beans", qty: 240 }, { foodId: "rice", qty: 100 }, { foodId: "sweetcorn", qty: 120 },
+      { foodId: "avocado", qty: 1 }, { foodId: "peppers", qty: 100 }, { foodId: "spice_mix", qty: 8 },
+      { foodId: "olive_oil", qty: 10 }, { foodId: "lemon", qty: 1 },
+    ],
+    steps: [
+      "Rice on.",
+      "Peppers into a dry hot pan, cut side down, until they blister and blacken at the edges. 5 minutes, barely touched.",
+      "Oil, spices, beans and corn in for 3 minutes, mashing about a quarter of the beans into the pan.",
+      "Everything over the rice, avocado sliced on, lemon squeezed hard over the lot.",
+    ],
+    tip: "Cook double the beans and the second portion is tomorrow's lunch cold, which is arguably better.",
+    method: "Blister peppers dry, fry spiced beans and corn with a quarter mashed, and serve over rice with avocado and lemon.",
+  },
+  {
+    id: "vg_lentil_carrot_quinoa", name: "Lentil, roast carrot & quinoa bowl", slot: "Lunch", minutes: 35,
+    items: [
+      { foodId: "red_lentils", qty: 100 }, { foodId: "quinoa", qty: 60 }, { foodId: "carrots", qty: 200 },
+      { foodId: "spinach", qty: 80 }, { foodId: "seeds_mixed", qty: 15 }, { foodId: "spice_mix", qty: 6 },
+      { foodId: "olive_oil", qty: 14 }, { foodId: "lemon", qty: 1 },
+    ],
+    steps: [
+      "Oven to 220C. Carrots in batons, tossed in half the oil and the spices, roasted 25 minutes until the edges go dark and sweet.",
+      "Lentils and quinoa in one pan with plenty of water, 15 minutes, then drained well.",
+      "Dress them hot with the rest of the oil and the lemon. Hot grains take on dressing; cold ones sit in it.",
+      "Spinach folded through so it half-wilts, carrots on top, seeds over.",
+    ],
+    tip: "The most protein of any soy-free vegan lunch in here, at about 44g. Roast the whole bag of carrots and use them twice.",
+    method: "Roast spiced carrot batons, cook lentils and quinoa together, dress them hot with oil and lemon, and fold through spinach.",
+  },
+  {
+    id: "vg_hummus_lentil_power_bowl", name: "Hummus & lentil power bowl", slot: "Lunch", minutes: 22,
+    items: [
+      { foodId: "red_lentils", qty: 110 }, { foodId: "rice", qty: 90 }, { foodId: "hummus", qty: 100 },
+      { foodId: "cucumber", qty: 100 }, { foodId: "tomatoes_fresh", qty: 120 }, { foodId: "spice_mix", qty: 6 },
+      { foodId: "olive_oil", qty: 10 }, { foodId: "lemon", qty: 1 },
+    ],
+    steps: [
+      "Rice and lentils in separate pans — lentils go to mush in the time rice takes.",
+      "Lentils 15 minutes, drained, then stirred through the spices and oil while hot.",
+      "Chop the cucumber and tomato, salt them, and leave 5 minutes. The juice they give up is the dressing.",
+      "Rice, lentils, salad and its juice, hummus in a spoonful on top, lemon over.",
+    ],
+    tip: "One of the bigger lunches in the book, for a day with a session in it. Halve the rice if it isn't.",
+    method: "Cook rice and lentils separately, spice the hot lentils, salt the chopped salad for its juice, and build with a spoonful of hummus.",
+  },
+  {
+    id: "vg_mushroom_pea_quinoa", name: "Mushroom, pea & lemon quinoa", slot: "Lunch", minutes: 22,
+    items: [
+      { foodId: "quinoa", qty: 80 }, { foodId: "mushrooms", qty: 200 }, { foodId: "peas_frozen", qty: 120 },
+      { foodId: "spinach", qty: 60 }, { foodId: "seeds_mixed", qty: 15 }, { foodId: "garlic", qty: 10 },
+      { foodId: "olive_oil", qty: 12 }, { foodId: "lemon", qty: 1 },
+    ],
+    steps: [
+      "Quinoa on, 15 minutes.",
+      "Mushrooms into a dry pan, no oil, high heat. They will give up their water, then squeak, then brown. Wait for the brown — that is 4 minutes past when you want to stop.",
+      "Oil and garlic in now, 30 seconds, then the frozen peas straight from the bag for 2 minutes.",
+      "Drained quinoa in, spinach through, lemon zest and juice, seeds over.",
+    ],
+    tip: "Oiling mushrooms at the start makes them soggy — the oil goes in after they have browned, not before.",
+    method: "Brown mushrooms in a dry pan before adding oil and garlic, cook peas through, and fold with quinoa, spinach and lemon.",
+  },
+  {
+    id: "vg_curried_lentil_soup", name: "Curried lentil & potato soup", slot: "Lunch", minutes: 30,
+    items: [
+      { foodId: "red_lentils", qty: 90 }, { foodId: "potatoes", qty: 200 }, { foodId: "carrots", qty: 120 },
+      { foodId: "coconut_milk", qty: 80 }, { foodId: "curry_paste", qty: 20 }, { foodId: "onion", qty: 80 },
+      { foodId: "stock_cubes", qty: 6 }, { foodId: "olive_oil", qty: 10 },
+    ],
+    steps: [
+      "Onion and diced carrot in the oil, 8 minutes, lid on so they sweat rather than colour.",
+      "Curry paste in for a minute — it should smell like a curry house before any liquid goes near it.",
+      "Lentils, cubed potato, stock and a litre of water. Simmer 20 minutes.",
+      "Blitz about half of it and leave the rest in pieces, then the coconut milk stirred through off the heat.",
+      "Taste for salt and add more lemon or vinegar than feels right. Lentil soup is flat without acid.",
+    ],
+    tip: "Freezes in portions and reheats from frozen. Blitzing only half is what stops it tasting like baby food.",
+    method: "Sweat onion and carrot, cook out the curry paste, simmer with lentils, potato and stock, blitz half, and finish with coconut milk.",
+  },
+  {
+    id: "vg_stuffed_peppers", name: "Stuffed peppers with quinoa & beans", slot: "Dinner", minutes: 45,
+    items: [
+      { foodId: "peppers", qty: 300 }, { foodId: "quinoa", qty: 80 }, { foodId: "black_beans", qty: 200 },
+      { foodId: "sweetcorn", qty: 80 }, { foodId: "passata", qty: 150 }, { foodId: "spice_mix", qty: 8 },
+      { foodId: "garlic", qty: 8 }, { foodId: "olive_oil", qty: 14 },
+    ],
+    steps: [
+      "Oven to 200C. Halve the peppers through the stalk, seeds out, and roast them cut side up with oil and salt for 15 minutes first — stuffing raw peppers gives you crunchy peppers and dry filling.",
+      "Quinoa on, 15 minutes, drained.",
+      "Fry the garlic and spices, add passata, beans and corn, and simmer 5 minutes until thick. Fold the quinoa in.",
+      "Pile it into the softened halves, mounded high, and back in for 15 minutes.",
+      "The tops should catch and blacken slightly. That is the good bit.",
+    ],
+    tip: "Roast the peppers first. Every recipe that skips that step produces the same watery disappointment.",
+    method: "Roast halved peppers before filling, simmer beans and corn in spiced passata, fold in quinoa, stuff the halves and roast again.",
+  },
+  {
+    id: "vg_mushroom_ragu_mash", name: "Mushroom ragù with garlic mash", slot: "Dinner", minutes: 40,
+    items: [
+      { foodId: "mushrooms", qty: 350 }, { foodId: "red_lentils", qty: 90 }, { foodId: "potatoes", qty: 400 },
+      { foodId: "passata", qty: 250 }, { foodId: "onion", qty: 100 }, { foodId: "garlic", qty: 12 },
+      { foodId: "stock_cubes", qty: 6 }, { foodId: "olive_oil", qty: 18 },
+    ],
+    steps: [
+      "Mushrooms into a dry pan in one layer, high heat, until deeply browned. Do them in two batches if the pan is crowded — piled up they boil.",
+      "Chop them small once browned and set aside. This is the step that gives it the texture of a meat ragù.",
+      "Onion in the oil 8 minutes, half the garlic for one, then lentils, passata, stock and a mug of water.",
+      "Mushrooms back in and simmer 25 minutes until a spoon dragged through leaves a gap.",
+      "Potatoes boiled and mashed with the rest of the garlic crushed in raw and a good slug of oil. No milk needed — the ragù is wet enough.",
+    ],
+    tip: "Raw garlic in the mash rather than cooked. It is sharper and it cuts through the lentils.",
+    method: "Brown and chop mushrooms, simmer them with lentils, passata and stock into a thick ragù, and serve over garlic mash.",
+  },
+  {
+    id: "vg_loaded_jacket", name: "Loaded sweet potato with chilli beans", slot: "Dinner", minutes: 55,
+    items: [
+      { foodId: "sweet_potato", qty: 350 }, { foodId: "black_beans", qty: 200 }, { foodId: "tomatoes_tin", qty: 150 },
+      { foodId: "avocado", qty: 1 }, { foodId: "onion", qty: 60 }, { foodId: "spice_mix", qty: 8 },
+      { foodId: "chilli_fresh", qty: 6 }, { foodId: "olive_oil", qty: 10 },
+    ],
+    steps: [
+      "Oven to 210C. Prick the sweet potatoes, rub with oil and salt, straight onto the shelf — no foil, which steams them soft-skinned.",
+      "Give them 45 minutes, until the skin is tight and something sugary is leaking out of the ends.",
+      "Twenty minutes before they are done: onion and chilli in oil, spices for a minute, then beans and tomatoes simmered until thick.",
+      "Split the potatoes right open and crush the insides with a fork before anything goes on.",
+      "Beans in, avocado on, more chilli if you want it.",
+    ],
+    tip: "Mostly oven time you are not standing over. Put them in when you get home and do everything else in the meantime.",
+    method: "Bake sweet potatoes bare at 210C, simmer chilli beans with tomatoes, and load the split, forked-open potatoes.",
+  },
+  {
+    id: "vg_smoky_rice_bean_pot", name: "Smoky rice & bean one-pot", slot: "Dinner", minutes: 35,
+    items: [
+      { foodId: "rice", qty: 130 }, { foodId: "black_beans", qty: 250 }, { foodId: "peppers", qty: 150 },
+      { foodId: "sweetcorn", qty: 100 }, { foodId: "passata", qty: 200 }, { foodId: "onion", qty: 100 },
+      { foodId: "avocado", qty: 1 }, { foodId: "spice_mix", qty: 10 }, { foodId: "stock_cubes", qty: 5 },
+      { foodId: "olive_oil", qty: 16 },
+    ],
+    steps: [
+      "Onion and peppers in the oil, 8 minutes, until the peppers have soft dark patches.",
+      "Spices for a minute, then the dry rice stirred through the oil for another — every grain coated before liquid goes in.",
+      "Passata, stock and 400ml water. Bring up, then lowest heat, lid on, 18 minutes, no stirring.",
+      "Beans and corn scattered on top for the last 5 with the lid back on so they steam through.",
+      "Lid off, heat up for 2 minutes to catch the bottom, then fork it up and let it sit 5 minutes. Avocado on at the table.",
+    ],
+    tip: "The catch on the bottom is the point, not a mistake. Leave it the extra two minutes.",
+    method: "Soften onion and peppers, toast the rice in the spiced oil, simmer covered in passata and stock, steam beans and corn on top, then catch the base.",
+  },
+  {
+    id: "vg_lentil_traybake", name: "Roast veg & lentil traybake", slot: "Dinner", minutes: 45,
+    items: [
+      { foodId: "red_lentils", qty: 100 }, { foodId: "potatoes", qty: 250 }, { foodId: "courgette", qty: 200 },
+      { foodId: "peppers", qty: 200 }, { foodId: "hummus", qty: 80 }, { foodId: "spice_mix", qty: 8 },
+      { foodId: "olive_oil", qty: 18 }, { foodId: "lemon", qty: 1 },
+    ],
+    steps: [
+      "Oven to 220C, and get the empty tray hot in it first. Vegetables hitting a hot tray sear; a cold tray steams them.",
+      "Potatoes in chunks with the oil and spices, 20 minutes on their own — they need the head start.",
+      "Peppers and thick courgette rounds added, another 20 minutes, turned once.",
+      "Lentils on the hob meanwhile, 15 minutes, drained and seasoned hard.",
+      "Loosen the hummus with lemon juice and a splash of water into a pourable dressing, and spoon it over the lot in the tray.",
+    ],
+    tip: "One tray and one pan. Thin the hummus more than you think — it should pour, not sit.",
+    method: "Roast spiced potatoes on a preheated tray, add courgette and peppers, cook lentils separately, and dress everything with lemon-loosened hummus.",
+  },
+  {
+    id: "vg_chilli_broccoli_chickpea", name: "Chilli-garlic broccoli & chickpeas", slot: "Dinner", minutes: 20,
+    items: [
+      { foodId: "broccoli", qty: 250 }, { foodId: "chickpeas", qty: 220 }, { foodId: "rice", qty: 60 },
+      { foodId: "garlic", qty: 12 }, { foodId: "chilli_fresh", qty: 8 }, { foodId: "seeds_mixed", qty: 12 },
+      { foodId: "olive_oil", qty: 14 }, { foodId: "lemon", qty: 1 },
+    ],
+    steps: [
+      "Rice on.",
+      "Broccoli into florets, and cut each one flat on one side. Flat side down in the hot oil, 4 minutes, untouched, until properly charred.",
+      "Drained and dried chickpeas in, and press them so some split — the split ones crisp.",
+      "Sliced garlic and chilli for the last 45 seconds only. Any longer and the garlic burns bitter.",
+      "Off the heat, lemon over, seeds through.",
+    ],
+    tip: "The lightest dinner in the vegan list, for rest days. Charring the flat side is what stops broccoli tasting boiled.",
+    method: "Char flat-cut broccoli florets in hot oil, split and crisp chickpeas alongside, and finish with garlic, chilli, lemon and seeds over rice.",
+  },
+  {
+    id: "vg_maple_pea_shake", name: "Maple & banana pea protein shake", slot: "Snack", minutes: 2,
+    items: [
+      { foodId: "pea_protein", qty: 35 }, { foodId: "coconut_milk", qty: 60 }, { foodId: "banana", qty: 1 },
+      { foodId: "maple_syrup", qty: 8 },
+    ],
+    steps: [
+      "Coconut milk and 250ml cold water into the shaker or blender first, powder second. Powder first welds itself to the bottom.",
+      "Banana in — frozen in chunks if you have it, which makes it thick enough to eat with a spoon.",
+      "Maple and a pinch of salt, then blitz.",
+    ],
+    tip: "About 30g of protein with no dairy, no soy and no nuts in it, which almost no shake manages.",
+    method: "Blend pea protein with coconut milk, water, banana, maple and salt.",
+  },
+  {
+    id: "vg_avo_bean_pot", name: "Smashed avocado & bean pot", slot: "Snack", minutes: 5,
+    items: [
+      { foodId: "avocado", qty: 1 }, { foodId: "black_beans", qty: 120 }, { foodId: "tomatoes_fresh", qty: 80 },
+      { foodId: "chilli_fresh", qty: 5 }, { foodId: "lemon", qty: 1 },
+    ],
+    steps: [
+      "Smash the avocado roughly with a fork — lumps are wanted here, this is not guacamole.",
+      "Drained beans in whole, halved tomatoes, chopped chilli.",
+      "Half the lemon squeezed in and stirred through, the other half squeezed on top to keep it green.",
+      "Salt properly and eat within the hour.",
+    ],
+    tip: "Lemon on the surface is what stops it browning in a lunchbox. Press cling film right down onto it too.",
+    method: "Roughly smash avocado, fold through beans, tomatoes and chilli, and seal the surface with lemon.",
+  },
+  {
+    id: "vg_apple_seed_yog_pot", name: "Coconut, apple & seed pot", slot: "Snack", minutes: 3,
+    items: [
+      { foodId: "coconut_yoghurt", qty: 120 }, { foodId: "apple", qty: 1 }, { foodId: "seeds_mixed", qty: 20 },
+      { foodId: "spice_mix", qty: 2 },
+    ],
+    steps: [
+      "Toast the seeds in a dry pan for 2 minutes until they start jumping. It takes them from filler to the best part of it.",
+      "Grate the apple with the skin on, straight into the yoghurt, and stir the cinnamon through.",
+      "Seeds over at the last moment so they stay crunchy.",
+    ],
+    tip: "Toast the whole bag of seeds at once and keep them in a jar. They go into everything after that.",
+    method: "Toast the seeds dry, stir grated apple and cinnamon into coconut yoghurt, and scatter the seeds over.",
+  },
+  // ===========================================================================
+  // THE LEAN TIER.
+  //
+  // WHAT THE MEASUREMENT SAID. Count the meals that suit a 60kg woman cutting —
+  // 1,690 kcal and 132g of protein, so 0.078g of protein per calorie — and the
+  // answer across a 121-recipe book was TWO breakfasts, ONE lunch, TWO dinners
+  // and TWO snacks. A maintaining athlete had eleven to fourteen per slot.
+  //
+  // That is not a variety problem with a variety fix. Someone cutting had no
+  // choice at all: their plan was forced, the same forced plan every week, and
+  // week-on-week rotation could not move it because there was nowhere to move
+  // it to. The book was written around meals that carry 800-1,300 kcal, and a
+  // cutting athlete's whole dinner is 558.
+  //
+  // Small and protein-dense is a genuinely different brief from small. Cutting
+  // the portion of a pasta bake gets you a small pasta bake — 12g of protein
+  // and hungry by three. These are built the other way round: the protein
+  // comes first and the starch is whatever the calories have left, which is
+  // why they lean on chicken, turkey, tuna, prawns, cottage cheese, Greek
+  // yoghurt and the protein powders, and why several have no grain at all.
+  //
+  // Every diet pattern gets its own, because a cutting vegan was the worst-off
+  // athlete in the entire app.
+  // ===========================================================================
+  {
+    id: "lean_cottage_berry_bowl", name: "Whipped cottage cheese & berry bowl", slot: "Breakfast", minutes: 5,
+    items: [
+      { foodId: "cottage_cheese", qty: 200 }, { foodId: "berries_frozen", qty: 100 },
+      { foodId: "oats", qty: 30 }, { foodId: "seeds_mixed", qty: 8 }, { foodId: "maple_syrup", qty: 5 },
+    ],
+    steps: [
+      "Whip the cottage cheese for 30 seconds with a fork or a stick blender until the curds disappear. This is the whole trick — whipped, it eats like thick yoghurt.",
+      "Warm the berries 40 seconds so they bleed into a syrup.",
+      "Cheese into the bowl, berries and their juice over, oats and seeds on top.",
+      "Maple last, and only if the berries were sharp.",
+    ],
+    tip: "34g of protein for under 400 calories. Blending is not optional — unwhipped cottage cheese is why people think they don't like it.",
+    method: "Whip the cottage cheese smooth, warm the berries into a syrup, and top with oats, seeds and a little maple.",
+  },
+  {
+    id: "lean_turkey_hash", name: "Turkey, mushroom & spinach hash", slot: "Breakfast", minutes: 15,
+    items: [
+      { foodId: "turkey_mince", qty: 100 }, { foodId: "eggs", qty: 2 }, { foodId: "mushrooms", qty: 150 },
+      { foodId: "spinach", qty: 80 }, { foodId: "tomatoes_fresh", qty: 100 }, { foodId: "olive_oil", qty: 6 },
+    ],
+    steps: [
+      "Mushrooms into a dry pan first, high heat, until they have given up their water and browned. Four minutes past when you want to stop.",
+      "Oil and the turkey in, broken up small, until it loses its pink and starts to catch.",
+      "Halved tomatoes for a minute, then the spinach on top with the lid on to wilt.",
+      "Push it all to one side and fry the eggs in the space.",
+    ],
+    tip: "44g of protein in 370 calories. Turkey mince dries out fast — take it off the moment it stops being pink.",
+    method: "Brown mushrooms dry, cook turkey mince through, wilt spinach with tomatoes, and fry eggs alongside.",
+  },
+  {
+    id: "lean_tofu_scramble", name: "Tofu, mushroom & tomato scramble", slot: "Breakfast", minutes: 12,
+    items: [
+      { foodId: "tofu", qty: 200 }, { foodId: "mushrooms", qty: 150 }, { foodId: "spinach", qty: 80 },
+      { foodId: "tomatoes_fresh", qty: 100 }, { foodId: "spice_mix", qty: 5 }, { foodId: "olive_oil", qty: 5 },
+    ],
+    steps: [
+      "Press the tofu hard for five minutes, then crumble it between your fingers into uneven pieces — even ones look like a science experiment.",
+      "Brown the mushrooms in a dry pan before anything else goes in.",
+      "Oil, tofu and the turmeric-heavy spices in, and leave it to catch for 3 minutes before stirring.",
+      "Tomatoes and spinach through at the end, off the heat.",
+    ],
+    tip: "Crumbled, not cubed. The uneven edges are what make it read as scrambled rather than as tofu.",
+    method: "Brown mushrooms dry, crumble in pressed tofu with spices and let it catch, then fold through tomato and spinach.",
+  },
+  {
+    id: "lean_pea_quinoa_pot", name: "Berry & pea protein breakfast pot", slot: "Breakfast", minutes: 4,
+    items: [
+      { foodId: "pea_protein", qty: 35 }, { foodId: "coconut_yoghurt", qty: 80 },
+      { foodId: "berries_frozen", qty: 120 }, { foodId: "quinoa", qty: 30 }, { foodId: "seeds_mixed", qty: 8 },
+    ],
+    steps: [
+      "Pea protein into the coconut yoghurt with a splash of water, beaten a third at a time until it is smooth.",
+      "Cold cooked quinoa folded in — it gives it something to chew, which a protein pot otherwise badly lacks.",
+      "Berries stirred through from frozen. They thaw into it in about ten minutes.",
+      "Seeds over at the end.",
+    ],
+    tip: "36g of protein, vegan, and no soy in it. That combination is rare enough to be worth keeping quinoa in the fridge for.",
+    method: "Beat pea protein into coconut yoghurt, fold in cold quinoa and frozen berries, and top with seeds.",
+  },
+  {
+    id: "lean_chicken_potato_salad", name: "Chicken & new potato chopped salad", slot: "Lunch", minutes: 25,
+    items: [
+      { foodId: "chicken_breast", qty: 180 }, { foodId: "potatoes", qty: 200 }, { foodId: "cucumber", qty: 100 },
+      { foodId: "tomatoes_fresh", qty: 120 }, { foodId: "olive_oil", qty: 10 }, { foodId: "lemon", qty: 1 },
+    ],
+    steps: [
+      "Potatoes into salted water, 15 minutes, and dress them with half the oil and lemon while they are still hot.",
+      "Season the chicken properly and griddle it 6 minutes a side, then let it rest 5 minutes before slicing. Slicing it straight off the heat pours the juice onto the board.",
+      "Chop the cucumber and tomato small, salt them, wait 5 minutes for the juices.",
+      "Everything folded together, the salted vegetable juice included — that is most of the dressing.",
+    ],
+    tip: "46g of protein in 505 calories. Cooking the potatoes the night before makes this a five-minute lunch.",
+    method: "Dress hot boiled potatoes with oil and lemon, griddle and rest the chicken, and fold through salted chopped salad.",
+  },
+  {
+    id: "lean_tuna_bean_salad", name: "Tuna, black bean & pepper salad", slot: "Lunch", minutes: 8,
+    items: [
+      { foodId: "tuna_tin", qty: 150 }, { foodId: "black_beans", qty: 150 }, { foodId: "peppers", qty: 100 },
+      { foodId: "cucumber", qty: 100 }, { foodId: "olive_oil", qty: 10 }, { foodId: "lemon", qty: 1 },
+    ],
+    steps: [
+      "Drain the tuna properly — press it into the lid — or the whole bowl tastes of tin.",
+      "Beans rinsed until the water runs clear, which takes the tinned edge off them.",
+      "Dice the pepper and cucumber small so every forkful gets some.",
+      "Oil, all the lemon, plenty of black pepper, and fold it gently so the tuna stays in flakes.",
+    ],
+    tip: "47g of protein and no cooking whatsoever. Sits in the fridge overnight without going anywhere.",
+    method: "Drain and flake tuna, rinse the beans, and fold with diced pepper and cucumber in oil and lemon.",
+  },
+  {
+    id: "lean_cottage_chickpea_plate", name: "Cottage cheese & chickpea plate", slot: "Lunch", minutes: 8,
+    items: [
+      { foodId: "cottage_cheese", qty: 200 }, { foodId: "chickpeas", qty: 150 }, { foodId: "spinach", qty: 80 },
+      { foodId: "tomatoes_fresh", qty: 120 }, { foodId: "seeds_mixed", qty: 10 }, { foodId: "olive_oil", qty: 8 },
+    ],
+    steps: [
+      "Crisp the drained chickpeas in the oil for 6 minutes, pressing some flat so they split and brown.",
+      "Spinach into the hot pan for 20 seconds, just to collapse it.",
+      "Cottage cheese spooned onto the plate and spread with the back of the spoon, everything else piled on top while warm.",
+      "Seeds and a lot of black pepper.",
+    ],
+    tip: "Warm chickpeas onto cold cottage cheese is the point — it half-melts and behaves like a dressing.",
+    method: "Crisp chickpeas in oil, wilt spinach briefly, and pile both warm onto spread cottage cheese with seeds.",
+  },
+  {
+    id: "lean_tofu_lentil_bowl", name: "Lean tofu & lentil bowl", slot: "Lunch", minutes: 22,
+    items: [
+      { foodId: "tofu", qty: 170 }, { foodId: "red_lentils", qty: 50 }, { foodId: "spinach", qty: 80 },
+      { foodId: "peppers", qty: 100 }, { foodId: "olive_oil", qty: 3 }, { foodId: "lemon", qty: 1 },
+    ],
+    steps: [
+      "Lentils on, 15 minutes, drained well and seasoned hard while hot.",
+      "Press and cube the tofu, then dry-fry it — no oil — turning only when each face has gone golden and released itself.",
+      "Peppers in for the last 3 minutes so they blister.",
+      "Lentils, tofu, raw spinach underneath so it wilts from the heat, all the lemon over, and the oil last.",
+    ],
+    tip: "Dry-frying rather than oiling is what keeps this at 520 calories with 41g of protein.",
+    method: "Cook and season lentils, dry-fry tofu until golden, blister the peppers, and build over raw spinach with lemon.",
+  },
+  {
+    id: "lean_chicken_courgette_tray", name: "Spiced chicken & courgette tray", slot: "Dinner", minutes: 35,
+    items: [
+      { foodId: "chicken_breast", qty: 200 }, { foodId: "courgette", qty: 200 }, { foodId: "potatoes", qty: 250 },
+      { foodId: "spice_mix", qty: 8 }, { foodId: "olive_oil", qty: 10 }, { foodId: "lemon", qty: 1 },
+    ],
+    steps: [
+      "Oven to 220C with the tray already in it.",
+      "Potatoes in chunks, tossed in the oil and spices, onto the hot tray for 20 minutes.",
+      "Courgette in thick rounds and the chicken added, another 15 minutes — thick rounds, because thin ones disintegrate.",
+      "Lemon squeezed over the whole tray as it comes out, while everything is hot enough to drink it in.",
+    ],
+    tip: "53g of protein, one tray, nothing to wash up. Cut the chicken into two pieces if it is a thick fillet, or the courgette overcooks waiting for it.",
+    method: "Roast spiced potatoes on a preheated tray, add chicken and thick courgette rounds, and finish with lemon.",
+  },
+  {
+    id: "lean_turkey_chilli_no_rice", name: "Turkey chilli, no rice", slot: "Dinner", minutes: 30,
+    items: [
+      { foodId: "turkey_mince", qty: 200 }, { foodId: "tomatoes_tin", qty: 200 }, { foodId: "peppers", qty: 150 },
+      { foodId: "black_beans", qty: 120 }, { foodId: "onion", qty: 80 }, { foodId: "spice_mix", qty: 8 },
+      { foodId: "olive_oil", qty: 8 },
+    ],
+    steps: [
+      "Brown the turkey hard in the oil before the onion goes anywhere near it — mince added to a wet pan steams grey.",
+      "Onion and peppers in for 6 minutes, then the spices for one.",
+      "Tomatoes and a splash of water, and simmer 15 minutes until it thickens.",
+      "Beans in for the last 5, crushing a few against the side.",
+      "It wants more salt and more chilli than you think. Taste it twice.",
+    ],
+    tip: "60g of protein in 560 calories, and the peppers do the job the rice used to. Freezes in portions.",
+    method: "Brown turkey mince hard, soften onion and peppers with spices, simmer with tomatoes, and finish with part-crushed beans.",
+  },
+  {
+    id: "lean_prawn_courgette_rice", name: "Garlic prawn & courgette rice", slot: "Dinner", minutes: 18,
+    items: [
+      { foodId: "prawns", qty: 180 }, { foodId: "rice", qty: 70 }, { foodId: "courgette", qty: 200 },
+      { foodId: "garlic", qty: 12 }, { foodId: "chilli_fresh", qty: 6 }, { foodId: "olive_oil", qty: 10 },
+      { foodId: "lemon", qty: 1 },
+    ],
+    steps: [
+      "Rice on.",
+      "Courgette in half-moons into a hot dry pan until it colours on both sides, then out onto a plate.",
+      "Oil, sliced garlic and chilli for 30 seconds — no more, garlic burns bitter in a hot pan.",
+      "Prawns in for 90 seconds only. They are already cooked; you are warming them and coating them, and a minute too long makes them squeak.",
+      "Courgette back in, off the heat, all the lemon.",
+    ],
+    tip: "49g of protein for 550 calories. The 90 seconds is the whole recipe — everything else is preparation.",
+    method: "Colour courgette dry, flash garlic and chilli in oil, warm the prawns through for 90 seconds, and serve over rice with lemon.",
+  },
+  {
+    id: "lean_egg_potato_plate", name: "Eggs, cottage cheese & crushed potatoes", slot: "Dinner", minutes: 25,
+    items: [
+      { foodId: "eggs", qty: 3 }, { foodId: "cottage_cheese", qty: 150 }, { foodId: "potatoes", qty: 250 },
+      { foodId: "spinach", qty: 100 }, { foodId: "olive_oil", qty: 8 },
+    ],
+    steps: [
+      "Potatoes boiled 18 minutes, drained, then crushed flat with a fork rather than mashed — you want craggy edges.",
+      "Into the hot oil, cut side down, 5 minutes until the crags go crisp.",
+      "Eggs boiled 7 minutes for a set white and a soft middle, then straight into cold water so they peel.",
+      "Spinach wilted in the potato pan for 30 seconds.",
+      "Cottage cheese spooned over the hot potatoes so it loosens, eggs halved on top.",
+    ],
+    tip: "47g of protein without a scrap of meat. Crushing rather than mashing is what gets you crisp bits.",
+    method: "Crush boiled potatoes and crisp them in oil, boil eggs to a soft middle, and serve with wilted spinach and cottage cheese.",
+  },
+  {
+    id: "lean_tofu_broccoli_plate", name: "Chilli tofu & broccoli plate", slot: "Dinner", minutes: 20,
+    items: [
+      { foodId: "tofu", qty: 250 }, { foodId: "broccoli", qty: 250 }, { foodId: "peppers", qty: 100 },
+      { foodId: "garlic", qty: 10 }, { foodId: "soy_sauce", qty: 15 }, { foodId: "olive_oil", qty: 8 },
+    ],
+    steps: [
+      "Press the tofu for at least ten minutes with something heavy on it. Wet tofu will not brown, it will only steam.",
+      "Cube it and dry-fry on a high heat, turning only when each side releases itself from the pan.",
+      "Broccoli florets cut flat on one side, flat side down in the oil, 4 minutes untouched until charred.",
+      "Peppers, garlic and soy in for the last minute, tossed hard so it glazes rather than pools.",
+    ],
+    tip: "46g of protein and no starch, for a rest day. Pressing the tofu is the difference between golden and grey.",
+    method: "Dry-fry pressed tofu until golden, char flat-cut broccoli in oil, and glaze everything with garlic and soy at the end.",
+  },
+  {
+    id: "lean_cottage_cucumber_pot", name: "Cottage cheese & cucumber pot", slot: "Snack", minutes: 3,
+    items: [
+      { foodId: "cottage_cheese", qty: 150 }, { foodId: "cucumber", qty: 100 }, { foodId: "seeds_mixed", qty: 5 },
+    ],
+    steps: [
+      "Cucumber diced small — small enough to eat with a spoon alongside the cheese, not in chunks you have to chase.",
+      "Stirred through with a lot of black pepper and a pinch of salt.",
+      "Seeds on top at the last moment.",
+    ],
+    tip: "22g of protein for 160 calories, which is about as efficient as a snack gets.",
+    method: "Dice cucumber into cottage cheese, season heavily, and top with seeds.",
+  },
+  {
+    id: "lean_tuna_cucumber_pot", name: "Tuna & cucumber pot", slot: "Snack", minutes: 3,
+    items: [
+      { foodId: "tuna_tin", qty: 100 }, { foodId: "cucumber", qty: 100 }, { foodId: "lemon", qty: 1 },
+    ],
+    steps: [
+      "Drain the tuna hard, pressing it into the lid.",
+      "Flake it into the pot with the diced cucumber.",
+      "All the lemon and plenty of pepper. It needs the acid or it is very plain.",
+    ],
+    tip: "24g of protein in 150 calories. Keep a tin in your bag and this is a snack anywhere.",
+    method: "Flake drained tuna with diced cucumber, lemon and pepper.",
+  },
+  {
+    id: "lean_pea_berry_shake", name: "Pea protein & berry shake", slot: "Snack", minutes: 2,
+    items: [
+      { foodId: "pea_protein", qty: 25 }, { foodId: "berries_frozen", qty: 80 },
+    ],
+    steps: [
+      "Pour 300ml of cold water into the shaker first, powder after. The other way round welds it to the bottom.",
+      "Frozen berries straight in — they chill it and thicken it as they break up.",
+      "Shake for longer than feels necessary. Pea protein needs about twenty seconds.",
+    ],
+    tip: "21g of protein for 130 calories, dairy-free and soy-free. The berries are what make pea protein drinkable.",
+    method: "Shake pea protein with cold water and frozen berries.",
+  },
+  {
+    id: "lean_tofu_edamame_salad", name: "Lean tofu & edamame salad", slot: "Lunch", minutes: 18,
+    items: [
+      { foodId: "tofu", qty: 150 }, { foodId: "edamame", qty: 100 }, { foodId: "red_lentils", qty: 40 },
+      { foodId: "spinach", qty: 60 }, { foodId: "peppers", qty: 80 }, { foodId: "lemon", qty: 1 },
+      { foodId: "olive_oil", qty: 3 },
+    ],
+    steps: [
+      "Lentils on for 15 minutes, drained and seasoned while hot.",
+      "Edamame from frozen into the same water for the last 3 minutes.",
+      "Press and cube the tofu, then dry-fry it hard with no oil until three or four faces are golden.",
+      "Everything into the bowl over raw spinach, all the lemon, and the oil last so it coats rather than soaks.",
+    ],
+    tip: "46g of protein for 550 calories, entirely from plants. Soy is doing the heavy lifting — there is no way round that for a vegan cutting hard.",
+    method: "Cook lentils and edamame, dry-fry cubed tofu until golden, and fold together over spinach with lemon.",
+  },
+  {
+    id: "lean_tofu_lentil_greens", name: "Tofu, lentil & greens plate", slot: "Dinner", minutes: 25,
+    items: [
+      { foodId: "tofu", qty: 220 }, { foodId: "red_lentils", qty: 50 }, { foodId: "broccoli", qty: 200 },
+      { foodId: "spinach", qty: 80 }, { foodId: "garlic", qty: 10 }, { foodId: "chilli_fresh", qty: 6 },
+      { foodId: "olive_oil", qty: 5 },
+    ],
+    steps: [
+      "Lentils on, 15 minutes, drained and seasoned hard — under-seasoned lentils are what makes this kind of plate taste worthy.",
+      "Press the tofu, cube it, and dry-fry until golden on several faces.",
+      "Broccoli florets cut flat on one side, flat side into the oil, 4 minutes untouched until charred.",
+      "Garlic and chilli in for 30 seconds at the end, then the spinach thrown on top to wilt in the residual heat.",
+    ],
+    tip: "48g of protein in 570 calories with no starch at all. For a rest day in a cut.",
+    method: "Season cooked lentils, dry-fry tofu golden, char flat-cut broccoli, and finish with garlic, chilli and wilted spinach.",
   },
 ];

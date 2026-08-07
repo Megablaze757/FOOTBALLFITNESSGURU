@@ -35,9 +35,11 @@ interface Props {
   context?: TargetContext;
   /** Hand-picked meals saved against the current plan. */
   initialSwaps?: MealSwaps;
+  /** Meals the PREVIOUS plan served, so this one can move on from them. */
+  initialRecent?: string[] | null;
 }
 
-export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initialSeed, initialSwaps, context }: Props) {
+export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initialSeed, initialSwaps, initialRecent, context }: Props) {
   const [sex, setSex] = useState<Sex>(initial?.sex ?? "male");
   const [age, setAge] = useState(String(initial?.age ?? 20));
   const [heightCm, setHeightCm] = useState(String(initial?.heightCm ?? 178));
@@ -56,6 +58,14 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
    * offering one.
    */
   const [swaps, setSwaps] = useState<MealSwaps>(initialSwaps ?? {});
+  /**
+   * What the plan BEFORE this one served.
+   *
+   * Persisted for the same reason the seed is: the week is rebuilt from scratch
+   * on every visit, so anything that shaped it has to survive a reload or the
+   * rebuild silently produces a different plan from the one on screen.
+   */
+  const [recent, setRecent] = useState<string[]>(initialRecent ?? []);
   const [swapping, setSwapping] = useState<SwapTarget | null>(null);
   const [saved, setSaved] = useState(false);
   const [prefs, setPrefs] = useState<MealPrefs>({ ...DEFAULT_PREFS, ...(initialPrefs ?? {}) });
@@ -122,7 +132,7 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
   // the shopping list they'd already started buying against.
   useEffect(() => {
     if (seed === null || week) return;
-    setWeek(buildWeek(targets, seed, effectivePrefs, schedule, swaps));
+    setWeek(buildWeek(targets, seed, effectivePrefs, schedule, swaps, recent));
     // Only on mount, and only to restore. Changing stats afterwards should not
     // silently rewrite the plan under them — that's what Generate is for.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -141,7 +151,7 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
     if (!swapping || seed === null) return;
     const next = { ...swaps, [swapKey(swapping.dayIndex, swapping.slot, swapping.nth)]: mealId };
     setSwaps(next);
-    setWeek(buildWeek(targets, seed, effectivePrefs, schedule, next));
+    setWeek(buildWeek(targets, seed, effectivePrefs, schedule, next, recent));
     setSwapping(null);
     // Best effort: the swap is already on screen, and an older database without
     // the column must not make the feature look broken.
@@ -153,7 +163,7 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
   async function clearSwaps() {
     if (seed === null) return;
     setSwaps({});
-    setWeek(buildWeek(targets, seed, effectivePrefs, schedule, {}));
+    setWeek(buildWeek(targets, seed, effectivePrefs, schedule, {}, recent));
     try {
       await createClient().from("profiles").update({ meal_plan_swaps: {} }).eq("id", userId);
     } catch { /* ignore */ }
@@ -161,25 +171,34 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
 
   async function generate() {
     /**
-     * REGENERATION BARELY REGENERATED.
+     * REGENERATION DIDN'T REGENERATE. AT ALL.
      *
-     * This was `Math.random() * 3`, so the app could produce exactly three
-     * weeks, ever — and "Regenerate week" had a one-in-three chance of handing
-     * back the identical plan. buildWeek rotates each slot's pool with
-     * `(idx + seed + nth) % list.length`, so the seed is useful right up to the
-     * size of the pool; capping it at 3 threw nearly all of that away.
+     * It was `Math.random() * 3` once, so the app could produce three weeks
+     * ever and the button had a one-in-three chance of returning the identical
+     * plan. Widening that to 997 was supposed to fix it. It did nothing, and
+     * the reason is worse than the original bug: `seed` fed a tie-break worth a
+     * tenth of a penny against scoring terms weighted 4, 8 and 35, so it never
+     * changed a single choice. Measured across three athletes and three diet
+     * patterns, every seed from 0 to 5 produced the byte-identical week.
+     * "Regenerate week" had never worked.
      *
-     * Also never returns the seed they're already on. A regenerate that
-     * silently no-ops reads as a broken button, and at 1-in-3 it happened
-     * constantly.
+     * The seed still exists — the plan is rebuilt from it on every visit, so it
+     * has to. What actually varies the week is `recent`: the meals the last
+     * plan served, which arrive already carrying repeat cost so the new plan
+     * reaches past them. That took average week-on-week change from 0% to 55%.
      */
     let next = seed;
     for (let i = 0; i < 20 && next === seed; i++) next = Math.floor(Math.random() * 997);
     setSeed(next);
+    // What they've just been eating, so the new plan moves on from it. Captured
+    // BEFORE the state is replaced, obviously, and from the week on screen
+    // rather than from `recent` — that one is now two plans old.
+    const justServed = (week ?? []).flatMap((d) => d.meals.map((m) => m.meal.id));
+    setRecent(justServed);
     // A new seed is a new plan, so the old positions mean nothing — keeping the
     // swaps would move someone's Thursday dinner onto an unrelated slot.
     setSwaps({});
-    setWeek(buildWeek(targets, next!, effectivePrefs, schedule, {}));
+    setWeek(buildWeek(targets, next!, effectivePrefs, schedule, {}, justServed));
     setOpenDay(0);
     // Remember the stats AND which plan it was, so neither has to be redone.
     const supabase = createClient();
@@ -193,6 +212,7 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
       diet_notes: notes.trim() || null,
       meal_plan_seed: next!,
       meal_plan_swaps: {},
+      meal_plan_recent: justServed,
     }).eq("id", userId);
     if (!error) {
       // The nutrition page caches its loader; without this the restored plan

@@ -12,7 +12,7 @@ import {
   estimateMeal, fromAiItems, roundMacros, fitDimensions, scaleItem, totalOf,
   PHOTO_MAX_EDGE, PHOTO_QUALITY, type FoodEstimate, type EstimatedItem,
 } from "@/lib/food-estimate";
-import type { Macros } from "@/lib/meal-plan";
+import type { Macros, MealSwaps } from "@/lib/meal-plan";
 import type { TargetContext } from "@/lib/nutrition";
 
 interface Props {
@@ -32,6 +32,18 @@ interface Props {
    * Null means they've never generated a plan, and there is nothing to tick.
    */
   seed: number | null;
+  /**
+   * The other two things the plan is rebuilt from.
+   *
+   * Same bug as the seed above, one layer along. This component reproduced the
+   * week from the seed ALONE, so a dinner the athlete had swapped by hand on
+   * the Meal plan tab still showed the meal it replaced here — and once the
+   * planner started varying week on week, the whole day would have drifted.
+   * `buildWeek` is only pure with respect to all of its inputs; passing three
+   * of five and calling it reproducible is how this went wrong the first time.
+   */
+  swaps: MealSwaps;
+  recent: string[];
   /** The same sport goal and logged-training figures the daily card used. */
   context: TargetContext;
   /** Adds the eaten macros into the day's running totals. */
@@ -78,7 +90,7 @@ async function shrinkImage(file: File): Promise<string> {
  *
  * All three feed the same daily totals, which the tracker above then saves.
  */
-export function MealCheckIn({ stats, prefs, dietNotes, seed, context, onAdd }: Props) {
+export function MealCheckIn({ stats, prefs, dietNotes, seed, swaps, recent, context, onAdd }: Props) {
   const [ticked, setTicked] = useState<Set<string>>(new Set());
   const [text, setText] = useState("");
   const [estimate, setEstimate] = useState<FoodEstimate | null>(null);
@@ -175,9 +187,12 @@ export function MealCheckIn({ stats, prefs, dietNotes, seed, context, onAdd }: P
       activity: stats?.activity ?? "moderate",
       goal: stats?.goal ?? "maintain",
     };
-    const week = buildWeek(planTargets(body, context), seed, { ...DEFAULT_PREFS, ...(prefs ?? {}) }, parseSchedule(dietNotes));
+    const week = buildWeek(
+      planTargets(body, context), seed, { ...DEFAULT_PREFS, ...(prefs ?? {}) },
+      parseSchedule(dietNotes), swaps, recent
+    );
     return week[DAY_INDEX()]?.meals ?? [];
-  }, [stats, prefs, dietNotes, seed, context]);
+  }, [stats, prefs, dietNotes, seed, swaps, recent, context]);
 
   // Instant on-device preview as they type; the AI call refines it on request.
   const preview = useMemo(() => estimateMeal(text), [text]);

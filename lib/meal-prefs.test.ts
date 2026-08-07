@@ -80,6 +80,43 @@ test("budget mode produces a cheaper shop than the default", () => {
   assert.ok(cheap.total <= normal.total, `budget £${cheap.total} vs normal £${normal.total}`);
 });
 
+/**
+ * The check above tests ONE athlete on ONE diet, and that is how this broke
+ * twice.
+ *
+ * Budget mode has no dedicated machinery keeping it cheap — it competes on the
+ * same score as everything else, so whether it wins depends on what is in the
+ * pool. Both times it regressed, it was a pool change that did it, and both
+ * times the single-case test caught it only because that one case happened to
+ * be affected. A 22-year-old omnivore is not a proof.
+ *
+ * The last regression was worth £8.75: marginal pack cost reads zero for
+ * anything already in the basket, so amplifying it in budget mode made the
+ * first expensive protein picked look free for the rest of the week. Five
+ * salmon dinners and three of prawns — the two dearest things in the database
+ * — on fourteen distinct meals instead of twenty. Dearer AND more repetitive,
+ * which is both of the things it promises not to be.
+ */
+test("budget mode is cheaper for every athlete, not just one", () => {
+  const bodies: BodyStats[] = [
+    ATHLETE,
+    { sex: "female", age: 28, heightCm: 165, weightKg: 60, activity: "moderate", goal: "cut" },
+    { sex: "male", age: 35, heightCm: 190, weightKg: 95, activity: "high", goal: "build" },
+    { sex: "female", age: 19, heightCm: 172, weightKg: 68, activity: "high", goal: "build" },
+  ];
+  const dearer: string[] = [];
+  for (const body of bodies) {
+    for (const d of DIET_PATTERNS) {
+      const t = planTargets(body);
+      const p = prefs({ pattern: d.id });
+      const normal = shoppingList(buildWeek(t, 0, p)).total;
+      const cheap = shoppingList(buildWeek(t, 0, { ...p, budget: true })).total;
+      if (cheap > normal) dearer.push(`${body.goal}/${d.id}: £${cheap} vs £${normal}`);
+    }
+  }
+  assert.deepEqual(dearer, [], `budget mode came out dearer:\n  ${dearer.join("\n  ")}`);
+});
+
 test("combined restrictions still produce a full week, or say what's missing", () => {
   const strict = prefs({ pattern: "vegan", avoid: ["gluten", "nuts", "soy"] });
   const gaps = unmetSlots(strict);

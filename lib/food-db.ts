@@ -41,8 +41,14 @@ export type StoreId = "tesco" | "sainsburys" | "asda" | "aldi";
 
 // What's in a food, for diet and allergy filtering. A meal inherits the union
 // of its ingredients' tags.
+// `honey` sits with the animal products, not the allergens, because that is
+// what it is. It is not offered as an avoidance in the UI — nobody ticks "no
+// honey" — but the vegan pattern has to exclude it, and before it was tagged
+// the planner was putting honey in six vegan meals and honey on the vegan
+// shopping list. A vegan athlete reading their own plan would have known
+// immediately that nobody had checked it.
 export type FoodTag =
-  | "meat" | "pork" | "fish" | "dairy" | "egg"
+  | "meat" | "pork" | "fish" | "dairy" | "egg" | "honey"
   | "gluten" | "nuts" | "soy";
 
 export const FOODS: Food[] = [
@@ -73,7 +79,10 @@ export const FOODS: Food[] = [
   { id: "soy_sauce", name: "Soy sauce", aisle: "Cupboard", kcal: 66, protein: 8, carbs: 6, fats: 0.1, unit: "ml", packSize: 250, packPrice: 1.50, packLabel: "250ml", tags: ["soy", "gluten"] },
   { id: "stock_cubes", name: "Stock cubes", aisle: "Cupboard", kcal: 240, protein: 10, carbs: 25, fats: 12, unit: "g", packSize: 120, packPrice: 1.20, packLabel: "12 cubes", budget: "value" },
   { id: "lemon", name: "Lemons", aisle: "Fruit & veg", kcal: 29, protein: 1.1, carbs: 9, fats: 0.3, unit: "each", packSize: 4, packPrice: 1.10, packLabel: "4 pack", budget: "value" },
-  { id: "honey", name: "Honey", aisle: "Cupboard", kcal: 304, protein: 0.3, carbs: 82, fats: 0, unit: "g", packSize: 340, packPrice: 2.20, packLabel: "340g jar" },
+  { id: "honey", name: "Honey", aisle: "Cupboard", kcal: 304, protein: 0.3, carbs: 82, fats: 0, unit: "g", packSize: 340, packPrice: 2.20, packLabel: "340g jar", tags: ["honey"] },
+  // The vegan swap for honey, and the reason tagging honey didn't cost the
+  // vegan pool six meals — those recipes take maple instead and cook the same.
+  { id: "maple_syrup", name: "Maple syrup", aisle: "Cupboard", kcal: 260, protein: 0, carbs: 67, fats: 0.1, unit: "g", packSize: 250, packPrice: 3.20, packLabel: "250ml bottle" },
   { id: "pesto", name: "Green pesto", aisle: "Cupboard", kcal: 430, protein: 5, carbs: 6, fats: 43, unit: "g", packSize: 190, packPrice: 1.80, packLabel: "190g jar", tags: ["dairy", "nuts"] },
   { id: "coconut_milk", name: "Coconut milk", aisle: "Cupboard", kcal: 169, protein: 1.6, carbs: 3, fats: 17, unit: "ml", packSize: 400, packPrice: 1.20, packLabel: "400ml tin" },
   { id: "passata", name: "Passata", aisle: "Cupboard", kcal: 32, protein: 1.4, carbs: 6, fats: 0.2, unit: "g", packSize: 500, packPrice: 0.85, packLabel: "500g carton", budget: "value" },
