@@ -105,7 +105,18 @@ export function MealSwap({ target, prefs, onPick, onClose }: {
           )}
         </div>
 
-        <ul className="min-h-0 flex-1 divide-y divide-white/[0.05] overflow-y-auto">
+        {/* pb-28 on the SCROLLING element, not on the sheet.
+            On a phone this opens as a bottom sheet (`items-end`), flush to the
+            bottom of the viewport — and the tab bar is z-[60] against this
+            sheet's z-50, so it is drawn ON TOP. Measured: the last row ended
+            90px below the top of the bar, unreadable and untappable, with
+            nothing on screen to suggest the list continued.
+
+            Padding the sheet would leave a dead gap under a short list. Padding
+            the scroll container means the last item can always be scrolled
+            clear, and only when there is something to scroll. Same 7rem as
+            ExerciseModal, which solved this once already. */}
+        <ul className="min-h-0 flex-1 divide-y divide-white/[0.05] overflow-y-auto pb-28 sm:pb-0">
           {options.map(({ meal, macros, fit }) => {
             // "Fits" is not a score anyone should have to interpret. It becomes
             // one word, and only when it's a warning.
