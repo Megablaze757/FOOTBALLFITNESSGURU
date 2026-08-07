@@ -185,6 +185,16 @@ const WEEK_SHAPE: Record<Prog, WeekShape[]> = {
 // is the entire point of a deload, and what people get wrong when left to it.
 const RPE_DELTA = [0, 0.5, 1, -2];
 
+/**
+ * Minutes above which a single continuous effort is a session in its own right
+ * rather than something you tack onto the end of one.
+ *
+ * 45 keeps easy 20-40 minute aerobic work available on a lifting day — which is
+ * in every serious strength block and is what lets you recover between the
+ * heavy days — while keeping the 75-90 minute long run on endurance days.
+ */
+const LONG_EFFORT_MINUTES = 45;
+
 const WEEK_PROGRESSION: Record<Prog, string[]> = {
   load:  ["Groove the movement at a weight you could do 2-3 more reps with.",
           "Add a little weight and a set — reps drop slightly, that's the point.",
@@ -237,6 +247,7 @@ interface Ctx {
   constraints: Constraints;
   /** Coach's picks, as a set for cheap lookup. */
   picked?: Set<string>;
+  forced?: Set<string>;
 }
 
 interface Scored { m: Movement; score: number; spares: boolean }
@@ -310,14 +321,48 @@ function rotate<T>(arr: T[], by: number): T[] {
  * spinning through everything would eventually serve up the worst option for
  * the sake of variety, which isn't variety, it's noise.
  */
-function pick(ranked: Scored[], count: number, offset: number, usedIds: Set<string>, usedPatterns: Set<Pattern>): Movement[] {
+function pick(
+  ranked: Scored[], count: number, offset: number,
+  usedIds: Set<string>, usedPatterns: Set<Pattern>,
+  forced?: Set<string>
+): Movement[] {
   if (count <= 0 || !ranked.length) return [];
-  // The window has to be wider than the number of sessions that rotate through
-  // it, or the rotation wraps: with a window of 6, week 1 day 1 and week 3 day 1
-  // land on the same offset and you're back to repeating sessions.
+
+  const out: Movement[] = [];
+  /**
+   * A COACH'S PICK IS TAKEN BEFORE THE ROTATION, NOT RANKED INTO IT — on the
+   * one day of the week that pick belongs to.
+   *
+   * The +50 in `rankSlot` puts a chosen movement at the top of the list, and
+   * then `rotate` below spun it straight back out again — the window starts at
+   * `offset`, so position 0 is exactly where it does not get read from. A pick
+   * only ever appeared when the rotation happened to land on it, which for a
+   * three-day block meant a coach could pick a back squat, a row and a carry
+   * and get none of the three.
+   *
+   * Forcing every pick into every session is the opposite mistake, and the
+   * first version of this fix made it: three picks became a back squat, a row
+   * and a carry on all three days of the week. So each pick is pinned to ONE
+   * day — its position in the coach's list, modulo the days trained — and is
+   * merely well-ranked on the others. It appears every week without becoming
+   * the only thing the athlete ever does.
+   *
+   * The pain filter has already run by this point and returns null for anything
+   * badly loaded on a sore joint, so nothing here can reinstate a movement the
+   * engine refused on safety grounds.
+   */
+  if (forced?.size) {
+    for (const { m } of ranked) {
+      if (out.length >= count) break;
+      if (!forced.has(m.id) || usedIds.has(m.id) || usedPatterns.has(m.pattern)) continue;
+      out.push(m); usedIds.add(m.id); usedPatterns.add(m.pattern);
+    }
+    if (out.length >= count) return out;
+  }
+  // Wide enough that the days of a week, and the blocks that rotate through it,
+  // don't wrap onto each other and start repeating.
   const depth = Math.max(count * 3, 8);
   const window = rotate(ranked.slice(0, depth), offset);
-  const out: Movement[] = [];
 
   // First pass: a different movement pattern each time, so a session isn't
   // three variations of a squat.
@@ -544,8 +589,55 @@ export function buildBlock(input: EngineInput): ProgramPlan {
       const ctx: Ctx = {
         focusGoal, pain, soreAreas, sport: input.sport, trainingFocus: input.focus, constraints,
         picked: input.mustInclude?.length ? new Set(input.mustInclude) : undefined,
+        // The picks that belong to THIS day (see `pick`), rather than all of them.
+        forced: input.mustInclude?.length
+          ? new Set(input.mustInclude.filter((_, pi) => pi % days === di))
+          : undefined,
       };
       const sessionIndex = wi * days + di;
+      /**
+       * WHICH MOVEMENTS THIS SESSION USES IS FIXED FOR THE WHOLE BLOCK.
+       *
+       * It used to key off `sessionIndex`, so the exercises changed every week
+       * — and the entire periodisation above is written on the assumption that
+       * they do not. What an athlete actually read on day 1 of a strength
+       * block was:
+       *
+       *   wk1  Bent-over barbell row    "Groove the movement..."
+       *   wk2  Barbell hip thrust       "Add a little weight and a set"
+       *   wk3  Pogo hops                "Peak volume: extra set..."
+       *   wk4  Dumbbell shoulder press  "Deload: SAME MOVEMENTS, ~60%"
+       *
+       * Four unrelated exercises, each captioned as though it were last week's
+       * lift with more weight on it. You cannot add weight to a row by doing
+       * pogo hops, you cannot tell whether the block worked, and week 4 says
+       * "same movements" over the one exercise that had not appeared yet.
+       *
+       * Progressive overload is the whole mechanism a training block works by:
+       * repeat the movement, add load, deload, repeat. So selection is now
+       * per BLOCK — day 1 is the same session for four weeks, and only the
+       * sets, reps and RPE move. Variety comes between blocks instead, which
+       * is where it belongs, via the `block` term.
+       *
+       * Ball work is the exception and still rotates weekly: skill progresses
+       * by difficulty and variation rather than by load, so a different drill
+       * each week is the point rather than a bug.
+       */
+      const blockSeed = (block - 1) * 5 + di;
+      /**
+       * THE MAIN LIFT SURVIVES THE BLOCK CHANGE; THE ACCESSORY WORK DOES NOT.
+       *
+       * Rotating everything between blocks means the athlete never keeps a
+       * squat long enough to get good at it, and it also made block 3 come out
+       * with LESS total work than block 1 — the change of exercise swamped the
+       * +8%-a-block volume step, so someone three blocks in was doing 91 sets
+       * where they used to do 95.
+       *
+       * Which is how strength blocks are actually written: you keep squatting
+       * and pressing for months and change what goes around them. So the
+       * primary slot ignores the block, and everything else rotates on it.
+       */
+      const seedFor = (slot: Slot) => (slot === "primary" ? di : blockSeed) + SLOT_SEED[slot];
 
       const blueprint = { ...BLUEPRINTS[focusGoal] };
       // In-season conditioning is what the fixtures are for.
@@ -599,6 +691,31 @@ export function buildBlock(input: EngineInput): ProgramPlan {
         // Falls back to the full list if nothing easy survived the athlete's
         // exclusions, because a deload with no conditioning is still better
         // than a crash.
+        /**
+         * A LONG EASY RUN IS NOT A FINISHER FOR A LIFTING SESSION.
+         *
+         * Conditioning was ranked without reference to what the session already
+         * was, so a strength day ended with "Long run — 84 min · Zone 2", and a
+         * SPEED block prescribed two 84-minute runs a week. Both are the
+         * interference effect written out as a plan: high-volume aerobic work
+         * is the one thing known to blunt the strength and power adaptations
+         * the rest of the session exists to produce.
+         *
+         * Continuous efforts are `sets: 1` with the minutes in `reps`, so a long
+         * one is identifiable without new metadata. They stay on endurance days,
+         * where they are the session rather than an afterthought. Everything
+         * short — hill repeats, sled pushes, kettlebell swings — is untouched:
+         * those finish a strength day rather than fighting it.
+         *
+         * Falls back to the full list rather than leaving the slot empty, for
+         * an athlete whose exclusions rule out everything short.
+         */
+        if (slot === "conditioning" && focusGoal !== "endurance") {
+          const compatible = ranked.filter(
+            (r) => !(r.m.dose.sets === 1 && (r.m.dose.reps ?? 0) >= LONG_EFFORT_MINUTES)
+          );
+          if (compatible.length) ranked = compatible;
+        }
         if (slot === "conditioning" && wi === 3) {
           const easy = ranked.filter((r) => (r.m.dose.rpe ?? 10) <= RECOVERY_RPE_CEILING);
           if (easy.length) ranked = easy;
@@ -606,7 +723,9 @@ export function buildBlock(input: EngineInput): ProgramPlan {
         // Patterns only need to be unique within the training blocks; a warm-up
         // and a cool-down sharing "mobility" is fine and in fact correct.
         const patternGuard = slot === "warmup" || slot === "cooldown" ? new Set<Pattern>() : usedPatterns;
-        const chosen = pick(ranked, want, sessionIndex + SLOT_SEED[slot], usedIds, patternGuard);
+        // Ball work never reaches here — the skill slot is handled above and
+        // still rotates weekly off `sessionIndex`.
+        const chosen = pick(ranked, want, seedFor(slot), usedIds, patternGuard, ctx.forced);
 
         const fixed = slot === "warmup" || slot === "cooldown";
         for (const m of chosen) {

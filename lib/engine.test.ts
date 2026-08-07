@@ -53,18 +53,58 @@ test("equipment normalises to something filterable", () => {
 // The defect this engine exists to fix
 // =============================================================================
 
-test("a block is twelve different sessions, not three on a loop", () => {
+/**
+ * A BLOCK IS ONE PROGRAMME PROGRESSED, NOT TWELVE UNRELATED WORKOUTS.
+ *
+ * This test used to demand at least 8 distinct movement-sets across the 12
+ * sessions, which sounds like variety and is actually the defect. The engine
+ * periodises DOSE — `WEEK_PROGRESSION` literally tells the athlete "add a little
+ * weight and a set, reps drop slightly" and, on the deload, "same movements,
+ * ~60% of the weight". Rotating the exercises weekly made all of that copy a
+ * lie. What day 1 of a strength block actually read was:
+ *
+ *   wk1  Bent-over barbell row    "Groove the movement..."
+ *   wk2  Barbell hip thrust       "Add a little weight and a set"
+ *   wk3  Pogo hops                "Peak volume: extra set..."
+ *   wk4  Dumbbell shoulder press  "Deload: SAME MOVEMENTS, ~60%"
+ *
+ * You cannot add weight to a row by doing pogo hops, and you cannot tell
+ * whether the block worked. Progressive overload is the mechanism a block works
+ * by, so the movements now hold and the numbers move.
+ *
+ * The original v1 defect this test was written for — three sessions on a loop,
+ * unchanged all block — is still caught, by the prescriptions.
+ */
+test("a block progresses one programme rather than rotating exercises", () => {
   const plan = buildBlock({ goal: "strength", painMap: {}, sport: "rugby", daysPerWeek: 3 });
   const sessions = plan.weeks.flatMap((w) => w.sessions);
   assert.equal(sessions.length, 12);
 
-  // v1 produced three distinct sets of drills across the whole block, because
-  // selection was deterministic and nothing varied per session.
-  const byMovements = new Set(sessions.map((s) => s.drills.map((d) => d.name).join("|")));
-  assert.ok(byMovements.size >= 8, `only ${byMovements.size} distinct sessions in a 12-session block`);
+  // The same day, across the four weeks, trains the same movements — that is
+  // what makes the load progression above meaningful.
+  //
+  // Two slots are excluded and both deliberately. Ball work rotates because
+  // skill progresses by difficulty rather than by load. Conditioning is swapped
+  // on the deload — week 4 trades hill repeats for a recovery run, which is the
+  // one job that week has.
+  for (let di = 0; di < 3; di++) {
+    const lifts = (wi: number) =>
+      plan.weeks[wi].sessions[di].drills
+        .filter((d) => !d.skill && d.slot !== "conditioning")
+        .map((d) => d.name).join("|");
+    for (let wi = 1; wi < 4; wi++) {
+      assert.equal(lifts(wi), lifts(0), `day ${di + 1} trains different movements in week ${wi + 1} than in week 1`);
+    }
+  }
 
+  // And the numbers DO move — otherwise it is the same session four times,
+  // which is the v1 defect this test was originally written to catch.
   const byPrescription = new Set(sessions.map((s) => s.drills.map((d) => `${d.name}:${d.sets}x${d.reps}`).join("|")));
-  assert.ok(byPrescription.size >= 10, `only ${byPrescription.size} distinct prescriptions`);
+  assert.ok(byPrescription.size >= 10, `only ${byPrescription.size} distinct prescriptions in a 12-session block`);
+
+  // Different days of the same week are different sessions.
+  const week1 = plan.weeks[0].sessions.map((s) => s.drills.map((d) => d.name).join("|"));
+  assert.equal(new Set(week1).size, week1.length, "two days in week 1 are the same session");
 });
 
 test("the same day in consecutive weeks is not the same session", () => {
@@ -307,11 +347,16 @@ test("a trimmed prescription still reads correctly", () => {
   const s = buildBlock({ goal: "strength", painMap: {}, sport: "gym" }).weeks[0].sessions[0];
   const eased = adjustForReadiness(s, "Yellow");
   for (const d of eased.drills) {
-    if (!d.prescription) continue;
+    // Only the "N × ..." forms state a set count. A continuous effort is
+    // rendered as "20 min" (see prescriptionText), where the leading number is
+    // MINUTES — reading it as sets was a latent bug in this test, and it went
+    // unnoticed only because a strength day happened to draw interval-style
+    // conditioning. There is nothing to trim on a single continuous effort, and
+    // `restated` correctly leaves it alone.
+    if (!d.prescription?.includes(" × ")) continue;
+    if (d.slot === "warmup" || d.slot === "cooldown" || d.skill) continue;
     const lead = Number(d.prescription.split(" ")[0]);
-    if (Number.isFinite(lead) && d.slot !== "warmup" && d.slot !== "cooldown" && !d.skill) {
-      assert.equal(lead, d.sets, `${d.name}: prescription "${d.prescription}" disagrees with sets=${d.sets}`);
-    }
+    assert.equal(lead, d.sets, `${d.name}: prescription "${d.prescription}" disagrees with sets=${d.sets}`);
   }
 });
 
