@@ -37,11 +37,7 @@
 // =============================================================================
 
 import { complete, chain, ChainError } from "../_shared/llm.ts";
-
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, content-type",
-};
+import { requireTier, CORS, json } from "../_shared/gate.ts";
 
 /**
  * Base64 is ~4/3 of the bytes it encodes, so this is roughly a 1.1MB image.
@@ -103,13 +99,13 @@ Deno.serve(async (req: Request) => {
 
   if (!chain("vision").length) return json({ error: "AI not configured" }, 503);
 
-  // Authenticated, like every other route that spends money. The Worker checks
-  // the subscription tier and a per-user budget as well; this route cannot see
-  // either, so it verifies identity and leans on Supabase's own rate limits.
-  // If this becomes the permanent home for the photo path rather than a bridge
-  // while the Worker is fixed, the tier gate needs to move here too.
-  const user = await authUser(req);
-  if (!user) return json({ error: "unauthorized" }, 401);
+  // Nutrition is a paid feature. This route used to check identity only, on the
+  // reasoning that it was a bridge while the Worker was broken and the Worker
+  // held the paywall — which stopped being true the moment NEXT_PUBLIC_API_URL
+  // was unset and this became the only path. Hiding the camera from free users
+  // in the UI is not a permission check.
+  const gate = await requireTier(req, "silver", "Nutrition");
+  if (gate.denied) return gate.denied;
 
   const { text, image } = await req.json().catch(() => ({})) as { text?: string; image?: string };
   const meal = (text ?? "").trim().slice(0, 300);
@@ -147,23 +143,6 @@ Deno.serve(async (req: Request) => {
     return json({ error: String(e) }, 500);
   }
 });
-
-/** Who is calling. Uses the caller's own JWT, so RLS and expiry both apply. */
-async function authUser(req: Request): Promise<{ id: string } | null> {
-  const auth = req.headers.get("Authorization");
-  if (!auth?.startsWith("Bearer ")) return null;
-  const url = Deno.env.get("SUPABASE_URL");
-  const anon = Deno.env.get("SUPABASE_ANON_KEY");
-  if (!url || !anon) return null;
-  try {
-    const res = await fetch(`${url}/auth/v1/user`, { headers: { Authorization: auth, apikey: anon } });
-    if (!res.ok) return null;
-    const body = await res.json() as { id?: string };
-    return body?.id ? { id: body.id } : null;
-  } catch {
-    return null;
-  }
-}
 
 /**
  * Did the model deliberately answer "I can see nothing"?
@@ -212,8 +191,4 @@ function parseFoodItems(raw: string) {
   } catch {
     return null;
   }
-}
-
-function json(data: unknown, status: number): Response {
-  return new Response(JSON.stringify(data), { status, headers: { ...CORS, "Content-Type": "application/json" } });
 }

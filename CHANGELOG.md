@@ -228,6 +228,69 @@ supabase secrets set OPENROUTER_API_KEY=...   # the key the Worker already uses
 It uses the Worker's prompt and parser verbatim, so the same plate gets the
 same numbers whichever backend answers.
 
+## Security audit: the UI was the only thing enforcing two rules
+
+Prompted by a checklist: *the UI is the only security*, and *one user can see
+another user's data*. Both applied. Audited every table's RLS, every policy, and
+all twelve Edge Functions.
+
+### Paid features answered anybody who asked
+
+The paywall lived in exactly ONE place — `requireTier(..., "silver", ...)` on
+five Cloudflare Worker routes. The Supabase Edge Functions that answer the same
+requests had **no tier check at all**, because they were only ever the fallback
+and the fallback inherited none of the paywall.
+
+Unsetting `NEXT_PUBLIC_API_URL` moved every AI call onto that ungated path.
+Programs, the coach chat and meal estimation became free to any account with a
+token — the buttons stay hidden from free users in the UI, and the UI is not a
+permission check. `lib/api.ts` already contained a comment reasoning about "a
+402 means this needs Pro", describing a status code nothing was emitting.
+
+`supabase/functions/_shared/gate.ts` is now the one gate, with the Worker's
+semantics deliberately copied: 402 with `upgrade`/`tier`, 403 for a suspended
+account, fail-**open** on a suspension-lookup blip so a payer is never locked
+out, fail-**closed** on an unknown tier so a database hiccup never gives the
+product away. Nine tests, including that a missing service-role key denies
+rather than allows.
+
+### A service-role function that trusted the request body
+
+`process-video` is a Database Webhook handler. It runs with the service role —
+RLS does not apply to it — and it read `user_id`, `storage_path` and
+`check_in_id` straight out of the POST body. It is deployed with ordinary JWT
+verification, so "is signed in" was the only barrier, and being authenticated is
+not being authorised.
+
+Any signed-in user who could name a row id could:
+
+- upsert into `ai_plans` under **someone else's `user_id`** — a fabricated
+  biomechanics analysis and drill program landing in another athlete's account,
+  in an app built to manage injury risk;
+- flip any `videos` row to processing/ready/failed, breaking other people's
+  uploads;
+- have a signed URL minted for any object in the videos bucket, and any
+  check-in's pain map read, by naming them.
+
+The payload is now used for one thing — which row to look at — and every field
+that matters is read back from the table with the service role. A forged body
+can at most re-trigger processing of a video that genuinely exists and is
+genuinely pending. `WEBHOOK_SECRET` closes that remaining gap when configured.
+
+### What was already right
+
+- **RLS is enabled on all 29 tables.** The two `using (true)` policies that
+  remain are `app_settings` (a launch flag) and `waitlist` (insert-only), both
+  correct.
+- **`profiles: read all (authenticated)`** — any signed-in user reading every
+  athlete's height, weight and diet notes — was already replaced in migration
+  0037 by own-or-coach-related. Verified against the live database rather than
+  assumed, by checking that 0037's `is_admin()` exists there.
+- `create-checkout` takes the user from `auth.getUser()`, never the body.
+- `wearable-ingest` looks the athlete up *by* the token, so the token is the
+  identity — there is no id to forge.
+- `assess-readiness` is a pure function over its input and touches no data.
+
 ### One provider chain for the whole app: Groq, then OpenRouter
 
 Three Edge Functions each held their own Anthropic client, their own model id

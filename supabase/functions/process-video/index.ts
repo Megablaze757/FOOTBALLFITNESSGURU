@@ -8,7 +8,34 @@
 // (We trigger off the videos row, not a Storage webhook, so the analysis can map
 // cleanly back to a row and we control ret/status — Storage webhooks can't.)
 //
+// THE PAYLOAD IS A HINT, NOT A SOURCE OF TRUTH.
+//
+// This function runs with the SERVICE ROLE — it bypasses RLS entirely — and it
+// used to take `user_id`, `storage_path` and `check_in_id` straight out of the
+// request body. It is deployed with ordinary JWT verification, so "the caller
+// is signed in" was the only check standing between any account and a forged
+// webhook. Being authenticated is not being authorised, and the record in the
+// body was never verified to be a record at all.
+//
+// What that allowed, for any signed-in user who could guess a row id:
+//
+//   * upsert into `ai_plans` with somebody else's `user_id` — a fabricated
+//     biomechanics analysis and drill program appearing in another athlete's
+//     account, in an app whose whole purpose is managing injury risk;
+//   * flip any `videos` row to processing/ready/failed, breaking other people's
+//     uploads;
+//   * mint a signed URL for any path in the videos bucket, and read any
+//     check-in's pain map, by naming them.
+//
+// The fix is to use the payload for ONE thing — which row to look at — and read
+// every field that matters back from the table with the service role. A forged
+// body can then at most re-trigger processing of a video that genuinely exists
+// and is genuinely pending, which is a rate-limit problem, not a data-integrity
+// one. WEBHOOK_SECRET closes that last gap when it is configured.
+//
 // Secrets: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, CV_WORKER_URL, WORKER_API_KEY
+// Optional: WEBHOOK_SECRET — when set, the caller must send it as x-webhook-secret.
+//           Configure the same value on the Database Webhook's headers.
 // Deploy:  supabase functions deploy process-video
 // =============================================================================
 
@@ -24,12 +51,25 @@ interface VideoRow {
   status: string;
 }
 
+/**
+ * Only `record.id` is read from this. The rest of the row is deliberately typed
+ * as unknown-ish so nothing downstream can quietly start trusting it again.
+ */
 interface WebhookPayload {
   type: "INSERT" | "UPDATE" | "DELETE";
-  record: VideoRow | null;
+  record: { id?: string } | null;
 }
 
 Deno.serve(async (req: Request) => {
+  // When a secret is configured, the caller must present it. Left unset this is
+  // skipped rather than failing every existing webhook on deploy — the row
+  // re-read below is what actually protects the data, and this is the layer
+  // that stops strangers spending our CV worker budget.
+  const secret = Deno.env.get("WEBHOOK_SECRET");
+  if (secret && req.headers.get("x-webhook-secret") !== secret) {
+    return json({ error: "forbidden" }, 403);
+  }
+
   let payload: WebhookPayload;
   try {
     payload = await req.json();
@@ -37,17 +77,32 @@ Deno.serve(async (req: Request) => {
     return json({ error: "Invalid JSON" }, 400);
   }
 
-  const video = payload.record;
-  if (!video || payload.type === "DELETE") return json({ skipped: "no record" }, 200);
-  // Only process freshly-uploaded videos awaiting analysis.
-  if (!["uploading", "processing"].includes(video.status)) {
-    return json({ skipped: `status ${video.status}` }, 200);
-  }
+  // Only the row ID is taken from the caller. Everything else is read back.
+  const recordId = payload.record?.id;
+  if (!recordId || payload.type === "DELETE") return json({ skipped: "no record" }, 200);
 
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
+
+  // THE ROW AS THE DATABASE HAS IT, not as the caller described it. This single
+  // read is what makes a forged payload harmless: user_id, storage_path and
+  // check_in_id below are now facts, and cannot name another athlete's data.
+  const { data: video, error: readErr } = await supabase
+    .from("videos")
+    .select("id, user_id, check_in_id, storage_path, session_type, is_in_season, status")
+    .eq("id", recordId)
+    .maybeSingle<VideoRow>();
+  if (readErr) return json({ error: `read video: ${readErr.message}` }, 500);
+  if (!video) return json({ skipped: "no such video" }, 200);
+
+  // Only process freshly-uploaded videos awaiting analysis. Checked against the
+  // stored status, so a payload claiming "uploading" cannot reopen a finished
+  // one.
+  if (!["uploading", "processing"].includes(video.status)) {
+    return json({ skipped: `status ${video.status}` }, 200);
+  }
 
   try {
     await supabase.from("videos").update({ status: "processing" }).eq("id", video.id);

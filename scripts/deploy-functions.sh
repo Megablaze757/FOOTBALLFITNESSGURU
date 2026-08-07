@@ -24,6 +24,7 @@ supabase secrets set \
   STRIPE_PRICE_GOLD="${STRIPE_PRICE_GOLD:-}" \
   RESEND_API_KEY="${RESEND_API_KEY:-}" \
   GROQ_API_KEY="${GROQ_API_KEY:-}" \
+  WEBHOOK_SECRET="${WEBHOOK_SECRET:-}" \
   OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-}" \
   REMINDER_FROM="${REMINDER_FROM:-AI Coach <noreply@example.com>}" \
   APP_URL="${APP_URL:-http://localhost:3000}"
@@ -33,6 +34,17 @@ supabase secrets set \
 # speed, OpenRouter after it for breadth, and no Anthropic key anywhere. A
 # provider whose key is unset is skipped, so either one alone is a working
 # configuration.
+#
+# TIER GATING LIVES HERE NOW, not only in the Cloudflare Worker. coach-chat,
+# generate-program and estimate-food each call requireTier() from
+# functions/_shared/gate.ts before doing any work — see the header of that file.
+# They had no such check while the Worker held the paywall, which stopped being
+# true the moment NEXT_PUBLIC_API_URL was unset.
+#
+# process-video takes WEBHOOK_SECRET. Optional, but set it: without it any
+# signed-in user can POST a forged webhook payload and make the function spend
+# CV-worker budget. Put the same value in the Database Webhook's headers as
+# `x-webhook-secret`.
 #
 # estimate-food reads meal photos, and is here because the Cloudflare Worker's
 # deployed model chain is text-only — see the header of its index.ts — so this

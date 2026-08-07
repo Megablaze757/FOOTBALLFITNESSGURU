@@ -35,11 +35,7 @@
 // =============================================================================
 
 import { complete, chain, ChainError } from "../_shared/llm.ts";
-
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, content-type",
-};
+import { requireTier, CORS, json } from "../_shared/gate.ts";
 
 /**
  * The named splits the athlete can pick on the tile.
@@ -58,6 +54,13 @@ const SPLIT_BRIEF: Record<string, string> = {
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (!chain("text").length) return json({ error: "AI not configured" }, 503);
+
+  // Training programs are a paid feature, and this route had NO check of any
+  // kind — not tier, not even identity, relying on Supabase's default JWT
+  // verification alone. With the Worker out of the request path it is the only
+  // thing standing between a free account and the whole product.
+  const gate = await requireTier(req, "silver", "Training programs");
+  if (gate.denied) return gate.denied;
 
   const body = await req.json().catch(() => ({})) as {
     goal?: string; pain_map?: Record<string, number>; notes?: string; in_season?: boolean;
@@ -224,7 +227,3 @@ export function expandWeeks(seed: SeedPlan, goal: string) {
 }
 
 export { parseSeedWeek };
-
-function json(data: unknown, status: number): Response {
-  return new Response(JSON.stringify(data), { status, headers: { ...CORS, "Content-Type": "application/json" } });
-}

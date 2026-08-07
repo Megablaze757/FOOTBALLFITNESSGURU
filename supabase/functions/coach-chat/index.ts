@@ -10,11 +10,7 @@
 // =============================================================================
 
 import { complete, chain, ChainError } from "../_shared/llm.ts";
-
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, content-type",
-};
+import { requireTier, CORS, json } from "../_shared/gate.ts";
 
 const SYSTEM =
   "You are the athlete's personal football strength & conditioning coach and physio. " +
@@ -27,6 +23,10 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
 
   if (!chain("text").length) return json({ error: "AI not configured" }, 503);
+
+  // "Ask the coach" is a paid feature — the Worker gated it and this did not.
+  const gate = await requireTier(req, "silver", "Ask the coach");
+  if (gate.denied) return gate.denied;
 
   const { question, context } = await req.json().catch(() => ({}));
   if (!question) return json({ error: "question required" }, 400);
@@ -54,7 +54,3 @@ Deno.serve(async (req: Request) => {
     return json({ error: String(e) }, 500);
   }
 });
-
-function json(data: unknown, status: number): Response {
-  return new Response(JSON.stringify(data), { status, headers: { ...CORS, "Content-Type": "application/json" } });
-}
