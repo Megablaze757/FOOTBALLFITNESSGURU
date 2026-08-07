@@ -18,6 +18,7 @@ import type { BodyStats, MealPrefs } from "@/lib/meal-plan";
 import type { GoalType } from "@/lib/coach";
 import type { Subscription, Tier, TrainingLog } from "@/lib/types";
 import { daysAgoLocal, todayLocal } from "@/lib/day";
+import { selectProfile } from "@/lib/profile-columns";
 
 // Same colours as the rings, in the same order — see RING_COLOURS in
 // components/FuelRings.tsx. They disagreed before: protein was gold here and
@@ -43,7 +44,13 @@ export default function NutritionPage() {
       supabase.from("daily_check_ins").select("weight_kg").eq("user_id", user.id).not("weight_kg", "is", null).order("check_in_date", { ascending: false }).limit(1).maybeSingle(),
       supabase.from("programs").select("goal_type").eq("user_id", user.id).eq("status", "active").maybeSingle(),
       supabase.from("training_logs").select("log_date, total_minutes").eq("user_id", user.id).gte("log_date", since),
-      supabase.from("profiles").select("height_cm, birth_year, sex, activity_level, diet_goal, diet_pattern, diet_avoid, meals_per_day, diet_notes, meal_plan_seed, meal_plan_swaps, meal_plan_recent, meal_plan_starred, sport").eq("id", user.id).maybeSingle(),
+      // Split into stable and recently-added columns. Naming a column the
+      // database hasn't got yet makes PostgREST reject the WHOLE row, and this
+      // page then renders an athlete with no height, no weight and no plan —
+      // which is exactly what happened when 0066-0069 hadn't been applied.
+      selectProfile(supabase, user.id,
+        "height_cm, birth_year, sex, activity_level, diet_goal, diet_pattern, diet_avoid, meals_per_day, diet_notes, meal_plan_seed, sport",
+        ["meal_plan_swaps", "meal_plan_recent", "meal_plan_starred"]),
     ]);
     const pr = profile as {
       height_cm?: number; birth_year?: number; sex?: string;

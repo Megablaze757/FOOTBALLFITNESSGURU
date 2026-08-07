@@ -284,8 +284,18 @@ function GoalBuilder({ painMap, latestBench, sport, initialPositions, initialFoc
         goal: g, painMap, isInSeason: inSeason, sport, position: pos, focus: f,
         daysPerWeek: days ?? daysPerWeek,
       });
-      if (repaired.report.repaired.length) {
-        console.warn("generate-program returned sessions without a warm-up or cool-down; repaired locally", repaired.report);
+      // Logged rather than surfaced: the athlete gets a correct program either
+      // way, and "your backend is misbehaving" is not their problem to read.
+      // `slotless` is worth its own line — it means the backend sent no slot
+      // labels at all, which the repair used to treat as unfixable and now
+      // recovers by name from the movement library.
+      if (repaired.report.repaired.length || repaired.report.slotless || repaired.report.toppedUp.length) {
+        console.warn(
+          `generate-program returned ${repaired.report.slotless ? "a plan with no slot labels" : "sessions missing a warm-up or cool-down"}` +
+          `; recovered ${repaired.report.inferred} slot(s) by name, added scaffolding to ` +
+          `${repaired.report.repaired.length} session(s), topped up ${repaired.report.toppedUp.length} short week(s)`,
+          repaired.report,
+        );
       }
       plan = repaired.plan;
     } catch (e) {

@@ -6,6 +6,7 @@ import { Portal } from "@/components/Portal";
 import { Recipe } from "@/components/Recipe";
 import { EmptyState } from "@/components/EmptyState";
 import { MEALS, mealMacros, mealTags, DIET_PATTERNS, mealAllowed, DEFAULT_PREFS, type Meal, type Slot } from "@/lib/meal-plan";
+import { selectProfile } from "@/lib/profile-columns";
 import { FOOD_BY_ID } from "@/lib/food-db";
 
 /**
@@ -48,17 +49,30 @@ export function MealLibrary({ userId }: { userId: string }) {
   const [shown, setShown] = useState(PAGE);
   const [starred, setStarred] = useState<string[]>([]);
   const [prefs, setPrefs] = useState<{ pattern: string; avoid: string[] } | null>(null);
+  /**
+   * Whether a star can actually be saved.
+   *
+   * False when the column isn't in the database yet. The control is hidden
+   * rather than shown-and-broken: a star that lights up and is gone on reload
+   * is worse than no star, because the athlete believes they've told us
+   * something.
+   */
+  const [canStar, setCanStar] = useState(true);
 
   useEffect(() => {
     let active = true;
-    createClient().from("profiles")
-      .select("diet_pattern, diet_avoid, meal_plan_starred").eq("id", userId).maybeSingle()
-      .then(({ data }) => {
-        const p = data as { diet_pattern?: string; diet_avoid?: string[]; meal_plan_starred?: string[] } | null;
-        if (!active || !p) return;
-        setStarred(p.meal_plan_starred ?? []);
-        if (p.diet_pattern) setPrefs({ pattern: p.diet_pattern, avoid: p.diet_avoid ?? [] });
-      });
+    // meal_plan_starred comes from a recent migration, and naming a column the
+    // database hasn't got makes PostgREST reject the whole row — which would
+    // take the diet filter down with it and show a vegan every meat dish in the
+    // book. Split so the starring feature degrades on its own.
+    selectProfile<{ diet_pattern?: string; diet_avoid?: string[]; meal_plan_starred?: string[] }>(
+      createClient(), userId, "diet_pattern, diet_avoid", ["meal_plan_starred"],
+    ).then(({ data: p, missing }) => {
+      if (!active || !p) return;
+      setStarred(p.meal_plan_starred ?? []);
+      setCanStar(!missing.includes("meal_plan_starred"));
+      if (p.diet_pattern) setPrefs({ pattern: p.diet_pattern, avoid: p.diet_avoid ?? [] });
+    });
     return () => { active = false; };
   }, [userId]);
 
@@ -136,9 +150,11 @@ export function MealLibrary({ userId }: { userId: string }) {
         <button onClick={() => setQuick(!quick)} aria-pressed={quick} className="chip-option chip-option-sm">
           <span aria-hidden>⏱</span> Under 15 min
         </button>
-        <button onClick={() => setStarredOnly(!starredOnly)} aria-pressed={starredOnly} className="chip-option chip-option-sm">
-          <span aria-hidden>★</span> Starred{starred.length > 0 ? ` (${starred.length})` : ""}
-        </button>
+        {canStar && (
+          <button onClick={() => setStarredOnly(!starredOnly)} aria-pressed={starredOnly} className="chip-option chip-option-sm">
+            <span aria-hidden>★</span> Starred{starred.length > 0 ? ` (${starred.length})` : ""}
+          </button>
+        )}
         {dietPrefs && (
           <button onClick={() => setMyDiet(!myDiet)} aria-pressed={myDiet} className="chip-option chip-option-sm">
             <span aria-hidden>✓</span> Fits my diet
@@ -191,6 +207,7 @@ export function MealLibrary({ userId }: { userId: string }) {
                         </span>
                       </span>
                     </button>
+                    {canStar && (
                     <button
                       onClick={() => toggleStar(m.id)}
                       aria-pressed={starred.includes(m.id)}
@@ -204,6 +221,7 @@ export function MealLibrary({ userId }: { userId: string }) {
                         {starred.includes(m.id) ? "★" : "☆"}
                       </span>
                     </button>
+                    )}
                   </div>
                 </li>
               );
@@ -221,6 +239,7 @@ export function MealLibrary({ userId }: { userId: string }) {
       {open && (
         <MealModal
           meal={open}
+          canStar={canStar}
           starred={starred.includes(open.id)}
           onStar={() => toggleStar(open.id)}
           onClose={() => setOpen(null)}
@@ -230,8 +249,8 @@ export function MealLibrary({ userId }: { userId: string }) {
   );
 }
 
-function MealModal({ meal, starred, onStar, onClose }: {
-  meal: Meal; starred: boolean; onStar: () => void; onClose: () => void;
+function MealModal({ meal, canStar, starred, onStar, onClose }: {
+  meal: Meal; canStar: boolean; starred: boolean; onStar: () => void; onClose: () => void;
 }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -282,14 +301,16 @@ function MealModal({ meal, starred, onStar, onClose }: {
             </div>
           )}
 
-          <button
-            onClick={onStar}
-            aria-pressed={starred}
-            className="chip-option mt-4 w-full justify-center"
-          >
-            <span aria-hidden className={starred ? "text-amber-400" : ""}>{starred ? "★" : "☆"}</span>
-            {starred ? "Starred — planned more often" : "Star this recipe"}
-          </button>
+          {canStar && (
+            <button
+              onClick={onStar}
+              aria-pressed={starred}
+              className="chip-option mt-4 w-full justify-center"
+            >
+              <span aria-hidden className={starred ? "text-amber-400" : ""}>{starred ? "★" : "☆"}</span>
+              {starred ? "Starred — planned more often" : "Star this recipe"}
+            </button>
+          )}
         </div>
       </div>
     </Portal>

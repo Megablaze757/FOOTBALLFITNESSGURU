@@ -39,6 +39,20 @@ test("the local engine still builds a warm-up, conditioning and a cool-down", ()
   }
 });
 
+/** A one-week, one-session plan built from bare drill names. */
+function oneSession(names: string[]): ProgramPlan {
+  return {
+    goal: "strength", summary: "s", constraints: [],
+    weeks: [{
+      week: 1, theme: "Build", intensity: "moderate",
+      sessions: [{
+        day: 1, focus: "Lower",
+        drills: names.map((name) => ({ name, sets: 3, reps: 8, cue: "c", reason: "r" })),
+      }],
+    }],
+  } as unknown as ProgramPlan;
+}
+
 test("a well-formed plan is returned untouched", () => {
   const plan = buildBlock(INPUT);
   const { plan: out, report } = repairPlan(plan, INPUT);
@@ -96,11 +110,21 @@ test("the same warm-up is not bolted onto every session", () => {
 });
 
 /**
- * A v1 plan, or a model that ignored the schema entirely, has no slot labels.
- * We cannot tell a warm-up from a main lift, so we must not guess — bolting a
- * second warm-up onto a session that already has one is worse than leaving it.
+ * A PLAN WITH NO SLOT LABELS AT ALL — the case the repair used to give up on.
+ *
+ * The first version bailed here on the reasoning that we cannot tell a warm-up
+ * from a main lift, so guessing risks bolting a second warm-up onto a session
+ * that already has one. Sound, and it left the actual reported bug unfixed: a
+ * backend returning bare unlabelled drills got no scaffolding restored at all,
+ * which is precisely what was being complained about. The repair only worked on
+ * plans that were already mostly right.
+ *
+ * It is not a guess when you can look it up. Every drill worth naming is in
+ * MOVEMENTS and every movement there declares its slot, so the structure gets
+ * RECOVERED rather than invented — and the double-warm-up worry disappears with
+ * it, because an existing warm-up is now recognised as one.
  */
-test("a plan with no slot labels at all is left alone", () => {
+test("slots are recovered by name when the backend sends none", () => {
   const local = buildBlock(INPUT);
   const slotless: ProgramPlan = {
     ...local,
@@ -108,14 +132,86 @@ test("a plan with no slot labels at all is left alone", () => {
       ...w,
       sessions: w.sessions.map((s) => ({
         ...s,
+        // eslint-disable-next-line no-unused-vars
+        drills: s.drills.map(({ slot, ...rest }) => rest),
+      })),
+    })),
+  };
+
+  const { plan, report } = repairPlan(slotless, INPUT);
+  assert.equal(report.slotless, true, "the input genuinely had no labels");
+  assert.ok(report.inferred > 0, "slots should be recovered from the movement library");
+
+  // Every session ends up structurally complete.
+  for (const week of plan.weeks) {
+    for (const s of week.sessions) {
+      for (const slot of ["warmup", "conditioning", "cooldown"]) {
+        assert.ok(s.drills.some((d) => d.slot === slot), `week ${week.week} day ${s.day} has no ${slot}`);
+      }
+    }
+  }
+});
+
+/**
+ * The specific harm the old bail-out existed to prevent. These drills all came
+ * from the local engine, so every one is in the library and every warm-up is
+ * recognised — nothing should be added on top.
+ */
+test("recovering slots does not bolt a second warm-up onto a complete session", () => {
+  const local = buildBlock(INPUT);
+  const slotless: ProgramPlan = {
+    ...local,
+    weeks: local.weeks.map((w) => ({
+      ...w,
+      sessions: w.sessions.map((s) => ({
+        ...s,
+        // eslint-disable-next-line no-unused-vars
         drills: s.drills.map(({ slot, ...rest }) => rest),
       })),
     })),
   };
   const { plan, report } = repairPlan(slotless, INPUT);
-  assert.equal(report.slotless, true);
-  assert.equal(report.repaired.length, 0);
-  assert.equal(plan, slotless);
+
+  assert.deepEqual(report.repaired, [], "a complete session needed nothing added");
+  for (let w = 0; w < plan.weeks.length; w++) {
+    for (let i = 0; i < plan.weeks[w].sessions.length; i++) {
+      assert.equal(
+        plan.weeks[w].sessions[i].drills.length,
+        local.weeks[w].sessions[i].drills.length,
+        "drill count must not change when only labels were missing"
+      );
+    }
+  }
+});
+
+/**
+ * A movement the model invented isn't in the library, so its slot stays unknown
+ * — and the session is then treated as missing that block and given a real one.
+ * Silence is not evidence that a warm-up happened.
+ */
+test("an unrecognised drill name does not count as a warm-up", () => {
+  const local = buildBlock(INPUT);
+  const invented: ProgramPlan = {
+    ...local,
+    weeks: local.weeks.map((w) => ({
+      ...w,
+      sessions: w.sessions.map((s) => ({
+        ...s,
+        drills: [{
+          name: "Quantum Fascia Activation", sets: 3, reps: 10,
+          cue: "invented", reason: "invented",
+        }],
+      })),
+    })),
+  };
+  const { plan, report } = repairPlan(invented, INPUT);
+  assert.ok(report.repaired.length > 0, "an unknown drill must not satisfy the warm-up requirement");
+  for (const week of plan.weeks) {
+    for (const s of week.sessions) {
+      assert.ok(s.drills.some((d) => d.slot === "warmup"), `day ${s.day} still has no warm-up`);
+      assert.ok(s.drills.some((d) => d.slot === "cooldown"), `day ${s.day} still has no cool-down`);
+    }
+  }
 });
 
 test("only the missing half is added", () => {
@@ -170,4 +266,107 @@ test("a session keeping its own conditioning does not get a second one", () => {
   const before = local.weeks[0].sessions[0].drills.filter((d) => d.slot === "conditioning").length;
   const after = plan.weeks[0].sessions[0].drills.filter((d) => d.slot === "conditioning").length;
   assert.equal(after, before, "conditioning was duplicated");
+});
+
+/**
+ * The near-miss, which is where name matching earns its keep or causes harm.
+ *
+ * A model writes "Ankle rocks"; the library says "Half-kneeling ankle rocks".
+ * Exact matching misses it, and the session then gets a redundant second
+ * warm-up. Whole-phrase containment catches it.
+ */
+test("a warm-up named slightly differently is still recognised", () => {
+  const { plan, report } = repairPlan(oneSession([
+    "Ankle rocks", "Back squat", "Couch stretch", "Easy run",
+  ]), INPUT);
+  assert.equal(report.repaired.length, 0, "nothing should have been added");
+  const drills = plan.weeks[0].sessions[0].drills;
+  assert.equal(drills.find((d) => d.name === "Ankle rocks")?.slot, "warmup");
+  assert.equal(drills.find((d) => d.name === "Easy run")?.slot, "conditioning");
+});
+
+/**
+ * And the harm it must not cause. "Squat" on its own appears inside movements
+ * in several different slots, so it identifies none of them — matching it would
+ * label a main lift as a warm-up and skip adding a real one.
+ */
+test("a generic one-word name is not matched to a slot", () => {
+  const { plan, report } = repairPlan(oneSession(["Squat", "Bench press"]), INPUT);
+  assert.deepEqual(report.repaired[0]?.added, ["warmup", "conditioning", "cooldown"]);
+  assert.equal(
+    plan.weeks[0].sessions[0].drills.find((d) => d.name === "Squat")?.slot,
+    undefined,
+    "an ambiguous name must stay unslotted rather than pass as a warm-up"
+  );
+});
+
+/** A whole block of bare lifts — the shape the diverged backend actually sends. */
+test("a bare list of lifts gets a warm-up, conditioning and a stretch", () => {
+  const { plan, report } = repairPlan(
+    oneSession(["Back squat", "Romanian deadlift", "Walking lunge"]), INPUT);
+  assert.deepEqual(report.repaired[0]?.added, ["warmup", "conditioning", "cooldown"]);
+  const drills = plan.weeks[0].sessions[0].drills;
+  assert.equal(drills[0].slot, "warmup", "the session must open with the warm-up");
+  assert.equal(drills[drills.length - 1].slot, "cooldown", "and close with the stretch");
+  // The model's own work is untouched in the middle.
+  for (const name of ["Back squat", "Romanian deadlift", "Walking lunge"]) {
+    assert.ok(drills.some((d) => d.name === name), `${name} was dropped`);
+  }
+});
+
+/**
+ * A SHORT WEEK IS MISSING TRAINING, not missing scaffolding.
+ *
+ * The client asks for `days_per_week` and nothing checked that the answer
+ * honoured it. Someone who sets 5 days has said what they can commit to; three
+ * well-formed sessions look exactly as valid as five to a caller whose only
+ * check is that a `plan` key exists.
+ */
+test("a week short of the requested days is topped up from the engine", () => {
+  const wants5 = { ...INPUT, daysPerWeek: 5 };
+  const short: ProgramPlan = {
+    goal: "strength", summary: "s", constraints: [],
+    weeks: [1, 2].map((week) => ({
+      week, theme: "Build", intensity: "moderate", focusNote: "",
+      sessions: [1, 2, 3].map((day) => ({
+        day, title: `Day ${day}`, focus: "strength",
+        drills: [{ name: "Back squat", sets: 4, reps: 5, cue: "c", reason: "r" }],
+      })),
+    })),
+  } as unknown as ProgramPlan;
+
+  const { plan, report } = repairPlan(short, wants5);
+  for (const week of plan.weeks) {
+    assert.equal(week.sessions.length, 5, `week ${week.week} still has ${week.sessions.length} days`);
+    // Renumbered to continue the week — two "day 1"s would break the check-in's
+    // day lookup.
+    assert.deepEqual(week.sessions.map((s) => s.day), [1, 2, 3, 4, 5]);
+  }
+  assert.equal(report.toppedUp.length, 2, "both weeks were short");
+
+  // And the added days are real sessions, scaffolding included.
+  for (const week of plan.weeks) {
+    for (const s of week.sessions) {
+      assert.ok(s.drills.some((d) => d.slot === "warmup"), `day ${s.day} has no warm-up`);
+      assert.ok(s.drills.length > 1, `day ${s.day} is empty`);
+    }
+  }
+});
+
+test("a full week is left at the length the model chose", () => {
+  const { report } = repairPlan(buildBlock(INPUT), INPUT);
+  assert.deepEqual(report.toppedUp, []);
+});
+
+/**
+ * More days than asked for may be deliberate — a deload week structured
+ * differently — and deleting training somebody has been given is a worse
+ * mistake than leaving an extra day they can skip.
+ */
+test("extra sessions are never removed", () => {
+  const wants2 = { ...INPUT, daysPerWeek: 2 };
+  const generous = buildBlock({ ...INPUT, daysPerWeek: 4 });
+  const { plan, report } = repairPlan(generous, wants2);
+  assert.equal(plan.weeks[0].sessions.length, 4);
+  assert.deepEqual(report.toppedUp, []);
 });
