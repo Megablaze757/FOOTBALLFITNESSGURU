@@ -95,7 +95,7 @@ test("bulk planning beats naive rotation on price", () => {
       const of = (slot: string) => MEALS.filter((m) => m.slot === slot);
       const picks = [of("Breakfast"), of("Lunch"), of("Dinner"), of("Snack")].map((l) => l[i % l.length]);
       return {
-        day, skipped: [],
+        day, skipped: [], load: "even" as const, targetKcal: 0,
         meals: picks.map((meal) => ({ meal, scale: 1, macros: { kcal: 0, protein: 0, carbs: 0, fats: 0 } })),
         macros: { kcal: 0, protein: 0, carbs: 0, fats: 0 },
       };

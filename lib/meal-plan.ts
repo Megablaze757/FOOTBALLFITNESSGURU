@@ -392,6 +392,24 @@ export interface PlannedDay {
   macros: Macros;
   /** Slots deliberately left unplanned — eating out, fasting, skipped. */
   skipped: SkippedMeal[];
+  /**
+   * Why this day is the size it is.
+   *
+   * "even" when the athlete hasn't said which days they train, which is most of
+   * them — the plan stays flat rather than guessing. The UI uses this to say so
+   * on the day, because a day carrying 300 more calories than yesterday with no
+   * explanation reads as a bug rather than as coaching.
+   */
+  load: "training" | "rest" | "even";
+  /**
+   * THIS day's calorie target, which is not the week's on a cycled plan.
+   *
+   * The UI compares the day against it. Without it the calorie bar reads a
+   * training day as 12% over and a rest day as 9% under, and the athlete is
+   * told they have overeaten on exactly the day the plan fed them more on
+   * purpose.
+   */
+  targetKcal: number;
 }
 
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
@@ -515,6 +533,17 @@ const MAX_REPEATS = 3;
  * eaten yet, so every subsequent week compares badly against it. Averaged over
  * five consecutive weeks, which is what an athlete actually pays, it is 5%.
  */
+/**
+ * How far a training day's calories sit above the athlete's weekly average.
+ *
+ * 12% either side is enough to be visible on the plate — roughly a whole extra
+ * snack on a hard day — without producing a rest day nobody would stick to. The
+ * real ceiling on going further is that carbohydrate is doing all the moving:
+ * protein is held, so at 25% a rest day starts demanding a protein density most
+ * of the book can't reach, and the planner buys the deficit out of the one
+ * macro that was never supposed to move.
+ */
+const CYCLE_DEPTH = 0.12;
 const VARIETY_BUDGET = 3; // £ per meal
 
 /**
@@ -939,7 +968,43 @@ export function buildWeek(
    */
   // Grams of protein per calorie this athlete needs. Cutting pushes it up
   // (protein held while calories come down), bulking pushes it down.
-  const requiredProteinPerKcal = targets.calories > 0 ? targets.protein / targets.calories : 0;
+  /**
+   * HARD DAYS AND EASY DAYS ARE NOT THE SAME DAY.
+   *
+   * Every day of the plan used to carry identical calories, so an athlete
+   * training Tuesday and Thursday ate the same on Sunday as on a double
+   * session. That is the single biggest reason a plan reads as generic: it is
+   * the one thing about their week the plan visibly ignored.
+   *
+   * Calories move, PROTEIN DOES NOT. Protein is a daily floor tied to
+   * bodyweight and it does not care what you did that day; carbohydrate is the
+   * fuel and it is what should follow the work. So the day's calorie target
+   * scales and its protein target is held, which means the density the planner
+   * demands goes UP on a rest day — fewer calories, same grams.
+   *
+   * The week still averages to the athlete's target: whatever the training days
+   * gain, the rest days give back. `CYCLE_DEPTH` is capped so that a five-day
+   * trainer with two rest days doesn't end up with a rest day 30% down — the
+   * shortfall is spread over however many rest days there are, and the depth
+   * shrinks to keep the easiest day within 12% of target.
+   */
+  const trainingDays = new Set(schedule?.trainingDays ?? []);
+  const hardCount = trainingDays.size;
+  const easyCount = DAYS.length - hardCount;
+  const depth = hardCount > 0 && easyCount > 0
+    ? Math.min(CYCLE_DEPTH, CYCLE_DEPTH * (easyCount / hardCount))
+    : 0;
+  const dayScale = (dayIndex: number): number =>
+    depth === 0 ? 1
+      : trainingDays.has(dayIndex) ? 1 + depth
+      : 1 - depth * (hardCount / easyCount);
+
+  const dayCalories = (dayIndex: number) => targets.calories * dayScale(dayIndex);
+  // Protein per calorie RISES as calories fall, because the grams stay put.
+  const proteinPerKcalOn = (dayIndex: number): number => {
+    const kcal = dayCalories(dayIndex);
+    return kcal > 0 ? targets.protein / kcal : 0;
+  };
 
   // The slots for a day. Constant across the week — mealsPerDay doesn't vary by
   // day — so it's hoisted out of the map to give `choose` its size target.
@@ -986,10 +1051,10 @@ export function buildWeek(
    * Scaling only the remaining meals would inflate breakfast to cover a
    * restaurant dinner, which is not what anyone wants.
    */
-  const slotKcal = (slot: Slot): number =>
-    shareTotal > 0 ? targets.calories * (SLOT_SHARE[slot] / shareTotal) : 0;
+  const slotKcal = (slot: Slot, dayIndex: number): number =>
+    shareTotal > 0 ? dayCalories(dayIndex) * (SLOT_SHARE[slot] / shareTotal) : 0;
 
-  const choose = (slot: Slot, nth = 0, avoid: Set<string> = new Set()): Meal | undefined => {
+  const choose = (slot: Slot, dayIndex: number, nth = 0, avoid: Set<string> = new Set()): Meal | undefined => {
     const list = pools[slot].filter((m) => !avoid.has(m.id));
     if (!list.length) return undefined;
     const ranked = list
@@ -1004,11 +1069,11 @@ export function buildWeek(
          * Keeping them in one number meant variety could only be bought by
          * spending whichever was cheapest, which was always the nutrition.
          */
-        const fit = proteinShortfall(meal, requiredProteinPerKcal) * PROTEIN_WEIGHT
+        const fit = proteinShortfall(meal, proteinPerKcalOn(dayIndex)) * PROTEIN_WEIGHT
           // How far this meal's own calories sit from what this slot should
           // carry, so a big athlete is offered big meals rather than a small
           // one scaled past the point of sense.
-          + sizeMismatch(meal, slotKcal(slot)) * SIZE_WEIGHT
+          + sizeMismatch(meal, slotKcal(slot, dayIndex)) * SIZE_WEIGHT
           + repeatCost(uses.get(meal.id) ?? 0, repeatPenalty);
         return {
           meal,
@@ -1070,7 +1135,7 @@ export function buildWeek(
       && r.fit <= best.fit + 1e-9
       // As protein-dense as this athlete needs; or where even the best meal in
       // the slot can't manage that, at least as dense as the best.
-      && proteinDensity(r.meal) >= Math.min(requiredProteinPerKcal, bestDensity) - 1e-9
+      && proteinDensity(r.meal) >= Math.min(proteinPerKcalOn(dayIndex), bestDensity) - 1e-9
       // And costs no more than this much extra. Variety is worth paying for and
       // is not worth paying anything at all for: uncapped, preferring the
       // unseen meal every time added £7 a week to the shop, because an unseen
@@ -1128,7 +1193,7 @@ export function buildWeek(
         continue;
       }
 
-      const m = choose(slot, nth, usedToday);
+      const m = choose(slot, i, nth, usedToday);
       if (m) { picks.push(m); usedToday.add(m.id); }
     }
 
@@ -1142,7 +1207,7 @@ export function buildWeek(
      * near a portion a person would actually serve.
      */
     const meals = picks.map((meal) => {
-      const want = slotKcal(meal.slot);
+      const want = slotKcal(meal.slot, i);
       const base = mealMacros(meal).kcal;
       const raw = base > 0 ? want / base : 1;
       /**
@@ -1169,7 +1234,11 @@ export function buildWeek(
       }),
       { kcal: 0, protein: 0, carbs: 0, fats: 0 }
     );
-    return { day, meals, macros, skipped };
+    return {
+      day, meals, macros, skipped,
+      load: depth === 0 ? "even" : trainingDays.has(i) ? "training" : "rest",
+      targetKcal: dayCalories(i),
+    };
   };
 
   return DAYS.map(buildDay);

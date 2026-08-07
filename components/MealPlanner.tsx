@@ -519,7 +519,7 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={2}
-            placeholder="e.g. I don't like yoghurt, no fish, I eat out on Tuesdays, I skip breakfast"
+            placeholder="e.g. I train Monday, Wednesday and Friday, I don't like yoghurt, no fish, I eat out on Tuesdays"
             className="field resize-none"
           />
           {noteDislikes.length > 0 && (
@@ -563,6 +563,11 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
                     <span className={`block text-[11px] tabular-nums ${on ? "text-pitch-400/70" : "text-slate-600"}`}>
                       {Math.round(d.macros.kcal)}
                     </span>
+                    {d.load !== "even" && (
+                      <span className="block text-[10px] leading-none" aria-label={d.load === "training" ? "Training day" : "Rest day"}>
+                        {d.load === "training" ? "🔥" : "🌙"}
+                      </span>
+                    )}
                   </button>
                 );
               })}
@@ -677,11 +682,24 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
               })}
             </div>
 
+            {/* A day carrying 600 calories more than yesterday reads as a bug
+                unless the plan says why. Only shown when the athlete has
+                actually told us which days they train — otherwise every day is
+                the same size and there is nothing to explain. */}
+            {week[openDay].load !== "even" && (
+              <p className="mt-4 flex items-center gap-2 text-xs text-slate-400">
+                <span aria-hidden>{week[openDay].load === "training" ? "🔥" : "🌙"}</span>
+                {week[openDay].load === "training"
+                  ? `Training day — fed ${Math.round(week[openDay].targetKcal - targets.calories)} kcal above your weekly average, mostly as carbs.`
+                  : `Rest day — ${Math.round(targets.calories - week[openDay].targetKcal)} kcal below your weekly average. Protein stays the same.`}
+              </p>
+            )}
+
             {/* The day's total against the target, as two bars rather than a
                 sentence with the target in brackets. Whether a day lands is the
                 question the whole screen exists to answer. */}
             <div className="mt-4 space-y-2.5 rounded-2xl bg-white/[0.03] p-3.5">
-              <DayBar label="Calories" value={week[openDay].macros.kcal} target={targets.calories} colour="#e3b53f" unit="" />
+              <DayBar label="Calories" value={week[openDay].macros.kcal} target={week[openDay].targetKcal || targets.calories} colour="#e3b53f" unit="" />
               <DayBar label="Protein" value={week[openDay].macros.protein} target={targets.protein} colour="#38bdf8" unit="g" />
             </div>
 

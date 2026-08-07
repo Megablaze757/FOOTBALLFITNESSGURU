@@ -158,3 +158,50 @@ test("eating out makes the shop cheaper, not dearer", () => {
     `eating out twice cost £${out.total.toFixed(2)} against £${normal.total.toFixed(2)} for cooking every night`
   );
 });
+
+// --- training days -----------------------------------------------------------
+
+/**
+ * The plan used to feed an athlete identically on a rest day and a double
+ * session, which is the single most visible way it read as generic. These pin
+ * the parsing; `meal-plan.test.ts` pins what the planner does with it.
+ */
+test("training days are read from the ways people actually write them", () => {
+  for (const note of [
+    "I train Monday, Wednesday and Friday",
+    "gym mon wed fri",
+    "sessions on mondays, wednesdays and fridays",
+    "I play monday and wednesday and friday",
+  ]) {
+    assert.deepEqual(parseSchedule(note).trainingDays, [0, 2, 4], note);
+  }
+});
+
+/**
+ * The "and" bug, which is the one that actually bit.
+ *
+ * `clauses()` splits on "and", so only the first clause contains the word
+ * "train" — Friday was dropped and the athlete got a rest day's food on a
+ * training day.
+ */
+test("a trailing day list inherits the training intent", () => {
+  assert.deepEqual(parseSchedule("I train Tuesday and Thursday").trainingDays, [1, 3]);
+});
+
+test("a rest day named as a rest day is not a training day", () => {
+  assert.deepEqual(parseSchedule("no gym on sundays").trainingDays, []);
+  assert.deepEqual(parseSchedule("I rest on Sundays").trainingDays, []);
+});
+
+test("training with no day named changes nothing", () => {
+  // "I train hard so I need more protein" names no day, and marking the whole
+  // week would be the same as marking none of it — but worse, because it would
+  // look like the app understood something it didn't.
+  assert.deepEqual(parseSchedule("I train hard and need loads of protein").trainingDays, []);
+});
+
+test("eating out and training are read from the same sentence", () => {
+  const s = parseSchedule("I train tuesdays and thursdays, and I eat out on fridays");
+  assert.deepEqual(s.trainingDays, [1, 3]);
+  assert.ok(s.skips.some((k) => k.day === 4), "Friday dinner should still be skipped");
+});

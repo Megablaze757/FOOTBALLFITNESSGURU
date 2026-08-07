@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { parseSchedule } from "./meal-schedule";
 import {
   planTargets, buildWeek, shoppingList, mealMacros, DEFAULT_PREFS,
   MEALS, mealAllowed, mealTags,
@@ -275,4 +276,66 @@ test("a star can't override an allergy or a diet", () => {
     !week.flatMap((d) => d.meals).some((m) => m.meal.id === meaty.id),
     `${meaty.id} is meat and was served to a vegan because it was starred`
   );
+});
+
+// --- training days vs rest days ----------------------------------------------
+
+/**
+ * HARD DAYS AND EASY DAYS ARE NOT THE SAME DAY.
+ *
+ * Every day of the plan used to carry identical calories, so someone training
+ * Tuesday and Thursday ate the same on Sunday as on a double session. Calories
+ * now follow the work; protein does not, because protein is a daily floor tied
+ * to bodyweight and doesn't care what you did that day.
+ */
+test("training days are fed more than rest days, and the week still averages out", () => {
+  const t = planTargets(ATHLETES[0]);
+  const schedule = parseSchedule("I train Monday, Wednesday and Friday");
+  const week = buildWeek(t, 0, prefs(), schedule);
+
+  const hard = week.filter((d) => d.load === "training");
+  const easy = week.filter((d) => d.load === "rest");
+  assert.equal(hard.length, 3, "Monday, Wednesday and Friday should be training days");
+  assert.equal(easy.length, 4);
+
+  const avg = (ds: typeof week) => ds.reduce((s, d) => s + d.macros.kcal, 0) / ds.length;
+  assert.ok(avg(hard) > avg(easy) * 1.1, `training days ${avg(hard).toFixed(0)} vs rest ${avg(easy).toFixed(0)}`);
+
+  // The week still lands on the athlete's actual target — the training days'
+  // extra is exactly what the rest days gave back, not a bonus on top.
+  const weekAvg = week.reduce((s, d) => s + d.macros.kcal, 0) / week.length;
+  assert.ok(
+    Math.abs(weekAvg - t.calories) < t.calories * 0.05,
+    `week averaged ${weekAvg.toFixed(0)} against a ${t.calories.toFixed(0)} target`
+  );
+});
+
+/**
+ * The thing that makes it cycling rather than just eating less.
+ *
+ * Carbohydrate is the fuel and it is what should move. Protein is held, so a
+ * rest day demands a HIGHER protein density than a training day — fewer
+ * calories, same grams. Get this wrong and the planner buys the calorie deficit
+ * out of the one macro that was never supposed to move.
+ */
+test("cycling calories does not cycle protein below target", () => {
+  for (const body of ATHLETES) {
+    for (const pattern of ["omnivore", "vegetarian", "vegan"] as const) {
+      const t = planTargets(body);
+      const week = buildWeek(t, 0, prefs({ pattern }), parseSchedule("I train Tuesday and Thursday"));
+      for (const d of week) {
+        assert.ok(
+          d.macros.protein >= t.protein * 0.95,
+          `${body.goal}/${pattern} ${d.day} (${d.load}): ${d.macros.protein.toFixed(0)}g against a ${t.protein.toFixed(0)}g target`
+        );
+      }
+    }
+  }
+});
+
+test("an athlete who hasn't said when they train gets a flat week", () => {
+  // Guessing which days somebody trains is worse than not guessing: it moves
+  // food off a day they might be doing a double session.
+  const week = buildWeek(planTargets(ATHLETES[0]), 0, prefs(), parseSchedule("I like eggs"));
+  assert.ok(week.every((d) => d.load === "even"), "no training days named, so no cycling");
 });
