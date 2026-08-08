@@ -43,11 +43,16 @@ export function WeeklyVolume({ week }: { week: ProgramWeek }) {
   const scale = Math.max(LANDMARKS.productiveHigh, ...rows.map((r) => r.sets));
 
   return (
-    <details className="mb-3 rounded-xl border border-white/[0.08] bg-white/[0.02]">
-      <summary className="tap-target flex cursor-pointer list-none items-center justify-between px-3 py-2">
+    <details className="group/vol mb-3 rounded-xl border border-white/[0.08] bg-white/[0.02]">
+      <summary className="tap-target flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2">
         <span className="text-xs font-semibold text-slate-300">What this week trains</span>
-        <span className="text-[11px] text-slate-500">
-          {rows.length} muscle groups · tap
+        <span className="flex shrink-0 items-center gap-1.5 text-[11px] text-slate-500">
+          {rows.length} muscle groups
+          {/* `list-none` kills the default marker, so without this nothing says
+              the row opens — the exact finding the UI audit already made about
+              every other collapsible in the app. Same glyph and rotation as
+              ProtocolCard and MealPlanner so it behaves the way the rest do. */}
+          <span className="text-xs transition group-open/vol:rotate-180" aria-hidden>▾</span>
         </span>
       </summary>
 
