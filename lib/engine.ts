@@ -148,6 +148,17 @@ const BLUEPRINTS: Record<GoalType, Partial<Record<Slot, number>>> = {
  */
 const RECOVERY_RPE_CEILING = 5;
 
+/**
+ * Sports whose athletes sprint, and the movements that keep their hamstrings
+ * attached. See the bonus in `rankSlot`.
+ *
+ * Deliberately the hamstring-SPECIFIC movements: a squat is not hamstring work
+ * and a hip thrust is glutes. The deadlift earns its place because it is the
+ * one bilateral hinge heavy enough to matter here.
+ */
+const SPRINT_SPORTS = new Set<SportId>(["football", "rugby", "basketball", "running"]);
+const HAMSTRING_WORK = new Set(["nordic_curl", "single_leg_rdl", "hamstring_slider", "deadlift"]);
+
 const SLOT_ORDER: Slot[] = ["warmup", "primary", "secondary", "accessory", "skill", "conditioning", "cooldown"];
 
 export const SLOT_LABEL: Record<Slot, string> = {
@@ -331,6 +342,26 @@ function rankSlot(slot: Slot, ctx: Ctx): Scored[] {
 
       // Sport fit. A runner should not be given scrum drives.
       if (ctx.sport && m.sports) score += m.sports.includes(ctx.sport) ? 5 : -8;
+
+      /**
+       * A SPRINTING SPORT GETS HAMSTRING WORK. NON-NEGOTIABLE.
+       *
+       * A four-day football block contained NONE — measured, across every week.
+       * Not a Nordic curl, not an RDL, not a slider, all three of which are in
+       * the catalogue. The posterior chain got a hip thrust, which is glutes,
+       * and depth drops. Nothing else in the app could see it, because volume
+       * was counted per session slot rather than per muscle.
+       *
+       * Hamstring strain is the most common non-contact injury in football and
+       * the Nordic curl is the best-evidenced thing anyone has found to reduce
+       * it. Shipping a sprinting athlete a programme with no hamstring work in
+       * it is the one programming error with a documented injury attached.
+       *
+       * A bonus rather than a hard requirement, so the pain filter still wins:
+       * an athlete reporting a hamstring already has these excluded above, and
+       * nothing here can bring them back.
+       */
+      if (ctx.sport && SPRINT_SPORTS.has(ctx.sport) && HAMSTRING_WORK.has(m.id)) score += 8;
 
       if (ctx.trainingFocus === "aesthetics" && (m.kit === "barbell" || m.kit === "dumbbell" || m.kit === "machine")) score += 3;
       if (ctx.trainingFocus === "fitness" && m.targets.includes("endurance")) score += 3;

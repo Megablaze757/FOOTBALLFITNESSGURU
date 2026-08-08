@@ -29,13 +29,24 @@ import { runZoneLabel, runZoneFeel } from "./running";
 // program shapes from there made the two files import each other.
 import type { ProgramPlan, ProgramWeek, ProgramSession, ProgramDrill, BodyArea } from "./engine";
 
+/**
+ * The one muscle-group vocabulary in the app.
+ *
+ * `adductors` is here for the S&C side rather than this one — `groupOf` below
+ * never returns it, because the imported gym catalogue has no adductor
+ * category. It exists because groin injury is second only to hamstring in
+ * football and the movement library carries Copenhagen planks and adductor
+ * isometrics specifically for it; folding those into "legs" would hide the one
+ * thing they are in the programme to do. See lib/muscle-volume.ts.
+ */
 export type MuscleGroup =
   | "chest" | "back" | "shoulders" | "biceps" | "triceps"
-  | "quads" | "hamstrings" | "glutes" | "calves" | "core";
+  | "quads" | "hamstrings" | "glutes" | "calves" | "adductors" | "core";
 
 const GROUP_LABEL: Record<MuscleGroup, string> = {
   chest: "chest", back: "back", shoulders: "shoulders", biceps: "biceps", triceps: "triceps",
-  quads: "quads", hamstrings: "hamstrings", glutes: "glutes", calves: "calves", core: "core",
+  quads: "quads", hamstrings: "hamstrings", glutes: "glutes", calves: "calves",
+  adductors: "adductors", core: "core",
 };
 
 // Muscle groups map onto the coarse exclusion regions so "I don't train legs"
@@ -43,13 +54,14 @@ const GROUP_LABEL: Record<MuscleGroup, string> = {
 const GROUP_REGION: Record<MuscleGroup, Region> = {
   chest: "chest", back: "back", shoulders: "shoulders",
   biceps: "arms", triceps: "arms",
-  quads: "legs", hamstrings: "legs", glutes: "legs", calves: "legs",
+  quads: "legs", hamstrings: "legs", glutes: "legs", calves: "legs", adductors: "legs",
   core: "core",
 };
 
 // Which joint each group loads, for pain-aware substitution.
 const GROUP_JOINT: Partial<Record<MuscleGroup, BodyArea>> = {
   quads: "knee", hamstrings: "hamstring", glutes: "hip", calves: "ankle",
+  adductors: "hip",
   chest: "shoulder", shoulders: "shoulder", triceps: "shoulder",
 };
 
@@ -123,6 +135,26 @@ const POOL: Movement[] = IMPORTED_EXERCISES
   })
   .filter((m): m is Movement => m !== null)
   .sort((a, b) => quality(b.ex) - quality(a.ex) || a.ex.name.localeCompare(b.ex.name));
+
+/**
+ * The muscle group behind an exercise NAME, for reading a plan back.
+ *
+ * A built programme carries names, not catalogue objects, so anything auditing
+ * one after the fact has nothing else to go on. Lower-cased and de-duplicated
+ * the same way POOL is, so the two cannot disagree about what "Cable Fly" is.
+ */
+const GROUP_BY_NAME: Map<string, MuscleGroup> =
+  new Map(POOL.map((m) => [m.ex.name.toLowerCase(), m.group]));
+
+export function muscleGroupForName(name: string): MuscleGroup | null {
+  return GROUP_BY_NAME.get(name.trim().toLowerCase()) ?? null;
+}
+
+/** True when the named exercise is a compound, for weighting assistance work. */
+export function isCompoundName(name: string): boolean {
+  const hit = POOL.find((m) => m.ex.name.toLowerCase() === name.trim().toLowerCase());
+  return hit ? hit.compound : false;
+}
 
 // --- splits ------------------------------------------------------------------
 

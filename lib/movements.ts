@@ -137,7 +137,7 @@ const META: Record<string, MovementMeta> = {
   // --- Secondary: the second movement, complementing the primary ------------
   goblet_squat: { slot: "secondary", pattern: "squat", targets: ["strength"], load: { knee: 1 }, level: 1, prog: "load", dose: d(3, 10, REST.moderate, { rpe: 7 }), region: "legs" },
   hip_thrust: { slot: "secondary", pattern: "hinge", targets: ["strength"], load: { hamstring: 1 }, level: 1, prog: "load", dose: d(3, 10, REST.moderate, { rpe: 8 }), region: "legs" },
-  single_leg_rdl: { slot: "secondary", pattern: "hinge", targets: ["strength", "injury_recovery"], load: { hamstring: 1 }, level: 2, prog: "load", dose: d(3, 8, REST.moderate, { unit: "each side", rpe: 7, tempo: "3s down" }), region: "legs" },
+  single_leg_rdl: { slot: "secondary", pattern: "hinge", targets: ["strength", "injury_recovery", "speed"], load: { hamstring: 1 }, level: 2, prog: "load", dose: d(3, 8, REST.moderate, { unit: "each side", rpe: 7, tempo: "3s down" }), region: "legs" },
   bulgarian_split: { slot: "secondary", pattern: "lunge", targets: ["strength"], load: { knee: 2, hip: 1 }, level: 2, prog: "load", dose: d(3, 8, REST.moderate, { unit: "each side", rpe: 8 }), region: "legs" },
   barbell_row: { slot: "secondary", pattern: "pull_h", targets: ["strength"], load: { lower_back: 1 }, level: 2, prog: "load", dose: d(3, 8, REST.moderate, { rpe: 8 }), region: "back" },
   lat_pulldown: { slot: "secondary", pattern: "pull_v", targets: ["strength"], load: {}, level: 1, prog: "load", dose: d(3, 10, REST.moderate, { rpe: 7 }), region: "back" },
@@ -148,7 +148,14 @@ const META: Record<string, MovementMeta> = {
   defensive_slides: { slot: "secondary", pattern: "cod", targets: ["agility"], load: { knee: 1 }, level: 1, prog: "time", dose: d(4, 25, REST.moderate, { unit: "secs", rpe: 8 }), region: "conditioning" },
 
   // --- Accessory: volume, weak points, durability ---------------------------
-  nordic_curl: { slot: "accessory", pattern: "hinge", targets: ["strength", "injury_recovery"], load: { hamstring: 2 }, level: 2, prog: "reps", dose: d(3, 6, REST.short, { tempo: "Resist the lower" }), region: "legs" },
+  // Hamstring work targets SPEED as well as strength, which is not a
+  // technicality. These scored poorly in a speed session because their targets
+  // said "strength, injury_recovery" — so a football speed block came out with
+  // four hamstring sets against thirteen quad sets, and sprinting is itself the
+  // mechanism that tears hamstrings. The Nordic curl is the best-evidenced
+  // injury-prevention exercise there is for sprinting athletes; it belongs in a
+  // speed block by name, not by exception.
+  nordic_curl: { slot: "accessory", pattern: "hinge", targets: ["strength", "injury_recovery", "speed"], load: { hamstring: 2 }, level: 2, prog: "reps", dose: d(3, 6, REST.short, { tempo: "Resist the lower" }), region: "legs" },
   copenhagen: { slot: "accessory", pattern: "core", targets: ["strength", "injury_recovery"], load: { hip: 1 }, level: 2, prog: "time", dose: d(3, 20, REST.short, { unit: "secs" }), region: "core" },
   spanish_squat: { slot: "accessory", pattern: "squat", targets: ["injury_recovery"], load: { knee: 1 }, level: 1, prog: "time", dose: d(3, 30, REST.short, { unit: "secs" }), region: "legs" },
   band_lateral_walk: { slot: "accessory", pattern: "rehab", targets: ["injury_recovery", "strength"], load: {}, level: 1, prog: "reps", dose: d(3, 12, REST.short, { unit: "each side" }), region: "legs" },
@@ -158,7 +165,7 @@ const META: Record<string, MovementMeta> = {
   bird_dog: { slot: "accessory", pattern: "core", targets: ["injury_recovery"], load: {}, level: 1, prog: "reps", dose: d(3, 8, REST.short, { unit: "each side" }), region: "core" },
   mcgill_curl_up: { slot: "accessory", pattern: "core", targets: ["injury_recovery"], load: {}, level: 1, prog: "time", dose: d(3, 10, REST.short, { unit: "secs" }), region: "core" },
   isometric_wall_sit: { slot: "accessory", pattern: "squat", targets: ["injury_recovery", "endurance"], load: { knee: 1 }, level: 1, prog: "time", dose: d(3, 30, REST.short, { unit: "secs" }), region: "legs" },
-  hamstring_slider: { slot: "accessory", pattern: "hinge", targets: ["injury_recovery"], load: { hamstring: 1 }, level: 2, prog: "reps", dose: d(3, 8, REST.short, { tempo: "Slow out" }), region: "legs" },
+  hamstring_slider: { slot: "accessory", pattern: "hinge", targets: ["injury_recovery", "speed"], load: { hamstring: 1 }, level: 2, prog: "reps", dose: d(3, 8, REST.short, { tempo: "Slow out" }), region: "legs" },
   terminal_knee_ext: { slot: "accessory", pattern: "rehab", targets: ["injury_recovery"], load: { knee: 1 }, level: 1, prog: "reps", dose: d(3, 15, REST.short), region: "legs" },
   adductor_iso_squeeze: { slot: "accessory", pattern: "rehab", targets: ["injury_recovery"], load: { hip: 1 }, level: 1, prog: "time", dose: d(3, 20, REST.short, { unit: "secs" }), region: "legs" },
   calf_raise_eccentric: { slot: "accessory", pattern: "rehab", targets: ["injury_recovery"], load: { ankle: 1 }, level: 1, prog: "reps", dose: d(3, 12, REST.short, { tempo: "3s lower" }), region: "legs" },
