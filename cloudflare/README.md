@@ -150,3 +150,52 @@ Pasting the dashboard JS back into `worker.js` restores the running artifact
 exactly, but leaves `src/index.ts` — the file anyone would actually edit — still
 behind, and now diverged from the artifact next to it. Both need the change, or
 the next `wrangler deploy` reintroduces the same regression.
+
+
+## Why the meal photo estimator is off, and the one field that turns it on
+
+The app decides whether to send a photo to the Worker by reading ONE field from
+`/health`:
+
+```
+curl -s https://apex-api.fitnessguru.workers.dev/health
+```
+
+If the response contains a non-empty `vision`, photos go to the Worker. If the
+field is absent or empty, `lib/api.ts` treats the Worker as blind, tries the
+Supabase Edge Function instead, and — when that is not deployed either — falls
+back to estimating from the athlete's typed description.
+
+Today the field is absent. The chain is eight text-only models:
+
+```
+version : 2026-08-04.2
+vision  : (absent)
+chain   : groq/openai/gpt-oss-120b, groq/llama-3.3-70b-versatile,
+          openrouter/deepseek/deepseek-chat, ... (8, all text)
+```
+
+**An API key does not add vision.** The provider keys decide which providers can
+be *reached*; the vision chain decides whether any model in it can *see*. Adding
+GROQ_API_KEY makes the text chain work (and it is already rung 1) and changes
+nothing about photos, because no vision-capable model is configured.
+
+Two ways to get the field populated:
+
+1. **Set the vision models variable in the dashboard.** In the repo's Worker the
+   list comes from `OPENROUTER_VISION_MODELS`, falling back to a built-in
+   default. Note the warning in the `[vars]` block of `wrangler.toml`: pasting
+   the Worker into the dashboard does NOT apply anything in that block, and a
+   var in there has already been silently unset in production once for exactly
+   this reason. The deployed Worker is `2026-08-04.2` and its source is not in
+   this repo, so confirm the variable's real name first — dashboard → `apex-api`
+   → Edit code → search for `vision`. Then Settings → Variables, add it, and
+   re-run the curl above to confirm `vision` appears.
+
+2. **Deploy the Supabase Edge Function** — Actions tab → "Deploy Edge Functions".
+   That one is in version control, has its own Groq→OpenRouter vision chain, and
+   needs `GROQ_API_KEY` as a **GitHub** repo secret. A key added to Cloudflare is
+   visible only to the Worker; the two systems share nothing.
+
+Either works, and they compose: once the Worker can see, photos go back to it
+automatically and the Edge Function stops being used for them.
