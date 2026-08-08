@@ -3,6 +3,11 @@
 Backend: Supabase · Frontend: Next.js (App Router, TypeScript, Tailwind)
 AI microservices (Python/FastAPI) arrive in Phase 2+.
 
+> **Picking this up? Start with [`docs/HANDOVER.md`](docs/HANDOVER.md).** It
+> lists what is done, what is outstanding with the blocker named, and the four
+> things only a human can do — three of which are credential rotations that
+> should happen before anything else.
+
 ## Status
 
 | Phase | Scope | State |
