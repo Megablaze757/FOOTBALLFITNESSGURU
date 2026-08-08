@@ -315,6 +315,7 @@ function NutritionTabs({ userId, today, log, targets, stats, prefs, dietNotes, m
           mealSeed={mealSeed}
           mealSwaps={mealSwaps}
           mealRecent={mealRecent}
+          mealStarred={mealStarred}
           sport={sport}
           context={context}
           onAddStats={() => setTab("plan")}
@@ -337,13 +338,13 @@ function Header() {
   );
 }
 
-function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietNotes, mealSeed, mealSwaps, mealRecent, sport, context, onAddStats }: {
+function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietNotes, mealSeed, mealSwaps, mealRecent, mealStarred, sport, context, onAddStats }: {
   userId: string; today: string; initial: any; targets: NutritionTargets | null;
   stats: Partial<BodyStats> | null; prefs: Partial<MealPrefs> | null; dietNotes: string | null;
   /** Shared with the planner so today?s tick-list matches the plan exactly. */
   context: TargetContext;
   /** Which plan they're on, so today's tick-list is THAT plan and not another. */
-  mealSeed: number | null; mealSwaps: Record<string, string>; mealRecent: string[];
+  mealSeed: number | null; mealSwaps: Record<string, string>; mealRecent: string[]; mealStarred: string[];
   /** Colours the rings and frames the verdict in this sport's terms. */
   sport: SportProfile;
   /** Sends them to the tab that collects height/age/sex, so the estimate sharpens. */
@@ -568,7 +569,7 @@ function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietN
         </div>
       </div>
 
-      <MealCheckIn stats={stats} prefs={prefs} dietNotes={dietNotes} seed={mealSeed} swaps={mealSwaps} recent={mealRecent} context={context} onAdd={addEaten} />
+      <MealCheckIn stats={stats} prefs={prefs} dietNotes={dietNotes} seed={mealSeed} swaps={mealSwaps} recent={mealRecent} starred={mealStarred} context={context} onAdd={addEaten} />
 
       {/* EVERYTHING THAT ISN'T THE DAILY JOB, folded away.
           The rationale, the resting-rate working and the manual overrides are

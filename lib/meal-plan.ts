@@ -163,6 +163,35 @@ function foodIdsIn(notes: string, mood: RegExp): string[] {
   return [...out];
 }
 
+/**
+ * The preferences a plan is ACTUALLY built from.
+ *
+ * `buildWeek` is pure with respect to all of its inputs, which is what lets the
+ * app store a plan as a single seed and rebuild it anywhere. That only works if
+ * every caller passes the same inputs — and two of them did not.
+ *
+ * The Meal plan tab merged the athlete's starred dishes and the foods inferred
+ * from their notes into prefs before building. The Today tick-list passed the
+ * raw saved prefs. Starring is worth a £30 bonus in the planner and exempts a
+ * dish from the had-it-last-week rule, so the moment anyone starred anything,
+ * the two screens showed different food for the same day — the plan said one
+ * dinner and the thing you tick off said another.
+ *
+ * One derivation, used by both, so they cannot disagree again. Same reason
+ * planTargets exists as a single calculation rather than two.
+ */
+export function effectiveMealPrefs(
+  prefs: MealPrefs,
+  notes: string | null | undefined,
+  starred: string[] | undefined
+): MealPrefs {
+  return {
+    ...prefs,
+    dislikes: [...prefs.dislikes, ...dislikedFoodIds(notes ?? "")],
+    starred: starred ?? prefs.starred,
+  };
+}
+
 export const DEFAULT_PREFS: MealPrefs = {
   pattern: "omnivore", avoid: [], mealsPerDay: 4, budget: false, dislikes: [], favourites: [], starred: [],
 };

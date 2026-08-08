@@ -4,10 +4,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { invokeAI, estimateFood, backendCapabilities } from "@/lib/api";
 import { useJobs } from "@/lib/jobs";
 import {
-  planTargets, buildWeek, mealMacros, DEFAULT_PREFS,
+  planTargets, buildWeek, mealMacros, effectiveMealPrefs, DEFAULT_PREFS,
   type BodyStats, type MealPrefs, type PlannedMeal,
 } from "@/lib/meal-plan";
 import { parseSchedule } from "@/lib/meal-schedule";
+import { Recipe } from "@/components/Recipe";
+import { Portal } from "@/components/Portal";
 import {
   estimateMeal, fromAiItems, roundMacros, fitDimensions, scaleItem, totalOf,
   PHOTO_MAX_EDGE, PHOTO_QUALITY, type FoodEstimate, type EstimatedItem,
@@ -44,6 +46,15 @@ interface Props {
    */
   swaps: MealSwaps;
   recent: string[];
+  /**
+   * Dishes they starred — the last input this component was missing.
+   *
+   * A star is worth a £30 bonus in the planner and exempts a dish from the
+   * had-it-last-week rule, so leaving it out did not nudge the week, it
+   * rebuilt a different one. The Meal plan tab and this list showed different
+   * food for the same day the moment anybody starred anything.
+   */
+  starred: string[];
   /** The same sport goal and logged-training figures the daily card used. */
   context: TargetContext;
   /** Adds the eaten macros into the day's running totals. */
@@ -90,7 +101,7 @@ async function shrinkImage(file: File): Promise<string> {
  *
  * All three feed the same daily totals, which the tracker above then saves.
  */
-export function MealCheckIn({ stats, prefs, dietNotes, seed, swaps, recent, context, onAdd }: Props) {
+export function MealCheckIn({ stats, prefs, dietNotes, seed, swaps, recent, starred, context, onAdd }: Props) {
   const [ticked, setTicked] = useState<Set<string>>(new Set());
   const [text, setText] = useState("");
   const [estimate, setEstimate] = useState<FoodEstimate | null>(null);
@@ -188,11 +199,29 @@ export function MealCheckIn({ stats, prefs, dietNotes, seed, swaps, recent, cont
       goal: stats?.goal ?? "maintain",
     };
     const week = buildWeek(
-      planTargets(body, context), seed, { ...DEFAULT_PREFS, ...(prefs ?? {}) },
+      planTargets(body, context), seed,
+      // The SAME derivation MealPlanner uses, not a re-implementation of it.
+      effectiveMealPrefs({ ...DEFAULT_PREFS, ...(prefs ?? {}) }, dietNotes, starred),
       parseSchedule(dietNotes), swaps, recent
     );
     return week[DAY_INDEX()]?.meals ?? [];
-  }, [stats, prefs, dietNotes, seed, swaps, recent, context]);
+  }, [stats, prefs, dietNotes, seed, swaps, recent, starred, context]);
+
+  /**
+   * The meal whose recipe is open, if any.
+   *
+   * A sheet rather than the Meal plan tab's inline `<details>`: this list is a
+   * tick-list you work down, and expanding a row in place shoves the rest of it
+   * under your thumb mid-tap.
+   */
+  const [recipe, setRecipe] = useState<PlannedMeal | null>(null);
+  useEffect(() => {
+    if (!recipe) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setRecipe(null);
+    document.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => { document.removeEventListener("keydown", onKey); document.body.style.overflow = ""; };
+  }, [recipe]);
 
   // Instant on-device preview as they type; the AI call refines it on request.
   const preview = useMemo(() => estimateMeal(text), [text]);
@@ -349,19 +378,41 @@ export function MealCheckIn({ stats, prefs, dietNotes, seed, swaps, recent, cont
               const m = roundMacros(mealMacros(pm.meal, pm.scale));
               return (
                 <li key={pm.meal.id}>
-                  <button
-                    onClick={() => toggle(pm)}
-                    className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2 text-left transition ${
-                      on ? "border-pitch-400/40 bg-pitch-400/[0.07]" : "border-white/10 bg-white/[0.02] hover:bg-white/[0.05]"
+                  {/* TWO ACTIONS, TWO TARGETS.
+                      The whole row used to be one button that ticked the meal
+                      off, so there was no way to read the recipe from here at
+                      all — you had to remember the dish, leave, and find it
+                      again on the Meal plan tab. Ticking is the frequent action
+                      so it keeps the big target; the name opens the recipe. */}
+                  <div
+                    className={`flex w-full items-center gap-1 rounded-xl border transition ${
+                      on ? "border-pitch-400/40 bg-pitch-400/[0.07]" : "border-white/10 bg-white/[0.02]"
                     }`}
                   >
-                    <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-md border text-[11px] ${on ? "border-pitch-400 bg-pitch-400 text-ink-900" : "border-white/25 text-transparent"}`}>✓</span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-[11px] uppercase tracking-wide text-slate-500">{pm.meal.slot}</span>
-                      <span className="block truncate text-sm font-semibold text-slate-100">{pm.meal.name}</span>
-                    </span>
-                    <span className="shrink-0 text-xs tabular-nums text-slate-400">{m.kcal} kcal</span>
-                  </button>
+                    <button
+                      onClick={() => toggle(pm)}
+                      aria-pressed={on}
+                      aria-label={`${on ? "Un-tick" : "Tick off"} ${pm.meal.name}`}
+                      className="tap-target grid shrink-0 place-items-center pl-3 pr-1"
+                    >
+                      <span className={`grid h-5 w-5 place-items-center rounded-md border text-[11px] ${on ? "border-pitch-400 bg-pitch-400 text-ink-900" : "border-white/25 text-transparent"}`}>✓</span>
+                    </button>
+
+                    <button
+                      onClick={() => setRecipe(pm)}
+                      className="tap-target flex min-w-0 flex-1 items-center gap-3 py-2 pr-3 text-left"
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[11px] uppercase tracking-wide text-slate-500">{pm.meal.slot}</span>
+                        <span className="block truncate text-sm font-semibold text-slate-100">{pm.meal.name}</span>
+                      </span>
+                      <span className="shrink-0 text-xs tabular-nums text-slate-400">{m.kcal} kcal</span>
+                      {/* Says the name is tappable. Without it the second target
+                          is invisible and nobody finds the recipe. */}
+                      <span className="shrink-0 text-slate-600" aria-hidden>›</span>
+                      <span className="sr-only">View recipe</span>
+                    </button>
+                  </div>
                 </li>
               );
             })}
@@ -508,6 +559,37 @@ export function MealCheckIn({ stats, prefs, dietNotes, seed, swaps, recent, cont
           Estimates, not measurements — portions vary. Adjust the numbers below if you know better.
         </p>
       </div>
+
+      {recipe && (
+        <Portal>
+          <div
+            className="fixed inset-0 z-[100] flex items-end justify-center bg-black/70 p-0 backdrop-blur-sm sm:items-center sm:p-4"
+            onClick={() => setRecipe(null)}
+          >
+            <div
+              // pb-28 clears the floating mobile tab bar, which otherwise sits
+              // on top of the last of the method steps.
+              className="animate-scale-in max-h-[88vh] w-full max-w-lg overflow-y-auto rounded-t-3xl border border-white/10 bg-ink-800 p-6 pb-28 shadow-card sm:rounded-3xl sm:pb-6"
+              onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+              aria-label={recipe.meal.name}
+            >
+              <div className="mb-4 flex items-start justify-between gap-3">
+                <h3 className="text-lg font-extrabold text-slate-100">{recipe.meal.name}</h3>
+                <button
+                  onClick={() => setRecipe(null)}
+                  className="tap-target shrink-0 text-slate-400 hover:text-slate-100"
+                  aria-label="Close recipe"
+                >
+                  ✕
+                </button>
+              </div>
+              <Recipe meal={recipe.meal} scale={recipe.scale} macros={recipe.macros} />
+            </div>
+          </div>
+        </Portal>
+      )}
     </div>
   );
 }

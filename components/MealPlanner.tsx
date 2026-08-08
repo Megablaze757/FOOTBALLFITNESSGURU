@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { invalidate } from "@/lib/use-async";
 import {
-  planTargets, buildWeek, shoppingList, unmetSlots, dislikedFoodIds, favouriteFoodIds,
+  effectiveMealPrefs, planTargets, buildWeek, shoppingList, unmetSlots, dislikedFoodIds, favouriteFoodIds,
   swapKey, slotTargetKcal, type MealSwaps,
   ACTIVITY_LEVELS, DIET_GOALS, DIET_PATTERNS, AVOIDANCES, DEFAULT_PREFS,
   type BodyStats, type Sex, type ActivityLevel, type DietGoal, type PlannedDay,
@@ -167,9 +167,11 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
   // If someone excludes enough, a meal slot can end up with nothing in it —
   // better to say so than to quietly hand back a short day.
   // Foods named in the notes are excluded on top of the tapped preferences.
+  // Shared with MealCheckIn — see effectiveMealPrefs. The two screens rebuild
+  // the same week from the same seed and must feed buildWeek identically.
   const effectivePrefs = useMemo(
-    () => ({ ...prefs, dislikes: [...prefs.dislikes, ...noteDislikes], starred }),
-    [prefs, noteDislikes, starred]
+    () => effectiveMealPrefs(prefs, notes, starred),
+    [prefs, notes, starred]
   );
   const gaps = useMemo(() => unmetSlots(effectivePrefs), [effectivePrefs]);
 
