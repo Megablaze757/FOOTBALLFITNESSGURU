@@ -117,7 +117,7 @@ function Metric({ label, value, delta, goodWhen, baseline, series, colour, unit,
       <div className="flex items-baseline gap-2">
         <span className="stat-label">{label}</span>
         {significant && (
-          <span className={`text-[11px] font-bold ${good ? "text-readiness-green" : "text-readiness-amber"}`}>
+          <span className={`text-[11px] font-bold ${good ? "text-readiness-green" : "text-readiness-yellow"}`}>
             {delta! > 0 ? "+" : ""}{Math.round(delta!)}%
           </span>
         )}

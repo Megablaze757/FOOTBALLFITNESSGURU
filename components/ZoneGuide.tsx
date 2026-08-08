@@ -141,7 +141,7 @@ export function RunTypeGuide() {
                 Zone {zone.id}
               </span>
               {r.hard ? (
-                <span className="chip text-[11px] text-readiness-amber">Hard day</span>
+                <span className="chip text-[11px] text-readiness-yellow">Hard day</span>
               ) : (
                 <span className="chip text-[11px] text-slate-400">Easy day</span>
               )}

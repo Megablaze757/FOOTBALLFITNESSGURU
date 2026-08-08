@@ -260,13 +260,13 @@ export default function DashboardPage() {
         <div className="card p-5">
           <div className="mb-2 flex items-center justify-between gap-3">
             <span className="stat-label">Easy vs hard · last 14 days</span>
-            <span className={`chip ${runSplit.meetsTarget ? "text-readiness-green" : "text-readiness-amber"}`}>
+            <span className={`chip ${runSplit.meetsTarget ? "text-readiness-green" : "text-readiness-yellow"}`}>
               {runSplit.easyPct}% easy
             </span>
           </div>
           <div className="flex h-2.5 overflow-hidden rounded-full bg-white/[0.06]">
             <div className="bg-readiness-green" style={{ width: `${runSplit.easyPct}%` }} />
-            <div className="bg-readiness-amber" style={{ width: `${runSplit.hardPct}%` }} />
+            <div className="bg-readiness-yellow" style={{ width: `${runSplit.hardPct}%` }} />
           </div>
           <p className="mt-2 text-sm text-slate-300">{runSplit.note}</p>
           <p className="mt-1 text-xs text-slate-500">
