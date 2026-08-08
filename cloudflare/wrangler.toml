@@ -26,6 +26,11 @@ crons = ["0 8 * * *"]
 #
 # Slugs verified live on 2026-07-28; free models get retired often, and a dead
 # slug costs one wasted attempt.
+# INERT as of 2026-08-04: these never run. Every AI route requires silver, and
+# the "skip the free rungs" priority flag is also silver-or-above, so the free
+# list is always empty by the time the chain executes. Verified against the
+# built Worker. They become live again only if an AI feature is opened to
+# bronze. Groq is the free-and-fast path now.
 OPENROUTER_FREE_MODELS = "nvidia/nemotron-3-super-120b-a12b:free,openai/gpt-oss-20b:free,google/gemma-4-31b-it:free"
 
 # A REAL OpenRouter model slug. "deepseek/deepseek-v4-flash" was invalid, so
@@ -33,12 +38,38 @@ OPENROUTER_FREE_MODELS = "nvidia/nemotron-3-super-120b-a12b:free,openai/gpt-oss-
 # deepseek-chat is cheap and capable; confirm the exact slug at
 # https://openrouter.ai/models if you swap it.
 OPENROUTER_MODEL = "deepseek/deepseek-chat"
+
+# --- The provider ladder ---------------------------------------------------
+# Order is Groq -> OpenRouter -> NVIDIA, fastest first, and a provider is on the
+# ladder ONLY if its key is set. That key is the whole switch — there is no
+# AI_PROVIDER variable, so you can never select a provider you have no key for.
+#
+# Defaults for everything below live in code, so leaving them unset here is fine
+# — and, given this block is never applied to the hand-pasted Worker, is what
+# actually happens in production.
+
+# Groq: primary. Currently on the FREE tier (developer plans sold out), so the
+# per-token prices stay blank and Groq calls are counted as costing nothing.
+# Set them if you move to a paid plan, or spend goes invisible. (The per-user
+# daily call cap still applies either way.)
+GROQ_MODEL = "openai/gpt-oss-120b"
+GROQ_FALLBACK_MODELS = "llama-3.3-70b-versatile"
+# GROQ_PROMPT_PER_M = ""
+# GROQ_COMPLETION_PER_M = ""
+
+# NVIDIA: last-resort rung. Measured slower than OpenRouter for this app, so it
+# sits at the bottom — a slow rung in the MIDDLE would delay the fallback
+# without ever being the one that answers. Same free-tier pricing note as Groq.
+NVIDIA_MODEL = "meta/llama-3.3-70b-instruct"
+NVIDIA_FALLBACK_MODELS = "nvidia/llama-3.3-nemotron-super-49b-v1"
+# NVIDIA_PROMPT_PER_M = ""
+# NVIDIA_COMPLETION_PER_M = ""
 AI_DAILY_LIMIT = "40"   # max AI coach calls per user per day; over this, the on-device engine is used
 
 # Free trial on the first paid subscription, in days. 0 turns it off. Only
 # granted to someone with no prior Stripe subscription, so cancelling and
 # resubscribing can't farm repeat trials.
-TRIAL_DAYS = "7"
+TRIAL_DAYS = "14"
 
 # Price of the PAID model, USD per million tokens. Used to cost every request
 # against the user's monthly budget when OpenRouter doesn't report a figure
@@ -60,7 +91,9 @@ STRIPE_PRICE_SILVER = "price_1TvCAyG0ICmhMX6mAvegjzCb"   # £15/mo individual
 STRIPE_PRICE_GOLD   = "price_1TvCBcG0ICmhMX6mLuUwY3Qe"   # £20/mo individual
 
 # Secrets are NOT stored here — set them with `wrangler secret put NAME`:
-#   OPENROUTER_API_KEY            (your OpenRouter key — powers coach chat + programs)
+#   GROQ_SECRET                   (console.groq.com key — PRIMARY AI provider)
+#   OPENROUTER_API_KEY            (your OpenRouter key — second rung)
+#   NVIDIA_SECRET                 (build.nvidia.com key — last-resort rung)
 #   SUPABASE_ANON_KEY             (publishable key — used to verify caller sessions)
 #   SUPABASE_SERVICE_ROLE_KEY     (server-only — Stripe/email write to the DB)
 #   STRIPE_SECRET_KEY             (sk_... — the sensitive one)

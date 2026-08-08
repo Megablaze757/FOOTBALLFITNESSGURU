@@ -20,6 +20,31 @@ export interface Env {
   OPENROUTER_API_KEY: string;
   OPENROUTER_MODEL: string; // paid model — the last rung before the on-device engine
   OPENROUTER_FREE_MODELS: string; // comma-separated ":free" slugs, tried first
+  /**
+   * Groq — the PRIMARY provider, and the reason this is a ladder at all.
+   *
+   * All three endpoints are OpenAI-compatible, so only the base URL, the
+   * credential and the model slugs differ between them. Setting a provider's
+   * key IS the switch that enables it: no separate AI_PROVIDER variable, and
+   * therefore no way to select a provider you have no key for — a failure that
+   * would look exactly like the model being down.
+   *
+   * Groq goes first on latency. These calls are output-token-bound (prompts run
+   * 76-900 tokens, max_tokens up to 2200), so throughput dominates response
+   * time and Groq's is roughly an order of magnitude above a shared GPU free
+   * tier.
+   */
+  GROQ_SECRET: string;
+  GROQ_MODEL: string;            // primary Groq slug
+  GROQ_FALLBACK_MODELS: string;  // comma-separated slugs tried after it
+  GROQ_PROMPT_PER_M: string;     // USD per million prompt tokens (blank = free tier)
+  GROQ_COMPLETION_PER_M: string; // USD per million completion tokens
+  /** NVIDIA NIM — kept as a last-resort rung. See GROQ_SECRET for the pattern. */
+  NVIDIA_SECRET: string;
+  NVIDIA_MODEL: string;       // primary NVIDIA slug
+  NVIDIA_FALLBACK_MODELS: string; // comma-separated slugs tried after it
+  NVIDIA_PROMPT_PER_M: string;     // USD per million prompt tokens
+  NVIDIA_COMPLETION_PER_M: string; // USD per million completion tokens
   // Auth (verify the caller's Supabase session)
   SUPABASE_URL: string;
   SUPABASE_ANON_KEY: string;
@@ -38,7 +63,7 @@ export interface Env {
   VAPID_PRIVATE_KEY: string; // base64url 'd' of the same key pair — secret
   VAPID_SUBJECT: string;     // mailto: contact, required by the push services
   AI_DAILY_LIMIT: string;       // max LLM calls per user per day (default 40)
-  TRIAL_DAYS: string;           // free-trial length in days (default 7; 0 disables)
+  TRIAL_DAYS: string;           // free-trial length in days (default 14; 0 disables)
   PAID_PROMPT_PER_M: string;    // USD per million prompt tokens on the paid model
   PAID_COMPLETION_PER_M: string; // USD per million completion tokens
   APP_URL: string;
@@ -77,7 +102,18 @@ export default {
       // request — and I twice reasoned about behaviour from source that wasn't
       // deployed. curl the health route and you know.
       if (pathname.endsWith("/health")) {
-        return json({ ok: true, version: WORKER_VERSION, model: modelChain(env)[0] });
+        // Reports the whole ladder, not just the top rung. After a paste into
+        // the dashboard the question is always "did the secret actually take?"
+        // — and a missing NVIDIA_SECRET is invisible otherwise, because the
+        // Worker would quietly carry on serving from OpenRouter.
+        const chain = modelChain(env);
+        return json({
+          ok: true,
+          version: WORKER_VERSION,
+          model: chain[0] ? `${chain[0].provider}/${chain[0].model}` : null,
+          providers: [...new Set(chain.map((r) => r.provider))],
+          chain: chain.map((r) => `${r.provider}/${r.model}`),
+        });
       }
       return json({ error: "not found" }, 404);
     } catch (e) {
@@ -339,10 +375,28 @@ function overBudget(state: BudgetState): Response {
 // nobody is watching a spinner and the budget can be what the work actually
 // needs. Callers pass their own client-side timeout to match.
 // Bump on every paste into the Cloudflare dashboard. GET /health reports it.
-const WORKER_VERSION = "2026-07-29.1";
+const WORKER_VERSION = "2026-08-04.2";
 
 const CHAIN_BUDGET_MS = 55_000;
-const ATTEMPT_TIMEOUT_MS = 30_000;
+/**
+ * How long ONE attempt may hang before we abort it, per provider.
+ *
+ * This was a flat 30s, sized for the slowest thing on the ladder. That number
+ * is actively harmful with a fast primary in front: Groq answers in a few
+ * seconds when healthy, so 30s of waiting only ever happens when it is NOT
+ * going to answer — and every one of those seconds is taken from the rungs
+ * below, which is how a fallback ends up never running.
+ *
+ * Budget arithmetic that has to keep holding: a stage can start an attempt just
+ * before its deadline, so its worst finish is deadline + timeout. Groq
+ * 12+10=22s, OpenRouter 38+20=58s, NVIDIA 52+15=67s. Only the last exceeds
+ * CHAIN_BUDGET_MS, and only when every rung above it has already failed.
+ */
+const ATTEMPT_TIMEOUT_MS: Record<Provider, number> = {
+  groq: 10_000,
+  openrouter: 20_000,
+  nvidia: 15_000,
+};
 
 // Fallback rungs, tried only if the good model fails. Hard-coded defaults on
 // purpose: these live in wrangler.toml too, but the Worker is pasted into the
@@ -372,11 +426,147 @@ const DEFAULT_FALLBACK_MODELS = [
  * The actual saving was nothing worth having: 22 calls on the paid model cost
  * $0.0015. Quality first, fall back only when it genuinely breaks.
  */
-function modelChain(env: Env): string[] {
-  const configured = (env.OPENROUTER_FREE_MODELS || "").split(",").map((s) => s.trim()).filter(Boolean);
-  const fallbacks = configured.length ? configured : DEFAULT_FALLBACK_MODELS;
-  const primary = (env.OPENROUTER_MODEL || "deepseek/deepseek-chat").trim();
-  return [primary, ...fallbacks].filter((m, i, all) => m && all.indexOf(m) === i);
+type Provider = "groq" | "openrouter" | "nvidia";
+
+/** One rung of the fallback ladder: which model, on whose infrastructure. */
+interface Rung { provider: Provider; model: string }
+
+const PROVIDER_API: Record<Provider, string> = {
+  groq: "https://api.groq.com/openai/v1/chat/completions",
+  openrouter: "https://openrouter.ai/api/v1/chat/completions",
+  nvidia: "https://integrate.api.nvidia.com/v1/chat/completions",
+};
+
+/** A provider is enabled by having a key, and only by that. */
+function keyFor(env: Env, p: Provider): string {
+  const k = p === "groq" ? env.GROQ_SECRET : p === "nvidia" ? env.NVIDIA_SECRET : env.OPENROUTER_API_KEY;
+  return (k || "").trim();
+}
+
+/**
+ * Ladder order, fastest first.
+ *
+ * Groq leads because these calls are output-token-bound, so provider throughput
+ * IS response time. NVIDIA sits last rather than second: measured against this
+ * app it was slower than OpenRouter, and a slow rung in the middle delays the
+ * fallback without ever being the one that answers. Last means it only runs
+ * when both faster providers are genuinely down, which is what it's for.
+ */
+const PROVIDER_ORDER: Provider[] = ["groq", "openrouter", "nvidia"];
+
+/**
+ * Cumulative deadline, measured from the start of the whole chain, past which
+ * we stop trying this provider and move to the next.
+ *
+ * Per-provider slices are the only reason the lower rungs are reachable at all.
+ * One hung request can burn ATTEMPT_TIMEOUT_MS (30s) on its own, so against a
+ * single shared 55s budget a stalled primary would swallow the lot and the
+ * "fallback" would never once run — precisely the failure it exists to prevent.
+ * Groq's slice is tight because if Groq is healthy it answers in seconds; if it
+ * hasn't answered in 20, waiting longer is worse than moving on.
+ */
+const PROVIDER_DEADLINE_MS: Record<Provider, number> = {
+  groq: 12_000,
+  openrouter: 38_000,
+  nvidia: 52_000,
+};
+
+/**
+ * Only race the OpenRouter `:free` rungs if we get here early.
+ *
+ * Those rungs exist to save money for non-paying users, and Groq now does that
+ * job better: also free, and far faster. So when Groq has already burned time
+ * failing, spending up to another 20s on the slowest, least reliable models on
+ * the ladder before reaching deepseek is the worst of both — it delays the rung
+ * that was always going to answer, to save a fraction of a penny.
+ *
+ * NOTE: as of 2026-08-04 this guard, and the free race it guards, are BOTH
+ * unreachable. `priority` is meetsTier(tier, "silver") and every AI route
+ * already returns 402 below silver — so by the time complete() runs, priority
+ * is always true and the free list is always empty. Verified by driving the
+ * bundled Worker at silver, the lowest tier that reaches an AI route: exactly
+ * one OpenRouter call is made, the paid one. OPENROUTER_FREE_MODELS therefore
+ * configures nothing today.
+ *
+ * Left in place rather than deleted because it costs nothing and comes back to
+ * life the moment any AI feature is opened up to bronze — which is a plausible
+ * thing to want, and a nasty thing to have to rebuild under time pressure.
+ */
+const FREE_RACE_START_BY_MS = 15_000;
+
+/**
+ * Groq defaults.
+ *
+ * gpt-oss-120b leads on quality-per-second: bigger than the 70B alternatives,
+ * and Groq serves it fast enough that the size costs little. Llama 3.3 70B sits
+ * behind it as the battle-tested JSON workhorse.
+ *
+ * Deliberately EXCLUDED: the r1-distill reasoning models. They emit a thinking
+ * trace before the answer, which fails the JSON validation nearly every call
+ * here depends on — fast and unusable is not a fallback.
+ *
+ * UNVERIFIED, unlike the NVIDIA list: Groq's catalogue endpoint is unreachable
+ * from the environment these were written in, so they are from documentation
+ * rather than a live GET /models. Check them against the Groq console; a wrong
+ * slug shows up as every Groq rung 404ing straight through to OpenRouter.
+ */
+const GROQ_DEFAULT_MODEL = "openai/gpt-oss-120b";
+const GROQ_DEFAULT_FALLBACKS = ["llama-3.3-70b-versatile"];
+
+/**
+ * Both slugs verified present in NVIDIA's live catalogue (GET /v1/models) on
+ * 2026-08-04. There is no ":free" variant to prefer — see isFree() — so these
+ * are free by virtue of being on integrate.api.nvidia.com at all.
+ */
+const NVIDIA_DEFAULT_MODEL = "meta/llama-3.3-70b-instruct";
+const NVIDIA_DEFAULT_FALLBACKS = ["nvidia/llama-3.3-nemotron-super-49b-v1"];
+
+/**
+ * An OpenRouter `:free` rung — billed at nothing, so it can be RACED.
+ *
+ * Groq and NVIDIA rungs bill nothing either (both are on free tiers) but
+ * deliberately do not count here. Neither has a `:free` suffix to look for,
+ * because neither has a free/paid split in its API — the whole catalogue draws
+ * on one pot of credits. Those pots are FINITE and rate-limited, which is
+ * exactly why their rungs are queued rather than raced: racing would burn two
+ * or more requests against the quota to save a second, and exhausting the quota
+ * drops the entire app down the ladder.
+ */
+function isFree(r: Rung): boolean {
+  return r.provider === "openrouter" && r.model.endsWith(":free");
+}
+
+function chainFor(env: Env, p: Provider): Rung[] {
+  if (!keyFor(env, p)) return [];
+  const raw = p === "groq" ? env.GROQ_FALLBACK_MODELS
+    : p === "nvidia" ? env.NVIDIA_FALLBACK_MODELS
+    : env.OPENROUTER_FREE_MODELS;
+  const defaults = p === "groq" ? GROQ_DEFAULT_FALLBACKS
+    : p === "nvidia" ? NVIDIA_DEFAULT_FALLBACKS
+    : DEFAULT_FALLBACK_MODELS;
+  const primary = (
+    p === "groq" ? env.GROQ_MODEL || GROQ_DEFAULT_MODEL
+    : p === "nvidia" ? env.NVIDIA_MODEL || NVIDIA_DEFAULT_MODEL
+    : env.OPENROUTER_MODEL || "deepseek/deepseek-chat"
+  ).trim();
+
+  const configured = (raw || "").split(",").map((s) => s.trim()).filter(Boolean);
+  return [primary, ...(configured.length ? configured : defaults)]
+    .filter((m, i, all) => m && all.indexOf(m) === i)
+    .map((model) => ({ provider: p, model }));
+}
+
+/**
+ * The full ladder: Groq, then OpenRouter, then NVIDIA — each included only if
+ * its key is set.
+ *
+ * Keeping all three wired is the point: a provider outage stops being an outage
+ * for the athlete, because the ladder carries on down onto other
+ * infrastructure. If no key is set this returns empty and complete() fails
+ * loudly rather than pretending to have tried.
+ */
+function modelChain(env: Env): Rung[] {
+  return PROVIDER_ORDER.flatMap((p) => chainFor(env, p));
 }
 
 // Price of the paid rung, in USD per MILLION tokens, for deepseek/deepseek-chat
@@ -391,14 +581,37 @@ function modelChain(env: Env): string[] {
 const PAID_PROMPT_PER_M = 0.2002;
 const PAID_COMPLETION_PER_M = 0.8001;
 
-function modelPrice(env: Env, model: string): { prompt: number; completion: number } {
-  if (model.endsWith(":free")) return { prompt: 0, completion: 0 };
+function modelPrice(env: Env, rung: Rung): { prompt: number; completion: number } {
+  if (isFree(rung)) return { prompt: 0, completion: 0 };
   // Number("") is 0 and Number(undefined) is NaN, either of which would price
   // every call at zero — fall back unless the override actually parses.
   const num = (v: string | undefined, fallback: number) => {
     const n = Number(v);
     return v && Number.isFinite(n) && n >= 0 ? n : fallback;
   };
+  /**
+   * Groq and NVIDIA default to ZERO, which means the monthly SPEND cap does not
+   * apply to their calls. That is correct while both are on free tiers: free
+   * credits are not a bill, and there is nothing to cap.
+   *
+   * It becomes WRONG the moment either moves to a paid plan — set that
+   * provider's _PROMPT_PER_M and _COMPLETION_PER_M then, or spend goes
+   * invisible. Note the per-user daily call cap (AI_DAILY_LIMIT) still applies
+   * either way, so an abusive account stays bounded; what is missing at zero is
+   * only the money ceiling.
+   */
+  if (rung.provider === "groq") {
+    return {
+      prompt: num(env.GROQ_PROMPT_PER_M, 0),
+      completion: num(env.GROQ_COMPLETION_PER_M, 0),
+    };
+  }
+  if (rung.provider === "nvidia") {
+    return {
+      prompt: num(env.NVIDIA_PROMPT_PER_M, 0),
+      completion: num(env.NVIDIA_COMPLETION_PER_M, 0),
+    };
+  }
   return {
     prompt: num(env.PAID_PROMPT_PER_M, PAID_PROMPT_PER_M),
     completion: num(env.PAID_COMPLETION_PER_M, PAID_COMPLETION_PER_M),
@@ -413,12 +626,14 @@ function modelPrice(env: Env, model: string): { prompt: number; completion: numb
  */
 function costOf(
   env: Env,
-  model: string,
+  rung: Rung,
   usage: { prompt_tokens?: number; completion_tokens?: number; cost?: number } | undefined,
   maxTokens: number
 ): number {
+  // OpenRouter reports `cost`; NVIDIA does not, so NVIDIA always lands on the
+  // tokens x price path below.
   if (typeof usage?.cost === "number" && usage.cost >= 0) return usage.cost;
-  const price = modelPrice(env, model);
+  const price = modelPrice(env, rung);
   if (price.prompt === 0 && price.completion === 0) return 0;
   const promptTokens = usage?.prompt_tokens ?? 2000;
   const completionTokens = usage?.completion_tokens ?? maxTokens;
@@ -427,48 +642,79 @@ function costOf(
 
 interface Attempt { text: string; cost: number }
 
-async function openRouterOnce(
-  env: Env, model: string, system: string, user: string, maxTokens: number, json_mode = false
+/**
+ * One call to one model.
+ *
+ * Both providers speak the OpenAI chat-completions shape, so the request body
+ * is almost identical — only the endpoint, the credential and a couple of
+ * vendor-specific extras differ.
+ */
+async function providerOnce(
+  env: Env, rung: Rung, system: string, user: string, maxTokens: number, json_mode = false
 ): Promise<Attempt> {
+  const isOpenRouter = rung.provider === "openrouter";
+  const model = rung.model;
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), ATTEMPT_TIMEOUT_MS);
+  const timer = setTimeout(() => ctrl.abort(), ATTEMPT_TIMEOUT_MS[rung.provider]);
   try {
-    const r = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const send = (withJsonMode: boolean) => fetch(
+      PROVIDER_API[rung.provider],
+      {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${env.OPENROUTER_API_KEY}`,
+        Authorization: `Bearer ${keyFor(env, rung.provider)}`,
         "Content-Type": "application/json",
-        "HTTP-Referer": env.APP_URL,
-        "X-Title": "PocketAthlete",
+        // Attribution headers are OpenRouter's, for their dashboard. The others
+        // reject nothing over them, but sending them there is just noise.
+        ...(isOpenRouter ? { "HTTP-Referer": env.APP_URL, "X-Title": "PocketAthlete" } : {}),
       },
       body: JSON.stringify({
         model,
         max_tokens: maxTokens,
         // Ask OpenRouter to report what it charged, so accounting uses their
-        // number rather than our reconstruction of it.
-        usage: { include: true },
+        // number rather than our reconstruction of it. Groq and NVIDIA have no
+        // such option and can reject unknown top-level fields, so it is sent
+        // only where it means something.
+        ...(isOpenRouter ? { usage: { include: true } } : {}),
         // Constrains the decoder to valid JSON. Without it the cheap models
         // wrap their answer in prose or a ``` fence often enough that a rung
         // fails validation and we pay the latency of trying another one.
-        ...(json_mode ? { response_format: { type: "json_object" } } : {}),
+        ...(withJsonMode ? { response_format: { type: "json_object" } } : {}),
         messages: [
           { role: "system", content: system },
           { role: "user", content: user },
         ],
       }),
       signal: ctrl.signal,
-    });
+    }
+    );
+
+    let r = await send(json_mode);
+    /**
+     * Not every NIM model implements response_format, and the ones that don't
+     * reject the whole request rather than ignoring the field. Since almost
+     * every call this app makes is JSON-mode, that would take out every NVIDIA
+     * rung for every feature — so a 400 that names the field is retried once
+     * without it, and we lean on `validate` to catch malformed output as it
+     * already does for the models that never supported it.
+     */
+    if (!r.ok && r.status === 400 && json_mode) {
+      const detail = await r.text();
+      if (/response_format|json_object/i.test(detail)) r = await send(false);
+      else throw new Error(`400 ${detail.slice(0, 200)}`);
+    }
+
     if (!r.ok) throw new Error(`${r.status} ${(await r.text()).slice(0, 200)}`);
     const data = (await r.json()) as {
       choices?: { message?: { content?: string } }[];
       error?: { message?: string };
       usage?: { prompt_tokens?: number; completion_tokens?: number; cost?: number };
     };
-    // OpenRouter can answer 200 with an error body, or with no choices at all
-    // when an upstream provider drops the request.
+    // Both providers can answer 200 with an error body, or with no choices at
+    // all when the upstream model drops the request.
     if (data.error?.message) throw new Error(data.error.message.slice(0, 200));
     const text = data.choices?.[0]?.message?.content ?? "";
-    const cost = costOf(env, model, data.usage, maxTokens);
+    const cost = costOf(env, rung, data.usage, maxTokens);
     // An empty completion still consumed tokens, so it is thrown AFTER the cost
     // is known — the caller adds it to the running total either way.
     if (!text.trim()) throw Object.assign(new Error("empty completion"), { cost });
@@ -499,52 +745,80 @@ async function complete(
   // model that reliably returns junk run up an invisible tab.
   let spent = 0;
 
-  const attempt = async (model: string) => {
-    const { text, cost } = await openRouterOnce(env, model, opts.system, opts.user, opts.maxTokens, opts.json);
+  const attempt = async (rung: Rung) => {
+    const { text, cost } = await providerOnce(env, rung, opts.system, opts.user, opts.maxTokens, opts.json);
     spent += cost;
     if (opts.validate && !opts.validate(text)) throw new Error("unusable output");
-    return { text, model, cost: 0 };
+    return { text, model: `${rung.provider}/${rung.model}`, cost: 0 };
   };
 
   const chain = modelChain(env);
+  if (!chain.length) throw Object.assign(new Error("no AI provider configured"), { cost: 0 });
+
+  /**
+   * Queued rungs, each provider under its OWN slice of the clock.
+   *
+   * Sequential rather than raced: every provider on the ladder is on a free
+   * tier with a finite request quota, and firing several at once to save a
+   * second spends that quota several times faster.
+   */
+  const runQueued = async (rungs: Rung[]) => {
+    for (const rung of rungs) {
+      const label = `${rung.provider}/${rung.model}`;
+      if (Date.now() - started > PROVIDER_DEADLINE_MS[rung.provider]) {
+        trail.push(`${label}: skipped (${rung.provider} budget spent)`);
+        continue;
+      }
+      try {
+        return { ...(await attempt(rung)), cost: spent };
+      } catch (e) {
+        spent += typeof (e as { cost?: number })?.cost === "number" ? (e as { cost: number }).cost : 0;
+        trail.push(`${label}: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+    return null;
+  };
+
+  // Groq first — the whole point of the ladder's order.
+  const fast = await runQueued(chain.filter((r) => r.provider === "groq"));
+  if (fast) return fast;
+
+  const orChain = chain.filter((r) => r.provider === "openrouter");
   // Priority AI is Gold's, and it's a real difference rather than a label: the
   // free rungs are rate-limited shared capacity with no SLA, so skipping them
   // is the difference between a program in ~3s and one that sometimes takes 15
   // or falls back to the on-device engine. It costs about half a penny.
-  const free = opts.priority ? [] : chain.filter((m) => m.endsWith(":free"));
-  const paid = chain.filter((m) => !m.endsWith(":free"));
+  const free = opts.priority ? [] : orChain.filter(isFree);
+  const paid = orChain.filter((r) => !isFree(r));
 
   // The free rungs are RACED, not queued. Trying them one after another means
   // the athlete waits for each slow model to finish being wrong before the next
   // one starts, and three sequential timeouts is the whole budget gone. They
   // cost nothing, so there is no reason to be polite about it: fire them
   // together and take the first answer that validates.
-  if (free.length) {
+  if (free.length && Date.now() - started > FREE_RACE_START_BY_MS) {
+    free.forEach((r) => trail.push(`${r.model}: skipped (too late to be worth racing)`));
+  } else if (free.length) {
     try {
       const winner = await Promise.any(free.map(attempt));
       return { ...winner, cost: spent };
     } catch (e) {
       const errs = (e as AggregateError)?.errors ?? [];
-      free.forEach((m, i) => trail.push(`${m}: ${errs[i]?.message ?? "failed"}`));
+      free.forEach((r, i) => trail.push(`${r.model}: ${errs[i]?.message ?? "failed"}`));
       spent += errs.reduce((n: number, err: { cost?: number }) => n + (typeof err?.cost === "number" ? err.cost : 0), 0);
     }
   }
 
   // Paid rungs stay sequential — each one is real money, so we only reach for
   // the next if the previous actually failed.
-  for (const model of paid) {
-    if (Date.now() - started > CHAIN_BUDGET_MS) {
-      trail.push(`${model}: skipped (budget spent)`);
-      break;
-    }
-    try {
-      const winner = await attempt(model);
-      return { ...winner, cost: spent };
-    } catch (e) {
-      spent += typeof (e as { cost?: number })?.cost === "number" ? (e as { cost: number }).cost : 0;
-      trail.push(`${model}: ${e instanceof Error ? e.message : String(e)}`);
-    }
-  }
+  const viaPaid = await runQueued(paid);
+  if (viaPaid) return viaPaid;
+
+  // NVIDIA last: slowest of the three, so it only earns a turn once the other
+  // two have actually failed.
+  const viaNvidia = await runQueued(chain.filter((r) => r.provider === "nvidia"));
+  if (viaNvidia) return viaNvidia;
+
   throw Object.assign(new Error(`all models failed — ${trail.join(" | ")}`), { cost: spent });
 }
 
@@ -1146,7 +1420,12 @@ async function createCheckout(req: Request, env: Env): Promise<Response> {
   // subscription id is the evidence they've already been through this — comped
   // beta accounts have no such id, so testers still get their trial if they
   // later choose to pay.
-  const trialDays = Math.max(0, Math.min(90, Number(env.TRIAL_DAYS ?? "7") || 0));
+  // Default matters more than it looks: this Worker is pasted into the
+  // Cloudflare dashboard by hand, which applies nothing from wrangler.toml. If
+  // TRIAL_DAYS was never set as a dashboard variable — and it wasn't — this
+  // fallback IS the trial length in production. Keep it in step with
+  // lib/subscription.ts, which is what the pricing page tells people.
+  const trialDays = Math.max(0, Math.min(90, Number(env.TRIAL_DAYS ?? "14") || 0));
   const eligibleForTrial = trialDays > 0 && !prior?.stripe_subscription_id;
 
   const session = await stripe(env, "checkout/sessions", {
@@ -1163,8 +1442,10 @@ async function createCheckout(req: Request, env: Env): Promise<Response> {
     ...(eligibleForTrial ? { "subscription_data[trial_period_days]": String(trialDays) } : {}),
   });
   // The caller shows different copy for a trial than for an immediate charge —
-  // promising "free for 7 days" to someone who is about to be billed today is
-  // the kind of thing that produces chargebacks.
+  // promising a free trial to someone who is about to be billed today is the
+  // kind of thing that produces chargebacks. Deliberately no number here: this
+  // comment said "7 days" and outlived the 7-day trial, and a comment that
+  // quotes a value someone else owns is a comment that goes stale.
   return json({ url: session.url, trialDays: eligibleForTrial ? trialDays : 0 });
 }
 
