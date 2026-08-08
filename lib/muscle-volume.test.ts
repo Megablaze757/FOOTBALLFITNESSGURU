@@ -140,14 +140,31 @@ test("no generated programme buries a muscle group", () => {
  * Hamstring strain is the most common non-contact injury in football and the
  * Nordic curl is the best-evidenced thing anyone has found to reduce it.
  */
-test("a sprinting sport's block contains real hamstring work", () => {
+test("a sprinting sport's block contains real hamstring and calf work", () => {
+  /**
+   * ACROSS EVERY DAY COUNT, not just the convenient one.
+   *
+   * This test used to check 4 days only, and that gap let a regression through:
+   * widening the speed blueprint by one accessory slot shifted the rotation,
+   * the Nordic curl vanished, and a 3-DAY speed block went to zero hamstring
+   * sets while the test stayed green. A scoring bonus can always be rotated
+   * out — SPRINT_ESSENTIALS are taken before the rotation for that reason.
+   */
   for (const sport of ["football", "rugby"] as const) {
-    for (const goal of ["strength", "speed"] as const) {
-      const audit = auditWeek(wk({ goal, daysPerWeek: 4, sport, focus: "performance" }));
-      assert.ok(
-        audit.volume.hamstrings > 0,
-        `${sport}/${goal}: not one hamstring set in the week`
-      );
+    for (const goal of ["speed", "strength", "agility"] as const) {
+      for (const days of [2, 3, 4, 5]) {
+        const audit = auditWeek(wk({ goal, daysPerWeek: days, sport, focus: "performance" }));
+        assert.ok(
+          audit.volume.hamstrings > 0,
+          `${sport}/${goal} ${days}d: not one hamstring set in the week`
+        );
+        // Football is a series of achilles loads. Calves were sitting at 1.3
+        // sets a week — below anything worth calling training.
+        assert.ok(
+          audit.volume.calves > 0,
+          `${sport}/${goal} ${days}d: not one calf set in the week`
+        );
+      }
     }
   }
 });

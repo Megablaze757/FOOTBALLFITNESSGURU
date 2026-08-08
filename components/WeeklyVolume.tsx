@@ -21,6 +21,15 @@ import {
  */
 export function WeeklyVolume({ week }: { week: ProgramWeek }) {
   const audit = auditWeek(week);
+  /**
+   * A DELOAD IS SUPPOSED TO BE LOW.
+   *
+   * Rendered, the deload week came out as ten rows of amber "maintenance",
+   * which reads as ten things going wrong in the week whose entire job is that
+   * the work comes down. The verdicts are only meaningful against a week that
+   * is trying to build something.
+   */
+  const deload = week.intensity === "Deload";
   const rows = (Object.keys(audit.volume) as MuscleGroup[])
     .map((m) => ({ muscle: m, sets: audit.volume[m] }))
     .filter((r) => r.sets > 0)
@@ -44,16 +53,27 @@ export function WeeklyVolume({ week }: { week: ProgramWeek }) {
 
       <div className="space-y-1.5 px-3 pb-3">
         {rows.map((r) => (
-          <VolumeRow key={r.muscle} muscle={r.muscle} sets={r.sets} scale={scale} />
+          <VolumeRow key={r.muscle} muscle={r.muscle} sets={r.sets} scale={scale} deload={deload} />
         ))}
 
         {/* Says what the shaded band on every bar means. Without it the bars are
             decoration — a number with no target is not information. */}
         <p className="pt-1 text-[11px] leading-relaxed text-slate-500">
-          The shaded band is {LANDMARKS.productiveLow}–{LANDMARKS.productiveHigh} sets a week, where
-          most of the benefit sits. Below {LANDMARKS.maintenance} is maintenance — enough to hold
-          what you have, not to build. These are averages; in-season, most groups
-          sitting at maintenance is the point, not a gap.
+          {deload ? (
+            <>
+              Deload week — everything is meant to be down. The lighter marker on each
+              bar is {LANDMARKS.productiveLow}–{LANDMARKS.productiveHigh} sets, which is where a
+              BUILDING week sits; you are below it on purpose.
+            </>
+          ) : (
+            <>
+              The lighter section of each bar is {LANDMARKS.productiveLow}–{LANDMARKS.productiveHigh} sets
+              a week, where most of the benefit sits. Below {LANDMARKS.maintenance} is
+              maintenance — enough to hold what you have, not to build. These are
+              averages; in-season, most groups sitting at maintenance is the point,
+              not a gap.
+            </>
+          )}
         </p>
 
         {audit.hamstringToQuad !== null && audit.hamstringToQuad < 0.5 && (
@@ -84,9 +104,17 @@ const VERDICT: Record<VolumeVerdict, { bar: string; text: string; word: string |
   excessive:   { bar: "bg-readiness-red", text: "text-readiness-red", word: "very high" },
 };
 
-function VolumeRow({ muscle, sets, scale }: { muscle: MuscleGroup; sets: number; scale: number }) {
+/** Nearest half-set. "3.7 sets" is arithmetic leaking through, not a prescription. */
+const show = (n: number) => {
+  const half = Math.round(n * 2) / 2;
+  return Number.isInteger(half) ? String(half) : half.toFixed(1);
+};
+
+function VolumeRow({ muscle, sets, scale, deload }: {
+  muscle: MuscleGroup; sets: number; scale: number; deload: boolean;
+}) {
   const verdict = verdictFor(sets);
-  const style = VERDICT[verdict];
+  const style = deload && verdict === "maintenance" ? VERDICT.productive : VERDICT[verdict];
   const pct = Math.min(100, (sets / scale) * 100);
   const bandLeft = (LANDMARKS.productiveLow / scale) * 100;
   const bandWidth = ((LANDMARKS.productiveHigh - LANDMARKS.productiveLow) / scale) * 100;
@@ -98,8 +126,13 @@ function VolumeRow({ muscle, sets, scale }: { muscle: MuscleGroup; sets: number;
       <span className="relative h-2.5 flex-1 overflow-hidden rounded-full bg-white/[0.05]">
         {/* The target band, behind the bar. Recessive on purpose: it is the
             reference, not the reading. */}
+        {/* Rendered, this was INVISIBLE: bg-white/[0.06] sitting on a
+            bg-white/[0.05] track is a one-percent difference nobody can see, so
+            the caption was explaining a band that wasn't on screen. Marked with
+            edges rather than a fill, which reads at 2.5px tall where a wash
+            does not. */}
         <span
-          className="absolute inset-y-0 bg-white/[0.06]"
+          className="absolute inset-y-0 border-x border-white/25 bg-white/[0.10]"
           style={{ left: `${bandLeft}%`, width: `${bandWidth}%` }}
           aria-hidden
         />
@@ -111,7 +144,7 @@ function VolumeRow({ muscle, sets, scale }: { muscle: MuscleGroup; sets: number;
       </span>
 
       <span className={`w-8 shrink-0 text-right text-[11px] font-semibold tabular-nums ${style.text}`}>
-        {sets}
+        {show(sets)}
       </span>
       {/* Colour alone would leave this unreadable for anyone who can't separate
           the amber from the gold, and unspoken for a screen reader. */}
@@ -119,7 +152,7 @@ function VolumeRow({ muscle, sets, scale }: { muscle: MuscleGroup; sets: number;
         {style.word ?? ""}
       </span>
       <span className="sr-only">
-        {MUSCLE_LABEL[muscle]}: {sets} sets this week, {style.word ?? "in the productive range"}.
+        {MUSCLE_LABEL[muscle]}: {show(sets)} sets this week, {style.word ?? "in the productive range"}.
       </span>
     </div>
   );

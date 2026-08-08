@@ -399,7 +399,7 @@ export function buildProgram(input: BuildProgramInput): ProgramPlan {
 
   return {
     ...plan,
-    summary: programSummary(input.goal, sore, input.isInSeason ?? false, block, input.sport, input.position, input.focus),
+    summary: programSummary(input.goal, sore, input.isInSeason ?? false, block, input.sport, input.position, input.focus, input.daysPerWeek),
     constraints: [
       ...(sore.length ? [`Protecting your ${sore.map(prettyArea).join(", ")} — high-impact loading on these is dialled back.`] : []),
       ...constraints.summary,
@@ -411,7 +411,7 @@ const FOCUS_LABEL: Record<TrainingFocus, string> = {
   performance: "performance", fitness: "general fitness", aesthetics: "muscle & aesthetics", rehab: "rehab",
 };
 
-function programSummary(goal: GoalType, sore: BodyArea[], inSeason: boolean, block: number, sport?: SportId, position?: string | string[], focus?: TrainingFocus): string {
+function programSummary(goal: GoalType, sore: BodyArea[], inSeason: boolean, block: number, sport?: SportId, position?: string | string[], focus?: TrainingFocus, daysPerWeek?: number): string {
   const g = GOALS.find((x) => x.id === goal)?.label ?? goal;
   // "In-season" means nothing to a lifter and "off-season" nothing to a
   // gym-goer. Each sport names its own phases.
@@ -428,7 +428,22 @@ function programSummary(goal: GoalType, sore: BodyArea[], inSeason: boolean, blo
   const focusNote = focusLabel && focus !== "performance" ? ` Weighted toward ${focusLabel}.` : "";
   const blockNote = block > 1 ? ` Block ${block} — volume stepped up ${Math.round((block - 1) * 8)}% from your last block.` : "";
   const note = sore.length ? ` Built around your sore ${sore.map(prettyArea).join(" & ")}, swapping in lower-impact options.` : "";
-  return `A 4-week ${g.toLowerCase()} block, ${season}, progressing Base → Build → Peak → Deload.${forWhom}${focusNote}${blockNote}${note}`;
+  /**
+   * IN-SEASON, FOUR GYM SESSIONS IS MORE THAN THE PROFESSIONALS DO.
+   *
+   * Studies of professional squads describe ONE to two strength sessions a week
+   * maintaining physical output across a season — the matches are the training
+   * load, and the gym's job is to keep tissue robust rather than to build.
+   *
+   * Said rather than enforced. How often somebody trains is theirs to decide
+   * and quietly overriding it would be worse than the over-reach; but handing a
+   * footballer a four-day in-season block with no comment implies the app
+   * thinks that is normal, and it is not.
+   */
+  const busy = inSeason && (daysPerWeek ?? 0) >= 4 && sport !== "gym" && sport !== "weightlifting"
+    ? ` Note: ${daysPerWeek} gym sessions a week is a lot in-season — professional squads typically do one or two, and let the matches be the load. The week is ordered heaviest-first so the session before matchday is the lightest.`
+    : "";
+  return `A 4-week ${g.toLowerCase()} block, ${season}, progressing Base → Build → Peak → Deload.${forWhom}${focusNote}${blockNote}${note}${busy}`;
 }
 
 // --- "What's working" analysis ----------------------------------------------

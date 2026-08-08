@@ -130,7 +130,12 @@ const BLUEPRINTS: Record<GoalType, Partial<Record<Slot, number>>> = {
   // strength block either: some easy aerobic work is in every serious one,
   // because it's what lets you recover between the heavy days.
   strength:        { warmup: 2, primary: 1, secondary: 2, accessory: 2, conditioning: 1, cooldown: 1 },
-  speed:           { warmup: 2, primary: 2, secondary: 1, accessory: 1, conditioning: 1, cooldown: 1 },
+  // Two accessory slots, not one. With a single slot a speed block came out at
+  // 0.3 hamstring sets per quad set — quads accumulating from squats, split
+  // squats and every jump while the hamstrings got one Nordic. Sprinting is the
+  // mechanism that tears hamstrings, so the session that trains sprinting is
+  // the last one that should be short of hamstring work.
+  speed:           { warmup: 2, primary: 2, secondary: 1, accessory: 2, conditioning: 1, cooldown: 1 },
   agility:         { warmup: 2, primary: 1, secondary: 2, accessory: 1, conditioning: 1, cooldown: 1 },
   endurance:       { warmup: 2, secondary: 1, accessory: 1, conditioning: 2, cooldown: 1 },
   injury_recovery: { warmup: 3, secondary: 1, accessory: 3, conditioning: 1, cooldown: 1 },
@@ -158,6 +163,32 @@ const RECOVERY_RPE_CEILING = 5;
  */
 const SPRINT_SPORTS = new Set<SportId>(["football", "rugby", "basketball", "running"]);
 const HAMSTRING_WORK = new Set(["nordic_curl", "single_leg_rdl", "hamstring_slider", "deadlift"]);
+/**
+ * Calf and achilles work, for the same reason and the same sports.
+ *
+ * Football blocks were coming out at 1.3-5.7 calf sets a week — below
+ * maintenance — in a sport that is essentially a series of achilles loads.
+ * Calf raises sit in the `rehab` pattern and score like rehab work, so they
+ * never won a slot unless somebody was already injured, which is precisely the
+ * wrong time to start.
+ */
+const CALF_WORK = new Set(["calf_raise", "calf_raise_eccentric", "pogo_hops"]);
+
+/**
+ * What a sprinting athlete's week must contain, whatever else is in it.
+ *
+ * A scoring bonus was not enough and could not be: `pick` rotates its window, so
+ * a well-ranked movement is spun out of the slot exactly as a coach's picks
+ * were. Widening the speed blueprint made it WORSE — the extra accessory slot
+ * shifted the rotation and the Nordic vanished entirely, taking a 3-day speed
+ * block from four hamstring sets to zero.
+ *
+ * So these are taken before the rotation, the same mechanism as a coach's pick,
+ * and for a stronger reason: a coach's pick is a preference, and a sprinting
+ * athlete with no posterior-chain work is a hamstring injury with a date on it.
+ * The pain filter still runs first and still wins.
+ */
+const SPRINT_ESSENTIALS = ["nordic_curl", "calf_raise_eccentric"];
 
 const SLOT_ORDER: Slot[] = ["warmup", "primary", "secondary", "accessory", "skill", "conditioning", "cooldown"];
 
@@ -236,6 +267,8 @@ const LONG_EFFORT_MINUTES = 45;
  */
 const QUALITY_PATTERNS = new Set<Pattern>(["sprint", "jump", "cod", "footwork"]);
 const QUALITY_RPE_CEILING = 8;
+/** Accessories are volume work: two or three reps left in the tank. */
+const ACCESSORY_RPE = 7;
 
 /**
  * In-season gym volume as a fraction of off-season, and how it is spread.
@@ -361,7 +394,8 @@ function rankSlot(slot: Slot, ctx: Ctx): Scored[] {
        * an athlete reporting a hamstring already has these excluded above, and
        * nothing here can bring them back.
        */
-      if (ctx.sport && SPRINT_SPORTS.has(ctx.sport) && HAMSTRING_WORK.has(m.id)) score += 8;
+      if (ctx.sport && SPRINT_SPORTS.has(ctx.sport)
+        && (HAMSTRING_WORK.has(m.id) || CALF_WORK.has(m.id))) score += 8;
 
       if (ctx.trainingFocus === "aesthetics" && (m.kit === "barbell" || m.kit === "dumbbell" || m.kit === "machine")) score += 3;
       if (ctx.trainingFocus === "fitness" && m.targets.includes("endurance")) score += 3;
@@ -461,10 +495,28 @@ function pick(
 
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
 
-function doseForWeek(base: Dose, prog: Prog, wi: number, volumeScale: number, fixed: boolean, pattern?: Pattern): Dose {
+function doseForWeek(baseDose: Dose, prog: Prog, wi: number, volumeScale: number, fixed: boolean, pattern?: Pattern, slot?: Slot): Dose {
   // Warm-ups and cool-downs don't periodise. The same eight leg swings every
   // session is correct; progressing them is theatre.
-  if (fixed) return { ...base };
+  if (fixed) return { ...baseDose };
+
+  /**
+   * ACCESSORY WORK HAD NO TARGET EFFORT AT ALL.
+   *
+   * A third of every session — the accessory block — shipped with no RPE, so
+   * the athlete was told to do three sets of twelve and nothing about how hard.
+   * "As many as it says" is not a prescription; people either coast through
+   * accessories or grind them to failure, and both waste the slot.
+   *
+   * 7 as the base: accessories are volume work, meant to leave two or three
+   * reps in reserve. Deliberately only for movements that carry no RPE of their
+   * own — anything the catalogue has already dosed keeps its own number, and
+   * rehab work in particular must stay light.
+   */
+  const base: Dose = baseDose.rpe == null && slot === "accessory" && pattern !== "rehab"
+    ? { ...baseDose, rpe: ACCESSORY_RPE }
+    : baseDose;
+
 
   const shape = WEEK_SHAPE[prog][wi];
 
@@ -660,6 +712,18 @@ export function buildBlock(input: EngineInput): ProgramPlan {
   const rehab = input.goal === "injury_recovery";
   const themes = rehab ? REHAB_THEMES : THEMES;
   const rotation = focusRotationFor(input);
+  /**
+   * The coach's picks, plus the ones the sport makes non-negotiable.
+   *
+   * Appended rather than prepended: a coach who has chosen specific movements
+   * gets their days first, and the essentials fill in around them.
+   */
+  const required = [
+    ...(input.mustInclude ?? []),
+    ...(input.sport && SPRINT_SPORTS.has(input.sport)
+      ? SPRINT_ESSENTIALS.filter((id) => !(input.mustInclude ?? []).includes(id))
+      : []),
+  ];
 
   const weeks: ProgramWeek[] = THEMES.map((_, wi) => {
     // In-season, the matches are the training. Volume comes down so the sport
@@ -693,10 +757,10 @@ export function buildBlock(input: EngineInput): ProgramPlan {
       const focusGoal = rotation[di % rotation.length];
       const ctx: Ctx = {
         focusGoal, pain, soreAreas, sport: input.sport, trainingFocus: input.focus, constraints,
-        picked: input.mustInclude?.length ? new Set(input.mustInclude) : undefined,
+        picked: required.length ? new Set(required) : undefined,
         // The picks that belong to THIS day (see `pick`), rather than all of them.
-        forced: input.mustInclude?.length
-          ? new Set(input.mustInclude.filter((_, pi) => pi % days === di))
+        forced: required.length
+          ? new Set(required.filter((_, pi) => pi % days === di))
           : undefined,
       };
       const sessionIndex = wi * days + di;
@@ -834,7 +898,7 @@ export function buildBlock(input: EngineInput): ProgramPlan {
 
         const fixed = slot === "warmup" || slot === "cooldown";
         for (const m of chosen) {
-          const dose = doseForWeek(m.dose, m.prog, wi, sessionScale, fixed, m.pattern);
+          const dose = doseForWeek(m.dose, m.prog, wi, sessionScale, fixed, m.pattern, slot);
           // A run's zone IS the instruction, and "40 min" on its own is the
           // single most common way an easy day gets run too hard. Every other
           // surface in the app speaks in zones; the programme was the one that
