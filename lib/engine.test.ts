@@ -399,3 +399,88 @@ test("with no picks, nothing changes", () => {
   const b = buildBlock({ goal: "speed", painMap: {}, sport: "football", mustInclude: [] });
   assert.deepEqual(a, b);
 });
+
+// --- professional-grade dosing ------------------------------------------------
+
+/**
+ * QUALITY WORK IS NEVER TAKEN TO FAILURE.
+ *
+ * Sprinting, jumping and changing direction are limited by force per contact,
+ * not by how much work you can survive. The weekly RPE escalation applied to
+ * everything equally, so peak week prescribed flying sprints, hill sprints and
+ * the T-drill at RPE 10 — maximal, nothing in reserve — and depth drops and
+ * power cleans at 9.
+ *
+ * Nobody coaches a sprint session to failure. The velocity-loss literature is
+ * consistent that lower fatigue thresholds produce better explosive adaptations
+ * at matched volume, and a fatigued sprint is the textbook hamstring-strain
+ * mechanism.
+ */
+test("sprints, jumps and change-of-direction never exceed RPE 8", () => {
+  const quality = new Set(["sprint", "jump", "cod", "footwork"]);
+  for (const goal of ["speed", "agility", "strength"] as const) {
+    const plan = buildBlock({ goal, painMap: {}, sport: "football", daysPerWeek: 4 });
+    for (const w of plan.weeks) {
+      for (const s of w.sessions) {
+        for (const d of s.drills) {
+          const m = MOVEMENTS.find((x) => x.name === d.name);
+          if (!m || !quality.has(m.pattern) || !d.intensity) continue;
+          const rpe = Number(d.intensity.replace(/[^\d.]/g, ""));
+          assert.ok(
+            rpe <= 8,
+            `${w.theme} week: ${d.name} (${m.pattern}) prescribed at ${d.intensity}`
+          );
+        }
+      }
+    }
+  }
+});
+
+/** Strength work still gets to be hard — that is where a block's intensity lives. */
+test("but strength work still climbs into the peak week", () => {
+  const plan = buildBlock({ goal: "strength", painMap: {}, sport: "gym", daysPerWeek: 4 });
+  const peak = plan.weeks[2].sessions.flatMap((s) => s.drills);
+  const hard = peak.filter((d) => {
+    const m = MOVEMENTS.find((x) => x.name === d.name);
+    if (!m || !d.intensity) return false;
+    const heavy = ["squat", "hinge", "push_h", "push_v", "pull_h", "pull_v"].includes(m.pattern);
+    return heavy && Number(d.intensity.replace(/[^\d.]/g, "")) >= 9;
+  });
+  assert.ok(hard.length > 0, "peak week should push the strength lifts to RPE 9");
+});
+
+/**
+ * IN-SEASON, THE WEEK TAPERS INTO THE MATCH.
+ *
+ * Elite football runs a matchday-minus microcycle: load peaks at MD-4/MD-3 and
+ * comes down through MD-2 and MD-1 so the player arrives fresh, and studies of
+ * professional squads find exactly that pattern in the tracking data. A flat
+ * week does the opposite of what it should — the session closest to the match
+ * is as heavy as the one furthest from it, and the gym takes the legs the match
+ * needed.
+ */
+test("an in-season week comes down towards the match", () => {
+  const load = (p: ReturnType<typeof buildBlock>, di: number) =>
+    p.weeks[0].sessions[di].drills.reduce((n, d) => n + d.sets, 0);
+
+  const inSeason = buildBlock({ goal: "strength", painMap: {}, sport: "football", daysPerWeek: 4, isInSeason: true });
+  const off = buildBlock({ goal: "strength", painMap: {}, sport: "football", daysPerWeek: 4 });
+
+  const last = inSeason.weeks[0].sessions.length - 1;
+  assert.ok(
+    load(inSeason, last) < load(inSeason, 0),
+    `last session (${load(inSeason, last)} sets) should be lighter than the first (${load(inSeason, 0)})`
+  );
+
+  // Off-season has no match to be fresh for, so nothing to taper into.
+  const offLoads = off.weeks[0].sessions.map((_, i) => load(off, i));
+  assert.ok(
+    Math.max(...offLoads) - Math.min(...offLoads) < offLoads[0],
+    "off-season sessions should not be tapered"
+  );
+
+  // And the week still does less work overall than the off-season one.
+  const total = (p: ReturnType<typeof buildBlock>) =>
+    p.weeks[0].sessions.reduce((n, s) => n + s.drills.reduce((m, d) => m + d.sets, 0), 0);
+  assert.ok(total(inSeason) < total(off), "in-season should be a lighter week overall");
+});

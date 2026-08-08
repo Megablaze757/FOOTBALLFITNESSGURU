@@ -195,6 +195,52 @@ const RPE_DELTA = [0, 0.5, 1, -2];
  */
 const LONG_EFFORT_MINUTES = 45;
 
+/**
+ * Movement patterns whose quality is destroyed by fatigue, and the effort
+ * ceiling that protects them.
+ *
+ * Sprinting, jumping and changing direction are limited by how much force you
+ * can produce per contact, not by how much work you can survive. Grind them and
+ * the thing being trained goes away: the velocity-loss literature is consistent
+ * that lower fatigue thresholds produce BETTER explosive adaptations than
+ * higher ones at matched volume, and a fatigued sprint is also the textbook
+ * hamstring-strain mechanism.
+ *
+ * The escalation above applied uniformly, so peak week prescribed:
+ *
+ *   Flying 20m sprints    RPE 10   (max effort, zero in reserve)
+ *   Hill sprints          RPE 10
+ *   T-drill               RPE 10
+ *   Depth drop to sprint  RPE  9
+ *   Power clean           RPE  9
+ *
+ * RPE 10 is failure. Nobody coaches a sprint session to failure, and an
+ * Olympic lift at 9 is a technique problem waiting to happen. Peaking this work
+ * means sharper reps and more of them, never grinding — so it keeps its base
+ * effort and is capped at 8 whatever the week says.
+ *
+ * Strength patterns (squat, hinge, press, pull, carry) are unaffected: RPE 8-9
+ * in a peak week is exactly right for those, and that is where the block's
+ * intensity is supposed to come from.
+ */
+const QUALITY_PATTERNS = new Set<Pattern>(["sprint", "jump", "cod", "footwork"]);
+const QUALITY_RPE_CEILING = 8;
+
+/**
+ * In-season gym volume as a fraction of off-season, and how it is spread.
+ *
+ * The fraction is unchanged; TAPER_HIGH and TAPER_LOW average to it, so the
+ * week does the same total work and simply front-loads it. Professional squads
+ * do far less in-season gym work than this implies in absolute terms — the
+ * literature describes one to two strength sessions a week maintaining
+ * performance across a season — but how many days to train is the athlete's
+ * choice to make, and overriding it silently is not this engine's job. What it
+ * can do is make sure the last session before the weekend is the light one.
+ */
+const IN_SEASON_VOLUME = 0.75;
+const TAPER_HIGH = 0.95;
+const TAPER_LOW = 0.55;
+
 const WEEK_PROGRESSION: Record<Prog, string[]> = {
   load:  ["Groove the movement at a weight you could do 2-3 more reps with.",
           "Add a little weight and a set — reps drop slightly, that's the point.",
@@ -384,7 +430,7 @@ function pick(
 
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
 
-function doseForWeek(base: Dose, prog: Prog, wi: number, volumeScale: number, fixed: boolean): Dose {
+function doseForWeek(base: Dose, prog: Prog, wi: number, volumeScale: number, fixed: boolean, pattern?: Pattern): Dose {
   // Warm-ups and cool-downs don't periodise. The same eight leg swings every
   // session is correct; progressing them is theatre.
   if (fixed) return { ...base };
@@ -429,7 +475,12 @@ function doseForWeek(base: Dose, prog: Prog, wi: number, volumeScale: number, fi
   // The floor is 5 for gym work — nothing below that is worth a set — but a
   // movement that STARTS easier than that is meant to be, so it keeps its own.
   const floor = Math.min(5, base.rpe ?? 5);
-  const rpe = base.rpe != null ? clamp(Math.round((base.rpe + RPE_DELTA[wi]) * 2) / 2, floor, 10) : undefined;
+  // Quality work never climbs into the red — see QUALITY_PATTERNS. The deload's
+  // -2 still applies, because coming DOWN is always allowed.
+  const ceiling = pattern && QUALITY_PATTERNS.has(pattern) ? QUALITY_RPE_CEILING : 10;
+  const rpe = base.rpe != null
+    ? clamp(Math.round((base.rpe + RPE_DELTA[wi]) * 2) / 2, Math.min(floor, ceiling), ceiling)
+    : undefined;
   return { ...base, sets, reps, rpe };
 }
 
@@ -582,9 +633,32 @@ export function buildBlock(input: EngineInput): ProgramPlan {
   const weeks: ProgramWeek[] = THEMES.map((_, wi) => {
     // In-season, the matches are the training. Volume comes down so the sport
     // gets the athlete's legs, not the gym.
-    const volumeScale = (input.isInSeason ? 0.75 : 1) * blockScale;
+    const volumeScale = (input.isInSeason ? IN_SEASON_VOLUME : 1) * blockScale;
 
     const sessions: ProgramSession[] = Array.from({ length: days }, (_, di) => {
+      /**
+       * IN-SEASON, THE WEEK TAPERS INTO THE MATCH.
+       *
+       * Every session used to carry identical load, with the whole week simply
+       * scaled to 75%. That is not how the sport is actually coached. Elite
+       * football runs a matchday-minus microcycle — load peaks at MD-4 and MD-3
+       * and comes down through MD-2 and MD-1, so the player arrives fresh — and
+       * the research on professional squads confirms the pattern in the data:
+       * workload on MD-4/MD-3 is reliably greater than on MD-2/MD-1.
+       *
+       * A flat week does the opposite of what it should: the session closest to
+       * the match is exactly as heavy as the one furthest from it, so the gym
+       * takes the legs the match needed.
+       *
+       * So sessions descend across the week, from 0.95 down to 0.55, which
+       * averages to the same IN_SEASON_VOLUME the flat version used. Same total
+       * work, arranged the way a club would arrange it. Off-season is untouched
+       * — with no match to be fresh for there is nothing to taper into.
+       */
+      const taper = input.isInSeason && days > 1
+        ? (TAPER_HIGH - (TAPER_HIGH - TAPER_LOW) * (di / (days - 1))) / IN_SEASON_VOLUME
+        : 1;
+      const sessionScale = volumeScale * taper;
       const focusGoal = rotation[di % rotation.length];
       const ctx: Ctx = {
         focusGoal, pain, soreAreas, sport: input.sport, trainingFocus: input.focus, constraints,
@@ -729,7 +803,7 @@ export function buildBlock(input: EngineInput): ProgramPlan {
 
         const fixed = slot === "warmup" || slot === "cooldown";
         for (const m of chosen) {
-          const dose = doseForWeek(m.dose, m.prog, wi, volumeScale, fixed);
+          const dose = doseForWeek(m.dose, m.prog, wi, sessionScale, fixed, m.pattern);
           // A run's zone IS the instruction, and "40 min" on its own is the
           // single most common way an easy day gets run too hard. Every other
           // surface in the app speaks in zones; the programme was the one that
