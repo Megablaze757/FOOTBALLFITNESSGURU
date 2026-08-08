@@ -586,6 +586,129 @@ front-end bundle.
 
 ---
 
+## 2026-08-08 (handover) — Programs that progress, meals that agree with each other, and four things only a human can do
+
+**Operator action: FOUR, and three of them are credential rotations.** Full
+detail and the exact steps are in [`docs/HANDOVER.md`](docs/HANDOVER.md), which
+is the document to hand a developer picking this up cold.
+
+1. **Rotate three exposed credentials.** A Supabase **secret key**, the database
+   password, and an NVIDIA API key were all exposed during this work. The secret
+   key is the urgent one — it bypasses RLS entirely, so it is full read/write to
+   every athlete's data over HTTPS from anywhere. After rotating, update
+   `SUPABASE_SERVICE_ROLE_KEY` in the Worker or Stripe and the reminder crons
+   break. Re-add the NVIDIA key as **Type: Secret** — it is currently Plaintext,
+   which is the only one of the three that is a standing misconfiguration rather
+   than an accident.
+2. **Get the deployed Worker into version control.** It is `2026-08-04.2` and
+   exists only in the Cloudflare dashboard; both copies in this repo are
+   `2026-08-01.1`. `npm run worker:drift -- <url>` reports the gap. Copy FROM
+   production, never deploy over it.
+3. **Deploy `estimate-food`** — Actions → Deploy Edge Functions. Needs
+   `SUPABASE_ACCESS_TOKEN` as a repo secret, which only a human can generate.
+   This is the last thing standing between the meal photo estimator and working.
+4. **Validate two CHECK constraints** added `NOT VALID` in migration 0070. They
+   guard new writes but were never checked against existing rows — and those
+   rows are the ones producing `NaN` macros and "Weighted toward undefined."
+
+Migrations 0066–0070 are applied and verified live. 758 tests, lint, typecheck
+and build clean.
+
+### Programs stopped rotating exercises and started progressing one
+
+The recurring "programs don't feel high quality" had a concrete cause. Movement
+selection keyed off the session index, so exercises changed every week — while
+the periodisation copy is written on the assumption that they do not. Day 1 of a
+strength block read, verbatim:
+
+```
+wk1  Bent-over barbell row    "Groove the movement..."
+wk2  Barbell hip thrust       "Add a little weight and a set"
+wk3  Pogo hops                "Peak volume: extra set..."
+wk4  Dumbbell shoulder press  "Deload: SAME MOVEMENTS, ~60%"
+```
+
+Four unrelated exercises, each captioned as last week's lift with more weight on
+it. Selection is per **block** now — 3×8, 4×7, 4×6, 2×8 on the same lift — and
+variety moved between blocks, which come out 88% different.
+
+Peak week was also prescribing **flying sprints and the T-drill at RPE 10**.
+That is failure. Sprinting and jumping are limited by force per contact, and a
+fatigued sprint is the textbook hamstring-strain mechanism, so those patterns are
+capped at 8 while strength work still climbs to 9.
+
+And a four-day football block contained **zero hamstring sets** — no Nordic, no
+RDL, no slider, all three in the catalogue. Nothing in the app could see it
+because volume was counted per session slot. It is now counted per muscle group
+(`lib/muscle-volume.ts`), shown to the athlete in the program calendar, and
+sprinting sports get hamstring and calf work taken *before* the selection
+rotation, because a scoring bonus kept getting spun out of the window.
+
+In-season weeks now taper into the match rather than sitting flat, matching how
+professional squads actually periodise a microcycle.
+
+### Today's meals and the meal plan showed different food
+
+A plan is stored as one seed and rebuilt wherever it is displayed, which only
+works if every caller feeds `buildWeek` the same inputs. The Meal plan tab
+merged starred dishes and note-inferred dislikes into prefs; the Today tick-list
+did not, and the page never passed `starred` down at all. A star is worth £30 in
+the planner, so leaving it out rebuilt a *different week*. One derivation now.
+
+You also could not open a recipe from Today — the row was a single button that
+only ticked the meal off.
+
+### The meal photo estimator, diagnosed properly
+
+`NEXT_PUBLIC_API_URL` **is** set, so the app routes to the Worker; the Worker's
+`/health` reports **no vision model** over a chain of eight text-only models; the
+Edge Function that would cover it is not deployed. Adding a vision-models
+variable will not help — the deployed Worker's `/health` has no `vision` key at
+all where the repo's emits one unconditionally, so the rewrite appears to have
+removed the vision path entirely. *(Inferred from the response shape, not from
+reading the source.)*
+
+Until it is deployed, a photo **plus a typed description** now produces a real
+estimate rather than an error — the fallback uses the words when nothing can
+read the picture.
+
+That work also found a bug that had never once worked: supabase-js reports every
+failure as `"Edge Function returned a non-2xx status code"`, so the friendly
+404 message `estimateFood` was matching on never fired. Athletes saw that raw
+string under a button.
+
+### Other things that were quietly broken
+
+- **Three Tailwind colour classes rendered as nothing.** `readiness-amber` does
+  not exist (it is `readiness-yellow`) and was used in four places, including a
+  dashboard progress bar that was drawing invisible. `text-pitch-200` does not
+  exist either, so program week focus notes had no colour. Guard added.
+- **Budget mode came out DEARER** than not using it for 6 of 96 athlete/diet
+  combinations. Two weights re-swept jointly; now clean on all 96.
+- **The store picker only changed search links**, so an Aldi shopper was quoted
+  Tesco prices. It sets the price level now, and athletes can correct any line.
+- **52 new recipes** (143 → 195). Adding them initially made a vegan cutting
+  athlete's week *worse*, which is recorded in the handover because it is the
+  more useful half of the story.
+
+### Guards added, each because something broke silently
+
+`worker-drift` (deployed Worker ≠ repo, with "couldn't check" distinct from
+"they differ"), a predeploy hook and a CI step so `wrangler deploy` cannot
+overwrite a newer dashboard Worker, `backend-routes.test.ts` (a backend call no
+backend serves — it immediately found one a hand-written list had missed), and
+`theme-tokens.test.ts` for the colour classes above.
+
+Every one was verified by injecting the regression it exists to catch.
+
+**One standing warning**: the Worker answers 18 routes, the Edge Functions cover
+4 of the 14 the app calls, and **ten features exist on the Worker alone** —
+including billing and account deletion, neither of which can have an on-device
+fallback. Do not unset `NEXT_PUBLIC_API_URL` without adding those first. It was
+proposed once already.
+
+---
+
 ## 2026-08-03 (iOS 0.2.0) — A widget, a reminder, and the ability to read
 
 **Operator action: none for the web.** `ios/` is excluded from `tsconfig.json`
