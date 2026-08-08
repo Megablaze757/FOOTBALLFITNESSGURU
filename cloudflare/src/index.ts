@@ -39,6 +39,18 @@ export interface Env {
   GROQ_FALLBACK_MODELS: string;  // comma-separated slugs tried after it
   GROQ_PROMPT_PER_M: string;     // USD per million prompt tokens (blank = free tier)
   GROQ_COMPLETION_PER_M: string; // USD per million completion tokens
+  /**
+   * Vision model chains, per provider, comma-separated.
+   *
+   * Separate from the text chains because MOST MODELS CANNOT SEE, and sending a
+   * photo to one that can't is the entire meal-photo bug: the request succeeds,
+   * the model answers confidently about a meal it never saw, and nothing
+   * anywhere reports an error. A slug belongs in a vision list only once it has
+   * been confirmed to accept image input.
+   */
+  GROQ_VISION_MODELS: string;
+  OPENROUTER_VISION_MODELS: string;
+  NVIDIA_VISION_MODELS: string;
   /** NVIDIA NIM — kept as a last-resort rung. See GROQ_SECRET for the pattern. */
   NVIDIA_SECRET: string;
   NVIDIA_MODEL: string;       // primary NVIDIA slug
@@ -107,12 +119,19 @@ export default {
         // — and a missing NVIDIA_SECRET is invisible otherwise, because the
         // Worker would quietly carry on serving from OpenRouter.
         const chain = modelChain(env);
+        const vision = visionChain(env);
         return json({
           ok: true,
           version: WORKER_VERSION,
           model: chain[0] ? `${chain[0].provider}/${chain[0].model}` : null,
           providers: [...new Set(chain.map((r) => r.provider))],
           chain: chain.map((r) => `${r.provider}/${r.model}`),
+          // The client routes photos on this field: present means "this server
+          // can see", absent means send them elsewhere or don't offer a camera.
+          // It must therefore report the chain that ACTUALLY exists, never a
+          // hardcoded true — advertising vision we can't do is how photos
+          // reached a text-only model and got answered anyway.
+          vision: vision.length ? vision.map((r) => `${r.provider}/${r.model}`) : false,
         });
       }
       return json({ error: "not found" }, 404);
@@ -375,7 +394,7 @@ function overBudget(state: BudgetState): Response {
 // nobody is watching a spinner and the budget can be what the work actually
 // needs. Callers pass their own client-side timeout to match.
 // Bump on every paste into the Cloudflare dashboard. GET /health reports it.
-const WORKER_VERSION = "2026-08-04.2";
+const WORKER_VERSION = "2026-08-08.1";
 
 const CHAIN_BUDGET_MS = 55_000;
 /**
@@ -569,6 +588,48 @@ function modelChain(env: Env): Rung[] {
   return PROVIDER_ORDER.flatMap((p) => chainFor(env, p));
 }
 
+/**
+ * Vision defaults — a DIFFERENT ladder, and deliberately OpenRouter-first.
+ *
+ * The text chain leads with Groq on speed. This one doesn't, because for vision
+ * a correct slug matters more than a fast one: a model that cannot see does not
+ * fail, it answers confidently about a photo it never received. Both OpenRouter
+ * entries were verified against their live catalogue (GET /v1/models,
+ * 2026-08-08) as declaring `image` among their input modalities. No Groq vision
+ * slug could be verified — their API is unreachable from where this was
+ * written — and shipping an unverified default here would 404 every photo.
+ *
+ * So Groq is supported but not assumed: set GROQ_VISION_MODELS to a slug you
+ * have checked and it goes to the front of the queue for its provider.
+ * NVIDIA likewise.
+ */
+const VISION_DEFAULTS: Record<Provider, string[]> = {
+  groq: [],
+  openrouter: ["google/gemini-2.5-flash", "openai/gpt-4.1-mini"],
+  nvidia: [],
+};
+
+function visionChainFor(env: Env, p: Provider): Rung[] {
+  if (!keyFor(env, p)) return [];
+  const raw = p === "groq" ? env.GROQ_VISION_MODELS
+    : p === "nvidia" ? env.NVIDIA_VISION_MODELS
+    : env.OPENROUTER_VISION_MODELS;
+  const configured = (raw || "").split(",").map((s) => s.trim()).filter(Boolean);
+  // Configured values REPLACE the defaults rather than appending — otherwise a
+  // slug you set because the default was retired still gets tried after it.
+  const models = configured.length ? configured : VISION_DEFAULTS[p];
+  return models
+    .filter((m, i, all) => m && all.indexOf(m) === i)
+    .map((model) => ({ provider: p, model }));
+}
+
+/** OpenRouter first here — see VISION_DEFAULTS for why the order differs. */
+const VISION_ORDER: Provider[] = ["openrouter", "groq", "nvidia"];
+
+function visionChain(env: Env): Rung[] {
+  return VISION_ORDER.flatMap((p) => visionChainFor(env, p));
+}
+
 // Price of the paid rung, in USD per MILLION tokens, for deepseek/deepseek-chat
 // as of 2026-07-25. Published pricing, not a secret — so it lives in the code
 // rather than as a dashboard var. That matters here: this Worker is pasted into
@@ -650,7 +711,8 @@ interface Attempt { text: string; cost: number }
  * vendor-specific extras differ.
  */
 async function providerOnce(
-  env: Env, rung: Rung, system: string, user: string, maxTokens: number, json_mode = false
+  env: Env, rung: Rung, system: string, user: string, maxTokens: number, json_mode = false,
+  image?: string
 ): Promise<Attempt> {
   const isOpenRouter = rung.provider === "openrouter";
   const model = rung.model;
@@ -682,7 +744,19 @@ async function providerOnce(
         ...(withJsonMode ? { response_format: { type: "json_object" } } : {}),
         messages: [
           { role: "system", content: system },
-          { role: "user", content: user },
+          // A text-only turn stays a plain string. The array form is valid
+          // OpenAI-compatible input everywhere, but some providers are fussier
+          // about it, and there is no reason to take that risk on the 99% of
+          // calls that carry no picture.
+          image
+            ? {
+                role: "user",
+                content: [
+                  { type: "text", text: user },
+                  { type: "image_url", image_url: { url: image } },
+                ],
+              }
+            : { role: "user", content: user },
         ],
       }),
       signal: ctrl.signal,
@@ -736,6 +810,8 @@ async function complete(
     validate?: (text: string) => boolean; json?: boolean;
     /** Gold's "priority AI": skip the free rungs entirely. */
     priority?: boolean;
+    /** A `data:image/…` URL. Its presence switches to the vision ladder. */
+    image?: string;
   }
 ): Promise<{ text: string; model: string; cost: number }> {
   const started = Date.now();
@@ -746,14 +822,22 @@ async function complete(
   let spent = 0;
 
   const attempt = async (rung: Rung) => {
-    const { text, cost } = await providerOnce(env, rung, opts.system, opts.user, opts.maxTokens, opts.json);
+    const { text, cost } = await providerOnce(env, rung, opts.system, opts.user, opts.maxTokens, opts.json, opts.image);
     spent += cost;
     if (opts.validate && !opts.validate(text)) throw new Error("unusable output");
     return { text, model: `${rung.provider}/${rung.model}`, cost: 0 };
   };
 
-  const chain = modelChain(env);
-  if (!chain.length) throw Object.assign(new Error("no AI provider configured"), { cost: 0 });
+  const chain = opts.image ? visionChain(env) : modelChain(env);
+  if (!chain.length) {
+    // Distinguished from "no provider configured": with a photo in hand, the
+    // useful thing to know is that nothing on the ladder can SEE, which is a
+    // different fix from having no key at all.
+    throw Object.assign(
+      new Error(opts.image ? "no vision model configured" : "no AI provider configured"),
+      { cost: 0 }
+    );
+  }
 
   /**
    * Queued rungs, each provider under its OWN slice of the clock.
@@ -778,6 +862,23 @@ async function complete(
     }
     return null;
   };
+
+  /**
+   * The vision ladder runs in ITS OWN order, not the text one.
+   *
+   * Everything below this point regroups the chain by provider in
+   * PROVIDER_ORDER (Groq first). Letting a photo through that would silently
+   * reverse visionChain()'s deliberately OpenRouter-first order the moment
+   * GROQ_VISION_MODELS was set — putting an unverified slug ahead of a verified
+   * one, which is the exact failure this whole path exists to fix. None of
+   * these rungs are `:free`, so there is nothing to race and nothing lost by
+   * taking them strictly in order.
+   */
+  if (opts.image) {
+    const seen = await runQueued(chain);
+    if (seen) return seen;
+    throw Object.assign(new Error(`all vision models failed — ${trail.join(" | ")}`), { cost: spent });
+  }
 
   // Groq first — the whole point of the ladder's order.
   const fast = await runQueued(chain.filter((r) => r.provider === "groq"));
@@ -830,7 +931,10 @@ async function complete(
 async function meteredComplete(
   env: Env,
   userId: string,
-  opts: { system: string; user: string; maxTokens: number; validate?: (text: string) => boolean; json?: boolean }
+  opts: {
+    system: string; user: string; maxTokens: number;
+    validate?: (text: string) => boolean; json?: boolean; image?: string;
+  }
 ): Promise<{ text: string; model: string }> {
   try {
     // Paying skips the free queue. This said `=== "gold"`, which quietly meant
@@ -1081,9 +1185,33 @@ async function estimateFood(req: Request, env: Env): Promise<Response> {
   if (gate) return gate;
   const budget = await checkBudget(env, u.id);
   if (!budget.allowed) return overBudget(budget);
-  const { text } = (await req.json()) as { text?: string };
+  const { text, image } = (await req.json()) as { text?: string; image?: string };
   const meal = (text ?? "").trim().slice(0, 300);
-  if (meal.length < 2) return json({ error: "text required" }, 400);
+
+  /**
+   * Photo support. The image is optional and the text path is unchanged.
+   *
+   * Size is capped BEFORE anything else touches it: base64 runs about 4/3 of
+   * the raw bytes, so 1.5M characters is roughly a 1.1MB image. Over that is a
+   * 413, not a 400 — the request is well-formed, it is just too big, and the
+   * client can act on that distinction by downscaling further.
+   */
+  const MAX_IMAGE_CHARS = 1_500_000;
+  if (image !== undefined) {
+    if (typeof image !== "string" || !image.startsWith("data:image/")) {
+      return json({ error: "image must be a data:image/… URL" }, 400);
+    }
+    if (image.length > MAX_IMAGE_CHARS) {
+      return json({ error: "image too large — downscale it and try again" }, 413);
+    }
+    if (!visionChain(env).length) {
+      // Say what is actually wrong. The old behaviour here was to answer from a
+      // text-only model, which invented a meal from the description alone and
+      // reported it as though it had looked at the photo.
+      return json({ error: "no vision model configured on this server", vision: false }, 503);
+    }
+  }
+  if (!image && meal.length < 2) return json({ error: "text required" }, 400);
 
   const sys =
     "You estimate the nutrition of a meal an athlete describes in plain language. " +
@@ -1096,11 +1224,27 @@ async function estimateFood(req: Request, env: Env): Promise<Response> {
     "kcal must be the total for the stated qty, not per 100g, and must be greater than zero. " +
     "No prose outside the JSON.";
 
+  // Scale references, because a photo has no ruler in it. Portion size is most
+  // of the error in a calorie estimate — identifying the food is the part a
+  // model is good at — so it is given something in frame to measure against.
+  const photoSys = image
+    ? sys +
+      " You are looking at a PHOTOGRAPH of the meal. Judge portions against what is visible: " +
+      "a dinner plate is about 27cm across, a fork 19cm, a mug holds 300ml, a closed fist is 150-200g. " +
+      "Count what you can actually see and do not invent sides that are not in the picture. " +
+      "Include cooking oil or butter if the food looks fried or glossy, which people always omit."
+    : sys;
+
   const { text: raw, model } = await meteredComplete(env, u.id, {
-    system: sys,
-    user: `The athlete ate: ${meal}`,
+    system: photoSys,
+    user: image
+      ? (meal.length >= 2
+          ? `Estimate this meal from the photo. The athlete also described it as: ${meal}`
+          : "Estimate this meal from the photo.")
+      : `The athlete ate: ${meal}`,
     maxTokens: 700,
     json: true,
+    image,
     validate: (t) => parseFoodItems(t) !== null,
   });
   const items = parseFoodItems(raw);
