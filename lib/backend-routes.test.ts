@@ -12,16 +12,21 @@ import { join } from "node:path";
  * reached when it isn't, which are in `supabase/functions/`.
  *
  * They do NOT serve the same routes, and nothing anywhere checked that. The
- * Worker answers 18; the Edge Functions cover 4 of the 14 the app calls. So
- * unsetting NEXT_PUBLIC_API_URL — which was done to get the meal photo
- * estimator onto a backend that can see — silently took TEN features with it,
- * including subscription management and account deletion. Neither of those has
- * an on-device fallback, and neither can have one: you cannot cancel a Stripe
- * subscription from a phone with no server.
+ * Worker answers 18; the Supabase Edge Functions cover 4 of the 14 the app
+ * calls. Ten features — including subscription management and account deletion
+ * — exist on the Worker alone.
  *
- * The photo estimator did not need that change. `estimateFood` already routes
- * photos to the Edge Function on its own when the Worker reports no vision
- * (see lib/api.ts), independently of NEXT_PUBLIC_API_URL.
+ * Today that is fine: NEXT_PUBLIC_API_URL is set to the Worker in production,
+ * so everything routes there and works. The point is what happens if it is ever
+ * unset, which has been proposed once already to get the meal photo estimator
+ * onto a backend that can see. That would take all ten with it, silently, and
+ * billing and deletion have no on-device fallback and cannot have one — you
+ * cannot cancel a Stripe subscription from a phone with no server.
+ *
+ * It also would not have helped. `estimateFood` already routes photos to the
+ * Edge Function on its own when the Worker reports no vision, and falls back to
+ * a text estimate when neither can see (lib/api.ts) — all independently of
+ * NEXT_PUBLIC_API_URL.
  *
  * This test is the check that was missing. It is deliberately a static scan of
  * the repo rather than a live probe: it has to fail in CI, on a laptop, with no

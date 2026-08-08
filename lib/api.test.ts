@@ -16,11 +16,13 @@ import { backendCapabilities, resetBackendCapabilities } from "./api";
 const realFetch = globalThis.fetch;
 const realApi = process.env.NEXT_PUBLIC_API_URL;
 const realSupabase = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const realAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 afterEach(() => {
   globalThis.fetch = realFetch;
   restore("NEXT_PUBLIC_API_URL", realApi);
   restore("NEXT_PUBLIC_SUPABASE_URL", realSupabase);
+  restore("NEXT_PUBLIC_SUPABASE_ANON_KEY", realAnon);
   resetBackendCapabilities();
 });
 
@@ -137,4 +139,101 @@ test("the probe is made once per session", async () => {
   await Promise.all([backendCapabilities(), backendCapabilities(), backendCapabilities()]);
   await backendCapabilities();
   assert.equal(calls.health, 1, `probed ${calls.health} times`);
+});
+
+// --- when nothing can see the photo ------------------------------------------
+
+/**
+ * A DESCRIBED MEAL BEATS NO MEAL.
+ *
+ * Both vision routes can be gone at once, and in production both are: the
+ * Worker's chain is eight text-only models and reports no `vision`, and the
+ * Edge Function that would cover it isn't deployed. The old behaviour was to
+ * say so and stop — which threw away a working answer, because the athlete has
+ * usually typed something next to the photo and the TEXT estimate works fine on
+ * the Worker.
+ */
+function stubBothBlind({ workerAnswer }: { workerAnswer?: unknown } = {}) {
+  const calls: string[] = [];
+  // Real Response objects: the Supabase client reads `headers.get`, so a
+  // hand-rolled `{ ok, json }` shape fails inside the library rather than in
+  // the code under test — which looks exactly like a bug in the code under test.
+  const reply = (status: number, body: unknown) =>
+    new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+
+  globalThis.fetch = (async (url: string, init?: RequestInit) => {
+    const u = String(url);
+    if (u.includes("/functions/v1/estimate-food")) {
+      calls.push(init?.method === "OPTIONS" ? "probe" : "edge");
+      return reply(404, { error: "not found" });
+    }
+    if (u.endsWith("/health")) {
+      calls.push("health");
+      // No `vision` key: the Worker cannot see.
+      return reply(200, { ok: true, version: "2026-08-04.2", model: "groq/x" });
+    }
+    if (u.endsWith("/estimate-food")) {
+      calls.push("worker-text");
+      const body = JSON.parse(String(init?.body ?? "{}"));
+      return reply(200, workerAnswer ?? { items: [], echoed: body });
+    }
+    calls.push(`other:${u}`);
+    return reply(500, {});
+  }) as unknown as typeof fetch;
+  return calls;
+}
+
+test("a photo nothing can read falls back to the words next to it", async () => {
+  process.env.NEXT_PUBLIC_API_URL = "https://worker.test";
+  process.env.NEXT_PUBLIC_SUPABASE_URL = "https://sb.test";
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "test-anon-key";
+  const calls = stubBothBlind({ workerAnswer: { items: [{ name: "chicken salad", kcal: 400 }] } });
+
+  const { estimateFood } = await import("./api");
+  const res = await estimateFood<{ items?: unknown[] }>({
+    image: "data:image/jpeg;base64,AAAA",
+    text: "large chicken salad with olive oil",
+  });
+
+  assert.equal(res.items?.length, 1, "the text estimate should have produced an answer");
+  assert.ok(calls.includes("worker-text"), `never tried the text route: ${calls.join(", ")}`);
+});
+
+test("the text it falls back to is the description, not the image", async () => {
+  process.env.NEXT_PUBLIC_API_URL = "https://worker.test";
+  process.env.NEXT_PUBLIC_SUPABASE_URL = "https://sb.test";
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "test-anon-key";
+  let sent: Record<string, unknown> = {};
+  const reply = (status: number, body: unknown) =>
+    new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+  globalThis.fetch = (async (url: string, init?: RequestInit) => {
+    const u = String(url);
+    if (u.includes("/functions/v1/")) return reply(404, { error: "not found" });
+    if (u.endsWith("/health")) return reply(200, { ok: true, model: "x" });
+    sent = JSON.parse(String(init?.body ?? "{}"));
+    return reply(200, { items: [{ name: "x", kcal: 1 }] });
+  }) as unknown as typeof fetch;
+
+  const { estimateFood } = await import("./api");
+  await estimateFood({ image: "data:image/jpeg;base64,AAAA", text: "two eggs on toast" });
+
+  assert.equal(sent.text, "two eggs on toast");
+  assert.equal(sent.image, undefined, "must not resend the image to a text-only model");
+});
+
+test("with no description it asks for one instead of reporting a 404", async () => {
+  process.env.NEXT_PUBLIC_API_URL = "https://worker.test";
+  process.env.NEXT_PUBLIC_SUPABASE_URL = "https://sb.test";
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "test-anon-key";
+  stubBothBlind();
+
+  const { estimateFood } = await import("./api");
+  await assert.rejects(
+    () => estimateFood({ image: "data:image/jpeg;base64,AAAA" }),
+    (e: Error) => {
+      assert.match(e.message, /describe the meal/i, `unhelpful message: ${e.message}`);
+      assert.doesNotMatch(e.message, /\b404\b/, "a status code is not an instruction");
+      return true;
+    }
+  );
 });

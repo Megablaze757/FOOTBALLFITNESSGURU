@@ -196,7 +196,21 @@ export function resetBackendCapabilities(): void {
 async function invokeEdge<T>(fn: string, body: unknown): Promise<T> {
   const supabase = createClient();
   const { data, error } = await supabase.functions.invoke(fn, { body: body as Record<string, unknown> });
-  if (error) throw error;
+  if (error) {
+    /**
+     * CARRY THE STATUS, BECAUSE THE MESSAGE DOES NOT.
+     *
+     * supabase-js reports every failed call as the same sentence — "Edge
+     * Function returned a non-2xx status code" — with the real Response tucked
+     * away on `.context`. So a 404 from an undeployed function is indisplayable
+     * from a 500, and callers matching on the text (which `estimateFood` did)
+     * silently never matched at all: athletes got that sentence verbatim under
+     * a button instead of the message written for them.
+     */
+    const status = (error as { context?: { status?: number } })?.context?.status;
+    if (status) Object.assign(error, { status });
+    throw error;
+  }
   return data as T;
 }
 
@@ -235,13 +249,39 @@ export async function estimateFood<T = unknown>(body: { text?: string; image?: s
   try {
     return await invokeEdge<T>("estimate-food", body);
   } catch (e) {
-    // The Edge Function isn't deployed yet. Say which of the two things has to
-    // happen rather than reporting a 404 from a URL the athlete has never heard
-    // of — this message ends up under a button on someone's phone.
+    // Status first — see invokeEdge for why the message alone cannot be trusted.
+    const status = (e as { status?: number })?.status;
     const msg = e instanceof Error ? e.message : String(e);
-    if (/404|not found/i.test(msg)) {
-      throw new Error("Photo estimates aren't switched on yet on the server (estimate-food).");
-    }
-    throw e;
+    if (status !== 404 && !/404|not found/i.test(msg)) throw e;
+
+    /**
+     * NO BACKEND CAN SEE — SO USE THE WORDS INSTEAD OF GIVING UP.
+     *
+     * Both vision routes are gone at this point: the Worker's chain is eight
+     * text-only models and reports no `vision` at all, and the Edge Function
+     * that would cover it isn't deployed. The honest previous behaviour was to
+     * say so and stop.
+     *
+     * But the athlete has usually typed something alongside the photo — "with
+     * olive oil", "large chicken salad" — and the TEXT estimate works perfectly
+     * well on the Worker today. Refusing to run it because the picture couldn't
+     * be read is throwing away a working answer over a broken one. A described
+     * meal beats no meal, and it beats making them retype it into a different
+     * box after an error.
+     *
+     * Three characters, matching `askAi` in MealCheckIn: below that there's
+     * nothing to estimate from and a guess would be invented rather than
+     * derived.
+     */
+    const described = body.text?.trim() ?? "";
+    if (described.length >= 3) return invokeAI<T>("estimate-food", { text: described });
+
+    // Nothing to fall back on. Ask for the one thing that would make it work
+    // rather than reporting a 404 from a URL the athlete has never heard of —
+    // this message ends up under a button on someone's phone.
+    throw new Error(
+      "I can't read photos yet — the server feature isn't switched on (estimate-food). " +
+      "Describe the meal instead and I'll work it out from that."
+    );
   }
 }
