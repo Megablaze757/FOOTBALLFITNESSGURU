@@ -8,7 +8,7 @@ import { createClient } from "@/lib/supabase/client";
 import { sportTerms } from "@/lib/sport-terms";
 import { SPORTS, type SportId } from "@/lib/exercises";
 import { assessReadiness } from "@/lib/readiness";
-import { computeACWR } from "@/lib/load";
+import { computeACWR, hasTrainingContent } from "@/lib/load";
 import { BodyMap } from "@/components/BodyMap";
 import { ReadinessGauge } from "@/components/ReadinessGauge";
 import { TrainingLogInput, type TrainingState } from "@/components/TrainingLogInput";
@@ -219,11 +219,7 @@ export function JournalForm({ initial, initialTraining, sport, planned = [] }: {
     };
 
     const cleanDrills = training.drills.filter((d) => d.name.trim());
-    // distance and contact count as "something was logged" in their own right —
-    // a runner who enters 8km and nothing else has told us about a session, and
-    // dropping it because there were no drills or minutes would lose the entry.
-    const trainingRow = (cleanDrills.length || training.total_minutes || training.intensity ||
-                         training.distance_km || training.contact_minutes)
+    const trainingRow = hasTrainingContent({ ...training, drills: cleanDrills })
       ? {
           drills: cleanDrills,
           total_minutes: training.total_minutes,
@@ -459,7 +455,8 @@ export function JournalForm({ initial, initialTraining, sport, planned = [] }: {
         </div>
       </div>
 
-      <section className="card p-5">
+      {/* Anchor: the done-state's "Add today's training" scrolls here. */}
+      <section id="training" className="card scroll-mt-20 p-5">
         <div className="mb-3 flex items-center gap-2">
           <h2 className="field-label !mb-0">Today&apos;s training</h2>
           <span className="chip text-pitch-400">drills logged to history</span>

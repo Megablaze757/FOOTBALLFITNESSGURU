@@ -182,3 +182,32 @@ export function weeklyReport(
     focus,
   };
 }
+
+/**
+ * Did this training entry actually record anything?
+ *
+ * A `training_logs` row can exist with every field null — one gets upserted
+ * alongside a check-in that touched none of it. Treating that as "you've logged
+ * training" is the difference between prompting someone to log their session
+ * and silently deciding they already did.
+ *
+ * Distance and contact minutes count in their own right: a runner who enters
+ * 8km and nothing else has told us about a session, and a check for drills or
+ * minutes alone would throw it away.
+ */
+export function hasTrainingContent(t: {
+  drills?: unknown[] | null;
+  total_minutes?: number | null;
+  intensity?: number | null;
+  distance_km?: number | null;
+  contact_minutes?: number | null;
+} | null | undefined): boolean {
+  if (!t) return false;
+  return !!(
+    (t.drills?.length ?? 0) > 0 ||
+    t.total_minutes ||
+    t.intensity ||
+    t.distance_km ||
+    t.contact_minutes
+  );
+}

@@ -167,6 +167,23 @@ const META: Record<string, MovementMeta> = {
 
   // --- Conditioning: the finisher -------------------------------------------
   tempo_runs: { slot: "conditioning", pattern: "conditioning", targets: ["endurance"], load: { hamstring: 1, knee: 1 }, level: 2, prog: "time", dose: d(6, 100, REST.moderate, { unit: "metres", rpe: 7 }), region: "conditioning" },
+
+  // --- Running by zone -------------------------------------------------------
+  //
+  // Prescribed in minutes, because that's how runs are planned and how the
+  // check-in records them. RPE is what makes these usable in a plan: the engine
+  // already eases effort targets on a Yellow readiness day, so a zone 4 session
+  // automatically becomes something sensible rather than being skipped.
+  //
+  // Zone 1 carries `injury_recovery` so it can be offered as active recovery to
+  // someone coming back from a niggle — it's the one run that adds no stress.
+  // Zones 4 and 5 carry `speed` as well as `endurance`, because that's what they
+  // actually develop for a field-sport athlete.
+  zone1_run: { slot: "conditioning", pattern: "conditioning", targets: ["injury_recovery", "endurance"], load: {}, level: 1, prog: "time", dose: d(1, 25, REST.none, { unit: "minutes", rpe: 3 }), region: "conditioning" },
+  zone2_run: { slot: "conditioning", pattern: "conditioning", targets: ["endurance"], load: { ankle: 1 }, level: 1, prog: "time", dose: d(1, 40, REST.none, { unit: "minutes", rpe: 4 }), region: "conditioning" },
+  zone3_run: { slot: "conditioning", pattern: "conditioning", targets: ["endurance"], load: { hamstring: 1, ankle: 1 }, level: 2, prog: "time", dose: d(1, 30, REST.none, { unit: "minutes", rpe: 6 }), region: "conditioning" },
+  zone4_run: { slot: "conditioning", pattern: "conditioning", targets: ["endurance", "speed"], load: { hamstring: 1, knee: 1 }, level: 3, prog: "time", dose: d(3, 8, REST.moderate, { unit: "minutes", rpe: 8 }), region: "conditioning" },
+  zone5_run: { slot: "conditioning", pattern: "conditioning", targets: ["endurance", "speed"], load: { hamstring: 2, knee: 1, ankle: 1 }, level: 3, prog: "time", dose: d(5, 4, REST.long, { unit: "minutes", rpe: 9 }), region: "conditioning" },
   bike_intervals: { slot: "conditioning", pattern: "conditioning", targets: ["endurance", "injury_recovery"], load: {}, level: 2, prog: "time", dose: d(8, 40, REST.short, { unit: "secs", rpe: 8 }), region: "conditioning" },
   rowing_intervals: { slot: "conditioning", pattern: "conditioning", targets: ["endurance"], load: { lower_back: 1 }, level: 2, prog: "time", dose: d(6, 60, REST.moderate, { unit: "secs", rpe: 8 }), region: "conditioning" },
   ski_erg: { slot: "conditioning", pattern: "conditioning", targets: ["endurance"], load: { shoulder: 1 }, level: 2, prog: "time", dose: d(6, 45, REST.moderate, { unit: "secs", rpe: 8 }), region: "conditioning" },

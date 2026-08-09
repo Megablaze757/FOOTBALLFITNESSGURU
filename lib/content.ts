@@ -99,7 +99,7 @@ export const FACT_GROUPS: FactGroup[] = [
     label: "Plans & access",
     facts: [
       "There is one paid plan, Pro, at £20 a month. Everything is included in it.",
-      "There is a 7-day free trial on the first paid subscription.",
+      "There is a 14-day free trial on the first paid subscription.",
       "You can cancel any time from your profile, through Stripe's own billing portal.",
       "You can delete your account and everything in it, permanently, from the app.",
       "It installs to your home screen and works offline.",

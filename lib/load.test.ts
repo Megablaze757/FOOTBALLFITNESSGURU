@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { sessionLoad, computeACWR, checkInStreak, weeklyReport, tonnage, totalDistanceKm } from "./load";
+import { sessionLoad, computeACWR, checkInStreak, weeklyReport, tonnage, totalDistanceKm, hasTrainingContent } from "./load";
 import type { DailyCheckIn, NutritionLog, TrainingLog } from "./types";
 
 const day = (offset: number, from = new Date("2026-06-28")) =>
@@ -132,4 +132,29 @@ test("distance sums and rounds to one place", () => {
   const b: TrainingLog = { ...tlog("b", 30, 5), distance_km: 5.1 };
   assert.equal(totalDistanceKm([a, b]), 13.4);
   assert.equal(totalDistanceKm([tlog("c", 30, 5)]), 0, "no distance logged is 0, not NaN");
+});
+
+test("an all-null training row does not count as trained", () => {
+  // The case that matters: a row upserted alongside a check-in that touched
+  // none of the training fields. Counting it would hide the "add your training"
+  // prompt from exactly the people who haven't added any.
+  assert.equal(hasTrainingContent({
+    drills: [], total_minutes: null, intensity: null,
+    distance_km: null, contact_minutes: null,
+  }), false);
+  assert.equal(hasTrainingContent(null), false);
+  assert.equal(hasTrainingContent(undefined), false);
+});
+
+test("distance or contact alone counts as trained", () => {
+  // A runner logging 8km and nothing else has told us about a session.
+  assert.equal(hasTrainingContent({ distance_km: 8 }), true);
+  assert.equal(hasTrainingContent({ contact_minutes: 20 }), true);
+  assert.equal(hasTrainingContent({ total_minutes: 45 }), true);
+  assert.equal(hasTrainingContent({ drills: [{ name: "Squat" }] }), true);
+});
+
+test("zero is not a logged value", () => {
+  // 0 minutes at 0 intensity is an empty form, not a session.
+  assert.equal(hasTrainingContent({ total_minutes: 0, intensity: 0, distance_km: 0 }), false);
 });

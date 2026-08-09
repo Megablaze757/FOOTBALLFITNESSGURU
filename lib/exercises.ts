@@ -136,6 +136,40 @@ export const EXERCISES: Exercise[] = [
     cues: ["Smooth and controlled, ~75%", "Relaxed upper body", "Consistent split every rep"],
     why: "Extends your aerobic base so you repeat sprints late in games." },
 
+  // --- Running by zone --------------------------------------------------------
+  //
+  // The five-zone model, which is how runners actually talk and plan. It was
+  // missing entirely: "tempo runs" existed and nothing said what an easy run
+  // was, how easy, or why most of your week should be one.
+  //
+  // No `sports` tag on purpose, so they're available to everyone. A recovery run
+  // is a recovery run whether you're a marathoner or a centre back, and the
+  // zone 1/2 distinction is exactly what field-sport athletes get wrong when
+  // they run every session at the same middling effort.
+  //
+  // Each is anchored to the talk test rather than heart-rate percentages,
+  // because everyone has a mouth and most people don't have a chest strap.
+  { id: "zone1_run", name: "Zone 1 — recovery run", category: "Recovery", demo: "run", equipment: "None",
+    muscles: ["Cardio"], tempo: "Very easy · fully conversational",
+    cues: ["You could hold a conversation in full sentences", "Slower than feels right — that's the point", "Stop before you're tired, not after"],
+    why: "Moves blood through sore legs without adding training stress." },
+  { id: "zone2_run", name: "Zone 2 — easy run", category: "Endurance", demo: "run", equipment: "None",
+    muscles: ["Hamstrings", "Calves", "Cardio"], tempo: "Easy · can talk in sentences",
+    cues: ["Conversational, but you'd rather not sing", "Nose breathing should be just about possible", "This is most of your week, not the hard bit"],
+    why: "Builds the aerobic base everything else is spent from." },
+  { id: "zone3_run", name: "Zone 3 — steady run", category: "Endurance", demo: "run", equipment: "None",
+    muscles: ["Hamstrings", "Quads", "Cardio"], tempo: "Steady · short sentences only",
+    cues: ["Comfortably hard — sentences get short", "Should feel repeatable for 30-40 minutes", "Easy to spend too much of your week here"],
+    why: "Useful in moderation, and the zone most people accidentally live in." },
+  { id: "zone4_run", name: "Zone 4 — threshold", category: "Endurance", demo: "run", equipment: "None",
+    muscles: ["Hamstrings", "Quads", "Cardio"], tempo: "Hard · a few words at a time",
+    cues: ["The fastest pace you could hold for about an hour", "Controlled, not a race", "Finish feeling you had one more rep in you"],
+    why: "Raises the pace you can sustain before you start to fade." },
+  { id: "zone5_run", name: "Zone 5 — VO2max intervals", category: "Endurance", demo: "run", equipment: "None",
+    muscles: ["Quads", "Calves", "Cardio"], tempo: "Very hard · single words",
+    cues: ["3-5 minutes hard, equal easy jog between", "Same pace on the last rep as the first", "If rep six is faster, the first five were too slow"],
+    why: "Lifts your ceiling — the top end everything else sits under." },
+
   // --- Conditioning -----------------------------------------------------------
   //
   // The library had two cardio entries, both of them running or a bike, which
@@ -462,6 +496,23 @@ export const EXERCISES: Exercise[] = [
 // Fuller "how to perform it" write-ups — setup, execution, what to feel and the
 // most common mistake. Merged onto EXERCISES below so components can show depth.
 const DESCRIPTIONS: Record<string, string> = {
+  // --- Running zones ---------------------------------------------------------
+  // Written to answer "what does zone 2 actually mean" without a heart-rate
+  // monitor, because most people don't have one and the ones who do rarely have
+  // their zones set correctly. The talk test is the anchor throughout: it needs
+  // no kit, it's self-correcting on hills and in heat, and it's what a coach
+  // would tell you anyway.
+  zone1_run:
+    "The easiest running you will do — genuinely slow, and slower than your ego wants. You should be able to hold a full conversation in complete sentences without pausing for breath. Roughly 50–60% of your maximum heart rate if you track it. Use it the day after something hard: the point is to move blood through sore legs and add no training stress at all. 20–35 minutes is plenty, and if you finish feeling like you've trained, you went too fast. Walking the hills to keep the effort down is completely correct, not a failure.",
+  zone2_run:
+    "Easy aerobic running, and the zone most of your week should live in — commonly 70–80% of total weekly volume. You can talk in full sentences but wouldn't want to sing; nose-only breathing should be just about possible. Around 60–70% of maximum heart rate. This is what builds the aerobic base every harder session is spent from, and it works by accumulating time rather than by hurting: 30–75 minutes depending on where you are. The single most common mistake in endurance training is running these too hard, which turns them into zone 3 and leaves you too tired for the sessions that were supposed to be hard.",
+  zone3_run:
+    "Steady running — comfortably hard. Sentences shorten to a few words at a time and breathing is noticeably rhythmic. About 70–80% of maximum heart rate. It's genuinely useful in moderation, typically 20–40 minutes continuous, and it's also the zone people drift into by accident: too hard to recover from, not hard enough to drive real adaptation. If every run you do feels like this one, that's the problem to fix — make the easy ones easier and the hard ones harder.",
+  zone4_run:
+    "Threshold running, at roughly the fastest pace you could hold for about an hour. Talking is down to a few words. Around 80–90% of maximum heart rate. Run it as one block of 20–30 minutes or as reps — 3 × 8 minutes with 2 minutes easy between is a standard session. The discipline is holding back: it should feel controlled and repeatable, and you should finish believing you had one more rep in you. This is the session that raises the pace you can sustain before you start to fade, which for a field-sport athlete is the difference between the 70th minute and the 90th.",
+  zone5_run:
+    "VO2max intervals — very hard, single words only, 90%+ of maximum heart rate. Reps of 3–5 minutes with an equal or slightly shorter easy jog between, typically 4–6 of them, always after a full warm-up including some strides. Pace every rep off the last one: if rep six is your fastest, the first five were too slow. One of these a week is enough for most people and two is more than almost anyone needs. This lifts the ceiling everything else sits underneath, and it is also the session most likely to injure you if your easy weeks haven't been easy.",
+
   ladder_quickfeet: "Set an agility ladder flat on the ground and work through patterns (one foot in each, two in each, lateral in-in-out) as fast as you can stay clean. Keep your weight on the balls of the feet, arms pumping in rhythm, and eyes up. It's a coordination and foot-speed drill, not a conditioning grind — quality of contact beats raw speed.",
   reactive_mirror: "Face a partner a couple of metres away; one leads with short lateral and forward-back movements, the other mirrors as fast as possible. Stay in a low athletic stance and react — never pre-plan. This trains the unscripted change-of-direction you actually use in a game, where you respond to an opponent rather than a cone.",
   lateral_shuffle: "Set two gates ~6–10m apart. Drop into a low stance, hips back and chest up, and shuffle sideways pushing hard off the outside foot without clicking your heels together. Stay square and low the whole way. The goal is a strong lateral push-off, which is exactly the position that protects the knee when you cut.",
