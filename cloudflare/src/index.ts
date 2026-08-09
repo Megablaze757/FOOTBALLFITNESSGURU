@@ -136,7 +136,29 @@ export default {
       }
       return json({ error: "not found" }, 404);
     } catch (e) {
-      return json({ error: String(e) }, 500);
+      const raw = e instanceof Error ? e.message : String(e);
+      /**
+       * A model-chain failure is not a 500 and should not read like one.
+       *
+       * This used to return `String(e)` verbatim, so an athlete tapping
+       * "build my plan" was shown "Error: all models failed — groq/…: unusable
+       * output | openrouter/…: unusable output" — a sentence that names our
+       * suppliers, explains nothing they can act on, and looks like the app
+       * broke rather than the AI being unavailable, which the on-device engine
+       * is standing by to cover.
+       *
+       * 503 rather than 500: the request was fine, the upstream is temporarily
+       * not. The trail moves to `detail` so it is still one click away in the
+       * network tab for whoever is debugging, without being the headline.
+       */
+      if (/^all (models|vision models) failed/.test(raw)) {
+        return json({
+          error: "The AI coach is unavailable right now — your plan was built on this device instead.",
+          reason: "upstream_unavailable",
+          detail: raw,
+        }, 503);
+      }
+      return json({ error: raw }, 500);
     }
   },
 
@@ -394,7 +416,7 @@ function overBudget(state: BudgetState): Response {
 // nobody is watching a spinner and the budget can be what the work actually
 // needs. Callers pass their own client-side timeout to match.
 // Bump on every paste into the Cloudflare dashboard. GET /health reports it.
-const WORKER_VERSION = "2026-08-08.1";
+const WORKER_VERSION = "2026-08-09.1";
 
 const CHAIN_BUDGET_MS = 55_000;
 /**
@@ -529,8 +551,28 @@ const FREE_RACE_START_BY_MS = 15_000;
  * rather than a live GET /models. Check them against the Groq console; a wrong
  * slug shows up as every Groq rung 404ing straight through to OpenRouter.
  */
-const GROQ_DEFAULT_MODEL = "openai/gpt-oss-120b";
-const GROQ_DEFAULT_FALLBACKS = ["llama-3.3-70b-versatile"];
+/**
+ * Llama 3.3 70B leads, NOT gpt-oss-120b.
+ *
+ * This is a correction. The comment below already said reasoning models are
+ * excluded because their thinking trace breaks the JSON validation nearly
+ * every call here depends on — and then gpt-oss-120b, which is a reasoning
+ * model, was made the primary anyway. The rule was right and it was not
+ * applied to the model that most needed it.
+ *
+ * The failure mode is specific: reasoning tokens are billed against
+ * max_tokens, and these calls run 320-2200. A model that thinks before it
+ * writes can spend that whole budget reasoning and return finish_reason
+ * "length" with empty or half-finished content — which fails validate, on
+ * every Groq rung, and reads as "all models failed".
+ *
+ * llama-3.3-70b-versatile does not reason before answering and is the
+ * better-behaved JSON producer. gpt-oss-120b stays as the rung behind it: when
+ * it does answer cleanly it is the stronger model, and by then the budget
+ * question has already been settled by the rung above failing.
+ */
+const GROQ_DEFAULT_MODEL = "llama-3.3-70b-versatile";
+const GROQ_DEFAULT_FALLBACKS = ["openai/gpt-oss-120b"];
 
 /**
  * Both slugs verified present in NVIDIA's live catalogue (GET /v1/models) on
@@ -701,7 +743,18 @@ function costOf(
   return (promptTokens * price.prompt + completionTokens * price.completion) / 1_000_000;
 }
 
-interface Attempt { text: string; cost: number }
+interface Attempt {
+  text: string;
+  cost: number;
+  /**
+   * The provider's own reason for stopping. Carried because "unusable output"
+   * is the same words whether the model wrote prose, wrote nothing, or was cut
+   * off mid-JSON — and those have completely different fixes. `length` in
+   * particular means max_tokens ran out, which is the failure a reasoning model
+   * produces when its thinking eats the budget before it starts answering.
+   */
+  finish?: string;
+}
 
 /**
  * One call to one model.
@@ -780,19 +833,35 @@ async function providerOnce(
 
     if (!r.ok) throw new Error(`${r.status} ${(await r.text()).slice(0, 200)}`);
     const data = (await r.json()) as {
-      choices?: { message?: { content?: string } }[];
+      choices?: {
+        message?: { content?: string; reasoning?: string };
+        finish_reason?: string;
+      }[];
       error?: { message?: string };
       usage?: { prompt_tokens?: number; completion_tokens?: number; cost?: number };
     };
     // Both providers can answer 200 with an error body, or with no choices at
     // all when the upstream model drops the request.
     if (data.error?.message) throw new Error(data.error.message.slice(0, 200));
-    const text = data.choices?.[0]?.message?.content ?? "";
+    const choice = data.choices?.[0];
+    const text = choice?.message?.content ?? "";
+    const finish = choice?.finish_reason;
     const cost = costOf(env, rung, data.usage, maxTokens);
     // An empty completion still consumed tokens, so it is thrown AFTER the cost
     // is known — the caller adds it to the running total either way.
-    if (!text.trim()) throw Object.assign(new Error("empty completion"), { cost });
-    return { text, cost };
+    if (!text.trim()) {
+      /**
+       * A reasoning model that spends its whole budget thinking returns exactly
+       * this: finish_reason "length", a populated `reasoning`, and an empty
+       * `content`. Saying so is the difference between a one-line fix (raise
+       * max_tokens, or stop using a reasoning model here) and an afternoon.
+       */
+      const why = finish === "length"
+        ? `empty completion — hit max_tokens (${maxTokens})${choice?.message?.reasoning ? " with all of it spent on reasoning" : ""}`
+        : `empty completion${finish ? ` (finish_reason: ${finish})` : ""}`;
+      throw Object.assign(new Error(why), { cost });
+    }
+    return { text, cost, finish };
   } finally {
     clearTimeout(timer);
   }
@@ -822,9 +891,29 @@ async function complete(
   let spent = 0;
 
   const attempt = async (rung: Rung) => {
-    const { text, cost } = await providerOnce(env, rung, opts.system, opts.user, opts.maxTokens, opts.json, opts.image);
+    const { text, cost, finish } = await providerOnce(env, rung, opts.system, opts.user, opts.maxTokens, opts.json, opts.image);
     spent += cost;
-    if (opts.validate && !opts.validate(text)) throw new Error("unusable output");
+    if (opts.validate && !opts.validate(text)) {
+      /**
+       * "unusable output" on its own was unactionable — it is the same two
+       * words whether the model wrapped its JSON in prose, was truncated
+       * mid-object, or answered a different question entirely. The reply is
+       * the evidence, so a redacted slice of it goes in the trail.
+       *
+       * Truncation is called out separately because it is the one cause the
+       * model did not choose: the request asked for more than max_tokens
+       * allowed, and no amount of retrying the same rung will fix it.
+       */
+      const head = text.trim().slice(0, 80).replace(/\s+/g, " ");
+      throw Object.assign(
+        new Error(
+          finish === "length"
+            ? `truncated at max_tokens (${opts.maxTokens}) — incomplete JSON`
+            : `unusable output — ${text.length} chars, starts: "${head}"`
+        ),
+        { cost: 0 }
+      );
+    }
     return { text, model: `${rung.provider}/${rung.model}`, cost: 0 };
   };
 
