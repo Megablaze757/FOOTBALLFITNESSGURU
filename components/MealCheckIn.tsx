@@ -60,8 +60,17 @@ interface Props {
   context: TargetContext;
   /** Whose ticks these are — see tickKey. */
   userId: string;
-  /** Adds the eaten macros into the day's running totals. */
-  onAdd: (m: Macros) => void;
+  /**
+   * Log something eaten. Carries a LABEL and, for a planned meal, a ref.
+   *
+   * It used to pass bare macros, which is why nothing could be edited later:
+   * the day was a running total with no record of what went into it. Un-ticking
+   * had to post the same numbers back as negatives — arithmetic standing in for
+   * a delete, and wrong the moment a rounded macro did not cancel exactly.
+   */
+  onAdd: (e: { label: string; macros: Macros; source: "plan" | "estimate"; ref?: string }) => void;
+  /** Un-tick: drop the entry this planned meal created. */
+  onRemoveRef: (ref: string) => void;
 }
 
 const DAY_INDEX = () => (new Date().getDay() + 6) % 7; // JS weeks start Sunday; ours start Monday
@@ -104,7 +113,7 @@ async function shrinkImage(file: File): Promise<string> {
  *
  * All three feed the same daily totals, which the tracker above then saves.
  */
-export function MealCheckIn({ stats, prefs, dietNotes, seed, swaps, recent, starred, context, onAdd, userId }: Props) {
+export function MealCheckIn({ stats, prefs, dietNotes, seed, swaps, recent, starred, context, onAdd, onRemoveRef, userId }: Props) {
   /**
    * WHICH MEALS ARE TICKED, KEPT ACROSS NAVIGATION.
    *
@@ -333,10 +342,12 @@ export function MealCheckIn({ stats, prefs, dietNotes, seed, swaps, recent, star
     const macros = roundMacros(mealMacros(pm.meal, pm.scale));
     if (next.has(key)) {
       next.delete(key);
-      onAdd({ kcal: -macros.kcal, protein: -macros.protein, carbs: -macros.carbs, fats: -macros.fats });
+      // Removes the entry rather than posting negative macros over the top of
+      // the total. Subtraction only cancelled exactly while nothing rounded.
+      onRemoveRef(key);
     } else {
       next.add(key);
-      onAdd(macros);
+      onAdd({ label: pm.meal.name, macros, source: "plan", ref: key });
     }
     setTicked(next);
   }
@@ -428,7 +439,13 @@ export function MealCheckIn({ stats, prefs, dietNotes, seed, swaps, recent, star
     if (!shown || shown.items.length === 0) return;
     // shown.total, not a fresh sum: the two are kept equal by reviseItems, and
     // adding a number the athlete never saw is how a tracker loses trust.
-    onAdd(shown.total);
+    onAdd({
+      // Name it after what was actually estimated, so the row in Today's food
+      // says "Chicken, rice, broccoli" rather than an anonymous calorie figure.
+      label: shown.items.map((i) => i.name).slice(0, 3).join(", ") || "Logged food",
+      macros: shown.total,
+      source: "estimate",
+    });
     setAdded(`Added ${shown.total.kcal} kcal`);
     setText("");
     setEstimate(null);

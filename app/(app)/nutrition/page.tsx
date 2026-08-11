@@ -11,6 +11,9 @@ import { can } from "@/lib/subscription";
 import { FeatureLock } from "@/components/FeatureLock";
 import { MealPlanner } from "@/components/MealPlanner";
 import { MealCheckIn } from "@/components/MealCheckIn";
+import { TodayFood } from "@/components/TodayFood";
+import { addEntry, logTotals, parseEntries, removeByRef, type FoodEntry } from "@/lib/food-log";
+import type { Macros } from "@/lib/meal-plan";
 import { Tabs, TabPanel } from "@/components/Tabs";
 import { FuelRings } from "@/components/FuelRings";
 import { nutritionTargets, type NutritionTargets, type TargetContext } from "@/lib/nutrition";
@@ -364,6 +367,12 @@ function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietN
   });
   const [water, setWater] = useState<number>(initial?.daily_water_intake_ml ?? 0);
   const [eaten, setEaten] = useState<number>(initial?.calories_eaten ?? 0);
+  /**
+   * Today's food, itemised. parseEntries tolerates a row written before 0072
+   * added the column — those days come back with an empty list and keep showing
+   * the totals already on the row, rather than failing to open.
+   */
+  const [entries, setEntries] = useState<FoodEntry[]>(parseEntries((initial as { entries?: unknown } | null)?.entries));
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -424,16 +433,26 @@ function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietN
    * typed, and writing those on each keystroke would persist "2" on the way to
    * "2500". Those keep the explicit button.
    */
-  function addEaten(m: { kcal: number; protein: number; carbs: number; fats: number }) {
-    const nextEaten = Math.max(0, eaten + m.kcal);
-    const nextMacros = {
-      protein: String(Math.max(0, (Number(macros.protein) || 0) + m.protein)),
-      carbs: String(Math.max(0, (Number(macros.carbs) || 0) + m.carbs)),
-      fats: String(Math.max(0, (Number(macros.fats) || 0) + m.fats)),
-    };
-    setEaten(nextEaten);
-    setMacros(nextMacros);
-    void persist({ eaten: nextEaten, macros: nextMacros });
+  /**
+   * THE LIST IS THE TRUTH; THE TOTALS ARE DERIVED FROM IT.
+   *
+   * This used to add macros onto a running total and nothing else, which is why
+   * nothing could be corrected afterwards: the day dissolved into two numbers
+   * with no record of what made them. Now every log appends an entry and the
+   * totals are recomputed by summing — so editing a portion or removing a meal
+   * is just a change to the list, and the two can never disagree.
+   */
+  function addFood(e: { label: string; macros: Macros; source: "plan" | "estimate"; ref?: string }) {
+    applyEntries(addEntry(entries, { ...e.macros, label: e.label, source: e.source, ref: e.ref }));
+  }
+
+  function applyEntries(next: FoodEntry[]) {
+    setEntries(next);
+    const t = logTotals(next);
+    setEaten(t.kcal);
+    const m = { protein: String(t.protein), carbs: String(t.carbs), fats: String(t.fats) };
+    setMacros(m);
+    void persist({ eaten: t.kcal, macros: m, entries: next });
   }
 
   /**
@@ -442,12 +461,13 @@ function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietN
    * here would save the value from before the tap, which is the off-by-one-tap
    * bug that makes autosave worse than no autosave.
    */
-  async function persist(over?: { eaten?: number; macros?: Record<string, string>; water?: number }) {
+  async function persist(over?: { eaten?: number; macros?: Record<string, string>; water?: number; entries?: FoodEntry[] }) {
     setSaving(true);
     setError(null);
     const e_ = over?.eaten ?? eaten;
     const m_ = over?.macros ?? macros;
     const w_ = over?.water ?? water;
+    const en_ = over?.entries ?? entries;
     const supabase = createClient();
     const { error: e } = await supabase.from("nutrition_logs").upsert(
       {
@@ -461,6 +481,7 @@ function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietN
           fats: Number(m_.fats) || 0,
         },
         daily_water_intake_ml: w_,
+        entries: en_,
       },
       { onConflict: "user_id,log_date" }
     );
@@ -612,7 +633,25 @@ function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietN
         </div>
       </div>
 
-      <MealCheckIn userId={userId} stats={stats} prefs={prefs} dietNotes={dietNotes} seed={mealSeed} swaps={mealSwaps} recent={mealRecent} starred={mealStarred} context={context} onAdd={addEaten} />
+      {/* What you have eaten, before the ways to add more. Once anything is
+          logged, "what did I put in?" is the question this page is open for —
+          and it had no answer at all, only a total. */}
+      {entries.length > 0 && (
+        <div className="card p-5">
+          <div className="mb-3 flex items-baseline justify-between gap-2">
+            <h2 className="field-label !mb-0">Today&apos;s food</h2>
+            <span className="text-xs text-slate-500">tap a row to fix the amount</span>
+          </div>
+          <TodayFood entries={entries} onChange={applyEntries} />
+        </div>
+      )}
+
+      <MealCheckIn
+        userId={userId} stats={stats} prefs={prefs} dietNotes={dietNotes} seed={mealSeed}
+        swaps={mealSwaps} recent={mealRecent} starred={mealStarred} context={context}
+        onAdd={addFood}
+        onRemoveRef={(ref) => applyEntries(removeByRef(entries, ref))}
+      />
 
       {/* EVERYTHING THAT ISN'T THE DAILY JOB, folded away.
           The rationale, the resting-rate working and the manual overrides are
@@ -664,20 +703,16 @@ function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietN
               <span className="field-label">Daily calorie target</span>
               <input type="number" inputMode="numeric" value={calories} onChange={(e) => setCalories(e.target.value)} placeholder="e.g. 2800" className="field" />
             </label>
-            {/* These are what you ATE, not what you are aiming for — the
-                targets are computed above. Logging a meal fills them in; this
-                is for correcting the number by hand. The old label just said
-                "Protein (g)" under a heading about targets, which is how the
-                same field came to mean two things. */}
-            <span className="field-label !mb-1">Macros eaten today (g)</span>
-            <div className="grid grid-cols-3 gap-3">
-              {MACROS.map((m) => (
-                <label key={m.key} className="block">
-                  <span className="text-[11px] font-semibold" style={{ color: m.color }}>{m.label}</span>
-                  <input type="number" inputMode="numeric" value={macros[m.key]} onChange={(e) => setMacros((p) => ({ ...p, [m.key]: e.target.value }))} className="field text-center" />
-                </label>
-              ))}
-            </div>
+            {/* THE "MACROS EATEN TODAY" BOXES ARE GONE, and their absence is
+                the point. Three number inputs sat here for correcting the day
+                by hand, which existed only because the day had no itemised
+                list — so a correction meant working out new totals yourself and
+                retyping them. Worse, once you had used both the tick-list and
+                the boxes they disagreed about the same day with no way to tell
+                which was right.
+                Today's food (above) is editable per item now, and the totals
+                are summed from it. One place to change a number, and it cannot
+                contradict itself. */}
           </div>
         </div>
       </details>
