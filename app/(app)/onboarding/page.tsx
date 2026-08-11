@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Icon } from "@/components/Icon";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/lib/auth";
 import { SPORTS, type SportId } from "@/lib/exercises";
@@ -82,7 +83,10 @@ export default function OnboardingPage() {
                   onClick={() => { setSport(s.id); setPositions([]); }}
                   className={`card p-5 text-left transition ${sport === s.id ? "ring-2 ring-pitch-400/70 shadow-glow" : "card-hover"}`}
                 >
-                  <div className="text-3xl">{s.emoji}</div>
+                  {/* Lights up with the selection instead of staying a fixed
+                      full-colour glyph — the ring alone was carrying the whole
+                      selected state on the first screen anyone ever sees. */}
+                  <Icon name={s.icon} size={30} className={sport === s.id ? "text-pitch-400" : "text-slate-300"} />
                   <div className="mt-2 font-bold text-slate-100">{s.label}</div>
                 </button>
               ))}

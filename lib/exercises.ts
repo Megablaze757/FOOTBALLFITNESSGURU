@@ -6,6 +6,7 @@
 // Pure data (no deps) — safe on the static site.
 // =============================================================================
 
+import type { IconName } from "@/components/Icon";
 import { IMPORTED_EXERCISES, difficultyOf, equipBucket } from "./exercise-catalog";
 import { IMPORTED_HOWTO } from "./exercise-howto";
 
@@ -28,13 +29,21 @@ const DIFF_RANK: Record<Difficulty, number> = { easy: 0, medium: 1, advanced: 2 
 
 export type SportId = "football" | "rugby" | "weightlifting" | "gym" | "basketball" | "running";
 
-export const SPORTS: { id: SportId; label: string; emoji: string }[] = [
-  { id: "football", label: "Football", emoji: "⚽" },
-  { id: "rugby", label: "Rugby", emoji: "🏉" },
-  { id: "weightlifting", label: "Weightlifting", emoji: "🏋️" },
-  { id: "gym", label: "Gym & fitness", emoji: "💪" },
-  { id: "basketball", label: "Basketball", emoji: "🏀" },
-  { id: "running", label: "Running", emoji: "🏃" },
+/**
+ * `icon` is ours (components/Icon.tsx); `emoji` survives for ONE reason.
+ *
+ * ProfileForm renders the sport list as a native `<select>`, and an `<option>`
+ * can hold text and nothing else — no SVG, no element. So the emoji stays for
+ * that control alone. Everywhere the sport is drawn as a tile or a pill uses
+ * the icon, which takes the theme colour and looks the same on every phone.
+ */
+export const SPORTS: { id: SportId; label: string; emoji: string; icon: IconName }[] = [
+  { id: "football", label: "Football", emoji: "⚽", icon: "ball" },
+  { id: "rugby", label: "Rugby", emoji: "🏉", icon: "rugby" },
+  { id: "weightlifting", label: "Weightlifting", emoji: "🏋️", icon: "barbell" },
+  { id: "gym", label: "Gym & fitness", emoji: "💪", icon: "muscle" },
+  { id: "basketball", label: "Basketball", emoji: "🏀", icon: "basketball" },
+  { id: "running", label: "Running", emoji: "🏃", icon: "run" },
 ];
 
 export interface Exercise {

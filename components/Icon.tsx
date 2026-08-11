@@ -37,7 +37,12 @@ export type IconName =
   | "barbell" | "book" | "video" | "plate" | "target" | "chart" | "plaster"
   | "squad" | "stretch" | "flame" | "trophy" | "bolt" | "warning" | "run"
   | "ball" | "brain" | "watch" | "leg" | "trend-up" | "trend-down" | "check"
-  | "clock" | "scales" | "sleep";
+  | "clock" | "scales" | "sleep"
+  // Second batch, covering the rest of the head of the emoji distribution.
+  | "muscle" | "hourglass" | "clipboard" | "ruler" | "camera" | "document"
+  | "note" | "person" | "building" | "medal" | "basketball" | "rugby"
+  | "signal" | "calendar" | "chat" | "droplet" | "lock" | "pan" | "confetti"
+  | "swimmer" | "bike" | "shield";
 
 const PATHS: Record<IconName, React.ReactNode> = {
   // A loaded bar, read end-on: two plates each side of a knurled shaft.
@@ -70,6 +75,34 @@ const PATHS: Record<IconName, React.ReactNode> = {
   clock: <><circle cx="12" cy="12" r="8.5" /><path d="M12 7v5.2l3.2 2" /></>,
   scales: <><path d="M12 4v16" /><path d="M5 8h14" /><path d="M5 8 2.5 14a3.2 3.2 0 0 0 5 0Z" /><path d="M19 8l-2.5 6a3.2 3.2 0 0 0 5 0Z" /></>,
   sleep: <><path d="M19 14.5A8 8 0 0 1 9.5 5a8.2 8.2 0 1 0 9.5 9.5Z" /><path d="M15 4h4l-4 4h4" /></>,
+
+  // A flexed arm, read as the outline the emoji is famous for — shoulder,
+  // biceps peak, forearm — without the skin tone the emoji forces on you.
+  muscle: <><path d="M4 16.5V13a4 4 0 0 1 4-4h3.5" /><path d="M11.5 9a5 5 0 0 1 5-5 3.5 3.5 0 0 1 3.5 3.5c0 4-2.5 5.5-2.5 8A4.5 4.5 0 0 1 13 20H8a4 4 0 0 1-4-3.5" /><path d="M11.5 9v3.5" /></>,
+  hourglass: <><path d="M7 3h10M7 21h10" /><path d="M8 3v3.5L12 11l4-4.5V3M8 21v-3.5L12 13l4 4.5V21" /></>,
+  clipboard: <><rect x="5" y="4.5" width="14" height="16" rx="2" /><path d="M9 4.5a3 3 0 0 1 6 0" /><path d="M9 11h6M9 15h4" /></>,
+  ruler: <><rect x="2.5" y="8" width="19" height="8" rx="1.5" transform="rotate(-20 12 12)" /><path d="m8.2 8.2 1 2.6M11.6 6.9l1 2.6M15 5.7l1 2.6" /></>,
+  camera: <><rect x="3" y="7" width="18" height="13" rx="2.5" /><circle cx="12" cy="13.5" r="3.5" /><path d="M8.5 7 10 4h4l1.5 3" /></>,
+  document: <><path d="M6 3h7l5 5v13H6Z" /><path d="M13 3v5h5" /><path d="M9 13h6M9 17h4" /></>,
+  note: <><path d="M4 20.5 4.8 16 16 4.8a2 2 0 0 1 3 3L7.8 19Z" /><path d="M14 6.5 17.5 10" /></>,
+  person: <><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 4-6 8-6s8 2 8 6" /></>,
+  building: <><path d="M4 21V6.5L12 3l8 3.5V21" /><path d="M2.5 21h19" /><path d="M9 21v-5h6v5" /><path d="M9 10h.01M15 10h.01" /></>,
+  // A medal on a ribbon. One icon for all three places, coloured by the caller
+  // — which is the whole advantage over three separate emoji.
+  medal: <><circle cx="12" cy="14.5" r="5.5" /><path d="M8.5 9.4 6 2h5l2 4.5M15.5 9.4 18 2h-5" /><path d="M12 12.2v4.6" /></>,
+  basketball: <><circle cx="12" cy="12" r="8.5" /><path d="M3.5 12h17M12 3.5v17" /><path d="M6 5.8c2.6 2.4 2.6 10 0 12.4M18 5.8c-2.6 2.4-2.6 10 0 12.4" /></>,
+  rugby: <><ellipse cx="12" cy="12" rx="9" ry="6" transform="rotate(-40 12 12)" /><path d="m9 15 6-6" /><path d="m10.4 11.4 1.4 1.4M12.2 9.6l1.4 1.4" /></>,
+  signal: <><path d="M12 20v-6" /><circle cx="12" cy="11.5" r="1.6" /><path d="M8.2 7.7a5.5 5.5 0 0 0 0 7.6M15.8 7.7a5.5 5.5 0 0 1 0 7.6" /><path d="M5.4 4.9a9.5 9.5 0 0 0 0 13.2M18.6 4.9a9.5 9.5 0 0 1 0 13.2" /></>,
+  calendar: <><rect x="3.5" y="5.5" width="17" height="15" rx="2" /><path d="M3.5 10h17M8 3.5v4M16 3.5v4" /></>,
+  chat: <><path d="M20 15.5a2.5 2.5 0 0 1-2.5 2.5H8l-4 3V6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5Z" /><path d="M8.5 9h7M8.5 13h4" /></>,
+  droplet: <><path d="M12 3s6 6.4 6 10.2A6 6 0 0 1 6 13.2C6 9.4 12 3 12 3Z" /></>,
+  lock: <><rect x="4.5" y="10.5" width="15" height="10" rx="2.5" /><path d="M8 10.5V7.8a4 4 0 0 1 8 0v2.7" /><path d="M12 14.5v2" /></>,
+  pan: <><ellipse cx="10" cy="13" rx="7" ry="5" /><path d="M17 13h4.5" /><path d="M10 8V5.5" /></>,
+  // Three streamers, not a party popper — it has to read at 16px.
+  confetti: <><path d="M4 20.5 8.5 8l7.5 7.5Z" /><path d="M14 4.5v2M18.5 6l-1.4 1.4M20 11h-2" /><path d="M11 11.5 12.5 13" /></>,
+  swimmer: <><circle cx="16" cy="6.5" r="1.9" /><path d="m5 11 4.5-2.5L13 11l2.5-2" /><path d="M2.5 17c1.6 0 1.6 1.5 3.2 1.5S7.3 17 8.9 17s1.6 1.5 3.2 1.5S13.7 17 15.3 17s1.6 1.5 3.2 1.5S20.1 17 21.7 17" /></>,
+  bike: <><circle cx="5.5" cy="17" r="3.5" /><circle cx="18.5" cy="17" r="3.5" /><path d="m5.5 17 4-8h5l-3 8h7" /><path d="M13 5.5h3" /></>,
+  shield: <><path d="M12 3 4.5 6v6c0 4.4 3.1 7.9 7.5 9 4.4-1.1 7.5-4.6 7.5-9V6Z" /></>,
 };
 
 export function Icon({

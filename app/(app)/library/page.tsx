@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { Icon } from "@/components/Icon";
 import { useCurrentUser } from "@/lib/auth";
 import { EXERCISES, EXERCISE_CATEGORIES, SPORTS, DIFFICULTIES, EQUIPMENT_BUCKETS, getExercisesForSport, demoImplement, rowToExercise, exerciseEquip, withinLevel, type Exercise, type ExerciseCategory, type SportId, type Difficulty } from "@/lib/exercises";
 import { ExerciseDemo } from "@/components/ExerciseDemo";
@@ -199,7 +200,7 @@ export default function LibraryPage() {
       <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
         <Pill label="All sports" active={sport === "all"} onClick={() => setSport("all")} small />
         {SPORTS.map((s) => (
-          <Pill key={s.id} label={`${s.emoji} ${s.label}`} active={sport === s.id} onClick={() => setSport(s.id)} small />
+          <Pill key={s.id} label={<span className="inline-flex items-center gap-1.5"><Icon name={s.icon} size={15} />{s.label}</span>} active={sport === s.id} onClick={() => setSport(s.id)} small />
         ))}
       </div>
 
@@ -260,7 +261,7 @@ export default function LibraryPage() {
       {sportDrills.length > 0 && (
         <section>
           <h2 className="field-label">
-            {SPORTS.find((s) => s.id === sport)?.emoji} Made for {SPORTS.find((s) => s.id === sport)?.label.toLowerCase()}
+            Made for {SPORTS.find((s) => s.id === sport)?.label.toLowerCase()}
           </h2>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {sportDrills.map((ex) => (
@@ -356,7 +357,7 @@ export default function LibraryPage() {
   );
 }
 
-function Pill({ label, active, onClick, small }: { label: string; active: boolean; onClick: () => void; small?: boolean }) {
+function Pill({ label, active, onClick, small }: { label: React.ReactNode; active: boolean; onClick: () => void; small?: boolean }) {
   return (
     <button
       onClick={onClick}
