@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { invokeAI } from "@/lib/api";
 import { createClient } from "@/lib/supabase/client";
+import { ConfirmButton } from "@/components/ConfirmButton";
 import { useJobs } from "@/lib/jobs";
 import { baseAreaOf } from "@/lib/essentials";
 import { BodyMap } from "@/components/BodyMap";
@@ -190,9 +191,17 @@ export function InjuryPlanner({ sport, hurt, onHurtChange, description, onDescri
                   that assumption happened to be correct. */}
               {savedAt && <p className="mt-0.5 text-xs text-slate-500">Saved {savedAt} — it&apos;s here whenever you come back.</p>}
             </div>
-            <button onClick={() => setPlan(null)} className="tap-target shrink-0 text-xs text-slate-400 hover:text-pitch-400">
+            {/* The line directly above promises the plan is kept. Clearing it
+                on one tap made that promise false. */}
+            <ConfirmButton
+              onConfirm={() => setPlan(null)}
+              question="Clear this rehab plan and start a new one?"
+              confirmLabel="New plan"
+              destructive={false}
+              className="tap-target shrink-0 text-xs text-slate-400 hover:text-pitch-400"
+            >
               New plan
-            </button>
+            </ConfirmButton>
           </div>
           <p className="mt-2 text-sm text-slate-200">{plan.summary}</p>
 

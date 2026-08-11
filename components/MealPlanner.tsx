@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { ConfirmButton } from "@/components/ConfirmButton";
 import { invalidate } from "@/lib/use-async";
 import {
   effectiveMealPrefs, planTargets, buildWeek, shoppingList, unmetSlots, dislikedFoodIds, favouriteFoodIds,
@@ -441,9 +442,25 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
           </div>
         )}
 
-        <button onClick={generate} className="btn-primary mt-4">
-          {week ? "Regenerate week" : "Build my week"}
-        </button>
+        {/* Only asks when there is something to lose. Building the first week
+            is not destructive; regenerating rerolls all 28 meals and orphans
+            the shopping list — which you may be halfway through in a
+            supermarket, since the ticks are keyed to the plan's seed. */}
+        {week ? (
+          <ConfirmButton
+            onConfirm={generate}
+            question="Reroll all 28 meals? Your shopping list starts again."
+            confirmLabel="Regenerate"
+            destructive={false}
+            className="btn-primary mt-4"
+          >
+            Regenerate week
+          </ConfirmButton>
+        ) : (
+          <button onClick={generate} className="btn-primary mt-4">
+            Build my week
+          </button>
+        )}
         {saved && <p className="mt-2 text-xs text-readiness-green">✓ Stats saved to your profile.</p>}
       </div>
 

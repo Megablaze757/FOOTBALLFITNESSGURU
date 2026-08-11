@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { ConfirmButton } from "@/components/ConfirmButton";
 import { useAsync } from "@/lib/use-async";
 import { CustomExerciseForm } from "@/components/CustomExerciseForm";
 
@@ -49,7 +50,16 @@ export function TeamExercises({ coachId }: { coachId: string }) {
                 <div className="truncate text-sm font-semibold text-slate-100">{r.name}</div>
                 <div className="text-xs text-slate-500">{r.category}{r.sport ? ` · ${r.sport}` : ""}</div>
               </div>
-              <button onClick={() => remove(r.id)} className="shrink-0 text-xs text-slate-400 hover:text-readiness-red">Remove</button>
+              {/* A hard delete of something the coach typed by hand, with no
+                  undo and no copy anywhere else. */}
+              <ConfirmButton
+                onConfirm={() => remove(r.id)}
+                question="Remove permanently?"
+                confirmLabel="Remove"
+                className="shrink-0 text-xs text-slate-400 hover:text-readiness-red"
+              >
+                Remove
+              </ConfirmButton>
             </li>
           ))}
         </ul>

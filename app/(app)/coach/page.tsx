@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { ConfirmButton } from "@/components/ConfirmButton";
 import { useCurrentUser } from "@/lib/auth";
 import { useAsync } from "@/lib/use-async";
 import {
@@ -879,9 +880,18 @@ function ActiveProgram({
             4.88:1 — a pass. The change was still worth making; the reason given
             for it wasn't true. */}
         <div className="flex shrink-0 flex-col items-end gap-1">
-          <button onClick={newProgram} className="tap-target text-xs font-semibold text-slate-300 hover:text-pitch-400">
+          {/* Archives the block you are part-way through. Delete below already
+              asked before acting; this did not, and it is the one people reach
+              for by accident because it sits at the top of the card. */}
+          <ConfirmButton
+            onConfirm={newProgram}
+            question="Archive this block and start again?"
+            confirmLabel="Rebuild it"
+            destructive={false}
+            className="tap-target text-xs font-semibold text-slate-300 hover:text-pitch-400"
+          >
             Not right? Rebuild it
-          </button>
+          </ConfirmButton>
           {!confirmDelete ? (
             <button onClick={() => setConfirmDelete(true)} className="tap-target text-xs text-slate-400 hover:text-readiness-red">
               Delete
