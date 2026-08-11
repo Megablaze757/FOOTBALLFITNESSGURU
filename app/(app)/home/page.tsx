@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { Icon, type IconName } from "@/components/Icon";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/lib/auth";
@@ -528,10 +529,14 @@ function GettingStarted({ setup, showingProgramCta }: {
 }
 
 
-function QuickLink({ href, title, sub, icon }: { href: string; title: string; sub: string; icon: string }) {
+function QuickLink({ href, title, sub, icon }: { href: string; title: string; sub: string; icon: IconName }) {
   return (
     <Link href={href} className="card card-hover flex items-center gap-3 p-4">
-      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white/[0.04] text-xl">{icon}</span>
+      {/* Takes the tile's own colour rather than arriving as a full-colour
+          bitmap, so this grid finally matches the tab bar underneath it. */}
+      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white/[0.04] text-pitch-400">
+        <Icon name={icon} />
+      </span>
       <div className="min-w-0">
         <div className="truncate text-sm font-bold text-slate-100">{title}</div>
         <div className="truncate text-xs text-slate-400">{sub}</div>

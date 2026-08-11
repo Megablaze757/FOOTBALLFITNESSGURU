@@ -16,11 +16,13 @@
 // =============================================================================
 
 import type { SportId } from "./exercises";
+import type { IconName } from "@/components/Icon";
 
 export interface SportTool {
   href: string;
   title: string;
-  icon: string;
+  /** A name from components/Icon.tsx — not an emoji. See the note there. */
+  icon: IconName;
 }
 
 export interface SportProfile {
@@ -74,14 +76,14 @@ export type DashboardStat =
 
 // Every sport gets the same seven destinations; only the order changes.
 const TOOL: Record<string, SportTool> = {
-  plan: { href: "/coach", title: "My plan", icon: "🏋️" },
-  exercises: { href: "/library", title: "Exercises", icon: "📚" },
-  video: { href: "/train", title: "Video analysis", icon: "🎥" },
-  nutrition: { href: "/nutrition", title: "Nutrition", icon: "🍽️" },
-  guides: { href: "/essentials", title: "Guides", icon: "🎯" },
-  progress: { href: "/dashboard", title: "Progress", icon: "📈" },
+  plan: { href: "/coach", title: "My plan", icon: "barbell" },
+  exercises: { href: "/library", title: "Exercises", icon: "book" },
+  video: { href: "/train", title: "Video analysis", icon: "video" },
+  nutrition: { href: "/nutrition", title: "Nutrition", icon: "plate" },
+  guides: { href: "/essentials", title: "Guides", icon: "target" },
+  progress: { href: "/dashboard", title: "Progress", icon: "chart" },
   // Its own page now, not a deep link into a tab. See app/(app)/injury.
-  injury: { href: "/injury", title: "Injury", icon: "🩹" },
+  injury: { href: "/injury", title: "Injury", icon: "plaster" },
 };
 
 const order = (...keys: (keyof typeof TOOL)[]) => keys.map((k) => TOOL[k]);
