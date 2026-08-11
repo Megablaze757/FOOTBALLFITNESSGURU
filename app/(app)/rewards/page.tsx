@@ -16,6 +16,7 @@ import { LevelUpModal } from "@/components/LevelUpModal";
 import { WeeklyChallenges } from "@/components/WeeklyChallenges";
 import { Leaderboards } from "@/components/Leaderboards";
 import { RankLadder } from "@/components/RankLadder";
+import { RankBadge } from "@/components/RankBadge";
 import { daysAgoLocal, todayLocal } from "@/lib/day";
 
 export default function RewardsPage() {
@@ -127,11 +128,14 @@ export default function RewardsPage() {
         <div className="flex items-center gap-4">
           {/* The badge takes the tier's own colour — the point of a ladder is
               that Emerald looks different from Bronze at a glance. */}
+          {/* The insignia carries the tier colour itself now, so the tile behind
+              it is a faint wash rather than a solid block — a badge drawn in the
+              tier colour on a fill of the same colour is invisible. */}
           <div
-            className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl text-3xl shadow-glow"
-            style={{ background: `linear-gradient(135deg, ${level.color}, ${level.color}88)` }}
+            className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl shadow-glow"
+            style={{ background: `linear-gradient(135deg, ${level.color}33, ${level.color}11)` }}
           >
-            {level.emoji}
+            <RankBadge tier={level.tier} division={level.division} color={level.color} size={46} />
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-baseline gap-2">

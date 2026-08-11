@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { rankLadder, rankFor, type LevelInfo } from "@/lib/gamification";
+import { RankBadge } from "@/components/RankBadge";
 
 /**
  * The whole ladder, so a rank means something.
@@ -47,11 +48,15 @@ export function RankLadder({ level }: { level: LevelInfo }) {
                   isCurrent ? "bg-white/[0.06]" : ""
                 }`}
               >
+                {/* Unreached tiers dim rather than greyscale: the badge is drawn
+                    in the tier's own colour, and `grayscale` on an emoji was the
+                    only way to lock one before. Opacity keeps the shape — which
+                    is what tells you what you are climbing towards. */}
                 <span
-                  className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg text-base ${reached ? "" : "grayscale"}`}
-                  style={{ background: reached ? `${t.color}22` : "rgba(255,255,255,0.03)" }}
+                  className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${reached ? "" : "opacity-35"}`}
+                  style={{ background: reached ? `${t.color}18` : "rgba(255,255,255,0.03)" }}
                 >
-                  {t.emoji}
+                  <RankBadge tier={t.tier} color={reached ? t.color : "#8b93a1"} size={26} />
                 </span>
                 <span className="min-w-0 flex-1">
                   <span
