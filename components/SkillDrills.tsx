@@ -150,12 +150,7 @@ function Line({ label, text }: { label: string; text: string }) {
 
 function Pill({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (
-    <button
-      onClick={onClick}
-      className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition ${
-        active ? "border-pitch-400/50 bg-pitch-400/10 text-pitch-400" : "border-white/10 bg-white/[0.03] text-slate-300"
-      }`}
-    >
+    <button onClick={onClick} aria-pressed={active} className="chip-option chip-option-sm">
       {label}
     </button>
   );

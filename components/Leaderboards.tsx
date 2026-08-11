@@ -63,13 +63,17 @@ export function Leaderboards({ userId }: { userId: string }) {
     <div className="card p-5">
       <div className="mb-3 flex items-center justify-between gap-2">
         <h2 className="field-label !mb-0">🏆 Leaderboards</h2>
-        <div className="flex gap-1 rounded-full bg-white/[0.04] p-0.5">
+        <div className="flex shrink-0 gap-1 rounded-full bg-white/[0.04] p-0.5">
           {(["squad", "world"] as const).map((s) => (
             <button
               key={s}
               onClick={() => setScope(s)}
-              className={`rounded-full px-3 py-1 text-xs font-semibold capitalize transition ${
-                scope === s ? "bg-pitch-400 text-ink-900" : "text-slate-400"
+              aria-pressed={scope === s}
+              // A filled segmented control, so it keeps its own colours rather
+              // than the outlined chip look — but it takes the 44px floor, and
+              // the aria-pressed it never had.
+              className={`min-h-[44px] rounded-full px-3 text-xs font-semibold transition ${
+                scope === s ? "bg-pitch-400 text-ink-900" : "text-slate-400 hover:text-slate-200"
               }`}
             >
               {s === "squad" ? "My squad" : "World"}
@@ -83,13 +87,10 @@ export function Leaderboards({ userId }: { userId: string }) {
           <button
             key={b.id}
             onClick={() => setBoardId(b.id)}
-            className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition ${
-              boardId === b.id
-                ? "border-pitch-400/50 bg-pitch-400/10 text-pitch-400"
-                : "border-white/10 bg-white/[0.03] text-slate-300"
-            }`}
+            aria-pressed={boardId === b.id}
+            className="chip-option chip-option-sm"
           >
-            {b.icon} {b.label}
+            <span aria-hidden>{b.icon}</span> {b.label}
           </button>
         ))}
       </div>

@@ -1,20 +1,21 @@
 "use client";
 
-import Link from "next/link";
+import { BackLink } from "@/components/BackLink";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/lib/auth";
 import { useAsync } from "@/lib/use-async";
 import { MiniBars } from "@/components/MiniBars";
 import type { BodyLog } from "@/lib/types";
+import { daysAgoLocal, todayLocal } from "@/lib/day";
 
 export default function BodyPage() {
   const user = useCurrentUser();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayLocal();
 
   const { data, loading, reload } = useAsync(async () => {
     const supabase = createClient();
-    const since = new Date(Date.now() - 120 * 86400_000).toISOString().slice(0, 10);
+    const since = daysAgoLocal(120);
     const { data: logs } = await supabase
       .from("body_logs").select("*").eq("user_id", user.id).gte("log_date", since).order("log_date", { ascending: true });
     const rows = (logs ?? []) as BodyLog[];
@@ -35,12 +36,10 @@ export default function BodyPage() {
 
   return (
     <div className="animate-fade-up mx-auto max-w-3xl space-y-5">
-      <header className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-extrabold tracking-tight">Body</h1>
-          <p className="mt-1 text-sm text-slate-400">Weight, body fat and photos over time. Feeds your calorie targets.</p>
-        </div>
-        <Link href="/dashboard" className="text-sm text-slate-400 hover:text-pitch-400">← Back</Link>
+      <header className="flex flex-col">
+        <BackLink href="/dashboard" label="Progress" />
+        <h1 className="text-3xl font-extrabold tracking-tight">Body</h1>
+        <p className="mt-1 text-sm text-slate-400">Weight, body fat and photos over time. Feeds your calorie targets.</p>
       </header>
 
       <BodyForm userId={user.id} today={today} onSaved={reload} />
@@ -51,13 +50,13 @@ export default function BodyPage() {
         <>
           {weightSeries.length > 0 && (
             <div className="card p-5">
-              <h2 className="field-label">Weight (kg)</h2>
+              <h2 className="field-label">Weight over time</h2>
               <MiniBars data={weightSeries} color="#e3b53f" unit=" kg" emptyLabel="Add a weight below and this fills in. Two entries a week is enough to see a trend." />
             </div>
           )}
           {bfSeries.length > 0 && (
             <div className="card p-5">
-              <h2 className="field-label">Body fat (%)</h2>
+              <h2 className="field-label">Body fat over time</h2>
               <MiniBars data={bfSeries} color="#fbbf24" unit="%" height={72} emptyLabel="Optional — only if you measure body fat. Weight alone is plenty." />
             </div>
           )}

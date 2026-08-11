@@ -52,8 +52,11 @@ OPENROUTER_MODEL = "deepseek/deepseek-chat"
 # per-token prices stay blank and Groq calls are counted as costing nothing.
 # Set them if you move to a paid plan, or spend goes invisible. (The per-user
 # daily call cap still applies either way.)
-GROQ_MODEL = "openai/gpt-oss-120b"
-GROQ_FALLBACK_MODELS = "llama-3.3-70b-versatile"
+# llama leads, not gpt-oss: gpt-oss is a REASONING model, its thinking is billed
+# against max_tokens, and it was returning finish_reason "length" with empty
+# content — which reads as "all models failed".
+GROQ_MODEL = "llama-3.3-70b-versatile"
+GROQ_FALLBACK_MODELS = "openai/gpt-oss-120b"
 # GROQ_PROMPT_PER_M = ""
 # GROQ_COMPLETION_PER_M = ""
 
@@ -64,6 +67,16 @@ NVIDIA_MODEL = "meta/llama-3.3-70b-instruct"
 NVIDIA_FALLBACK_MODELS = "nvidia/llama-3.3-nemotron-super-49b-v1"
 # NVIDIA_PROMPT_PER_M = ""
 # NVIDIA_COMPLETION_PER_M = ""
+
+# Vision models, for the meal-photo path only. A SEPARATE chain because the text
+# primary above cannot see: sending it an image does not fail usefully, it
+# answers about nothing and then every remaining rung does the same until the
+# time budget is gone. /health reports which one is live.
+#
+# These two are the compiled defaults as well, so leaving them unset is fine.
+# GROQ_VISION_MODELS is deliberately empty: no Groq vision slug could be
+# verified against their catalogue, and an unverified default 404s every photo.
+OPENROUTER_VISION_MODELS = "google/gemini-2.5-flash,openai/gpt-4.1-mini"
 AI_DAILY_LIMIT = "40"   # max AI coach calls per user per day; over this, the on-device engine is used
 
 # Free trial on the first paid subscription, in days. 0 turns it off. Only

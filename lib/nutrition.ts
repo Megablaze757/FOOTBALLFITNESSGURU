@@ -61,25 +61,64 @@ export function basalRate({ sex, age, heightCm, weightKg }: Pick<BodyStats, "sex
   return Math.round(sex === "male" ? base + 5 : base - 161);
 }
 
-export function planTargets(stats: BodyStats): PlanTargets {
-  const bmr = basalRate(stats);
-  const factor = ACTIVITY_LEVELS.find((a) => a.id === stats.activity)?.factor ?? 1.55;
-  const tdee = Math.round(bmr * factor);
-  const adjust = DIET_GOALS.find((g) => g.id === stats.goal)?.adjust ?? 0;
-  const calories = Math.round((tdee * (1 + adjust)) / 10) * 10;
+/**
+ * Everything the daily card knows that a body-stats form does not: which sport
+ * goal is driving the macro split, and how much training has actually been
+ * logged. Optional, because the pure meal-plan tests have no page around them.
+ */
+export interface TargetContext {
+  goal?: GoalType | null;
+  avgTrainingMinutes?: number;
+  trainingDaysLogged?: number;
+}
 
-  // Protein first (it's what protects muscle in a deficit and builds it in a
-  // surplus), then fats for hormones, carbs take the remainder as training fuel.
-  const proteinPerKg = stats.goal === "cut" ? 2.2 : stats.goal === "build" ? 2.0 : 1.8;
-  const protein = Math.round(stats.weightKg * proteinPerKg);
-  const fats = Math.round(stats.weightKg * 0.9);
-  const remaining = calories - protein * 4 - fats * 9;
-  const carbs = Math.max(50, Math.round(remaining / 4));
+/**
+ * Calorie and macro targets for the meal planner.
+ *
+ * THIS USED TO BE A SECOND, SIMPLER CALCULATION, and that was the bug behind
+ * "the numbers don't agree". The Today tab said 2,850 kcal from
+ * nutritionTargets — which floors the number at resting metabolic rate, refuses
+ * to put a 16-year-old in a deficit, weights carbs by sport, and reconciles the
+ * macros against the headline so the card always adds up. The meal plan was
+ * built to a different number from here, which did none of that. Two tabs, two
+ * answers, same athlete, and MealCheckIn had already been pinned to the wrong
+ * one deliberately so at least it matched the plan.
+ *
+ * There is one calculation now. This is a thin adapter over it, kept because
+ * the meal-plan engine and its tests are written against BodyStats, and pass
+ * the same `context` the daily card uses so the two cannot drift again.
+ */
+export function planTargets(stats: BodyStats, context: TargetContext = {}): PlanTargets {
+  const t = nutritionTargets({
+    weightKg: stats.weightKg,
+    heightCm: stats.heightCm,
+    age: stats.age,
+    sex: stats.sex,
+    activity: stats.activity,
+    dietGoal: stats.goal,
+    goal: context.goal ?? null,
+    avgTrainingMinutes: context.avgTrainingMinutes ?? 0,
+    trainingDaysLogged: context.trainingDaysLogged ?? 0,
+  });
 
-  const goalLabel = DIET_GOALS.find((g) => g.id === stats.goal)?.label.toLowerCase() ?? "maintain";
+  // nutritionTargets only returns null without a usable weight, and BodyStats
+  // requires one. Guard rather than assert, so a zero from a form field can't
+  // crash the planner.
+  if (!t) {
+    const bmr = basalRate(stats);
+    return { bmr, tdee: bmr, calories: bmr, protein: 0, carbs: 0, fats: 0, rationale: "Add your weight to get a target." };
+  }
+
+  // bmr/tdee go null when height, age or sex are missing. The planner's form
+  // always collects all three, so this only bites on a partial profile.
   return {
-    bmr, tdee, calories, protein, carbs, fats,
-    rationale: `Your body burns about ${bmr} kcal at rest and roughly ${tdee} with your training load. To ${goalLabel} we've set ${calories} kcal with ${protein}g protein (${proteinPerKg}g per kg) to protect muscle.`,
+    bmr: t.bmr ?? 0,
+    tdee: t.tdee ?? 0,
+    calories: t.calories,
+    protein: t.protein,
+    carbs: t.carbs,
+    fats: t.fats,
+    rationale: t.rationale,
   };
 }
 
@@ -200,7 +239,26 @@ export function nutritionTargets(input: TargetInput): NutritionTargets | null {
   const { weightKg, goal, avgTrainingMinutes } = input;
   if (!weightKg || weightKg <= 0) return null;
 
-  const g = goal ?? "speed";
+  /**
+   * The sport goal, GUARANTEED to be one this module has numbers for.
+   *
+   * `goal` is typed `GoalType | null`, and the type is a promise TypeScript
+   * cannot keep here: it arrives from `programs.goal_type`, which is
+   * `text not null` with NO check constraint — the permitted values exist only
+   * in a SQL comment. `programs.goal_type as GoalType` at the call site is a
+   * cast, not a check.
+   *
+   * An unrecognised value used to index straight into PROTEIN_PER_KG and
+   * FAT_PER_KG, both of which would hand back `undefined`, and `weightKg *
+   * undefined` is NaN. The athlete's protein, fats AND carbs all came out NaN
+   * together, and the rationale sentence rendered literally as "with NaNg
+   * protein (NaNg/kg)". One unexpected string in one row does that.
+   *
+   * Falling back to the same default an absent goal gets is right because the
+   * alternative — throwing — takes the whole nutrition page down over a value
+   * nothing validates on the way in.
+   */
+  const g: GoalType = goal && goal in PROTEIN_PER_KG ? goal : "speed";
   const age = input.age ?? null;
   const sex = input.sex ?? null;
   const heightCm = input.heightCm ?? null;
@@ -255,9 +313,16 @@ export function nutritionTargets(input: TargetInput): NutritionTargets | null {
   calories = Math.round(calories / 10) * 10;
 
   // Protein: whichever of the sport goal and the diet goal asks for more.
+  //
+  // `?? 0` on the diet ladder for the same reason `g` is validated above —
+  // `profiles.diet_goal` does carry a check constraint, but the value reaches
+  // here through `as never` and a constraint is only as good as the migration
+  // having been applied to the database you happen to be pointed at. Zero drops
+  // the diet ladder out of the Math.max and leaves the sport ladder deciding,
+  // which is exactly what happens when no diet goal is set at all.
   const proteinPerKg = Math.max(
     PROTEIN_PER_KG[g],
-    input.dietGoal ? DIET_PROTEIN_PER_KG[input.dietGoal] : 0
+    (input.dietGoal ? DIET_PROTEIN_PER_KG[input.dietGoal] : 0) ?? 0
   );
   const protein = Math.round(weightKg * proteinPerKg);
 
@@ -292,6 +357,24 @@ export function nutritionTargets(input: TargetInput): NutritionTargets | null {
     WATER_CAP_ML,
     Math.round((weightKg * WATER_PER_KG + avgTrainingMinutes * WATER_PER_TRAINING_MIN) / 50) * 50
   );
+
+  /**
+   * Last line: never hand back a number that isn't one.
+   *
+   * The two guards above fix the routes to NaN that are known about. This
+   * catches the ones that aren't — a new lookup table added later, a field that
+   * arrives as a string from somewhere, a division that meets a zero. NaN
+   * propagates silently through arithmetic and only becomes visible at the
+   * point it is rendered, which is the athlete's screen; by then it has already
+   * been written into a rationale sentence and passed to the meal planner,
+   * where `NaN` calorie targets produce a week of meals scaled by NaN.
+   *
+   * Returning null is what this function already does for "not enough
+   * information", and every caller handles it. A wrong-but-plausible number
+   * would be worse: it would be acted on.
+   */
+  const finite = [calories, protein, carbs, fats, water_ml].every(Number.isFinite);
+  if (!finite) return null;
 
   return {
     calories, protein, carbs, fats, water_ml,

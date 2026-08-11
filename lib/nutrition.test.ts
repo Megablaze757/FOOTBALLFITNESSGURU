@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { nutritionTargets, activityFactor, basalRate, type TargetInput } from "./nutrition";
+import { GOALS } from "./coach";
+import { nutritionTargets, activityFactor, basalRate, planTargets, type TargetInput, type BodyStats } from "./nutrition";
 
 // A fully-described adult, so the measured path is in play.
 const ADULT: TargetInput = {
@@ -157,4 +158,124 @@ test("targets land on tidy numbers people can actually aim at", () => {
   assert.equal(t.calories % 10, 0);
   assert.equal(t.water_ml % 50, 0);
   assert.equal(t.protein, Math.round(t.protein));
+});
+
+// --- One number, everywhere --------------------------------------------------
+
+test("the meal planner and the daily card agree on calories", () => {
+  // THE BUG THIS PINS. planTargets was a second, simpler calculation: no
+  // resting-rate floor, no under-18 guard, no sport weighting, different
+  // protein per kg. So the Today tab said one number, the meal plan was built
+  // to another, and MealCheckIn had been deliberately pinned to the wrong one
+  // so that at least the tick-list matched the plan.
+  const stats: BodyStats = {
+    sex: "male", age: 24, heightCm: 180, weightKg: 78,
+    activity: "high", goal: "maintain",
+  };
+  const context = { goal: "endurance" as const, avgTrainingMinutes: 55, trainingDaysLogged: 12 };
+
+  const card = nutritionTargets({
+    weightKg: stats.weightKg, heightCm: stats.heightCm, age: stats.age, sex: stats.sex,
+    activity: stats.activity, dietGoal: stats.goal,
+    goal: context.goal, avgTrainingMinutes: context.avgTrainingMinutes,
+    trainingDaysLogged: context.trainingDaysLogged,
+  })!;
+  const plan = planTargets(stats, context);
+
+  assert.equal(plan.calories, card.calories);
+  assert.equal(plan.protein, card.protein);
+  assert.equal(plan.carbs, card.carbs);
+  assert.equal(plan.fats, card.fats);
+});
+
+test("planTargets inherits the safety floors it used to lack", () => {
+  // A 16-year-old asking to cut must not be put in a deficit, and nobody is
+  // targeted below their resting metabolic rate. The old planTargets did
+  // neither, so a meal plan could be built to a number the daily card would
+  // have refused to show.
+  const teen: BodyStats = {
+    sex: "female", age: 16, heightCm: 165, weightKg: 55,
+    activity: "high", goal: "cut",
+  };
+  const t = planTargets(teen);
+  assert.ok(t.calories >= t.bmr, `${t.calories} kcal is below a resting rate of ${t.bmr}`);
+
+  const maintaining = planTargets({ ...teen, goal: "maintain" });
+  assert.ok(
+    t.calories >= maintaining.calories,
+    "a growing athlete asking to cut should not be given fewer calories than maintaining",
+  );
+});
+
+test("the macros never contradict the headline calories", () => {
+  for (const goal of ["cut", "maintain", "build"] as const) {
+    const t = planTargets({ sex: "male", age: 30, heightCm: 175, weightKg: 70, activity: "light", goal });
+    const macroKcal = t.protein * 4 + t.carbs * 4 + t.fats * 9;
+    assert.ok(
+      Math.abs(macroKcal - t.calories) <= 20,
+      `${goal}: macros come to ${macroKcal} kcal but the target says ${t.calories}`,
+    );
+  }
+});
+
+// --- targets must never be NaN -----------------------------------------------
+
+/**
+ * NaN IS THE WORST FAILURE THIS MODULE HAS, because it is silent until it is on
+ * a screen. It propagates through every subsequent sum, gets written into the
+ * rationale sentence ("with NaNg protein"), and is handed to the meal planner,
+ * which then scales a week of portions by NaN.
+ *
+ * The route in is a database column the type system only pretends to police.
+ * `programs.goal_type` is `text not null` with NO check constraint — the
+ * permitted values live in a SQL comment — and the app casts it to GoalType at
+ * the boundary. One unexpected string produced NaN protein, NaN fats and NaN
+ * carbs at once.
+ */
+test("an unrecognised sport goal falls back instead of producing NaN", () => {
+  for (const rogue of ["power", "hypertrophy", "", "SPEED", "cut"]) {
+    const t = nutritionTargets({
+      weightKg: 78, heightCm: 180, age: 22, sex: "male",
+      goal: rogue as never, avgTrainingMinutes: 60,
+    });
+    assert.ok(t, `${rogue}: returned null`);
+    for (const [k, v] of Object.entries({
+      calories: t.calories, protein: t.protein, carbs: t.carbs, fats: t.fats, water_ml: t.water_ml,
+    })) {
+      assert.ok(Number.isFinite(v), `${rogue}: ${k} was ${v}`);
+    }
+    assert.ok(!t.rationale.includes("NaN"), `${rogue}: rationale reads "${t.rationale}"`);
+  }
+});
+
+test("an unrecognised diet goal falls back to the sport ladder", () => {
+  const t = nutritionTargets({
+    weightKg: 78, heightCm: 180, age: 22, sex: "male",
+    goal: "strength", avgTrainingMinutes: 60, dietGoal: "lose" as never,
+  });
+  assert.ok(t);
+  assert.ok(Number.isFinite(t.protein), `protein was ${t.protein}`);
+  // "strength" asks 2.0 g/kg on its own, and a meaningless diet goal must not
+  // drag that down — it drops out of the comparison rather than winning it.
+  assert.equal(t.protein, Math.round(78 * 2.0));
+});
+
+test("every real goal combination produces finite targets", () => {
+  const bodies = [
+    { weightKg: 60, heightCm: 165, age: 28, sex: "female" as const },
+    { weightKg: 95, heightCm: 190, age: 35, sex: "male" as const },
+    { weightKg: 48, heightCm: 155, age: 15, sex: "female" as const },
+  ];
+  for (const body of bodies) {
+    for (const goal of GOALS.map((x) => x.id)) {
+      for (const dietGoal of [null, "cut", "maintain", "build"] as const) {
+        const t = nutritionTargets({ ...body, goal, dietGoal, avgTrainingMinutes: 45 });
+        assert.ok(t, `${goal}/${dietGoal}: null`);
+        assert.ok(
+          [t.calories, t.protein, t.carbs, t.fats].every(Number.isFinite),
+          `${goal}/${dietGoal}: ${JSON.stringify(t)}`
+        );
+      }
+    }
+  }
 });

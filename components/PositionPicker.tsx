@@ -43,11 +43,7 @@ export function PositionPicker({ sport, value, onChange }: {
               type="button"
               onClick={() => toggle(p)}
               aria-pressed={on}
-              className={`rounded-full border px-3 py-1.5 text-sm transition ${
-                on
-                  ? "border-pitch-400/50 bg-pitch-400/10 text-pitch-400"
-                  : "border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.06]"
-              }`}
+              className="chip-option"
             >
               {p}
               {i === 0 && <span className="ml-1.5 text-[10px] uppercase tracking-wide opacity-70">main</span>}

@@ -5,6 +5,7 @@ import type { ProgramWeek } from "@/lib/coach";
 import { getExerciseByName, type Exercise } from "@/lib/exercises";
 import { ExerciseModal } from "@/components/ExerciseDetail";
 import { SessionDrills } from "@/components/SessionDrills";
+import { WeeklyVolume } from "@/components/WeeklyVolume";
 
 // Week-by-week program calendar you tick through. Each session is a tile;
 // completing one calls onToggle (which also logs it to training).
@@ -45,10 +46,14 @@ export function ProgramCalendar({
             </summary>
 
             {w.focusNote && (
-              <p className="mb-3 rounded-lg border border-pitch-400/20 bg-pitch-400/[0.05] px-3 py-2 text-xs text-pitch-200">
+              <p className="mb-3 rounded-lg border border-pitch-400/20 bg-pitch-400/[0.05] px-3 py-2 text-xs text-pitch-300">
                 {w.focusNote}
               </p>
             )}
+
+            {/* Folded by default. It answers a question you only sometimes have,
+                and the sessions are what you came to this screen for. */}
+            <WeeklyVolume week={w} />
 
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {w.sessions.map((s) => {

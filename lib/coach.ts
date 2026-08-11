@@ -15,6 +15,7 @@ import { positionLabel } from "./positions";
 import { sportTerms } from "./sport-terms";
 import { MOVEMENTS, regionOfMovement, type Movement, type GoalType, type BodyArea } from "./movements";
 import { buildBlock, painByArea, type ProgramPlan, type TrainingFocus } from "./engine";
+import { buildRunProgram, type RunnerLevel } from "./running";
 
 // The catalogue lives in ./movements and the block builder in ./engine. This
 // module keeps the athlete-facing API — the goal lists, the recommendations and
@@ -285,7 +286,40 @@ export interface BuildProgramInput {
   /** Movement ids a coach picked from the library. A strong preference that
    *  still passes through the pain filter and the athlete's exclusions. */
   mustInclude?: string[];
+
+  // --- Running. Ignored unless the athlete's sport is running. --------------
+  /** Current weekly mileage. The block is built from where they ARE. */
+  weeklyKm?: number | null;
+  runnerLevel?: RunnerLevel;
+  /** A RACE_GOALS id — "5k", "half", "marathon"… */
+  raceGoalId?: string;
+  /** Threshold pace in sec/km, normally from `thresholdPaceFromBenchmarks`. */
+  thresholdSecPerKm?: number | null;
 }
+
+/**
+ * Whether this athlete should get a RUN block rather than a gym block.
+ *
+ * Same shape as `wantsHypertrophy` and the same rehab carve-out. The goal test
+ * matters: a runner's four options are endurance, speed, injury recovery and
+ * "Runner's strength", and only the first two are actually running. Sending the
+ * strength goal here would take away the leg-durability work that keeps them
+ * running, which is the opposite of helping.
+ */
+function wantsRunPlan(input: BuildProgramInput): boolean {
+  if (input.goal === "injury_recovery" || input.focus === "rehab") return false;
+  if (input.sport !== "running") return false;
+  return input.goal === "endurance" || input.goal === "speed";
+}
+
+/**
+ * Weekly mileage to build from when the athlete hasn't told us.
+ *
+ * 8km per running day is a modest, safe starting point — deliberately an
+ * underestimate, because the cost of starting someone too low is a fortnight of
+ * easy weeks and the cost of starting them too high is an injury.
+ */
+const DEFAULT_KM_PER_DAY = 8;
 
 /**
  * Whether this athlete should get a bodybuilding split rather than an S&C block.
@@ -320,6 +354,25 @@ export function buildProgram(input: BuildProgramInput): ProgramPlan {
   // and returns untouched. Overwriting them here with the S&C wording told a
   // bodybuilder they were on a "strength & power block" when they were on
   // push/pull/legs.
+  // A runner's plan is a set of runs in zones, not a set of drills in sets and
+  // reps. Same handoff pattern as hypertrophy below, and for the same reason:
+  // the shape of the training is different, not just its contents.
+  if (wantsRunPlan(input)) {
+    const days = input.daysPerWeek ?? 4;
+    return buildRunProgram({
+      weeklyKm: input.weeklyKm ?? days * DEFAULT_KM_PER_DAY,
+      daysPerWeek: days,
+      level: input.runnerLevel ?? "intermediate",
+      goal: input.goal as "endurance" | "speed",
+      goalId: input.raceGoalId,
+      block,
+      thresholdSecPerKm: input.thresholdSecPerKm ?? null,
+      // Sore anywhere that running loads means the filler days drop to recovery
+      // pace. The engine can't take the impact away, so it takes the intensity.
+      recoveryBias: sore.some((a) => ["knee", "ankle", "hamstring", "hip"].includes(a)),
+    });
+  }
+
   if (wantsHypertrophy(input)) {
     return buildHypertrophyProgram({
       painMap: input.painMap,
@@ -346,7 +399,7 @@ export function buildProgram(input: BuildProgramInput): ProgramPlan {
 
   return {
     ...plan,
-    summary: programSummary(input.goal, sore, input.isInSeason ?? false, block, input.sport, input.position, input.focus),
+    summary: programSummary(input.goal, sore, input.isInSeason ?? false, block, input.sport, input.position, input.focus, input.daysPerWeek),
     constraints: [
       ...(sore.length ? [`Protecting your ${sore.map(prettyArea).join(", ")} — high-impact loading on these is dialled back.`] : []),
       ...constraints.summary,
@@ -358,7 +411,7 @@ const FOCUS_LABEL: Record<TrainingFocus, string> = {
   performance: "performance", fitness: "general fitness", aesthetics: "muscle & aesthetics", rehab: "rehab",
 };
 
-function programSummary(goal: GoalType, sore: BodyArea[], inSeason: boolean, block: number, sport?: SportId, position?: string | string[], focus?: TrainingFocus): string {
+function programSummary(goal: GoalType, sore: BodyArea[], inSeason: boolean, block: number, sport?: SportId, position?: string | string[], focus?: TrainingFocus, daysPerWeek?: number): string {
   const g = GOALS.find((x) => x.id === goal)?.label ?? goal;
   // "In-season" means nothing to a lifter and "off-season" nothing to a
   // gym-goer. Each sport names its own phases.
@@ -366,10 +419,31 @@ function programSummary(goal: GoalType, sore: BodyArea[], inSeason: boolean, blo
   const season = inSeason ? t.inSeason : t.offSeason;
   const who = [positionLabel(position), sport].filter(Boolean).join(" · ");
   const forWhom = who ? ` Tailored for a ${who}.` : "";
-  const focusNote = focus && focus !== "performance" ? ` Weighted toward ${FOCUS_LABEL[focus]}.` : "";
+  // `profiles.training_focus` is a bare text column whose permitted values live
+  // only in a SQL comment, and the app casts it to TrainingFocus on the way in.
+  // An unlisted value read back as "Weighted toward undefined." in the summary
+  // at the top of the athlete's program — the sentence describing what the
+  // block is FOR. Say nothing rather than say that.
+  const focusLabel = focus ? FOCUS_LABEL[focus] : undefined;
+  const focusNote = focusLabel && focus !== "performance" ? ` Weighted toward ${focusLabel}.` : "";
   const blockNote = block > 1 ? ` Block ${block} — volume stepped up ${Math.round((block - 1) * 8)}% from your last block.` : "";
   const note = sore.length ? ` Built around your sore ${sore.map(prettyArea).join(" & ")}, swapping in lower-impact options.` : "";
-  return `A 4-week ${g.toLowerCase()} block, ${season}, progressing Base → Build → Peak → Deload.${forWhom}${focusNote}${blockNote}${note}`;
+  /**
+   * IN-SEASON, FOUR GYM SESSIONS IS MORE THAN THE PROFESSIONALS DO.
+   *
+   * Studies of professional squads describe ONE to two strength sessions a week
+   * maintaining physical output across a season — the matches are the training
+   * load, and the gym's job is to keep tissue robust rather than to build.
+   *
+   * Said rather than enforced. How often somebody trains is theirs to decide
+   * and quietly overriding it would be worse than the over-reach; but handing a
+   * footballer a four-day in-season block with no comment implies the app
+   * thinks that is normal, and it is not.
+   */
+  const busy = inSeason && (daysPerWeek ?? 0) >= 4 && sport !== "gym" && sport !== "weightlifting"
+    ? ` Note: ${daysPerWeek} gym sessions a week is a lot in-season — professional squads typically do one or two, and let the matches be the load. The week is ordered heaviest-first so the session before matchday is the lightest.`
+    : "";
+  return `A 4-week ${g.toLowerCase()} block, ${season}, progressing Base → Build → Peak → Deload.${forWhom}${focusNote}${blockNote}${note}${busy}`;
 }
 
 // --- "What's working" analysis ----------------------------------------------

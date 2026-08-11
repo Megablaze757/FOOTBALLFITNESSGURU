@@ -1,0 +1,1763 @@
+# Changelog
+
+Notable changes, newest first. Dates rather than version numbers — the app ships
+continuously from `main` and there is nothing to pin a semver to.
+
+Each entry says what changed **and what an operator has to do about it**. A
+change that needs a migration applied or the Worker re-pasted is not done when
+it merges, and a changelog that doesn't say so is how a feature sits dark for a
+fortnight while everyone assumes it shipped.
+
+---
+
+# Everything that changed, in one place
+
+The dated entries below are what happened *when*. This is what happened, full
+stop — by area, so you can find a thing without reading 1,200 lines. Dates in
+brackets point at the detailed entry.
+
+## The app people use
+
+**Nutrition** went from a stack of boxes to the daily loop's third pillar. It is
+a primary tab in the bottom bar (labelled "Food" — six slots on a 320px phone
+give each about 45px), it leads with four rings rather than a form, and the meal
+planner behind it builds a week you can shop for. *(08-01 latest, 08-02 latest,
+08-03 looking)*
+
+**Meal plans actually scale to the athlete.** They take height, weight, age and
+sex, and you can pick a goal — bulk, cut, maintain. A full audit found the plans
+were feeding a 115kg athlete 69% of their target; per-meal scaling and a
+re-weighted picker took that to ~88%, and where it still falls short the UI says
+so with a fix rather than quietly under-feeding. Vegan protein went from 58–64%
+to 73–79% by parameter sweep, not by guessing. *(08-02 audit)*
+
+**The shopping list became a shopping list.** It had no checkboxes — the one
+thing you need standing in an aisle — and tapping an item left the app for
+Tesco. The row is the tick now, ticks survive a backgrounded phone, and the
+running total is what's *left* to buy. *(08-02 later)*
+
+**Injury** was rebuilt twice, because the first attempt was still a wall of
+text. Nothing expands by default, red flags stay visible rather than hiding
+behind a disclosure, and the body map sits inside the planner that consumes it
+instead of below it. *(08-02, 08-02 walls)*
+
+**Guides** stopped being an AI wall of text — the fuel tab's eighteen bullets
+became a timeline you step through. *(08-02 walls)*
+
+**The check-in is quick by default** and stays quick. Weight is an opt-in pill,
+training logging is surfaced in the quick form rather than buried, and re-opening
+a day you already logged no longer forces the long version. *(08-02 defaults,
+08-02 findability, 08-03 looking)*
+
+**Home** earns its place once the day is done — a seven-day strip built from
+data that was already being fetched and thrown away — and no longer shows three
+competing to-do lists. *(08-02 later, 08-03 looking)*
+
+**Video analysis** got its upload box back, because tiles that open a picker on
+tap don't tell you where to put a file. *(08-02 walls)*
+
+**Running, meal photos and connected wearables** — zone/pace engine, photo
+calorie estimation as a background job, Oura/Whoop/Garmin/Apple Health.
+*(08-01)*
+
+## How it looks and how it feels
+
+**A measured UI/UX audit of the seventeen signed-in pages**, which nothing had
+ever checked — the e2e suite stops at the login gate. It found 89 tap targets
+under 44px, 29 axe WCAG violations, four centred paragraphs, two dead-end empty
+states and a page with no `<h1>`. All zero now. Seventy of the 89 had one cause:
+six hand-rolled copies of the same chip, three with no ARIA state at all. There
+is one `.chip-option` now. *(08-03 playbook)*
+
+**Then a second pass that looked at the screens instead of measuring them,**
+because passing checks is not the same as being good. The check-in had two
+identical gold primary buttons with 60% of the page below the real one (3966px →
+2360px). Nutrition led with 700px of empty rings and a `0` whenever no weight was
+logged, with the fix as small print linking to the wrong page. Home listed the
+same tasks twice. *(08-03 looking)*
+
+**Accessibility is enforced, not asserted.** Contrast is calibrated in
+`tailwind.config.ts` and re-measured against both surfaces; the maximum-scale
+viewport lock (a WCAG 1.4.4 failure) is gone; every page has one `<h1>`.
+
+## What keeps it working
+
+**632 unit tests**, coverage gated at 95/85/90 (actuals 98.5/88.8/93.8).
+
+**End-to-end smoke tests** over the public routes — load, hydrate, no console
+errors, single `<h1>`, no sideways scroll, no axe violations — because 632 unit
+tests and a green `next build` will all pass while the app serves a white
+screen. *(08-02 e2e)*
+
+**`npm run audit:ui`** measures the pages behind login by stubbing auth, which
+Playwright cannot otherwise reach. *(08-03 playbook)*
+
+**CI runs all of it** — lint, typecheck, coverage, `npm audit`, e2e — and deploy
+depends on CI passing.
+
+**A production-readiness pass**: security headers, a custom 404, icons and
+social images, and a repeatable deployment-status check. *(08-02 hardening)*
+
+## The iOS app
+
+Native SwiftUI in `ios/`, not a webview. The daily loop end to end — sign in,
+check in, readiness verdict — with HealthKit, a home-screen widget and a daily
+reminder that stays quiet on days you have already checked in. The scoring and
+streak engines are hand-ported from TypeScript with tests, because two
+implementations of one rule drift silently.
+
+**Detail lives in [`ios/CHANGELOG.md`](ios/CHANGELOG.md)** — versioned, not
+dated, because it ships as builds Apple approves. **None of it has been
+compiled.** *(08-02 iOS, 08-03 iOS 0.2.0)*
+
+## The morning sync — deploy this and Apple Health works
+
+**Two commands, and it does not touch the Cloudflare Worker.**
+
+```bash
+supabase db push                                             # migration 0066
+supabase functions deploy wearable-ingest --no-verify-jwt
+```
+
+`--no-verify-jwt` is required and is **not** a security hole. The caller is an
+Apple Shortcut with no Supabase session and no way to refresh one; it
+authenticates with the athlete's ingest token, which the function checks itself.
+With JWT verification on, Supabase rejects the request before the function runs
+and every morning silently 401s.
+
+**Why a Supabase function rather than the Worker route that already exists.**
+The Worker has this code and it has never been deployed — and production is
+running source that is not in this repo (see the divergence warning below), so
+pasting the repo's bundle would delete the live AI provider chain. The sync
+shares nothing with the AI routes but a database, so it ships on its own and
+goes live today rather than waiting on a merge nobody has scheduled.
+
+**The token no longer needs a server at all.** Minting was a POST to the Worker
+purely to generate a UUID and write one column — work the browser does directly
+against a row RLS already permits. That removed the last dependency on a Worker
+deploy.
+
+## The Worker — what your dev has to do
+
+**Full spec is the next section down: [The only remaining step — Worker deploy
+spec](#the-only-remaining-step--worker-deploy-spec).** It is written for whoever
+does the deploy, and every claim in it is verifiable from the source or with
+`curl`. Sections 0–9 cover what is live, the build, environment, database,
+what each new route does, the vision path, cron, verification and hardening.
+
+**No code needs writing.** `cloudflare/src/index.ts` is already in the repo,
+tested and committed. The job is bundle → set one optional variable → paste →
+verify. In brief:
+
+| # | Step | The bit people get wrong |
+|---|---|---|
+| 1 | `npx esbuild src/index.ts --bundle --format=esm --target=es2022 --platform=neutral --outfile=worker.js` | **Paste `worker.js`, never `src/index.ts`.** The source imports from `../lib/*`; esbuild resolves those at bundle time and the dashboard editor has no bundler, so raw TS throws on module load and *every route 500s*. `--platform=neutral` matters too — `node` injects built-in shims workerd doesn't provide. |
+| 2 | One new **optional** env var | Everything else is already set; the wearable sync reuses the service-role key the Worker already holds. |
+| 3 | Paste into the Cloudflare dashboard | — |
+| 4 | `curl -s .../health` | See the warning immediately below — do **not** simply paste over what is live. |
+
+**Do the rate-limiting rule in the same sitting** (spec §8). It is a dashboard
+change, not a code one: the Worker's zone → Security → WAF → Rate limiting.
+
+### ⚠️ STOP — the repo and production have diverged, in both directions
+
+**Measured 2026-08-04, not assumed.** This supersedes the "Deployment status"
+table below it, which said live was `2026-07-29.1`. It isn't.
+
+```bash
+curl -s https://apex-api.fitnessguru.workers.dev/health
+# {"ok":true,"version":"2026-08-04.2",
+#  "model":"groq/openai/gpt-oss-120b",
+#  "providers":["groq","openrouter","nvidia"], "chain":[ …8 models… ]}
+```
+
+**Production is `2026-08-04.2`. The repo is `2026-08-01.1`.** Production is
+*newer*, and it is built from source this repository does not contain: there are
+zero occurrences of `groq` in `cloudflare/src/index.ts`, the repo's `modelChain`
+is OpenRouter-only, and the repo's `/health` does not even emit a `providers`
+field. Someone has done real provider work — a three-provider, eight-model
+fallback chain — outside this repo.
+
+**But production is missing the wearable feature entirely.** Probing every route
+in the repo's source against live:
+
+| Route | Live | |
+|---|---|---|
+| `/connect-wearable` | **404** | missing |
+| `/ingest-token` | **404** | missing |
+| `/wearable-ingest` | **404** | missing |
+| all 14 others | 401 / 200 / 400 | present (401 = route exists, auth required) |
+
+A 404 here means the route is absent from the deployed bundle, not that auth was
+refused — every other protected route answers 401.
+
+**This is why Apple Health does not work.** The Shortcut posts to
+`/wearable-ingest`, which does not exist in production, so every morning's sync
+404s silently. Same for the "Set up" button, which calls `/ingest-token` to mint
+the token in the first place.
+
+**So do NOT paste the repo bundle over production.** It would fix Apple Health
+and simultaneously delete the groq/nvidia provider chain, regressing every AI
+feature to a single OpenRouter model. Neither version is a superset of the other.
+
+### Four features have now broken from this, not one
+
+Each was reported separately, as an unrelated bug, and each traced back here:
+
+| Reported as | Actually |
+|---|---|
+| "Apple health still not working" | `/wearable-ingest` and `/ingest-token` 404 — routes absent from the deployed bundle |
+| "The programs have changed, before they had warmups stretching running" | `/generate-program` returns sessions with no warm-up, conditioning or cool-down |
+| "Meal image estimator broken" | Live `/health` reports **no `vision` field** and runs `groq/openai/gpt-oss-120b`, which is **text-only** — every photo was sent to something that could not look at it |
+| AI features generally | Live carries a three-provider chain this repo has never seen |
+
+Three of the four now degrade honestly — the wearable card says the sync isn't
+live, and programs get their scaffolding restored locally. Those are mitigations
+at the boundary, not fixes, written because the boundary is the only place this
+repository controls.
+
+**The photo estimator is now actually fixed**, by routing around the Worker
+rather than waiting for it. `supabase/functions/estimate-food` is a vision route
+that lives in version control and deploys with one command:
+
+```bash
+supabase functions deploy estimate-food
+supabase secrets set OPENROUTER_API_KEY=...   # the key the Worker already uses
+```
+
+It uses the Worker's prompt and parser verbatim, so the same plate gets the
+same numbers whichever backend answers.
+
+## Security audit: the UI was the only thing enforcing two rules
+
+Prompted by a checklist: *the UI is the only security*, and *one user can see
+another user's data*. Both applied. Audited every table's RLS, every policy, and
+all twelve Edge Functions.
+
+### Paid features answered anybody who asked
+
+The paywall lived in exactly ONE place — `requireTier(..., "silver", ...)` on
+five Cloudflare Worker routes. The Supabase Edge Functions that answer the same
+requests had **no tier check at all**, because they were only ever the fallback
+and the fallback inherited none of the paywall.
+
+Unsetting `NEXT_PUBLIC_API_URL` moved every AI call onto that ungated path.
+Programs, the coach chat and meal estimation became free to any account with a
+token — the buttons stay hidden from free users in the UI, and the UI is not a
+permission check. `lib/api.ts` already contained a comment reasoning about "a
+402 means this needs Pro", describing a status code nothing was emitting.
+
+`supabase/functions/_shared/gate.ts` is now the one gate, with the Worker's
+semantics deliberately copied: 402 with `upgrade`/`tier`, 403 for a suspended
+account, fail-**open** on a suspension-lookup blip so a payer is never locked
+out, fail-**closed** on an unknown tier so a database hiccup never gives the
+product away. Nine tests, including that a missing service-role key denies
+rather than allows.
+
+### A service-role function that trusted the request body
+
+`process-video` is a Database Webhook handler. It runs with the service role —
+RLS does not apply to it — and it read `user_id`, `storage_path` and
+`check_in_id` straight out of the POST body. It is deployed with ordinary JWT
+verification, so "is signed in" was the only barrier, and being authenticated is
+not being authorised.
+
+Any signed-in user who could name a row id could:
+
+- upsert into `ai_plans` under **someone else's `user_id`** — a fabricated
+  biomechanics analysis and drill program landing in another athlete's account,
+  in an app built to manage injury risk;
+- flip any `videos` row to processing/ready/failed, breaking other people's
+  uploads;
+- have a signed URL minted for any object in the videos bucket, and any
+  check-in's pain map read, by naming them.
+
+The payload is now used for one thing — which row to look at — and every field
+that matters is read back from the table with the service role. A forged body
+can at most re-trigger processing of a video that genuinely exists and is
+genuinely pending. `WEBHOOK_SECRET` closes that remaining gap when configured.
+
+### What was already right
+
+- **RLS is enabled on all 29 tables.** The two `using (true)` policies that
+  remain are `app_settings` (a launch flag) and `waitlist` (insert-only), both
+  correct.
+- **`profiles: read all (authenticated)`** — any signed-in user reading every
+  athlete's height, weight and diet notes — was already replaced in migration
+  0037 by own-or-coach-related. Verified against the live database rather than
+  assumed, by checking that 0037's `is_admin()` exists there.
+- `create-checkout` takes the user from `auth.getUser()`, never the body.
+- `wearable-ingest` looks the athlete up *by* the token, so the token is the
+  identity — there is no id to forge.
+- `assess-readiness` is a pure function over its input and touches no data.
+
+### One provider chain for the whole app: Groq, then OpenRouter
+
+Three Edge Functions each held their own Anthropic client, their own model id
+and their own error handling — while the Cloudflare Worker, serving most of the
+app's AI, ran a completely different provider chain. Two AI stacks in one
+product means two sets of credentials, two bills, two things to rotate, and
+features that fail differently for reasons nobody can hold in their head at
+once. **The Anthropic key is gone.** `supabase/functions/_shared/llm.ts` is the
+one chain, and `coach-chat`, `generate-program` and `estimate-food` all call it.
+
+Groq first, because it is by a distance the faster of the two and every one of
+these calls happens while somebody waits. OpenRouter second, because breadth is
+exactly what a fallback needs: when a Groq model is retired, rate-limited or
+down, the same request goes to a different company's hardware instead of
+failing. A provider whose key is unset is **skipped, not failed**, so either one
+alone is a working configuration.
+
+| | Groq | OpenRouter |
+|---|---|---|
+| Text | `openai/gpt-oss-120b`, `llama-3.3-70b-versatile` | `deepseek/deepseek-chat`, `google/gemini-2.5-flash` |
+| Vision | `qwen/qwen3.6-27b` | `google/gemini-2.5-flash`, `openai/gpt-4.1-mini` |
+
+**The vision list is short, and that asymmetry is the whole bug.** Most models
+cannot see. Groq's production chain — `gpt-oss-120b`, `llama-3.3-70b` — is
+text-only, so photos went to something incapable of looking at them. A model
+belongs in a vision list only once it has been checked to accept image input,
+and there is a test asserting the two lists don't overlap.
+
+Every list is overridable by env (`GROQ_VISION_MODELS` and friends), which is
+how a retired model slug gets fixed in a hurry rather than by a redeploy.
+
+`generate-program` lost Anthropic's `json_schema` output format in the move —
+Groq and OpenRouter have no equivalent every model honours — so the schema is
+stated in the prompt and the reply is validated by parsing it, which is what the
+Worker already does. A rung answering with prose or half an object is a failed
+rung, not a failed program. It was also **never in the deploy script**, which is
+its own small bug, now fixed.
+
+The client picks the route from what the backends say they can do. `/health`
+advertises a vision model → the Worker, as before. It doesn't → the Edge
+Function, if a CORS preflight says that's deployed. Neither → the camera is not
+offered, and the app says the server can't read photos instead of blaming the
+photograph. The day the Worker can see again it takes the traffic back on its
+own; there is no flag to switch and none to forget.
+
+**The fix is a merge, and it needs whoever owns `2026-08-04.2`:**
+
+1. Get that source into this repo — it is currently nowhere in version control,
+   which is its own problem: the thing serving production exists only in a
+   Cloudflare dashboard and on someone's machine.
+2. Port the wearable code onto it — `wearableIngest`, `ingestToken` and
+   `connectWearable` in `cloudflare/src/index.ts`, plus their route lines near
+   the top of `fetch`.
+3. Bundle, paste, then verify **both** halves:
+   ```bash
+   curl -s .../health                                    # providers still 3
+   curl -s -X POST .../wearable-ingest -d '{}'           # 401, not 404
+   ```
+   401 is the pass condition — it means the route exists and rejected an
+   unauthenticated body, which is exactly right.
+
+## Still on you
+
+Nothing above is blocked on these, but the first two are load-bearing:
+
+1. **Set GitHub Pages → Source → "GitHub Actions".** Until this is done the site
+   intermittently serves a Jekyll build of `README.md` instead of the app. This
+   has already happened once, on 28 July. Only the repo owner can change it.
+2. **Get production's Worker source into this repo, then merge the wearable
+   routes into it** — see the divergence warning above. **Apple Health is broken
+   until this is done**, because `/wearable-ingest` and `/ingest-token` 404 in
+   production. Do not paste the repo bundle as a shortcut; it would regress the
+   provider chain that is live.
+3. Confirm Supabase backup retention and do a restore drill.
+4. **Rotate the Supabase database password** (deferred to post-beta, by choice —
+   it is in git history).
+
+---
+
+## Deployment status — checked 2026-08-02
+
+> **⚠️ Row 1 is out of date — re-measured 2026-08-04.** Live is **not**
+> `2026-07-29.1`; it is `2026-08-04.2`, built from source that is not in this
+> repo, and it is missing the three wearable routes. See *"the repo and
+> production have diverged"* above. Rows 2–4 still hold.
+>
+> The lesson is the one this file already preaches and this row broke: a
+> deployment state that is written down is a claim with a timestamp, not a fact.
+> Re-run the `curl` below rather than believing the table.
+
+Verified against the live site and Worker rather than assumed. This supersedes
+the per-release tables further down, two of which are now out of date.
+
+| # | Step | State |
+|---|---|---|
+| 1 | ~~Paste the Worker bundle (`2026-08-01.1`)~~ | ⚠️ **superseded — see above** |
+| 2 | Set the `NEXT_PUBLIC_API_URL` repo Variable | ✅ done |
+| 3 | Deploy the front-end | ✅ done — current with `0d2338a` |
+| 4 | Apply migrations `0064` + `0065` | ✅ done |
+
+**How each was checked**, so it can be re-checked rather than trusted:
+
+```bash
+# 1. Worker version — reports 2026-07-29.1, i.e. the OLD bundle
+curl -s https://apex-api.fitnessguru.workers.dev/health
+
+# ...and its three new routes 404 (they should 401 once pasted)
+for r in wearable-ingest ingest-token connect-wearable; do
+  curl -s -o /dev/null -w "$r %{http_code}\n" -X POST \
+    "https://apex-api.fitnessguru.workers.dev/$r" \
+    -H 'Content-Type: application/json' -d '{}'
+done
+
+# 2 + 3. The live site is pocketathlete.com (github.io 301s to it).
+# The Worker URL is compiled into the deployed bundle, and the newest
+# UI strings are present in the route chunks.
+curl -sL https://pocketathlete.com/nutrition/ | grep -o 'src="[^"]*\.js"'
+```
+
+A caution learned the hard way here: when grepping deployed chunks, **check the
+fetch returned 200 first**. GitHub Pages answers a bad asset path with a 9KB
+HTML 404 page, and grepping that for a missing string returns "not found" just
+as convincingly as a real absence does.
+
+### The only remaining step — Worker deploy spec
+
+Written for whoever does the deploy. **No code needs writing.** The source is
+already in the repo, tested and committed at `cloudflare/src/index.ts`; the job
+is to bundle it, set one optional variable, and paste. Everything below is
+verifiable from the source or with `curl`.
+
+#### 0. What is currently live
+
+`GET /health` → `{"ok":true,"version":"2026-07-29.1","model":"deepseek/deepseek-chat"}`
+
+That is the bundle from 29 July. The repo is on `2026-08-01.1`. Three route
+handlers and a vision path exist in source and not in production.
+
+#### 1. Build the bundle
+
+```bash
+cd cloudflare
+npx esbuild src/index.ts --bundle --format=esm \
+  --target=es2022 --platform=neutral --outfile=worker.js
+# -> worker.js  73.7kb
+```
+
+**Paste `worker.js`, never `src/index.ts`.** The source has
+`import { ... } from "../lib/biometrics"` and `"../lib/affiliate"` — those are
+resolved by esbuild at bundle time. The Cloudflare dashboard editor has no
+bundler, so the raw TypeScript throws on module load and every route 500s.
+
+`--platform=neutral` matters: `node` would inject Node built-in shims that
+workerd does not provide.
+
+#### 2. Environment
+
+One **new, optional** variable. Everything else is already set — the wearable
+sync reuses the service-role key the Worker holds.
+
+| Binding | Type | Required | Notes |
+|---|---|---|---|
+| `OPENROUTER_VISION_MODELS` | plaintext var | no | Comma-separated OpenRouter slugs for the meal-photo path. Unset falls back to the compiled default chain: `google/gemini-2.5-flash`, then `openai/gpt-4.1-mini`. See `visionChain()` — configured values replace the defaults rather than appending, and duplicates are stripped. |
+
+No new secrets. If you set nothing at all, the vision path still works.
+
+#### 3. Database
+
+Migrations `0064` and `0065` (`supabase/migrations/`) are **already applied** —
+verified per-column against the live project. The new handlers depend on:
+
+- `profiles.ingest_token uuid` (nullable, unique index
+  `profiles_ingest_token_idx`) — written by `/ingest-token`, looked up by
+  `/wearable-ingest`.
+- `wearable_connections` (`user_id`, `provider`, `access_token`,
+  `last_sync_at`, `last_error`) with `primary key (user_id, provider)` — the
+  upsert relies on it via `?on_conflict=user_id,provider` plus
+  `Prefer: resolution=merge-duplicates`, so without that PK every reconnect
+  would insert a duplicate row instead of updating.
+
+Nothing to run. Listed so a 500 can be diagnosed against the right schema.
+
+#### 4. What the new routes do
+
+All three are in the `fetch` dispatch (`src/index.ts` ~line 79-83) and all
+return JSON.
+
+**`POST /connect-wearable`** — auth: Supabase user JWT in `Authorization`.
+Body `{ provider: "oura", token: "<personal access token>" }`.
+
+Verifies the token against `https://api.ouraring.com/v2/usercollection/sleep`
+*before* storing it, then backfills 7 days and upserts the connection.
+`{ ok: true, days: n }` on success. Rejects tokens under 20 chars with 400.
+`provider: "whoop" | "garmin"` returns a 400 whose message names the developer
+application as the blocker — the UI mirrors that wording, so don't make it
+generic. Any other provider is `"unknown provider"`.
+
+> Storing before verifying was the bug this avoids: it produces a connection
+> that looks live in the UI and silently returns nothing every night.
+
+**`POST /ingest-token`** — auth: Supabase user JWT. No body.
+
+Mints a `crypto.randomUUID()` into `profiles.ingest_token` and returns
+`{ token, url }`, where `url` is this Worker's origin + `/wearable-ingest`,
+derived from the request URL. Calling it again rotates — the previous token
+stops working immediately. A UUID rather than a JWT deliberately: the holder is
+an Apple Shortcut with no way to refresh anything.
+
+**`POST /wearable-ingest`** — auth: **the ingest token**, as
+`Authorization: Bearer <uuid>`. *Not* a user JWT — that separation is the entire
+point of the endpoint.
+
+The token is regex-checked as a UUID before it hits PostgREST (a non-uuid
+comparison errors rather than returning empty), then resolved to a user.
+No match → 401, deliberately, so a misconfigured Shortcut fails visibly instead
+of appearing to work for weeks. Body is parsed by `parseIngestPayload` in
+`lib/biometrics.ts`; accepts `hrv`, `restingHR`, `sleepHours`. Nothing usable →
+400 naming the three fields.
+
+#### 5. Vision path on `/estimate-food`
+
+Same route, same auth (user JWT), same `silver` tier gate and per-user budget
+check. The body gains an optional `image`: a `data:image/*` URL.
+
+- Client downscales to ~768px JPEG before sending (`lib/food-estimate.ts`).
+- Worker enforces `MAX_IMAGE_CHARS = 1_500_000` — base64 is ~4/3 of the bytes,
+  so about a 1.1MB image. Over that → **413**, not 400.
+- An `image` that isn't a `data:` URL → 400.
+- Text-only requests behave exactly as before.
+
+#### 6. Cron
+
+`syncWearables(env)` is prepended to the existing `scheduled` job list. It pulls
+every Oura connection, refetches 7 days, and writes `last_sync_at` /
+`last_error` per connection. Each cron job is already wrapped in its own
+try/catch, so a failing sync cannot stop reminders or the retention sweep.
+
+**The existing cron trigger is unchanged** — no new schedule to add.
+
+#### 7. Verify the paste took
+
+```bash
+API=https://apex-api.fitnessguru.workers.dev
+
+# Expect version 2026-08-01.1 and a "vision" field.
+curl -s $API/health
+
+# Expect 401 on all three (route exists, correctly demanding auth).
+# 404 means the paste truncated — the realistic failure mode at 73.7KB.
+for r in wearable-ingest ingest-token connect-wearable; do
+  curl -s -o /dev/null -w "$r %{http_code}\n" -X POST "$API/$r" \
+    -H 'Content-Type: application/json' -d '{}'
+done
+```
+
+A route still on `404` after pasting means the editor silently cut the file.
+Re-paste; don't debug the handler.
+
+#### 8. Worker hardening — do this at the same time
+
+Not required to make the paste work, and both come out of the production
+readiness audit (`docs/PRODUCTION-READINESS.md`, items 6 and 11). Neither needs
+a code change.
+
+**a) Add a Cloudflare Rate Limiting rule.** There is no per-IP limit on
+unauthenticated requests. Everything expensive already requires a JWT and is
+capped per user by `AI_DAILY_LIMIT` and `checkBudget()`, so the exposure is
+request volume rather than spend — but `/stripe-webhook` and the auth-check path
+on every route can be hit anonymously.
+
+> Cloudflare dashboard → the Worker's zone → Security → WAF → Rate limiting
+> rules. Suggested: **100 requests / minute / IP** on `apex-api.*`, action
+> *Block*, duration 60s. Exclude nothing — legitimate app traffic is nowhere
+> near that, since a single athlete's whole day is a handful of calls.
+
+**b) Confirm and record Supabase backup retention.** This is the one open item
+with an unrecoverable failure mode, and it is a lookup, not a project: RTO and
+RPO can't be stated until someone reads the retention window off the current
+plan. Then do one restore into a scratch project — an untested backup is not a
+backup — and write both numbers into `docs/PRODUCTION-READINESS.md` items 23/24.
+
+#### 9. Until it's done
+
+The app runs on its on-device fallbacks. That is intended behaviour, not
+breakage, and each screen says so where it matters. Dark until the paste: meal
+photo estimation, Oura and Apple Health sync, and the nightly wearable cron. The
+AI coach, rehab planner and all billing already work on the old bundle.
+
+**Nothing in the last four releases needs a Worker change.** The nutrition,
+injury, shopping-list, Guides and meal-planner work is front-end and pure logic;
+the meal-plan audit touched only `lib/meal-plan.ts`, which ships in the
+front-end bundle.
+
+---
+
+## 2026-08-08 (handover) — Programs that progress, meals that agree with each other, and four things only a human can do
+
+**Operator action: FOUR, and three of them are credential rotations.** Full
+detail and the exact steps are in [`docs/HANDOVER.md`](docs/HANDOVER.md), which
+is the document to hand a developer picking this up cold.
+
+1. **Rotate three exposed credentials.** A Supabase **secret key**, the database
+   password, and an NVIDIA API key were all exposed during this work. The secret
+   key is the urgent one — it bypasses RLS entirely, so it is full read/write to
+   every athlete's data over HTTPS from anywhere. After rotating, update
+   `SUPABASE_SERVICE_ROLE_KEY` in the Worker or Stripe and the reminder crons
+   break. Re-add the NVIDIA key as **Type: Secret** — it is currently Plaintext,
+   which is the only one of the three that is a standing misconfiguration rather
+   than an accident.
+2. **Get the deployed Worker into version control.** It is `2026-08-04.2` and
+   exists only in the Cloudflare dashboard; both copies in this repo are
+   `2026-08-01.1`. `npm run worker:drift -- <url>` reports the gap. Copy FROM
+   production, never deploy over it.
+3. **Deploy `estimate-food`** — Actions → Deploy Edge Functions. Needs
+   `SUPABASE_ACCESS_TOKEN` as a repo secret, which only a human can generate.
+   This is the last thing standing between the meal photo estimator and working.
+4. **Validate two CHECK constraints** added `NOT VALID` in migration 0070. They
+   guard new writes but were never checked against existing rows — and those
+   rows are the ones producing `NaN` macros and "Weighted toward undefined."
+
+Migrations 0066–0070 are applied and verified live. 758 tests, lint, typecheck
+and build clean.
+
+### Programs stopped rotating exercises and started progressing one
+
+The recurring "programs don't feel high quality" had a concrete cause. Movement
+selection keyed off the session index, so exercises changed every week — while
+the periodisation copy is written on the assumption that they do not. Day 1 of a
+strength block read, verbatim:
+
+```
+wk1  Bent-over barbell row    "Groove the movement..."
+wk2  Barbell hip thrust       "Add a little weight and a set"
+wk3  Pogo hops                "Peak volume: extra set..."
+wk4  Dumbbell shoulder press  "Deload: SAME MOVEMENTS, ~60%"
+```
+
+Four unrelated exercises, each captioned as last week's lift with more weight on
+it. Selection is per **block** now — 3×8, 4×7, 4×6, 2×8 on the same lift — and
+variety moved between blocks, which come out 88% different.
+
+Peak week was also prescribing **flying sprints and the T-drill at RPE 10**.
+That is failure. Sprinting and jumping are limited by force per contact, and a
+fatigued sprint is the textbook hamstring-strain mechanism, so those patterns are
+capped at 8 while strength work still climbs to 9.
+
+And a four-day football block contained **zero hamstring sets** — no Nordic, no
+RDL, no slider, all three in the catalogue. Nothing in the app could see it
+because volume was counted per session slot. It is now counted per muscle group
+(`lib/muscle-volume.ts`), shown to the athlete in the program calendar, and
+sprinting sports get hamstring and calf work taken *before* the selection
+rotation, because a scoring bonus kept getting spun out of the window.
+
+In-season weeks now taper into the match rather than sitting flat, matching how
+professional squads actually periodise a microcycle.
+
+### Today's meals and the meal plan showed different food
+
+A plan is stored as one seed and rebuilt wherever it is displayed, which only
+works if every caller feeds `buildWeek` the same inputs. The Meal plan tab
+merged starred dishes and note-inferred dislikes into prefs; the Today tick-list
+did not, and the page never passed `starred` down at all. A star is worth £30 in
+the planner, so leaving it out rebuilt a *different week*. One derivation now.
+
+You also could not open a recipe from Today — the row was a single button that
+only ticked the meal off.
+
+### The meal photo estimator, diagnosed properly
+
+`NEXT_PUBLIC_API_URL` **is** set, so the app routes to the Worker; the Worker's
+`/health` reports **no vision model** over a chain of eight text-only models; the
+Edge Function that would cover it is not deployed. Adding a vision-models
+variable will not help — the deployed Worker's `/health` has no `vision` key at
+all where the repo's emits one unconditionally, so the rewrite appears to have
+removed the vision path entirely. *(Inferred from the response shape, not from
+reading the source.)*
+
+Until it is deployed, a photo **plus a typed description** now produces a real
+estimate rather than an error — the fallback uses the words when nothing can
+read the picture.
+
+That work also found a bug that had never once worked: supabase-js reports every
+failure as `"Edge Function returned a non-2xx status code"`, so the friendly
+404 message `estimateFood` was matching on never fired. Athletes saw that raw
+string under a button.
+
+### Other things that were quietly broken
+
+- **Three Tailwind colour classes rendered as nothing.** `readiness-amber` does
+  not exist (it is `readiness-yellow`) and was used in four places, including a
+  dashboard progress bar that was drawing invisible. `text-pitch-200` does not
+  exist either, so program week focus notes had no colour. Guard added.
+- **Budget mode came out DEARER** than not using it for 6 of 96 athlete/diet
+  combinations. Two weights re-swept jointly; now clean on all 96.
+- **The store picker only changed search links**, so an Aldi shopper was quoted
+  Tesco prices. It sets the price level now, and athletes can correct any line.
+- **52 new recipes** (143 → 195). Adding them initially made a vegan cutting
+  athlete's week *worse*, which is recorded in the handover because it is the
+  more useful half of the story.
+
+### Guards added, each because something broke silently
+
+`worker-drift` (deployed Worker ≠ repo, with "couldn't check" distinct from
+"they differ"), a predeploy hook and a CI step so `wrangler deploy` cannot
+overwrite a newer dashboard Worker, `backend-routes.test.ts` (a backend call no
+backend serves — it immediately found one a hand-written list had missed), and
+`theme-tokens.test.ts` for the colour classes above.
+
+Every one was verified by injecting the regression it exists to catch.
+
+**One standing warning**: the Worker answers 18 routes, the Edge Functions cover
+4 of the 14 the app calls, and **ten features exist on the Worker alone** —
+including billing and account deletion, neither of which can have an on-device
+fallback. Do not unset `NEXT_PUBLIC_API_URL` without adding those first. It was
+proposed once already.
+
+---
+
+## 2026-08-03 (iOS 0.2.0) — A widget, a reminder, and the ability to read
+
+**Operator action: none for the web.** `ios/` is excluded from `tsconfig.json`
+and `.eslintrc.json`, so `npm run build`, `npm test` and `npm run lint` never
+see it. The two share a Supabase project and nothing else.
+
+**Full detail now lives in [`ios/CHANGELOG.md`](ios/CHANGELOG.md)**, which is
+versioned rather than dated — this app ships as discrete builds a human submits
+and Apple approves, and users sit on old versions for weeks, so "which version
+has the widget" is a question someone will actually need answered. Summary:
+
+The app could write a check-in and never see one again — `Supabase.swift` had no
+GET at all. It reads now, which is what makes the rest possible: a home-screen
+**widget** showing today's readiness, and a **daily reminder that does not fire
+on days you have already checked in**. Those two are the only things in `ios/`
+that a website cannot do, and they are what guideline 4.2 wants to see.
+
+### One thing that matters to the web app too
+
+Porting the streak engine found a **cross-platform date bug**. `CheckInView`
+formatted the check-in date in the phone's **local** timezone; the web writes
+`new Date().toISOString().slice(0, 10)`, which is always **UTC**. East of UTC
+they disagree for part of every day — an athlete in Sydney checking in at 9am
+gets `2026-08-03` from the phone and `2026-08-02` from the browser — and since
+the upsert conflict target is `(user_id, check_in_date)`, that is two rows for
+one morning: a duplicated day, a broken streak, two scores for one check-in.
+
+The phone matches the web now, so nothing on this side needs changing today.
+**But the open question is a web question as much as an iOS one:** should the
+check-in date be the athlete's *local* day rather than UTC? Arguably yes — your
+"today" is wherever you are standing, and a UK user checking in at 00:30 BST
+currently writes it against the previous day. Changing it would alter the
+meaning of every row already in `daily_check_ins` and needs one deliberate
+migration across both clients. Flagged here so it is not lost.
+
+---
+
+## 2026-08-03 (looking) — Four screens redesigned by looking at them
+
+**Operator action: none.** Front-end only.
+
+The audit below this entry made the app *pass* things. It could not tell you
+whether a screen was any good, because none of what it measures is what makes a
+UI good. So this pass rendered the signed-in screens and looked at them.
+
+**Coach is the app's best screen** and became the reference: an icon tile, a
+bold title, one line of description, as a tappable card. Where something needed
+rebuilding, it was rebuilt to look like that.
+
+### Check-in — the daily screen had two primary buttons
+
+`/journal/` is opened every morning, and about sixty per cent of it was wearable
+setup sitting *below* the submit button — including a second full-width gold
+"Save today", identical in weight to "Submit check-in" and lower on the page.
+The eye reads the last big button as the finish line.
+
+Connecting a watch is a once-ever job and typing HRV by hand is a never job for
+most people, so neither gets daily real estate. Both are behind one row that
+says whether last night synced. **The page went from 3966px to 2360px and now
+ends where the check-in ends.**
+
+"Trained today?" — the row this app was specifically asked to make findable —
+had a lone 14px `+` as its only affordance, on a card otherwise identical to the
+read-only info panels. It says **Log it →** now.
+
+### Nutrition — the hero was the part with no information
+
+With no weight logged there is no target, so all four rings render as empty grey
+circles round a `0`, above four rows of `0g —`. Roughly seven hundred pixels,
+the entire first screen, saying nothing — and the one instruction that fixes it
+was small print underneath, linking to `/home` rather than to the check-in, so
+the app's most valuable unlock cost an extra hop and a hunt.
+
+The rings now appear only when they can show something. In their place, the
+prompt is the hero and the action is a button that goes where it says. The
+calorie quick-add buttons hide in that state too: with the ring gone their only
+label went with it, and adding 200 towards a target that doesn't exist moves a
+bar that isn't there.
+
+### Home — three to-do lists on one screen
+
+Home showed a gold "build your program" hero, a "Today" quest list, and a
+checklist headed **"Things you haven't tried yet"** repeating three of the same
+four items. An athlete on a ten-day streak was told they hadn't tried a check-in.
+
+Anything the day already asks for is filtered out, the program row disappears
+while the hero is showing it, and the card lost its gold glow so the hero is the
+only glowing thing on the page.
+
+### Back links
+
+`← Back` sat in a `justify-between` header opposite a two-line subtitle, and on
+Nutrition the two overlapped — measured, 12×12px. It's on its own row above the
+title now, in all six pages, where it cannot collide and where every other
+mobile app puts it.
+
+632 unit tests, 31 e2e tests, and the audit below still at zero across all
+seventeen routes.
+
+---
+
+## 2026-08-03 (playbook) — A UI/UX audit of the signed-in app, and what it found
+
+**Operator action: none.** Front-end and CSS only — no migration, no Worker
+change. Ships with the next front-end deploy.
+
+Applied a UI/UX playbook across the app. The point of this entry is less the
+redesign than **how the problems were found**, because the same method finds the
+next batch.
+
+### The gap
+
+`e2e/smoke.spec.ts` covers seven public routes and stops at the login gate — a
+deliberate choice, documented in its header. Everything behind login, which is
+the app people open every day, had never been measured by anything. Opinions
+about it, yes. Measurements, no.
+
+So `scripts/ui-audit.mjs` (`npm run audit:ui`) gets past the gate by seeding a
+session into localStorage and route-stubbing Supabase, then measures all
+seventeen signed-in routes for tap-target size, line length, centred prose,
+dead-end empty states, `<h1>` count, horizontal overflow, and full axe
+WCAG 2.1 A/AA.
+
+**First run, against pages that looked fine:**
+
+| Finding | Count |
+|---|---|
+| Tap targets under 44px | **89** |
+| axe A/AA violations | **5 rules, 29 nodes** |
+| Centred paragraphs over 90 chars | 4 |
+| Dead-end empty states | 2 |
+| Pages with no `<h1>` | 1 |
+
+After: **0 of every one of them**, on all seventeen routes.
+
+### The root cause behind 70 of the 89
+
+There was no shared "selectable option" control. The same
+`rounded-full border px-3 py-1 text-xs` was hand-written in six places — the
+library filters, skill-drill filters, injury symptom and duration pickers, the
+position picker, the leaderboard switcher — each slightly different, all of them
+26–38px tall. Fixing seventy call sites individually would have left the
+seventy-first to be written wrong next week.
+
+So: one `.chip-option` class. Selected state is driven off `aria-pressed` /
+`aria-selected` rather than a className, which also fixed a quieter bug — **three
+of the six copies had no ARIA state at all**, so they looked selected and
+announced as an ordinary button. Twenty-eight of them on the library page alone.
+
+Likewise `← Back`, written out identically in eight files at 40×33px, is now
+`components/BackLink.tsx` — and it names its destination ("← Progress") instead
+of saying "back" about a link that goes somewhere fixed.
+
+### Four accessibility bugs no unit test could see
+
+- **`aria-controls` pointed at nothing.** All four pages using `<Tabs>` promised
+  `aria-controls="panel-x"`; `TabPanel` was exported and used by **nobody**.
+  Critical axe failure on four pages. The component's own comment called this
+  "a promise the markup has to keep" — it wasn't being kept.
+- **Twenty AA contrast failures on Rewards.** Locked badges were dimmed with
+  `opacity-45` on the whole card, which multiplied straight through the
+  carefully calibrated palette in `tailwind.config.ts` and took the badge name
+  to 4.21:1 and its description to **2.10:1**. The dimming moved onto the parts
+  that aren't text.
+- **Seven `aria-label`s going nowhere.** The Home week strip put `aria-label` on
+  bare `<span>`s, where it is prohibited and browsers may drop it — so the
+  screen-reader text for all seven days was silently discarded.
+- **`/report/` had no `<h1>`.** Its only heading lives inside the report sheet,
+  so a new athlete with no check-ins got a page with no heading at all, one grey
+  sentence, and no way to reach the thing that would fill it.
+
+### Empty states
+
+`components/EmptyState.tsx`: icon, then what would specifically fill this, then
+a way to do it. Applied to Report, Squad and Benchmarks; Home's week strip now
+says "Log a session in your check-in and these fill in" instead of "Nothing
+logged yet this week."
+
+### On trusting the numbers
+
+A selector-based audit that matches nothing reports a perfect score — identical
+output to a perfect app. Every clean result here was confirmed by injecting a
+known-bad element into the built page (a 20px button, a 2000px paragraph, an
+`<img>` with no alt, a second `<h1>`) and checking it got flagged. It was, all
+eight of them, **after** the false-positive carve-outs were added.
+
+Two findings were investigated and dismissed as probe artefacts rather than
+fixed: a 20×20 checkbox whose `<label>` is the real target, and the `—`
+placeholder in labelled stat cells. Both carve-outs are re-validated against a
+deliberately undersized case.
+
+632 unit tests and 31 e2e tests still pass.
+
+---
+
+## 2026-08-02 (iOS) — A native Swift app, in `ios/`
+
+**Operator action: needs a Mac.** Nothing in `ios/` affects the web app —
+`tsconfig.json` and `.eslintrc.json` exclude it, so `npm run build`, `npm test`
+and `npm run lint` never see it. The two share a Supabase project and nothing
+else.
+
+Superseded an earlier Capacitor scaffold from the same day. A webview wrapper
+was the wrong answer to "put it on the App Store": it invites Guideline 4.2, and
+it isn't what was asked for.
+
+### Added — `ios/`, native SwiftUI
+
+The daily loop, end to end: sign in → check in → readiness verdict, with Apple
+Health filling in what it can.
+
+- **`Readiness.swift`** — the scoring engine, a faithful port of
+  `lib/readiness.ts`. Same weights, hard limits, ACWR caps and advice strings.
+- **`ReadinessTests.swift`** — the TypeScript suite ported case for case. It
+  exists because two implementations of one engine drift silently: someone tunes
+  a weight on the web, the phone keeps the old one, and the same athlete is told
+  "train" on one device and "rest" on the other. Plus one Swift-only case — Swift
+  dictionaries have no insertion order, so a tie on pain would otherwise name a
+  different joint per launch.
+- **`HealthKitManager.swift`** — sleep, HRV and resting heart rate. Only counts
+  time actually asleep (`.inBed` includes lying awake reading, and counting it
+  turns a bad night into a good one), attributes a night to the day it ended, and
+  sums fragments rather than taking the longest.
+- **`Supabase.swift`** — auth and PostgREST over `URLSession`, no SDK. Refresh
+  token in the Keychain, not UserDefaults. Writes `source: "apple_health"`,
+  because `biometrics_source_check` does not permit `'healthkit'` and the
+  best-effort write would have failed silently.
+- **`CheckInView.swift` / `BodyMap.swift`** — tap scales rather than sliders,
+  soreness behind a yes/no, and the same fifteen body regions and coordinates as
+  the web so a left knee marked on the phone is a left knee on the site.
+
+### Not built, and it is not a small remainder
+
+The programme builder and engine, nutrition, the meal planner, the shopping
+list, video pose analysis, injury and rehab, guides, progress, the exercise
+library, coach/squad, and sign-up with billing. The web app is ~50 tested engine
+modules and 20 screens; porting it is a multi-month project. The daily loop is
+the right first slice — it is what people open every day and the part that gains
+most from being native.
+
+**None of it has run on a device.** It cannot, from here. `ios/README.md` has
+the Xcode steps and the pre-submission checklist, including the one that costs
+money: the moment a paid tier appears in this build it must use In-App Purchase,
+not Stripe.
+
+---
+
+## 2026-08-02 (defaults) — Quick check-in stays quick, and the upload box comes back
+
+No operator action. Front-end only.
+
+### Fixed
+
+**One tap on "add match day" put you in full mode forever.** `chooseMode(true)`
+wrote `pa:checkin-mode: "full"` to localStorage, and every check-in after that
+opened in full — sliders instead of tap scales, the body map open every morning.
+So an athlete who once wanted to record a match day silently converted their
+daily ten-second habit into the dozen-interaction form that quick mode exists to
+replace. Nothing said it had happened, and the only way out was noticing a small
+"Use the quick check-in" link.
+
+A per-day action is not a preference. "I need the match-day fields today" says
+nothing about tomorrow, and guessing wrong costs the habit. Quick is now always
+the default and the choice is not remembered; full is one tap away every day for
+anyone who wants it. The old localStorage key is deleted on load, so anyone
+already stuck in full mode is let out on their next visit rather than carrying a
+setting they never chose.
+
+**The video page lost its upload box.** Replacing it with movement tiles that
+opened the picker on tap was neat and completely invisible — nothing on screen
+said "this is where a video goes", so the page went from under-explained to
+unusable. My own change, same day.
+
+The tiles refine *what* gets checked; the box is the thing you came to do. Both,
+in that order, and tapping a tile no longer springs a file dialog — a surprise
+dialog is wrong when there's a visible drop zone right beneath it.
+
+---
+
+## 2026-08-02 (walls) — Fuel tab, video analysis, injury description
+
+No operator action. Front-end only.
+
+### Changed
+
+**The Guides fuel tab was eighteen bullets down a rail.** Six phases, three tips
+each, 180 words, every one on screen at once and all the same weight — the
+reader left to find their own place in it. The copy was fine; the problem was
+showing all of it. There is no reason to read Friday's dinner advice while
+sitting in the changing room ninety minutes before kick-off.
+
+It's a timeline you step through now: tap the point you're at, see three
+bullets. Same words, a sixth of the screen. Same interaction as the meal
+planner's day strip on purpose — two places that mean "pick a point in time, see
+what's at it" shouldn't be two different controls.
+
+**Video analysis opened on a dashed box.** For a feature that runs pose tracking
+on your own phone and can tell you your knee is collapsing, the first screen was
+"Choose or drop a video" and nothing else. Nobody uploads footage of themselves
+to find out what an app might do with it — and the one control that decides
+which checks can actually run was a dropdown *after* the file was picked.
+
+The nine movements it can read are the first thing now, as tiles that each say
+what they look at — depth and chest position, knee drive and stride, plant foot.
+Tapping one sets the movement and opens the picker, so choosing what you want
+checked and choosing the clip is one gesture. Session type and in-season moved
+behind a "Details" disclosure: they're for the training-load record, not the
+analysis, and they were two of the four things asked before you could press
+upload. The lead now also says the clip never leaves your phone, which is the
+question people actually have.
+
+**The injury page asked for an essay.** Step 2 was a 180-character worked
+example sitting in the box as grey placeholder, under a sentence of
+instructions — a paragraph of prose asking for a paragraph of prose, on the page
+someone opens because something hurts. It read as homework, and the honest
+outcome of homework is three words and a worse plan.
+
+Nine tappable phrases now, covering the details that actually change a rehab
+plan: when it hurts, what provokes it, whether it swelled, what's been tried.
+Tapping appends, so a usable description gets built by thumb in about four taps
+and can still be edited into sentences.
+
+---
+
+## 2026-08-02 (findability) — Logging a session, and adding your own exercise
+
+No operator action. Front-end only.
+
+### Changed
+
+**Logging today's training is a thing you do, not a mode you switch to.** From
+the quick check-in the only route to it was a button that flipped the whole form
+to full — trading the tap scales for sliders and opening the body map — to reach
+one section at the bottom. So the athlete who had just trained, which is most
+athletes opening this screen, had to change how the entire page worked in order
+to say so. Plenty never found it at all.
+
+It's a card of its own now, in quick mode, with a plain "Trained today?" and a
+line saying why it matters (it feeds training load and progress). Opens in
+place; the quick check-in stays quick for anyone who skips it. Full mode is
+still there for the things quick genuinely omits — match day, pain detail, the
+sliders — and its button now says so instead of advertising training logging it
+no longer has a monopoly on.
+
+**You can add your own exercises, and now you can find out.** `CustomExerciseForm`
+was only ever rendered from `/squad`, which is coaches-only. The exercise library
+merged custom entries into the list *and* into search, and offered no route to
+creating one — so the feature existed, was visible in its results, and was
+unreachable for every athlete.
+
+The database was never the blocker: the RLS policy is
+`using (coach_id = auth.uid())`, which asks who owns the row rather than whether
+they're a coach, so any authenticated user has always been able to insert their
+own. Purely a missing button, now on the library page — the one place someone
+who can't find a movement actually is — with a count of how many you have.
+
+### Notes
+
+`custom_exercises.coach_id` means *owner*, not *coach*. Renaming it is a
+migration plus churn across three files for no behavioural gain, so it stays;
+recorded here and in the component because the name will otherwise mislead
+whoever reads it next.
+
+---
+
+## 2026-08-02 (later) — Injury guides, the quick check-in, and Home
+
+No operator action. Front-end only.
+
+### Fixed
+
+**The injury page opened ~350 words of rehab at you.** Measured, not guessed:
+each protocol carries five steps, four red flags, a four-stage return-to-play
+plan and five exercises — about 175 words — and the `highlight` variant rendered
+all of it open. The page used that variant for every area the last check-in had
+flagged, so a knee and an ankle put two full protocols on screen before the
+athlete had tapped anything.
+
+That came from a well-meant decision: if we know your ankle hurts, show you the
+ankle protocol. Knowing which one is relevant is the useful part; dumping it
+open is not. Relevance is a gold edge and a badge now — "from your check-in",
+"matches what you said" — and every card stays shut until asked.
+
+Three sections became one. "From your last check-in", "Matching guides" and a
+"Browse all" disclosure were three headings and three lists of the same card,
+needing a dedupe pass between them. One ranked list with a reason attached
+removes the overlap by construction. Six protocols plus the mobility chips now
+measure about 1.1 phone screens.
+
+Inside an opened card the order matches what it's for: steps and exercises
+first, return-to-play behind its own disclosure, red flags last but **not**
+hidden — everything else there can wait; a sign that means stop and get assessed
+cannot be behind a tap.
+
+**I had made the quick check-in worse.** Adding weight to it was right — full
+mode is the one almost nobody picks, so most accounts never gave a weight after
+sign-up, and it's what every calorie and macro figure is computed from. But I
+shipped it as a field label, a full-width input with a long placeholder and a
+helper sentence: three rows of form on the screen whose entire selling point is
+three taps and ten seconds. A daily habit dies of exactly that. It's a pill now
+— one short row closed, a small inline number open, and skipping stays free.
+
+### Changed
+
+**Home stopped getting emptier the more you did.** Cutting it to one card was
+right, but tick all three of the day's quests and the reward was a screen with
+less on it than when you arrived.
+
+It now shows your **last seven days as seven dots** — outline for a session
+logged, centre dot for a check-in — with the week's sessions and minutes and a
+link through to Progress. Per-day rather than three totals on purpose: "4
+sessions this week" is a fact, seven dots with a visible gap in them is a habit,
+and the gap is the thing that makes anyone train on the next Thursday.
+
+Cost no extra query. `week` was already being computed on Home and rendered
+nowhere — three numbers derived from rows the page had already paid to fetch and
+then thrown away.
+
+---
+
+## 2026-08-02 (e2e) — Smoke tests, and five accessibility bugs they found
+
+No operator action. Front-end and CI only.
+
+### Added
+
+**End-to-end smoke tests.** `e2e/smoke.spec.ts` — Playwright on a Pixel 7 and
+Desktop Chrome, running against the **real static export in `out/`**, not
+`next dev`. That is the artefact that ships, and dev mode differs from it in
+exactly the ways that hide bugs.
+
+31 checks across seven public routes: loads without a 4xx, body non-empty,
+**hydrates** (the export prerenders markup, so a page can look perfect and be
+completely dead), no unexpected console errors, exactly one non-empty `h1`, no
+horizontal document scroll on a phone, and **no WCAG 2.1 A/AA violations** via
+axe-core.
+
+Everything in `lib/` is unit-tested to 98%, and none of it would notice a
+provider throwing on mount or a white screen. Both run as sibling CI jobs and
+both gate the deploy.
+
+No signed-in journeys, deliberately: faking a Supabase session in CI means
+either shipping a test account's credentials or stubbing until the test stops
+resembling the app.
+
+### Fixed — all five found by the suite on its first run
+
+**Pinch-zoom was disabled on every page.** `maximumScale: 1` in the viewport —
+a WCAG 1.4.4 failure, and it lands hardest on exactly the people who most need
+to zoom: anyone reading a 10px macro label or a rehab instruction outdoors.
+
+That setting is almost always added to stop iOS zooming when a text input is
+focused, and the real cause of *that* is a font-size under 16px on the input.
+`.field` was 14px. It is now 16px on phones and 14px from `sm` up, so the cause
+is gone and zoom stays enabled for everyone.
+
+**A landing-page heading at 1.9:1.** The "01 / 02 / 03 / 04" step numbers were
+`text-pitch-400/30`. A step number you cannot read is not a subtle watermark,
+it's a missing step. `/60` — 4.2:1, still visibly behind the heading.
+
+**`/login` had no `h1`** — a styled `<div>` — so a screen reader announced no
+page title on the one screen where knowing where you are matters most.
+
+**Inline links on `/waitlist` were distinguished by colour alone** (WCAG 1.4.1).
+Underlined.
+
+**The comparison table scrolled but could not be focused.** It is wider than a
+phone, so its right-hand columns were unreachable without a mouse. `tabIndex`,
+a `role` and an accessible name.
+
+### Notes
+
+The h1 check initially failed on `/pricing` for the wrong reason: it asserted on
+`domcontentloaded`, and that page's heading only exists after hydration — the
+prerendered HTML is a loading state. The test measures the hydrated page now.
+Worth recording because a test that fails for the wrong reason is one edit away
+from being "fixed" by deleting the assertion.
+
+---
+
+## 2026-08-02 (hardening) — Production readiness audit
+
+**Operator action: two items, both listed in the Worker deploy spec above** —
+a Cloudflare rate-limiting rule, and confirming Supabase backup retention.
+Neither needs a code change and neither blocks the Worker paste.
+
+Audited all 26 items of a standard production checklist against the code,
+migrations, live site and Worker. Full result in
+`docs/PRODUCTION-READINESS.md`, with ✅ / ⚠️ / ➖ and the specific gap named for
+every partial — an item that doesn't apply is not a pass.
+
+### Fixed
+
+**Deploys were not gated on tests.** `deploy.yml` shipped regardless of a red
+suite; `ci.yml`'s own comment invited someone to wire it up one day. It now
+calls `ci.yml` via `workflow_call` with `needs: test`, so the gate can't drift
+from the checks it enforces. `lib/` is what the app degrades to whenever the AI
+backend is unavailable, and a wrong training plan or calorie target fails
+quietly — exactly what a green pipeline must not wave through.
+
+**Linting had never run.** `npm run lint` was `next lint` with no config, which
+drops into an interactive setup prompt — so it hung in CI and nobody got past it
+locally. Nothing in this repo had ever been linted. `.eslintrc.json` is committed
+with the rule choices explained in `.eslintrc.README.md`, and lint is now a
+**blocking** CI step, which is only reasonable because the tree came back clean
+apart from one warning. That warning was fixed rather than suppressed:
+`MealPlanner` rebuilt `stats` on every render and hand-enumerated its six fields
+in a second deps array — two lists of the same six fields, one edit from
+disagreeing. `stats` is memoised and `targets` depends on the object.
+
+**One colour failed WCAG AA.** `text-slate-700` measures 1.86:1 on these
+surfaces — below AA even for large text. Its three uses were struck-through
+shopping-list items added earlier the same day; they're `slate-600` (4.76:1) now
+and the token is documented in `tailwind.config.ts` as not-for-text.
+
+### Added
+
+- **Coverage thresholds enforced in CI** — 95% line / 85% branch / 90% function
+  over `lib/`, against actuals of 98.53 / 88.79 / 93.75, so it ratchets rather
+  than rubber-stamps. Verified the flags actually fail a run by setting an
+  impossible threshold, rather than trusting a green run to mean the gate works.
+- **Dependabot** for the app, the Worker (separate lockfile, and it holds the
+  service-role key) and GitHub Actions. Patch/minor grouped into one PR each —
+  fourteen separate bumps is a queue nobody reads.
+- **`npm audit` in CI**, advisory. Every current high is a Next.js *server-side*
+  advisory — Image Optimizer, Server Components, Middleware, rewrites, Server
+  Actions, Edge runtime — and this app is `output: "export"` with no Next server
+  in production, so none is reachable. `npm audit fix --force` would install
+  `next@16`, a breaking major, to fix nothing exploitable. Failing a build on
+  unreachable advisories trains people to ignore the step.
+
+### Notes — what the audit got wrong first time
+
+Recorded because the method matters more than the verdict:
+
+- **Contrast was called "the most likely real failure". It wasn't.** I measured
+  against stock Tailwind hexes without reading `tailwind.config.ts`, which
+  already overrides `slate-500` and `slate-600` for exactly this reason. Every
+  token in use passes AA on both the page and the card surface; only the
+  un-overridden `slate-700` failed.
+- **A sloppy regex made three tables look like they had no RLS.** All 29 have
+  it. The pattern required a single space before `enable row level security` and
+  the migrations align that column with several.
+- Three claims in the first draft of the readiness doc were wrong and were
+  corrected after checking: `dangerouslySetInnerHTML` *is* used (four times, all
+  JSON-LD through an escaping helper), `useAsync` guards with an `active` flag
+  rather than a `cancelled` one, and `aria-live` lives in `JobTray.tsx`.
+
+### Still open, and honestly so
+
+No end-to-end tests. No screen-reader pass. RTO/RPO undefined because Supabase
+backup retention hasn't been confirmed, and no restore drill has been done —
+the one item here whose failure mode is unrecoverable. No architecture diagram.
+No GDPR data *export* (deletion exists). Audit trails aren't tamper-evident.
+HIPAA is marked not-applicable with reasons rather than claimed — a consumer
+fitness app is not a covered entity, and GDPR special-category is the standard
+that actually binds.
+
+---
+
+## 2026-08-02 (audit) — Meal plans actually scale to the athlete
+
+No operator action. Front-end and pure logic only.
+
+An audit across five body types × three goals × four diet patterns found the
+planner failing two groups outright, both silently.
+
+### Fixed
+
+**Big athletes were being under-fed.** A 115kg forward building on 4,370 kcal was
+handed 3,010 across three meals — **69% of target**, 1,360 kcal a day missing,
+for the one athlete whose entire goal is gaining weight. Nothing on screen said
+a word about it.
+
+Three causes, all now addressed:
+
+- **Meal choice ignored calorie size.** Selection scored on cost, protein and
+  repetition, so a 105kg forward and a 52kg athlete were handed identical dishes
+  and told apart only by a portion multiplier that caps at 1.6×. A "Greek yoghurt
+  breakfast bowl" scaled to 811 kcal is not a breakfast anyone would serve. Meals
+  are now scored on how close their own calories sit to what the slot should
+  carry, so big targets pull in big meals.
+- **The recipe pool topped out at 777 kcal for a dinner.** Ten new meals, chosen
+  to be calorie- and protein-dense rather than just larger servings of the same
+  thing.
+- **Portions were scaled by one figure for the whole day.** Breakfast, dinner and
+  snack all moved together, and the snack's "fair share" was a quarter of the
+  day. Each meal is now portioned to its own slot.
+
+Together: 69% → 82% on four meals, ~88% on five. Beyond that it is an honest
+limit of a recipe list, so the screen **says so** and offers the fix — spreading
+the same calories over five meals, which is how anyone eats that much anyway.
+
+**Plant-based plans collapsed on protein** — 58–64% of target. Cutting on 60% of
+your protein is how you lose muscle instead of fat. The pool gained tofu, quinoa
+and pea-protein meals and protein is weighted much harder in selection: now
+73–79%, with calories still landing at 99–103%. The day card's existing "short on
+protein" warning covers the rest, because hitting an athlete's protein target on
+a plant-based cut is genuinely hard and pretending otherwise would be worse.
+
+Three regression tests cover this; two of them fail against the old scoring.
+
+### Changed
+
+**The goal picker is on the front card.** Lean down / maintain / build moves the
+calorie target by ~1,100 kcal — more than any other control — and it was in the
+"Adjust" drawer behind the stats. It was the one choice an athlete actually wants
+to make and the hardest to find.
+
+**Weight is in the quick check-in.** It was full-mode only, and full mode is the
+one almost nobody picks, so for most accounts the app never got a weight after
+sign-up. Weight is what the calorie targets, macro split, meal plan and shopping
+list are all computed from; without one they run on a 75kg default. Optional,
+with no validation and no nag.
+
+**The planner says which numbers it made up.** Height, age, weight and sex each
+fall back to a hard-coded default, and the new summary line was reading
+"From 20 yrs · 178cm · 75kg" as though the athlete had given them. It now names
+the assumptions and links to the fields.
+
+---
+
+## 2026-08-02 (latest) — The meal planner
+
+No operator action. Front-end only.
+
+### Changed
+
+**The meal planner asks nothing and builds a week.** It opened on eleven stacked
+controls — age, height, weight, sex, training load, goal, diet pattern, things to
+avoid, meals a day, a budget tick and a notes box — with the button that actually
+does something below all of it. On the tab you opened to *see a meal plan*.
+
+Almost every one of those answers was already in the profile; the nutrition page
+loads them and passes them straight in. The form was mostly asking the athlete to
+retype what the app had just read. It now leads with the calorie and macro
+targets, one line saying what they were worked out from, and one button.
+Everything else is behind "Adjust". This is the same fix the programme builder on
+`/coach` got, which had the same shape and the same problem.
+
+**The day strip carries each day's calories.** Seven identical three-letter pills
+meant the only way to find the big day before a match was to tap through all
+seven.
+
+**A day's total is two bars, not a sentence.** It read
+`2,841 kcal · 158g protein (target 2,850 / 165g)` — four numbers in one line, and
+you did the comparison yourself. Whether a day lands is the question the whole
+screen exists to answer.
+
+**Meals look like they open.** Each meal is a disclosure and had no marker and no
+chevron, so nothing indicated there was a recipe, a method and a macro breakdown
+inside. The ingredient list now right-aligns its quantities instead of running
+them into the names with a dash.
+
+---
+
+## 2026-08-02 (later) — Shopping list and Guides
+
+No operator action. Front-end only.
+
+### Changed
+
+**The shopping list is a shopping list now.** It had no checkboxes — which is the
+entire job. You are standing in an aisle holding a phone, and the one thing you
+need is to mark what's in the trolley; it was a read-only table of prices, so the
+only way to use it was to remember where you'd got to.
+
+Every row ticks. Ticked items strike through and dim, each aisle shows its own
+count, and a bar across the top tracks the shop. The total is joined by what's
+left to buy, which is the number that matters once you're halfway round. Ticks
+are kept against the plan's seed and survive the app being backgrounded — a shop
+takes forty minutes with the phone in a pocket, and losing them at that moment
+would make the feature worthless exactly when it's in use. Regenerating the week
+gets a clean list, because it's a different shop.
+
+**Tapping an item no longer throws you out of the app.** Every food name was a
+link to a supermarket search opening in a new tab, and the name was the only tap
+target in the row — so the most natural gesture while shopping, tapping the thing
+you just picked up, launched Tesco's website. The row is the tick; a small,
+separate search icon does the searching. The store picker moved above the list,
+since it decides what that icon does — it used to sit underneath, after a
+sentence telling you to tap items you'd already scrolled past.
+
+**Guides lost a layer of boxes.** The position card had two bordered panels
+inside a bordered card inside a bordered page — three frames around a bulleted
+list. The lists keep their headings and get a coloured marker each; they don't
+need boxes to be told apart. The position was also both a chip and the heading.
+
+**The matchday timeline reads as a timeline.** Each step was a card, which boxed
+every hour of the day separately and broke the run of it. The rail is the only
+frame now.
+
+**Recovery protocols were three full cards side by side** — each with a
+checklist, red flags and exercise chips — squeezed into a third of the width at
+three different heights. One column, collapsed, tap to open.
+
+### Fixed
+
+- **The matchday timeline's icons sat on top of their own headings.** A 36px
+  emoji centred on the rail reaches 18px into the text column, and the padding
+  didn't clear it. It only ever looked right because each step was wrapped in a
+  card whose padding pushed the text out of the way; removing the card exposed
+  it. Caught by measuring the gap in a real render, not by reading the classes.
+- **`tab === "fuel"` was tested twice in a row**, with a separate section under
+  each — one condition, two places to keep in step.
+
+---
+
+## 2026-08-02 — Injury, redesigned
+
+No operator action. Front-end only.
+
+### Changed
+
+**The injury page asks one set of questions, once.** There were two textareas on
+one screen wanting the same thing in almost the same words — "What's going on?"
+in the planner, "Or describe it in your own words" in the card below it — one
+feeding the AI plan, the other keyword-matching the static guides, and nothing
+saying why. Someone in pain had to describe their injury twice to get everything
+the page offered.
+
+It's one card of three numbered steps now: where is it, what does it feel like,
+how long has it been going on. Each ticks itself off, so a "Build my plan" button
+that won't light up tells you which part you haven't done instead of just
+refusing.
+
+**A rehab plan shows one stage at a time.** Rehab is sequential — you are in
+exactly one stage — and three stacked open was a very long page of exercises you
+must not do yet. The others show their name and timeframe. "Move on when…" moved
+inside each stage; it used to be its own card at the bottom, three stages away
+from the one you're actually in.
+
+**The body map reads as a body.** Fifteen bright slate dots on a nearly invisible
+silhouette meant the one area you'd marked was the quietest thing on the figure.
+Untouched regions are dim with a legible edge, a marked one grows and takes its
+pain colour, and the selection is chips you can tap to undo rather than a
+full-width panel holding the words "Selected: L knee".
+
+### Fixed
+
+- **The body map was rendered below the component that read from it.** The
+  planner's `area` came from a map further down the page, so filling the form top
+  to bottom — what everyone does — sent no area at all. You had to scroll past,
+  tap, and scroll back.
+- **Arriving dumped the whole guide catalogue.** With nothing selected the page
+  rendered every protocol, so "something hurts, help" opened on a dozen cards
+  about other people's injuries. Matching guides only; the rest is behind one tap.
+- **The disclaimer rendered up to three times**, two of them on screen together.
+- **The page knew where it hurt and asked anyway.** It fetched the last
+  check-in's pain map, used it to pick protocols, then started the map empty. It
+  now carries over — but only from a check-in in the last three days, since
+  pre-filling a knee from three weeks ago would be a confident lie that then
+  feeds the rehab plan.
+- **The loading skeleton was less than half the real card's height**, so the page
+  jumped when the query landed.
+
+---
+
+## 2026-08-01 (latest) — Nutrition, redesigned
+
+No operator action. Front-end only — no schema change, no Worker change. The
+three outstanding steps from the section below still stand and are unaffected.
+
+### Changed
+
+**Nutrition is a primary tab.** It replaces Progress in the bottom bar, labelled
+"Food" because six slots on a 320px phone give each about 45px. The daily loop
+is check in / train / eat, and eating was the only one of the three behind the
+More sheet — a poor place for the one paid feature with a job every single day.
+Progress is a review surface rather than an action, and Home already carries the
+parts of it you'd want daily; it's one tap away in More. Injury was not
+displaced: it was promoted after being reported unfindable twice, and "open More,
+then look" is no way to reach it when something hurts.
+
+**Today's fuelling is four rings, not a stack of boxes.** The page was a verdict
+card, a calories card, macro bars and a water bar — every element a bordered
+rectangle of the same weight, and two of them reporting the same number in
+different words. It read as a form to fill in rather than something to look at,
+which for the one screen someone opens after training is the wrong way round.
+
+Calories, protein, carbs and fat as concentric rings answer "am I on track" in
+one glance and no reading, in a shape this audience already knows from their
+watch. The verdict is a single line inside the same card, saying only the part a
+ring can't: what to do about the gap, in this sport's terms. Water rides along
+the bottom as a slim bar — it was one number and two buttons and never justified
+a panel of its own.
+
+**The rings lead the page.** They used to open below the meal tick-list, so the
+first thing on screen was a list of things to do and the answer to "where am I"
+was a scroll away. Look, then act.
+
+### Fixed
+
+- **The same macro was two different colours on one screen** — protein was gold
+  in the input labels and sky in the rings, carbs sky in one and green in the
+  other. One palette now, shared between the two.
+- **The calorie ring could be identical to a macro ring.** It took the sport
+  accent, and two of the six accents are exactly the green and blue used for
+  carbs and protein — a footballer would have seen two indistinguishable rings.
+  The ring palette is fixed; colour there means "which macro", and that has to
+  hold on every account.
+- **The headline number overlapped the inner rings.** Four rings at a 15px
+  stroke leave a 64px hole and "2,800" at 36px is about 100px wide. Caught by
+  rendering it rather than reasoning about it.
+- **"Coach targets" was a whole bordered panel to deliver one sentence and a
+  link.** It's the hero's empty state now.
+- **The loading skeleton was shaped like the old page**, so the layout jumped
+  when data landed — the thing a skeleton exists to prevent.
+
+---
+
+## 2026-08-01 (later) — Simpler pages
+
+### What the Worker still needs
+
+The front-end is merged and deployed. **These are the outstanding steps**, and
+until they're done the app runs on its on-device fallbacks — which is intended
+behaviour, not breakage, and each screen says so where it matters.
+
+| # | Step | Why |
+|---|---|---|
+| 1 | Paste the bundled Worker (`2026-08-01.1`) into Cloudflare | Live is still `2026-07-29.1` — confirmed via `/health` |
+| 2 | ~~Set the GitHub repo **Variable** `NEXT_PUBLIC_API_URL`~~ | **done** — verified in the deployed bundle 2026-08-02 |
+| 3 | ~~Re-run *Deploy to GitHub Pages*~~ | **done** — the deploy runs on push and is current |
+
+**Paste the bundle, not `cloudflare/src/index.ts`.** The source imports from
+`lib/affiliate` and `lib/biometrics`, which resolve at bundle time — the
+dashboard editor has no bundler and the raw file fails on load. Regenerate with:
+
+```bash
+cd cloudflare && npx esbuild src/index.ts --bundle --format=esm \
+  --target=es2022 --platform=neutral --outfile=worker.js
+```
+
+**Verifying the paste took** — `/health` should report `2026-08-01.1` and gain a
+`vision` field, and these three routes should go from `404` to `401`
+(route exists, correctly demanding auth):
+
+```bash
+for r in wearable-ingest ingest-token connect-wearable; do
+  curl -s -o /dev/null -w "$r %{http_code}\n" -X POST \
+    "$API/$r" -H 'Content-Type: application/json' -d '{}'
+done
+```
+
+A route still on `404` means the paste truncated — the realistic failure mode at
+74KB.
+
+**New endpoints in this version:** `/connect-wearable`, `/ingest-token`,
+`/wearable-ingest`, plus a vision path on `/estimate-food` and a nightly
+wearable sync added to the cron handler.
+
+**New optional config:** `OPENROUTER_VISION_MODELS` (comma-separated). Defaults
+are compiled in, so nothing breaks if it's unset. No new secrets are required —
+the wearable sync uses the service-role key the Worker already holds.
+
+### Changed
+
+**Home is the day, not a homepage.** Eleven stacked sections with the daily job
+third — including a second navigation grid on a page that already has a nav bar,
+and the same three actions repeated lower down as "daily quests". Seven now,
+four of which render on a typical day.
+
+The quests *were* the day: `dailyQuests()` returns exactly check in, train, eat.
+They're one card, and each row carries its own substance — the session's real
+name and "Week 2 · 6 exercises", the calories actually left, the readiness
+verdict. Rank and XP progress close the card, so the reward sits underneath the
+work rather than two panels below it.
+
+Two render branches became one. There was a separate "not checked in yet" page
+maintaining its own copy of the greeting, notifications and tool grid, and the
+two had drifted.
+
+**The programme builder asks one question, not seven.** The quick-start tiles
+already built a programme in a single tap, and six further questions sat
+permanently open beneath them — so a new athlete met a form and never registered
+that the tiles were the answer. `ROADMAP.md` names this as the thing that decides
+whether a new account ever sees the product work. Everything is behind one
+"Build your own" tap. 13 top-level blocks → 4.
+
+**Nutrition is no longer buried.** It was seventh of seven tiles for football,
+rugby and basketball, and behind the More sheet on a phone — the one paid feature
+with a daily job was the hardest thing to reach. Home leads with today's fuel,
+and it moved up the tool grid in every sport. Cost no extra query: Home was
+already fetching the row and using only its existence.
+
+**Less lecturing.** `/coach` carried 1,109 characters of prose, nearly 3× any
+other page, explaining physiology behind choices the controls had already made
+clear. Down to 780, longest block 177 → 88.
+
+**Whoop and Garmin are no longer listed as connections.** They each had a
+greyed-out row explaining the developer programme in the way. All true, and none
+of it the athlete's problem — two dead entries in a list of four made the whole
+feature look half-built, and someone with a Whoop wants to know what to do, not
+why they can't do the other thing. One line now points at the CSV importer
+directly below it, which already reads their exports. The rows can come back the
+day those applications are approved.
+
+### Fixed
+
+- **`/coach` asked "What are you training for?" twice**, meaning two different
+  things — training focus, and race distance.
+- **`/body` labelled a chart and an input field identically** — "Weight (kg)"
+  appeared twice meaning a history and a box to type in.
+
+### Notes
+
+Pages checked and found structurally fine, left alone rather than churned:
+`/body`, `/pricing`, `/train`, `/benchmarks`, `/dashboard`, `/essentials`,
+`/report`, `/profile`, `/journal`, `/injury`. `/rewards` is dense deliberately —
+it's the gamification destination, not a daily-path page.
+
+---
+
+## 2026-08-01 — Running, meal photos, connected wearables
+
+Sixteen commits, 39 files, ~4,900 lines. Merged to `main` as `fb9cca5`.
+
+### Requires action before this fully works
+
+| Step | Status |
+|---|---|
+| Apply migrations `0064` + `0065` | **done** — verified against the live project |
+| Paste the Worker bundle (`2026-08-01.1`) into Cloudflare | **outstanding** — live still reports `2026-07-29.1` |
+| Set the `NEXT_PUBLIC_API_URL` repo Variable, then re-run the Pages deploy | **done** — see the status block at the top |
+
+Until the last two are done the site runs on its on-device fallbacks: the AI
+coach uses the local engine, meal photos can't reach a vision model, and the
+Apple Health screen correctly reports there is nowhere to push to. Nothing is
+broken; it is degraded on purpose and says so.
+
+### Added
+
+**Running, as an actual sport.** `lib/running.ts` — five training zones defined
+against both heart rate and pace, threshold pace derived from any race the
+athlete has logged, the fourteen run types, and the rules that stop a week
+hurting someone (the 80/20 easy/hard split, hard days never adjacent, a ceiling
+on how fast weekly volume may grow).
+
+**Runs in every sport's programme, not just a runner's.** Nine runs are ordinary
+library exercises with no sport restriction, so a footballer's conditioning or
+any sport's recovery day can be a run. Recovery runs included.
+
+**Zones everywhere they're prescribed.** Every run in a programme reads
+`45 min · Zone 2 (Easy)` with the talk test on the cue, because a zone number
+coaches nobody without a heart-rate strap. A zone reference lives on the
+exercise library, showing the athlete's own paces once they've logged a race.
+
+**Runner inputs on `/coach`.** Race goal, current weekly mileage and experience
+level, so a block is built from where someone actually is. Paces are shown
+before the block is generated, not only inside it.
+
+**Run logging on the check-in.** Which of the fourteen run types it was, which
+zone it *actually* was (not the one you meant), distance, and average heart rate.
+The easy-vs-hard split then appears on Progress.
+
+**Meal photos.** Photograph a plate and get an estimate. A separate vision model
+chain on the Worker; the image is downscaled to 768px on the phone first.
+
+**Connected wearables.** Oura via a personal access token, verified against Oura
+before storing and re-pulled nightly. Apple Health via a Shortcut posting to a
+per-user ingest endpoint, with a five-step setup guide. Whoop and Garmin are
+shown as blocked, with the reason — both need a developer application approved,
+which no amount of code fixes.
+
+**Biometric trends on Progress.** HRV, resting heart rate and sleep against the
+athlete's own rolling baseline.
+
+### Changed
+
+**The nutrition page has one card for today instead of five.** The calorie figure
+used to appear four times on one screen, twice at the same size, and the two
+headline numbers disagreed whenever anyone used both. Nothing was removed — the
+rationale, the metabolic working and the manual overrides moved into a closed
+disclosure.
+
+**Meal estimates are editable before you accept them.** Identifying the food is
+what a model is good at; deciding whether that was 200g of rice or 90g is not,
+and portions are most of the error in a calorie count.
+
+**Estimating runs in the background.** Leave the tab, come back, get told when it
+lands — the same job runner the programme builder uses.
+
+**A much better portion prompt.** Real scale references for photos (a dinner
+plate is 27cm, a fork 19cm, a mug 300ml, a fist 150–200g) and UK household
+measures for text, plus cooked-vs-dry weights, cooking fat nobody mentions, and
+round numbers instead of a false-precision `187g`.
+
+**"Training load", not "ACWR".** The acronym was still showing on the logged-out
+landing page — the one audience guaranteed not to know what an acute:chronic
+workload ratio is — and on the weekly report, the page whose whole purpose is
+being handed to a coach or physio.
+
+### Fixed
+
+**Runs were being prescribed on badly injured limbs.** The engine refuses a
+movement when pain is 7+ and its load on that joint is 2+, and the runs' joint
+loads were set too low — so a torn hamstring at 8/10 was still handed a
+75-minute long run, and an 8/10 knee got strides, which are near-maximal
+sprinting. Running is the classic hamstring re-injury mechanism. No run now
+survives severe lower-limb pain; the bike, rower and pool still fill the slot.
+
+**Runs were dosed like lifts.** A two-set floor made a long run read `sets: 2`;
+an RPE floor of 5 clamped a recovery run's RPE 2 up to 5, which stops it being a
+recovery run; and rep-scaling took a 75-minute long run to 105 by week 3 — about
+four times what a runner should add. Runs progress in duration only, capped, and
+their effort never moves.
+
+**The floating nav on an installed iPhone app.** Scrolling past the end of the
+document rubber-bands the page, and in a standalone PWA that bounce drags
+`position: fixed` elements with it. `overscroll-behavior-y: none` removes the
+bounce. Also: `background-attachment: fixed` was forcing Safari to repaint the
+page gradient on every frame of every scroll, and dropped frames are exactly when
+a browser starts mishandling everything else that's fixed.
+
+**The page scrolled underneath the open More sheet**, which reads as the nav
+coming loose.
+
+**Tab labels collided.** Six tabs on a 320px phone gave each 45px with no gutter,
+so the bar read as "Check in Progress" — one phrase.
+
+**The nutrition tabs disagreed about calories.** `planTargets` was a second,
+simpler calculation with no resting-rate floor, no under-18 guard and different
+protein-per-kg, so the meal plan was built to a different number from the one on
+the daily card. One calculation now.
+
+**`applyTargets` wrote target macros into the field that holds intake.** One
+field, two meanings depending on which control you last touched — which as
+progress bars meant tapping it filled all three to 100% and claimed you'd eaten
+a day's food you hadn't touched.
+
+**The Apple Health screen showed an unusable address** on revisit — it
+interpolated an empty `NEXT_PUBLIC_API_URL` into a relative path that sends a
+Shortcut's data nowhere, silently.
+
+**The nutrition card ignored the manual calorie target**, filling towards the
+computed one instead.
+
+**The tab bar's `bottom` had no fallback.** It was an inline
+`max(1rem, env(safe-area-inset-bottom))`, and any engine not understanding
+`env()` drops the whole declaration — leaving `bottom: auto`, which is precisely
+the "nav at the bottom of the page instead of the screen" failure.
+
+**The `biometrics.source` constraint would have broken CSV imports.** The CSV
+parser has always written `'import'`; the constraint listed what the values were
+*supposed* to be called.
+
+### Notes
+
+- `npm run lint` is still unconfigured — it drops into an interactive setup
+  prompt, so nothing has ever been linted. Pre-existing.
+- The Supabase database password is in git history and wants rotating.

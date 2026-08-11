@@ -207,7 +207,7 @@ function Waitlist({ rows }: { rows: { email: string; source: string | null; crea
       <div className="mb-3 flex items-center justify-between">
         <h2 className="field-label !mb-0">📧 Email waitlist · {rows.length}</h2>
         {rows.length > 0 && (
-          <button onClick={copyEmails} className="text-xs font-semibold text-pitch-400 hover:underline">
+          <button onClick={copyEmails} className="tap-target text-xs font-semibold text-pitch-400 hover:underline">
             {copied ? "Copied ✓" : "Copy all emails"}
           </button>
         )}

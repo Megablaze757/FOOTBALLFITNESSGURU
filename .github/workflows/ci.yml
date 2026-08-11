@@ -5,10 +5,13 @@ name: Tests
 # here matters more than it looks: the app degrades to them whenever the AI
 # backend is unavailable, and a wrong plan fails quietly rather than loudly.
 #
-# Deploys are NOT gated on this yet — wire `needs: test` into deploy.yml if you
-# want a failing test to stop the site shipping.
+# Deploys ARE gated on this: deploy.yml calls this workflow via `workflow_call`
+# and its build job `needs: test`, so a red run here stops the site shipping.
 
 on:
+  # Callable from deploy.yml, so the deploy gate runs exactly these checks
+  # rather than a copy of them that can drift.
+  workflow_call:
   push:
     # Every branch, not just main — the point of the tests is to catch a broken
     # engine before it reaches main, which means running them where the work is.
@@ -36,4 +39,73 @@ jobs:
       # everything else in the push. This is the same check, thirty seconds
       # after the push instead.
       - run: npm run typecheck
-      - run: npm test
+
+      # Linting had never run before 2026-08-02: `next lint` with no config
+      # drops into an interactive setup prompt, so it hung in CI and nobody got
+      # past it locally. Config is committed (.eslintrc.json, rationale in
+      # .eslintrc.README.md) and the tree is clean, so this can be blocking from
+      # day one rather than accumulating a backlog nobody will ever clear.
+      - run: npm run lint
+
+      # Coverage is ENFORCED, not just reported. lib/ is the deterministic
+      # engine layer — readiness, training load, calorie targets, rehab
+      # constraints — and it is what the app falls back to whenever the AI
+      # backend is unavailable. Thresholds sit just under the current figures
+      # (98.5 line / 88.8 branch / 93.8 func) so this ratchets rather than
+      # rubber-stamps: new engine code without tests drops the number and fails.
+      - run: npm run test:coverage
+
+      # Advisory, not blocking. Every current `npm audit` high is a Next.js
+      # server-side advisory — Image Optimizer, Server Components, Middleware,
+      # rewrites, Server Actions, Edge runtime — and this app is
+      # `output: "export"`, a static bundle on GitHub Pages with no Next server
+      # at runtime, so none of them is reachable in production. Failing the
+      # build on unreachable advisories trains people to ignore the step; a
+      # visible log they can read does not. See docs/PRODUCTION-READINESS.md.
+      - name: Dependency audit (advisory)
+        run: npm audit --omit=dev || true
+
+  # END-TO-END: does the app actually boot, and is it still accessible?
+  #
+  # Separate job so it runs in parallel with the unit suite rather than adding
+  # a browser download to the fast feedback path. It gates the deploy the same
+  # way, because everything it catches is a whole-page failure: `lib/` is 98%
+  # covered and none of it would notice a provider throwing on mount, a white
+  # screen, or a colour choice that drops below AA.
+  #
+  # Runs against the real static export in out/, not `next dev` — that is the
+  # artefact that ships, and dev mode differs from it in exactly the ways that
+  # hide bugs.
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      # Chromium only. The bugs this suite exists to catch are layout and
+      # accessibility failures, which are not browser-specific, and three
+      # engines would treble the run for no extra signal.
+      - run: npx playwright install --with-deps chromium
+
+      # Placeholder Supabase config: these tests never talk to a backend, but
+      # the client throws at construction without a URL, and a page that dies
+      # on load would fail every assertion for the wrong reason. Publishable
+      # values only — nothing secret, and nothing that reaches a real project.
+      - name: Build the static export
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: sb_publishable_e2e_placeholder
+
+      - run: npm run test:e2e
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7

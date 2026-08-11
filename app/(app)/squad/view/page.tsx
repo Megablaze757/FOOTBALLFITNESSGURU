@@ -11,6 +11,7 @@ import { computeACWR, type LoadZone } from "@/lib/load";
 import { ReadinessGauge } from "@/components/ReadinessGauge";
 import { MessageThread } from "@/components/MessageThread";
 import type { DailyCheckIn, Program, TrainingLog } from "@/lib/types";
+import { daysAgoLocal, todayLocal } from "@/lib/day";
 
 const ZONE: Record<LoadZone, { label: string; color: string }> = {
   building: { label: "Building", color: "#94a3b8" },
@@ -31,11 +32,11 @@ export default function SquadAthletePage() {
 function Inner() {
   const user = useCurrentUser();
   const athleteId = useSearchParams().get("id") ?? "";
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayLocal();
 
   const { data, loading } = useAsync(async () => {
     const supabase = createClient(); // coach-read RLS scopes these to the coach's athletes
-    const since = new Date(Date.now() - 28 * 86400_000).toISOString().slice(0, 10);
+    const since = daysAgoLocal(28);
     const [{ data: profile }, { data: checkIn }, { data: program }, { data: training }] = await Promise.all([
       supabase.from("profiles").select("full_name").eq("id", athleteId).maybeSingle(),
       supabase.from("daily_check_ins").select("*").eq("user_id", athleteId).eq("check_in_date", today).maybeSingle(),

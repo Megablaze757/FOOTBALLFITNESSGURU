@@ -47,9 +47,21 @@ const config: Config = {
         // definition, no chance of missing a site, and `text-slate-500` keeps
         // meaning "muted" wherever it already appears. The three muted tiers
         // stay visually distinct — 4.9, 6.2 and 7.8 against the page.
+        //
+        // Re-measured 2026-08-02 against BOTH the page (#09090a) and the .card
+        // surface (ink-800 at 70% over it, the worse of the two). Every text
+        // token in use passes AA for normal text:
+        //
+        //   slate-100 17.6  slate-200 15.7  slate-300 13.0  slate-400 7.5
+        //   slate-500  6.0  slate-600  4.8  pitch-400 10.1  sky-300  11.6
+        //   readiness red 6.3 / green 10.0 / yellow 11.6
+        //
+        // slate-700 (#334155) is 1.86:1 and is NOT overridden — it is below AA
+        // even for large text. Do not use it for text on these surfaces; the
+        // three uses it had (struck-through shopping items) are now slate-600.
         slate: {
-          600: "#717f96", // was #475569 (2.63:1) → 4.91:1
-          500: "#8391a6", // was #64748b (4.18:1) → 6.22:1
+          600: "#717f96", // was #475569 (2.63:1) → 4.76:1 on card
+          500: "#8391a6", // was #64748b (4.18:1) → 6.03:1 on card
         },
       },
       boxShadow: {

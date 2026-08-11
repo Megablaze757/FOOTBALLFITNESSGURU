@@ -3,16 +3,20 @@
 import { useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { Tabs } from "@/components/Tabs";
+import { Tabs, TabPanel } from "@/components/Tabs";
 import { ProgressPanel } from "@/components/ProgressPanel";
 import { useCurrentUser } from "@/lib/auth";
 import { useAsync } from "@/lib/use-async";
 import { summarizeTrends, type Trend } from "@/lib/trends";
 import { resolveInsight, actionLabel } from "@/lib/insights";
 import { computeACWR, weeklyReport, tonnage, totalDistanceKm, type LoadZone } from "@/lib/load";
+import { easyShare } from "@/lib/running";
+import { BiometricTrends } from "@/components/BiometricTrends";
+import type { Biometric } from "@/lib/biometrics";
 import { sportProfile, type SportProfile } from "@/lib/sport-profile";
 import { TrendChart } from "@/components/TrendChart";
 import type { DailyCheckIn, DailyInsight, NutritionLog, TrainingLog } from "@/lib/types";
+import { daysAgoLocal } from "@/lib/day";
 
 const ZONE_META: Record<LoadZone, { label: string; color: string }> = {
   building: { label: "Building baseline", color: "#94a3b8" },
@@ -125,8 +129,8 @@ export default function DashboardPage() {
 
   const { data, loading } = useAsync(async () => {
     const supabase = createClient();
-    const since = new Date(Date.now() - 28 * 86400_000).toISOString().slice(0, 10);
-    const [{ data: rows }, { data: insightRow }, { data: training }, { data: nutrition }, { data: weekCheck }, { data: prof }] = await Promise.all([
+    const since = daysAgoLocal(28);
+    const [{ data: rows }, { data: insightRow }, { data: training }, { data: nutrition }, { data: weekCheck }, { data: prof }, { data: bio }] = await Promise.all([
       supabase.from("daily_check_ins").select("*").eq("user_id", user.id).order("check_in_date", { ascending: false }).limit(14),
       supabase.from("daily_insights").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(1).maybeSingle(),
       supabase.from("training_logs").select("*").eq("user_id", user.id).gte("log_date", since),
@@ -135,6 +139,10 @@ export default function DashboardPage() {
       // Their sport decides how the verdict is worded — a runner is told to cut
       // mileage, a lifter to drop a set.
       supabase.from("profiles").select("sport").eq("id", user.id).maybeSingle(),
+      // A connected ring writes here nightly. Loaded on Progress so the data
+      // visibly does something beyond nudging the readiness score — a feed you
+      // cannot see the output of is a feed people disconnect.
+      supabase.from("biometrics").select("*").eq("user_id", user.id).gte("metric_date", since).order("metric_date", { ascending: true }),
     ]);
     return {
       checkIns: (rows ?? []) as DailyCheckIn[],
@@ -143,6 +151,7 @@ export default function DashboardPage() {
       nutrition: (nutrition ?? []) as NutritionLog[],
       weekCheck: (weekCheck ?? []) as DailyCheckIn[],
       sport: sportProfile((prof as { sport?: string } | null)?.sport),
+      bio: (bio ?? []) as Biometric[],
     };
   }, [user.id], `dashboard:${user.id}`);
 
@@ -191,20 +200,30 @@ export default function DashboardPage() {
   const sport = data!.sport;
 
   // This week only, for the sport-specific headline figure.
-  const since7 = new Date(Date.now() - 6 * 86400_000).toISOString().slice(0, 10);
+  const since7 = daysAgoLocal(6);
   const thisWeek = data!.training.filter((t) => t.log_date >= since7);
   const weekDistance = totalDistanceKm(thisWeek);
   const weekTonnage = tonnage(thisWeek);
   const weekContact = thisWeek.reduce((n, t) => n + (Number(t.contact_minutes) || 0), 0);
+
+  // The 80/20 split, over a fortnight rather than a week — one week is too few
+  // runs for the percentage to mean anything, and a single hard session in a
+  // light week would read as a warning when it isn't one.
+  const since14 = daysAgoLocal(13);
+  const runSplit = easyShare(
+    data!.training
+      .filter((t) => t.log_date >= since14 && t.run_type)
+      .map((t) => ({ type: t.run_type!, km: t.distance_km, minutes: t.total_minutes })),
+  );
 
   return (
     <div className="animate-fade-up space-y-5">
       <Header source={resolved.source} />
       <Tabs tabs={TABS} active={tab} onChange={setTab} label="Progress sections" />
 
-      {tab === "progress" && <ProgressPanel userId={user.id} />}
+      {tab === "progress" && <TabPanel id="progress"><ProgressPanel userId={user.id} /></TabPanel>}
 
-      {tab === "recovery" && <>
+      {tab === "recovery" && <TabPanel id="recovery">
       <Verdict
         acwr={acwr}
         riskScore={resolved.riskScore}
@@ -227,6 +246,33 @@ export default function DashboardPage() {
       {resolved.focusBodyPart && (
         <div className="card flex items-center gap-2 px-4 py-3 text-sm text-readiness-red">
           ⚠️ <span className="font-medium text-slate-200">Risk zone:</span> {resolved.focusBodyPart}
+        </div>
+      )}
+
+      {/* Renders nothing without data, so an athlete with no wearable never
+          sees an empty card asking them to buy one. */}
+      <BiometricTrends rows={data!.bio} />
+
+      {/* Only when there are runs to report on. This is the whole reason the
+          check-in asks which run it was — without it the split can't be known,
+          and it's the number that most often explains why someone is tired. */}
+      {runSplit && (
+        <div className="card p-5">
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <span className="stat-label">Easy vs hard · last 14 days</span>
+            <span className={`chip ${runSplit.meetsTarget ? "text-readiness-green" : "text-readiness-yellow"}`}>
+              {runSplit.easyPct}% easy
+            </span>
+          </div>
+          <div className="flex h-2.5 overflow-hidden rounded-full bg-white/[0.06]">
+            <div className="bg-readiness-green" style={{ width: `${runSplit.easyPct}%` }} />
+            <div className="bg-readiness-yellow" style={{ width: `${runSplit.hardPct}%` }} />
+          </div>
+          <p className="mt-2 text-sm text-slate-300">{runSplit.note}</p>
+          <p className="mt-1 text-xs text-slate-500">
+            Measured in time at intensity, not by session — a threshold run is mostly easy running
+            either side of the hard part.
+          </p>
         </div>
       )}
 
@@ -362,7 +408,7 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
-      </>}
+      </TabPanel>}
     </div>
   );
 }

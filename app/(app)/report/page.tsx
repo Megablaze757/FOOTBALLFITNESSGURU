@@ -1,22 +1,41 @@
 "use client";
 
-import Link from "next/link";
+import { BackLink } from "@/components/BackLink";
+import { EmptyState } from "@/components/EmptyState";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/lib/auth";
 import { useAsync } from "@/lib/use-async";
 import { Logo } from "@/components/Logo";
 import { assessReadiness } from "@/lib/readiness";
 import { summarizeTrends } from "@/lib/trends";
-import { computeACWR, weeklyReport, checkInStreak } from "@/lib/load";
+import { computeACWR, weeklyReport, checkInStreak, type LoadZone } from "@/lib/load";
+
 import type { CheckInInput, DailyCheckIn, NutritionLog, Program, TrainingLog } from "@/lib/types";
+import { daysAgoLocal } from "@/lib/day";
+
+/**
+ * Plain words for the load zones, matching Progress exactly.
+ *
+ * Duplicated deliberately rather than exported from the dashboard page: a page
+ * component is not a module to import from, and the alternative — a raw ratio
+ * labelled with an acronym — is what this replaces.
+ */
+const ZONE_LABEL: Record<LoadZone, string> = {
+  building: "Building baseline",
+  detraining: "Detraining",
+  optimal: "Sweet spot",
+  caution: "Climbing",
+  danger: "Spike — risk",
+};
+
 
 export default function ReportPage() {
   const user = useCurrentUser();
 
   const { data, loading } = useAsync(async () => {
     const supabase = createClient();
-    const since = new Date(Date.now() - 28 * 86400_000).toISOString().slice(0, 10);
-    const week = new Date(Date.now() - 7 * 86400_000).toISOString().slice(0, 10);
+    const since = daysAgoLocal(28);
+    const week = daysAgoLocal(7);
     const [{ data: profile }, { data: checks }, { data: training }, { data: nutrition }, { data: prog }] = await Promise.all([
       supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle(),
       supabase.from("daily_check_ins").select("*").eq("user_id", user.id).gte("check_in_date", since).order("check_in_date", { ascending: true }),
@@ -36,8 +55,27 @@ export default function ReportPage() {
   }, [user.id], `report:${user.id}`);
 
   if (loading) return <div className="card h-96 animate-pulse" />;
+  /* This branch used to be one grey sentence in a card — and because the only
+     <h1> on this page lives inside the report sheet, a new athlete got a page
+     with no heading at all: nothing named it in the tab, nothing for a screen
+     reader to land on, and no way to reach the thing that would fill it. */
   if (!data || !data.checkIns.length) {
-    return <p className="card px-4 py-10 text-center text-sm text-slate-400">Not enough data for a report yet — log a few check-ins first.</p>;
+    return (
+      <div className="animate-fade-up space-y-5">
+        <header className="flex items-center justify-between">
+          <h1 className="text-3xl font-extrabold tracking-tight">Weekly report</h1>
+          <BackLink href="/dashboard" label="Progress" />
+        </header>
+        <div className="card">
+          <EmptyState
+            icon="📄"
+            title="Not enough logged for a report yet"
+            body="The report is built entirely from your check-ins — nothing on it is estimated. A few days of them and there's a one-page summary here to show a coach, physio or parent."
+            action={{ label: "Check in now", href: "/journal" }}
+          />
+        </div>
+      </div>
+    );
   }
 
   const { name, checkIns, weekChecks, training, nutrition, program } = data;
@@ -63,7 +101,7 @@ export default function ReportPage() {
   return (
     <div className="animate-fade-up space-y-5">
       <header className="no-print flex items-center justify-between">
-        <Link href="/dashboard" className="text-sm text-slate-400 hover:text-pitch-400">← Back</Link>
+        <BackLink href="/dashboard" label="Progress" />
         <button onClick={() => window.print()} className="btn-primary w-auto px-5">Save as PDF</button>
       </header>
 
@@ -96,7 +134,11 @@ export default function ReportPage() {
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Kpi label="Sessions" value={`${report.sessions}`} />
           <Kpi label="Check-ins" value={`${report.checkIns}/7`} />
-          <Kpi label="Load (ACWR)" value={acwr.ratio != null ? `${acwr.ratio}` : "—"} />
+          {/* The ratio on its own is a number nobody can act on, and the
+              acronym is worse. The zone is the answer — the same wording
+              Progress uses, so the two pages don't describe the same figure in
+              two different vocabularies. */}
+          <Kpi label="Training load" value={acwr.ratio != null ? ZONE_LABEL[acwr.zone] : "—"} />
           <Kpi label="Streak" value={`${streak}🔥`} />
           <Kpi label="Avg sleep" value={summary.avgSleep != null ? `${summary.avgSleep}/10` : "—"} />
           <Kpi label="Weight Δ" value={summary.weightDeltaKg == null ? "—" : `${summary.weightDeltaKg > 0 ? "+" : ""}${summary.weightDeltaKg}kg`} />

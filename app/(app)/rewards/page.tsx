@@ -16,11 +16,12 @@ import { LevelUpModal } from "@/components/LevelUpModal";
 import { WeeklyChallenges } from "@/components/WeeklyChallenges";
 import { Leaderboards } from "@/components/Leaderboards";
 import { RankLadder } from "@/components/RankLadder";
+import { daysAgoLocal, todayLocal } from "@/lib/day";
 
 export default function RewardsPage() {
   const user = useCurrentUser();
-  const today = new Date().toISOString().slice(0, 10);
-  const since7 = new Date(Date.now() - 6 * 86400_000).toISOString().slice(0, 10);
+  const today = todayLocal();
+  const since7 = daysAgoLocal(6);
 
   const { data, loading } = useAsync(async () => {
     const supabase = createClient();
@@ -38,7 +39,7 @@ export default function RewardsPage() {
      * than any streak this app can display, and today's activity is in there by
      * definition.
      */
-    const since60 = new Date(Date.now() - 59 * 86400_000).toISOString().slice(0, 10);
+    const since60 = daysAgoLocal(59);
     const [checks, training, programs, benchC, videoC, nutrition, checkC, trainC, nutriC] = await Promise.all([
       supabase.from("daily_check_ins").select("check_in_date").eq("user_id", user.id).gte("check_in_date", since60),
       supabase.from("training_logs").select("log_date").eq("user_id", user.id).gte("log_date", since60),
@@ -188,10 +189,34 @@ export default function RewardsPage() {
           {[...unlocked, ...locked].map((a) => {
             const got = unlocked.includes(a);
             return (
-              <div key={a.id} className={`card flex items-center gap-3 p-3 ${got ? "" : "opacity-45"}`}>
-                <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl text-xl ${got ? "bg-pitch-400/15" : "bg-white/[0.04] grayscale"}`}>{a.icon}</span>
+              /* Locked badges were the whole card at `opacity-45`, which took
+                 the name to 4.21:1 and the description to 2.10:1 — both under
+                 AA, and axe found twenty of them. The palette in
+                 tailwind.config is calibrated so every muted tier passes on
+                 this surface; a blanket opacity multiplies straight through
+                 that work and undoes it.
+
+                 So the dimming moved off the text and onto the parts that
+                 aren't text: a greyscale icon on a flatter tile. The name and
+                 description step down a tier instead — slate-400 (7.7:1) and
+                 slate-500 (6.2:1) — which still reads as "not yours yet" and
+                 stays legible in daylight. These are the badges telling a new
+                 athlete what to aim for, so they are the ones most worth being
+                 able to read. */
+              <div key={a.id} className="card flex items-center gap-3 p-3">
+                <span
+                  className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl text-xl ${got ? "bg-pitch-400/15" : "bg-white/[0.03] opacity-60 grayscale"}`}
+                  aria-hidden
+                >
+                  {a.icon}
+                </span>
                 <div className="min-w-0">
-                  <div className="truncate text-sm font-bold text-slate-100">{a.name}</div>
+                  <div className={`truncate text-sm font-bold ${got ? "text-slate-100" : "text-slate-400"}`}>
+                    {a.name}
+                    {/* Colour and grey are the only things separating these two
+                        states; neither survives a screen reader. */}
+                    <span className="sr-only">{got ? " — unlocked" : " — locked"}</span>
+                  </div>
                   <div className="truncate text-xs text-slate-500">{a.desc}</div>
                 </div>
               </div>

@@ -67,8 +67,30 @@ test("programs contain real isolation work, not just compounds", () => {
 });
 
 test("reps stay in the hypertrophy range all block", () => {
-  for (const d of allDrills(gymPlan())) {
+  // Lifting only. The session now closes with an easy conditioning finisher,
+  // and its `reps` field carries minutes or seconds rather than repetitions —
+  // "1 × 20 minutes" is not a set of twenty. Asserting a rep range over it
+  // would be checking the wrong unit, not catching a bad prescription.
+  for (const d of allDrills(gymPlan()).filter((d) => d.slot !== "conditioning")) {
     assert.ok(d.reps >= 6 && d.reps <= 15, `${d.name} prescribed ${d.reps} reps`);
+  }
+});
+
+test("the cardio finisher is a finisher, not a second workout", () => {
+  const plan = gymPlan();
+  for (const w of plan.weeks) {
+    for (const s of w.sessions) {
+      const cardio = s.drills.filter((d) => d.slot === "conditioning");
+      assert.ok(cardio.length <= 1, `${s.title} has ${cardio.length} conditioning entries`);
+      // It closes the session — putting it before the lifting would make the
+      // lifting worse, which is the whole reason it goes last.
+      if (cardio.length) assert.equal(s.drills[s.drills.length - 1].slot, "conditioning");
+    }
+  }
+  // A VO2 session on top of a leg day is not a finisher, so the effort is capped.
+  for (const d of allDrills(plan).filter((d) => d.slot === "conditioning")) {
+    const rpe = Number(/RPE (\d+)/.exec(d.intensity ?? "")?.[1] ?? 0);
+    assert.ok(rpe <= 7, `${d.name} at RPE ${rpe} is a workout, not a finisher`);
   }
 });
 

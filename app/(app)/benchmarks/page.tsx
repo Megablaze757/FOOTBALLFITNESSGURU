@@ -1,6 +1,7 @@
 "use client";
 
-import Link from "next/link";
+import { BackLink } from "@/components/BackLink";
+import { EmptyState } from "@/components/EmptyState";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/lib/auth";
 import { useAsync } from "@/lib/use-async";
@@ -28,12 +29,10 @@ export default function BenchmarksPage() {
 
   return (
     <div className="animate-fade-up mx-auto max-w-3xl space-y-5">
-      <header className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-extrabold tracking-tight">Benchmarks</h1>
-          <p className="mt-1 text-sm text-slate-400">Test the same lifts and sprints now and then, so progress is measured rather than guessed.</p>
-        </div>
-        <Link href="/dashboard" className="text-sm text-slate-400 hover:text-pitch-400">← Back</Link>
+      <header className="flex flex-col">
+        <BackLink href="/dashboard" label="Progress" />
+        <h1 className="text-3xl font-extrabold tracking-tight">Benchmarks</h1>
+        <p className="mt-1 text-sm text-slate-400">Test the same lifts and sprints now and then, so progress is measured rather than guessed.</p>
       </header>
 
       <BenchmarkForm onSaved={reload} sport={data?.sport} />
@@ -70,12 +69,15 @@ export default function BenchmarksPage() {
              entire point is measuring rather than guessing, the empty state is
              the best chance to explain why one number today is worth having —
              and to say it's a two-minute job, not a programme. */
-          <div className="card px-4 py-8 text-center">
-            <p className="text-sm text-slate-300">Nothing to compare against yet.</p>
-            <p className="mx-auto mt-1 max-w-sm text-xs text-slate-500">
-              One number today is enough to start. Test the same thing again in a month and you&apos;ll
-              know whether the training worked, instead of guessing from how you felt.
-            </p>
+          <div className="card">
+            <EmptyState
+              icon="📏"
+              title="Nothing to compare against yet"
+              // No button: the form that fills this is already on screen, a
+              // few hundred pixels up. A CTA scrolling you to something you can
+              // see is worse than a sentence pointing at it.
+              body="One number today is enough to start — use the form above. Test the same thing again in a month and you'll know whether the training worked, instead of guessing from how you felt."
+            />
           </div>
         ) : (
           <ul className="space-y-2">

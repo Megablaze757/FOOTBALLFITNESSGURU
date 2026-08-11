@@ -15,7 +15,23 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # THE SITE DOES NOT SHIP IF THE ENGINES ARE BROKEN.
+  #
+  # Deploys used to run regardless of the test suite — ci.yml even said so in a
+  # comment, inviting someone to wire this up one day. The engines in lib/ are
+  # what the app degrades to whenever the AI backend is unavailable, and a wrong
+  # training plan or calorie target fails quietly rather than loudly. That is
+  # precisely the class of bug a green pipeline must not wave through.
+  #
+  # Reusing ci.yml rather than copying its steps, so the gate can never drift
+  # from the checks it is supposed to be enforcing.
+  test:
+    uses: ./.github/workflows/ci.yml
+
   build:
+    # Both the unit suite and the e2e smoke tests, since ci.yml runs them as
+    # sibling jobs and `needs` on the caller waits for the whole workflow.
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

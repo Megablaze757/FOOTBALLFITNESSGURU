@@ -10,13 +10,17 @@ import { checkInStreak, computeACWR } from "@/lib/load";
 import { nextSession } from "@/lib/next-session";
 import type { ProgramPlan } from "@/lib/coach";
 import { WearableImport } from "@/components/WearableImport";
+import { WearableConnect } from "@/components/WearableConnect";
 import type { TrainingState } from "@/components/TrainingLogInput";
 import type { Biometric } from "@/lib/biometrics";
 import type { CheckInInput, TrainingLog } from "@/lib/types";
+import { todayLocal, daysAgoLocal } from "@/lib/day";
 
 export default function JournalPage() {
   const user = useCurrentUser();
-  const today = new Date().toISOString().slice(0, 10);
+  // todayLocal(), not toISOString() — see lib/day.ts. My version of this line
+  // was the UTC form their change exists to remove.
+  const today = todayLocal();
   const [editing, setEditing] = useState(false);
 
   const { data, loading, reload } = useAsync(async () => {
@@ -24,8 +28,8 @@ export default function JournalPage() {
     // 60 days is far more than any streak this app displays, and today's
     // check-in is in the window by definition — so the streak costs one extra
     // parallel query returning dates only, not a scan of the whole table.
-    const since60 = new Date(Date.now() - 59 * 86400_000).toISOString().slice(0, 10);
-    const since28 = new Date(Date.now() - 27 * 86400_000).toISOString().slice(0, 10);
+    const since60 = daysAgoLocal(59);
+    const since28 = daysAgoLocal(27);
     const [{ data: existing }, { data: training }, { data: bio }, { data: profile }, { data: program }, { data: recent }, { data: recentTraining }] = await Promise.all([
       supabase.from("daily_check_ins").select("*").eq("user_id", user.id).eq("check_in_date", today).maybeSingle(),
       supabase.from("training_logs").select("*").eq("user_id", user.id).eq("log_date", today).maybeSingle(),
@@ -89,6 +93,9 @@ export default function JournalPage() {
     : undefined;
 
   const done = !!checkIn;
+  // Did anything actually arrive from a watch today? Decides whether the row
+  // below offers to set one up or confirms it already worked.
+  const hasBio = !!(data?.bio && (data.bio.hrv_ms != null || data.bio.resting_hr != null || data.bio.sleep_hours != null));
 
   return (
     <div className="animate-fade-up mx-auto max-w-2xl">
@@ -131,14 +138,49 @@ export default function JournalPage() {
         </div>
       )}
 
-      <div className="mt-5">
-        <WearableImport
-          userId={user.id}
-          today={today}
-          initial={data?.bio ? { hrv_ms: data.bio.hrv_ms, resting_hr: data.bio.resting_hr, sleep_hours: data.bio.sleep_hours } : undefined}
-          onSaved={reload}
-        />
-      </div>
+      {/* WHY THIS IS BEHIND A DISCLOSURE NOW.
+       *
+       * Both wearable blocks used to sit open under the form, and together they
+       * were about sixty percent of the page — on the one screen an athlete
+       * opens every single morning. Worse, the manual entry card carries its own
+       * full-width gold "Save today" button, so the daily screen had TWO primary
+       * actions of identical weight, the second one *below* the real one. The
+       * eye reads the last big button as the finish line, which is exactly the
+       * wrong thing here.
+       *
+       * Connecting a watch is a thing you do once. Typing HRV in by hand is a
+       * thing you do only if you have no watch. Neither is the daily job, so
+       * neither gets daily-job real estate. One row, one tap, and the check-in
+       * now ends where the check-in ends.
+       *
+       * The summary says whether anything arrived, so a connected athlete can
+       * confirm last night synced without opening it. */}
+      <details className="card group mt-5 overflow-hidden">
+        <summary className="tap-target flex w-full cursor-pointer list-none items-center gap-3 p-4 text-left">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/[0.04] text-lg" aria-hidden>⌚</span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-bold text-slate-100">Sleep &amp; HRV from a watch</span>
+            <span className="block text-xs text-slate-500">
+              {hasBio
+                ? "Synced for today — tap to check or change it."
+                : "Connect Oura, Whoop, Garmin or Apple Health, or type it in."}
+            </span>
+          </span>
+          <span className="shrink-0 text-xs text-slate-500 transition group-open:rotate-180" aria-hidden>▾</span>
+        </summary>
+        {/* Connecting comes FIRST, then the manual fallback. Someone typing HRV
+            into a box every morning is the person most worth showing that they
+            don't have to. */}
+        <div className="space-y-5 border-t border-white/[0.08] p-4">
+          <WearableConnect userId={user.id} />
+          <WearableImport
+            userId={user.id}
+            today={today}
+            initial={data?.bio ? { hrv_ms: data.bio.hrv_ms, resting_hr: data.bio.resting_hr, sleep_hours: data.bio.sleep_hours } : undefined}
+            onSaved={reload}
+          />
+        </div>
+      </details>
     </div>
   );
 }

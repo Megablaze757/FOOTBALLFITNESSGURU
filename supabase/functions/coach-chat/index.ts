@@ -5,16 +5,12 @@
 // their goal, pain, readiness and current program. Returns { answer }.
 // The /coach chat calls this and falls back to the local engine on any error.
 //
-// Secrets: ANTHROPIC_API_KEY
+// Secrets: GROQ_API_KEY and/or OPENROUTER_API_KEY (see ../_shared/llm.ts)
 // Deploy:  supabase functions deploy coach-chat
 // =============================================================================
 
-import Anthropic from "npm:@anthropic-ai/sdk@0.69.0";
-
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, content-type",
-};
+import { complete, chain, ChainError } from "../_shared/llm.ts";
+import { requireTier, CORS, json } from "../_shared/gate.ts";
 
 const SYSTEM =
   "You are the athlete's personal football strength & conditioning coach and physio. " +
@@ -26,8 +22,11 @@ const SYSTEM =
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
 
-  const key = Deno.env.get("ANTHROPIC_API_KEY");
-  if (!key) return json({ error: "AI not configured" }, 503);
+  if (!chain("text").length) return json({ error: "AI not configured" }, 503);
+
+  // "Ask the coach" is a paid feature — the Worker gated it and this did not.
+  const gate = await requireTier(req, "silver", "Ask the coach");
+  if (gate.denied) return gate.denied;
 
   const { question, context } = await req.json().catch(() => ({}));
   if (!question) return json({ error: "question required" }, 400);
@@ -39,23 +38,19 @@ Deno.serve(async (req: Request) => {
     `Current plan drills: ${(context?.programDrills ?? []).join(", ") || "none"}`,
   ].join("\n");
 
-  const client = new Anthropic({ apiKey: key });
   try {
-    const resp = await client.messages.create({
-      model: "claude-opus-4-8",
-      max_tokens: 600,
-      thinking: { type: "adaptive" },
+    const { text } = await complete({
       system: SYSTEM,
-      messages: [{ role: "user", content: `Context:\n${ctx}\n\nQuestion: ${question}` }],
+      user: `Context:\n${ctx}\n\nQuestion: ${question}`,
+      maxTokens: 600,
+      // A one-word reply is a failed rung, not an answer. The /coach chat falls
+      // back to the local engine on any error, so a blank-ish response here is
+      // strictly worse than admitting the model didn't answer.
+      validate: (t) => t.trim().length > 20,
     });
-    if (resp.stop_reason === "refusal") return json({ error: "refused" }, 422);
-    const answer = resp.content.filter((b: { type: string }) => b.type === "text").map((b: { text: string }) => b.text).join("").trim();
-    return json({ answer }, 200);
+    return json({ answer: text.trim() }, 200);
   } catch (e) {
+    if (e instanceof ChainError) return json({ error: e.message }, 502);
     return json({ error: String(e) }, 500);
   }
 });
-
-function json(data: unknown, status: number): Response {
-  return new Response(JSON.stringify(data), { status, headers: { ...CORS, "Content-Type": "application/json" } });
-}

@@ -10,6 +10,16 @@ name: Deploy API Worker
 #
 # One-time setup: add a repo secret CLOUDFLARE_API_TOKEN (Cloudflare dashboard →
 # My Profile → API Tokens → Create Token → "Edit Cloudflare Workers" template).
+#
+# THE DRIFT GATE BELOW IS NOT OPTIONAL. Production is edited by hand in the
+# dashboard, so the deployed Worker is routinely AHEAD of this repository — it
+# is 2026-08-04.2 against 2026-08-01.1 as this is written. Deploying from here
+# would overwrite that with older code and lose changes that exist nowhere else.
+# The path filter makes that a live risk: editing cloudflare/README.md is enough
+# to trigger this workflow.
+#
+# `npm run deploy` has a predeploy hook that checks the same thing, but
+# wrangler-action does not go through npm, so the check has to be repeated here.
 
 on:
   push:
@@ -18,6 +28,11 @@ on:
       - "cloudflare/**"
       - ".github/workflows/deploy-worker.yml"
   workflow_dispatch:
+    inputs:
+      force:
+        description: "Deploy even if the live Worker differs from this repo (overwrites it)"
+        type: boolean
+        default: false
 
 jobs:
   deploy:
@@ -45,6 +60,18 @@ jobs:
       # engine, which is exactly the failure you don't notice.
       - name: Typecheck
         run: npx tsc --noEmit
+
+      # Refuses when the deployed Worker is not the one in this repo — and also
+      # when it cannot tell, because deploying without knowing what you are
+      # about to overwrite is the whole risk. Override deliberately by running
+      # the workflow with `force` set.
+      - name: Refuse to overwrite a newer Worker
+        if: env.CF_TOKEN != '' && inputs.force != true
+        working-directory: .
+        run: node scripts/worker-drift.mjs "$WORKER_URL"
+        env:
+          # Public — it is baked into the shipped browser bundle.
+          WORKER_URL: https://apex-api.fitnessguru.workers.dev
 
       - uses: cloudflare/wrangler-action@v3
         if: env.CF_TOKEN != ''

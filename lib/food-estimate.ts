@@ -198,20 +198,119 @@ export function fromAiItems(
   for (const r of raw ?? []) {
     const name = (r.name ?? "").trim();
     if (!name) continue;
-    const kcal = Number(r.kcal) || 0;
+    const stated = Number(r.kcal) || 0;
     // A food with no calories is a parse failure, not a zero-calorie food.
-    if (kcal <= 0) continue;
+    if (stated <= 0) continue;
+
+    const protein = Math.max(0, Number(r.protein) || 0);
+    const carbs = Math.max(0, Number(r.carbs) || 0);
+    const fats = Math.max(0, Number(r.fats) || 0);
+
+    /**
+     * Reconcile the headline calories against the macros.
+     *
+     * The two come from the same answer and are supposed to agree — protein and
+     * carbs are 4 kcal/g, fat is 9 — and when a model gets one of them wrong it
+     * is almost always the kcal, because that is the number it writes first and
+     * least carefully. A meal listed as 30g protein, 60g carbs and 20g fat is
+     * 540 kcal whatever the model then claimed.
+     *
+     * Only when they disagree by more than a fifth, so ordinary rounding and
+     * the genuine slack in food data (fibre, sugar alcohols) pass through
+     * untouched. Below that threshold the stated figure is kept, because it may
+     * well be the better one.
+     */
+    const fromMacros = protein * 4 + carbs * 4 + fats * 9;
+    const kcal = fromMacros > 0 && Math.abs(stated - fromMacros) / fromMacros > 0.2 ? fromMacros : stated;
+
     items.push({
       foodId: null,
       name,
       qty: Math.max(1, Math.round(Number(r.qty) || 1)),
       unit: r.unit === "ml" ? "ml" : r.unit === "each" ? "each" : "g",
-      macros: roundMacros({
-        kcal, protein: Number(r.protein) || 0, carbs: Number(r.carbs) || 0, fats: Number(r.fats) || 0,
-      }),
+      macros: roundMacros({ kcal, protein, carbs, fats }),
       explicit: true,
     });
   }
   const total = items.reduce((s, i) => addMacros(s, i.macros), { kcal: 0, protein: 0, carbs: 0, fats: 0 });
   return { items, total: roundMacros(total), unmatched: [] };
+}
+
+// --- Meal photos -------------------------------------------------------------
+
+/**
+ * The longest edge a meal photo is scaled down to before it's sent.
+ *
+ * A phone camera produces 3–5MB and 4000px across. None of that helps a model
+ * identify a chicken breast, and all of it costs: the upload is the slowest
+ * part of the whole round trip on a gym's signal, and image tokens are charged
+ * by area, so a full-resolution photo is several times the price for the same
+ * answer. 768px is comfortably enough to read a plate.
+ */
+export const PHOTO_MAX_EDGE = 768;
+
+/** JPEG quality for the same. Food photos are noisy, so this is invisible. */
+export const PHOTO_QUALITY = 0.7;
+
+/**
+ * Scale (w, h) so the longest edge is at most `max`, preserving aspect ratio.
+ *
+ * Never scales UP — a small photo is left alone rather than being interpolated
+ * into a bigger file that carries no more detail.
+ */
+export function fitDimensions(w: number, h: number, max = PHOTO_MAX_EDGE): { width: number; height: number } {
+  if (!(w > 0) || !(h > 0)) return { width: 0, height: 0 };
+  const longest = Math.max(w, h);
+  if (longest <= max) return { width: Math.round(w), height: Math.round(h) };
+  const scale = max / longest;
+  // At least 1px on the short edge: a very wide panorama would otherwise round
+  // its height to zero and produce a canvas nothing can be drawn on.
+  return { width: Math.max(1, Math.round(w * scale)), height: Math.max(1, Math.round(h * scale)) };
+}
+
+// --- Correcting an estimate --------------------------------------------------
+//
+// An estimate — from a photo or a sentence — is a guess about portions, and
+// portions are most of the error in a calorie count. The athlete can usually
+// see immediately that it has said 200g of rice when they ate half that, and
+// "accept all of it or throw all of it away" is the worst possible affordance
+// for something you can nearly fix. These two let the UI make it editable.
+
+/**
+ * Rescale one item to a new quantity, moving its macros with it.
+ *
+ * Linear, because that is what a portion IS — twice the rice is twice
+ * everything. Guards zero and negatives: a quantity of 0 means "I didn't eat
+ * this", which is a removal, and the caller handles that rather than storing a
+ * zero-calorie row.
+ */
+export function scaleItem(item: EstimatedItem, newQty: number): EstimatedItem {
+  const qty = Math.max(0, Math.round(newQty));
+  // The item's own qty is the reference. Falling back to 1 stops a corrupt
+  // qty:0 item turning every correction into a division by zero.
+  const factor = qty / (item.qty > 0 ? item.qty : 1);
+  return {
+    ...item,
+    qty,
+    macros: roundMacros({
+      kcal: item.macros.kcal * factor,
+      protein: item.macros.protein * factor,
+      carbs: item.macros.carbs * factor,
+      fats: item.macros.fats * factor,
+    }),
+    // A number the athlete typed is no longer an assumption, so the "(assumed)"
+    // hint has to come off — it would be claiming they told us something they
+    // didn't, in reverse.
+    explicit: true,
+  };
+}
+
+/** Re-total a list after edits. The displayed total must never drift from the rows. */
+export function totalOf(items: EstimatedItem[]): Macros {
+  return roundMacros(
+    items.reduce(
+      (s, i) => addMacros(s, i.macros),
+      { kcal: 0, protein: 0, carbs: 0, fats: 0 },
+    ),
+  );
 }

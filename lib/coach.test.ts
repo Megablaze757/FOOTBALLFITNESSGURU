@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { recommendDrills, buildProgram, analyzeProgress, painByArea, goalsForSport } from "./coach";
 import { MOVEMENTS } from "./movements";
+import type { ProgramPlan } from "./engine";
 import type { TrainingLog } from "./types";
 
 test("goalsForSport tailors goals per sport", () => {
@@ -132,4 +133,281 @@ test("weighted lifts wave reps down toward the peak", () => {
     compared++;
   }
   assert.ok(compared > 0, "no load lift appeared in both week 1 and week 3 to compare");
+});
+
+// --- Running handoff ---------------------------------------------------------
+
+test("a runner chasing endurance gets runs, not a drill list", () => {
+  const plan = buildProgram({ goal: "endurance", painMap: {}, sport: "running", daysPerWeek: 5 });
+  const names = plan.weeks.flatMap((w) => w.sessions.flatMap((s) => s.drills.map((d) => d.name)));
+  assert.ok(names.some((n) => /run|tempo|interval|threshold|VO2/i.test(n)), `got: ${[...new Set(names)].join(", ")}`);
+  // The tell that it went to the wrong engine: a runner's plan full of sleds,
+  // shuttles and bike intervals, which is what happened before this existed.
+  assert.ok(!names.some((n) => /sled|shuttle|bike/i.test(n)), `gym conditioning leaked in: ${names.join(", ")}`);
+});
+
+test("every run in a runner's plan names its zone", () => {
+  const plan = buildProgram({ goal: "endurance", painMap: {}, sport: "running", daysPerWeek: 4 });
+  for (const w of plan.weeks) {
+    for (const s of w.sessions) {
+      assert.match(s.drills[0].prescription ?? "", /Zone [1-5]/, `${s.title} has no zone`);
+    }
+  }
+});
+
+test("a runner asking for strength still gets the gym", () => {
+  // "Runner's strength" is leg durability work — hijacking it into a run block
+  // would remove the very thing that keeps them running.
+  const plan = buildProgram({ goal: "strength", painMap: {}, sport: "running", daysPerWeek: 3 });
+  const names = plan.weeks.flatMap((w) => w.sessions.flatMap((s) => s.drills.map((d) => d.name)));
+  assert.ok(!names.every((n) => /run$/i.test(n)), "expected gym work, got a run block");
+});
+
+test("a runner coming back from injury gets rehab, not mileage", () => {
+  const plan = buildProgram({ goal: "injury_recovery", painMap: { knee_left: 6 }, sport: "running", daysPerWeek: 3 });
+  assert.notEqual(plan.goal, "endurance");
+});
+
+test("a footballer is unaffected by the running handoff", () => {
+  const plan = buildProgram({ goal: "endurance", painMap: {}, sport: "football", daysPerWeek: 4 });
+  const names = plan.weeks.flatMap((w) => w.sessions.flatMap((s) => s.drills.map((d) => d.name)));
+  assert.ok(names.length > plan.weeks.length * 4, "expected a full drill list, not one run per day");
+});
+
+test("a sore runner's easy days drop to recovery pace", () => {
+  const sore = buildProgram({
+    goal: "endurance", painMap: { knee_left: 6 }, sport: "running", daysPerWeek: 5,
+  });
+  const fresh = buildProgram({ goal: "endurance", painMap: {}, sport: "running", daysPerWeek: 5 });
+  const zone1 = (p: typeof sore) =>
+    p.weeks.flatMap((w) => w.sessions).filter((s) => /Zone 1/.test(s.drills[0].prescription ?? "")).length;
+  assert.ok(zone1(sore) > zone1(fresh), "a sore knee should pull the easy days back to Zone 1");
+});
+
+test("runs are available to every sport, not just runners", () => {
+  // The requirement is plain: a footballer or a gym athlete doing conditioning
+  // should be able to be told to go for a run. Before the run entries existed,
+  // a conditioning slot could only be filled by a sled, a shuttle or a bike.
+  const RUNS = ["Easy run", "Long run", "Threshold run", "Recovery run", "Fartlek run", "Hill repeats"];
+  for (const sport of ["football", "rugby", "basketball", "gym", "weightlifting"] as const) {
+    const names = new Set(
+      recommendDrills({ goal: "endurance", painMap: {}, sport }).map((d) => d.name),
+    );
+    assert.ok([...names].some((n) => RUNS.includes(n)), `${sport} was offered no runs: ${[...names].join(", ")}`);
+  }
+});
+
+test("a recovery run is reachable as recovery work in any sport", () => {
+  const names = recommendDrills({ goal: "injury_recovery", painMap: {}, sport: "gym" }).map((d) => d.name);
+  assert.ok(names.length > 0);
+});
+
+test("'no running' drops every run but keeps the bike", () => {
+  // The four that don't have "run" in the name — Fartlek, Strides, Hill
+  // repeats, VO2 max intervals — are why running had to become a region. The
+  // name-stem rule alone would have let all four through.
+  const plan = buildProgram({
+    goal: "endurance", painMap: {}, sport: "football", daysPerWeek: 4,
+    notes: "no running, my shins are wrecked",
+  });
+  const names = plan.weeks.flatMap((w) => w.sessions.flatMap((s) => s.drills.map((d) => d.name)));
+  for (const banned of ["Easy run", "Long run", "Fartlek run", "Hill repeats", "Strides", "VO2 max intervals"]) {
+    assert.ok(!names.includes(banned), `"${banned}" survived a "no running" note`);
+  }
+  // …and the point of making it a region rather than banning cardio outright:
+  // conditioning must still be fillable.
+  assert.ok(plan.constraints.some((c) => /running/i.test(c)), "the exclusion should be shown back to the athlete");
+});
+
+test("a runner's own numbers drive the block", () => {
+  // The mileage input is the one variable that decides whether a block builds
+  // someone or injures them, so it has to actually reach the engine.
+  const small = buildProgram({
+    goal: "endurance", painMap: {}, sport: "running", daysPerWeek: 5, weeklyKm: 20,
+  });
+  const big = buildProgram({
+    goal: "endurance", painMap: {}, sport: "running", daysPerWeek: 5, weeklyKm: 80,
+  });
+  const km = (p: typeof small) => Number(/([\d.]+)km target/.exec(p.weeks[0].focusNote)![1]);
+  assert.equal(km(small), 20);
+  assert.equal(km(big), 80);
+});
+
+test("runner level caps the hard sessions", () => {
+  const beginner = buildProgram({
+    goal: "endurance", painMap: {}, sport: "running", daysPerWeek: 5,
+    weeklyKm: 40, runnerLevel: "beginner",
+  });
+  const advanced = buildProgram({
+    goal: "endurance", painMap: {}, sport: "running", daysPerWeek: 5,
+    weeklyKm: 40, runnerLevel: "advanced",
+  });
+  const hard = (p: typeof beginner) =>
+    p.weeks[1].sessions.filter((s) => /Threshold|VO2|Cruise|repeat|Fartlek|Steady|Progression/i.test(s.title)).length;
+  assert.equal(hard(beginner), 1);
+  assert.ok(hard(advanced) > hard(beginner), `advanced ${hard(advanced)} vs beginner ${hard(beginner)}`);
+});
+
+test("a logged race turns the plan's zones into real paces", () => {
+  const withRace = buildProgram({
+    goal: "endurance", painMap: {}, sport: "running", daysPerWeek: 4,
+    weeklyKm: 40, thresholdSecPerKm: 255,
+  });
+  const p = withRace.weeks[0].sessions[0].drills[0].prescription!;
+  assert.match(p, /\d+:\d\d–\d+:\d\d\/km/, `expected a pace range, got: ${p}`);
+});
+
+test("every sport and every goal can prescribe an actual run", () => {
+  // The ask was "running in the programs", not "running available to the
+  // programs". Those came apart: the run entries existed in the catalogue and
+  // scored fine, and a strength block still contained none, because the
+  // strength blueprint had no conditioning slot at all — so for the goal most
+  // athletes pick, nothing in any sport could ever tell them to go for a run.
+  const RUNS = [
+    "Recovery run", "Easy run", "Long run", "Threshold run",
+    "VO2 max intervals", "Fartlek run", "Progression run", "Hill repeats",
+  ];
+  for (const sport of ["football", "rugby", "basketball", "gym", "weightlifting"] as const) {
+    for (const goal of ["endurance", "speed", "strength"] as const) {
+      const plan = buildProgram({ goal, painMap: {}, sport, daysPerWeek: 4 });
+      const names = plan.weeks.flatMap((w) => w.sessions.flatMap((s) => s.drills.map((d) => d.name)));
+      assert.ok(
+        names.some((n) => RUNS.includes(n)),
+        `${sport}/${goal} contains no runs at all`,
+      );
+    }
+  }
+});
+
+test("the deload week gets recovery running, not hill repeats", () => {
+  // Filling week 4's conditioning from the same ranked list as Peak week put
+  // hill repeats into the down week — the one week they must not be in. It was
+  // also why the recovery run, the easiest thing in the catalogue, was never
+  // selected anywhere in the app.
+  for (const sport of ["football", "gym", "weightlifting"] as const) {
+    const plan = buildProgram({ goal: "strength", painMap: {}, sport, daysPerWeek: 4 });
+    const deload = plan.weeks[3].sessions.flatMap((s) => s.drills.map((d) => d.name));
+    assert.ok(!deload.includes("Hill repeats"), `${sport}: hill repeats in the deload week`);
+    assert.ok(!deload.includes("VO2 max intervals"), `${sport}: VO2 intervals in the deload week`);
+  }
+  // And it actually reaches for the recovery run somewhere across a block.
+  const names = buildProgram({ goal: "strength", painMap: {}, sport: "football", daysPerWeek: 4 })
+    .weeks.flatMap((w) => w.sessions.flatMap((s) => s.drills.map((d) => d.name)));
+  assert.ok(names.includes("Recovery run"), "recovery runs are still unreachable");
+});
+
+test("'no running' still empties the runs out of a strength block", () => {
+  // The new conditioning slot must not become a back door around the athlete's
+  // own exclusions.
+  const plan = buildProgram({
+    goal: "strength", painMap: {}, sport: "gym", daysPerWeek: 4, notes: "no running",
+  });
+  const names = plan.weeks.flatMap((w) => w.sessions.flatMap((s) => s.drills.map((d) => d.name)));
+  for (const banned of ["Easy run", "Long run", "Recovery run", "Hill repeats"]) {
+    assert.ok(!names.includes(banned), `"${banned}" survived a "no running" note`);
+  }
+});
+
+// --- Are the runs actually reasonable? ---------------------------------------
+
+const RUN_NAMES = [
+  "Recovery run", "Easy run", "Long run", "Threshold run",
+  "VO2 max intervals", "Fartlek run", "Progression run", "Hill repeats", "Strides",
+];
+const runsIn = (plan: ProgramPlan) =>
+  plan.weeks.flatMap((w) => w.sessions.flatMap((s) => s.drills)).filter((d) => RUN_NAMES.includes(d.name));
+
+test("every run in a program names its zone", () => {
+  // The zone is the instruction. "40 min" on its own is the commonest way an
+  // easy day gets run too hard, and the programme was the only surface in the
+  // app not speaking in zones.
+  for (const sport of ["football", "rugby", "gym", "weightlifting"] as const) {
+    for (const goal of ["endurance", "strength"] as const) {
+      const plan = buildProgram({ goal, painMap: {}, sport, daysPerWeek: 4 });
+      for (const d of runsIn(plan)) {
+        assert.match(d.prescription ?? "", /Zone [1-5] \(/, `${sport}/${goal}: ${d.name} has no zone`);
+        // And the talk test, so the number coaches someone with no HR strap.
+        assert.ok((d.cue ?? "").length > 20, `${d.name} has no effort description`);
+      }
+    }
+  }
+});
+
+test("a continuous run is one effort, not a set of them", () => {
+  // The two-set floor made a long run read `sets: 2` — the prescription text
+  // hid it, but anything reading the number saw two sets of a 75-minute run.
+  for (const d of runsIn(buildProgram({ goal: "strength", painMap: {}, sport: "football", daysPerWeek: 4 }))) {
+    if ((d.prescription ?? "").includes(" min")) {
+      assert.equal(d.sets, 1, `${d.name} prescribed as ${d.sets} sets`);
+    }
+  }
+});
+
+test("a recovery run stays a recovery run all block", () => {
+  // The RPE floor of 5 clamped its RPE 2 up to 5, so the one movement whose
+  // entire purpose is being easy was prescribed at moderate effort.
+  for (const d of runsIn(buildProgram({ goal: "strength", painMap: {}, sport: "football", daysPerWeek: 4 }))) {
+    if (d.name === "Recovery run") {
+      const rpe = Number(/RPE ([\d.]+)/.exec(d.intensity ?? "")?.[1] ?? 99);
+      assert.ok(rpe <= 3, `a recovery run at RPE ${rpe} is not a recovery run`);
+      assert.match(d.prescription ?? "", /Zone 1/);
+    }
+  }
+});
+
+test("run durations grow at a survivable rate", () => {
+  // Lift rep-scaling took a 75-minute long run to 105 by week 3 — a 40% jump
+  // inside one block, roughly four times what a runner should add.
+  // Weeks 1-3 only. Week 4 is the deload and is MEANT to come down, so folding
+  // it in would count the block working correctly as a swing.
+  const plan = buildProgram({ goal: "endurance", painMap: {}, sport: "football", daysPerWeek: 4 });
+  const byName = new Map<string, number[]>();
+  for (const w of plan.weeks.slice(0, 3)) {
+    for (const d of w.sessions.flatMap((s) => s.drills)) {
+      if (!RUN_NAMES.includes(d.name)) continue;
+      const mins = Number(/^(\d+) min/.exec(d.prescription ?? "")?.[1] ?? 0);
+      if (mins) byName.set(d.name, [...(byName.get(d.name) ?? []), mins]);
+    }
+  }
+  assert.ok(byName.size > 0, "no timed runs found to check");
+  for (const [name, mins] of byName) {
+    const grown = Math.max(...mins) / Math.min(...mins);
+    assert.ok(grown <= 1.25, `${name} climbs ${Math.round((grown - 1) * 100)}% across the build weeks`);
+  }
+});
+
+test("timed intervals are prescribed in round numbers", () => {
+  for (const d of runsIn(buildProgram({ goal: "endurance", painMap: {}, sport: "football", daysPerWeek: 4 }))) {
+    const secs = Number(/× (\d+)s/.exec(d.prescription ?? "")?.[1] ?? 0);
+    if (secs) assert.equal(secs % 5, 0, `${d.name}: ${secs}s is not a number anyone would say`);
+  }
+});
+
+test("no run is prescribed on a badly painful lower limb", () => {
+  // The engine refuses a movement when pain >= 7 AND its load on that joint is
+  // >= 2. I had the runs' joint loads too low, so a torn hamstring at 8/10 was
+  // still being handed a 75-minute long run and an 8/10 knee got strides —
+  // near-maximal sprinting. Running is the classic hamstring re-injury
+  // mechanism; an app must not prescribe it on a limb that hurts this much.
+  // The bike, rower and pool are still there to fill the conditioning slot.
+  for (const area of ["hamstring_left", "knee_left", "ankle_left"]) {
+    for (const goal of ["endurance", "strength", "injury_recovery"] as const) {
+      const plan = buildProgram({ goal, painMap: { [area]: 8 }, sport: "football", daysPerWeek: 4 });
+      const runs = runsIn(plan).map((d) => d.name);
+      assert.deepEqual(runs, [], `${area} 8/10 on a ${goal} block still got: ${[...new Set(runs)].join(", ")}`);
+    }
+  }
+});
+
+test("a healthy athlete still gets plenty of running", () => {
+  // The guard above must not have quietly emptied running out of the app.
+  const plan = buildProgram({ goal: "strength", painMap: {}, sport: "football", daysPerWeek: 4 });
+  assert.ok(runsIn(plan).length >= 4, `only ${runsIn(plan).length} runs in a healthy block`);
+});
+
+test("mild soreness discourages running without banning it", () => {
+  // 4/10 is sore, not injured. It should bias selection, not empty the slot —
+  // otherwise every twinge costs someone their aerobic work.
+  const plan = buildProgram({ goal: "endurance", painMap: { knee_left: 4 }, sport: "football", daysPerWeek: 4 });
+  assert.ok(runsIn(plan).length > 0, "mild soreness should not ban running outright");
 });

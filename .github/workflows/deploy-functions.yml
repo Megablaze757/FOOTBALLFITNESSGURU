@@ -1,0 +1,122 @@
+name: Deploy Edge Functions
+
+# Deploys supabase/functions/ from CI, so they can ship without installing the
+# Supabase CLI, Deno or a local clone. Run it from the Actions tab.
+#
+# ONE-TIME SETUP — two repo secrets:
+#
+#   SUPABASE_ACCESS_TOKEN   supabase.com/dashboard/account/tokens → Generate new
+#   GROQ_API_KEY            console.groq.com/keys
+#
+#   OPENROUTER_API_KEY is optional. The provider chain skips a provider with no
+#   key rather than failing, so Groq alone works — OpenRouter just adds a
+#   fallback for when Groq is rate-limited or down.
+#
+# Why this exists at all: the meal photo estimator is the one feature with no
+# working backend. The Cloudflare Worker's chain is eight text-only models and
+# its /health reports no `vision`, so photos have nowhere to go until
+# `estimate-food` is deployed here. Once it is, lib/api.ts routes photos to it
+# automatically — and hands them back to the Worker on its own the day the
+# Worker can see again. Nothing to switch over afterwards.
+
+on:
+  workflow_dispatch:
+    inputs:
+      functions:
+        description: "Space-separated function names to deploy"
+        type: string
+        default: "estimate-food"
+      set_secrets:
+        description: "Also push GROQ_API_KEY / OPENROUTER_API_KEY to Supabase"
+        type: boolean
+        default: true
+
+concurrency:
+  group: deploy-functions
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      # Not a secret: the project ref is in the shipped browser bundle already.
+      PROJECT_REF: txqhstackgidjqkkrzyj
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the access token is set
+        run: |
+          if [ -z "$SUPABASE_ACCESS_TOKEN" ]; then
+            echo "::error::SUPABASE_ACCESS_TOKEN is not set."
+            echo "Add it under Settings → Secrets and variables → Actions."
+            echo "Generate one at https://supabase.com/dashboard/account/tokens"
+            exit 1
+          fi
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      # Named explicitly rather than deploying everything in the directory. A
+      # blanket deploy would also ship the scheduled jobs and the Stripe
+      # webhook, which are currently served by the Worker — two live handlers
+      # for the same webhook is not a thing to switch on by accident.
+      - name: Deploy
+        run: |
+          set -euo pipefail
+          for fn in ${{ inputs.functions }}; do
+            if [ ! -d "supabase/functions/$fn" ]; then
+              echo "::error::supabase/functions/$fn does not exist"
+              exit 1
+            fi
+            echo "::group::deploying $fn"
+            supabase functions deploy "$fn" --project-ref "$PROJECT_REF"
+            echo "::endgroup::"
+          done
+
+      # Skipped silently when a key isn't configured — the chain treats an
+      # absent provider as "skip", not "fail", so deploying with only one of the
+      # two is a supported setup rather than a broken one.
+      - name: Set model keys
+        if: inputs.set_secrets
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -n "${GROQ_API_KEY:-}" ]; then
+            supabase secrets set "GROQ_API_KEY=$GROQ_API_KEY" --project-ref "$PROJECT_REF"
+            echo "GROQ_API_KEY set"
+          else
+            echo "::warning::GROQ_API_KEY not configured — Groq will be skipped"
+          fi
+          if [ -n "${OPENROUTER_API_KEY:-}" ]; then
+            supabase secrets set "OPENROUTER_API_KEY=$OPENROUTER_API_KEY" --project-ref "$PROJECT_REF"
+            echo "OPENROUTER_API_KEY set"
+          else
+            echo "OPENROUTER_API_KEY not configured — Groq only, no fallback"
+          fi
+          if [ -z "${GROQ_API_KEY:-}" ] && [ -z "${OPENROUTER_API_KEY:-}" ]; then
+            echo "::error::Neither model key is set, so every AI call will fail."
+            exit 1
+          fi
+
+      # Proves it answers, rather than reporting success because the CLI exited
+      # 0. An undeployed function 404s the CORS preflight; a deployed one does
+      # not. Same probe the app itself uses to decide whether to offer photos.
+      - name: Verify each function answers
+        run: |
+          set -euo pipefail
+          fail=0
+          for fn in ${{ inputs.functions }}; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" -m 20 -X OPTIONS \
+              "https://$PROJECT_REF.supabase.co/functions/v1/$fn")
+            if [ "$code" = "404" ]; then
+              echo "::error::$fn still 404s after deploying"
+              fail=1
+            else
+              echo "$fn answers ($code)"
+            fi
+          done
+          exit $fail

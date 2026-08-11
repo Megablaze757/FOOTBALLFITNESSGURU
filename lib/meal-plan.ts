@@ -7,7 +7,7 @@
 // for why live supermarket pricing isn't available. Pure + tested.
 // =============================================================================
 
-import { FOODS, FOOD_BY_ID, type Aisle, type Food, type FoodTag } from "./food-db";
+import { FOODS, FOOD_BY_ID, packPriceFor, isCorrected, type Aisle, type Food, type FoodTag, type PriceOverrides, type StoreId } from "./food-db";
 import { skipReason, EMPTY_SCHEDULE, type DietSchedule } from "./meal-schedule";
 import type { PlanTargets } from "./nutrition"; // used below; also re-exported
 
@@ -23,7 +23,11 @@ export const DIET_PATTERNS: { id: DietPattern; label: string; excludes: FoodTag[
   { id: "omnivore", label: "Everything", excludes: [] },
   { id: "pescatarian", label: "Pescatarian", excludes: ["meat", "pork"] },
   { id: "vegetarian", label: "Vegetarian", excludes: ["meat", "pork", "fish"] },
-  { id: "vegan", label: "Vegan", excludes: ["meat", "pork", "fish", "dairy", "egg"] },
+  // Honey is excluded here and nowhere else: it is an animal product, so vegans
+  // don't eat it, but vegetarians do and the pescatarian/omnivore patterns have
+  // no reason to care. Before it was tagged, six vegan meals contained honey and
+  // the vegan shopping list told people to go and buy a jar of it.
+  { id: "vegan", label: "Vegan", excludes: ["meat", "pork", "fish", "dairy", "egg", "honey"] },
 ];
 
 // Things people avoid for allergy or preference reasons, separate from the
@@ -46,6 +50,18 @@ export interface MealPrefs {
   dislikes: string[];   // food ids the athlete never wants to see
   /** Food ids they've said they like. A nudge toward, not a guarantee of. */
   favourites?: string[];
+  /**
+   * MEAL ids they've starred. A much stronger signal than `favourites`.
+   *
+   * The two are deliberately separate. `favourites` is ingredients, inferred
+   * from a sentence like "I like eggs", and it is a guess about a whole class
+   * of food. This is a specific dish the athlete tapped a star on, which is
+   * about as unambiguous as preference data gets — so it is worth more, and it
+   * also overrides the week-on-week variety rule. Somebody who starred the
+   * shakshuka wants the shakshuka again; being told they had it last week is
+   * not a reason to take it away from them.
+   */
+  starred?: string[];
 }
 
 
@@ -147,8 +163,37 @@ function foodIdsIn(notes: string, mood: RegExp): string[] {
   return [...out];
 }
 
+/**
+ * The preferences a plan is ACTUALLY built from.
+ *
+ * `buildWeek` is pure with respect to all of its inputs, which is what lets the
+ * app store a plan as a single seed and rebuild it anywhere. That only works if
+ * every caller passes the same inputs — and two of them did not.
+ *
+ * The Meal plan tab merged the athlete's starred dishes and the foods inferred
+ * from their notes into prefs before building. The Today tick-list passed the
+ * raw saved prefs. Starring is worth a £30 bonus in the planner and exempts a
+ * dish from the had-it-last-week rule, so the moment anyone starred anything,
+ * the two screens showed different food for the same day — the plan said one
+ * dinner and the thing you tick off said another.
+ *
+ * One derivation, used by both, so they cannot disagree again. Same reason
+ * planTargets exists as a single calculation rather than two.
+ */
+export function effectiveMealPrefs(
+  prefs: MealPrefs,
+  notes: string | null | undefined,
+  starred: string[] | undefined
+): MealPrefs {
+  return {
+    ...prefs,
+    dislikes: [...prefs.dislikes, ...dislikedFoodIds(notes ?? "")],
+    starred: starred ?? prefs.starred,
+  };
+}
+
 export const DEFAULT_PREFS: MealPrefs = {
-  pattern: "omnivore", avoid: [], mealsPerDay: 4, budget: false, dislikes: [], favourites: [],
+  pattern: "omnivore", avoid: [], mealsPerDay: 4, budget: false, dislikes: [], favourites: [], starred: [],
 };
 
 /** Does this meal contain something the athlete said they like? */
@@ -191,161 +236,154 @@ export interface Meal {
   name: string;
   slot: Slot;
   items: MealItem[];
+  /**
+   * How to cook it, as prose. Every meal has one.
+   *
+   * Kept as the source of truth so nothing had to be rewritten at once, but it
+   * is no longer what the UI renders directly — see `recipeSteps`. A paragraph
+   * is a fine way to STORE a method and a poor way to COOK from one: you are
+   * holding a phone with one hand and a pan with the other, and you need to
+   * know which line you are on.
+   */
   method: string;
+  /**
+   * The method as numbered steps, when it has been written out properly.
+   *
+   * Optional on purpose. `recipeSteps()` falls back to splitting `method` into
+   * sentences, so every meal gets a usable numbered list today and the good
+   * ones can be written by hand over time — rather than blocking the whole
+   * feature on rewriting sixty-one recipes in one go.
+   */
+  steps?: string[];
+  /** Hands-on time in minutes. Shown so a 40-minute dinner isn't a surprise. */
+  minutes?: number;
+  /** One thing worth knowing — batching, swaps, what goes wrong. */
+  tip?: string;
 }
 
-export const MEALS: Meal[] = [
-  { id: "oats_berries", name: "Protein porridge & berries", slot: "Breakfast",
-    items: [{ foodId: "oats", qty: 80 }, { foodId: "milk", qty: 300 }, { foodId: "whey_protein", qty: 30 }, { foodId: "berries_frozen", qty: 80 }],
-    method: "Simmer the oats in the milk for 4–5 minutes, take off the heat, stir the protein through once it's cooled slightly, then top with the berries." },
-  { id: "eggs_toast", name: "Scrambled eggs on wholemeal", slot: "Breakfast",
-    items: [{ foodId: "eggs", qty: 3 }, { foodId: "wholemeal_bread", qty: 80 }, { foodId: "spinach", qty: 50 }, { foodId: "olive_oil", qty: 5 }],
-    method: "Scramble the eggs low and slow, wilt the spinach in at the end, and serve on toast." },
-  { id: "yoghurt_bowl", name: "Greek yoghurt breakfast bowl", slot: "Breakfast",
-    items: [{ foodId: "greek_yoghurt", qty: 250 }, { foodId: "oats", qty: 40 }, { foodId: "banana", qty: 1 }, { foodId: "peanut_butter", qty: 20 }],
-    method: "Layer the yoghurt with oats, sliced banana and a spoon of peanut butter. No cooking — good for early starts." },
+/**
+ * A meal's method as steps you can follow one at a time.
+ *
+ * Splits on SENTENCE boundaries only, never on commas. Comma-splitting looked
+ * tempting — most of these methods are comma-separated instructions — but it
+ * mangles the ones with an aside in them ("season hard (turmeric and black
+ * salt, if you have them)") and turns "Cheap, high protein and it freezes"
+ * into three imaginary steps. A conservative split is never wrong; an
+ * aggressive one is wrong in a way that makes the app look careless.
+ */
+export function recipeSteps(meal: Meal): string[] {
+  return splitMethod(meal).steps;
+}
 
-  { id: "chicken_rice", name: "Chicken, rice & broccoli", slot: "Lunch",
-    items: [{ foodId: "chicken_breast", qty: 180 }, { foodId: "rice", qty: 90 }, { foodId: "broccoli", qty: 120 }, { foodId: "olive_oil", qty: 10 }],
-    method: "Pan-fry the chicken in the oil, boil the rice, steam the broccoli. The batch-cook staple — make three at once." },
-  { id: "tuna_wrap", name: "Tuna & salad wraps", slot: "Lunch",
-    items: [{ foodId: "tuna_tin", qty: 100 }, { foodId: "tortilla_wrap", qty: 2 }, { foodId: "spinach", qty: 40 }, { foodId: "cheddar", qty: 25 }],
-    method: "Drain the tuna, load the wraps with spinach and cheese, roll tight. Travels well in a kit bag." },
-  { id: "beans_toast", name: "Beans, eggs & toast", slot: "Lunch",
-    items: [{ foodId: "beans_baked", qty: 200 }, { foodId: "eggs", qty: 2 }, { foodId: "wholemeal_bread", qty: 80 }],
-    method: "Heat the beans, poach or fry the eggs, toast the bread. Cheap, fast and surprisingly well balanced." },
+/**
+ * Somewhere to look up another version of this dish.
+ *
+ * WHY A SEARCH LINK AND NOT THEIR RECIPE. BBC Good Food's recipes are
+ * copyrighted work owned by Immediate Media. The ingredient list alone is close
+ * to fact and thin on protection, but the method — the wording, the order, the
+ * asides — is exactly the creative expression copyright covers, and rewriting
+ * it lightly does not change that. So none of it is copied.
+ *
+ * A search link costs nothing, never goes stale, needs no licence, and is
+ * genuinely more useful than one borrowed recipe would be: someone who wants a
+ * different take on shakshuka gets fifty, from a source they already trust.
+ * It is the same decision `productLink` made about supermarket pricing — deep
+ * link out rather than scrape.
+ *
+ * The dish name is searched rather than our recipe title, so "Big tofu, bean
+ * and potato hash" doesn't return nothing. Anything in brackets or after a dash
+ * is ours, not the dish's.
+ */
+export function recipeSearchUrl(meal: Meal): string {
+  const dish = meal.name
+    .replace(/\s*\([^)]*\)/g, "")
+    .split(/\s+[—–-]\s+/)[0]
+    .trim();
+  return `https://www.bbcgoodfood.com/search?q=${encodeURIComponent(dish)}`;
+}
 
-  { id: "beef_pasta", name: "Beef bolognese & pasta", slot: "Dinner",
-    items: [{ foodId: "beef_mince_5", qty: 150 }, { foodId: "pasta", qty: 100 }, { foodId: "tomatoes_tin", qty: 200 }, { foodId: "onion", qty: 80 }],
-    method: "Brown the mince with the onion, add the tomatoes and simmer 20 minutes, serve over the pasta." },
-  { id: "salmon_potato", name: "Salmon, potatoes & greens", slot: "Dinner",
-    items: [{ foodId: "salmon_fillet", qty: 130 }, { foodId: "potatoes", qty: 300 }, { foodId: "broccoli", qty: 120 }, { foodId: "olive_oil", qty: 10 }],
-    method: "Roast the salmon 15 minutes at 200°C, boil or roast the potatoes, steam the greens." },
-  { id: "turkey_chilli", name: "Turkey chilli & rice", slot: "Dinner",
-    items: [{ foodId: "turkey_mince", qty: 160 }, { foodId: "chickpeas", qty: 150 }, { foodId: "tomatoes_tin", qty: 200 }, { foodId: "rice", qty: 80 }],
-    method: "Brown the turkey, add chickpeas and tomatoes, simmer 25 minutes and serve with rice. Freezes well." },
-  { id: "chicken_sweet_potato", name: "Chicken & sweet potato traybake", slot: "Dinner",
-    items: [{ foodId: "chicken_breast", qty: 180 }, { foodId: "sweet_potato", qty: 300 }, { foodId: "mixed_veg_frozen", qty: 150 }, { foodId: "olive_oil", qty: 10 }],
-    method: "Everything on one tray, 25 minutes at 200°C. Minimal washing up." },
+/**
+ * The bit of a method that is commentary rather than instruction.
+ *
+ * Most of these recipes end on an aside — "Cheap, high protein and it freezes",
+ * "Around 1,000 kcal without feeling like a challenge". True, useful, and not a
+ * step. Numbering it tells someone to go and do it, which is the kind of small
+ * wrongness that makes a whole feature feel machine-generated.
+ */
+export function recipeNote(meal: Meal): string | undefined {
+  return meal.tip ?? splitMethod(meal).note;
+}
 
-  { id: "shake_banana", name: "Protein shake & banana", slot: "Snack",
-    items: [{ foodId: "whey_protein", qty: 30 }, { foodId: "milk", qty: 300 }, { foodId: "banana", qty: 1 }],
-    method: "Blend or shake. The go-to within an hour of finishing training." },
-  { id: "yoghurt_almonds", name: "Yoghurt & almonds", slot: "Snack",
-    items: [{ foodId: "greek_yoghurt", qty: 200 }, { foodId: "almonds", qty: 25 }],
-    method: "Straight from the tub. Slow-digesting protein — good before bed." },
-  { id: "apple_pb", name: "Apple & peanut butter", slot: "Snack",
-    items: [{ foodId: "apple", qty: 1 }, { foodId: "peanut_butter", qty: 25 }],
-    method: "Slice the apple, dip. Easy carbs before a session." },
+/**
+ * Verbs a cooking instruction actually starts with.
+ *
+ * A list, not a parts-of-speech guess. The set of imperatives used in a recipe
+ * is small and closed, and enumerating it is both more accurate than a
+ * heuristic and honest about where it will fail — a method starting with a verb
+ * that isn't here degrades to "treated as a note", which is safe, rather than
+ * to a mangled step.
+ */
+const COOK_VERBS = new Set([
+  "add", "assemble", "bake", "beat", "blend", "blitz", "boil", "bring", "build",
+  "chop", "combine", "cook", "cover", "crack", "crisp", "crumble", "cube", "cut",
+  "defrost", "dice", "drain", "dress", "drizzle", "everything", "fill", "finish",
+  "fold", "fork", "fry", "grate", "grill", "heat", "keep", "layer", "leave",
+  "let", "loosen", "mash", "meanwhile", "microwave", "mix", "oven", "pan",
+  "plate", "pour", "press", "push", "put", "reduce", "reheat", "rinse", "roast",
+  "scramble", "sear", "season", "serve", "shake", "simmer", "slice", "snap",
+  "soften", "spread", "sprinkle", "squeeze", "steam", "stir", "take", "toast",
+  "top", "toss", "turn", "warm", "wilt", "whisk", "spoon", "tip", "rice",
+  "pasta", "potatoes", "beans", "lentils", "oven's", "under",
+]);
 
-  // --- Plant-based, so vegetarian and vegan plans aren't empty --------------
-  { id: "oats_soy", name: "Oats with soya milk & seeds", slot: "Breakfast",
-    items: [{ foodId: "oats", qty: 80 }, { foodId: "soy_milk", qty: 300 }, { foodId: "seeds_mixed", qty: 20 }, { foodId: "banana", qty: 1 }],
-    method: "Simmer the oats in soya milk, top with seeds and sliced banana." },
-  { id: "tofu_scramble", name: "Tofu scramble on toast", slot: "Breakfast",
-    items: [{ foodId: "tofu", qty: 150 }, { foodId: "wholemeal_bread", qty: 80 }, { foodId: "spinach", qty: 50 }, { foodId: "olive_oil", qty: 8 }],
-    method: "Crumble the tofu into a hot pan with turmeric and black pepper, wilt the spinach in, serve on toast." },
-  { id: "coconut_bowl", name: "Coconut yoghurt & seed bowl", slot: "Breakfast",
-    items: [{ foodId: "coconut_yoghurt", qty: 200 }, { foodId: "oats", qty: 40 }, { foodId: "berries_frozen", qty: 80 }, { foodId: "seeds_mixed", qty: 20 }],
-    method: "Layer it all up the night before and it's ready when you are." },
-  { id: "lentil_dhal", name: "Red lentil dhal & rice", slot: "Lunch",
-    items: [{ foodId: "red_lentils", qty: 100 }, { foodId: "tomatoes_tin", qty: 200 }, { foodId: "onion", qty: 80 }, { foodId: "rice", qty: 80 }],
-    method: "Soften the onion, add lentils, tomatoes and spices, simmer 25 minutes until thick. Cheap, high protein and it freezes." },
-  { id: "chickpea_wrap", name: "Chickpea & spinach wraps", slot: "Lunch",
-    items: [{ foodId: "chickpeas", qty: 200 }, { foodId: "tortilla_wrap", qty: 2 }, { foodId: "spinach", qty: 50 }, { foodId: "olive_oil", qty: 8 }],
-    method: "Crush the chickpeas roughly with oil and lemon, load into wraps with spinach." },
-  { id: "quinoa_beans", name: "Black bean & quinoa bowl", slot: "Dinner",
-    items: [{ foodId: "black_beans", qty: 200 }, { foodId: "quinoa", qty: 90 }, { foodId: "mixed_veg_frozen", qty: 150 }, { foodId: "olive_oil", qty: 10 }],
-    method: "Cook the quinoa, warm the beans with cumin and paprika, roast or steam the veg and combine." },
-  { id: "tofu_stirfry", name: "Tofu & veg stir-fry with rice", slot: "Dinner",
-    items: [{ foodId: "tofu", qty: 200 }, { foodId: "mixed_veg_frozen", qty: 200 }, { foodId: "rice", qty: 90 }, { foodId: "olive_oil", qty: 10 }],
-    method: "Press and cube the tofu, fry until golden, throw in the veg for the last few minutes, serve over rice." },
-  { id: "lentil_bolognese", name: "Lentil bolognese", slot: "Dinner",
-    items: [{ foodId: "red_lentils", qty: 100 }, { foodId: "tomatoes_tin", qty: 200 }, { foodId: "onion", qty: 80 }, { foodId: "pasta", qty: 100 }],
-    method: "Same method as a meat bolognese - soften the onion, add lentils and tomatoes, simmer until thick." },
-  { id: "pea_shake", name: "Plant protein shake", slot: "Snack",
-    items: [{ foodId: "pea_protein", qty: 30 }, { foodId: "soy_milk", qty: 300 }, { foodId: "banana", qty: 1 }],
-    method: "Blend. Straightforward post-training protein without dairy." },
-  { id: "seed_snack", name: "Seeds & apple", slot: "Snack",
-    items: [{ foodId: "seeds_mixed", qty: 30 }, { foodId: "apple", qty: 1 }],
-    method: "No prep, no allergens beyond seeds, travels anywhere." },
+function isInstruction(sentence: string): boolean {
+  const first = sentence.trim().toLowerCase().replace(/^[^a-z]+/, "").split(/[\s,]/)[0] ?? "";
+  return COOK_VERBS.has(first);
+}
 
-  // --- More of everything, because 23 meals could not fill a week -----------
-  //
-  // The library was 6 breakfasts, 5 lunches, 7 dinners and 5 snacks. A week
-  // needs SEVEN breakfasts, so repetition wasn't a scoring failure, it was
-  // arithmetic — and since everyone drew from the same six, two athletes with
-  // completely different targets got identical weeks. No amount of clever
-  // ranking fixes a pool smaller than the number of slots.
-  //
-  // Built from the 42 foods already in the database, so every one of these has
-  // real prices and real macros and lands on the shopping list correctly.
-  // Weighted toward the higher-protein end, which is where the pool was thinnest
-  // and where the targets actually bite.
-  { id: "eggs_scramble_wrap", name: "Scrambled egg & cheese wrap", slot: "Breakfast",
-    items: [{ foodId: "eggs", qty: 3 }, { foodId: "tortilla_wrap", qty: 2 }, { foodId: "cheddar", qty: 30 }, { foodId: "spinach", qty: 40 }],
-    method: "Scramble the eggs soft, fold through the cheese and wilted spinach, roll into the wraps." },
-  { id: "yoghurt_whey_oats", name: "High-protein overnight oats", slot: "Breakfast",
-    items: [{ foodId: "oats", qty: 70 }, { foodId: "greek_yoghurt", qty: 200 }, { foodId: "whey_protein", qty: 25 }, { foodId: "berries_frozen", qty: 80 }],
-    method: "Stir it all together the night before. Nothing to cook and it travels." },
-  { id: "salmon_bagel_eggs", name: "Salmon & scrambled eggs on toast", slot: "Breakfast",
-    items: [{ foodId: "salmon_fillet", qty: 100 }, { foodId: "eggs", qty: 2 }, { foodId: "wholemeal_bread", qty: 80 }],
-    method: "Flake cooked salmon through soft scrambled eggs, pile onto toast." },
-  { id: "cottage_oats_pb", name: "Peanut butter banana oats", slot: "Breakfast",
-    items: [{ foodId: "oats", qty: 80 }, { foodId: "milk", qty: 300 }, { foodId: "peanut_butter", qty: 25 }, { foodId: "banana", qty: 1 }],
-    method: "Simmer the oats in milk, stir the peanut butter through at the end, top with banana." },
+/**
+ * Split a prose method into steps plus a trailing note.
+ *
+ * Sentence boundaries only — never commas. Comma-splitting was tempting, since
+ * most of these are comma-separated instructions, but it turns an aside like
+ * "season hard (turmeric and black salt, if you have them)" into two steps and
+ * "Cheap, high protein and it freezes" into three. A conservative split is
+ * never wrong; an aggressive one is wrong in a way that looks careless.
+ *
+ * Trailing sentences that don't begin with a cooking verb are lifted out as the
+ * note. Only TRAILING ones: a non-instruction in the middle is usually context
+ * for the step after it ("The tofu needs to be dry. Fry it hard...") and pulling
+ * that to the bottom would break the sequence.
+ */
+function splitMethod(meal: Meal): { steps: string[]; note?: string } {
+  if (meal.steps?.length) return { steps: meal.steps, note: meal.tip };
 
-  { id: "chicken_wrap_salad", name: "Chicken salad wraps", slot: "Lunch",
-    items: [{ foodId: "chicken_breast", qty: 180 }, { foodId: "tortilla_wrap", qty: 2 }, { foodId: "spinach", qty: 50 }, { foodId: "greek_yoghurt", qty: 60 }],
-    method: "Shred cooked chicken, dress with yoghurt, lemon and pepper, load into wraps with spinach." },
-  { id: "tuna_pasta_salad", name: "Tuna pasta salad", slot: "Lunch",
-    items: [{ foodId: "tuna_tin", qty: 2 }, { foodId: "pasta", qty: 100 }, { foodId: "tomatoes_tin", qty: 100 }, { foodId: "olive_oil", qty: 10 }],
-    method: "Cook the pasta, cool it, fold in tuna, tomatoes and oil. Better cold the next day." },
-  { id: "turkey_rice_bowl", name: "Turkey rice bowl", slot: "Lunch",
-    items: [{ foodId: "turkey_mince", qty: 180 }, { foodId: "rice", qty: 90 }, { foodId: "mixed_veg_frozen", qty: 150 }, { foodId: "olive_oil", qty: 8 }],
-    method: "Brown the mince with whatever spice you like, serve over rice with the veg through it." },
-  { id: "jacket_beans_cheese", name: "Jacket potato, beans & cheese", slot: "Lunch",
-    items: [{ foodId: "potatoes", qty: 350 }, { foodId: "beans_baked", qty: 200 }, { foodId: "cheddar", qty: 40 }],
-    method: "Bake or microwave the potato, split, load. The cheapest hot lunch there is." },
-  { id: "quinoa_chicken_salad", name: "Chicken & quinoa salad", slot: "Lunch",
-    items: [{ foodId: "chicken_breast", qty: 150 }, { foodId: "quinoa", qty: 80 }, { foodId: "broccoli", qty: 100 }, { foodId: "olive_oil", qty: 10 }],
-    method: "Cook the quinoa, steam the broccoli, slice the chicken over the top and dress with oil and lemon." },
+  const sentences = meal.method
+    .split(/(?<=[.!?])\s+(?=[A-Z])/)
+    .map((s) => s.trim())
+    .filter(Boolean);
 
-  { id: "chicken_pasta_bake", name: "Chicken pasta bake", slot: "Dinner",
-    items: [{ foodId: "chicken_breast", qty: 200 }, { foodId: "pasta", qty: 100 }, { foodId: "tomatoes_tin", qty: 200 }, { foodId: "cheddar", qty: 40 }],
-    method: "Combine cooked pasta, chicken and sauce in a dish, cheese on top, 15 minutes in the oven." },
-  { id: "beef_rice_stirfry", name: "Beef & broccoli with rice", slot: "Dinner",
-    items: [{ foodId: "beef_mince_5", qty: 200 }, { foodId: "rice", qty: 90 }, { foodId: "broccoli", qty: 150 }, { foodId: "olive_oil", qty: 8 }],
-    method: "Brown the mince hard, add broccoli and a splash of water to steam, serve over rice." },
-  { id: "salmon_quinoa_veg", name: "Salmon, quinoa & greens", slot: "Dinner",
-    items: [{ foodId: "salmon_fillet", qty: 160 }, { foodId: "quinoa", qty: 90 }, { foodId: "broccoli", qty: 150 }],
-    method: "Oven the salmon 14 minutes, cook the quinoa, steam the greens." },
-  { id: "turkey_sweet_potato", name: "Turkey mince & sweet potato mash", slot: "Dinner",
-    items: [{ foodId: "turkey_mince", qty: 200 }, { foodId: "sweet_potato", qty: 300 }, { foodId: "mixed_veg_frozen", qty: 150 }],
-    method: "Mash the sweet potato, brown the mince with onion and herbs, veg on the side." },
-  { id: "chicken_potato_veg", name: "Roast chicken, potatoes & veg", slot: "Dinner",
-    items: [{ foodId: "chicken_breast", qty: 200 }, { foodId: "potatoes", qty: 300 }, { foodId: "broccoli", qty: 150 }, { foodId: "olive_oil", qty: 10 }],
-    method: "Everything on one tray at 200C, greens steamed at the end. Minimal washing up." },
-  { id: "tuna_jacket", name: "Tuna jacket potato", slot: "Dinner",
-    items: [{ foodId: "tuna_tin", qty: 2 }, { foodId: "potatoes", qty: 350 }, { foodId: "greek_yoghurt", qty: 60 }, { foodId: "spinach", qty: 50 }],
-    method: "Yoghurt instead of mayo — same texture, considerably more protein." },
+  const steps = [...sentences];
+  const notes: string[] = [];
+  // Peel commentary off the end, but never take the last instruction with it —
+  // a method must always have at least one step.
+  while (steps.length > 1 && !isInstruction(steps[steps.length - 1])) {
+    notes.unshift(steps.pop()!);
+  }
 
-  { id: "yoghurt_berries_snack", name: "Greek yoghurt & berries", slot: "Snack",
-    items: [{ foodId: "greek_yoghurt", qty: 200 }, { foodId: "berries_frozen", qty: 80 }],
-    method: "Defrost the berries in the microwave for 30 seconds and stir through." },
-  { id: "eggs_boiled_snack", name: "Boiled eggs & an apple", slot: "Snack",
-    items: [{ foodId: "eggs", qty: 3 }, { foodId: "apple", qty: 1 }],
-    method: "Boil a batch at the start of the week. Seven minutes, then cold water." },
-  { id: "cheese_bread_snack", name: "Cheese on toast", slot: "Snack",
-    items: [{ foodId: "cheddar", qty: 50 }, { foodId: "wholemeal_bread", qty: 80 }],
-    method: "Grill rather than toast, so the cheese goes properly molten." },
-  { id: "whey_milk_snack", name: "Whey & milk", slot: "Snack",
-    items: [{ foodId: "whey_protein", qty: 30 }, { foodId: "milk", qty: 300 }],
-    method: "Thirty seconds, 45g of protein. The fallback when there's no time." },
-  { id: "chickpea_snack", name: "Roast chickpeas", slot: "Snack",
-    items: [{ foodId: "chickpeas", qty: 150 }, { foodId: "olive_oil", qty: 8 }],
-    method: "Drain, dry, toss in oil and paprika, 25 minutes at 200C until they rattle." },
-];
+  return { steps, note: notes.length ? notes.join(" ") : undefined };
+}
+
+/**
+ * The recipes live in `meals-data.ts` now.
+ *
+ * Six hundred lines of dinners inside the scoring engine made both harder to
+ * read and impossible to review separately — the maths and the menu change for
+ * completely different reasons. Re-exported here because every caller already
+ * imports MEALS from this module.
+ */
+import { MEALS } from "./meals-data";
+export { MEALS };
 
 // --- macros ------------------------------------------------------------------
 
@@ -383,6 +421,24 @@ export interface PlannedDay {
   macros: Macros;
   /** Slots deliberately left unplanned — eating out, fasting, skipped. */
   skipped: SkippedMeal[];
+  /**
+   * Why this day is the size it is.
+   *
+   * "even" when the athlete hasn't said which days they train, which is most of
+   * them — the plan stays flat rather than guessing. The UI uses this to say so
+   * on the day, because a day carrying 300 more calories than yesterday with no
+   * explanation reads as a bug rather than as coaching.
+   */
+  load: "training" | "rest" | "even";
+  /**
+   * THIS day's calorie target, which is not the week's on a cycled plan.
+   *
+   * The UI compares the day against it. Without it the calorie bar reads a
+   * training day as 12% over and a rest day as 9% under, and the athlete is
+   * told they have overeaten on exactly the day the plan fed them more on
+   * purpose.
+   */
+  targetKcal: number;
 }
 
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
@@ -443,12 +499,109 @@ function addToBasket(meal: Meal, basket: Basket, scale = 1): void {
 // Eating the same thing all week is cheap and miserable. Each prior use of a
 // meal adds this much to its effective cost, so reuse has to genuinely save
 // money to win, and no meal may appear more than MAX_REPEATS times.
-const REPEAT_PENALTY = 0.85; // £
+/**
+ * What it costs to serve the same meal again, per previous use.
+ *
+ * ESCALATING, NOT LINEAR — see `repeatCost`. At the old flat 0.85 a repeat was
+ * nearly free next to a protein term weighted 35, so the planner simply picked
+ * its favourite three times: an average athlete's week contained TWELVE
+ * distinct meals across 28 slots, with Monday, Tuesday and Wednesday
+ * identical. Adding sixty recipes changes nothing if the scoring will not
+ * reach for them, which is why "the meals are repetitive" survived every
+ * previous attempt to fix it by adding more.
+ */
+const REPEAT_PENALTY = 4; // £
 // Discount applied to a meal containing a food they said they like. Sized to
 // beat a typical price gap between meals but not a large one, so a favourite
 // wins ties and near-ties without wrecking the shopping bill.
-const FAVOURITE_BONUS = 1.2; // £
+/**
+ * RAISED FROM 1.2 WHEN SIZE_WEIGHT WENT UP, and it had to be.
+ *
+ * These two constants compete for the same decision, so one cannot move alone.
+ * At SIZE_WEIGHT 8 with the undersize bias, a meal 10% under its slot already
+ * costs 2.4 — so a 1.2 bonus could no longer win anything, and "I like eggs"
+ * silently stopped producing eggs. `a favourite food shows up more often in the
+ * week` caught it, which is the entire reason that test exists.
+ *
+ * Swept against both constraints: 2.0 is the lowest value that passes, and
+ * every value from 2.0 to 6.0 leaves the macro audit identical (worst-case 94%
+ * calories, 92% protein, zero misses). 3.0 takes the headroom rather than
+ * sitting exactly on the edge, and keeps the original intent — a meal ~10%
+ * off-size yields to a preference, one 20% off-size does not.
+ */
+const FAVOURITE_BONUS = 5.0; // £
 const MAX_REPEATS = 3;
+
+/**
+ * What a fresh dish is allowed to add to the shopping bill, per meal.
+ *
+ * The reason last week's meals keep winning is not that they're better — it's
+ * that their ingredients are already in the trolley, so they cost nothing at
+ * the margin while an unfamiliar dish drags a new pack in behind it. Preferring
+ * the unseen meal with no cap at all does produce the most variety (69% of the
+ * week turning over) and puts £24 a week on the shop, which nobody asked for.
+ *
+ * Swept over four athletes and seven diet patterns, five weeks each, at £3:
+ *
+ *   - 51% of slots differ from last week, against 0% before any of this
+ *   - 11% of each week is a dish the athlete has never been served
+ *   - 20.9 distinct meals a week, up from 19.1
+ *   - days missing their protein target: 2.5%, against 2.7% before — variety
+ *     costs nothing here because `fit` is guarded separately
+ *   - £105 against £100
+ *
+ * A fiver buys 55% and £24 buys 69%, so the curve flattens hard just past
+ * here. Budget mode is the lever for anyone who would rather have the £5.
+ *
+ * FLAT, not scaled to the slot's calories, though that was tried: a 203 kcal
+ * snack getting the same licence as a 1,100 kcal dinner looks obviously wrong,
+ * and scaling it by size dropped week-on-week change from 61% to 42% while
+ * doing nothing about the bill. The apparent problem it was meant to solve —
+ * a 15% jump between week one and week two — was a measurement artefact.
+ * Week one is the cost-optimal week by construction, because nothing has been
+ * eaten yet, so every subsequent week compares badly against it. Averaged over
+ * five consecutive weeks, which is what an athlete actually pays, it is 5%.
+ */
+/**
+ * How far a training day's calories sit above the athlete's weekly average.
+ *
+ * 12% either side is enough to be visible on the plate — roughly a whole extra
+ * snack on a hard day — without producing a rest day nobody would stick to. The
+ * real ceiling on going further is that carbohydrate is doing all the moving:
+ * protein is held, so at 25% a rest day starts demanding a protein density most
+ * of the book can't reach, and the planner buys the deficit out of the one
+ * macro that was never supposed to move.
+ */
+const CYCLE_DEPTH = 0.12;
+const VARIETY_BUDGET = 3; // £ per meal
+
+/**
+ * What a starred dish is worth against everything else in the slot.
+ *
+ * Bigger than FAVOURITE_BONUS (5.0) because it is a far better signal: that one
+ * is inferred from a sentence and covers a whole ingredient class, while this is
+ * a dish the athlete deliberately tapped a star on.
+ *
+ * Swept by starring each of 339 athlete/meal combinations in turn and counting
+ * whether the star was honoured:
+ *
+ *      bonus   appearances/wk   stars ignored   worst day off target
+ *          8            0.92        156 (46%)                  10.0%
+ *         12            1.43        104 (31%)                  10.7%
+ *         30            2.80          11  (3%)                  15.6%
+ *         50            3.00           0  (0%)                  30.1%
+ *
+ * 30. Starring something and never once seeing it is the failure that matters —
+ * at 12 it happened to a third of stars, which would read as the button not
+ * working. Past 30 the last few percent are bought by forcing dishes into slots
+ * they do not fit, and a day 30% off its calorie target is not a plan.
+ *
+ * The 3% that stay unhonoured are meals whose size is hopeless for that slot: a
+ * 524 kcal stir-fry starred into a 1,026 kcal dinner. Portions scale 0.55x-1.6x
+ * and no bonus should override that, because the result is a plate nobody would
+ * serve.
+ */
+const STARRED_BONUS = 30; // £
 
 /**
  * What a full miss on a meal's protein share is worth, in the same made-up
@@ -476,7 +629,93 @@ const MAX_REPEATS = 3;
  * basket and cheap repetition wins. Above it the plan overshoots protein by 20%,
  * which is money spent on protein nobody asked for.
  */
-const PROTEIN_WEIGHT = 9; // £ per unit of normalised density shortfall
+const PROTEIN_WEIGHT = 35; // £ per unit of normalised density shortfall
+
+/**
+ * How the day's calories divide between meals.
+ *
+ * Portion scaling used to work off one flat `targets.calories / mealCount`,
+ * which treats a snack as a third of a dinner's equal — so a snack got pushed
+ * to 1.6× to reach a "per-meal" target it was never meant to hit, and dinner
+ * got the same multiplier as breakfast.
+ *
+ * Normalised over whichever slots are actually planned, so three meals a day
+ * still totals the target rather than landing 12% short.
+ */
+const SLOT_SHARE: Record<Slot, number> = {
+  Breakfast: 0.25, Lunch: 0.30, Dinner: 0.33, Snack: 0.12,
+};
+
+/**
+ * MEALS ARE CHOSEN BY SIZE, NOT JUST BY PRICE AND PROTEIN.
+ *
+ * A 105kg forward on 3,720 kcal and a 52kg athlete on 1,740 were handed
+ * identical dishes and told apart only by a portion multiplier — and that
+ * multiplier is clamped at 1.6, so the big athlete finished 8% under target
+ * with a Greek yoghurt bowl scaled to 811 kcal. Scaling is for fine adjustment;
+ * it cannot turn a snack into a footballer's dinner, and pretending otherwise
+ * produces portions nobody would serve.
+ *
+ * Scoring the gap between a meal's own calories and its slot's share means big
+ * targets pull in inherently bigger meals, small targets pull in lighter ones,
+ * and the scale needed afterwards stays near 1.
+ *
+ * Weighted below protein deliberately: being handed a meal that misses the
+ * protein target matters more than one that needs scaling to 1.2×.
+ */
+const SIZE_WEIGHT = 8; // £ per unit of normalised calorie mismatch
+
+/**
+ * How far this meal's own calories sit from what the slot should carry.
+ *
+ * ASYMMETRIC ON PURPOSE, and this is the fix for the biggest complaint the
+ * planner had: too small is much worse than too big, because the two are not
+ * equally recoverable. Portions scale by `Math.min(1.6, max(0.6, want / base))`,
+ * so a meal that is twice the size it needs just gets served at 0.6 and lands
+ * near enough — while a meal at a third of the size hits the 1.6 ceiling and
+ * simply cannot reach the target, however hungry the athlete is.
+ *
+ * Measured, not guessed. A 115kg athlete on a build had 23 of his 28 weekly
+ * meals pinned at the 1.6 clamp and ate 75% of his target: the planner kept
+ * choosing a 507 kcal breakfast for a 1198 kcal slot when a 1099 kcal one was
+ * in the pool, because at SIZE_WEIGHT 4 a few pence of cost outweighed being
+ * half the required size.
+ *
+ * A grid over SIZE_WEIGHT × undersize bias, scored across 90 combinations of
+ * body size, goal, diet and meal count:
+ *
+ *     4 × 1 (was)   worst day 76% of calories, 35% of meals clamped
+ *     8 × 3 (now)   worst day 89% of calories, 21% of meals clamped
+ *    30 × 3         worst day 92%, but worst protein falls 77% → 65%
+ *
+ * Pushing size harder keeps buying calories and starts selling protein, because
+ * the two terms compete for the same choice. 8 × 3 is the corner: it takes the
+ * calorie floor from 76% to 89% and halves the clamping, with worst-case
+ * protein unchanged.
+ */
+const UNDERSIZE_BIAS = 3;
+
+/**
+ * Cost of an nth serving, rising faster than n.
+ *
+ * A second helping of something good across a week is fine — people cook in
+ * batches and eat the same dinner twice. A third is the app being lazy. Linear
+ * cost cannot express that difference: whatever value makes the third serving
+ * expensive also makes the second one unlikely, which produces a week of
+ * twenty-eight unrelated shopping lists.
+ *
+ * The exponent does the work instead. At weight 4: one repeat costs 4, two
+ * costs 14. The second serving stays affordable, the third rarely wins.
+ */
+function repeatCost(uses: number, weight: number): number {
+  return Math.pow(uses, 1.8) * weight;
+}
+
+function sizeMismatch(meal: Meal, slotKcal: number): number {
+  if (slotKcal <= 0) return 0;
+  const diff = (mealMacros(meal).kcal - slotKcal) / slotKcal;
+  return diff < 0 ? -diff * UNDERSIZE_BIAS : diff;
+}
 
 /**
  * How far short a meal falls on protein DENSITY — grams per calorie — against
@@ -496,10 +735,16 @@ const PROTEIN_WEIGHT = 9; // £ per unit of normalised density shortfall
  */
 function proteinShortfall(meal: Meal, requiredPerKcal: number): number {
   if (requiredPerKcal <= 0) return 0;
+  // A meal with no calories has no density to judge; one with no PROTEIN is
+  // maximally short, and must not be confused with it.
+  if (mealMacros(meal).kcal <= 0) return 0;
+  return Math.max(0, (requiredPerKcal - proteinDensity(meal)) / requiredPerKcal);
+}
+
+/** Grams of protein per calorie. Zero for a meal with no calories in it. */
+function proteinDensity(meal: Meal): number {
   const m = mealMacros(meal);
-  if (m.kcal <= 0) return 0;
-  const density = m.protein / m.kcal;
-  return Math.max(0, (requiredPerKcal - density) / requiredPerKcal);
+  return m.kcal > 0 ? m.protein / m.kcal : 0;
 }
 
 /** Slots that have nothing left once the athlete's rules are applied. */
@@ -513,11 +758,72 @@ export function unmetSlots(prefs: MealPrefs): Slot[] {
  * then each day is scaled to land on the calorie target. Portions are clamped
  * so we never prescribe a comically small or huge plate.
  */
+/**
+ * Meals the athlete chose by hand, replacing what the planner picked.
+ *
+ * Keyed by POSITION — `"2:Dinner:0"` is Wednesday's dinner — rather than by the
+ * meal being replaced. That matters: a swap has to survive the plan being
+ * rebuilt, and `buildWeek` is re-run from the seed on every visit. Keying by
+ * the original meal's id would break the moment anything upstream changed what
+ * that slot would otherwise have held, which is exactly when someone's choice
+ * matters most.
+ */
+/**
+ * What one slot is meant to carry, for this athlete.
+ *
+ * Exported because the swap dialog has to show alternatives against the same
+ * number the planner scores them by — a UI that ranked meals on its own idea of
+ * "about right" would recommend things the engine would then scale oddly.
+ * Duplicating the share maths in the component is how those two drift.
+ */
+export function slotTargetKcal(targets: PlanTargets, prefs: MealPrefs, slot: Slot): number {
+  const wanted: Slot[] = [
+    "Breakfast", "Lunch", "Dinner",
+    ...(prefs.mealsPerDay >= 4 ? (["Snack"] as Slot[]) : []),
+    ...(prefs.mealsPerDay >= 5 ? (["Snack"] as Slot[]) : []),
+  ];
+  const total = wanted.reduce((sum, sl) => sum + SLOT_SHARE[sl], 0);
+  return total > 0 ? targets.calories * (SLOT_SHARE[slot] / total) : 0;
+}
+
+export type MealSwaps = Record<string, string>;
+
+/** The key a swap is stored under. Exported so the UI cannot invent its own. */
+export function swapKey(dayIndex: number, slot: Slot, nth: number): string {
+  return `${dayIndex}:${slot}:${nth}`;
+}
+
 export function buildWeek(
   targets: PlanTargets,
   seed = 0,
   prefs: MealPrefs = DEFAULT_PREFS,
-  schedule: DietSchedule = EMPTY_SCHEDULE
+  schedule: DietSchedule = EMPTY_SCHEDULE,
+  swaps: MealSwaps = {},
+  /**
+   * Meal ids served in the PREVIOUS plan, so the next one can move on.
+   *
+   * WHY A SEED WAS NEVER GOING TO DO THIS. `seed` shifted a tie-break worth a
+   * tenth of a penny against terms weighted 4, 8 and 35, so it decided nothing:
+   * measured across three athletes and three diet patterns, every seed from 0
+   * to 5 produced the byte-identical week, and "Regenerate week" had therefore
+   * never once returned a different plan. Widening the seed range from 3 to 997
+   * — an earlier attempt at this same complaint — changed nothing, because the
+   * range was not the problem.
+   *
+   * Raising the rotation's weight is not the fix either. Swept to fourteen
+   * pounds a slot it still moved only 6% of the week, because the top-scoring
+   * meal for a given athlete and slot genuinely IS better than the rest, by a
+   * wide margin, and that margin is the whole point of the size and protein
+   * terms. Anything strong enough to overturn it on merit is strong enough to
+   * hand someone a badly-fitting meal.
+   *
+   * So the planner remembers instead. Week-on-week variety is the same problem
+   * as day-on-day variety, one level up, and it takes the same mechanism: last
+   * week's meals arrive already carrying repeat cost, so this week reaches past
+   * them unless nothing better exists. It stays a COST and never a ban, which
+   * is what keeps a narrow diet from running out of food.
+   */
+  recent: string[] = []
 ): PlannedDay[] {
   const pools: Record<Slot, Meal[]> = {
     Breakfast: bySlot("Breakfast", prefs), Lunch: bySlot("Lunch", prefs),
@@ -528,6 +834,20 @@ export function buildWeek(
   const uses = new Map<string, number>();
 
   /**
+   * Last week's picks, entered into the repeat counter at a discount.
+   *
+   * Discounted because a repeat NEXT week is a much smaller sin than a repeat
+   * on Tuesday when you ate it on Monday, and because `repeatCost` escalates
+   * — feeding raw counts in would make anything served three times last week
+   * effectively unreachable, which is how you starve a vegan's Thursday.
+   *
+   * Held separately from `uses` so it does not count toward MAX_REPEATS: last
+   * week must not be able to cap a meal out of this week entirely.
+   */
+  const lastWeek = new Map<string, number>();
+  for (const id of recent) lastWeek.set(id, (lastWeek.get(id) ?? 0) + 1);
+
+  /**
    * Cheapest addition to the trolley that isn't already on repeat. `nth`
    * separates the two snack slots so a 5-meal day doesn't pick the same snack
    * twice, and `seed` lets the UI reshuffle for someone who wants a different
@@ -536,8 +856,125 @@ export function buildWeek(
   // Budget mode leans harder on repetition: reusing what's already bought is the
   // single biggest lever on the bill, and someone who ticked "cheap staples" has
   // told us they'd rather eat the same thing than pay more.
-  const repeatPenalty = prefs.budget ? REPEAT_PENALTY * 0.35 : REPEAT_PENALTY;
+  /**
+   * Variety is scaled to how many meals there are to spread it over.
+   *
+   * A flat penalty broke a real case: someone eating out twice a week got a
+   * MORE expensive shop than someone cooking every night — £111 against £103 —
+   * because the planner spread twenty-six slots across twenty-one different
+   * dishes and the extra ingredients cost more in whole packs than the two
+   * dinners saved. Cooking less and paying more is indefensible however varied
+   * the week is.
+   *
+   * The cause is that a repeat costs the same whether there are 28 slots or 18,
+   * while pack efficiency gets steadily more important as slots come out — a
+   * bag of rice has fewer meals to amortise over. So the pressure to vary now
+   * falls with the number of slots, and the scale is set against a full 4-meal
+   * week (28) so an ordinary plan is unaffected.
+   *
+   * Set in `weeklyRepeatPenalty` below, once `wanted` is known.
+   */
+  const budgetScale = prefs.budget ? 0.35 : 1;
+  /**
+   * BUDGET MODE HAS TO ACTUALLY WEIGHT COST, and it didn't.
+   *
+   * The only thing ticking "cheap staples" changed was the repeat penalty
+   * above — a nudge toward eating the same thing twice. Cost itself was scored
+   * identically in both modes, so budget mode was competing against protein and
+   * size terms it had no extra leverage over. It mostly came out cheaper by
+   * luck, via the repetition.
+   *
+   * Adding twelve meals to the pool broke the luck: with more good-fitting
+   * options available, `budget mode produces a cheaper shop than the default`
+   * started failing at £68.90 against £63.90. Budget mode was producing the
+   * DEARER shop, which is the one thing it exists not to do.
+   *
+   * So cost gets a real multiplier. It is deliberately a multiplier on the term
+   * rather than a reduction of the others: someone on a budget still needs
+   * their protein, and this way cost outranks a marginal nutritional gain
+   * without ever overriding a large one.
+   */
+  /**
+   * How hard the MARGINAL cost of a meal counts — what the extra packs cost on
+   * top of what is already in the trolley.
+   *
+   * Dropped from 2.5 to 1.5 when the book went from 143 recipes to 195. Marginal
+   * cost reads near zero for anything whose ingredients are already in the
+   * basket, so weighting it heavily makes budget mode lock on: it bought one £9
+   * salmon pack and every further salmon dinner then looked free. Measured on a
+   * 95kg athlete building, budget mode came out at £106.55 against £93.95 for
+   * not using it at all. Sharing the weight with the pro-rata term below fixes
+   * it — see SERVING_COST_WEIGHT, which was swept jointly with this.
+   */
+  const costWeight = prefs.budget ? 1.5 : 1;
+  /**
+   * AND IT HAS TO WEIGHT WHAT A DISH COSTS, not only what it adds today.
+   *
+   * `costWeight` above amplifies MARGINAL cost — what the trolley goes up by,
+   * given what's already in it. That is the right number for "do I need
+   * another bag of rice" and the wrong one for "is salmon expensive", because
+   * once a pack is in the basket its marginal cost is zero. Amplifying a
+   * gradient that reads zero for anything already bought produces lock-in: the
+   * first expensive thing picked becomes the cheapest-looking option for the
+   * rest of the week, and budget mode's softened repeat penalty doesn't push
+   * back.
+   *
+   * It happened. Budget mode was picking salmon FIVE times and prawns three —
+   * the two dearest proteins in the database — landing a £113.40 shop against
+   * the normal plan's £104.65, on fourteen distinct meals instead of twenty.
+   * Less variety AND more money, which is both of the things it promises not
+   * to do.
+   *
+   * So the pro-rata cost of a serving is scored too. It doesn't care what's in
+   * the basket, so it never reads zero, and a budget shopper avoids salmon for
+   * the reason a real one does: salmon is dear.
+   *
+   * Swept over five athletes and four diet patterns, and RE-SWEPT after the
+   * lean tier was added, because the right weight depends on what's in the
+   * book: at 1 it was clean on 20 combinations, and eighteen new recipes later
+   * it was letting a bulking vegan's budget shop come out at £89.90 against
+   * £84.55. That is what `budget mode is cheaper for every athlete` exists to
+   * catch, and it caught it.
+   *
+   * RE-SWEPT AGAIN at 195 recipes, this time JOINTLY with `costWeight` below,
+   * because the two spend against each other and sweeping either alone finds a
+   * false floor: at the old 2.5/3 pairing six of 96 athlete/diet combinations
+   * came out DEARER in budget mode, and no value of this weight alone fixed
+   * them — at 0 it was still three of sixteen, which is what proved the lock-in
+   * was coming from the marginal term rather than from here.
+   *
+   * At 1.5/4: none of 96 combinations comes out dearer, average weekly saving
+   * £14.50. It is a plateau rather than a knife-edge — 1.5 paired with 4, 5 or 6
+   * is clean throughout — which is the difference between a calibration and a
+   * coincidence.
+   *
+   * Going further is tempting, because the saving keeps climbing. It gets
+   * bought with food: the protein target starts going missing, which is budget
+   * mode deciding the athlete would rather be cheap than fed. Nobody ticked
+   * that box.
+   */
+  const SERVING_COST_WEIGHT = 4;
+  const servingCostWeight = prefs.budget ? SERVING_COST_WEIGHT : 0;
+  /**
+   * Budget mode does not pay for variety.
+   *
+   * A new dish means a new pack, so week-on-week rotation has a price — about
+   * 5% on an average shop, but 13% for a lean athlete cutting, whose basket is
+   * small and whose food comes in small packs. Someone who ticked "cheap
+   * staples" has already answered the question that trade poses. Charging them
+   * for a change of menu they didn't ask for was also, concretely, making
+   * budget mode come out DEARER than not using it for a bulking vegan.
+   */
+  const varietyBudget = prefs.budget ? 0 : VARIETY_BUDGET;
   const favourites = new Set(prefs.favourites ?? []);
+  /**
+   * Dishes the athlete starred.
+   *
+   * Worth more than an inferred ingredient preference (see STARRED_BONUS) and,
+   * below, exempt from the had-it-last-week rule — a star is a request for the
+   * dish to keep coming back, so variety must not quietly undo it.
+   */
+  const starred = new Set(prefs.starred ?? []);
 
   /**
    * PROTEIN IS A TARGET, NOT AN ACCIDENT.
@@ -560,48 +997,195 @@ export function buildWeek(
    */
   // Grams of protein per calorie this athlete needs. Cutting pushes it up
   // (protein held while calories come down), bulking pushes it down.
-  const requiredProteinPerKcal = targets.calories > 0 ? targets.protein / targets.calories : 0;
+  /**
+   * HARD DAYS AND EASY DAYS ARE NOT THE SAME DAY.
+   *
+   * Every day of the plan used to carry identical calories, so an athlete
+   * training Tuesday and Thursday ate the same on Sunday as on a double
+   * session. That is the single biggest reason a plan reads as generic: it is
+   * the one thing about their week the plan visibly ignored.
+   *
+   * Calories move, PROTEIN DOES NOT. Protein is a daily floor tied to
+   * bodyweight and it does not care what you did that day; carbohydrate is the
+   * fuel and it is what should follow the work. So the day's calorie target
+   * scales and its protein target is held, which means the density the planner
+   * demands goes UP on a rest day — fewer calories, same grams.
+   *
+   * The week still averages to the athlete's target: whatever the training days
+   * gain, the rest days give back. `CYCLE_DEPTH` is capped so that a five-day
+   * trainer with two rest days doesn't end up with a rest day 30% down — the
+   * shortfall is spread over however many rest days there are, and the depth
+   * shrinks to keep the easiest day within 12% of target.
+   */
+  const trainingDays = new Set(schedule?.trainingDays ?? []);
+  const hardCount = trainingDays.size;
+  const easyCount = DAYS.length - hardCount;
+  const depth = hardCount > 0 && easyCount > 0
+    ? Math.min(CYCLE_DEPTH, CYCLE_DEPTH * (easyCount / hardCount))
+    : 0;
+  const dayScale = (dayIndex: number): number =>
+    depth === 0 ? 1
+      : trainingDays.has(dayIndex) ? 1 + depth
+      : 1 - depth * (hardCount / easyCount);
 
-  const choose = (slot: Slot, nth = 0, avoid: Set<string> = new Set()): Meal | undefined => {
+  const dayCalories = (dayIndex: number) => targets.calories * dayScale(dayIndex);
+  // Protein per calorie RISES as calories fall, because the grams stay put.
+  const proteinPerKcalOn = (dayIndex: number): number => {
+    const kcal = dayCalories(dayIndex);
+    return kcal > 0 ? targets.protein / kcal : 0;
+  };
+
+  // The slots for a day. Constant across the week — mealsPerDay doesn't vary by
+  // day — so it's hoisted out of the map to give `choose` its size target.
+  const wanted: { slot: Slot; nth: number }[] = [
+    { slot: "Breakfast", nth: 0 }, { slot: "Lunch", nth: 0 }, { slot: "Dinner", nth: 0 },
+    ...(prefs.mealsPerDay >= 4 ? [{ slot: "Snack" as Slot, nth: 0 }] : []),
+    ...(prefs.mealsPerDay >= 5 ? [{ slot: "Snack" as Slot, nth: 1 }] : []),
+  ];
+  // Slots actually COOKED this week, which is the number that matters. The
+  // first version of this multiplied `wanted` by seven and never changed,
+  // because days eaten out are skipped inside the day loop rather than removed
+  // from `wanted` — so the scaling silently did nothing. Counted properly here.
+  let weeklySlots = 0;
+  for (let d = 0; d < DAYS.length; d++) {
+    for (const w of wanted) if (!skipReason(schedule, d, w.slot)) weeklySlots++;
+  }
+  /**
+   * NO LONGER SCALED BY HOW MANY SLOTS THE WEEK HAS.
+   *
+   * It used to be `* min(1, weeklySlots / 28)`, added to stop a shorter week
+   * being spread across more distinct dishes than it could amortise packs
+   * over — the bug where telling the app you eat out twice made the shop
+   * DEARER, £104 against £100.
+   *
+   * Right diagnosis, wrong lever: it treated a pack-amortisation problem by
+   * suppressing variety, and it only half-worked even then. At 195 recipes it
+   * had stopped working altogether and started causing the inversion it was
+   * added to fix. Removing it is what actually fixes it — eating out on
+   * Tuesdays and Thursdays now costs £90.30 against £100.10 for cooking every
+   * night, which is the direction an athlete would expect.
+   *
+   * A global cost pass over the finished week was tried instead and dropped. It
+   * did save 6.5%, but it re-planned 20 of 28 slots when the athlete swapped a
+   * single dinner. A swap is not a regenerate, and nobody wants Monday's
+   * breakfast to move because they changed their mind about Wednesday.
+   */
+  const repeatPenalty = REPEAT_PENALTY * budgetScale;
+
+  const shareTotal = wanted.reduce((s, w) => s + SLOT_SHARE[w.slot], 0);
+  /**
+   * The calories this slot should carry.
+   *
+   * Deliberately computed from the FULL day, including meals being eaten out.
+   * Scaling only the remaining meals would inflate breakfast to cover a
+   * restaurant dinner, which is not what anyone wants.
+   */
+  const slotKcal = (slot: Slot, dayIndex: number): number =>
+    shareTotal > 0 ? dayCalories(dayIndex) * (SLOT_SHARE[slot] / shareTotal) : 0;
+
+  const choose = (slot: Slot, dayIndex: number, nth = 0, avoid: Set<string> = new Set()): Meal | undefined => {
     const list = pools[slot].filter((m) => !avoid.has(m.id));
     if (!list.length) return undefined;
     const ranked = list
-      .map((meal, idx) => ({
-        meal,
-        // The seed/nth term is a fraction of a penny — it only breaks ties
-        // between meals that cost the same, never overrides a real saving.
-        // A meal built round something they said they like is discounted, so
-        // it wins ties and near-ties. Deliberately a nudge and not an
-        // override: "I like eggs" should mean eggs turn up regularly, not
-        // eggs at every meal, and the repeat penalty still applies on top.
-        score: marginalCost(meal, basket)
-          - (isFavourite(meal, favourites) ? FAVOURITE_BONUS : 0)
-          + (uses.get(meal.id) ?? 0) * repeatPenalty
-          // How far this meal falls short of its share of the day's protein,
-          // as a fraction of that share, priced in pounds so it trades against
-          // cost. Only shortfall is penalised — going over is free, because
-          // extra protein is not a problem to solve.
-          + proteinShortfall(meal, requiredProteinPerKcal) * PROTEIN_WEIGHT
-          + ((idx + seed + nth) % list.length) * 0.001,
-        capped: (uses.get(meal.id) ?? 0) >= MAX_REPEATS,
-      }))
+      .map((meal, idx) => {
+        /**
+         * How well this meal suits THIS ATHLETE in THIS SLOT, in pounds.
+         *
+         * Split out from the money terms because the two are spendable on
+         * completely different things. An extra pack in the trolley is a fair
+         * price for a different dinner — plenty of people would pay it — and a
+         * day 15% short of its protein target is not a price anyone agreed to.
+         * Keeping them in one number meant variety could only be bought by
+         * spending whichever was cheapest, which was always the nutrition.
+         */
+        const fit = proteinShortfall(meal, proteinPerKcalOn(dayIndex)) * PROTEIN_WEIGHT
+          // How far this meal's own calories sit from what this slot should
+          // carry, so a big athlete is offered big meals rather than a small
+          // one scaled past the point of sense.
+          + sizeMismatch(meal, slotKcal(slot, dayIndex)) * SIZE_WEIGHT
+          + repeatCost(uses.get(meal.id) ?? 0, repeatPenalty);
+        return {
+          meal,
+          fit,
+          // The seed/nth term is a fraction of a penny — it only breaks ties
+          // between meals that cost the same, never overrides a real saving.
+          // A meal built round something they said they like is discounted, so
+          // it wins ties and near-ties. Deliberately a nudge and not an
+          // override: "I like eggs" should mean eggs turn up regularly, not
+          // eggs at every meal, and the repeat penalty still applies on top.
+          score: marginalCost(meal, basket) * costWeight
+            + mealCost(meal) * servingCostWeight
+            - (isFavourite(meal, favourites) ? FAVOURITE_BONUS : 0)
+            - (starred.has(meal.id) ? STARRED_BONUS : 0)
+            + fit
+            + ((idx + seed + nth) % list.length) * 0.001,
+          capped: (uses.get(meal.id) ?? 0) >= MAX_REPEATS,
+        };
+      })
       .sort((a, b) => a.score - b.score);
     // If everything is capped (a narrow diet with few options), take the best
     // anyway rather than leaving the slot empty.
-    const pick = ranked.find((r) => !r.capped) ?? ranked[0];
+    const best = ranked.find((r) => !r.capped) ?? ranked[0];
+
+    /**
+     * VARIETY IS SPENT ONLY WHERE IT IS FREE.
+     *
+     * The obvious way to avoid last week's meals is another term in the score
+     * above, and it works — measured across three athletes and six diet
+     * patterns it moved 30% of the week. It also drove the worst day's protein
+     * from bang on target to 15.7% SHORT, because that is what the term does:
+     * it outbids `proteinShortfall` for meals whose only fault is having been
+     * eaten on Tuesday. Telling someone they need 180g of protein and then
+     * planning them 152g so their menu looks fresh is not variety, it is the
+     * app quietly failing at its job.
+     *
+     * The meals the planner kept re-picking were the ones that FIT. So variety
+     * is taken out of the tie instead of out of the nutrition: rank on merit,
+     * then among everything within a few pounds of the best — which is to say
+     * everything just as good for this athlete in this slot — prefer what they
+     * haven't just eaten. When nothing else is close, the best meal wins and
+     * the week repeats, which is the honest answer for a narrow diet.
+     */
+    // Contenders are judged on FIT, not on the full score, so the slack is
+    // spent on the shopping bill rather than on the athlete's macros. Two
+    // earlier versions compared full scores and both leaked protein: pounds of
+    // tolerance buy protein shortfall more cheaply than anything else, because
+    // `proteinShortfall` is a fraction and the money terms are absolute.
+    //
+    // The density floor on top catches what a fit tolerance alone cannot.
+    // Shortfall is clamped at zero, so every meal at or above its share scores
+    // an identical 0 — and trading a protein-rich breakfast for a merely
+    // adequate one therefore looked free while quietly spending the surplus
+    // that was covering lunch.
+    const bestDensity = proteinDensity(best.meal);
+    const contenders = ranked.filter((r) =>
+      !r.capped
+      // Fits this athlete at least as well as the meal that won on score.
+      && r.fit <= best.fit + 1e-9
+      // As protein-dense as this athlete needs; or where even the best meal in
+      // the slot can't manage that, at least as dense as the best.
+      && proteinDensity(r.meal) >= Math.min(proteinPerKcalOn(dayIndex), bestDensity) - 1e-9
+      // And costs no more than this much extra. Variety is worth paying for and
+      // is not worth paying anything at all for: uncapped, preferring the
+      // unseen meal every time added £7 a week to the shop, because an unseen
+      // meal is usually one whose ingredients aren't in the trolley yet.
+      && r.score <= best.score + varietyBudget);
+    const pick = contenders.length > 1
+      ? contenders.reduce((a, b) => {
+          // A starred dish counts as unseen however often it was served. The
+          // athlete asked for it; "you had this last week" is the reason they
+          // starred it, not a reason to withhold it.
+          const seenA = starred.has(a.meal.id) ? 0 : lastWeek.get(a.meal.id) ?? 0;
+          const seenB = starred.has(b.meal.id) ? 0 : lastWeek.get(b.meal.id) ?? 0;
+          return seenB < seenA || (seenB === seenA && b.score < a.score) ? b : a;
+        })
+      : best;
     uses.set(pick.meal.id, (uses.get(pick.meal.id) ?? 0) + 1);
     addToBasket(pick.meal, basket);
     return pick.meal;
   };
 
-  return DAYS.map((day, i) => {
-    // Three meals means no snack; five means a second one.
-    const wanted: { slot: Slot; nth: number }[] = [
-      { slot: "Breakfast", nth: 0 }, { slot: "Lunch", nth: 0 }, { slot: "Dinner", nth: 0 },
-      ...(prefs.mealsPerDay >= 4 ? [{ slot: "Snack" as Slot, nth: 0 }] : []),
-      ...(prefs.mealsPerDay >= 5 ? [{ slot: "Snack" as Slot, nth: 1 }] : []),
-    ];
-
+  const buildDay = (day: string, i: number): PlannedDay => {
     const skipped: SkippedMeal[] = [];
     const picks: Meal[] = [];
     // A 5-meal day has two snack slots; without this they'd both resolve to the
@@ -615,20 +1199,63 @@ export function buildWeek(
         if (!skipped.some((s) => s.slot === slot)) skipped.push({ slot, reason });
         continue;
       }
-      const m = choose(slot, nth, usedToday);
+      /**
+       * A hand-picked meal wins outright.
+       *
+       * It still goes through `addToBasket` and the repeat counter, so the
+       * shopping list and the rest of the week account for it exactly as if the
+       * planner had chosen it — a swap that the costing ignored would produce a
+       * list that doesn't match the plan.
+       *
+       * An unknown or now-ineligible id (they went vegan since choosing it)
+       * falls through to the planner rather than erroring or leaving a hole.
+       */
+      const chosen = swaps[swapKey(i, slot, nth)];
+      const forced = chosen
+        ? pools[slot].find((x) => x.id === chosen && !usedToday.has(x.id))
+        : undefined;
+      if (forced) {
+        uses.set(forced.id, (uses.get(forced.id) ?? 0) + 1);
+        addToBasket(forced, basket);
+        picks.push(forced);
+        usedToday.add(forced.id);
+        continue;
+      }
+
+      const m = choose(slot, i, nth, usedToday);
       if (m) { picks.push(m); usedToday.add(m.id); }
     }
 
-    // Portion sizes are set from the athlete's FULL day, including any meal
-    // they're eating out. Scaling only the remaining meals would inflate
-    // breakfast to cover a restaurant dinner, which is not what anyone wants.
-    const fullDay = wanted.length;
-    const perMealTarget = fullDay > 0 ? targets.calories / fullDay : targets.calories;
-    const base = picks.length ? picks.reduce((s, m) => s + mealMacros(m).kcal, 0) / picks.length : 0;
-    const raw = base > 0 ? perMealTarget / base : 1;
-    const scale = Math.round(Math.min(1.6, Math.max(0.6, raw)) * 20) / 20; // 0.05 steps
-
-    const meals = picks.map((meal) => ({ meal, scale, macros: mealMacros(meal, scale) }));
+    /**
+     * Each meal is scaled to its own slot, not to one figure for the whole day.
+     *
+     * The old version averaged every pick's calories and applied a single
+     * multiplier to all of them, so a light breakfast and a heavy dinner moved
+     * together — and the snack, whose "fair share" was a quarter of the day,
+     * was dragged towards a main meal's size. Scaling per slot keeps each meal
+     * near a portion a person would actually serve.
+     */
+    const meals = picks.map((meal) => {
+      const want = slotKcal(meal.slot, i);
+      const base = mealMacros(meal).kcal;
+      const raw = base > 0 ? want / base : 1;
+      /**
+       * 0.55, not 0.6, at the bottom.
+       *
+       * The last failing case in the audit was a 55kg woman cutting on five
+       * meals a day: a ~1400 kcal target split five ways leaves about 280 kcal
+       * for a main, and the smallest meal in the pool at 0.6 still overshot —
+       * she was handed 110% of the calories she was trying to eat under, which
+       * defeats the entire point of a cut.
+       *
+       * A twentieth of a portion is the difference between the plan working and
+       * not, and 0.55 of a serving is still a serving. Going lower buys nothing
+       * measurable (0.5 and 0.45 score identically) and starts producing
+       * portions nobody would plate, so it stops here.
+       */
+      const scale = Math.round(Math.min(1.6, Math.max(0.55, raw)) * 20) / 20; // 0.05 steps
+      return { meal, scale, macros: mealMacros(meal, scale) };
+    });
     const macros = meals.reduce(
       (s, m) => ({
         kcal: s.kcal + m.macros.kcal, protein: s.protein + m.macros.protein,
@@ -636,8 +1263,14 @@ export function buildWeek(
       }),
       { kcal: 0, protein: 0, carbs: 0, fats: 0 }
     );
-    return { day, meals, macros, skipped };
-  });
+    return {
+      day, meals, macros, skipped,
+      load: depth === 0 ? "even" : trainingDays.has(i) ? "training" : "rest",
+      targetKcal: dayCalories(i),
+    };
+  };
+
+  return DAYS.map(buildDay);
 }
 
 // --- shopping list -----------------------------------------------------------
@@ -651,6 +1284,13 @@ export interface ShoppingLine {
   meals: number;
   /** Fraction of the packs actually eaten — the rest is left over. */
   used: number;     // 0..1
+  /**
+   * True when the athlete told us this price rather than us estimating it.
+   *
+   * The UI marks these, because the difference between "we think" and "you told
+   * us" is the whole point of letting them correct it.
+   */
+  corrected: boolean;
 }
 
 export interface ShoppingList {
@@ -663,7 +1303,20 @@ export interface ShoppingList {
   costPerMeal: number;
 }
 
-export function shoppingList(week: PlannedDay[]): ShoppingList {
+/**
+ * Options that decide what a pack COSTS, as opposed to how much of it is needed.
+ *
+ * Optional throughout: the planner's own scoring calls this to compare baskets
+ * and wants the baseline table, not one athlete's corrections, so that a plan
+ * built for a Tesco shopper and one built for an Aldi shopper are the same plan
+ * at different prices rather than two different plans.
+ */
+export interface PricingOptions {
+  store?: StoreId;
+  overrides?: PriceOverrides;
+}
+
+export function shoppingList(week: PlannedDay[], pricing: PricingOptions = {}): ShoppingList {
   const needed = new Map<string, number>();
   const mealCount = new Map<string, number>();
   for (const day of week) {
@@ -680,11 +1333,13 @@ export function shoppingList(week: PlannedDay[]): ShoppingList {
     const food = FOOD_BY_ID[foodId];
     if (!food) continue;
     const packs = Math.max(1, Math.ceil(qty / food.packSize));
+    const unitPrice = packPriceFor(food, pricing);
     lines.push({
       food,
       needed: Math.round(qty),
       packs,
-      cost: Math.round(packs * food.packPrice * 100) / 100,
+      cost: Math.round(packs * unitPrice * 100) / 100,
+      corrected: isCorrected(food, pricing.overrides),
       meals: mealCount.get(foodId) ?? 0,
       used: Math.min(1, qty / (packs * food.packSize)),
     });

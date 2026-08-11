@@ -4,6 +4,7 @@ import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { METRIC_CATALOG, metricDef } from "@/lib/benchmarks";
 import { metricsForSport } from "@/lib/sport-profile";
+import { todayLocal } from "@/lib/day";
 
 export function BenchmarkForm({ onSaved, sport }: { onSaved?: () => void; sport?: string | null }) {
   // Their sport’s tests first. Everything stays available underneath — a
@@ -11,7 +12,7 @@ export function BenchmarkForm({ onSaved, sport }: { onSaved?: () => void; sport?
   // not have to scroll past a Yo-Yo IR1 level to reach the clean & jerk.
   const ordered = metricsForSport(sport, METRIC_CATALOG).map(metricDef);
   const [open, setOpen] = useState(false);
-  const [testDate, setTestDate] = useState(new Date().toISOString().slice(0, 10));
+  const [testDate, setTestDate] = useState(todayLocal());
   const [values, setValues] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);

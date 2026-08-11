@@ -13,19 +13,21 @@ import { dailyQuests, computeXp, levelFor, type ActivityStats, type LevelInfo } 
 import { biometricSignal, type Biometric } from "@/lib/biometrics";
 import { sportProfile } from "@/lib/sport-profile";
 import { ReadinessGauge } from "@/components/ReadinessGauge";
-import { BiometricSignalCard } from "@/components/BiometricSignalCard";
+import { TodayCard } from "@/components/TodayCard";
+import { WeekStrip } from "@/components/WeekStrip";
 import { Notifications } from "@/components/Notifications";
 import type { CheckInInput, DailyInsight, TrainingLog } from "@/lib/types";
 import type { ProgramPlan } from "@/lib/engine";
+import { daysAgoLocal, todayLocal } from "@/lib/day";
 
 export default function HomePage() {
   const user = useCurrentUser();
   const router = useRouter();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayLocal();
 
   const { data, loading } = useAsync(async () => {
     const supabase = createClient();
-    const since = new Date(Date.now() - 40 * 86400_000).toISOString().slice(0, 10);
+    const since = daysAgoLocal(40);
     /**
      * ONE ROUND TRIP FOR EVERYTHING THAT DOESN'T DEPEND ON ANYTHING.
      *
@@ -44,7 +46,7 @@ export default function HomePage() {
      * rows fetched are the 28 days ACWR actually needs.
      */
     const head = { count: "exact" as const, head: true };
-    const since28 = new Date(Date.now() - 27 * 86400_000).toISOString().slice(0, 10);
+    const since28 = daysAgoLocal(27);
     const [
       { data: profile }, { data: checkIn }, { data: streakRows },
       { data: trainToday }, { data: nutriToday }, { data: bio },
@@ -59,7 +61,11 @@ export default function HomePage() {
       // rather than a second full scan.
       supabase.from("daily_check_ins").select("check_in_date").eq("user_id", user.id).gte("check_in_date", since),
       supabase.from("training_logs").select("log_date").eq("user_id", user.id).eq("log_date", today).maybeSingle(),
-      supabase.from("nutrition_logs").select("log_date").eq("user_id", user.id).eq("log_date", today).maybeSingle(),
+      // Widened from select("log_date"). The row was already being fetched and
+      // only its EXISTENCE used, to tick a quest — so Home knew whether you had
+      // eaten and threw away what you had eaten. The fuel card below costs no
+      // extra round trip because of that.
+      supabase.from("nutrition_logs").select("log_date, calories_eaten, daily_calorie_target").eq("user_id", user.id).eq("log_date", today).maybeSingle(),
       supabase.from("biometrics").select("*").eq("user_id", user.id)
         .gte("metric_date", since28).order("metric_date", { ascending: true }),
       supabase.from("programs").select("plan, completed_sessions").eq("user_id", user.id)
@@ -111,7 +117,7 @@ export default function HomePage() {
     // Rank + week-at-a-glance. Home used to show none of this, so an athlete
     // who hadn't checked in yet landed on a single empty-state card with
     // nothing to look at and no reason to stay.
-    const since7 = new Date(Date.now() - 6 * 86400_000).toISOString().slice(0, 10);
+    const since7 = daysAgoLocal(6);
     const checkDates = (streakRows ?? []).map((r) => r.check_in_date as string);
     const trainRows = (recentTraining ?? []) as { log_date: string; total_minutes: number | null }[];
     const programs = (progs ?? []) as { completed_sessions: string[] | null; status: string }[];
@@ -129,10 +135,37 @@ export default function HomePage() {
       // From the 40-day streak rows already in hand.
       checkInsLast7: checkDates.filter((d) => d >= since7).length,
     };
+    /**
+     * The last seven days, day by day.
+     *
+     * `week` was already being computed here and rendered nowhere — three
+     * numbers derived from rows the page had already paid to fetch, thrown
+     * away. Home is thin once the day's three quests are ticked, which is
+     * exactly the moment an athlete has earned something to look at, so it
+     * gets shown now (see WeekStrip).
+     *
+     * Per-day rather than three totals: "4 sessions this week" is a fact, and
+     * seven dots you can see a gap in is a habit.
+     */
+    const checkSet = new Set(checkDates);
+    const trainSet = new Set(trainRows.map((r) => r.log_date));
+    const days = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(Date.now() - (6 - i) * 86400_000);
+      const iso = d.toISOString().slice(0, 10);
+      return {
+        iso,
+        // Single letter, in the athlete's own locale rather than a hard-coded
+        // English array.
+        letter: d.toLocaleDateString(undefined, { weekday: "narrow" }),
+        checkedIn: checkSet.has(iso),
+        trained: trainSet.has(iso),
+      };
+    });
     const week = {
       sessions: trainRows.filter((r) => r.log_date >= since7).length,
       minutes: trainRows.filter((r) => r.log_date >= since7).reduce((n, r) => n + (r.total_minutes ?? 0), 0),
       checkIns: stats.checkInsLast7,
+      days,
     };
     // "Getting started" asks whether they've EVER done each thing. It used to
     // ask whether they'd checked in TODAY, so the onboarding checklist rose from
@@ -149,6 +182,7 @@ export default function HomePage() {
     return {
       profile, checkIn, insight, streak, quests, bioSignal, setup, stats, week, acwr,
       nextSession, hasProgram: programCount > 0, trainedToday: !!trainToday,
+      nutriToday: (nutriToday ?? null) as { calories_eaten: number | null; daily_calorie_target: number | null } | null,
     };
   }, [user.id], `home:${user.id}`);
 
@@ -166,6 +200,11 @@ export default function HomePage() {
   if (loading || needsOnboarding) return <Skeleton />;
 
   const level = levelFor(computeXp(data!.stats));
+  // From the saved target — not recomputed. Three places already worked out
+  // calories and two of them disagreed; a fourth here would be the same bug.
+  const kcalLeft = data!.nutriToday?.daily_calorie_target
+    ? data!.nutriToday.daily_calorie_target - (data!.nutriToday.calories_eaten ?? 0)
+    : null;
 
   // WHAT YOU CAME FOR, THEN WHAT YOU'VE EARNED — in that order.
   //
@@ -179,79 +218,113 @@ export default function HomePage() {
   // outright the app works without it, because it does — the program, the
   // library, video analysis and fuelling targets never needed it. Progress and
   // goals still exist, below, for the people who like them.
-  if (!data?.checkIn) {
-    return (
-      <div className="animate-fade-up space-y-6">
-        <Greeting name={firstName} sub={sport.tagline} streak={streak} />
-        <Notifications userId={user.id} />
-
-        <NextUp hasProgram={data!.hasProgram} nextSession={data!.nextSession} trainedToday={data!.trainedToday} accent={sport.accent} />
-        <CheckInNudge />
-        <ToolGrid tools={sport.tools} exclude="/coach" />
-
-        <GettingStarted setup={data!.setup} />
-        <RankStrip level={level} week={data!.week} />
-        <DailyQuests quests={data!.quests} />
-      </div>
-    );
-  }
-
+  /**
+   * ONE RENDER, CHECKED IN OR NOT.
+   *
+   * There used to be two whole branches — a "no check-in yet" page and a real
+   * one — which is why the same greeting, notification strip and tool grid were
+   * maintained twice and had already drifted apart. The Today card carries that
+   * state natively: the check-in row is simply unticked, which says what to do
+   * more plainly than a separate page ever did.
+   */
   const input: CheckInInput = {
-    pain_map: data.checkIn.pain_map ?? {},
-    fatigue_score: data.checkIn.fatigue_score,
-    sleep_quality: data.checkIn.sleep_quality,
-    nutrition_quality: data.checkIn.nutrition_quality,
-    weight_kg: data.checkIn.weight_kg,
-    is_match_day: data.checkIn.is_match_day,
-    match_minutes_played: data.checkIn.match_minutes_played,
+    pain_map: data!.checkIn?.pain_map ?? {},
+    fatigue_score: data!.checkIn?.fatigue_score ?? null,
+    sleep_quality: data!.checkIn?.sleep_quality ?? null,
+    nutrition_quality: data!.checkIn?.nutrition_quality ?? null,
+    weight_kg: data!.checkIn?.weight_kg ?? null,
+    is_match_day: data!.checkIn?.is_match_day ?? false,
+    match_minutes_played: data!.checkIn?.match_minutes_played ?? 0,
   };
-  const readiness = assessReadiness(input, { acwr: data.acwr.ratio });
-  const coachText = data.insight?.ai_summary_text ?? readiness.advice;
-  const watchZone = data.insight?.focus_body_part ?? readiness.focus_body_part;
-  const actionTag = actionLabel(data.insight?.recommended_action ?? null);
+  const readiness = assessReadiness(input, { acwr: data!.acwr.ratio });
+  const coachText = data!.insight?.ai_summary_text ?? readiness.advice;
+  const watchZone = data!.insight?.focus_body_part ?? readiness.focus_body_part;
+  const actionTag = actionLabel(data!.insight?.recommended_action ?? null);
+  const readinessLabel = !data!.checkIn ? null
+    : readiness.status === "Green" ? "Good to go"
+    : readiness.status === "Yellow" ? "Ease off a little" : "Recovery day";
 
   return (
-    <div className="animate-fade-up space-y-6">
-      <Greeting name={firstName} sub="Here's where you're at today." streak={streak} />
+    <div className="animate-fade-up space-y-5">
+      <Greeting name={firstName} sub="Here's your day." streak={streak} />
 
       <Notifications userId={user.id} />
 
-      {/* The action first, then the readiness that qualifies it. Readiness on
-          its own is a number; what to do with it is the product. */}
-      <NextUp hasProgram={data.hasProgram} nextSession={data.nextSession} trainedToday={data.trainedToday} accent={sport.accent} />
+      {/* THE DAY, THEN THE CONTEXT FOR IT.
+          Home stacked eleven sections with the daily job third, including a
+          second navigation grid and the same three actions repeated lower down
+          as "daily quests" — so the page asked for the same thing twice, in two
+          different voices. An athlete with ninety seconds before training met a
+          homepage rather than an app.
 
-      <div className="grid gap-5 lg:grid-cols-3">
-        <div className="card flex items-center justify-center p-6 pt-8 lg:col-span-1">
-          <ReadinessGauge score={readiness.score} status={readiness.status} />
-        </div>
+          Everything cut went somewhere it already belonged: the tool grid to
+          the nav bar that was always there, the wearable card to Progress
+          (which now charts it properly), and rank and quests into the card
+          below, where the reward sits underneath the work instead of three
+          scrolls away from it. */}
+      {/* NO PROGRAM, OR A FINISHED ONE, IS NOT A "DAY" — it's one decision, and
+          it deserves the whole card rather than a row inside a checklist. This
+          is the first-run call to action and the single most valuable thing a
+          new athlete can do, so it stays as prominent as it ever was. Once a
+          block exists the day takes over and this never appears again. */}
+      {(!data!.hasProgram || !data!.nextSession) && (
+        <NextUp
+          hasProgram={data!.hasProgram}
+          nextSession={data!.nextSession}
+          trainedToday={data!.trainedToday}
+          accent={sport.accent}
+        />
+      )}
 
-        <div className="space-y-5 lg:col-span-2">
-          <div className="card overflow-hidden p-5 sm:p-6">
-            <div className="mb-2 flex items-center justify-between">
-              <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-pitch-400">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-pitch-400" /> AI Coach
-              </span>
-              {actionTag && <span className="chip text-pitch-400">{actionTag}</span>}
+      <TodayCard
+        quests={data!.quests}
+        level={level}
+        sessionTitle={data!.nextSession?.title ?? null}
+        sessionSub={data!.nextSession ? `Week ${data!.nextSession.week} · ${data!.nextSession.drills} exercise${data!.nextSession.drills === 1 ? "" : "s"}` : null}
+        kcalLeft={kcalLeft}
+        readinessLabel={readinessLabel}
+      />
+
+      {/* THE PAGE GOT EMPTIER THE MORE YOU DID.
+          Home is one card by design, and that was right — but tick all three
+          quests and the reward was a screen with less on it than when you
+          arrived. The week strip is what the day adds up to, and the data was
+          already being fetched and thrown away. */}
+      <WeekStrip
+        days={data!.week.days}
+        sessions={data!.week.sessions}
+        minutes={data!.week.minutes}
+        accent={sport.accent}
+        complete={data!.quests.every((q) => q.done)}
+      />
+
+      {/* Only once they have checked in. A readiness gauge before any input is
+          a dial pointing at nothing, and the coach has nothing to go on. */}
+      {data!.checkIn && (
+        <div className="grid gap-5 lg:grid-cols-3">
+          <div className="card flex items-center justify-center p-6 pt-8 lg:col-span-1">
+            <ReadinessGauge score={readiness.score} status={readiness.status} />
+          </div>
+          <div className="space-y-5 lg:col-span-2">
+            <div className="card overflow-hidden p-5 sm:p-6">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-pitch-400">
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-pitch-400" /> AI Coach
+                </span>
+                {actionTag && <span className="chip text-pitch-400">{actionTag}</span>}
+              </div>
+              <p className="text-sm leading-relaxed text-slate-200 sm:text-base">{coachText}</p>
+              {watchZone && <div className="chip mt-3 text-readiness-red">⚠️ Watch zone: {watchZone}</div>}
             </div>
-            <p className="text-sm leading-relaxed text-slate-200 sm:text-base">{coachText}</p>
-            {watchZone && <div className="chip mt-3 text-readiness-red">⚠️ Watch zone: {watchZone}</div>}
           </div>
         </div>
-      </div>
+      )}
 
-      {/* Offered at the moment it's relevant. Rehab and mobility sat behind
-          "Guides" and then a tab, which is precisely where someone in pain will
-          not look — so when they've told us something hurts, we bring it to
-          them instead. */}
-      <SorenessCard painMap={data.checkIn.pain_map ?? {}} focus={readiness.focus_body_part} />
-
-      <ToolGrid tools={sport.tools} exclude="/coach" />
-
-      <BiometricSignalCard signal={data!.bioSignal} />
-
-      <GettingStarted setup={data!.setup} />
-      <RankStrip level={level} week={data!.week} />
-      <DailyQuests quests={data!.quests} />
+      {/* Both conditional — they render nothing when there is nothing to say. */}
+      <SorenessCard painMap={data!.checkIn?.pain_map ?? {}} focus={readiness.focus_body_part} />
+      {/* Same condition as the NextUp card above, so the two can never both be
+          telling you to build a program. */}
+      <GettingStarted setup={data!.setup} showingProgramCta={!data!.hasProgram || !data!.nextSession} />
     </div>
   );
 }
@@ -316,49 +389,6 @@ function NextUp({ hasProgram, nextSession, trainedToday, accent }: {
   );
 }
 
-/**
- * Everything else, deliberately quiet.
- *
- * Small, uniform, unlabelled with progress or counts — a drawer you open when
- * you want something, not six more things asking to be done. It sits below the
- * one real answer so the page has an obvious top.
- */
-function ToolGrid({ tools, exclude }: {
-  tools: { href: string; title: string; icon: string }[];
-  /** Destination the primary card already goes to, so it isn't offered twice. */
-  exclude?: string;
-}) {
-  // Order comes from lib/sport-profile.ts — a weightlifter shouldn't scan past
-  // video analysis to reach their plan, and a runner's first stop is load, not
-  // drills. Nothing is hidden by sport; hiding features would stop a footballer
-  // who wants to lift. Wording matches the nav, because two names for one
-  // destination on one screen is the confusion this pass removed.
-  //
-  // AND THE PRIMARY CARD'S DESTINATION IS DROPPED. NextUp is a link to /coach in
-  // every one of its states, so listing "My plan" here too put the same
-  // destination on the same screen twice — the exact duplication criticised in
-  // the nav audit, reintroduced two sections lower by me. Removing it also takes
-  // the grid from seven tiles to six, which divides evenly by both 2 and 3, so
-  // neither breakpoint ends on an orphan.
-  const shown = exclude ? tools.filter((t) => t.href !== exclude) : tools;
-  return (
-    <div>
-      <h2 className="field-label">Anything else</h2>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-      {shown.map((t) => (
-        <Link
-          key={t.href}
-          href={t.href}
-          className="card card-hover flex flex-col items-start gap-2 p-4"
-        >
-          <span className="grid h-10 w-10 place-items-center rounded-2xl bg-white/[0.04] text-xl">{t.icon}</span>
-          <span className="text-sm font-bold leading-tight text-slate-100">{t.title}</span>
-        </Link>
-      ))}
-      </div>
-    </div>
-  );
-}
 
 /**
  * The check-in, offered rather than demanded.
@@ -417,126 +447,55 @@ function CheckInNudge() {
   );
 }
 
-/**
- * Rank, progress to the next level, and the week at a glance — one card.
- *
- * These were three separate blocks (a rank strip, a four-tile stat row, and a
- * Playbook card that pointed at the same place as one of the quick links).
- * Home had ten stacked sections and read as a dashboard of dashboards; level
- * appeared twice, and Playbook twice. Same information, a third of the height.
- */
-function RankStrip({ level, week }: { level: LevelInfo; week: { sessions: number; minutes: number; checkIns: number } }) {
-  const toNext = level.xpForNext - level.xpIntoLevel;
-  const stats = [
-    { label: "Sessions", value: String(week.sessions) },
-    { label: "Trained", value: week.minutes >= 60 ? `${Math.round(week.minutes / 60)}h` : `${week.minutes}m` },
-    // Was "3/7". A denominator turns a record of what you did into a score out
-    // of seven you're failing, and nobody ever promised the app seven.
-    { label: "Check-ins", value: String(week.checkIns) },
-  ];
-  return (
-    <Link href="/rewards" className="card card-hover block p-4">
-      <div className="flex items-center gap-4">
-        <span
-          className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl text-2xl shadow-glow"
-          style={{ background: `linear-gradient(135deg, ${level.color}, ${level.color}88)` }}
-        >
-          {level.emoji}
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="flex items-baseline justify-between gap-2">
-            <span className="truncate text-lg font-extrabold" style={{ color: level.color }}>{level.rank}</span>
-            <span className="shrink-0 text-xs text-slate-500">{toNext} XP to go</span>
-          </span>
-          <span className="mt-1.5 block h-2 w-full overflow-hidden rounded-full bg-white/10">
-            <span
-              className="block h-full rounded-full transition-all"
-              style={{ width: `${Math.round(level.progress * 100)}%`, background: `linear-gradient(90deg, ${level.color}, ${level.color}aa)` }}
-            />
-          </span>
-        </span>
-      </div>
 
-      <div className="mt-4 grid grid-cols-3 gap-2 border-t border-white/5 pt-3 text-center">
-        {stats.map((s) => (
-          <div key={s.label}>
-            <div className="text-lg font-extrabold text-slate-100">{s.value}</div>
-            <div className="text-[11px] text-slate-500">{s.label} · 7d</div>
-          </div>
-        ))}
-      </div>
-    </Link>
-  );
-}
 
 /**
- * Optional, and says so.
+ * The things this app does that aren't part of the daily loop.
  *
- * Three unticked boxes labelled "quests" every morning is a debt you didn't
- * agree to, and the people most likely to feel it are exactly the ones with
- * least time. Gamification works when it's a bonus and grates when it's an
- * obligation, so this can now be turned off for good — the XP still accrues
- * from real activity either way, and /rewards still shows all of it.
+ * IT USED TO BE THE SAME LIST TWICE. Home already shows "Today" — check in,
+ * train, eat — and, when there's no program, a full-width gold card saying
+ * BUILD IT. This checklist then repeated three of those four as its own to-do
+ * list, several thousand pixels down the same screen. Someone with a ten-day
+ * streak and today's check-in still to do was shown "Check in" in Today and
+ * "Try a check-in" down here, under a heading that said "Things you haven't
+ * tried yet" — which was, for them, simply false.
+ *
+ * Three stacked to-do lists is not three times the guidance. It's the reader
+ * having to work out which list is the real one.
+ *
+ * So anything the day already asks for is filtered out, and what's left is what
+ * this card is genuinely for: the parts of the app you'd otherwise never find.
  */
-function DailyQuests({ quests }: { quests: { id: string; label: string; xp: number; done: boolean; href: string }[] }) {
-  const done = quests.filter((q) => q.done).length;
-  const [hidden, setHidden] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    try { setHidden(localStorage.getItem("pa:hide-goals") === "1"); } catch { setHidden(false); }
-  }, []);
-
-  if (hidden !== false) return null; // null = not read yet, avoids a flash
-
-  return (
-    <div className="card p-5">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 className="field-label !mb-0">If you fancy it today</h2>
-        <div className="flex shrink-0 items-center gap-3">
-          <Link href="/rewards" className="text-xs font-semibold text-pitch-400 hover:underline">{done}/{quests.length} · Rewards →</Link>
-          <button
-            type="button"
-            onClick={() => { setHidden(true); try { localStorage.setItem("pa:hide-goals", "1"); } catch { /* ignore */ } }}
-            className="tap-target text-xs text-slate-500 hover:text-slate-300"
-            title="Hide these — XP still counts from what you actually do"
-          >
-            Hide
-          </button>
-        </div>
-      </div>
-      <div className="grid gap-3 sm:grid-cols-3">
-        {quests.map((q) => (
-          <Link key={q.id} href={q.href} className={`flex items-center gap-2 rounded-2xl border p-3 transition ${q.done ? "border-pitch-400/30 bg-pitch-400/[0.06]" : "border-white/10 bg-white/[0.03] hover:bg-white/[0.06]"}`}>
-            <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-full border text-xs ${q.done ? "border-pitch-400 bg-pitch-400 text-ink-900" : "border-white/20 text-transparent"}`}>✓</span>
-            <span className={`flex-1 text-xs font-medium ${q.done ? "text-slate-400 line-through" : "text-slate-100"}`}>{q.label}</span>
-            <span className="text-[10px] font-bold text-pitch-400">+{q.xp}</span>
-          </Link>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function GettingStarted({ setup }: { setup: { checkedIn: boolean; hasProgram: boolean; hasVideo: boolean; loggedNutrition: boolean } }) {
+function GettingStarted({ setup, showingProgramCta }: {
+  setup: { checkedIn: boolean; hasProgram: boolean; hasVideo: boolean; loggedNutrition: boolean };
+  /** The gold "build your program" card is on screen — don't say it again. */
+  showingProgramCta: boolean;
+}) {
   const steps = [
-    { done: setup.checkedIn, href: "/journal", title: "Try a check-in", sub: "Three taps — it tunes your session to how you feel" },
-    { done: setup.hasProgram, href: "/coach", title: "Build your training program", sub: "The AI coach periodises it to your goal" },
-    { done: setup.hasVideo, href: "/train", title: "Analyse a video", sub: "Upload a clip for a technique breakdown" },
-    { done: setup.loggedNutrition, href: "/nutrition", title: "Set your nutrition", sub: "Calorie & macro targets, meal plan" },
-  ];
+    // Checking in and logging food are daily quests in the card above. They are
+    // deliberately NOT repeated here; a permanent row telling you to do a thing
+    // you do every morning stops being information after day one.
+    { done: setup.hasProgram, href: "/coach", title: "Build your training program", sub: "The AI coach periodises it to your goal", hide: showingProgramCta },
+    { done: setup.hasVideo, href: "/train", title: "Analyse a video", sub: "Upload a clip for a technique breakdown", hide: false },
+  ].filter((s) => !s.hide);
+
   const doneCount = steps.filter((s) => s.done).length;
   const [hidden, setHidden] = useState(false);
 
   // Once the core loop is set up, this disappears for good.
-  if (doneCount === steps.length || hidden) return null;
+  if (!steps.length || doneCount === steps.length || hidden) return null;
   const next = steps.find((s) => !s.done);
 
   return (
-    <section className="card-premium p-5 sm:p-6">
+    /* A plain card, not `card-premium`. The premium treatment is a gold glow,
+       and the "build your program" hero at the top of this page is the other
+       thing wearing it. Two glowing gold cards on one screen means neither is
+       the primary — and this one, by definition, is the optional extras. */
+    <section className="card p-5 sm:p-6">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <span className="eyebrow">Worth a look · {doneCount}/{steps.length}</span>
-          <h2 className="mt-1 text-lg font-extrabold">Things you haven&apos;t tried yet</h2>
+          <span className="eyebrow">Worth a look</span>
+          <h2 className="mt-1 text-lg font-extrabold">More the app can do</h2>
         </div>
         <button onClick={() => setHidden(true)} className="tap-target shrink-0 text-xs text-slate-500 hover:text-slate-300">Hide</button>
       </div>
@@ -624,5 +583,64 @@ function Skeleton() {
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Today's fuel, on the front page.
+ *
+ * Nutrition was the seventh of seven tiles in the tool grid for football, rugby
+ * and basketball, and on a phone it sat behind the More sheet — so the one paid
+ * feature with a job to do EVERY DAY was the hardest thing in the app to reach.
+ * You cannot build a habit out of something that takes three taps to find.
+ *
+ * Reads the saved target rather than recomputing one. Three places already
+ * calculated calories and two of them disagreed; adding a fourth here would
+ * reintroduce exactly the bug that took a day to unpick. This is the number the
+ * athlete themselves is working to.
+ */
+function FuelCard({ nutri }: { nutri: { calories_eaten: number | null; daily_calorie_target: number | null } | null }) {
+  const eaten = nutri?.calories_eaten ?? 0;
+  const target = nutri?.daily_calorie_target ?? 0;
+
+  // Nothing set up yet — an invitation, not an empty progress bar reading 0%.
+  if (!target) {
+    return (
+      <Link href="/nutrition" className="card card-hover flex items-center gap-3 p-4">
+        <span className="text-lg" aria-hidden>🍽️</span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-bold text-slate-100">What should I eat today?</span>
+          <span className="block text-xs text-slate-400">Calorie and protein targets from your body and training.</span>
+        </span>
+        <span className="shrink-0 text-pitch-400">→</span>
+      </Link>
+    );
+  }
+
+  const left = target - eaten;
+  const pct = Math.min(100, Math.round((eaten / target) * 100));
+  // "600 left" is the actionable phrasing; "you are 600 over" is the honest one
+  // once they have passed it. Neither is a telling-off.
+  const headline = left > 0
+    ? `${left.toLocaleString()} kcal left today`
+    : left === 0 ? "Bang on target" : `${Math.abs(left).toLocaleString()} kcal over`;
+
+  return (
+    <Link href="/nutrition" className="card card-hover block p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="stat-label">🍽️ Today&apos;s fuel</div>
+          <div className="mt-0.5 text-lg font-extrabold text-slate-100">{headline}</div>
+          <div className="text-xs text-slate-500">{eaten.toLocaleString()} of {target.toLocaleString()} kcal</div>
+        </div>
+        <span className="shrink-0 text-pitch-400">→</span>
+      </div>
+      <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-white/10">
+        <div
+          className="h-full rounded-full bg-gradient-to-r from-pitch-400 to-pitch-600 transition-all"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </Link>
   );
 }

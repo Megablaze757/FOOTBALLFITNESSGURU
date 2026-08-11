@@ -19,7 +19,8 @@ export function RankLadder({ level }: { level: LevelInfo }) {
     <div className="card p-4">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center justify-between gap-2 text-left"
+        aria-expanded={open}
+        className="flex min-h-[44px] w-full items-center justify-between gap-2 text-left"
       >
         <span>
           <span className="block text-sm font-bold text-slate-100">All ranks</span>
@@ -27,7 +28,7 @@ export function RankLadder({ level }: { level: LevelInfo }) {
             You&apos;re {currentIndex + 1} of {ladder.length} tiers in
           </span>
         </span>
-        <span className={`shrink-0 text-xs text-slate-500 transition ${open ? "rotate-180" : ""}`}>▾</span>
+        <span className={`shrink-0 text-xs text-slate-500 transition ${open ? "rotate-180" : ""}`} aria-hidden>▾</span>
       </button>
 
       {open && (

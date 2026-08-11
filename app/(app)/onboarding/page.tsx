@@ -63,7 +63,11 @@ export default function OnboardingPage() {
           <div className="text-center">
             <Logo size={80} className="mx-auto" />
             <h1 className="mt-6 text-3xl font-extrabold tracking-tight">Welcome to PocketAthlete</h1>
-            <p className="mx-auto mt-3 max-w-sm text-slate-400">Tell us two things and you&apos;ll get a four-week plan built around your sport, with every movement explained. Takes about thirty seconds.</p>
+            {/* Logo and heading stay centred; the paragraph doesn't. It runs to
+                three lines, and a centred three-line block makes the reader
+                find a new starting x for each one — on the first screen of the
+                app, where the copy has the most work to do. */}
+            <p className="mx-auto mt-3 max-w-sm text-left text-slate-400">Tell us two things and you&apos;ll get a four-week plan built around your sport, with every movement explained. Takes about thirty seconds.</p>
           </div>
         )}
 
@@ -131,11 +135,13 @@ export default function OnboardingPage() {
       {/* Nav */}
       <div className="mt-8 flex items-center justify-between">
         {step > 0 && step < 3 ? (
-          <button onClick={() => setStep((s) => s - 1)} className="text-sm text-slate-400 hover:text-pitch-400">← Back</button>
+          <button onClick={() => setStep((s) => s - 1)} className="tap-target -ml-2 gap-1 px-2 text-sm text-slate-400 hover:text-pitch-400">
+            <span aria-hidden>←</span> Back
+          </button>
         ) : <span />}
         {step < 3 ? (
           <div className="flex items-center gap-4">
-            <button onClick={skip} disabled={saving} className="text-sm text-slate-500 hover:text-slate-300">Skip</button>
+            <button onClick={skip} disabled={saving} className="tap-target px-2 text-sm text-slate-500 hover:text-slate-300">Skip</button>
             <button onClick={() => setStep((s) => s + 1)} className="btn-primary w-auto px-8">{step === 0 ? "Get started" : "Next"}</button>
           </div>
         ) : <span />}

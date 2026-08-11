@@ -24,11 +24,19 @@ export interface MealSkip {
 
 export interface DietSchedule {
   skips: MealSkip[];
+  /**
+   * Day indices (0 = Monday) the athlete trains or plays on.
+   *
+   * Empty means they didn't say, and the plan stays flat — a guess about which
+   * days somebody trains is worse than no guess, because it moves food off a
+   * day they might be doing a double session.
+   */
+  trainingDays: number[];
   /** What the parser understood, shown back to the athlete. */
   summary: string[];
 }
 
-export const EMPTY_SCHEDULE: DietSchedule = { skips: [], summary: [] };
+export const EMPTY_SCHEDULE: DietSchedule = { skips: [], trainingDays: [], summary: [] };
 
 const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
@@ -57,6 +65,19 @@ const EATING_OUT = /\beat(ing)? out\b|\bate out\b|\beat food out\b|\bmeal out\b|
 // "I don't eat this meal" — skipping or fasting.
 const SKIPPING = /\bskip(s|ping|ped)?\b|\bdon'?t eat\b|\bdo not eat\b|\bnever eat\b|\bno\b|\bwithout\b/i;
 const FASTING = /\bfast(ing)?\b|\bintermittent\b|\b16:8\b|\buntil (noon|midday|12)\b/i;
+
+/**
+ * "This is a day I do something hard."
+ *
+ * Deliberately narrow. It has to catch the ways people actually write it —
+ * "I train Mon Wed Fri", "gym tuesdays and thursdays", "match on Saturday" —
+ * without catching "I train hard so I need more protein", which names no day
+ * and would otherwise mark the whole week. That is handled by requiring days:
+ * see the `days.length` check at the call site.
+ */
+const TRAINING = /\btrain(ing|s)?\b|\bgym\b|\bsessions?\b|\bmatch(es|day|days)?\b|\bgames?\b|\bfixtures?\b|\bpractice\b|\bworkouts?\b|\blift(ing|s)?\b|\brun(ning|s)?\b|\bplay(ing|s)?\b/i;
+// "no gym on Sundays" is a REST day being named, not a training day.
+const NEGATED = /\bno\b|\bnot\b|\bnever\b|\brest\b|\boff\b|\bdon'?t\b|\bdo not\b/i;
 
 function clauses(text: string): string[] {
   return text.split(/[.;\n]|\bbut\b|\band\b|\balso\b/i).map((c) => c.trim()).filter(Boolean);
@@ -88,11 +109,12 @@ function listDays(days: number[]): string {
  */
 export function parseSchedule(notes: string | null | undefined): DietSchedule {
   const text = (notes ?? "").trim();
-  if (text.length < 3) return { skips: [], summary: [] };
+  if (text.length < 3) return { skips: [], trainingDays: [], summary: [] };
 
   const skips: MealSkip[] = [];
   const summary: string[] = [];
   const seen = new Set<string>();
+  const training = new Set<number>();
 
   const add = (days: number[], slot: Slot, reason: string) => {
     for (const day of days) {
@@ -103,16 +125,74 @@ export function parseSchedule(notes: string | null | undefined): DietSchedule {
     }
   };
 
+  /**
+   * The intent from the previous clause, so a trailing day list inherits it.
+   *
+   * `clauses()` splits on "and", which is right for "I love chicken but no
+   * fish" and wrong for a list of days. "I eat out on Tuesdays and Thursdays"
+   * became "I eat out on Tuesdays" plus a bare "Thursdays" — the second had no
+   * eating-out phrase in it, so it was dropped, and Thursday's dinner was
+   * planned, shopped for and cooked anyway.
+   *
+   * That is the most natural way anyone would write it, and it silently cost
+   * them a meal's worth of food every week.
+   */
+  let carried: { out: boolean; fasting: boolean; namedSlot: Slot | null } | null = null;
+  /**
+   * Training intent carries across "and" for the same reason eating out does.
+   *
+   * "I train Monday, Wednesday and Friday" splits into three clauses and only
+   * the first contains the word "train" — so Friday was silently dropped and
+   * the athlete's plan fed them a rest day on a training day. That is the most
+   * natural way anyone would write it.
+   */
+  let carriedTraining = false;
+
   for (const clause of clauses(text)) {
-    const out = EATING_OUT.test(clause);
-    const fasting = FASTING.test(clause);
-    const namedSlot = slotIn(clause);
+    let out = EATING_OUT.test(clause);
+    let fasting = FASTING.test(clause);
+    let namedSlot = slotIn(clause);
     // A bare "no lunch on Fridays" only counts as skipping when a meal is named;
     // otherwise "no dairy" would wipe out someone's whole week.
-    const skipping = !out && !fasting && namedSlot !== null && SKIPPING.test(clause);
-    if (!out && !fasting && !skipping) continue;
+    let skipping = !out && !fasting && namedSlot !== null && SKIPPING.test(clause);
 
     const days = daysIn(clause);
+
+    /**
+     * A clause that is NOTHING BUT DAYS continues the one before it.
+     *
+     * Deliberately strict: the clause must contain days and no intent of its
+     * own. "I eat out Tuesdays and I skip breakfast" is unaffected, because the
+     * second half carries its own meaning and never reaches this.
+     */
+    if (!out && !fasting && !skipping && days.length > 0 && carried) {
+      out = carried.out;
+      fasting = carried.fasting;
+      namedSlot = carried.namedSlot;
+      skipping = !out && !fasting && namedSlot !== null;
+    }
+
+    /**
+     * Training days are read INDEPENDENTLY of the eating-out logic below.
+     *
+     * They're a different kind of fact about the same sentence — "I train
+     * Tuesdays and Thursdays and eat out on Fridays" says both — so this runs
+     * before the `continue` that drops clauses with no meal intent in them.
+     */
+    const negated = NEGATED.test(clause);
+    const saysTraining = TRAINING.test(clause) && !negated;
+    // A clause that is nothing but days inherits the previous clause's intent.
+    const bareDays = days.length > 0 && !TRAINING.test(clause) && !negated
+      && !EATING_OUT.test(clause) && !FASTING.test(clause) && slotIn(clause) === null;
+    if (days.length > 0 && (saysTraining || (bareDays && carriedTraining))) {
+      for (const d of days) training.add(d);
+      carriedTraining = true;
+    } else if (negated || (TRAINING.test(clause) && negated)) {
+      carriedTraining = false;
+    }
+
+    if (!out && !fasting && !skipping) continue;
+    carried = { out, fasting, namedSlot };
     const everyDay = days.length === 0;
     const targetDays = everyDay ? [0, 1, 2, 3, 4, 5, 6] : days;
     const slot: Slot = namedSlot ?? (fasting ? "Breakfast" : "Dinner");
@@ -134,7 +214,17 @@ export function parseSchedule(notes: string | null | undefined): DietSchedule {
     }
   }
 
-  return { skips, summary };
+  const trainingDays = [...training].sort((a, b) => a - b);
+  // Naming every day as a training day is the same as naming none: there is
+  // nothing to cycle food between.
+  const cycled = trainingDays.length > 0 && trainingDays.length < 7 ? trainingDays : [];
+  if (cycled.length) {
+    summary.push(
+      `Training on ${listDays(cycled)} — those days get more food, the rest get a little less.`
+    );
+  }
+
+  return { skips, trainingDays: cycled, summary };
 }
 
 /** Is this meal slot skipped on this day? Returns the reason, or null. */

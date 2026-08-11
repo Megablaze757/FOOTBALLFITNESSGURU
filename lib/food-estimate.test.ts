@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { estimateMeal, fromAiItems } from "./food-estimate";
+import { estimateMeal, fromAiItems, fitDimensions, scaleItem, totalOf } from "./food-estimate";
 
 const names = (t: string) => estimateMeal(t).items.map((i) => i.name.toLowerCase());
 
@@ -133,4 +133,104 @@ test("malformed AI payloads don't throw", () => {
   assert.equal(fromAiItems([]).items.length, 0);
   assert.equal(fromAiItems([{}]).items.length, 0);
   assert.equal(fromAiItems([{ name: "  " }]).items.length, 0);
+});
+
+// --- Meal photos -------------------------------------------------------------
+
+test("fitDimensions caps the longest edge and keeps the aspect ratio", () => {
+  const landscape = fitDimensions(4000, 3000, 768);
+  assert.equal(landscape.width, 768);
+  assert.equal(landscape.height, 576); // 4:3 preserved
+  const portrait = fitDimensions(3000, 4000, 768);
+  assert.equal(portrait.width, 576);
+  assert.equal(portrait.height, 768);
+});
+
+test("fitDimensions never scales a small photo up", () => {
+  assert.deepEqual(fitDimensions(320, 240, 768), { width: 320, height: 240 });
+  // Exactly at the cap is left alone too.
+  assert.deepEqual(fitDimensions(768, 768, 768), { width: 768, height: 768 });
+});
+
+test("fitDimensions survives degenerate input", () => {
+  assert.deepEqual(fitDimensions(0, 0), { width: 0, height: 0 });
+  assert.deepEqual(fitDimensions(NaN, 100), { width: 0, height: 0 });
+  // A panorama must not round its short edge to a canvas of zero height.
+  assert.ok(fitDimensions(10000, 3, 768).height >= 1);
+});
+
+// --- Correcting an estimate --------------------------------------------------
+
+test("scaleItem moves the macros with the portion", () => {
+  const item = { foodId: null, name: "Rice", qty: 200, unit: "g" as const, explicit: false,
+    macros: { kcal: 260, protein: 6, carbs: 56, fats: 1 } };
+  const half = scaleItem(item, 100);
+  assert.equal(half.qty, 100);
+  assert.equal(half.macros.kcal, 130);
+  assert.equal(half.macros.carbs, 28);
+  const double = scaleItem(item, 400);
+  assert.equal(double.macros.kcal, 520);
+});
+
+test("a corrected portion is no longer an assumption", () => {
+  // Otherwise the row keeps saying "(assumed)" about a number the athlete
+  // just typed in themselves.
+  const item = { foodId: null, name: "Rice", qty: 200, unit: "g" as const, explicit: false,
+    macros: { kcal: 260, protein: 6, carbs: 56, fats: 1 } };
+  assert.equal(scaleItem(item, 150).explicit, true);
+});
+
+test("scaleItem survives zero and nonsense quantities", () => {
+  const item = { foodId: null, name: "Rice", qty: 200, unit: "g" as const, explicit: true,
+    macros: { kcal: 260, protein: 6, carbs: 56, fats: 1 } };
+  assert.equal(scaleItem(item, 0).macros.kcal, 0);
+  assert.equal(scaleItem(item, -50).qty, 0);
+  // A corrupt source item must not divide by zero.
+  const broken = { ...item, qty: 0 };
+  assert.ok(Number.isFinite(scaleItem(broken, 100).macros.kcal));
+});
+
+test("totalOf keeps the headline honest after an edit", () => {
+  const items = [
+    { foodId: null, name: "Rice", qty: 200, unit: "g" as const, explicit: true, macros: { kcal: 260, protein: 6, carbs: 56, fats: 1 } },
+    { foodId: null, name: "Chicken", qty: 150, unit: "g" as const, explicit: true, macros: { kcal: 250, protein: 46, carbs: 0, fats: 6 } },
+  ];
+  assert.deepEqual(totalOf(items), { kcal: 510, protein: 52, carbs: 56, fats: 7 });
+  // Remove one and the total must follow.
+  assert.equal(totalOf(items.slice(1)).kcal, 250);
+  assert.deepEqual(totalOf([]), { kcal: 0, protein: 0, carbs: 0, fats: 0 });
+});
+
+test("a wildly wrong kcal is corrected from the macros", () => {
+  // The two come from the same answer and are meant to agree. When one is
+  // wrong it is almost always the kcal — it is written first and least
+  // carefully — so 30p/60c/20f is 540 kcal whatever the model then claimed.
+  const [item] = fromAiItems([
+    { name: "Chicken and rice", qty: 400, unit: "g", kcal: 250, protein: 30, carbs: 60, fats: 20 },
+  ]).items;
+  assert.equal(item.macros.kcal, 540);
+});
+
+test("ordinary rounding slack is left alone", () => {
+  // Fibre and sugar alcohols mean real food data never adds up exactly, and
+  // "correcting" a 5% gap would replace a good number with a derived one.
+  const [item] = fromAiItems([
+    { name: "Porridge", qty: 90, unit: "g", kcal: 350, protein: 12, carbs: 60, fats: 7 },
+  ]).items;
+  assert.equal(item.macros.kcal, 350); // macros say 351 — close enough to keep
+});
+
+test("an item with no macros keeps its stated calories", () => {
+  // Nothing to reconcile against; deriving 0 kcal would silently drop the food
+  // out of the day's total.
+  const [item] = fromAiItems([{ name: "Cola", qty: 330, unit: "ml", kcal: 139 }]).items;
+  assert.equal(item.macros.kcal, 139);
+});
+
+test("negative macros can't drag a total downwards", () => {
+  const [item] = fromAiItems([
+    { name: "Odd", qty: 100, unit: "g", kcal: 200, protein: -5, carbs: 40, fats: 5 },
+  ]).items;
+  assert.ok(item.macros.protein >= 0);
+  assert.ok(item.macros.kcal > 0);
 });

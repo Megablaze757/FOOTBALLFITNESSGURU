@@ -32,6 +32,7 @@ import type { PainMap } from "./types";
 import type { SportId } from "./exercises";
 import { isExcluded, EMPTY_CONSTRAINTS, type Constraints } from "./constraints";
 import { skillForSession } from "./skills";
+import { runZoneLabel, runZoneFeel } from "./running";
 import {
   MOVEMENTS, type BodyArea, type Dose, type GoalType, type Movement,
   type Pattern, type Prog, type Slot,
@@ -123,13 +124,71 @@ export function painByArea(painMap: PainMap): Partial<Record<BodyArea, number>> 
  * endurance day is built around the conditioning block.
  */
 const BLUEPRINTS: Record<GoalType, Partial<Record<Slot, number>>> = {
-  strength:        { warmup: 2, primary: 1, secondary: 2, accessory: 2, cooldown: 1 },
-  speed:           { warmup: 2, primary: 2, secondary: 1, accessory: 1, cooldown: 1 },
+  // A strength block used to end at the cool-down with no aerobic work in it at
+  // all — which meant that for the goal most athletes actually pick, no program
+  // in any sport could ever prescribe going for a run. That isn't a defensible
+  // strength block either: some easy aerobic work is in every serious one,
+  // because it's what lets you recover between the heavy days.
+  strength:        { warmup: 2, primary: 1, secondary: 2, accessory: 2, conditioning: 1, cooldown: 1 },
+  // Two accessory slots, not one. With a single slot a speed block came out at
+  // 0.3 hamstring sets per quad set — quads accumulating from squats, split
+  // squats and every jump while the hamstrings got one Nordic. Sprinting is the
+  // mechanism that tears hamstrings, so the session that trains sprinting is
+  // the last one that should be short of hamstring work.
+  speed:           { warmup: 2, primary: 2, secondary: 1, accessory: 2, conditioning: 1, cooldown: 1 },
   agility:         { warmup: 2, primary: 1, secondary: 2, accessory: 1, conditioning: 1, cooldown: 1 },
   endurance:       { warmup: 2, secondary: 1, accessory: 1, conditioning: 2, cooldown: 1 },
   injury_recovery: { warmup: 3, secondary: 1, accessory: 3, conditioning: 1, cooldown: 1 },
-  skill:           { warmup: 2, primary: 1, secondary: 1, accessory: 1, cooldown: 1 },
+  skill:           { warmup: 2, primary: 1, secondary: 1, accessory: 1, conditioning: 1, cooldown: 1 },
 };
+
+/**
+ * Above this RPE a conditioning movement isn't recovery work.
+ *
+ * Used on the deload week, where the whole point is that the work comes down.
+ * Filling that week's conditioning slot from the same ranked list as Peak week
+ * put hill repeats and VO2 intervals into the down week, which is the one week
+ * they must not be in — and it was also why the recovery run, the easiest thing
+ * in the catalogue, was never selected anywhere.
+ */
+const RECOVERY_RPE_CEILING = 5;
+
+/**
+ * Sports whose athletes sprint, and the movements that keep their hamstrings
+ * attached. See the bonus in `rankSlot`.
+ *
+ * Deliberately the hamstring-SPECIFIC movements: a squat is not hamstring work
+ * and a hip thrust is glutes. The deadlift earns its place because it is the
+ * one bilateral hinge heavy enough to matter here.
+ */
+const SPRINT_SPORTS = new Set<SportId>(["football", "rugby", "basketball", "running"]);
+const HAMSTRING_WORK = new Set(["nordic_curl", "single_leg_rdl", "hamstring_slider", "deadlift"]);
+/**
+ * Calf and achilles work, for the same reason and the same sports.
+ *
+ * Football blocks were coming out at 1.3-5.7 calf sets a week — below
+ * maintenance — in a sport that is essentially a series of achilles loads.
+ * Calf raises sit in the `rehab` pattern and score like rehab work, so they
+ * never won a slot unless somebody was already injured, which is precisely the
+ * wrong time to start.
+ */
+const CALF_WORK = new Set(["calf_raise", "calf_raise_eccentric", "pogo_hops"]);
+
+/**
+ * What a sprinting athlete's week must contain, whatever else is in it.
+ *
+ * A scoring bonus was not enough and could not be: `pick` rotates its window, so
+ * a well-ranked movement is spun out of the slot exactly as a coach's picks
+ * were. Widening the speed blueprint made it WORSE — the extra accessory slot
+ * shifted the rotation and the Nordic vanished entirely, taking a 3-day speed
+ * block from four hamstring sets to zero.
+ *
+ * So these are taken before the rotation, the same mechanism as a coach's pick,
+ * and for a stronger reason: a coach's pick is a preference, and a sprinting
+ * athlete with no posterior-chain work is a hamstring injury with a date on it.
+ * The pain filter still runs first and still wins.
+ */
+const SPRINT_ESSENTIALS = ["nordic_curl", "calf_raise_eccentric"];
 
 const SLOT_ORDER: Slot[] = ["warmup", "primary", "secondary", "accessory", "skill", "conditioning", "cooldown"];
 
@@ -167,6 +226,64 @@ const WEEK_SHAPE: Record<Prog, WeekShape[]> = {
 // Effort climbs into the peak week and drops off a cliff on the deload — which
 // is the entire point of a deload, and what people get wrong when left to it.
 const RPE_DELTA = [0, 0.5, 1, -2];
+
+/**
+ * Minutes above which a single continuous effort is a session in its own right
+ * rather than something you tack onto the end of one.
+ *
+ * 45 keeps easy 20-40 minute aerobic work available on a lifting day — which is
+ * in every serious strength block and is what lets you recover between the
+ * heavy days — while keeping the 75-90 minute long run on endurance days.
+ */
+const LONG_EFFORT_MINUTES = 45;
+
+/**
+ * Movement patterns whose quality is destroyed by fatigue, and the effort
+ * ceiling that protects them.
+ *
+ * Sprinting, jumping and changing direction are limited by how much force you
+ * can produce per contact, not by how much work you can survive. Grind them and
+ * the thing being trained goes away: the velocity-loss literature is consistent
+ * that lower fatigue thresholds produce BETTER explosive adaptations than
+ * higher ones at matched volume, and a fatigued sprint is also the textbook
+ * hamstring-strain mechanism.
+ *
+ * The escalation above applied uniformly, so peak week prescribed:
+ *
+ *   Flying 20m sprints    RPE 10   (max effort, zero in reserve)
+ *   Hill sprints          RPE 10
+ *   T-drill               RPE 10
+ *   Depth drop to sprint  RPE  9
+ *   Power clean           RPE  9
+ *
+ * RPE 10 is failure. Nobody coaches a sprint session to failure, and an
+ * Olympic lift at 9 is a technique problem waiting to happen. Peaking this work
+ * means sharper reps and more of them, never grinding — so it keeps its base
+ * effort and is capped at 8 whatever the week says.
+ *
+ * Strength patterns (squat, hinge, press, pull, carry) are unaffected: RPE 8-9
+ * in a peak week is exactly right for those, and that is where the block's
+ * intensity is supposed to come from.
+ */
+const QUALITY_PATTERNS = new Set<Pattern>(["sprint", "jump", "cod", "footwork"]);
+const QUALITY_RPE_CEILING = 8;
+/** Accessories are volume work: two or three reps left in the tank. */
+const ACCESSORY_RPE = 7;
+
+/**
+ * In-season gym volume as a fraction of off-season, and how it is spread.
+ *
+ * The fraction is unchanged; TAPER_HIGH and TAPER_LOW average to it, so the
+ * week does the same total work and simply front-loads it. Professional squads
+ * do far less in-season gym work than this implies in absolute terms — the
+ * literature describes one to two strength sessions a week maintaining
+ * performance across a season — but how many days to train is the athlete's
+ * choice to make, and overriding it silently is not this engine's job. What it
+ * can do is make sure the last session before the weekend is the light one.
+ */
+const IN_SEASON_VOLUME = 0.75;
+const TAPER_HIGH = 0.95;
+const TAPER_LOW = 0.55;
 
 const WEEK_PROGRESSION: Record<Prog, string[]> = {
   load:  ["Groove the movement at a weight you could do 2-3 more reps with.",
@@ -220,6 +337,7 @@ interface Ctx {
   constraints: Constraints;
   /** Coach's picks, as a set for cheap lookup. */
   picked?: Set<string>;
+  forced?: Set<string>;
 }
 
 interface Scored { m: Movement; score: number; spares: boolean }
@@ -258,6 +376,27 @@ function rankSlot(slot: Slot, ctx: Ctx): Scored[] {
       // Sport fit. A runner should not be given scrum drives.
       if (ctx.sport && m.sports) score += m.sports.includes(ctx.sport) ? 5 : -8;
 
+      /**
+       * A SPRINTING SPORT GETS HAMSTRING WORK. NON-NEGOTIABLE.
+       *
+       * A four-day football block contained NONE — measured, across every week.
+       * Not a Nordic curl, not an RDL, not a slider, all three of which are in
+       * the catalogue. The posterior chain got a hip thrust, which is glutes,
+       * and depth drops. Nothing else in the app could see it, because volume
+       * was counted per session slot rather than per muscle.
+       *
+       * Hamstring strain is the most common non-contact injury in football and
+       * the Nordic curl is the best-evidenced thing anyone has found to reduce
+       * it. Shipping a sprinting athlete a programme with no hamstring work in
+       * it is the one programming error with a documented injury attached.
+       *
+       * A bonus rather than a hard requirement, so the pain filter still wins:
+       * an athlete reporting a hamstring already has these excluded above, and
+       * nothing here can bring them back.
+       */
+      if (ctx.sport && SPRINT_SPORTS.has(ctx.sport)
+        && (HAMSTRING_WORK.has(m.id) || CALF_WORK.has(m.id))) score += 8;
+
       if (ctx.trainingFocus === "aesthetics" && (m.kit === "barbell" || m.kit === "dumbbell" || m.kit === "machine")) score += 3;
       if (ctx.trainingFocus === "fitness" && m.targets.includes("endurance")) score += 3;
 
@@ -293,14 +432,48 @@ function rotate<T>(arr: T[], by: number): T[] {
  * spinning through everything would eventually serve up the worst option for
  * the sake of variety, which isn't variety, it's noise.
  */
-function pick(ranked: Scored[], count: number, offset: number, usedIds: Set<string>, usedPatterns: Set<Pattern>): Movement[] {
+function pick(
+  ranked: Scored[], count: number, offset: number,
+  usedIds: Set<string>, usedPatterns: Set<Pattern>,
+  forced?: Set<string>
+): Movement[] {
   if (count <= 0 || !ranked.length) return [];
-  // The window has to be wider than the number of sessions that rotate through
-  // it, or the rotation wraps: with a window of 6, week 1 day 1 and week 3 day 1
-  // land on the same offset and you're back to repeating sessions.
+
+  const out: Movement[] = [];
+  /**
+   * A COACH'S PICK IS TAKEN BEFORE THE ROTATION, NOT RANKED INTO IT — on the
+   * one day of the week that pick belongs to.
+   *
+   * The +50 in `rankSlot` puts a chosen movement at the top of the list, and
+   * then `rotate` below spun it straight back out again — the window starts at
+   * `offset`, so position 0 is exactly where it does not get read from. A pick
+   * only ever appeared when the rotation happened to land on it, which for a
+   * three-day block meant a coach could pick a back squat, a row and a carry
+   * and get none of the three.
+   *
+   * Forcing every pick into every session is the opposite mistake, and the
+   * first version of this fix made it: three picks became a back squat, a row
+   * and a carry on all three days of the week. So each pick is pinned to ONE
+   * day — its position in the coach's list, modulo the days trained — and is
+   * merely well-ranked on the others. It appears every week without becoming
+   * the only thing the athlete ever does.
+   *
+   * The pain filter has already run by this point and returns null for anything
+   * badly loaded on a sore joint, so nothing here can reinstate a movement the
+   * engine refused on safety grounds.
+   */
+  if (forced?.size) {
+    for (const { m } of ranked) {
+      if (out.length >= count) break;
+      if (!forced.has(m.id) || usedIds.has(m.id) || usedPatterns.has(m.pattern)) continue;
+      out.push(m); usedIds.add(m.id); usedPatterns.add(m.pattern);
+    }
+    if (out.length >= count) return out;
+  }
+  // Wide enough that the days of a week, and the blocks that rotate through it,
+  // don't wrap onto each other and start repeating.
   const depth = Math.max(count * 3, 8);
   const window = rotate(ranked.slice(0, depth), offset);
-  const out: Movement[] = [];
 
   // First pass: a different movement pattern each time, so a session isn't
   // three variations of a squat.
@@ -322,15 +495,75 @@ function pick(ranked: Scored[], count: number, offset: number, usedIds: Set<stri
 
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
 
-function doseForWeek(base: Dose, prog: Prog, wi: number, volumeScale: number, fixed: boolean): Dose {
+function doseForWeek(baseDose: Dose, prog: Prog, wi: number, volumeScale: number, fixed: boolean, pattern?: Pattern, slot?: Slot): Dose {
   // Warm-ups and cool-downs don't periodise. The same eight leg swings every
   // session is correct; progressing them is theatre.
-  if (fixed) return { ...base };
+  if (fixed) return { ...baseDose };
+
+  /**
+   * ACCESSORY WORK HAD NO TARGET EFFORT AT ALL.
+   *
+   * A third of every session — the accessory block — shipped with no RPE, so
+   * the athlete was told to do three sets of twelve and nothing about how hard.
+   * "As many as it says" is not a prescription; people either coast through
+   * accessories or grind them to failure, and both waste the slot.
+   *
+   * 7 as the base: accessories are volume work, meant to leave two or three
+   * reps in reserve. Deliberately only for movements that carry no RPE of their
+   * own — anything the catalogue has already dosed keeps its own number, and
+   * rehab work in particular must stay light.
+   */
+  const base: Dose = baseDose.rpe == null && slot === "accessory" && pattern !== "rehab"
+    ? { ...baseDose, rpe: ACCESSORY_RPE }
+    : baseDose;
+
 
   const shape = WEEK_SHAPE[prog][wi];
+
+  /**
+   * A CONTINUOUS RUN IS NOT A LIFT, AND PERIODISING IT LIKE ONE BROKE IT.
+   *
+   * Everything below was written for sets of a movement, and applied to a
+   * 40-minute run it produced three separate absurdities:
+   *
+   *   * The two-set floor made a long run read `sets: 2`. The prescription text
+   *     hides it — "75 min" — but anything reading the number saw two sets of a
+   *     seventy-five minute run.
+   *   * The RPE floor of 5 clamped a recovery run's RPE 2 up to 5, so the one
+   *     movement in the catalogue whose entire purpose is being easy was
+   *     prescribed at moderate effort. It stopped being a recovery run.
+   *   * Lift rep-scaling took a 75-minute long run to 105 by week 3 — a 40%
+   *     jump inside one block, which is roughly four times what a runner should
+   *     add and exactly how people buy an injury.
+   *
+   * So a run progresses in DURATION only, gently, and its effort never moves:
+   * an easy run is easy in week 1 and week 4. That is what a zone means.
+   */
+  const continuous = base.unit === "minutes";
+  if (continuous) {
+    // Deliberately tighter than the 10%-a-week rule allows, because this is one
+    // conditioning slot inside someone else's strength block, not a run plan.
+    const growth = clamp(shape.repFactor, 0.7, 1.12);
+    return { ...base, sets: base.sets, reps: Math.max(1, Math.round(base.reps * growth)) };
+  }
+
   const sets = Math.max(wi === 3 ? 1 : 2, Math.round(base.sets * volumeScale) + shape.setsDelta);
-  const reps = Math.max(1, Math.round(base.reps * shape.repFactor));
-  const rpe = base.rpe != null ? clamp(Math.round((base.rpe + RPE_DELTA[wi]) * 2) / 2, 5, 10) : undefined;
+  // Seconds land on multiples of five. Scaling produced "9 × 81s", which is
+  // inside the sensible band and still reads as something a machine wrote —
+  // nobody has ever coached an eighty-one second hill.
+  const scaled = base.reps * shape.repFactor;
+  const reps = base.unit === "secs"
+    ? Math.max(5, Math.round(scaled / 5) * 5)
+    : Math.max(1, Math.round(scaled));
+  // The floor is 5 for gym work — nothing below that is worth a set — but a
+  // movement that STARTS easier than that is meant to be, so it keeps its own.
+  const floor = Math.min(5, base.rpe ?? 5);
+  // Quality work never climbs into the red — see QUALITY_PATTERNS. The deload's
+  // -2 still applies, because coming DOWN is always allowed.
+  const ceiling = pattern && QUALITY_PATTERNS.has(pattern) ? QUALITY_RPE_CEILING : 10;
+  const rpe = base.rpe != null
+    ? clamp(Math.round((base.rpe + RPE_DELTA[wi]) * 2) / 2, Math.min(floor, ceiling), ceiling)
+    : undefined;
   return { ...base, sets, reps, rpe };
 }
 
@@ -371,7 +604,12 @@ function sessionTitle(focus: GoalType, day: number): string {
     injury_recovery: "Rehab & activation",
     skill: "Ball skill",
   };
-  return `Day ${day + 1} · ${map[focus]}`;
+  // `focus` is typed GoalType and arrives from `programs.goal_type`, which is a
+  // bare text column — the app casts rather than checks. An unlisted value came
+  // out as the session being titled "Day 1 · undefined" on the athlete's plan.
+  // The day number is still true, so print that and drop the label rather than
+  // printing a word that means nothing.
+  return map[focus] ? `Day ${day + 1} · ${map[focus]}` : `Day ${day + 1}`;
 }
 
 function focusRotationFor(input: EngineInput): GoalType[] {
@@ -474,19 +712,101 @@ export function buildBlock(input: EngineInput): ProgramPlan {
   const rehab = input.goal === "injury_recovery";
   const themes = rehab ? REHAB_THEMES : THEMES;
   const rotation = focusRotationFor(input);
+  /**
+   * The coach's picks, plus the ones the sport makes non-negotiable.
+   *
+   * Appended rather than prepended: a coach who has chosen specific movements
+   * gets their days first, and the essentials fill in around them.
+   */
+  const required = [
+    ...(input.mustInclude ?? []),
+    ...(input.sport && SPRINT_SPORTS.has(input.sport)
+      ? SPRINT_ESSENTIALS.filter((id) => !(input.mustInclude ?? []).includes(id))
+      : []),
+  ];
 
   const weeks: ProgramWeek[] = THEMES.map((_, wi) => {
     // In-season, the matches are the training. Volume comes down so the sport
     // gets the athlete's legs, not the gym.
-    const volumeScale = (input.isInSeason ? 0.75 : 1) * blockScale;
+    const volumeScale = (input.isInSeason ? IN_SEASON_VOLUME : 1) * blockScale;
 
     const sessions: ProgramSession[] = Array.from({ length: days }, (_, di) => {
+      /**
+       * IN-SEASON, THE WEEK TAPERS INTO THE MATCH.
+       *
+       * Every session used to carry identical load, with the whole week simply
+       * scaled to 75%. That is not how the sport is actually coached. Elite
+       * football runs a matchday-minus microcycle — load peaks at MD-4 and MD-3
+       * and comes down through MD-2 and MD-1, so the player arrives fresh — and
+       * the research on professional squads confirms the pattern in the data:
+       * workload on MD-4/MD-3 is reliably greater than on MD-2/MD-1.
+       *
+       * A flat week does the opposite of what it should: the session closest to
+       * the match is exactly as heavy as the one furthest from it, so the gym
+       * takes the legs the match needed.
+       *
+       * So sessions descend across the week, from 0.95 down to 0.55, which
+       * averages to the same IN_SEASON_VOLUME the flat version used. Same total
+       * work, arranged the way a club would arrange it. Off-season is untouched
+       * — with no match to be fresh for there is nothing to taper into.
+       */
+      const taper = input.isInSeason && days > 1
+        ? (TAPER_HIGH - (TAPER_HIGH - TAPER_LOW) * (di / (days - 1))) / IN_SEASON_VOLUME
+        : 1;
+      const sessionScale = volumeScale * taper;
       const focusGoal = rotation[di % rotation.length];
       const ctx: Ctx = {
         focusGoal, pain, soreAreas, sport: input.sport, trainingFocus: input.focus, constraints,
-        picked: input.mustInclude?.length ? new Set(input.mustInclude) : undefined,
+        picked: required.length ? new Set(required) : undefined,
+        // The picks that belong to THIS day (see `pick`), rather than all of them.
+        forced: required.length
+          ? new Set(required.filter((_, pi) => pi % days === di))
+          : undefined,
       };
       const sessionIndex = wi * days + di;
+      /**
+       * WHICH MOVEMENTS THIS SESSION USES IS FIXED FOR THE WHOLE BLOCK.
+       *
+       * It used to key off `sessionIndex`, so the exercises changed every week
+       * — and the entire periodisation above is written on the assumption that
+       * they do not. What an athlete actually read on day 1 of a strength
+       * block was:
+       *
+       *   wk1  Bent-over barbell row    "Groove the movement..."
+       *   wk2  Barbell hip thrust       "Add a little weight and a set"
+       *   wk3  Pogo hops                "Peak volume: extra set..."
+       *   wk4  Dumbbell shoulder press  "Deload: SAME MOVEMENTS, ~60%"
+       *
+       * Four unrelated exercises, each captioned as though it were last week's
+       * lift with more weight on it. You cannot add weight to a row by doing
+       * pogo hops, you cannot tell whether the block worked, and week 4 says
+       * "same movements" over the one exercise that had not appeared yet.
+       *
+       * Progressive overload is the whole mechanism a training block works by:
+       * repeat the movement, add load, deload, repeat. So selection is now
+       * per BLOCK — day 1 is the same session for four weeks, and only the
+       * sets, reps and RPE move. Variety comes between blocks instead, which
+       * is where it belongs, via the `block` term.
+       *
+       * Ball work is the exception and still rotates weekly: skill progresses
+       * by difficulty and variation rather than by load, so a different drill
+       * each week is the point rather than a bug.
+       */
+      const blockSeed = (block - 1) * 5 + di;
+      /**
+       * THE MAIN LIFT SURVIVES THE BLOCK CHANGE; THE ACCESSORY WORK DOES NOT.
+       *
+       * Rotating everything between blocks means the athlete never keeps a
+       * squat long enough to get good at it, and it also made block 3 come out
+       * with LESS total work than block 1 — the change of exercise swamped the
+       * +8%-a-block volume step, so someone three blocks in was doing 91 sets
+       * where they used to do 95.
+       *
+       * Which is how strength blocks are actually written: you keep squatting
+       * and pressing for months and change what goes around them. So the
+       * primary slot ignores the block, and everything else rotates on it.
+       */
+      const seedFor = (slot: Slot) => (slot === "primary" ? di : blockSeed) + SLOT_SEED[slot];
 
       const blueprint = { ...BLUEPRINTS[focusGoal] };
       // In-season conditioning is what the fixtures are for.
@@ -532,23 +852,68 @@ export function buildBlock(input: EngineInput): ProgramPlan {
         const want = blueprint[slot] ?? 0;
         if (want <= 0) continue;
 
-        const ranked = rankSlot(slot, ctx);
+        let ranked = rankSlot(slot, ctx);
+
+        // Week 4 is the deload. Conditioning on a down week has to BE a down
+        // week — otherwise the same ranking that puts hill repeats in Peak
+        // puts them here too, and the week stops doing the one job it has.
+        // Falls back to the full list if nothing easy survived the athlete's
+        // exclusions, because a deload with no conditioning is still better
+        // than a crash.
+        /**
+         * A LONG EASY RUN IS NOT A FINISHER FOR A LIFTING SESSION.
+         *
+         * Conditioning was ranked without reference to what the session already
+         * was, so a strength day ended with "Long run — 84 min · Zone 2", and a
+         * SPEED block prescribed two 84-minute runs a week. Both are the
+         * interference effect written out as a plan: high-volume aerobic work
+         * is the one thing known to blunt the strength and power adaptations
+         * the rest of the session exists to produce.
+         *
+         * Continuous efforts are `sets: 1` with the minutes in `reps`, so a long
+         * one is identifiable without new metadata. They stay on endurance days,
+         * where they are the session rather than an afterthought. Everything
+         * short — hill repeats, sled pushes, kettlebell swings — is untouched:
+         * those finish a strength day rather than fighting it.
+         *
+         * Falls back to the full list rather than leaving the slot empty, for
+         * an athlete whose exclusions rule out everything short.
+         */
+        if (slot === "conditioning" && focusGoal !== "endurance") {
+          const compatible = ranked.filter(
+            (r) => !(r.m.dose.sets === 1 && (r.m.dose.reps ?? 0) >= LONG_EFFORT_MINUTES)
+          );
+          if (compatible.length) ranked = compatible;
+        }
+        if (slot === "conditioning" && wi === 3) {
+          const easy = ranked.filter((r) => (r.m.dose.rpe ?? 10) <= RECOVERY_RPE_CEILING);
+          if (easy.length) ranked = easy;
+        }
         // Patterns only need to be unique within the training blocks; a warm-up
         // and a cool-down sharing "mobility" is fine and in fact correct.
         const patternGuard = slot === "warmup" || slot === "cooldown" ? new Set<Pattern>() : usedPatterns;
-        const chosen = pick(ranked, want, sessionIndex + SLOT_SEED[slot], usedIds, patternGuard);
+        // Ball work never reaches here — the skill slot is handled above and
+        // still rotates weekly off `sessionIndex`.
+        const chosen = pick(ranked, want, seedFor(slot), usedIds, patternGuard, ctx.forced);
 
         const fixed = slot === "warmup" || slot === "cooldown";
         for (const m of chosen) {
-          const dose = doseForWeek(m.dose, m.prog, wi, volumeScale, fixed);
+          const dose = doseForWeek(m.dose, m.prog, wi, sessionScale, fixed, m.pattern, slot);
+          // A run's zone IS the instruction, and "40 min" on its own is the
+          // single most common way an easy day gets run too hard. Every other
+          // surface in the app speaks in zones; the programme was the one that
+          // didn't. The talk test goes on the cue, because a number without it
+          // coaches nobody who hasn't got a heart-rate strap on.
+          const zone = runZoneLabel(m.id);
+          const feel = runZoneFeel(m.id);
           drills.push({
             name: m.name,
             sets: dose.sets,
             reps: dose.reps,
-            cue: m.cue,
+            cue: feel ? `${zone} — ${feel}` : m.cue,
             reason: reasonFor(m, slot, ctx),
             progression: fixed ? undefined : WEEK_PROGRESSION[m.prog][wi],
-            prescription: prescriptionText(dose),
+            prescription: zone ? `${prescriptionText(dose)} · ${zone}` : prescriptionText(dose),
             slot,
             rest: dose.rest,
             intensity: dose.rpe != null ? `RPE ${dose.rpe}` : undefined,

@@ -2,8 +2,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   tierMeets, planFor, PLANS, ALL_PLANS, CAPABILITY_TIER, can, tierNeededFor,
-  PAID_TIER, maxActivePrograms, TRIAL_DAYS, type Capability,
+  PAID_TIER, maxActivePrograms, TRIAL_DAYS, VIDEO_QUOTA, type Capability,
 } from "./subscription";
+import { readFileSync } from "node:fs";
 
 test("tierMeets respects the ranking", () => {
   assert.ok(tierMeets("gold", "silver"));
@@ -93,4 +94,33 @@ test("the concurrent-program cap is a guard rail, not a lever", () => {
 
 test("the trial length is a sane number", () => {
   assert.ok(TRIAL_DAYS >= 0 && TRIAL_DAYS <= 30);
+});
+
+/**
+ * The video quota is written down twice — in `public.video_quota()` (migration
+ * 0036, which enforces it) and in `VIDEO_QUOTA` (which only explains it). Two
+ * copies of a number drift, so this reads the migration and compares.
+ *
+ * If this fails, the DATABASE is right: it is what actually rejects the insert.
+ */
+test("VIDEO_QUOTA matches public.video_quota() in the migration", () => {
+  const sql = readFileSync(
+    new URL("../supabase/migrations/0036_video_quota.sql", import.meta.url),
+    "utf8"
+  );
+  const body = sql.slice(sql.indexOf("create or replace function public.video_quota()"));
+  const fromSql: Record<string, number> = {};
+  for (const m of body.matchAll(/when '(gold|silver)' then (\d+)/g)) {
+    fromSql[m[1]] = Number(m[2]);
+  }
+  const bronze = body.match(/else (\d+)\s*(?:--|$)/m);
+  if (bronze) fromSql.bronze = Number(bronze[1]);
+
+  // Guard against the regexes silently matching nothing and "passing".
+  assert.deepEqual(Object.keys(fromSql).sort(), ["bronze", "gold", "silver"],
+    "could not parse the tiers out of the migration — fix this test, not the constant");
+
+  assert.equal(VIDEO_QUOTA.gold, fromSql.gold);
+  assert.equal(VIDEO_QUOTA.silver, fromSql.silver);
+  assert.equal(VIDEO_QUOTA.bronze, fromSql.bronze);
 });

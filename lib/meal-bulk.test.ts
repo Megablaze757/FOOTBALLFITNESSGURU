@@ -14,7 +14,11 @@ const plan = () => buildWeek(planTargets(ATHLETE), 0, DEFAULT_PREFS);
 // --- the bulk-buying idea ----------------------------------------------------
 
 test("a staple already in the basket is nearly free the second time", () => {
-  const riceMeal = MEALS.find((m) => m.id === "chicken_rice")!;
+  // Any rice-based meal. Was hard-coded to "chicken_rice", which is exactly the
+  // kind of fixture that breaks when the menu is rewritten — the behaviour under
+  // test is about bulk staples, not that one dish.
+  const riceMeal = MEALS.find((m) => m.items.some((i) => i.foodId === "rice"))!;
+  assert.ok(riceMeal, "no rice-based meal in the pool");
   const empty = marginalCost(riceMeal, new Map());
 
   // A 1kg bag of rice covers far more than one 90g portion, so once it's in the
@@ -40,10 +44,32 @@ test("packs are shared across the week, not bought per meal", () => {
   const list = shoppingList(plan());
   const shared = list.lines.filter((l) => l.meals > 1);
   assert.ok(shared.length >= 3, "staples should be reused across meals");
+
+  // WHAT THIS USED TO ASSERT, AND WHY IT WAS WRONG. The old check was
+  // `packs <= meals` — fewer packs than the meals they feed. That reads like
+  // the definition of sharing and isn't: it also fails when a single meal
+  // honestly needs more than one pack. Mushrooms come in a 250g punnet and a
+  // mushroom ragù wants 350g of them, so one meal is two packs however
+  // perfectly the week pools its shopping. The assertion passed for a year on
+  // the accident that no recipe had yet asked for more than a pack of
+  // anything small, and the first one that did looked like a sharing bug.
+  //
+  // Sharing means one pool per food, so the pack count is the ceiling of the
+  // WEEK's total need — never a ceiling taken per meal and added up.
+  // `needed` is rounded for display, so allow a unit of slop at a pack
+  // boundary rather than making this assertion flake on 250.4g of mushrooms.
   for (const l of shared) {
-    // The whole point: fewer packs than the meals they feed.
-    assert.ok(l.packs <= l.meals, `${l.food.id}: ${l.packs} packs for ${l.meals} meals`);
+    assert.ok(
+      l.packs <= Math.ceil((l.needed + 1) / l.food.packSize),
+      `${l.food.id}: ${l.packs} packs for ${l.needed}${l.food.unit} at ${l.food.packSize} a pack`
+    );
   }
+
+  // And it has to actually save something, or the line above is satisfied by
+  // a list that buys per meal and happens to round the same way.
+  const perMeal = shared.reduce((s, l) => s + l.meals * l.food.packPrice, 0);
+  const pooled = shared.reduce((s, l) => s + l.packs * l.food.packPrice, 0);
+  assert.ok(pooled < perMeal, `pooling saved nothing: £${pooled} vs £${perMeal} bought per meal`);
 });
 
 test("the list reports what a meal actually costs", () => {
@@ -69,7 +95,7 @@ test("bulk planning beats naive rotation on price", () => {
       const of = (slot: string) => MEALS.filter((m) => m.slot === slot);
       const picks = [of("Breakfast"), of("Lunch"), of("Dinner"), of("Snack")].map((l) => l[i % l.length]);
       return {
-        day, skipped: [],
+        day, skipped: [], load: "even" as const, targetKcal: 0,
         meals: picks.map((meal) => ({ meal, scale: 1, macros: { kcal: 0, protein: 0, carbs: 0, fats: 0 } })),
         macros: { kcal: 0, protein: 0, carbs: 0, fats: 0 },
       };

@@ -53,18 +53,58 @@ test("equipment normalises to something filterable", () => {
 // The defect this engine exists to fix
 // =============================================================================
 
-test("a block is twelve different sessions, not three on a loop", () => {
+/**
+ * A BLOCK IS ONE PROGRAMME PROGRESSED, NOT TWELVE UNRELATED WORKOUTS.
+ *
+ * This test used to demand at least 8 distinct movement-sets across the 12
+ * sessions, which sounds like variety and is actually the defect. The engine
+ * periodises DOSE — `WEEK_PROGRESSION` literally tells the athlete "add a little
+ * weight and a set, reps drop slightly" and, on the deload, "same movements,
+ * ~60% of the weight". Rotating the exercises weekly made all of that copy a
+ * lie. What day 1 of a strength block actually read was:
+ *
+ *   wk1  Bent-over barbell row    "Groove the movement..."
+ *   wk2  Barbell hip thrust       "Add a little weight and a set"
+ *   wk3  Pogo hops                "Peak volume: extra set..."
+ *   wk4  Dumbbell shoulder press  "Deload: SAME MOVEMENTS, ~60%"
+ *
+ * You cannot add weight to a row by doing pogo hops, and you cannot tell
+ * whether the block worked. Progressive overload is the mechanism a block works
+ * by, so the movements now hold and the numbers move.
+ *
+ * The original v1 defect this test was written for — three sessions on a loop,
+ * unchanged all block — is still caught, by the prescriptions.
+ */
+test("a block progresses one programme rather than rotating exercises", () => {
   const plan = buildBlock({ goal: "strength", painMap: {}, sport: "rugby", daysPerWeek: 3 });
   const sessions = plan.weeks.flatMap((w) => w.sessions);
   assert.equal(sessions.length, 12);
 
-  // v1 produced three distinct sets of drills across the whole block, because
-  // selection was deterministic and nothing varied per session.
-  const byMovements = new Set(sessions.map((s) => s.drills.map((d) => d.name).join("|")));
-  assert.ok(byMovements.size >= 8, `only ${byMovements.size} distinct sessions in a 12-session block`);
+  // The same day, across the four weeks, trains the same movements — that is
+  // what makes the load progression above meaningful.
+  //
+  // Two slots are excluded and both deliberately. Ball work rotates because
+  // skill progresses by difficulty rather than by load. Conditioning is swapped
+  // on the deload — week 4 trades hill repeats for a recovery run, which is the
+  // one job that week has.
+  for (let di = 0; di < 3; di++) {
+    const lifts = (wi: number) =>
+      plan.weeks[wi].sessions[di].drills
+        .filter((d) => !d.skill && d.slot !== "conditioning")
+        .map((d) => d.name).join("|");
+    for (let wi = 1; wi < 4; wi++) {
+      assert.equal(lifts(wi), lifts(0), `day ${di + 1} trains different movements in week ${wi + 1} than in week 1`);
+    }
+  }
 
+  // And the numbers DO move — otherwise it is the same session four times,
+  // which is the v1 defect this test was originally written to catch.
   const byPrescription = new Set(sessions.map((s) => s.drills.map((d) => `${d.name}:${d.sets}x${d.reps}`).join("|")));
-  assert.ok(byPrescription.size >= 10, `only ${byPrescription.size} distinct prescriptions`);
+  assert.ok(byPrescription.size >= 10, `only ${byPrescription.size} distinct prescriptions in a 12-session block`);
+
+  // Different days of the same week are different sessions.
+  const week1 = plan.weeks[0].sessions.map((s) => s.drills.map((d) => d.name).join("|"));
+  assert.equal(new Set(week1).size, week1.length, "two days in week 1 are the same session");
 });
 
 test("the same day in consecutive weeks is not the same session", () => {
@@ -307,11 +347,16 @@ test("a trimmed prescription still reads correctly", () => {
   const s = buildBlock({ goal: "strength", painMap: {}, sport: "gym" }).weeks[0].sessions[0];
   const eased = adjustForReadiness(s, "Yellow");
   for (const d of eased.drills) {
-    if (!d.prescription) continue;
+    // Only the "N × ..." forms state a set count. A continuous effort is
+    // rendered as "20 min" (see prescriptionText), where the leading number is
+    // MINUTES — reading it as sets was a latent bug in this test, and it went
+    // unnoticed only because a strength day happened to draw interval-style
+    // conditioning. There is nothing to trim on a single continuous effort, and
+    // `restated` correctly leaves it alone.
+    if (!d.prescription?.includes(" × ")) continue;
+    if (d.slot === "warmup" || d.slot === "cooldown" || d.skill) continue;
     const lead = Number(d.prescription.split(" ")[0]);
-    if (Number.isFinite(lead) && d.slot !== "warmup" && d.slot !== "cooldown" && !d.skill) {
-      assert.equal(lead, d.sets, `${d.name}: prescription "${d.prescription}" disagrees with sets=${d.sets}`);
-    }
+    assert.equal(lead, d.sets, `${d.name}: prescription "${d.prescription}" disagrees with sets=${d.sets}`);
   }
 });
 
@@ -353,4 +398,89 @@ test("with no picks, nothing changes", () => {
   const a = buildBlock({ goal: "speed", painMap: {}, sport: "football" });
   const b = buildBlock({ goal: "speed", painMap: {}, sport: "football", mustInclude: [] });
   assert.deepEqual(a, b);
+});
+
+// --- professional-grade dosing ------------------------------------------------
+
+/**
+ * QUALITY WORK IS NEVER TAKEN TO FAILURE.
+ *
+ * Sprinting, jumping and changing direction are limited by force per contact,
+ * not by how much work you can survive. The weekly RPE escalation applied to
+ * everything equally, so peak week prescribed flying sprints, hill sprints and
+ * the T-drill at RPE 10 — maximal, nothing in reserve — and depth drops and
+ * power cleans at 9.
+ *
+ * Nobody coaches a sprint session to failure. The velocity-loss literature is
+ * consistent that lower fatigue thresholds produce better explosive adaptations
+ * at matched volume, and a fatigued sprint is the textbook hamstring-strain
+ * mechanism.
+ */
+test("sprints, jumps and change-of-direction never exceed RPE 8", () => {
+  const quality = new Set(["sprint", "jump", "cod", "footwork"]);
+  for (const goal of ["speed", "agility", "strength"] as const) {
+    const plan = buildBlock({ goal, painMap: {}, sport: "football", daysPerWeek: 4 });
+    for (const w of plan.weeks) {
+      for (const s of w.sessions) {
+        for (const d of s.drills) {
+          const m = MOVEMENTS.find((x) => x.name === d.name);
+          if (!m || !quality.has(m.pattern) || !d.intensity) continue;
+          const rpe = Number(d.intensity.replace(/[^\d.]/g, ""));
+          assert.ok(
+            rpe <= 8,
+            `${w.theme} week: ${d.name} (${m.pattern}) prescribed at ${d.intensity}`
+          );
+        }
+      }
+    }
+  }
+});
+
+/** Strength work still gets to be hard — that is where a block's intensity lives. */
+test("but strength work still climbs into the peak week", () => {
+  const plan = buildBlock({ goal: "strength", painMap: {}, sport: "gym", daysPerWeek: 4 });
+  const peak = plan.weeks[2].sessions.flatMap((s) => s.drills);
+  const hard = peak.filter((d) => {
+    const m = MOVEMENTS.find((x) => x.name === d.name);
+    if (!m || !d.intensity) return false;
+    const heavy = ["squat", "hinge", "push_h", "push_v", "pull_h", "pull_v"].includes(m.pattern);
+    return heavy && Number(d.intensity.replace(/[^\d.]/g, "")) >= 9;
+  });
+  assert.ok(hard.length > 0, "peak week should push the strength lifts to RPE 9");
+});
+
+/**
+ * IN-SEASON, THE WEEK TAPERS INTO THE MATCH.
+ *
+ * Elite football runs a matchday-minus microcycle: load peaks at MD-4/MD-3 and
+ * comes down through MD-2 and MD-1 so the player arrives fresh, and studies of
+ * professional squads find exactly that pattern in the tracking data. A flat
+ * week does the opposite of what it should — the session closest to the match
+ * is as heavy as the one furthest from it, and the gym takes the legs the match
+ * needed.
+ */
+test("an in-season week comes down towards the match", () => {
+  const load = (p: ReturnType<typeof buildBlock>, di: number) =>
+    p.weeks[0].sessions[di].drills.reduce((n, d) => n + d.sets, 0);
+
+  const inSeason = buildBlock({ goal: "strength", painMap: {}, sport: "football", daysPerWeek: 4, isInSeason: true });
+  const off = buildBlock({ goal: "strength", painMap: {}, sport: "football", daysPerWeek: 4 });
+
+  const last = inSeason.weeks[0].sessions.length - 1;
+  assert.ok(
+    load(inSeason, last) < load(inSeason, 0),
+    `last session (${load(inSeason, last)} sets) should be lighter than the first (${load(inSeason, 0)})`
+  );
+
+  // Off-season has no match to be fresh for, so nothing to taper into.
+  const offLoads = off.weeks[0].sessions.map((_, i) => load(off, i));
+  assert.ok(
+    Math.max(...offLoads) - Math.min(...offLoads) < offLoads[0],
+    "off-season sessions should not be tapered"
+  );
+
+  // And the week still does less work overall than the off-season one.
+  const total = (p: ReturnType<typeof buildBlock>) =>
+    p.weeks[0].sessions.reduce((n, s) => n + s.drills.reduce((m, d) => m + d.sets, 0), 0);
+  assert.ok(total(inSeason) < total(off), "in-season should be a lighter week overall");
 });

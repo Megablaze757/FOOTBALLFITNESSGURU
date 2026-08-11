@@ -100,7 +100,13 @@ export default function TrainPage() {
     <div className="animate-fade-up space-y-5">
       <header>
         <h1 className="text-3xl font-extrabold tracking-tight">Video analysis</h1>
-        <p className="mt-1 text-sm text-slate-400">Film a movement, get it broken down frame by frame, and drills to fix what it finds.</p>
+        {/* Says where it runs, because that is the question people actually
+            have about uploading a video of themselves — and the answer is
+            unusually good. */}
+        <p className="mt-1 text-sm text-slate-400">
+          Film a couple of reps and get it read frame by frame, with drills for what it finds.
+          Runs on your phone — the clip is never sent anywhere to be analysed.
+        </p>
       </header>
 
       <VideoUploader sport={data?.sport} onUploaded={reload} />
@@ -112,7 +118,9 @@ export default function TrainPage() {
         {loading ? (
           <div className="card h-20 animate-pulse" />
         ) : !videos.length ? (
-          <p className="card px-4 py-8 text-center text-sm text-slate-500">No videos yet. Upload one above.</p>
+          <p className="card px-4 py-6 text-center text-sm text-slate-500">
+            Nothing analysed yet. Pick what you want checked above and film a couple of reps.
+          </p>
         ) : (
           <ul className="space-y-2">
             {videos.map((v) => {

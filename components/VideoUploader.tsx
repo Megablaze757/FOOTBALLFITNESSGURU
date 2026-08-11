@@ -1,10 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { MOVEMENTS, type MovementType } from "@/lib/movement";
 import { sportTerms } from "@/lib/sport-terms";
 import { MAX_CLIP_SECONDS } from "@/components/InBrowserAnalysis";
+import { todayLocal } from "@/lib/day";
+import { VIDEO_QUOTA, planFor } from "@/lib/subscription";
+import type { Tier } from "@/lib/types";
 
 // Must match the bucket's file_size_limit in migration 0036 — this copy exists
 // only to give a useful message before the upload starts.
@@ -69,7 +73,14 @@ export function VideoUploader({ sport, onUploaded }: { sport?: string; onUploade
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<{ url: string; seconds: number } | null>(null);
   const [done, setDone] = useState(false);
+  // Turns the error into an upgrade route rather than a dead end.
+  const [atCap, setAtCap] = useState(false);
   const thumbFor = useRef<File | null>(null);
+  // Held so the label's hidden input can be reached if we ever need to open the
+  // picker programmatically. The tiles deliberately do NOT do that any more —
+  // a file dialog appearing when you tap "Squat / lift" is a surprise when
+  // there is a visible upload box directly below.
+  const fileInput = useRef<HTMLInputElement>(null);
 
   // Build the preview as soon as a file is picked — that's the confirmation
   // that it actually landed, rather than just a filename.
@@ -103,7 +114,7 @@ export function VideoUploader({ sport, onUploaded }: { sport?: string; onUploade
       return;
     }
 
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayLocal();
     const { data: checkIn } = await supabase
       .from("daily_check_ins").select("id").eq("user_id", user.id).eq("check_in_date", today).maybeSingle();
 
@@ -115,12 +126,58 @@ export function VideoUploader({ sport, onUploaded }: { sport?: string; onUploade
       return;
     }
 
+    /**
+     * THE MONTHLY CAP, CHECKED BEFORE THE BYTES MOVE.
+     *
+     * `videos: insert own` (migration 0036) counts this month's rows inside the
+     * RLS policy — 3 on free, 15 on Silver, 40 on Gold. That is the right place
+     * to enforce it, because a client-side check only stops honest users.
+     *
+     * But the ORDER here was wrong, and it is why "upload not working" had no
+     * useful symptom. The file went to storage first and the row second, so
+     * someone at their cap waited out a full 60MB upload on mobile data, then
+     * got `new row violates row-level security policy for table "videos"`,
+     * then had the upload silently deleted again. A database sentence about a
+     * policy, after a two-minute wait, for a limit nothing had mentioned.
+     *
+     * One cheap count first. It cannot replace the policy — a race or a direct
+     * REST call still hits the real check below — but it turns the common case
+     * into an instant, honest answer instead of a slow, cryptic one.
+     */
+    const monthStart = `${todayLocal().slice(0, 7)}-01T00:00:00.000Z`;
+    const [{ count: usedThisMonth }, { data: subRow }] = await Promise.all([
+      supabase.from("videos").select("id", { count: "exact", head: true })
+        .eq("user_id", user.id).gte("created_at", monthStart),
+      supabase.from("subscriptions").select("tier, status").eq("user_id", user.id).maybeSingle(),
+    ]);
+    const tier: Tier = subRow?.status === "active" && subRow.tier ? subRow.tier : "bronze";
+    const quota = VIDEO_QUOTA[tier];
+    if ((usedThisMonth ?? 0) >= quota) {
+      setError(
+        `You've used all ${quota} of this month's uploads on ${planFor(tier).name}. ` +
+        `The cap resets on the 1st — or a higher plan lifts it. Clips you've already ` +
+        `uploaded still analyse as many times as you like.`
+      );
+      setAtCap(true);
+      setBusy(false);
+      return;
+    }
+
     const ext = file.name.split(".").pop() || "mp4";
     const path = `${user.id}/${crypto.randomUUID()}.${ext}`;
 
     const { error: upErr } = await supabase.storage.from("videos").upload(path, file, { contentType: file.type || "video/mp4" });
     if (upErr) {
-      setError(upErr.message);
+      // The bucket's own limits speak in HTTP, not English. Both of these are
+      // things the athlete can act on, so say which one it was.
+      const m = upErr.message || "";
+      setError(
+        /mime|content type/i.test(m)
+          ? `That file type isn't supported — MP4, MOV, WebM or MKV. (${m})`
+          : /size|413|too large|exceeded/i.test(m)
+            ? `That clip is over the ${MAX_UPLOAD_MB}MB limit. Trim it to the movement itself and it'll go straight through.`
+            : `Upload failed: ${m}`
+      );
       setBusy(false);
       return;
     }
@@ -165,7 +222,18 @@ export function VideoUploader({ sport, onUploaded }: { sport?: string; onUploade
       const { error: cleanupErr } = await supabase.storage.from("videos").remove([path]);
       if (cleanupErr) console.warn("orphaned upload left in storage:", path, cleanupErr.message);
 
-      setError(`Upload failed: ${rowErr.message}`);
+      // The quota lives in the RLS policy, so hitting it arrives here as a
+      // generic row-level-security violation. Untranslated, that is the message
+      // an athlete was being shown for the entirely ordinary event of reaching
+      // a documented limit. The pre-flight count above catches this first
+      // almost always; this is the race and the direct-API case.
+      const isQuota = /row-level security|violates.*policy/i.test(rowErr.message);
+      if (isQuota) setAtCap(true);
+      setError(
+        isQuota
+          ? "That's this month's upload limit reached. It resets on the 1st, and a higher plan lifts it."
+          : `Upload failed: ${rowErr.message}`
+      );
       setBusy(false);
       return;
     }
@@ -192,12 +260,66 @@ export function VideoUploader({ sport, onUploaded }: { sport?: string; onUploade
           <button type="button" onClick={() => setFile(null)} className="shrink-0 text-xs text-slate-400 hover:text-slate-200">Change</button>
         </div>
       ) : (
-        <label className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-white/15 px-4 py-8 text-center transition hover:border-pitch-400/50 hover:bg-white/[0.03]">
-          <span className="text-3xl">🎬</span>
-          <span className="mt-2 text-sm font-medium text-slate-200">{file ? `Reading ${file.name}…` : "Choose or drop a video"}</span>
-          <span className="mt-1 text-xs text-slate-500">MP4 / MOV — up to 30s. Short clips of one or two reps read best.</span>
-          <input type="file" accept="video/*" className="hidden" onChange={(e) => { setDone(false); setFile(e.target.files?.[0] ?? null); }} />
-        </label>
+        <div>
+          {/* WHAT DO YOU WANT CHECKED, NOT "CHOOSE A FILE".
+              The first thing here was a dashed box and nothing else, for a
+              feature that runs pose tracking on your own phone and can tell you
+              your knee is collapsing. Nobody uploads a video to find out what an
+              app might do with it — and the one control that decides which
+              checks can actually run was a <select> further down, after the
+              file was already picked.
+
+              The tiles ARE the explanation: nine things it can read, each
+              saying what it looks at. Tapping one sets the movement and opens
+              the picker, so choosing what you want checked and choosing the
+              clip is one gesture. */}
+          <span className="field-label">What do you want checked?</span>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {MOVEMENTS.map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => { setMovement(m.id); setDone(false); }}
+                className={`rounded-2xl border p-3 text-left transition ${
+                  movement === m.id
+                    ? "border-pitch-400/50 bg-pitch-400/10"
+                    : "border-white/10 bg-white/[0.02] hover:border-white/25"
+                }`}
+              >
+                <span className="text-lg" aria-hidden>{m.icon}</span>
+                <span className={`mt-1 block text-xs font-bold ${movement === m.id ? "text-pitch-400" : "text-slate-200"}`}>
+                  {m.label}
+                </span>
+                <span className="mt-0.5 block text-[11px] leading-snug text-slate-500">{m.blurb}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* THE UPLOAD BOX STAYS. My first pass replaced it with the tiles
+              alone — tapping one opened the picker, which is neat and entirely
+              invisible. Nothing on the screen said "this is where you put a
+              video", so the page went from under-explained to unusable.
+
+              The tiles refine WHAT gets checked; this is the thing you came to
+              do. Both, in that order. */}
+          <label className="mt-3 flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-white/15 px-4 py-7 text-center transition hover:border-pitch-400/50 hover:bg-white/[0.03]">
+            <span className="text-3xl" aria-hidden>🎬</span>
+            <span className="mt-2 text-sm font-semibold text-slate-100">Choose or drop a video</span>
+            <span className="mt-1 text-xs text-slate-500">
+              MP4 / MOV, up to 30s — one or two reps reads best.
+            </span>
+            <span className="mt-1 text-xs text-slate-500">
+              Analysed on your phone; the clip is never uploaded for processing.
+            </span>
+            <input
+              ref={fileInput}
+              type="file"
+              accept="video/*"
+              className="hidden"
+              onChange={(e) => { setDone(false); setFile(e.target.files?.[0] ?? null); }}
+            />
+          </label>
+        </div>
       )}
 
       {file && file.size > HEAVY_UPLOAD_BYTES && (
@@ -221,32 +343,55 @@ export function VideoUploader({ sport, onUploaded }: { sport?: string; onUploade
             />
           </label>
 
-          {/* What the clip shows drives which checks we can actually run. */}
-          <label className="block">
-            <span className="field-label">What&apos;s in this clip?</span>
-            <select value={movement} onChange={(e) => setMovement(e.target.value as MovementType)} className="field [color-scheme:dark]">
-              {MOVEMENTS.map((m) => <option key={m.id} value={m.id}>{m.icon} {m.label} — {m.blurb}</option>)}
-            </select>
-          </label>
-
-          <div className="grid grid-cols-2 gap-3">
-            <label className="block">
-              <span className="field-label">Session</span>
-              <select value={sessionType} onChange={(e) => setSessionType(e.target.value as SessionType)} className="field [color-scheme:dark]">
-                <option value="training">Training</option>
-                <option value="match">{terms.eventLabel}</option>
-                <option value="recovery">Recovery</option>
-              </select>
-            </label>
-            <label className="flex items-end gap-2 pb-3">
-              <input type="checkbox" checked={isInSeason} onChange={(e) => setIsInSeason(e.target.checked)} className="h-5 w-5 accent-pitch-500" />
-              <span className="text-sm text-slate-300">In-season</span>
-            </label>
+          {/* The movement is already chosen — it's how you got here. Shown as a
+              fact with a way back, not asked again. */}
+          <div className="flex items-center gap-2 text-xs text-slate-400">
+            <span aria-hidden>{MOVEMENTS.find((m) => m.id === movement)?.icon}</span>
+            Checking <span className="font-semibold text-slate-200">{MOVEMENTS.find((m) => m.id === movement)?.label}</span>
+            <button type="button" onClick={() => setFile(null)} className="tap-target text-slate-500 hover:text-pitch-400">change</button>
           </div>
+
+          {/* Session type and in-season are for the training-load record, not
+              for the analysis. They were two of the four things asked before
+              you could press upload; they're one tap away instead. */}
+          <details className="group rounded-2xl border border-white/[0.08]">
+            <summary className="flex cursor-pointer list-none items-center justify-between p-3 text-xs font-semibold text-slate-400">
+              <span>Details <span className="font-normal text-slate-600">session type, in-season</span></span>
+              <span className="text-slate-600 transition group-open:rotate-180" aria-hidden>▾</span>
+            </summary>
+            <div className="grid grid-cols-2 gap-3 border-t border-white/[0.06] p-3">
+              <label className="block">
+                <span className="field-label">Session</span>
+                <select value={sessionType} onChange={(e) => setSessionType(e.target.value as SessionType)} className="field [color-scheme:dark]">
+                  <option value="training">Training</option>
+                  <option value="match">{terms.eventLabel}</option>
+                  <option value="recovery">Recovery</option>
+                </select>
+              </label>
+              <label className="flex items-end gap-2 pb-3">
+                <input type="checkbox" checked={isInSeason} onChange={(e) => setIsInSeason(e.target.checked)} className="h-5 w-5 accent-pitch-500" />
+                <span className="text-sm text-slate-300">In-season</span>
+              </label>
+            </div>
+          </details>
         </>
       )}
 
-      {error && <p className="text-sm text-readiness-red">{error}</p>}
+      {/* A limit reached is not an error. Red says "you did something wrong,
+          try again", and trying again is precisely what cannot work here — so
+          the cap gets amber, a plain explanation, and the one thing that
+          actually resolves it. */}
+      {error && (
+        atCap
+          ? <div className="rounded-xl border border-amber-400/25 bg-amber-400/[0.06] p-3">
+              <p className="text-sm font-bold text-amber-300">Monthly upload limit reached</p>
+              <p className="mt-1 text-xs leading-relaxed text-slate-400">{error}</p>
+              <Link href="/pricing" className="chip-option chip-option-sm mt-2 border-pitch-400/40 text-pitch-400">
+                See plans
+              </Link>
+            </div>
+          : <p className="text-sm text-readiness-red">{error}</p>
+      )}
       {done && !file && (
         <p className="rounded-xl border border-readiness-green/30 bg-readiness-green/[0.06] px-3 py-2 text-sm text-readiness-green">
           ✓ Uploaded — tap it below to analyse.

@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { BackLink } from "@/components/BackLink";
+import { EmptyState } from "@/components/EmptyState";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/lib/auth";
@@ -13,6 +15,7 @@ import { AssignProgram } from "@/components/AssignProgram";
 import { positionList } from "@/lib/positions";
 import type { SportId } from "@/lib/exercises";
 import type { DailyCheckIn, Profile, Program, TrainingLog } from "@/lib/types";
+import { daysAgoLocal, todayLocal } from "@/lib/day";
 
 interface AthleteRow {
   id: string;
@@ -32,7 +35,7 @@ interface AthleteRow {
 
 export default function SquadPage() {
   const user = useCurrentUser();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayLocal();
 
   const { data, loading, reload } = useAsync(async () => {
     const supabase = createClient();
@@ -51,7 +54,7 @@ export default function SquadPage() {
     if (!acceptedIds.length) return { isCoach: true, athletes: [] as AthleteRow[], pending };
     const ids = acceptedIds;
 
-    const since7 = new Date(Date.now() - 6 * 86400_000).toISOString().slice(0, 10);
+    const since7 = daysAgoLocal(6);
     /**
      * EVERY COST HERE IS MULTIPLIED BY THE SIZE OF THE SQUAD.
      *
@@ -66,8 +69,8 @@ export default function SquadPage() {
      * the plan JSON fetched only for ACTIVE programs; training bounded to ACWR's
      * own 28-day window. Nothing on screen changes.
      */
-    const since60 = new Date(Date.now() - 59 * 86400_000).toISOString().slice(0, 10);
-    const since28 = new Date(Date.now() - 27 * 86400_000).toISOString().slice(0, 10);
+    const since60 = daysAgoLocal(59);
+    const since28 = daysAgoLocal(27);
     const [{ data: profiles }, { data: checkIns }, { data: activePrograms }, { data: allProgramStatuses }, { data: training }, { data: nutrition }, { data: benches }] = await Promise.all([
       supabase.from("profiles").select("id, full_name, sport, position, positions").in("id", ids),
       supabase.from("daily_check_ins")
@@ -185,7 +188,13 @@ export default function SquadPage() {
         </div>
       )}
       {!data.athletes.length ? (
-        <p className="card px-4 py-8 text-center text-sm text-slate-500">No athletes yet — add one by email above.</p>
+        <div className="card">
+          <EmptyState
+            icon="👥"
+            title="No athletes yet"
+            body="Invite one by email using the box above. Once they accept you'll see their readiness, check-in streak and training load here — and they'll see nothing of yours."
+          />
+        </div>
       ) : (
         <>
         <h2 className="field-label">🏆 Squad leaderboard</h2>
@@ -247,13 +256,11 @@ export default function SquadPage() {
 
 function Header() {
   return (
-    <header className="flex items-center justify-between">
-      <div>
+    <header className="flex flex-col">
+        <BackLink href="/profile" label="Profile" />
         <h1 className="text-3xl font-extrabold tracking-tight">Squad</h1>
         <p className="mt-1 text-sm text-slate-400">Who is fit, who is carrying something, and who has stopped checking in.</p>
-      </div>
-      <Link href="/profile" className="text-sm text-slate-400 hover:text-pitch-400">← Back</Link>
-    </header>
+      </header>
   );
 }
 

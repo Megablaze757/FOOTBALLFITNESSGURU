@@ -217,3 +217,22 @@ export const TEAM_PLAN: TeamPlan = {
 export function planFor(tier: Tier): TierPlan {
   return ALL_PLANS.find((p) => p.id === tier) ?? FREE;
 }
+
+/**
+ * Video uploads allowed per calendar month, per tier.
+ *
+ * MUST MATCH `public.video_quota()` in migration 0036 — the database is the
+ * enforcement and this is only here so the app can say "3 of 3 used" before
+ * making someone wait out a 60MB upload that RLS is going to reject.
+ *
+ * Two copies of a limit is a drift risk, and it is accepted deliberately: the
+ * alternative is an extra round trip to an RPC on every visit to the video
+ * page, to learn a number that changes about once a year. `videoQuotaMatchesSql`
+ * in the test suite reads the migration and fails if these disagree, which
+ * removes the only real danger.
+ */
+export const VIDEO_QUOTA: Record<Tier, number> = {
+  gold: 40,
+  silver: 15,
+  bronze: 3,
+};

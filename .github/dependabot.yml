@@ -1,0 +1,42 @@
+# Dependency scanning and patching.
+#
+# There was none, so a vulnerable transitive dependency would have sat until
+# someone happened to run `npm audit` by hand. Weekly rather than daily: this is
+# a small codebase with one maintainer, and a PR queue nobody reads is the same
+# as no scanning at all.
+#
+# Grouped into one PR per ecosystem for the same reason — fourteen separate
+# patch bumps is a queue; one is a review.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      # Patch and minor together: these should be routine, and CI now gates the
+      # deploy so a bad one cannot reach the site.
+      routine:
+        update-types: ["minor", "patch"]
+    labels: ["dependencies"]
+
+  # The Worker has its own lockfile and its own blast radius — it holds the
+  # service-role key, so its dependencies are worth watching separately.
+  - package-ecosystem: npm
+    directory: "/cloudflare"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    groups:
+      routine:
+        update-types: ["minor", "patch"]
+    labels: ["dependencies", "worker"]
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+    labels: ["dependencies", "ci"]

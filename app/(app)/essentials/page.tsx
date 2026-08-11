@@ -11,8 +11,9 @@ import { positionList } from "@/lib/positions";
 import { getExercise, SPORTS, type Exercise, type SportId } from "@/lib/exercises";
 import { ExerciseModal } from "@/components/ExerciseDetail";
 import { SkillDrills } from "@/components/SkillDrills";
-import { Tabs } from "@/components/Tabs";
+import { Tabs, TabPanel } from "@/components/Tabs";
 import { ProtocolCard } from "@/components/ProtocolCard";
+import { FuelTimeline } from "@/components/FuelTimeline";
 
 // The Playbook covers four unrelated topics. Stacked, that ran to six and a
 // half screens on a phone; split into tabs each view is about two.
@@ -97,33 +98,38 @@ export default function EssentialsPage() {
 
       {/* Position essentials */}
       {tab === "position" && (
+      <TabPanel id="position">
       <div className="space-y-4">
         {guides.map(({ position, guide }, i) => (
         <section key={position || "all"} className="card-premium p-6">
           <div className="flex items-center gap-2">
             <span className="chip text-pitch-400">{sportLabel}</span>
-            <span className="chip">{position || "All-round"}</span>
             {i === 0 && guides.length > 1 && <span className="chip text-slate-400">main</span>}
           </div>
-          <h2 className="mt-3 text-xl font-extrabold">
-            {position ? `${position} essentials` : "Your position essentials"}
+          {/* The position was a chip AND the heading. One of them was enough. */}
+          <h2 className="mt-3 text-2xl font-extrabold">
+            {position ? `Playing ${position}` : "Your position essentials"}
           </h2>
           <p className="mt-1 text-sm text-slate-300">{guide.summary}</p>
 
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <Col title="Prioritise physically" items={guide.physical} icon="⚡" />
-            <Col title="Sharpen technically" items={guide.skills} icon="🎯" />
+          {/* Two bordered panels inside a bordered card inside a bordered page
+              is three frames around a bulleted list. The lists carry their own
+              heading and a coloured marker; they don't need boxes to be told
+              apart. */}
+          <div className="mt-5 grid gap-5 sm:grid-cols-2">
+            <Col title="Prioritise physically" items={guide.physical} icon="⚡" colour="#e3b53f" />
+            <Col title="Sharpen technically" items={guide.skills} icon="🎯" colour="#38bdf8" />
           </div>
 
-          <div className="mt-4">
+          <div className="mt-5 border-t border-white/[0.07] pt-4">
             <div className="stat-label mb-2">Key drills for you</div>
             <div className="flex flex-wrap gap-2">
               {guide.keyDrills.map((id) => {
                 const ex = getExercise(id);
                 if (!ex) return null;
                 return (
-                  <button key={id} onClick={() => setOpen(ex)} className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-sm text-slate-200 transition hover:border-pitch-400/40 hover:bg-pitch-400/[0.06]">
-                    {ex.name} ›
+                  <button key={id} onClick={() => setOpen(ex)} className="chip-option text-slate-200 hover:border-pitch-400/40">
+                    {ex.name} <span aria-hidden>›</span>
                   </button>
                 );
               })}
@@ -135,45 +141,43 @@ export default function EssentialsPage() {
         </section>
         ))}
       </div>
+      </TabPanel>
       )}
 
       {/* Technical work. The position guide says a centre back needs heading;
           this is where they find out how to actually practise it. */}
-      {tab === "skills" && <SkillDrills sport={sport} position={positions} />}
+      {tab === "skills" && <TabPanel id="skills"><SkillDrills sport={sport} position={positions} /></TabPanel>}
 
-      {/* Gameday nutrition timeline */}
+      {/* One block, not two. `tab === "fuel"` was tested twice in a row with a
+          separate section under each — same condition, same tab, two places to
+          keep in step. */}
       {tab === "fuel" && (
-      <section>
-        <h2 className="field-label mb-3">{gameday} nutrition</h2>
-        <ol className="relative space-y-3 border-l border-white/10 pl-5">
-          {GAMEDAY_NUTRITION.map((ph) => (
-            <li key={ph.when} className="relative">
-              <span className="absolute -left-[27px] grid h-9 w-9 place-items-center rounded-full border border-white/10 bg-ink-800 text-base">{ph.icon}</span>
-              <div className="card p-4">
-                <div className="flex items-baseline justify-between gap-2">
-                  <span className="font-bold text-slate-100">{ph.title}</span>
-                  <span className="chip text-pitch-400">{ph.when}</span>
-                </div>
-                <ul className="mt-2 space-y-1 text-sm text-slate-300">
-                  {ph.tips.map((t) => <li key={t} className="flex gap-2"><span className="text-slate-500">•</span>{t}</li>)}
-                </ul>
-              </div>
-            </li>
-          ))}
-        </ol>
-      </section>
+      <TabPanel id="fuel">
+      <div className="space-y-6">
+        <section>
+          <h2 className="field-label mb-1">{gameday} fuelling</h2>
+          <p className="mb-3 text-xs text-slate-500">Tap the point you&apos;re at.</p>
+          {/* Was six phases x three tips rendered at once — eighteen bullets and
+              180 words down a rail, all the same weight, with the reader left to
+              find their own place in it. There is no reason to read Friday's
+              dinner advice from the changing room ninety minutes before
+              kick-off. */}
+          <FuelTimeline phases={GAMEDAY_NUTRITION} label={gameday} />
+        </section>
 
-      )}
-
-      {/* General recovery protocols */}
-      {tab === "fuel" && (
-      <section>
-        <h2 className="field-label mb-3">Recovery protocols</h2>
-        <div className="grid gap-3 sm:grid-cols-3">
-          {RECOVERY_GENERAL.map((p) => <ProtocolCard key={p.id} p={p} />)}
-        </div>
-      </section>
-
+        <section>
+          <h2 className="field-label mb-1">Recovery protocols</h2>
+          <p className="mb-3 text-xs text-slate-500">Tap one to open the steps.</p>
+          {/* Was three fully-expanded protocol cards side by side — each with a
+              checklist, red flags and exercise chips — squeezed into a third of
+              the width and all of different heights. Collapsed, in one column,
+              they're a list you can scan and open. */}
+          <div className="space-y-2">
+            {RECOVERY_GENERAL.map((p) => <ProtocolCard key={p.id} p={p} />)}
+          </div>
+        </section>
+      </div>
+      </TabPanel>
       )}
 
       {open && <ExerciseModal ex={open} onClose={() => setOpen(null)} />}
@@ -181,12 +185,19 @@ export default function EssentialsPage() {
   );
 }
 
-function Col({ title, items, icon }: { title: string; items: string[]; icon: string }) {
+function Col({ title, items, icon, colour }: {
+  title: string; items: string[]; icon: string; colour: string;
+}) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+    <div>
       <div className="stat-label mb-2">{icon} {title}</div>
-      <ul className="space-y-1.5 text-sm text-slate-200">
-        {items.map((i) => <li key={i} className="flex gap-2"><span className="text-pitch-400">›</span>{i}</li>)}
+      <ul className="space-y-2 text-sm text-slate-200">
+        {items.map((i) => (
+          <li key={i} className="flex gap-2.5">
+            <span className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: colour }} />
+            {i}
+          </li>
+        ))}
       </ul>
     </div>
   );

@@ -4,13 +4,19 @@ import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { invalidate } from "@/lib/use-async";
 import {
-  planTargets, buildWeek, shoppingList, shoppingListText, unmetSlots, dislikedFoodIds, favouriteFoodIds,
+  effectiveMealPrefs, planTargets, buildWeek, shoppingList, unmetSlots, dislikedFoodIds, favouriteFoodIds,
+  swapKey, slotTargetKcal, type MealSwaps,
   ACTIVITY_LEVELS, DIET_GOALS, DIET_PATTERNS, AVOIDANCES, DEFAULT_PREFS,
   type BodyStats, type Sex, type ActivityLevel, type DietGoal, type PlannedDay,
   type MealPrefs, type DietPattern, type Avoidance,
 } from "@/lib/meal-plan";
 import { parseSchedule } from "@/lib/meal-schedule";
-import { SUPERMARKETS, PRICES_REVIEWED, productLink, FOOD_BY_ID as FOOD_LOOKUP } from "@/lib/food-db";
+import { SUPERMARKETS, type StoreId, type PriceOverrides } from "@/lib/food-db";
+import type { TargetContext } from "@/lib/nutrition";
+import { Recipe } from "@/components/Recipe";
+import { MealSwap, type SwapTarget } from "@/components/MealSwap";
+import { FOOD_BY_ID as FOOD_LOOKUP } from "@/lib/food-db";
+import { ShoppingList } from "@/components/ShoppingList";
 
 interface Props {
   userId: string;
@@ -19,9 +25,24 @@ interface Props {
   initialNotes?: string | null;
   /** Seed of the plan they're already on. Null means they've never generated one. */
   initialSeed?: number | null;
+  /**
+   * The sport goal and logged training the daily card was computed from.
+   *
+   * Without this the planner reached the same function by a different route —
+   * no sport goal, no measured training — and produced a different calorie
+   * target from the one shown at the top of the page. Same function, same
+   * inputs, or they disagree again.
+   */
+  context?: TargetContext;
+  /** Hand-picked meals saved against the current plan. */
+  initialSwaps?: MealSwaps;
+  /** Meals the PREVIOUS plan served, so this one can move on from them. */
+  initialRecent?: string[] | null;
+  /** Dishes they've starred, which the planner favours heavily. */
+  initialStarred?: string[] | null;
 }
 
-export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initialSeed }: Props) {
+export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initialSeed, initialSwaps, initialRecent, initialStarred, context }: Props) {
   const [sex, setSex] = useState<Sex>(initial?.sex ?? "male");
   const [age, setAge] = useState(String(initial?.age ?? 20));
   const [heightCm, setHeightCm] = useState(String(initial?.heightCm ?? 178));
@@ -31,9 +52,33 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
   const [week, setWeek] = useState<PlannedDay[] | null>(null);
   const [seed, setSeed] = useState<number | null>(initialSeed ?? null);
   const [openDay, setOpenDay] = useState(0);
-  const [copied, setCopied] = useState(false);
+  /**
+   * Meals chosen by hand, on top of whatever the seed produced.
+   *
+   * Held here and persisted to the profile rather than recomputed, because the
+   * week is rebuilt from the seed on every visit — a swap that lived only in
+   * component state lasted until the next page load, which is worse than not
+   * offering one.
+   */
+  const [swaps, setSwaps] = useState<MealSwaps>(initialSwaps ?? {});
+  /**
+   * What the plan BEFORE this one served.
+   *
+   * Persisted for the same reason the seed is: the week is rebuilt from scratch
+   * on every visit, so anything that shaped it has to survive a reload or the
+   * rebuild silently produces a different plan from the one on screen.
+   */
+  const [recent, setRecent] = useState<string[]>(initialRecent ?? []);
+  /**
+   * Dishes they've starred.
+   *
+   * Unlike swaps, these SURVIVE a regenerate: a swap is positional and means
+   * nothing in a new plan, while a star is about the dish itself and should
+   * follow them until they take it off.
+   */
+  const [starred, setStarred] = useState<string[]>(initialStarred ?? []);
+  const [swapping, setSwapping] = useState<SwapTarget | null>(null);
   const [saved, setSaved] = useState(false);
-  const [store, setStore] = useState(SUPERMARKETS[0]);
   const [prefs, setPrefs] = useState<MealPrefs>({ ...DEFAULT_PREFS, ...(initialPrefs ?? {}) });
   const [notes, setNotes] = useState(initialNotes ?? "");
   const noteDislikes = useMemo(() => dislikedFoodIds(notes), [notes]);
@@ -43,20 +88,90 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
   // us planning (and shopping for) a Tuesday dinner.
   const schedule = useMemo(() => parseSchedule(notes), [notes]);
 
-  const stats: BodyStats = {
+  /**
+   * WHICH OF THESE FOUR ARE ACTUALLY THEIRS.
+   *
+   * Height, age, weight and sex are the parameters the whole plan is computed
+   * from, and each falls back to a hard-coded default when the profile hasn't
+   * got it — 178cm, 20 years, 75kg, male. That was survivable while they sat in
+   * an open form where you could see what they were set to. It stopped being
+   * survivable when the form moved behind "Adjust" and I put a summary line on
+   * the front reading "From 20 yrs · 178cm · 75kg", which states invented
+   * numbers as though the athlete had given them.
+   *
+   * A field counts as theirs once it arrives from the profile OR they type into
+   * it here. Anything else is named as an assumption.
+   */
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [adjustOpen, setAdjustOpen] = useState(false);
+  function touch(field: string) {
+    setTouched((t) => (t[field] ? t : { ...t, [field]: true }));
+  }
+  const assumed = [
+    initial?.weightKg == null && !touched.weight ? "weight" : null,
+    initial?.heightCm == null && !touched.height ? "height" : null,
+    initial?.age == null && !touched.age ? "age" : null,
+    initial?.sex == null && !touched.sex ? "sex" : null,
+  ].filter((x): x is string => x !== null);
+
+  // Memoised so it has a stable identity, which is what lets `targets` below
+  // depend on the object rather than re-listing its six inputs. The old version
+  // rebuilt `stats` every render and then enumerated its parts in the targets
+  // deps array — correct, but only by hand, and the linter could not verify it.
+  // Two lists of the same six fields is one edit away from disagreeing.
+  const stats: BodyStats = useMemo(() => ({
     sex, goal, activity,
     age: Number(age) || 20,
     heightCm: Number(heightCm) || 178,
     weightKg: Number(weightKg) || 75,
+  }), [sex, goal, activity, age, heightCm, weightKg]);
+
+  const targets = useMemo(() => planTargets(stats, context ?? {}), [stats, context]);
+  /**
+   * Where they shop, and any prices they've corrected.
+   *
+   * Both live here rather than in ShoppingList because the LIST is costed here,
+   * and a store picker that only changed the search links was quoting an Aldi
+   * shopper Tesco prices. Corrections are keyed by food and kept across weeks:
+   * what a pack costs is a fact about their supermarket, not about this plan.
+   */
+  const [store, setStore] = useState<StoreId>("tesco");
+  const [priceOverrides, setPriceOverrides] = useState<PriceOverrides>({});
+
+  useEffect(() => {
+    try {
+      const s = window.localStorage.getItem("shop:store");
+      if (s && SUPERMARKETS.some((x) => x.id === s)) setStore(s as StoreId);
+      const raw = window.localStorage.getItem("shop:prices");
+      if (raw) setPriceOverrides(JSON.parse(raw));
+    } catch { /* a corrupt or blocked store just means estimates */ }
+  }, []);
+
+  const chooseStore = (id: StoreId) => {
+    setStore(id);
+    try { window.localStorage.setItem("shop:store", id); } catch { /* ignore */ }
   };
-  const targets = useMemo(() => planTargets(stats), [sex, age, heightCm, weightKg, activity, goal]);
-  const list = useMemo(() => (week ? shoppingList(week) : null), [week]);
+  const correctPrice = (foodId: string, price: number | null) => {
+    setPriceOverrides((prev) => {
+      const next = { ...prev };
+      if (price === null) delete next[foodId]; else next[foodId] = price;
+      try { window.localStorage.setItem("shop:prices", JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+  };
+
+  const list = useMemo(
+    () => (week ? shoppingList(week, { store, overrides: priceOverrides }) : null),
+    [week, store, priceOverrides]
+  );
   // If someone excludes enough, a meal slot can end up with nothing in it —
   // better to say so than to quietly hand back a short day.
   // Foods named in the notes are excluded on top of the tapped preferences.
+  // Shared with MealCheckIn — see effectiveMealPrefs. The two screens rebuild
+  // the same week from the same seed and must feed buildWeek identically.
   const effectivePrefs = useMemo(
-    () => ({ ...prefs, dislikes: [...prefs.dislikes, ...noteDislikes] }),
-    [prefs, noteDislikes]
+    () => effectiveMealPrefs(prefs, notes, starred),
+    [prefs, notes, starred]
   );
   const gaps = useMemo(() => unmetSlots(effectivePrefs), [effectivePrefs]);
 
@@ -66,30 +181,94 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
   // the shopping list they'd already started buying against.
   useEffect(() => {
     if (seed === null || week) return;
-    setWeek(buildWeek(targets, seed, effectivePrefs, schedule));
+    setWeek(buildWeek(targets, seed, effectivePrefs, schedule, swaps, recent));
     // Only on mount, and only to restore. Changing stats afterwards should not
     // silently rewrite the plan under them — that's what Generate is for.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /**
+   * Apply a hand-picked meal and remember it.
+   *
+   * Rebuilds the whole week rather than patching the one day, because the
+   * shopping list, the repeat counter and the basket costing all depend on what
+   * else is in the week — swapping Thursday's dinner changes what Friday's is
+   * scored against, and a patched day would leave the list disagreeing with the
+   * plan.
+   */
+  async function applySwap(mealId: string) {
+    if (!swapping || seed === null) return;
+    const next = { ...swaps, [swapKey(swapping.dayIndex, swapping.slot, swapping.nth)]: mealId };
+    setSwaps(next);
+    setWeek(buildWeek(targets, seed, effectivePrefs, schedule, next, recent));
+    setSwapping(null);
+    // Best effort: the swap is already on screen, and an older database without
+    // the column must not make the feature look broken.
+    try {
+      await createClient().from("profiles").update({ meal_plan_swaps: next }).eq("id", userId);
+    } catch { /* ignore */ }
+  }
+
+  /**
+   * Star or unstar a dish.
+   *
+   * Deliberately does NOT rebuild the week. A star says "more of this in
+   * future", and rewriting the plan under someone the instant they tap a star
+   * would move meals they were reading and invalidate a shopping list they may
+   * already be buying against. It takes effect on the next regenerate, which
+   * is when they have asked for a new plan.
+   */
+  async function toggleStar(mealId: string) {
+    const next = starred.includes(mealId)
+      ? starred.filter((id) => id !== mealId)
+      : [...starred, mealId];
+    setStarred(next);
+    // Best effort, same as swaps: the star is already lit on screen, and an
+    // older database without the column must not make the button look broken.
+    try {
+      await createClient().from("profiles").update({ meal_plan_starred: next }).eq("id", userId);
+    } catch { /* ignore */ }
+  }
+
+  async function clearSwaps() {
+    if (seed === null) return;
+    setSwaps({});
+    setWeek(buildWeek(targets, seed, effectivePrefs, schedule, {}, recent));
+    try {
+      await createClient().from("profiles").update({ meal_plan_swaps: {} }).eq("id", userId);
+    } catch { /* ignore */ }
+  }
+
   async function generate() {
     /**
-     * REGENERATION BARELY REGENERATED.
+     * REGENERATION DIDN'T REGENERATE. AT ALL.
      *
-     * This was `Math.random() * 3`, so the app could produce exactly three
-     * weeks, ever — and "Regenerate week" had a one-in-three chance of handing
-     * back the identical plan. buildWeek rotates each slot's pool with
-     * `(idx + seed + nth) % list.length`, so the seed is useful right up to the
-     * size of the pool; capping it at 3 threw nearly all of that away.
+     * It was `Math.random() * 3` once, so the app could produce three weeks
+     * ever and the button had a one-in-three chance of returning the identical
+     * plan. Widening that to 997 was supposed to fix it. It did nothing, and
+     * the reason is worse than the original bug: `seed` fed a tie-break worth a
+     * tenth of a penny against scoring terms weighted 4, 8 and 35, so it never
+     * changed a single choice. Measured across three athletes and three diet
+     * patterns, every seed from 0 to 5 produced the byte-identical week.
+     * "Regenerate week" had never worked.
      *
-     * Also never returns the seed they're already on. A regenerate that
-     * silently no-ops reads as a broken button, and at 1-in-3 it happened
-     * constantly.
+     * The seed still exists — the plan is rebuilt from it on every visit, so it
+     * has to. What actually varies the week is `recent`: the meals the last
+     * plan served, which arrive already carrying repeat cost so the new plan
+     * reaches past them. That took average week-on-week change from 0% to 55%.
      */
     let next = seed;
     for (let i = 0; i < 20 && next === seed; i++) next = Math.floor(Math.random() * 997);
     setSeed(next);
-    setWeek(buildWeek(targets, next!, effectivePrefs, schedule));
+    // What they've just been eating, so the new plan moves on from it. Captured
+    // BEFORE the state is replaced, obviously, and from the week on screen
+    // rather than from `recent` — that one is now two plans old.
+    const justServed = (week ?? []).flatMap((d) => d.meals.map((m) => m.meal.id));
+    setRecent(justServed);
+    // A new seed is a new plan, so the old positions mean nothing — keeping the
+    // swaps would move someone's Thursday dinner onto an unrelated slot.
+    setSwaps({});
+    setWeek(buildWeek(targets, next!, effectivePrefs, schedule, {}, justServed));
     setOpenDay(0);
     // Remember the stats AND which plan it was, so neither has to be redone.
     const supabase = createClient();
@@ -102,6 +281,10 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
       meals_per_day: prefs.mealsPerDay,
       diet_notes: notes.trim() || null,
       meal_plan_seed: next!,
+      meal_plan_swaps: {},
+      meal_plan_recent: justServed,
+      // Stars are about the dishes, not this plan, so they carry over.
+      meal_plan_starred: starred,
     }).eq("id", userId);
     if (!error) {
       // The nutrition page caches its loader; without this the restored plan
@@ -112,32 +295,181 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
     }
   }
 
-  async function copyList() {
-    if (!list) return;
-    try {
-      await navigator.clipboard.writeText(shoppingListText(list));
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch { /* clipboard blocked — the list is on screen anyway */ }
-  }
+  /**
+   * When the built week can't reach the target, say so.
+   *
+   * A 115kg forward building on 4,370 kcal was handed 3,010 across three meals
+   * — 69% — and nothing on screen said a word about it. Portions cap at 1.6x on
+   * purpose (past that you get servings nobody would put on a plate), so above
+   * a certain target the only honest answers are "eat more often" or "this is
+   * as far as the recipe list goes". Silently under-feeding the one athlete
+   * whose goal is to gain is the worst of the three.
+   *
+   * 8% is the tolerance: a calorie target is an estimate, and flagging a 3%
+   * miss would be false precision on top of it.
+   */
+  const weekAvgKcal = week && week.length
+    ? week.reduce((s, d) => s + d.macros.kcal, 0) / week.length
+    : null;
+  const shortBy = weekAvgKcal != null && targets.calories > 0 && weekAvgKcal < targets.calories * 0.92
+    ? Math.round(targets.calories - weekAvgKcal)
+    : null;
+
+  const activityLabel = ACTIVITY_LEVELS.find((a) => a.id === activity)?.label ?? activity;
+  const goalLabel = DIET_GOALS.find((g) => g.id === goal)?.label ?? goal;
+  const patternLabel = DIET_PATTERNS.find((d) => d.id === prefs.pattern)?.label;
 
   return (
     <section className="space-y-4">
-      <div className="card-premium space-y-4 p-6">
-        <div>
-          <h2 className="text-xl font-extrabold">Meal plan &amp; shopping list</h2>
-          <p className="mt-1 text-sm text-slate-400">
-            Your stats set the calories — we build the week and the shop to match.
-          </p>
+      {/* ONE BUTTON, NOT NINE QUESTIONS.
+          This screen opened on eight stacked controls — age, height, weight,
+          sex, training load, goal, diet pattern, avoidances, meals a day, a
+          budget tick and a notes box — and the button that actually does
+          something was below all of it. On the tab you opened to see a meal
+          plan.
+
+          Nearly every one of those answers is already in the profile: the
+          nutrition page loads them, and passes them in here as `initial`. So
+          the form was mostly asking the athlete to retype what the app had
+          just read. It says what it's using instead, and the controls are one
+          tap away for when it's wrong.
+
+          Same fix as the programme builder on /coach, which had the same shape
+          and the same problem. */}
+      <div className="card-premium p-6">
+        <h2 className="text-xl font-extrabold">Your meal week</h2>
+        <p className="mt-1 text-sm text-slate-400">
+          Seven days of meals built to your calories, and a shop that covers them.
+        </p>
+
+        {/* THE GOAL BELONGS ON THE FRONT, NOT IN A DRAWER.
+            It moves the calorie target by ~1,100 kcal between lean down and
+            build — more than any other control here — and burying it in
+            "Adjust" with the stats made the one choice an athlete actually
+            wants to make the hardest to find. Everything else in there is a
+            detail; this is the question. */}
+        <div className="mt-4">
+          <span className="field-label">What are you doing?</span>
+          <div className="grid grid-cols-3 gap-2">
+            {DIET_GOALS.map((g) => (
+              <button
+                key={g.id}
+                onClick={() => setGoal(g.id)}
+                aria-pressed={goal === g.id}
+                className={`rounded-2xl border p-3 text-left transition ${
+                  goal === g.id
+                    ? "border-pitch-400/60 bg-pitch-400/10"
+                    : "border-white/10 bg-white/[0.02] hover:border-white/20"
+                }`}
+              >
+                <span className={`block text-sm font-bold ${goal === g.id ? "text-pitch-400" : "text-slate-200"}`}>
+                  {g.label}
+                </span>
+                <span className="mt-0.5 block text-[11px] leading-snug text-slate-500">{g.blurb}</span>
+              </button>
+            ))}
+          </div>
         </div>
 
+        <div className="mt-4 rounded-2xl border border-pitch-400/25 bg-pitch-400/[0.05] p-4">
+          {/* Four macro tiles across a 375px phone leaves ~80px each, which
+              wraps "Protein" onto two lines and clips the numbers. */}
+          <div className="grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
+            <Metric label="kcal" value={targets.calories} accent />
+            <Metric label="Protein" value={`${targets.protein}g`} />
+            <Metric label="Carbs" value={`${targets.carbs}g`} />
+            <Metric label="Fats" value={`${targets.fats}g`} />
+          </div>
+          <p className="mt-3 text-xs text-slate-400">{targets.rationale}</p>
+        </div>
+
+        {/* What it's working from, in one line. Someone whose weight is stale
+            can see that at a glance rather than by opening a form to check. */}
+        <p className="mt-3 text-xs text-slate-500">
+          From {age} yrs · {heightCm}cm · {weightKg}kg · {activityLabel.toLowerCase()} training · {goalLabel.toLowerCase()}
+          {patternLabel && patternLabel.toLowerCase() !== "anything" ? ` · ${patternLabel.toLowerCase()}` : ""}
+          {prefs.avoid.length > 0 ? ` · avoiding ${prefs.avoid.length}` : ""}
+        </p>
+
+        {/* Say which of those numbers we made up. Every calorie on this screen,
+            the macro split, the week and the shopping bill all come off these
+            four, and a plan built on a default 75kg is wrong in a way nothing
+            else on the page would reveal. */}
+        {assumed.length > 0 ? (
+          <button
+            onClick={() => setAdjustOpen(true)}
+            className="mt-2 w-full rounded-xl border border-amber-400/30 bg-amber-400/[0.06] px-3 py-2 text-left text-xs text-amber-200 transition hover:bg-amber-400/[0.1]"
+          >
+            We&apos;ve assumed your {listWords(assumed)} — everything here is built on{" "}
+            {assumed.length > 1 ? "those" : "that"}. Set {assumed.length > 1 ? "them" : "it"} →
+          </button>
+        ) : (
+          <button
+            onClick={() => setAdjustOpen((o) => !o)}
+            className="mt-1 text-xs font-semibold text-slate-400 hover:text-pitch-400"
+          >
+            Change any of this →
+          </button>
+        )}
+
+        {gaps.length > 0 && (
+          <div className="mt-3 rounded-xl border border-amber-400/30 bg-amber-400/[0.06] px-3 py-2 text-sm text-amber-200">
+            Nothing left for {gaps.join(" or ").toLowerCase()} with those rules — we&apos;ll build the rest of the
+            day and skip {gaps.length > 1 ? "those meals" : "that meal"}. Try lifting one restriction.
+          </div>
+        )}
+
+        {shortBy != null && (
+          <div className="mt-3 rounded-xl border border-amber-400/30 bg-amber-400/[0.06] px-3 py-2 text-sm text-amber-200">
+            This week averages about {shortBy.toLocaleString()} kcal a day under your{" "}
+            {targets.calories.toLocaleString()} target — portions are capped so you don&apos;t get
+            servings nobody could eat.
+            {prefs.mealsPerDay < 5 ? (
+              <>
+                {" "}
+                <button
+                  onClick={() => { setPrefs((p) => ({ ...p, mealsPerDay: 5 })); setAdjustOpen(true); }}
+                  className="font-semibold underline underline-offset-2 hover:text-amber-100"
+                >
+                  Spread it over 5 meals
+                </button>{" "}
+                and rebuild — that&apos;s how anyone eats this much anyway.
+              </>
+            ) : (
+              " Add a shake or a second helping on top; at this size the recipe list is the limit."
+            )}
+          </div>
+        )}
+
+        <button onClick={generate} className="btn-primary mt-4">
+          {week ? "Regenerate week" : "Build my week"}
+        </button>
+        {saved && <p className="mt-2 text-xs text-readiness-green">✓ Stats saved to your profile.</p>}
+      </div>
+
+      <details
+        open={adjustOpen}
+        onToggle={(e) => setAdjustOpen((e.currentTarget as HTMLDetailsElement).open)}
+        className="group card overflow-hidden"
+      >
+        <summary className="flex cursor-pointer list-none items-center justify-between p-4 text-sm font-semibold text-slate-200">
+          <span>
+            Adjust
+            <span className="ml-2 text-xs font-normal text-slate-500">
+              your stats, how you eat, anything to avoid
+            </span>
+          </span>
+          <span className="text-xs text-slate-500 transition group-open:rotate-180">▾</span>
+        </summary>
+
+        <div className="space-y-4 border-t border-white/[0.08] p-5">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Field label="Age" value={age} onChange={setAge} suffix="yrs" />
-          <Field label="Height" value={heightCm} onChange={setHeightCm} suffix="cm" />
-          <Field label="Weight" value={weightKg} onChange={setWeightKg} suffix="kg" />
+          <Field label="Age" value={age} onChange={(v) => { touch("age"); setAge(v); }} suffix="yrs" />
+          <Field label="Height" value={heightCm} onChange={(v) => { touch("height"); setHeightCm(v); }} suffix="cm" />
+          <Field label="Weight" value={weightKg} onChange={(v) => { touch("weight"); setWeightKg(v); }} suffix="kg" />
           <label className="block">
             <span className="field-label">Sex</span>
-            <select value={sex} onChange={(e) => setSex(e.target.value as Sex)} className="field [color-scheme:dark]">
+            <select value={sex} onChange={(e) => { touch("sex"); setSex(e.target.value as Sex); }} className="field [color-scheme:dark]">
               <option value="male">Male</option>
               <option value="female">Female</option>
             </select>
@@ -150,22 +482,6 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
             {ACTIVITY_LEVELS.map((a) => <option key={a.id} value={a.id}>{a.label} — {a.blurb}</option>)}
           </select>
         </label>
-
-        <div>
-          <span className="field-label">Goal</span>
-          <div className="grid grid-cols-3 gap-2">
-            {DIET_GOALS.map((g) => (
-              <button
-                key={g.id}
-                onClick={() => setGoal(goal === g.id ? "maintain" : g.id)}
-                className={`card p-3 text-left transition ${goal === g.id ? "ring-2 ring-pitch-400/70" : "card-hover"}`}
-              >
-                <div className="text-sm font-bold text-slate-100">{g.label}</div>
-                <div className="mt-0.5 text-xs text-slate-400">{g.blurb}</div>
-              </button>
-            ))}
-          </div>
-        </div>
 
         <div>
           <span className="field-label">How you eat</span>
@@ -242,7 +558,7 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={2}
-            placeholder="e.g. I don't like yoghurt, no fish, I eat out on Tuesdays, I skip breakfast"
+            placeholder="e.g. I train Monday, Wednesday and Friday, I don't like yoghurt, no fish, I eat out on Tuesdays"
             className="field resize-none"
           />
           {noteDislikes.length > 0 && (
@@ -257,47 +573,59 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
           ))}
         </label>
 
-        {gaps.length > 0 && (
-          <div className="rounded-xl border border-amber-400/30 bg-amber-400/[0.06] px-3 py-2 text-sm text-amber-200">
-            Nothing left for {gaps.join(" or ").toLowerCase()} with those rules — we&apos;ll build the rest of the
-            day and skip {gaps.length > 1 ? "those meals" : "that meal"}. Try lifting one restriction.
-          </div>
-        )}
-
-        <div className="rounded-2xl border border-pitch-400/25 bg-pitch-400/[0.05] p-4">
-          {/* Four macro tiles across a 375px phone leaves ~80px each, which
-              wraps "Protein" onto two lines and clips the numbers. */}
-          <div className="grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
-            <Metric label="kcal" value={targets.calories} accent />
-            <Metric label="Protein" value={`${targets.protein}g`} />
-            <Metric label="Carbs" value={`${targets.carbs}g`} />
-            <Metric label="Fats" value={`${targets.fats}g`} />
-          </div>
-          <p className="mt-3 text-xs text-slate-400">{targets.rationale}</p>
         </div>
-
-        <button onClick={generate} className="btn-primary">
-          {week ? "Regenerate week" : "Build my week"}
-        </button>
-        {saved && <p className="text-xs text-readiness-green">✓ Stats saved to your profile.</p>}
-      </div>
+      </details>
 
       {week && (
         <>
-          <div className="card p-5">
-            <div className="stat-label mb-3">Your week</div>
-            <div className="no-scrollbar mb-3 flex gap-2 overflow-x-auto pb-1">
-              {week.map((d, i) => (
-                <button
-                  key={d.day}
-                  onClick={() => setOpenDay(i)}
-                  className={`shrink-0 rounded-full border px-3 py-1.5 text-sm transition ${i === openDay ? "border-pitch-400/50 bg-pitch-400/10 text-pitch-400" : "border-white/10 bg-white/[0.03] text-slate-300"}`}
-                >
-                  {d.day.slice(0, 3)}
-                </button>
-              ))}
+          <div className="card overflow-hidden">
+            {/* The day strip carries each day's calories. It was seven identical
+                three-letter pills, so the only way to find the big day before
+                a match was to tap through all seven. */}
+            <div className="no-scrollbar flex gap-2 overflow-x-auto border-b border-white/[0.08] p-4">
+              {week.map((d, i) => {
+                const on = i === openDay;
+                return (
+                  <button
+                    key={d.day}
+                    onClick={() => setOpenDay(i)}
+                    aria-pressed={on}
+                    className={`shrink-0 rounded-2xl border px-3.5 py-2 text-center transition ${
+                      on
+                        ? "border-pitch-400/50 bg-pitch-400/10"
+                        : "border-white/10 bg-white/[0.02] hover:border-white/20"
+                    }`}
+                  >
+                    <span className={`block text-sm font-bold ${on ? "text-pitch-400" : "text-slate-300"}`}>
+                      {d.day.slice(0, 3)}
+                    </span>
+                    <span className={`block text-[11px] tabular-nums ${on ? "text-pitch-400/70" : "text-slate-600"}`}>
+                      {Math.round(d.macros.kcal)}
+                    </span>
+                    {d.load !== "even" && (
+                      <span className="block text-[10px] leading-none" aria-label={d.load === "training" ? "Training day" : "Rest day"}>
+                        {d.load === "training" ? "🔥" : "🌙"}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
 
+            <div className="p-5">
+
+            {Object.keys(swaps).length > 0 && (
+              <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-pitch-400/20 bg-pitch-400/[0.05] px-3 py-2">
+                <span className="text-xs text-slate-300">
+                  {Object.keys(swaps).length} meal{Object.keys(swaps).length === 1 ? "" : "s"} swapped this week
+                </span>
+                {/* An undo, not a regenerate. Regenerating rerolls all 28 meals
+                    and is a much bigger thing to do by accident. */}
+                <button onClick={clearSwaps} className="tap-target shrink-0 px-2 text-xs font-semibold text-slate-400 hover:text-pitch-400">
+                  Undo all
+                </button>
+              </div>
+            )}
             <div className="space-y-3">
               {/* Meals we're deliberately not planning. Shown rather than
                   silently missing, so the day doesn't just look incomplete. */}
@@ -307,40 +635,111 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
                   <span className="block text-sm font-semibold text-slate-400">{s.reason} — nothing to cook or buy</span>
                 </div>
               ))}
-              {week[openDay].meals.map((pm) => (
-                <details key={pm.meal.id} className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
-                  <summary className="flex cursor-pointer items-center gap-2 list-none">
+              {week[openDay].meals.map((pm, mi) => {
+                // Which occurrence of this slot today — a 5-meal day has two
+                // snacks, and they must swap independently.
+                const nth = week[openDay].meals.slice(0, mi).filter((x) => x.meal.slot === pm.meal.slot).length;
+                const swapped = !!swaps[swapKey(openDay, pm.meal.slot, nth)];
+                return (
+                <details key={`${pm.meal.slot}-${nth}-${pm.meal.id}`} className="group/meal rounded-2xl border border-white/[0.08] bg-white/[0.02] transition open:bg-white/[0.04]">
+                  <summary className="flex cursor-pointer list-none items-center gap-3 p-3.5">
                     <span className="min-w-0 flex-1">
-                      <span className="block text-[11px] uppercase tracking-wide text-slate-500">{pm.meal.slot}</span>
+                      <span className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-slate-500">
+                        {pm.meal.slot}
+                        {/* Says the plan is theirs now. Without it a swapped
+                            meal is indistinguishable from one the app chose,
+                            and "did that save?" is the first thing anyone
+                            wonders after changing something. */}
+                        {swapped && <span className="rounded bg-pitch-400/15 px-1 text-[10px] font-bold normal-case text-pitch-400">your pick</span>}
+                        {/* A marker, not a control. The row is already one tap
+                            target that opens the recipe, and a second one on it
+                            makes a one-handed tap a gamble — the same reason the
+                            swap button lives inside the card. This just lets you
+                            see which dishes are starred while scanning the week. */}
+                        {starred.includes(pm.meal.id) && (
+                          <span className="text-amber-400" title="Starred — the planner picks this more often" aria-label="Starred">★</span>
+                        )}
+                      </span>
                       <span className="block text-sm font-bold text-slate-100">{pm.meal.name}</span>
                     </span>
-                    <span className="shrink-0 text-xs text-slate-400">{Math.round(pm.macros.kcal)} kcal</span>
+                    <span className="shrink-0 text-right">
+                      <span className="block text-sm font-bold tabular-nums text-slate-300">{Math.round(pm.macros.kcal)}</span>
+                      {/* slate-500, not 600. At 10px the 600 measured 4.37:1
+                          against this card — under the 4.5 AA floor for small
+                          text. Invisible to the UI audit, which never opens a
+                          meal row, and it is the unit label on the only number
+                          in the row. */}
+                      <span className="block text-[10px] uppercase tracking-wide text-slate-500">kcal</span>
+                    </span>
+                    {/* There was no affordance at all — a summary with no marker
+                        and no chevron, so nothing said these opened. */}
+                    <span className="shrink-0 text-xs text-slate-600 transition group-open/meal:rotate-180">▾</span>
                   </summary>
-                  <ul className="mt-2 space-y-1 text-sm text-slate-300">
-                    {pm.meal.items.map((it) => {
-                      const f = FOOD_LOOKUP[it.foodId];
-                      if (!f) return null;
-                      const q = Math.round(it.qty * pm.scale);
-                      return (
-                        <li key={it.foodId} className="flex gap-2">
-                          <span className="text-pitch-400">·</span>
-                          {f.name} — {f.unit === "each" ? `${Math.max(1, q)}` : `${q}${f.unit}`}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                  <p className="mt-2 text-sm text-slate-400">{pm.meal.method}</p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    {Math.round(pm.macros.protein)}g protein · {Math.round(pm.macros.carbs)}g carbs · {Math.round(pm.macros.fats)}g fats
-                  </p>
+
+                  <div className="border-t border-white/[0.06] p-3.5">
+                    <Recipe meal={pm.meal} scale={pm.scale} macros={pm.macros} />
+                    {/* Inside the open card, not on the closed row. The row is
+                        already a tap target that opens the recipe, and a second
+                        control on it would make a one-handed tap a gamble
+                        between reading and replacing. Someone swapping has
+                        looked at the meal first. */}
+                    <div className="mt-4 flex gap-2">
+                      {/* The two answers to "what do I think of this meal",
+                          side by side: more of it, or not this one. */}
+                      <button
+                        onClick={() => toggleStar(pm.meal.id)}
+                        aria-pressed={starred.includes(pm.meal.id)}
+                        className="chip-option chip-option-sm flex-1 justify-center"
+                      >
+                        <span aria-hidden className={starred.includes(pm.meal.id) ? "text-amber-400" : ""}>
+                          {starred.includes(pm.meal.id) ? "★" : "☆"}
+                        </span>
+                        {starred.includes(pm.meal.id) ? "Starred" : "Star this"}
+                      </button>
+                      <button
+                        onClick={() => setSwapping({
+                          dayIndex: openDay,
+                          dayName: week[openDay].day,
+                          slot: pm.meal.slot,
+                          nth,
+                          current: pm.meal,
+                          slotKcal: slotTargetKcal(targets, effectivePrefs, pm.meal.slot),
+                        })}
+                        className="chip-option chip-option-sm flex-1 justify-center"
+                      >
+                        <span aria-hidden>⇄</span> Swap this
+                      </button>
+                    </div>
+                    {starred.includes(pm.meal.id) && (
+                      <p className="mt-2 text-center text-[11px] text-slate-500">
+                        Starred dishes come round more often from your next plan on.
+                      </p>
+                    )}
+                  </div>
                 </details>
-              ))}
+                );
+              })}
             </div>
 
-            <div className="mt-3 rounded-xl bg-white/[0.03] p-3 text-center text-sm">
-              <span className="font-bold text-slate-100">{Math.round(week[openDay].macros.kcal)} kcal</span>
-              <span className="text-slate-400"> · {Math.round(week[openDay].macros.protein)}g protein</span>
-              <span className="text-slate-500"> (target {targets.calories} / {targets.protein}g)</span>
+            {/* A day carrying 600 calories more than yesterday reads as a bug
+                unless the plan says why. Only shown when the athlete has
+                actually told us which days they train — otherwise every day is
+                the same size and there is nothing to explain. */}
+            {week[openDay].load !== "even" && (
+              <p className="mt-4 flex items-center gap-2 text-xs text-slate-400">
+                <span aria-hidden>{week[openDay].load === "training" ? "🔥" : "🌙"}</span>
+                {week[openDay].load === "training"
+                  ? `Training day — fed ${Math.round(week[openDay].targetKcal - targets.calories)} kcal above your weekly average, mostly as carbs.`
+                  : `Rest day — ${Math.round(targets.calories - week[openDay].targetKcal)} kcal below your weekly average. Protein stays the same.`}
+              </p>
+            )}
+
+            {/* The day's total against the target, as two bars rather than a
+                sentence with the target in brackets. Whether a day lands is the
+                question the whole screen exists to answer. */}
+            <div className="mt-4 space-y-2.5 rounded-2xl bg-white/[0.03] p-3.5">
+              <DayBar label="Calories" value={week[openDay].macros.kcal} target={week[openDay].targetKcal || targets.calories} colour="#e3b53f" unit="" />
+              <DayBar label="Protein" value={week[openDay].macros.protein} target={targets.protein} colour="#38bdf8" unit="g" />
             </div>
 
             {/* Plant-based days in particular tend to land on calories but fall
@@ -352,82 +751,24 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
                 one thing that will hold your results back.
               </div>
             )}
+            </div>
           </div>
 
-          {list && (
-            <div className="card p-5">
-              <div className="flex items-center justify-between">
-                <div className="stat-label">Shopping list</div>
-                <button onClick={copyList} className="text-xs text-pitch-400 hover:underline">
-                  {copied ? "Copied ✓" : "Copy list"}
-                </button>
-              </div>
-
-              <div className="mt-3 space-y-4">
-                {list.byAisle.map((group) => (
-                  <div key={group.aisle}>
-                    <div className="mb-1.5 flex items-center justify-between">
-                      <span className="text-xs font-bold uppercase tracking-wide text-slate-400">{group.aisle}</span>
-                      <span className="text-xs text-slate-500">~£{group.cost.toFixed(2)}</span>
-                    </div>
-                    <ul className="space-y-1.5">
-                      {group.lines.map((l) => (
-                        <li key={l.food.id} className="flex items-center gap-2 text-sm">
-                          <span className="min-w-0 flex-1">
-                            {/* Each item searches the chosen store directly — no
-                                API needed, and it can't go stale. */}
-                            <a
-                              href={productLink(l.food, store)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-slate-200 underline-offset-2 hover:text-pitch-400 hover:underline"
-                            >
-                              {l.food.name}
-                            </a>
-                            <span className="text-slate-500"> × {l.packs} <span className="text-slate-600">({l.food.packLabel})</span></span>
-                            {/* One bag across six meals is the whole point of
-                                buying the bag — say so, or it reads as £1.45
-                                spent on a single dinner. */}
-                            {l.meals > 1 && (
-                              <span className="block text-[11px] text-slate-500">covers {l.meals} meals this week</span>
-                            )}
-                          </span>
-                          <span className="shrink-0 tabular-nums text-slate-400">~£{l.cost.toFixed(2)}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
-              </div>
-
-              <div className="mt-4 flex items-center justify-between border-t border-white/10 pt-3">
-                <span>
-                  <span className="block text-sm font-bold text-slate-100">Estimated weekly shop</span>
-                  <span className="block text-xs text-slate-500">
-                    ~£{list.costPerMeal.toFixed(2)} a meal across {list.mealsPlanned} planned meals
-                  </span>
-                </span>
-                <span className="text-lg font-extrabold text-pitch-400">~£{list.total.toFixed(2)}</span>
-              </div>
-
-              <p className="mt-2 text-xs text-slate-500">
-                Estimates from typical UK supermarket prices (reviewed {PRICES_REVIEWED}) — not live pricing,
-                so your actual basket will differ. Tap any item to search it in:
-              </p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {SUPERMARKETS.map((sm) => (
-                  <button
-                    key={sm.id}
-                    onClick={() => setStore(sm)}
-                    className={`chip transition ${store.id === sm.id ? "border-pitch-400/50 text-pitch-400" : "hover:text-slate-200"}`}
-                  >
-                    {sm.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+          {list && <ShoppingList list={list} seed={seed} store={store} onStore={chooseStore} onCorrectPrice={correctPrice} />}
         </>
+      )}
+
+      {/* Last in the tree so it stacks above the plan, and mounted only when
+          asked for — a dialog kept mounted and hidden still traps focus in
+          some browsers. */}
+      {swapping && (
+        <MealSwap
+          starred={starred}
+          target={swapping}
+          prefs={effectivePrefs}
+          onPick={applySwap}
+          onClose={() => setSwapping(null)}
+        />
       )}
     </section>
   );
@@ -450,6 +791,38 @@ function Field({ label, value, onChange, suffix }: {
         <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">{suffix}</span>
       </div>
     </label>
+  );
+}
+
+/** ["height","age","sex"] -> "height, age and sex" */
+function listWords(words: string[]): string {
+  if (words.length <= 1) return words[0] ?? "";
+  return `${words.slice(0, -1).join(", ")} and ${words[words.length - 1]}`;
+}
+
+/** One day's total against its target, as a bar you can read without arithmetic. */
+function DayBar({ label, value, target, colour, unit }: {
+  label: string; value: number; target: number; colour: string; unit: string;
+}) {
+  const v = Math.round(value);
+  // Capped at the full width — a bar overflowing its track reads as broken, and
+  // the number beside it already says how far over the day went.
+  const pct = target > 0 ? Math.min(100, (v / target) * 100) : 0;
+  return (
+    <div>
+      <div className="flex items-baseline justify-between text-xs">
+        <span className="text-slate-400">{label}</span>
+        <span className="tabular-nums text-slate-300">
+          <span className="font-bold">{v.toLocaleString()}{unit}</span>
+          {/* Same reason: 4.49:1 at 12px, a hair under AA, and it is the half
+              of "2,340 / 3,100" that says what you are aiming at. */}
+          <span className="text-slate-500"> / {target.toLocaleString()}{unit}</span>
+        </span>
+      </div>
+      <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-white/[0.07]">
+        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: colour }} />
+      </div>
+    </div>
   );
 }
 

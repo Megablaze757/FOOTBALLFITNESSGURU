@@ -1,11 +1,30 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/lib/auth";
 import { EXERCISES, EXERCISE_CATEGORIES, SPORTS, DIFFICULTIES, EQUIPMENT_BUCKETS, getExercisesForSport, demoImplement, rowToExercise, exerciseEquip, withinLevel, type Exercise, type ExerciseCategory, type SportId, type Difficulty } from "@/lib/exercises";
 import { ExerciseDemo } from "@/components/ExerciseDemo";
 import { ExerciseModal } from "@/components/ExerciseDetail";
+import { CustomExerciseForm } from "@/components/CustomExerciseForm";
+import { ZoneGuide, RunTypeGuide } from "@/components/ZoneGuide";
+import { Tabs, TabPanel } from "@/components/Tabs";
+import { MealLibrary } from "@/components/MealLibrary";
+import { MEALS } from "@/lib/meal-plan";
+
+/**
+ * The page holds two libraries now, so it needs a name that covers both.
+ *
+ * Movements and recipes are the two reference lists in the app — "how do I do
+ * a Bulgarian split squat" and "what's in the katsu curry" are the same kind of
+ * question, and the recipes could previously only be read inside whatever plan
+ * the app had generated for you. Tabs rather than one merged list, because
+ * nobody searches for a squat and a shakshuka in the same breath.
+ */
+const LIBRARY_TABS = [
+  { id: "moves", label: "Exercises", icon: "🏋" },
+  { id: "meals", label: "Recipes", icon: "🍳" },
+] as const;
 
 // How many cards to render at once. Every card carries an animated SVG demo, so
 // showing all 300+ was both a 44-screen page and a scrolling performance issue.
@@ -16,6 +35,7 @@ const DIFF_LABEL: Record<Difficulty, string> = { easy: "Beginner", medium: "Inte
 
 export default function LibraryPage() {
   const user = useCurrentUser();
+  const [tab, setTab] = useState<(typeof LIBRARY_TABS)[number]["id"]>("moves");
   const [sport, setSport] = useState<SportId | "all">("all");
   const [cat, setCat] = useState<ExerciseCategory | "All">("All");
   const [level, setLevel] = useState<Difficulty>("advanced");
@@ -24,21 +44,53 @@ export default function LibraryPage() {
   const [open, setOpen] = useState<Exercise | null>(null);
   const [custom, setCustom] = useState<Exercise[]>([]);
   const [shown, setShown] = useState(PAGE);
+  // Feeds the zone guide so it shows THIS athlete's paces and heart rates
+  // rather than a generic table. All optional — the guide degrades to the
+  // standard bands and says so.
+  const [benchmarks, setBenchmarks] = useState<Record<string, number> | null>(null);
+  const [athlete, setAthlete] = useState<{ age: number | null; restingHr: number | null }>({ age: null, restingHr: null });
 
-  // Default to the athlete's sport + level, and pull in coach-authored exercises.
+  /**
+   * Re-read the athlete's own and their coach's exercises.
+   *
+   * Pulled out of the mount effect so the "add your own" form can call it —
+   * an exercise you just created not appearing in the list you created it from
+   * reads as the save having failed.
+   */
+  const reloadCustom = useCallback(async () => {
+    const { data } = await createClient().from("custom_exercises").select("*");
+    if (data) setCustom(data.map(rowToExercise));
+  }, []);
+
+  // Default to the athlete's sport + level, and pull in custom exercises —
+  // their own, and any their coach has authored.
   useEffect(() => {
     let active = true;
     const supabase = createClient();
-    supabase.from("profiles").select("sport, level").eq("id", user.id).maybeSingle().then(({ data }) => {
-      const p = data as { sport?: string; level?: string } | null;
-      if (active && p?.sport && SPORTS.some((sp) => sp.id === p.sport)) setSport(p.sport as SportId);
-      if (active && (p?.level === "easy" || p?.level === "medium" || p?.level === "advanced")) setLevel(p.level);
+    supabase.from("profiles").select("sport, level, birth_year").eq("id", user.id).maybeSingle().then(({ data }) => {
+      const p = data as { sport?: string; level?: string; birth_year?: number | null } | null;
+      if (!active) return;
+      if (p?.sport && SPORTS.some((sp) => sp.id === p.sport)) setSport(p.sport as SportId);
+      if (p?.level === "easy" || p?.level === "medium" || p?.level === "advanced") setLevel(p.level);
+      if (p?.birth_year) setAthlete((a) => ({ ...a, age: new Date().getFullYear() - p.birth_year! }));
     });
-    supabase.from("custom_exercises").select("*").then(({ data }) => {
-      if (active && data) setCustom(data.map(rowToExercise));
-    });
+    void reloadCustom();
+    // Latest test only — zones should follow current fitness, not a personal
+    // best from two seasons ago.
+    supabase.from("strength_benchmarks").select("metrics").order("test_date", { ascending: false }).limit(1)
+      .then(({ data }) => {
+        if (active && data?.[0]) setBenchmarks((data[0] as { metrics: Record<string, number> }).metrics);
+      });
+    supabase.from("biometrics").select("resting_hr").not("resting_hr", "is", null)
+      .order("metric_date", { ascending: false }).limit(1)
+      .then(({ data }) => {
+        if (active && data?.[0]) setAthlete((a) => ({ ...a, restingHr: (data[0] as { resting_hr: number }).resting_hr }));
+      });
     return () => { active = false; };
-  }, [user.id]);
+    // reloadCustom is a useCallback with no deps, so it is stable for the life
+    // of the component — listing it changes nothing and only adds a name the
+    // next reader has to check.
+  }, [user.id, reloadCustom]);
 
   const list = useMemo(() => {
     const all = [...custom, ...getExercisesForSport(sport)];
@@ -81,11 +133,63 @@ export default function LibraryPage() {
   return (
     <div className="animate-fade-up space-y-4">
       <header>
-        <h1 className="text-3xl font-extrabold tracking-tight">Exercise library</h1>
-        <p className="mt-1 text-sm text-slate-400">Look up any movement — how to do it, what it works, and when to use it. {EXERCISES.length} in total.</p>
+        <h1 className="text-3xl font-extrabold tracking-tight">Library</h1>
+        <p className="mt-1 text-sm text-slate-400">
+          {tab === "moves"
+            ? `Look up any movement — how to do it, what it works, and when to use it. ${EXERCISES.length} in total.`
+            : `Every recipe the meal planner can serve — method, timings and macros. ${MEALS.length} in total.`}
+        </p>
       </header>
 
+      <Tabs tabs={LIBRARY_TABS} active={tab} onChange={setTab} label="Library sections" />
+
+      <TabPanel id={tab}>
+      {/* Unmounted rather than hidden. Every exercise card carries an animated
+          SVG demo — that's why the list pages at 24 — and leaving a screenful
+          of them running behind the recipes would spend the budget the
+          pagination exists to protect. The filter state lives up here, so
+          switching away and back doesn't lose your place. */}
+      {tab === "meals" ? <MealLibrary userId={user.id} /> : (
+      <div className="space-y-4">
       <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search exercises or muscles…" className="field" />
+
+      {/* ADDING YOUR OWN WAS INVISIBLE, NOT ABSENT.
+          The form existed but was rendered only from /squad, which is
+          coaches-only — so this page merged custom exercises into the list and
+          into search while offering no way to create one. The database never
+          blocked it: the RLS policy asks who owns the row, not whether they're
+          a coach. Purely a missing button, on the one page where someone who
+          can't find a movement actually is. */}
+      <div className="flex flex-wrap items-center gap-3">
+        <CustomExerciseForm coachId={user.id} onAdded={reloadCustom} scope="mine" />
+        {custom.length > 0 && (
+          <span className="text-xs text-slate-500">
+            {custom.length} custom exercise{custom.length === 1 ? "" : "s"} in your library
+          </span>
+        )}
+      </div>
+
+      {/* Running zones — the reference every run prescription points back at.
+          Collapsed by default: it's a page of reading, and the library's job is
+          still to find a movement. Not gated on the athlete's sport, because
+          runs are now programmed in every sport and a footballer told to do a
+          Zone 2 run needs to know what that means as much as a runner does. */}
+      <details className="group card overflow-hidden">
+        <summary className="flex cursor-pointer list-none items-center justify-between p-4 text-sm font-semibold text-slate-200">
+          <span>
+            Running zones
+            <span className="ml-2 text-xs font-normal text-slate-500">what Zone 1–5 actually mean</span>
+          </span>
+          <span className="text-xs text-slate-500 transition group-open:rotate-180">▾</span>
+        </summary>
+        <div className="space-y-4 border-t border-white/[0.08] p-4">
+          <ZoneGuide metrics={benchmarks} age={athlete.age} restingHr={athlete.restingHr} />
+          <div>
+            <h3 className="field-label">The runs themselves</h3>
+            <RunTypeGuide />
+          </div>
+        </div>
+      </details>
 
       {/* Sport stays visible — it's the filter people change most. The other
           three used to sit under it as three more horizontal scrollers, which
@@ -100,7 +204,11 @@ export default function LibraryPage() {
       </div>
 
       <details className="group rounded-2xl border border-white/10 bg-white/[0.02] px-3 py-2 open:pb-3">
-        <summary className="flex cursor-pointer list-none items-center justify-between text-sm font-semibold text-slate-200">
+        {/* min-h, because a `<summary>` shrinks to its line box — this one was
+            20px tall and full-width, which is a target you scrub at rather than
+            hit. The count badge is a <span>, so it stays a badge and does not
+            inherit the tappable-chip floor. */}
+        <summary className="flex min-h-[44px] cursor-pointer list-none items-center justify-between text-sm font-semibold text-slate-200">
           <span>
             Filters
             {activeFilters > 0 && <span className="ml-2 chip text-pitch-400">{activeFilters} on</span>}
@@ -241,6 +349,9 @@ export default function LibraryPage() {
       )}
 
       {open && <ExerciseModal ex={open} onClose={() => setOpen(null)} />}
+      </div>
+      )}
+      </TabPanel>
     </div>
   );
 }
@@ -249,9 +360,12 @@ function Pill({ label, active, onClick, small }: { label: string; active: boolea
   return (
     <button
       onClick={onClick}
-      className={`shrink-0 rounded-full border font-medium transition ${small ? "px-3 py-1 text-xs" : "px-4 py-1.5 text-sm"} ${
-        active ? "border-pitch-400/40 bg-pitch-400/10 text-pitch-400" : "border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.06]"
-      }`}
+      // `aria-pressed` is new and not cosmetic: this page has twenty-eight of
+      // these across five filter groups, and without it every one announced as
+      // a plain button, leaving a screen-reader user no way to tell which
+      // filters were on.
+      aria-pressed={active}
+      className={`chip-option ${small ? "chip-option-sm" : ""}`}
     >
       {label}
     </button>

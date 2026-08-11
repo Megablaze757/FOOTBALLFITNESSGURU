@@ -10,6 +10,7 @@ import { SPORTS, type SportId } from "@/lib/exercises";
 import { assessReadiness } from "@/lib/readiness";
 import { computeACWR, hasTrainingContent } from "@/lib/load";
 import { BodyMap } from "@/components/BodyMap";
+import { AppleHealthPill } from "@/components/AppleHealthPill";
 import { ReadinessGauge } from "@/components/ReadinessGauge";
 import { TrainingLogInput, type TrainingState } from "@/components/TrainingLogInput";
 import { enqueue, browserStore, queueCount } from "@/lib/offline-queue";
@@ -29,6 +30,7 @@ interface DraftShape {
   training: TrainingState;
 }
 import type { CheckInInput, PainMap, ReadinessResult, TrainingDrill, TrainingLog } from "@/lib/types";
+import { daysAgoLocal, todayLocal } from "@/lib/day";
 
 /**
  * Is this failure "no signal" rather than "the server said no"?
@@ -82,28 +84,72 @@ export function JournalForm({ initial, initialTraining, sport, planned = [] }: {
    * something hurts, because most days nothing does.
    *
    * Nothing is lost: everything else stays one tap away, and someone who wants
-   * to log every set still can. The choice is remembered, so neither athlete
-   * has to keep re-making it.
+   * to log every set still can.
+   *
+   * QUICK IS ALWAYS THE DEFAULT, AND THE CHOICE IS NOT REMEMBERED.
+   *
+   * It used to be: tapping the full-mode button wrote `pa:checkin-mode: "full"`
+   * to localStorage, and every check-in after that opened in full — sliders
+   * instead of tap scales, the body map open every morning. So one athlete
+   * wanting to record a match day, once, silently converted their daily
+   * ten-second habit into the dozen-interaction form quick mode exists to
+   * replace. Nothing told them it had happened and the only way back was
+   * spotting a small "Use the quick check-in" link.
+   *
+   * A per-day action is not a preference. "I need the match-day fields today"
+   * says nothing about tomorrow, and the cost of guessing wrong is the thing
+   * most likely to make someone stop checking in at all.
+   *
+   * Full is still one tap away, every day, for anyone who wants it — it just
+   * has to be asked for each time. That is the right trade when one direction
+   * costs a tap and the other costs the habit.
+   *
+   * RE-OPENING TODAY'S ENTRY DOES NOT FORCE FULL EITHER. It used to: `initial`
+   * is populated whenever a check-in exists for today, so checking in once and
+   * then glancing at the page again — the same day, the same entry — handed
+   * back sliders and an open body map. The justification was "they came back
+   * for a reason", which is a guess, and the common reason is looking at what
+   * you already put in.
+   *
+   * Quick covers everything they are likely to change: sleep, how the body
+   * feels, soreness, weight, training. Match day and the nutrition slider are
+   * the only full-only fields, and wanting those is one tap. `sore` is seeded
+   * from the saved pain map below, so an existing entry opens with its marks
+   * visible rather than looking like nothing was ever recorded.
    */
   const [detailed, setDetailed] = useState(false);
   const [modeLoaded, setModeLoaded] = useState(false);
   useEffect(() => {
-    // Editing an existing entry opens in full — they came back for a reason,
-    // and hiding the field they want to change would be its own annoyance.
-    if (initial) { setDetailed(true); setModeLoaded(true); return; }
-    try {
-      setDetailed(localStorage.getItem("pa:checkin-mode") === "full");
-    } catch { /* private mode — quick is the better default anyway */ }
     setModeLoaded(true);
-  }, [initial]);
+
+    // Clear the old preference so anyone already stuck in full mode is let out
+    // on their next visit. Without this the key sits there forever, read by
+    // nothing, and the athlete it trapped would never know why.
+    try { localStorage.removeItem("pa:checkin-mode"); } catch { /* ignore */ }
+  }, []);
 
   function chooseMode(full: boolean) {
     setDetailed(full);
-    try { localStorage.setItem("pa:checkin-mode", full ? "full" : "quick"); } catch { /* ignore */ }
   }
 
   // Only meaningful in quick mode, where the body map is hidden until asked for.
-  const [sore, setSore] = useState<boolean | null>(null);
+  //
+  // Seeded from the saved entry: re-opening a check-in that recorded a sore
+  // knee must show that knee. Starting at null would render "Anything hurting?"
+  // unanswered over a pain map that has marks in it — the form contradicting
+  // its own data.
+  const [sore, setSore] = useState<boolean | null>(
+    initial?.pain_map && Object.keys(initial.pain_map).length > 0 ? true : null
+  );
+  // Has the weight pill been opened? Separate from `weight` so an entry that
+  // already has one opens expanded, and clearing the box doesn't snap it shut
+  // under the cursor mid-edit.
+  const [weighing, setWeighing] = useState(false);
+  // Quick mode: is the training log open? Starts open when there is already
+  // something logged, so a restored draft doesn't hide the drills in it.
+  const [logTraining, setLogTraining] = useState(
+    (initialTraining?.drills.length ?? 0) > 0 || initialTraining?.total_minutes != null
+  );
 
   /**
    * Offline state, said BEFORE they fill the form in.
@@ -133,7 +179,7 @@ export function JournalForm({ initial, initialTraining, sport, planned = [] }: {
     };
   }, []);
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayLocal();
   const userId = useCurrentUser().id;
 
   /**
@@ -152,7 +198,7 @@ export function JournalForm({ initial, initialTraining, sport, planned = [] }: {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const since = new Date(Date.now() - 28 * 86400_000).toISOString().slice(0, 10);
+      const since = daysAgoLocal(28);
       const { data } = await createClient()
         .from("training_logs")
         .select("log_date, total_minutes, intensity, drills")
@@ -219,6 +265,11 @@ export function JournalForm({ initial, initialTraining, sport, planned = [] }: {
     };
 
     const cleanDrills = training.drills.filter((d) => d.name.trim());
+    // The run_type case came from origin: someone who picks "Recovery run" and
+    // fills in nothing else has still told us what they did, and the 80/20
+    // report needs that row to exist. It lives in hasTrainingContent now rather
+    // than inline, because CheckInDone asks the same question to decide whether
+    // to prompt for training, and two copies of this list would drift.
     const trainingRow = hasTrainingContent({ ...training, drills: cleanDrills })
       ? {
           drills: cleanDrills,
@@ -226,6 +277,9 @@ export function JournalForm({ initial, initialTraining, sport, planned = [] }: {
           intensity: training.intensity,
           distance_km: training.distance_km ?? null,
           contact_minutes: training.contact_minutes ?? null,
+          run_type: training.run_type ?? null,
+          zone: training.zone ?? null,
+          avg_hr: training.avg_hr ?? null,
         }
       : null;
 
@@ -349,7 +403,11 @@ export function JournalForm({ initial, initialTraining, sport, planned = [] }: {
 
       {!modeLoaded ? null : !detailed ? (
         <>
-          <section className="card space-y-5 p-5">
+          <section className="card flex flex-col space-y-5 p-5">
+            {/* iOS only — renders nothing on the web. It sits above the sleep
+                question because it answers it, and a watch remembers last night
+                better than anyone does at 6am. */}
+            <AppleHealthPill onSleep={setSleep} />
             <TapScale
               label="How did you sleep?"
               value={sleep}
@@ -405,14 +463,115 @@ export function JournalForm({ initial, initialTraining, sport, planned = [] }: {
                 </div>
               )}
             </div>
+
+            {/* WEIGHT, WITHOUT COSTING THE QUICK CHECK-IN ITS POINT.
+                It belongs here: full mode is the one almost nobody picks, so for
+                most accounts the app never got a weight after sign-up — and
+                weight is what the calorie targets, macro split, meal plan and
+                shopping list are all computed from. Without one they run on a
+                75kg default.
+
+                But my first version of this was a field-label, a full-width
+                input with a long placeholder and a helper sentence — three rows
+                of form on a screen whose entire selling point is three taps and
+                ten seconds. A daily habit dies of exactly that.
+
+                So it's a pill until you want it. Closed it costs one short row;
+                open it's a small inline number. Skipping stays free — no
+                validation, no nag, and no evidence on screen that you skipped. */}
+            {weight === "" && !weighing ? (
+              <button
+                type="button"
+                onClick={() => setWeighing(true)}
+                className="tap-target self-start rounded-full border border-white/10 bg-white/[0.03] px-3.5 py-2 text-xs font-semibold text-slate-400 transition hover:border-pitch-400/40 hover:text-pitch-400"
+              >
+                + Weight today
+              </button>
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-slate-400">Weight</span>
+                <div className="relative w-28">
+                  <input
+                    type="number"
+                    step="0.1"
+                    inputMode="decimal"
+                    autoFocus={weighing && weight === ""}
+                    value={weight}
+                    onChange={(e) => setWeight(e.target.value)}
+                    className="field !py-2 pr-8 text-center"
+                    aria-label="Weight today in kilograms"
+                  />
+                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">kg</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setWeight(""); setWeighing(false); }}
+                  className="tap-target text-xs text-slate-500 hover:text-slate-300"
+                >
+                  Skip
+                </button>
+              </div>
+            )}
           </section>
 
+          {/* LOGGING YOUR SESSION IS A THING YOU DO, NOT A MODE YOU SWITCH TO.
+              The only route to it from here was a button that flipped the whole
+              form to full — trading the tap scales for sliders and opening the
+              body map — to reach one section at the bottom. So the athlete who
+              just trained, which is most athletes opening this, had to change
+              how the entire page works to say so. Plenty never found it.
+
+              It opens in place now, with its own card and its own heading, and
+              the quick check-in stays quick for anyone who doesn't want it. */}
+          {!logTraining ? (
+            <button
+              type="button"
+              onClick={() => setLogTraining(true)}
+              className="flex w-full items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-left transition hover:border-pitch-400/40"
+            >
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-pitch-400/10 text-lg" aria-hidden>🏋️</span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-bold text-slate-100">Trained today?</span>
+                <span className="block text-xs text-slate-500">Log the session — it feeds your training load and progress.</span>
+              </span>
+              {/* Was a lone "+" in 14px gold at the far edge of a card that
+                  otherwise looks exactly like the read-only info panels
+                  elsewhere in the app. Nothing about it said "this whole row is
+                  a button", which matters because logging a session is the
+                  thing this screen was specifically asked to make findable. A
+                  worded action reads as an action; a punctuation mark doesn't. */}
+              <span className="shrink-0 whitespace-nowrap text-xs font-bold text-pitch-400">
+                Log it <span aria-hidden>→</span>
+              </span>
+            </button>
+          ) : (
+            <section className="card p-5">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h2 className="field-label !mb-0">Today&apos;s training</h2>
+                <button
+                  type="button"
+                  onClick={() => { setLogTraining(false); setTraining({ drills: [], total_minutes: null, intensity: null }); }}
+                  className="tap-target shrink-0 text-xs text-slate-500 hover:text-slate-300"
+                >
+                  Didn&apos;t train
+                </button>
+              </div>
+              <TrainingLogInput
+                value={training}
+                onChange={setTraining}
+                planned={planned}
+                sport={(SPORTS.some((sp) => sp.id === sport) ? sport : "all") as SportId | "all"}
+              />
+            </section>
+          )}
+
+          {/* Full mode is now only about the things quick genuinely omits. */}
           <button
             type="button"
             onClick={() => chooseMode(true)}
             className="w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-slate-300 transition hover:border-pitch-400/40 hover:text-pitch-400"
           >
-            + Add weight, {terms.eventToday.toLowerCase().replace(/\?$/, "")} and today&apos;s training
+            + {terms.eventToday.replace(/\?$/, "")}, pain detail and sliders
           </button>
         </>
       ) : (

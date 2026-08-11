@@ -14,6 +14,10 @@
 // it at bundle time, so the code that decides what someone is owed is the same
 // code the unit tests cover — a second copy would be the one that goes wrong.
 import { splitCommission, estimateStripeFee } from "../../lib/affiliate";
+// Same reasoning as the commission maths above: this is the code that decides
+// what an athlete's readiness is built from, so it should be the code the unit
+// tests cover rather than a second copy that drifts.
+import { parseOuraSleep, parseIngestPayload } from "../../lib/biometrics";
 
 export interface Env {
   // AI
@@ -108,6 +112,11 @@ export default {
       if (pathname.endsWith("/delete-account")) return await deleteAccount(req, env);
       if (pathname.endsWith("/stripe-webhook")) return await stripeWebhook(req, env);
       if (pathname.endsWith("/admin-create-user")) return await adminCreateUser(req, env);
+      if (pathname.endsWith("/connect-wearable")) return await connectWearable(req, env);
+      if (pathname.endsWith("/ingest-token")) return await mintIngestToken(req, env);
+      // NOT session-authenticated — see the function. An Apple Shortcut cannot
+      // hold a Supabase JWT, so this one carries its own bearer token.
+      if (pathname.endsWith("/wearable-ingest")) return await wearableIngest(req, env);
       // WORKER_VERSION is bumped whenever this file changes in a way that
       // matters. The Worker is pasted into the dashboard by hand, so "is the
       // fix actually live?" was previously unanswerable without an authorised
@@ -169,6 +178,7 @@ export default {
     // this, one bad email address could abort the whole run, and the retention
     // sweep would simply never happen.
     for (const job of [
+      () => syncWearables(env),
       () => sendPushReminders(env),
       () => approveDueCommissions(env),
       () => sendDailyReminders(env),
@@ -416,7 +426,7 @@ function overBudget(state: BudgetState): Response {
 // nobody is watching a spinner and the budget can be what the work actually
 // needs. Callers pass their own client-side timeout to match.
 // Bump on every paste into the Cloudflare dashboard. GET /health reports it.
-const WORKER_VERSION = "2026-08-09.1";
+const WORKER_VERSION = "2026-08-09.2";
 
 const CHAIN_BUDGET_MS = 55_000;
 /**
@@ -672,6 +682,18 @@ function visionChain(env: Env): Rung[] {
   return VISION_ORDER.flatMap((p) => visionChainFor(env, p));
 }
 
+/*
+ * MERGE NOTE. There were two visionChain implementations, written independently
+ * against the same bug — one here returning bare OpenRouter slugs, one above
+ * returning provider-tagged Rungs. The Rung version survives because everything
+ * downstream is now provider-aware; this one could only ever reach OpenRouter.
+ *
+ * Both agreed on the reasoning worth keeping, which is recorded at
+ * VISION_DEFAULTS: none of the text rungs can see, and sending an image to one
+ * does not error usefully — it answers about nothing, then every remaining rung
+ * does the same until the budget is gone.
+ */
+
 // Price of the paid rung, in USD per MILLION tokens, for deepseek/deepseek-chat
 // as of 2026-07-25. Published pricing, not a secret — so it lives in the code
 // rather than as a dashboard var. That matters here: this Worker is pasted into
@@ -765,7 +787,7 @@ interface Attempt {
  */
 async function providerOnce(
   env: Env, rung: Rung, system: string, user: string, maxTokens: number, json_mode = false,
-  image?: string
+  image?: string | null
 ): Promise<Attempt> {
   const isOpenRouter = rung.provider === "openrouter";
   const model = rung.model;
@@ -880,7 +902,7 @@ async function complete(
     /** Gold's "priority AI": skip the free rungs entirely. */
     priority?: boolean;
     /** A `data:image/…` URL. Its presence switches to the vision ladder. */
-    image?: string;
+    image?: string | null;
   }
 ): Promise<{ text: string; model: string; cost: number }> {
   const started = Date.now();
@@ -1022,7 +1044,7 @@ async function meteredComplete(
   userId: string,
   opts: {
     system: string; user: string; maxTokens: number;
-    validate?: (text: string) => boolean; json?: boolean; image?: string;
+    validate?: (text: string) => boolean; json?: boolean; image?: string | null;
   }
 ): Promise<{ text: string; model: string }> {
   try {
@@ -1277,68 +1299,302 @@ async function estimateFood(req: Request, env: Env): Promise<Response> {
   const { text, image } = (await req.json()) as { text?: string; image?: string };
   const meal = (text ?? "").trim().slice(0, 300);
 
-  /**
-   * Photo support. The image is optional and the text path is unchanged.
-   *
-   * Size is capped BEFORE anything else touches it: base64 runs about 4/3 of
-   * the raw bytes, so 1.5M characters is roughly a 1.1MB image. Over that is a
-   * 413, not a 400 — the request is well-formed, it is just too big, and the
-   * client can act on that distinction by downscaling further.
-   */
+  // A photo of the plate, as a data: URL. The client downscales to ~768px and
+  // re-encodes as JPEG before sending — a modern phone camera produces 3-5MB
+  // per shot, which is slow to upload on a gym's signal and costs a great many
+  // image tokens for detail no model needs to identify a chicken breast.
+  //
+  // The ceiling here is the backstop for a client that didn't, or a caller
+  // that isn't ours. Base64 is ~4/3 of the bytes it encodes, so this is roughly
+  // a 1.1MB image.
   const MAX_IMAGE_CHARS = 1_500_000;
-  if (image !== undefined) {
-    if (typeof image !== "string" || !image.startsWith("data:image/")) {
-      return json({ error: "image must be a data:image/… URL" }, 400);
-    }
-    if (image.length > MAX_IMAGE_CHARS) {
-      return json({ error: "image too large — downscale it and try again" }, 413);
-    }
-    if (!visionChain(env).length) {
-      // Say what is actually wrong. The old behaviour here was to answer from a
-      // text-only model, which invented a meal from the description alone and
-      // reported it as though it had looked at the photo.
-      return json({ error: "no vision model configured on this server", vision: false }, 503);
-    }
+  const photo = typeof image === "string" && image.startsWith("data:image/") ? image : null;
+  if (image && !photo) return json({ error: "image must be a data: URL" }, 400);
+  if (photo && photo.length > MAX_IMAGE_CHARS) {
+    return json({ error: "that photo is too large — try again, or describe the meal instead" }, 413);
   }
-  if (!image && meal.length < 2) return json({ error: "text required" }, 400);
+  /**
+   * Refuse the photo rather than answer it blind.
+   *
+   * Without this the request falls through to a text-only model, which invents
+   * a meal from the description — or from nothing — and returns it as though it
+   * had looked at the picture. That is the original bug, and it is worse than
+   * an error because the athlete has no way to tell it happened.
+   */
+  if (photo && !visionChain(env).length) {
+    return json({ error: "this server can't read photos right now — describe the meal instead", vision: false }, 503);
+  }
+  if (!photo && meal.length < 2) return json({ error: "text or image required" }, 400);
 
+  // =========================================================================
+  // THE PORTION IS THE WHOLE PROBLEM.
+  //
+  // Naming the food is easy and a model does it well. Deciding whether that is
+  // 90g of rice or 250g is where nearly all the error lives, and a calorie
+  // estimate that is confidently 160% of the truth is worse than no estimate —
+  // someone eats to it for a month and cannot work out why nothing moved.
+  //
+  // So the prompt spends its length on portions, and on three specific ways
+  // this was going wrong:
+  //
+  //   * No scale. "A plate of pasta" is 300 kcal or 900 depending on the plate.
+  //     Photos get explicit reference objects; text gets UK household measures,
+  //     because "two handfuls" is how people actually describe food.
+  //   * False confidence. An unhedged number reads as measured. Uncertainty
+  //     belongs in the name, where the athlete can see it and correct it — the
+  //     UI makes every quantity editable precisely for this.
+  //   * Cooked vs dry. 75g of dry rice is 250g cooked, and the app's own food
+  //     table is dry weight, so mixing them silently triples someone's carbs.
+  // =========================================================================
   const sys =
-    "You estimate the nutrition of a meal an athlete describes in plain language. " +
+    (photo
+      ? "You estimate the nutrition of a meal an athlete has photographed. " +
+        "Work out the portion from the picture before you estimate anything else. Use whatever is in " +
+        "shot for scale: a dinner plate is about 27cm across and a side plate about 20cm, a fork is " +
+        "about 19cm long, a standard mug holds about 300ml, and a closed fist is roughly 150-200g of " +
+        "a dense food. State which reference you used in the name, e.g. \"Rice (fills a third of a " +
+        "27cm plate)\". " +
+        "Estimate the FOOD, not the container — a half-empty bowl is a half portion. " +
+        "If something is stacked or partly hidden, say so in the name and estimate the visible part " +
+        "plus a conservative allowance, e.g. \"Chips (pile, lower layer hidden — estimated)\". " +
+        "Never invent a food you cannot see. If the picture is too dark or blurred to identify " +
+        "anything, return an empty items array rather than guessing. "
+      : "You estimate the nutrition of a meal an athlete describes in plain language. " +
+        "Where they give a household measure, convert it: a heaped tablespoon is about 15g dry rice " +
+        "or 20g peanut butter, a slice of medium bread about 40g, a mug of dry oats about 90g, a " +
+        "supermarket chicken breast about 170g, a large egg about 58g, a tin of tuna about 145g " +
+        "drained. If they give no quantity at all, use a normal adult portion and say so in the name. ") +
     "Output ONLY valid minified JSON: {items:[{name:string,qty:number,unit:\"g\"|\"ml\"|\"each\",kcal:number,protein:number,carbs:number,fats:number}]}. " +
-    "One entry per distinct food. If no portion is stated, assume a normal adult serving and say so in the name " +
-    "(e.g. \"Chicken breast (medium portion)\"). Use UK supermarket foods and typical home cooking. " +
+    "One entry per distinct food. Use UK supermarket products and typical British home cooking. " +
     // Weights of cooked grains vary hugely with water; the app's own database is
-    // dry-weight, so mixing the two silently doubles someone's carbs.
-    "For rice, pasta and oats give the DRY weight. " +
-    "kcal must be the total for the stated qty, not per 100g, and must be greater than zero. " +
+    // dry-weight, so mixing the two silently multiplies someone's carbs.
+    "For rice, pasta, couscous and oats give the DRY weight, and say \"(dry)\" in the name. " +
+    "Include cooking fat if the dish obviously used it — a fried egg or a stir fry carries oil the " +
+    "athlete did not mention and it is often 100+ kcal. " +
+    // Round numbers read as estimates, which is what these are. A model that
+    // answers 187g invites the reader to treat a guess as a measurement.
+    "Round quantities to something a person would say: to the nearest 10g under 200g, nearest 25g " +
+    "above. Never give a quantity to the gram. " +
+    "Put any real uncertainty in the name, in brackets, in plain words. Do not hedge in the numbers. " +
+    "kcal must be the total for the stated qty, not per 100g, and must be greater than zero, and must " +
+    "be consistent with the macros you give (protein and carbs 4 kcal/g, fat 9 kcal/g, within 10%). " +
     "No prose outside the JSON.";
 
-  // Scale references, because a photo has no ruler in it. Portion size is most
-  // of the error in a calorie estimate — identifying the food is the part a
-  // model is good at — so it is given something in frame to measure against.
-  const photoSys = image
-    ? sys +
-      " You are looking at a PHOTOGRAPH of the meal. Judge portions against what is visible: " +
-      "a dinner plate is about 27cm across, a fork 19cm, a mug holds 300ml, a closed fist is 150-200g. " +
-      "Count what you can actually see and do not invent sides that are not in the picture. " +
-      "Include cooking oil or butter if the food looks fried or glossy, which people always omit."
-    : sys;
-
+  /*
+   * MERGE NOTE. I had written a shorter photo prompt that appended scale
+   * references to the text one. This branch's version is kept instead: it
+   * separates the photo and text prompts rather than bolting one onto the
+   * other, and it covers three things mine did not — estimating the food and
+   * not the container, saying which reference object was used, and returning an
+   * empty array for a picture too dark to read instead of guessing at it.
+   */
   const { text: raw, model } = await meteredComplete(env, u.id, {
-    system: photoSys,
-    user: image
-      ? (meal.length >= 2
-          ? `Estimate this meal from the photo. The athlete also described it as: ${meal}`
-          : "Estimate this meal from the photo.")
+    system: sys,
+    user: photo
+      ? meal
+        ? `Estimate this meal. The athlete also says: ${meal}`
+        : "Estimate this meal from the photo."
       : `The athlete ate: ${meal}`,
-    maxTokens: 700,
+    // A photo produces more items than a typed sentence usually does, so it
+    // needs more room to finish the JSON — an object cut off at max_tokens
+    // fails validation and costs a whole rung. Not so much room that a
+    // rambling model burns the latency budget.
+    maxTokens: photo ? 900 : 700,
     json: true,
-    image,
+    image: photo,
     validate: (t) => parseFoodItems(t) !== null,
   });
   const items = parseFoodItems(raw);
   if (!items) return json({ error: "could not read that meal" }, 422); // validate passed, so unreachable
   return json({ items, model });
+}
+
+// =============================================================================
+// Wearables that upload themselves.
+//
+// See migration 0065 for what each vendor actually permits — it decides the
+// shape of all of this. The short version: Oura can be connected today with a
+// token the athlete generates, Apple Health can push from a Shortcut, and Whoop
+// and Garmin both need an application to be approved before a single line of
+// their integration can run.
+// =============================================================================
+
+/**
+ * Store a provider token and pull straight away.
+ *
+ * The immediate sync is the point. A "Connected ✓" that shows no data until
+ * tomorrow's cron is indistinguishable from a broken one, and the athlete has
+ * no way to tell which they're looking at.
+ */
+async function connectWearable(req: Request, env: Env): Promise<Response> {
+  const u = await authUser(req, env);
+  if (!u) return json({ error: "unauthorized" }, 401);
+  const { provider, token } = (await req.json()) as { provider?: string; token?: string };
+
+  if (provider !== "oura") {
+    // Said plainly rather than as a generic 400. Whoop and Garmin are not
+    // "unsupported" — they are waiting on a registration only the operator can
+    // complete, and the UI repeats this so nobody keeps trying.
+    return json({
+      error: provider === "whoop" || provider === "garmin"
+        ? `${provider} needs a developer application to be approved before it can be connected. Import a CSV export for now.`
+        : "unknown provider",
+    }, 400);
+  }
+
+  const access = (token ?? "").trim();
+  if (access.length < 20) return json({ error: "that doesn't look like an Oura personal access token" }, 400);
+
+  // Verify BEFORE storing. Saving an unverified token gives someone a
+  // connection that looks live and silently returns nothing every night.
+  let rows: ReturnType<typeof parseOuraSleep>;
+  try {
+    rows = await fetchOura(access);
+  } catch (e) {
+    return json({ error: `Oura rejected that token — ${e instanceof Error ? e.message : String(e)}` }, 400);
+  }
+
+  const saved = await saveBiometrics(env, u.id, rows);
+  await supa(env, "/rest/v1/wearable_connections?on_conflict=user_id,provider", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Prefer: "resolution=merge-duplicates" },
+    body: JSON.stringify({
+      user_id: u.id, provider: "oura", access_token: access,
+      last_sync_at: new Date().toISOString(), last_error: null,
+    }),
+  });
+
+  return json({ ok: true, days: saved });
+}
+
+/**
+ * Mint (or rotate) the athlete's push token.
+ *
+ * A UUID rather than a JWT because the holder is an Apple Shortcut, which has
+ * no way to refresh anything. Rotating is just calling this again — the old
+ * token stops working the moment the new one is written.
+ */
+async function mintIngestToken(req: Request, env: Env): Promise<Response> {
+  const u = await authUser(req, env);
+  if (!u) return json({ error: "unauthorized" }, 401);
+  const token = crypto.randomUUID();
+  const r = await supa(env, `/rest/v1/profiles?id=eq.${u.id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ingest_token: token }),
+  });
+  if (!r.ok) return json({ error: "could not create a token" }, 500);
+  return json({ token, url: `${new URL(req.url).origin}${new URL(req.url).pathname.replace(/\/ingest-token$/, "/wearable-ingest")}` });
+}
+
+/**
+ * Accept a push from something that has no Supabase session.
+ *
+ * AUTHENTICATED BY THE INGEST TOKEN, not a user JWT — that is the whole reason
+ * this endpoint is separate. The token identifies the athlete, and a token that
+ * matches nobody is a 401 rather than a silent no-op, so a misconfigured
+ * Shortcut fails visibly instead of appearing to work for weeks.
+ */
+async function wearableIngest(req: Request, env: Env): Promise<Response> {
+  const auth = req.headers.get("Authorization") ?? "";
+  const token = auth.replace(/^Bearer\s+/i, "").trim();
+  // Format-check before querying: a malformed value can't match anything, and
+  // PostgREST errors on a non-uuid comparison rather than returning empty.
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(token)) {
+    return json({ error: "unauthorized" }, 401);
+  }
+
+  const r = await supa(env, `/rest/v1/profiles?ingest_token=eq.${token}&select=id`);
+  const found = r.ok ? ((await r.json()) as { id: string }[]) : [];
+  if (!found.length) return json({ error: "unauthorized" }, 401);
+
+  const rows = parseIngestPayload(await req.json().catch(() => null));
+  if (!rows.length) {
+    return json({ error: "nothing usable in that payload — send hrv, restingHR and/or sleepHours" }, 400);
+  }
+
+  const saved = await saveBiometrics(env, found[0].id, rows);
+  return json({ ok: true, days: saved });
+}
+
+/** Oura's v2 sleep collection for the last `days` days, parsed. */
+async function fetchOura(accessToken: string, days = 7) {
+  const end = new Date();
+  const start = new Date(end.getTime() - days * 86400_000);
+  const url = "https://api.ouraring.com/v2/usercollection/sleep" +
+    `?start_date=${start.toISOString().slice(0, 10)}&end_date=${end.toISOString().slice(0, 10)}`;
+
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 15_000);
+  try {
+    const r = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` }, signal: ctrl.signal });
+    if (r.status === 401 || r.status === 403) throw new Error("token rejected or expired");
+    if (!r.ok) throw new Error(`${r.status}`);
+    const body = (await r.json()) as { data?: unknown[] };
+    return parseOuraSleep((body.data ?? []) as Parameters<typeof parseOuraSleep>[0]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Upsert biometrics, without trampling anything typed in by hand.
+ *
+ * `source=neq.manual` is doing real work: someone who corrects a bad night's
+ * sleep reading should not have the correction overwritten by the next sync of
+ * the same day. The ring is the default, the human is the override.
+ */
+async function saveBiometrics(env: Env, userId: string, rows: { metric_date: string }[]): Promise<number> {
+  if (!rows.length) return 0;
+
+  const existing = await supa(
+    env,
+    `/rest/v1/biometrics?user_id=eq.${userId}&source=eq.manual&select=metric_date` +
+    `&metric_date=in.(${rows.map((r) => r.metric_date).join(",")})`,
+  );
+  const manual = new Set(
+    existing.ok ? ((await existing.json()) as { metric_date: string }[]).map((r) => r.metric_date) : [],
+  );
+  const writable = rows.filter((r) => !manual.has(r.metric_date));
+  if (!writable.length) return 0;
+
+  const r = await supa(env, "/rest/v1/biometrics?on_conflict=user_id,metric_date", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Prefer: "resolution=merge-duplicates" },
+    body: JSON.stringify(writable.map((row) => ({ ...row, user_id: userId }))),
+  });
+  return r.ok ? writable.length : 0;
+}
+
+/**
+ * Nightly pull for every connected ring.
+ *
+ * Runs first in the cron list, before the reminder emails, so the readiness a
+ * morning notification is based on already includes last night's sleep.
+ *
+ * A failure is WRITTEN TO THE ROW rather than only logged. A connection that
+ * quietly stopped working is worse than no connection at all, because readiness
+ * carries on reporting on stale data as though it were current — so the athlete
+ * needs to be able to see that it broke.
+ */
+async function syncWearables(env: Env): Promise<void> {
+  const r = await supa(env, "/rest/v1/wearable_connections?provider=eq.oura&access_token=not.is.null&select=user_id,access_token");
+  if (!r.ok) return;
+  const conns = (await r.json()) as { user_id: string; access_token: string }[];
+
+  for (const c of conns) {
+    let error: string | null = null;
+    try {
+      await saveBiometrics(env, c.user_id, await fetchOura(c.access_token));
+    } catch (e) {
+      error = (e instanceof Error ? e.message : String(e)).slice(0, 200);
+    }
+    await supa(env, `/rest/v1/wearable_connections?user_id=eq.${c.user_id}&provider=eq.oura`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ last_sync_at: new Date().toISOString(), last_error: error }),
+    });
+  }
 }
 
 // --- Injury rehab plans ------------------------------------------------------

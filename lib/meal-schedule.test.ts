@@ -98,3 +98,110 @@ test("a skipped day still reports honest macros", () => {
   const summed = tue.meals.reduce((n, m) => n + m.macros.kcal, 0);
   assert.ok(Math.abs(summed - tue.macros.kcal) < 1, "day macros should count only what we planned");
 });
+
+/**
+ * "Tuesdays AND Thursdays" — the way anyone would actually write it.
+ *
+ * `clauses()` splits on "and", so this arrived as "I eat out on Tuesdays" plus
+ * a bare "Thursdays". The second had no eating-out phrase in it and was
+ * dropped, so Thursday's dinner was planned, shopped for and cooked anyway —
+ * silently, every week. The comma form worked, which is why it went unnoticed.
+ */
+test("a day list joined by 'and' skips every day in it", () => {
+  const s = parseSchedule("I eat out on Tuesdays and Thursdays");
+  const days = s.skips.filter((k) => k.slot === "Dinner").map((k) => k.day).sort();
+  assert.deepEqual(days, [1, 3], "both days should be skipped");
+});
+
+test("'and' works without the word 'on', and for three days", () => {
+  assert.deepEqual(
+    parseSchedule("eat out Tuesday and Thursday").skips.map((k) => k.day).sort(),
+    [1, 3]
+  );
+  assert.deepEqual(
+    parseSchedule("I eat out Mondays, Wednesdays and Fridays").skips.map((k) => k.day).sort(),
+    [0, 2, 4]
+  );
+});
+
+/**
+ * The carry-over must be strict. A clause with its own meaning has to keep it,
+ * or "I eat out Tuesdays and I skip breakfast" would skip Tuesday's breakfast
+ * and dinner both.
+ */
+test("a clause with its own meaning does not inherit the previous one", () => {
+  const s = parseSchedule("I eat out on Tuesdays and I skip breakfast");
+  const tueDinner = s.skips.some((k) => k.day === 1 && k.slot === "Dinner");
+  assert.ok(tueDinner, "Tuesday dinner should still be skipped");
+  // Breakfast is skipped every day, not just Tuesday — it named no day.
+  const breakfasts = s.skips.filter((k) => k.slot === "Breakfast").length;
+  assert.ok(breakfasts === 0 || breakfasts === 7, `breakfast skipped on ${breakfasts} days`);
+});
+
+test("a stray day with no intent anywhere before it changes nothing", () => {
+  assert.deepEqual(parseSchedule("Tuesdays and Thursdays").skips, []);
+});
+
+/**
+ * Cooking two fewer dinners must not cost MORE.
+ *
+ * It did: the escalating repeat penalty spread a shorter week across more
+ * distinct dishes, and the extra ingredients cost more in whole packs than the
+ * two dinners saved — £111 against £103. Variety now scales with how many slots
+ * there are to amortise a pack over.
+ */
+test("eating out makes the shop cheaper, not dearer", () => {
+  const normal = shoppingList(week(""));
+  const out = shoppingList(week("I eat out on Tuesdays and Thursdays"));
+  assert.ok(
+    out.total < normal.total,
+    `eating out twice cost £${out.total.toFixed(2)} against £${normal.total.toFixed(2)} for cooking every night`
+  );
+});
+
+// --- training days -----------------------------------------------------------
+
+/**
+ * The plan used to feed an athlete identically on a rest day and a double
+ * session, which is the single most visible way it read as generic. These pin
+ * the parsing; `meal-plan.test.ts` pins what the planner does with it.
+ */
+test("training days are read from the ways people actually write them", () => {
+  for (const note of [
+    "I train Monday, Wednesday and Friday",
+    "gym mon wed fri",
+    "sessions on mondays, wednesdays and fridays",
+    "I play monday and wednesday and friday",
+  ]) {
+    assert.deepEqual(parseSchedule(note).trainingDays, [0, 2, 4], note);
+  }
+});
+
+/**
+ * The "and" bug, which is the one that actually bit.
+ *
+ * `clauses()` splits on "and", so only the first clause contains the word
+ * "train" — Friday was dropped and the athlete got a rest day's food on a
+ * training day.
+ */
+test("a trailing day list inherits the training intent", () => {
+  assert.deepEqual(parseSchedule("I train Tuesday and Thursday").trainingDays, [1, 3]);
+});
+
+test("a rest day named as a rest day is not a training day", () => {
+  assert.deepEqual(parseSchedule("no gym on sundays").trainingDays, []);
+  assert.deepEqual(parseSchedule("I rest on Sundays").trainingDays, []);
+});
+
+test("training with no day named changes nothing", () => {
+  // "I train hard so I need more protein" names no day, and marking the whole
+  // week would be the same as marking none of it — but worse, because it would
+  // look like the app understood something it didn't.
+  assert.deepEqual(parseSchedule("I train hard and need loads of protein").trainingDays, []);
+});
+
+test("eating out and training are read from the same sentence", () => {
+  const s = parseSchedule("I train tuesdays and thursdays, and I eat out on fridays");
+  assert.deepEqual(s.trainingDays, [1, 3]);
+  assert.ok(s.skips.some((k) => k.day === 4), "Friday dinner should still be skipped");
+});

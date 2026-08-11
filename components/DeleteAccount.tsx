@@ -61,7 +61,7 @@ export function DeleteAccount({ email }: { email: string }) {
         </p>
         <button
           onClick={() => { setOpen(true); setTyped(""); setError(null); }}
-          className="mt-3 rounded-2xl border border-readiness-red/40 px-4 py-2 text-sm font-semibold text-readiness-red transition hover:bg-readiness-red/10"
+          className="tap-target mt-3 rounded-2xl border border-readiness-red/40 px-4 text-sm font-semibold text-readiness-red transition hover:bg-readiness-red/10"
         >
           Delete my account
         </button>

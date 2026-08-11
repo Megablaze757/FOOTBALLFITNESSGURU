@@ -40,3 +40,9 @@ _*.mjs
 _*.ts
 _*.svg
 _*.js
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
