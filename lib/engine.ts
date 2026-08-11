@@ -190,6 +190,40 @@ const CALF_WORK = new Set(["calf_raise", "calf_raise_eccentric", "pogo_hops"]);
  */
 const SPRINT_ESSENTIALS = ["nordic_curl", "calf_raise_eccentric"];
 
+/**
+ * One guaranteed posterior-chain movement PER SESSION, not two per block.
+ *
+ * The two-item list above is distributed round-robin (`pi % days === di`), so
+ * on a 3-day week one session got a Nordic, one got calves and the third got
+ * neither — and everything past that relied on a scoring bonus that loses when
+ * slots are scarce. Measured on the peak week, that produced:
+ *
+ *   football/speed/3d   4.0 hamstring sets vs 13.0 quad — 0.31
+ *   rugby/speed/3d      4.0 vs 13.7          — 0.29
+ *   basketball/speed/3d 4.0 vs 13.0          — 0.31
+ *
+ * against 0.80-0.92 at five days. Quad volume does not move with frequency
+ * (squats and jumps are in every session) while hamstring volume did, so the
+ * fewer days an athlete trains, the worse the imbalance — which is backwards.
+ * Three days a week is the busy semi-pro, not the edge case.
+ *
+ * Returning exactly `days` entries means the modulo gives every session one.
+ * Hamstrings lead the cycle and so take the majority on odd-length weeks:
+ * the ratio is the worse deficit, and sprinting is the mechanism that tears
+ * hamstrings. Varying the movement rather than repeating one lift keeps the
+ * per-block selection rule intact — it differs by DAY, not by week.
+ */
+function sprintEssentials(days: number): string[] {
+  const cycle = [
+    "nordic_curl",
+    "calf_raise_eccentric",
+    "single_leg_rdl",
+    "calf_raise",
+    "hamstring_slider",
+  ];
+  return Array.from({ length: Math.max(0, days) }, (_, i) => cycle[i % cycle.length]);
+}
+
 const SLOT_ORDER: Slot[] = ["warmup", "primary", "secondary", "accessory", "skill", "conditioning", "cooldown"];
 
 export const SLOT_LABEL: Record<Slot, string> = {
@@ -721,7 +755,7 @@ export function buildBlock(input: EngineInput): ProgramPlan {
   const required = [
     ...(input.mustInclude ?? []),
     ...(input.sport && SPRINT_SPORTS.has(input.sport)
-      ? SPRINT_ESSENTIALS.filter((id) => !(input.mustInclude ?? []).includes(id))
+      ? sprintEssentials(days).filter((id) => !(input.mustInclude ?? []).includes(id))
       : []),
   ];
 

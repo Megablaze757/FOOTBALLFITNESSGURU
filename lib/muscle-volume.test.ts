@@ -195,3 +195,61 @@ test("the audit reports the week it audited", () => {
   const plan = buildBlock({ goal: "strength", painMap: {}, sport: "football", daysPerWeek: 3 });
   assert.deepEqual(plan.weeks.map((w) => auditWeek(w).week), [1, 2, 3, 4]);
 });
+
+test("a three-day sprint week is not short of hamstring work", () => {
+  /**
+   * MEASURED, and the number is the point.
+   *
+   * The sprint essentials used to be a fixed two-item list spread round-robin
+   * across the week, so a 3-day athlete got a Nordic on one day, calves on
+   * another and nothing posterior on the third. Quad volume does not move with
+   * frequency — squats and jumps are in every session — so the imbalance got
+   * WORSE the fewer days you trained, which is backwards: three days a week is
+   * the busy semi-pro this app is for, not an edge case.
+   *
+   * Peak-week hamstring:quad, before -> after:
+   *   football/speed/3d    0.31 -> 0.62
+   *   rugby/speed/3d       0.29 -> 0.82
+   *   basketball/speed/3d  0.31 -> 0.62
+   *
+   * 0.5 is the floor asserted here, deliberately below the 0.62 measured, so
+   * ordinary selection churn doesn't fail the build. Drop below it and a
+   * sprinting athlete is accumulating quad volume against a hamstring that
+   * isn't keeping up — which is the injury this whole path exists to prevent.
+   * If this fails, do not lower the threshold: find what stopped the essentials
+   * reaching every session.
+   */
+  for (const sport of ["football", "rugby", "basketball"] as const) {
+    const week = buildBlock({ goal: "speed", painMap: {}, sport, daysPerWeek: 3 }).weeks[2];
+    const v = weeklyMuscleVolume(week);
+    assert.ok(
+      v.hamstrings / v.quads >= 0.5,
+      `${sport}: ${v.hamstrings} hamstring sets against ${v.quads} quad — ratio ${(v.hamstrings / v.quads).toFixed(2)}`
+    );
+  }
+});
+
+test("every session in a sprint week carries posterior-chain work", () => {
+  // The mechanism behind the ratio above: `pi % days === di` gives each day one
+  // guaranteed essential only when the list is as long as the week. A shorter
+  // list silently leaves the last sessions with none.
+  //
+  // HONEST LIMIT: this one does NOT fail against the old two-item list — I
+  // checked. With three days, two forced essentials cover two sessions and the
+  // scoring bonus usually wins the third anyway, so the old code passes this
+  // while still producing a 0.31 ratio. The test above is the guard that bites;
+  // this pins the weaker, still-worth-having invariant that no session in a
+  // sprint week comes out with nothing for the posterior chain at all.
+  //
+  // Asserted through weeklyMuscleVolume rather than against a list of movement
+  // ids: drills carry names, not ids, and a hand-written id list would be one
+  // catalogue rename away from passing while measuring nothing.
+  const week = buildBlock({ goal: "speed", painMap: {}, sport: "football", daysPerWeek: 3 }).weeks[2];
+  for (const s of week.sessions) {
+    const v = weeklyMuscleVolume({ ...week, sessions: [s] });
+    assert.ok(
+      v.hamstrings + v.calves > 0,
+      `session "${s.title}" has no hamstring or calf work: ${s.drills.map((d) => d.name).join(", ")}`
+    );
+  }
+});
