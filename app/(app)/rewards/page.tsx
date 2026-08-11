@@ -17,6 +17,7 @@ import { WeeklyChallenges } from "@/components/WeeklyChallenges";
 import { Leaderboards } from "@/components/Leaderboards";
 import { RankLadder } from "@/components/RankLadder";
 import { RankBadge } from "@/components/RankBadge";
+import { Icon } from "@/components/Icon";
 import { daysAgoLocal, todayLocal } from "@/lib/day";
 
 export default function RewardsPage() {
@@ -68,6 +69,9 @@ export default function RewardsPage() {
       videos: videoC.count ?? 0,
       nutritionLogs: nutriC.count ?? 0,
       checkInsLast7: checkDates.filter((d) => d >= since7).length,
+      // A rest day is one you checked in on and did not train. Both lists are
+      // already here, so this costs no extra query — see ActivityStats.
+      restDaysLogged: checkDates.filter((d) => !trainDates.includes(d)).length,
     };
     const state: DailyState = {
       checkedInToday: checkDates.includes(today),
@@ -208,11 +212,13 @@ export default function RewardsPage() {
                  athlete what to aim for, so they are the ones most worth being
                  able to read. */
               <div key={a.id} className="card flex items-center gap-3 p-3">
+                {/* `grayscale` went with the emoji it existed for — a filter is
+                    the only way to mute a full-colour glyph, and it is the wrong
+                    tool for an SVG that already takes the colour it is given. */}
                 <span
-                  className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl text-xl ${got ? "bg-pitch-400/15" : "bg-white/[0.03] opacity-60 grayscale"}`}
-                  aria-hidden
+                  className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${got ? "bg-pitch-400/15 text-pitch-400" : "bg-white/[0.03] text-slate-500 opacity-60"}`}
                 >
-                  {a.icon}
+                  <Icon name={a.icon} size={20} />
                 </span>
                 <div className="min-w-0">
                   <div className={`truncate text-sm font-bold ${got ? "text-slate-100" : "text-slate-400"}`}>

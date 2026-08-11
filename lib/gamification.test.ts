@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   computeXp, levelFor, rankFor, rankLadder, evaluateAchievements, dailyQuests, EMPTY_STATS,
+  ACHIEVEMENTS,
 } from "./gamification";
 
 test("XP accumulates from activity and levels rise", () => {
@@ -83,4 +84,69 @@ test("daily quests reflect today's state", () => {
   assert.equal(q.find((x) => x.id === "checkin")!.done, true);
   assert.equal(q.find((x) => x.id === "train")!.done, false);
   assert.equal(q.length, 3);
+});
+
+test("resting is not punished by the reward system", () => {
+  /**
+   * THE CONTRADICTION THIS FIXES. Every other system in the app treats backing
+   * off as a skill — ACWR flags a load spike as an injury risk, readiness tells
+   * a Red day to take active recovery, and the engine writes a deload into every
+   * block. Gamification was the one place that treated it as nothing: a
+   * training day paid 22 (10 check-in + 12 session), a rest day paid 10, and
+   * fifty sessions earned a badge called "Machine".
+   *
+   * For a fifteen-year-old chasing a badge, that argued in the direction that
+   * gets people hurt.
+   */
+  const base = { ...EMPTY_STATS, checkIns: 1 };
+  const rested = computeXp({ ...base, restDaysLogged: 1 });
+  const trained = computeXp({ ...base, trainingSessions: 1 });
+
+  assert.ok(rested > computeXp(base), "a rest day must earn something, or the app pays nothing for its own advice");
+  assert.ok(
+    trained > rested,
+    "training must still outrank resting — the point is to remove the penalty, not to invert the incentive"
+  );
+});
+
+test("the badges reward recovery, not just accumulation", () => {
+  // Ten rest days is a badge. Before, no amount of correct recovery unlocked
+  // anything at all.
+  const resting = { ...EMPTY_STATS, restDaysLogged: 10 };
+  const { unlocked } = evaluateAchievements(resting, 1);
+  assert.ok(unlocked.some((a) => a.id === "rest_10"), "logging rest days unlocks nothing");
+});
+
+test("no badge name tells an athlete to train harder", () => {
+  /**
+   * The Rewards page's own subtitle is "XP builds up from things you were doing
+   * anyway. Nothing here needs chasing." It then handed out "Grinder" and
+   * "Machine" for logging sessions. A name that instructs is not the same as a
+   * name that records, and an injury-risk app should only ever do the second.
+   *
+   * Pins the copy, because this is the kind of thing that creeps back in one
+   * cheerful pull request at a time.
+   */
+  const exhorting = /grind|machine|beast|savage|no days off|relentless|animal/i;
+
+  /**
+   * Scoped to badges gated on TRAINING VOLUME, which is the actual risk.
+   *
+   * My first version matched the vocabulary anywhere and caught "Week warrior"
+   * and "Unstoppable" — both of which are check-in streaks. Checking in takes
+   * ten seconds, carries no injury risk, and is a thing the app genuinely wants
+   * every day; a bit of character on those badges urges nothing dangerous. The
+   * principle is not "no energetic words", it is "do not push an athlete toward
+   * more sessions", so the test asks which badges are gated on sessions.
+   */
+  const volumeGated = ACHIEVEMENTS.filter((a) => {
+    const many = { ...EMPTY_STATS, trainingSessions: 999, completedSessions: 999 };
+    return a.test(many, 1) && !a.test(EMPTY_STATS, 1);
+  });
+  assert.ok(volumeGated.length >= 2, "expected the session-count badges to be found by this probe");
+  const offenders = volumeGated.filter((a) => exhorting.test(a.name));
+  assert.deepEqual(
+    offenders.map((a) => a.name), [],
+    "a badge gated on session count must record what happened, not urge more of it"
+  );
 });

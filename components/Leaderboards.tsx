@@ -40,6 +40,10 @@ export function Leaderboards({ userId }: { userId: string }) {
       checkIns: r.check_ins_7, streak: r.streak, trainingSessions: r.sessions_7,
       completedSessions: r.completed_7, completedBlocks: 0, benchmarks: 0,
       videos: 0, nutritionLogs: 0, checkInsLast7: r.check_ins_7,
+      // The leaderboard view aggregates seven days of activity and does not
+      // carry rest days. Zero, rather than a guess that would rank people on a
+      // number nobody measured.
+      restDaysLogged: 0,
     });
     return {
       userId: r.user_id,

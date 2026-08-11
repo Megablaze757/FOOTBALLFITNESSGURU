@@ -1,3 +1,4 @@
+import type { IconName } from "@/components/Icon";
 // =============================================================================
 // Gamification engine — XP, levels/ranks, achievements and daily quests, all
 // computed from activity the athlete already generates. Pure + tested, so it
@@ -14,11 +15,26 @@ export interface ActivityStats {
   videos: number;            // clips analysed
   nutritionLogs: number;     // nutrition days logged
   checkInsLast7: number;     // check-ins in the last 7 days
+  /**
+   * Days you checked in and did NOT train.
+   *
+   * The reward system had no idea recovery existed — nothing in this file
+   * mentioned rest, deloads or backing off, while the rest of the app is built
+   * around exactly that. ACWR flags a load spike as an injury risk, readiness
+   * tells a Red day to take active recovery, and the engine writes a deload
+   * week into every block. Then Rewards paid 12 XP a session, called fifty of
+   * them "Machine", and paid nothing at all for the day you were told to rest.
+   *
+   * That is the app arguing with itself, and for a fifteen-year-old chasing a
+   * badge it argues in the direction that gets people hurt.
+   */
+  restDaysLogged: number;
 }
 
 export const EMPTY_STATS: ActivityStats = {
   checkIns: 0, streak: 0, trainingSessions: 0, completedSessions: 0,
   completedBlocks: 0, benchmarks: 0, videos: 0, nutritionLogs: 0, checkInsLast7: 0,
+  restDaysLogged: 0,
 };
 
 // XP awarded per unit of activity.
@@ -31,6 +47,16 @@ const XP = {
   video: 20,
   nutritionLog: 8,
   streakDay: 5,
+  /**
+   * A rest day earns something, and that is the whole point.
+   *
+   * Training a day was worth 22 (10 for the check-in, 12 for the session) and
+   * resting was worth 10 — so the reward curve said train, including on the day
+   * readiness said Red and the app itself said stop. At 6 a rest day is worth
+   * 16 against 22: still less than training, because training is the thing
+   * being built, but no longer a penalty for following the advice.
+   */
+  restDay: 6,
 };
 
 export function computeXp(s: ActivityStats): number {
@@ -42,7 +68,8 @@ export function computeXp(s: ActivityStats): number {
     s.benchmarks * XP.benchmark +
     s.videos * XP.video +
     s.nutritionLogs * XP.nutritionLog +
-    s.streak * XP.streakDay
+    s.streak * XP.streakDay +
+    s.restDaysLogged * XP.restDay
   );
 }
 
@@ -156,23 +183,47 @@ export interface Achievement {
   id: string;
   name: string;
   desc: string;
-  icon: string;
+  icon: IconName;
   test: (s: ActivityStats, level: number) => boolean;
 }
 
 export const ACHIEVEMENTS: Achievement[] = [
-  { id: "first_checkin", name: "First step", desc: "Log your first check-in", icon: "👣", test: (s) => s.checkIns >= 1 },
-  { id: "streak_7", name: "Week warrior", desc: "7-day check-in streak", icon: "🔥", test: (s) => s.streak >= 7 },
-  { id: "streak_30", name: "Unstoppable", desc: "30-day check-in streak", icon: "⚡", test: (s) => s.streak >= 30 },
-  { id: "perfect_week", name: "Perfect week", desc: "Check in all 7 days", icon: "📅", test: (s) => s.checkInsLast7 >= 7 },
-  { id: "sessions_10", name: "Grinder", desc: "Log 10 training sessions", icon: "🏋️", test: (s) => s.trainingSessions >= 10 },
-  { id: "sessions_50", name: "Machine", desc: "Log 50 training sessions", icon: "🤖", test: (s) => s.trainingSessions >= 50 },
-  { id: "first_program", name: "Got a plan", desc: "Generate your first program", icon: "🗺️", test: (s) => s.completedSessions >= 1 || s.completedBlocks >= 1 },
-  { id: "block_cleared", name: "Block cleared", desc: "Finish a full 4-week block", icon: "✅", test: (s) => s.completedBlocks >= 1 },
-  { id: "first_video", name: "On camera", desc: "Analyse your first clip", icon: "🎥", test: (s) => s.videos >= 1 },
-  { id: "tested", name: "Benchmarked", desc: "Log a strength/speed test", icon: "📏", test: (s) => s.benchmarks >= 1 },
-  { id: "fuelled", name: "Fuelled", desc: "Log your nutrition", icon: "🍽️", test: (s) => s.nutritionLogs >= 1 },
-  { id: "level_10", name: "Double digits", desc: "Reach level 10", icon: "🌟", test: (_s, level) => level >= 10 },
+  { id: "first_checkin", name: "First step", desc: "Log your first check-in", icon: "foot", test: (s) => s.checkIns >= 1 },
+  { id: "streak_7", name: "Week warrior", desc: "7-day check-in streak", icon: "flame", test: (s) => s.streak >= 7 },
+  { id: "streak_30", name: "Unstoppable", desc: "30-day check-in streak", icon: "bolt", test: (s) => s.streak >= 30 },
+  { id: "perfect_week", name: "Perfect week", desc: "Check in all 7 days", icon: "calendar", test: (s) => s.checkInsLast7 >= 7 },
+  /**
+   * WAS "Grinder" AND "Machine", and the names were the problem.
+   *
+   * This page's own subtitle reads "XP builds up from things you were doing
+   * anyway. Nothing here needs chasing." It then handed a fifteen-year-old a
+   * badge for grinding and a bigger one for being a machine about it — in an
+   * app whose load engine flags accumulating volume as an injury risk and whose
+   * readiness engine tells you to stop.
+   *
+   * The milestones stay, because logging your training IS worth marking. The
+   * exhortation goes. A name that instructs is not the same as a name that
+   * records, and this app should only ever be doing the second.
+   */
+  { id: "sessions_10", name: "Ten logged", desc: "Log 10 training sessions", icon: "barbell", test: (s) => s.trainingSessions >= 10 },
+  { id: "sessions_50", name: "Fifty logged", desc: "Log 50 training sessions", icon: "dumbbell", test: (s) => s.trainingSessions >= 50 },
+  /**
+   * The recovery side of the ledger, which did not exist at all.
+   *
+   * Every other system in the app treats backing off as a skill: ACWR, the
+   * readiness verdict, the deload week the engine writes into every block. The
+   * reward system was the one place that treated it as nothing. An athlete who
+   * did exactly what they were told on a Red day earned less than one who
+   * ignored it, which is a strange thing for an injury-risk product to pay for.
+   */
+  { id: "rest_10", name: "Rest is training", desc: "Check in on 10 days you didn't train", icon: "sleep", test: (s) => s.restDaysLogged >= 10 },
+  { id: "rest_30", name: "Knows when to stop", desc: "30 rest days logged", icon: "shield", test: (s) => s.restDaysLogged >= 30 },
+  { id: "first_program", name: "Got a plan", desc: "Generate your first program", icon: "target", test: (s) => s.completedSessions >= 1 || s.completedBlocks >= 1 },
+  { id: "block_cleared", name: "Block cleared", desc: "Finish a full 4-week block", icon: "check", test: (s) => s.completedBlocks >= 1 },
+  { id: "first_video", name: "On camera", desc: "Analyse your first clip", icon: "video", test: (s) => s.videos >= 1 },
+  { id: "tested", name: "Benchmarked", desc: "Log a strength/speed test", icon: "ruler", test: (s) => s.benchmarks >= 1 },
+  { id: "fuelled", name: "Fuelled", desc: "Log your nutrition", icon: "plate", test: (s) => s.nutritionLogs >= 1 },
+  { id: "level_10", name: "Double digits", desc: "Reach level 10", icon: "medal", test: (_s, level) => level >= 10 },
 ];
 
 export function evaluateAchievements(s: ActivityStats, level: number): { unlocked: Achievement[]; locked: Achievement[] } {

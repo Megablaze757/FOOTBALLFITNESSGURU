@@ -135,6 +135,9 @@ export default function HomePage() {
       nutritionLogs: nutritionCount ?? 0,
       // From the 40-day streak rows already in hand.
       checkInsLast7: checkDates.filter((d) => d >= since7).length,
+      // A rest day is one you checked in on and did not train. Both lists are
+      // already here, so this costs no extra query — see ActivityStats.
+      restDaysLogged: checkDates.filter((d) => !trainRows.map((t) => t.log_date).includes(d)).length,
     };
     /**
      * The last seven days, day by day.

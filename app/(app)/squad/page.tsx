@@ -135,6 +135,11 @@ export default function SquadPage() {
         trainingSessions: trainCount.get(p.id) ?? 0,
         completedSessions: prog?.completed_sessions.length ?? 0,
         completedBlocks: blocksByUser.get(p.id) ?? 0,
+        // The squad roster counts an athlete's training logs but does not fetch
+        // their dates, so it cannot tell a rest day from a day off the app.
+        // Zero rather than a guess — the alternative is ranking a squad on a
+        // number nobody measured.
+        restDaysLogged: 0,
         benchmarks: benchCount.get(p.id) ?? 0,
         videos: 0,
         nutritionLogs: nutriCount.get(p.id) ?? 0,
