@@ -1,4 +1,5 @@
 import type { ReadinessStatus } from "@/lib/types";
+import { gaugeAngle, arc, GAUGE_START_DEG, GAUGE_END_DEG } from "@/lib/gauge";
 
 const COLORS: Record<ReadinessStatus, string> = {
   Green: "#34d399",
@@ -6,10 +7,27 @@ const COLORS: Record<ReadinessStatus, string> = {
   Red: "#fb5d6b",
 };
 
-// Semicircular gauge: needle sweeps 0 (left) -> 100 (right), dark theme + glow.
+/**
+ * Semicircular gauge: needle sweeps 0 (left) -> 100 (right), dark theme + glow.
+ *
+ * THE SWEEP USED TO BE A QUARTER-TURN OUT, and the comment above was the giveaway
+ * — it described the intent while the code did something else. `-90 + pct * 180`
+ * runs from straight UP at 0, through right at 50, to straight DOWN at 100: a
+ * right-facing semicircle, not the speedometer this is meant to be.
+ *
+ * In SVG angles, 0° points right and positive turns clockwise (y grows
+ * downward), so left->top->right is 180° -> 270° -> 360°.
+ *
+ * Half of it was also invisible. The viewBox is 124 tall and the geometry ran to
+ * y=180, so everything past a score of ~53 was clipped off the bottom. A typical
+ * readiness of 81 put the needle tip at (140, 159) — outside the canvas, pointing
+ * down and to the right, straight through where the number is drawn. That is the
+ * "line overlaps the number" this fixes; the needle was never overlapping the
+ * digits so much as escaping the gauge entirely.
+ */
 export function ReadinessGauge({ score, status }: { score: number; status: ReadinessStatus }) {
   const clamped = Math.max(0, Math.min(100, score));
-  const angle = -90 + (clamped / 100) * 180;
+  const angle = gaugeAngle(clamped);
   const color = COLORS[status];
   const cx = 100, cy = 100, r = 80;
 
@@ -30,8 +48,8 @@ export function ReadinessGauge({ score, status }: { score: number; status: Readi
           </filter>
         </defs>
 
-        <path d={arc(cx, cy, r, -90, 90)} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="14" strokeLinecap="round" />
-        <path d={arc(cx, cy, r, -90, angle)} fill="none" stroke="url(#gaugeFill)" strokeWidth="14" strokeLinecap="round" filter="url(#gaugeGlow)" />
+        <path d={arc(cx, cy, r, GAUGE_START_DEG, GAUGE_END_DEG)} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="14" strokeLinecap="round" />
+        <path d={arc(cx, cy, r, GAUGE_START_DEG, angle)} fill="none" stroke="url(#gaugeFill)" strokeWidth="14" strokeLinecap="round" filter="url(#gaugeGlow)" />
 
         <g transform={`rotate(${angle} ${cx} ${cy})`}>
           <line x1={cx} y1={cy} x2={cx + r - 8} y2={cy} stroke={color} strokeWidth="3" strokeLinecap="round" />
@@ -47,14 +65,6 @@ export function ReadinessGauge({ score, status }: { score: number; status: Readi
   );
 }
 
-function arc(cx: number, cy: number, r: number, startDeg: number, endDeg: number): string {
-  const s = polar(cx, cy, r, startDeg);
-  const e = polar(cx, cy, r, endDeg);
-  const large = Math.abs(endDeg - startDeg) > 180 ? 1 : 0;
-  return `M ${s.x} ${s.y} A ${r} ${r} 0 ${large} 1 ${e.x} ${e.y}`;
-}
-
-function polar(cx: number, cy: number, r: number, deg: number) {
-  const rad = (deg * Math.PI) / 180;
-  return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
-}
+// arc() and polar() moved to lib/gauge.ts — see the note there. They were
+// unreachable by the test suite while they lived in this file, which is how the
+// sweep stayed a quarter-turn out for as long as it did.

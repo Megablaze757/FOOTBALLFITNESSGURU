@@ -5,7 +5,7 @@ import { BackLink } from "@/components/BackLink";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/lib/auth";
-import { useAsync } from "@/lib/use-async";
+import { useAsync, invalidate } from "@/lib/use-async";
 import { can } from "@/lib/subscription";
 import { FeatureLock } from "@/components/FeatureLock";
 import { MealPlanner } from "@/components/MealPlanner";
@@ -405,38 +405,77 @@ function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietN
    * a ticked meal is un-ticked, so everything clamps at zero rather than going
    * negative on a double-tap.
    */
+  /**
+   * A TICK IS A COMMIT, SO IT HAS TO REACH THE DATABASE.
+   *
+   * This only ever moved React state. Nothing persisted until you scrolled past
+   * the whole page and pressed "Save today's nutrition" — so ticking your meals,
+   * watching the ring fill, and then tapping Progress silently threw the lot
+   * away. Coming back re-read the row that was never written and the counter was
+   * back to zero. Reported as "when I clicked progress the calories reset", and
+   * that is exactly what happened.
+   *
+   * Nothing about ticking a meal says "this is a draft". The number goes up, the
+   * ring moves, the item strikes through — every signal says committed. A save
+   * button somewhere below the fold is not consent, it is a trap.
+   *
+   * Only the TAPPED fields autosave. The calorie target and the macro boxes are
+   * typed, and writing those on each keystroke would persist "2" on the way to
+   * "2500". Those keep the explicit button.
+   */
   function addEaten(m: { kcal: number; protein: number; carbs: number; fats: number }) {
-    setEaten((n) => Math.max(0, n + m.kcal));
-    setMacros((prev) => ({
-      protein: String(Math.max(0, (Number(prev.protein) || 0) + m.protein)),
-      carbs: String(Math.max(0, (Number(prev.carbs) || 0) + m.carbs)),
-      fats: String(Math.max(0, (Number(prev.fats) || 0) + m.fats)),
-    }));
+    const nextEaten = Math.max(0, eaten + m.kcal);
+    const nextMacros = {
+      protein: String(Math.max(0, (Number(macros.protein) || 0) + m.protein)),
+      carbs: String(Math.max(0, (Number(macros.carbs) || 0) + m.carbs)),
+      fats: String(Math.max(0, (Number(macros.fats) || 0) + m.fats)),
+    };
+    setEaten(nextEaten);
+    setMacros(nextMacros);
+    void persist({ eaten: nextEaten, macros: nextMacros });
   }
 
-  async function save() {
+  /**
+   * Write today's row. Takes overrides because React state is not yet updated
+   * when a tap handler wants to persist what it just computed — reading `eaten`
+   * here would save the value from before the tap, which is the off-by-one-tap
+   * bug that makes autosave worse than no autosave.
+   */
+  async function persist(over?: { eaten?: number; macros?: Record<string, string>; water?: number }) {
     setSaving(true);
     setError(null);
+    const e_ = over?.eaten ?? eaten;
+    const m_ = over?.macros ?? macros;
+    const w_ = over?.water ?? water;
     const supabase = createClient();
     const { error: e } = await supabase.from("nutrition_logs").upsert(
       {
         user_id: userId,
         log_date: today,
         daily_calorie_target: calories ? Number(calories) : null,
-        calories_eaten: eaten || null,
+        calories_eaten: e_ || null,
         macros: {
-          protein: Number(macros.protein) || 0,
-          carbs: Number(macros.carbs) || 0,
-          fats: Number(macros.fats) || 0,
+          protein: Number(m_.protein) || 0,
+          carbs: Number(m_.carbs) || 0,
+          fats: Number(m_.fats) || 0,
         },
-        daily_water_intake_ml: water,
+        daily_water_intake_ml: w_,
       },
       { onConflict: "user_id,log_date" }
     );
     if (e) setError(e.message);
-    else setSaved(true);
+    else {
+      setSaved(true);
+      // Home and Progress both read this row from the same cache. Without this
+      // they keep serving the pre-tick numbers, which looks like the reset all
+      // over again — just one screen further along.
+      invalidate(`nutrition:${userId}`);
+      invalidate(`home:${userId}`);
+    }
     setSaving(false);
   }
+
+  const save = () => persist();
 
   return (
     // Header and width live on the tab shell now, so they don't render twice.
@@ -559,7 +598,10 @@ function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietN
             {[250, 500].map((ml) => (
               <button
                 key={ml}
-                onClick={() => setWater((w) => w + ml)}
+                // Persisted on tap for the same reason the meal ticks are: a
+                // glass of water you logged and then navigated away from was
+                // never logged at all.
+                onClick={() => { const next = water + ml; setWater(next); void persist({ water: next }); }}
                 className="chip shrink-0 text-sky-300 hover:bg-white/[0.08]"
               >
                 +{ml}
