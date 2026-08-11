@@ -532,3 +532,37 @@ test("a strength day sits between the two hard quality days", () => {
     }
   }
 });
+
+test("a sprint distance holds across the block and the sets carry the progression", () => {
+  /**
+   * Peak week used to read "Stride-outs 6 × 81m". The seconds branch already
+   * rounded to fives — its comment says nobody has coached an eighty-one
+   * second hill — and metres were simply never given the same treatment.
+   *
+   * Rounding alone would have printed 80m and hidden the worse half: a sprint
+   * distance is the drill, not a volume knob. 20m is an acceleration, 60m is a
+   * stride-out, 80m is a different exercise. Scaling swapped the drill for a
+   * harder one and progressed the sets on top — 5 × 60m to 6 × 81m is a 60%
+   * jump in sprint volume in two weeks, in the quality most likely to tear a
+   * hamstring. "Flying 20m sprints" makes it plainest: the distance is in the
+   * exercise's own name.
+   */
+  const plan = buildBlock({ goal: "speed", painMap: {}, sport: "football", daysPerWeek: 3 });
+  const distances = new Map<string, Set<number>>();
+  for (const wk of plan.weeks) {
+    for (const s of wk.sessions) {
+      for (const d of s.drills) {
+        const m = /^(\d+) × (\d+)m$/.exec(d.prescription ?? "");
+        if (!m) continue;
+        const metres = Number(m[2]);
+        assert.equal(metres % 5, 0, `${d.name}: ${metres}m is not a distance anyone would coach`);
+        if (!distances.has(d.name)) distances.set(d.name, new Set());
+        distances.get(d.name)!.add(metres);
+      }
+    }
+  }
+  assert.ok(distances.size > 0, "no distance work found — this test would pass vacuously");
+  for (const [name, set] of distances) {
+    assert.equal(set.size, 1, `${name} changed distance across the block: ${[...set].join(", ")}m`);
+  }
+});

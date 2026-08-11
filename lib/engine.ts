@@ -586,9 +586,30 @@ function doseForWeek(baseDose: Dose, prog: Prog, wi: number, volumeScale: number
   // inside the sensible band and still reads as something a machine wrote —
   // nobody has ever coached an eighty-one second hill.
   const scaled = base.reps * shape.repFactor;
+  /**
+   * A DISTANCE IS THE DRILL, NOT ITS VOLUME.
+   *
+   * The seconds fix above stopped at seconds, so metres kept scaling — and a
+   * speed block's peak week read "Stride-outs 6 × 81m". Nobody has ever coached
+   * an eighty-one metre stride-out either.
+   *
+   * Rounding alone would have printed 80m and hidden the worse half. A sprint
+   * distance is not a volume knob: 20m is an acceleration, 60m is a stride-out
+   * and 80m is a different exercise that happens to share a name. Scaling it
+   * silently swapped the drill for a harder one and then progressed the sets
+   * on top — 5 × 60m to 6 × 81m is a 60% jump in sprint volume across two
+   * weeks, in the quality most likely to tear a hamstring.
+   *
+   * So distance holds and the SETS carry the progression, exactly as the
+   * continuous-run branch above holds effort and moves duration. 5 × 60m to
+   * 6 × 60m is what a coach writes. The rounding stays as a backstop for
+   * catalogue entries that aren't already round.
+   */
   const reps = base.unit === "secs"
     ? Math.max(5, Math.round(scaled / 5) * 5)
-    : Math.max(1, Math.round(scaled));
+    : base.unit === "metres"
+      ? Math.max(5, Math.round(base.reps / 5) * 5)
+      : Math.max(1, Math.round(scaled));
   // The floor is 5 for gym work — nothing below that is worth a set — but a
   // movement that STARTS easier than that is meant to be, so it keeps its own.
   const floor = Math.min(5, base.rpe ?? 5);
