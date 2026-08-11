@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { type IconName } from "@/components/Icon";
 import { Tabs, TabPanel } from "@/components/Tabs";
 import { ProgressPanel } from "@/components/ProgressPanel";
 import { useCurrentUser } from "@/lib/auth";
@@ -110,8 +111,8 @@ function Verdict({ acwr, riskScore, focusBodyPart, topWin, sport }: {
 // half held what. Recovery is how the body is coping; Performance is what you've
 // built. Distinct, and neither repeats the page.
 const TABS = [
-  { id: "recovery" as const, label: "Recovery", icon: "🧠" },
-  { id: "progress" as const, label: "Performance", icon: "📈" },
+  { id: "recovery" as const, label: "Recovery", icon: "brain" as IconName },
+  { id: "progress" as const, label: "Performance", icon: "chart" as IconName },
 ];
 
 /**

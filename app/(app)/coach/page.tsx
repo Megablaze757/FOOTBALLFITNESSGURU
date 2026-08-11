@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { type IconName } from "@/components/Icon";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { useCurrentUser } from "@/lib/auth";
 import { useAsync } from "@/lib/use-async";
@@ -85,10 +86,10 @@ function readinessOf(checkIn: DailyCheckIn | null, training: TrainingLog[] = [])
 }
 
 type CoachTab = "today" | "program" | "ask";
-const COACH_TABS: { id: CoachTab; label: string; icon: string }[] = [
-  { id: "today", label: "Today", icon: "⚡" },
-  { id: "program", label: "Program", icon: "📅" },
-  { id: "ask", label: "Ask coach", icon: "💬" },
+const COACH_TABS: { id: CoachTab; label: string; icon: IconName }[] = [
+  { id: "today", label: "Today", icon: "bolt" },
+  { id: "program", label: "Program", icon: "calendar" },
+  { id: "ask", label: "Ask coach", icon: "chat" },
 ];
 
 export default function CoachPage() {
@@ -702,7 +703,6 @@ function ActiveProgram({
   const [advancing, setAdvancing] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [tab, setTab] = useState<CoachTab>("today");
-  const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   /**
@@ -892,18 +892,19 @@ function ActiveProgram({
           >
             Not right? Rebuild it
           </ConfirmButton>
-          {!confirmDelete ? (
-            <button onClick={() => setConfirmDelete(true)} className="tap-target text-xs text-slate-400 hover:text-readiness-red">
-              Delete
-            </button>
-          ) : (
-            <div className="flex items-center gap-2">
-              <button onClick={deleteProgram} disabled={deleting} className="tap-target text-xs font-semibold text-readiness-red disabled:opacity-50">
-                {deleting ? "…" : "Delete for good"}
-              </button>
-              <button onClick={() => setConfirmDelete(false)} className="text-xs text-slate-500">Cancel</button>
-            </div>
-          )}
+          {/* Was a hand-rolled inline confirm — "Delete for good" and "Cancel"
+              side by side inside this shrink-0 column, which on a 375px phone
+              ran straight off the card. Same dialog as everything else now, so
+              there is one confirmation layout to keep working rather than two. */}
+          <ConfirmButton
+            onConfirm={deleteProgram}
+            disabled={deleting}
+            question="Delete this block for good? Its completed sessions go with it."
+            confirmLabel={deleting ? "Deleting…" : "Delete for good"}
+            className="tap-target text-xs text-slate-400 hover:text-readiness-red"
+          >
+            Delete
+          </ConfirmButton>
           {deleteError && <span className="max-w-[12rem] text-right text-[10px] text-readiness-red">{deleteError}</span>}
         </div>
       </header>

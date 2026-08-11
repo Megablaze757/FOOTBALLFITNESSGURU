@@ -4,6 +4,7 @@ import Link from "next/link";
 import { BackLink } from "@/components/BackLink";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { type IconName } from "@/components/Icon";
 import { useCurrentUser } from "@/lib/auth";
 import { useAsync, invalidate } from "@/lib/use-async";
 import { can } from "@/lib/subscription";
@@ -283,8 +284,8 @@ function avgDailyMinutes(rows: Pick<TrainingLog, "total_minutes">[]): number {
  * list. Nobody needs both at once, and together they made the page endless.
  */
 const NUTRITION_TABS = [
-  { id: "today" as const, label: "Today", icon: "🍽️" },
-  { id: "plan" as const, label: "Meal plan", icon: "🛒" },
+  { id: "today" as const, label: "Today", icon: "plate" as IconName },
+  { id: "plan" as const, label: "Meal plan", icon: "clipboard" as IconName },
 ];
 
 function NutritionTabs({ userId, today, log, targets, stats, prefs, dietNotes, mealSeed, mealSwaps, mealRecent, mealStarred, sport, context }: {

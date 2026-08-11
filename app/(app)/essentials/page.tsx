@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { type IconName } from "@/components/Icon";
 import { useCurrentUser } from "@/lib/auth";
 import { useAsync } from "@/lib/use-async";
 import { positionGuides, gamedayLabel, GAMEDAY_NUTRITION, RECOVERY_GENERAL } from "@/lib/essentials";
@@ -18,14 +19,14 @@ import { FuelTimeline } from "@/components/FuelTimeline";
 // The Playbook covers four unrelated topics. Stacked, that ran to six and a
 // half screens on a phone; split into tabs each view is about two.
 type TabId = "position" | "skills" | "fuel";
-const TABS: { id: TabId; label: string; icon: string }[] = [
-  { id: "position", label: "Your position", icon: "🎯" },
-  { id: "skills", label: "Skill drills", icon: "⚽" },
+const TABS: { id: TabId; label: string; icon: IconName }[] = [
+  { id: "position", label: "Your position", icon: "target" },
+  { id: "skills", label: "Skill drills", icon: "ball" },
   // "Injury & rehab" was here, and being a tab on a page called "Guides" is why
   // nobody could find it. It's /injury now, in the nav. Mobility went with it —
   // the warm-up was stranded under "Your position", equally unfindable for
   // anyone trying to avoid getting hurt.
-  { id: "fuel", label: "Fuel & recovery", icon: "🍝" },
+  { id: "fuel", label: "Fuel & recovery", icon: "plate" },
 ];
 
 export default function EssentialsPage() {

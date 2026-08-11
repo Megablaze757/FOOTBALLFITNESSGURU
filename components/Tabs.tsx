@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef } from "react";
+import { Icon, type IconName } from "@/components/Icon";
 
 /**
  * The pill tab strip the Coach page already used, extracted so the other long
@@ -13,7 +14,8 @@ import { useRef } from "react";
 export interface TabDef<T extends string> {
   id: T;
   label: string;
-  icon?: string;
+  /** A name from components/Icon.tsx. Was an emoji string. */
+  icon?: IconName;
 }
 
 export function Tabs<T extends string>({ tabs, active, onChange, label = "Sections" }: {
@@ -77,7 +79,7 @@ export function Tabs<T extends string>({ tabs, active, onChange, label = "Sectio
             // look was a separate className that could disagree with the ARIA.
             className="chip-option"
           >
-            {t.icon && <span aria-hidden>{t.icon}</span>}
+            {t.icon && <Icon name={t.icon} size={15} />}
             {t.label}
           </button>
         );

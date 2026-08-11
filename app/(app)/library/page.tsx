@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { Icon } from "@/components/Icon";
+import { Icon, type IconName } from "@/components/Icon";
 import { useCurrentUser } from "@/lib/auth";
 import { EXERCISES, EXERCISE_CATEGORIES, SPORTS, DIFFICULTIES, EQUIPMENT_BUCKETS, getExercisesForSport, demoImplement, rowToExercise, exerciseEquip, withinLevel, type Exercise, type ExerciseCategory, type SportId, type Difficulty } from "@/lib/exercises";
 import { ExerciseDemo } from "@/components/ExerciseDemo";
@@ -23,8 +23,8 @@ import { MEALS } from "@/lib/meal-plan";
  * nobody searches for a squat and a shakshuka in the same breath.
  */
 const LIBRARY_TABS = [
-  { id: "moves", label: "Exercises", icon: "🏋" },
-  { id: "meals", label: "Recipes", icon: "🍳" },
+  { id: "moves", label: "Exercises", icon: "barbell" },
+  { id: "meals", label: "Recipes", icon: "pan" },
 ] as const;
 
 // How many cards to render at once. Every card carries an animated SVG demo, so
