@@ -8,6 +8,7 @@ import {
   type BodyStats, type MealPrefs, type PlannedMeal,
 } from "@/lib/meal-plan";
 import { parseSchedule } from "@/lib/meal-schedule";
+import { todayLocal } from "@/lib/day";
 import { Recipe } from "@/components/Recipe";
 import { Portal } from "@/components/Portal";
 import {
@@ -57,6 +58,8 @@ interface Props {
   starred: string[];
   /** The same sport goal and logged-training figures the daily card used. */
   context: TargetContext;
+  /** Whose ticks these are — see tickKey. */
+  userId: string;
   /** Adds the eaten macros into the day's running totals. */
   onAdd: (m: Macros) => void;
 }
@@ -101,8 +104,40 @@ async function shrinkImage(file: File): Promise<string> {
  *
  * All three feed the same daily totals, which the tracker above then saves.
  */
-export function MealCheckIn({ stats, prefs, dietNotes, seed, swaps, recent, starred, context, onAdd }: Props) {
+export function MealCheckIn({ stats, prefs, dietNotes, seed, swaps, recent, starred, context, onAdd, userId }: Props) {
+  /**
+   * WHICH MEALS ARE TICKED, KEPT ACROSS NAVIGATION.
+   *
+   * This was plain component state, so leaving the tab and coming back cleared
+   * every tick. On its own that was merely annoying. Once the day's calories
+   * started persisting on tap it became actively wrong: the ring showed the
+   * food while the list showed nothing ticked, and ticking a meal again added
+   * it a SECOND time. The two have to survive together or not at all.
+   *
+   * localStorage keyed by athlete and day, matching how the shopping list keeps
+   * its ticks. Not a database column: this is a per-device checklist for one
+   * day, the calories it produces are already in `nutrition_logs`, and a
+   * migration to sync a set of checkboxes across devices is not worth it. The
+   * key includes the date, so tomorrow starts clean without anything to expire.
+   */
+  const tickKey = `pa:meals-ticked:${userId}:${todayLocal()}`;
   const [ticked, setTicked] = useState<Set<string>>(new Set());
+  const [ticksLoaded, setTicksLoaded] = useState(false);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(tickKey);
+      if (raw) setTicked(new Set(JSON.parse(raw) as string[]));
+    } catch { /* private mode, or someone edited it — start empty */ }
+    setTicksLoaded(true);
+  }, [tickKey]);
+
+  useEffect(() => {
+    // Not before the read above has run, or the first render writes an empty
+    // set over the ticks it is about to load.
+    if (!ticksLoaded) return;
+    try { localStorage.setItem(tickKey, JSON.stringify([...ticked])); } catch { /* ignore */ }
+  }, [ticked, tickKey, ticksLoaded]);
   const [text, setText] = useState("");
   const [estimate, setEstimate] = useState<FoodEstimate | null>(null);
   const [source, setSource] = useState<"local" | "ai">("local");
@@ -332,8 +367,55 @@ export function MealCheckIn({ stats, prefs, dietNotes, seed, swaps, recent, star
     setEstimate({ items: next, total: totalOf(next), unmatched: shown?.unmatched ?? [] });
   }
 
+  /**
+   * WHY THE QUANTITY FIELD NEEDS A DRAFT, AND WHY 0 IS REFUSED.
+   *
+   * It was `value={it.qty}` with `Number(e.target.value)`. Two faults, and the
+   * second is caused by the first:
+   *
+   *   1. Clearing the box gave `Number("") === 0`, which re-rendered the field
+   *      as "0" instantly. You could never empty it to type a new number — the
+   *      zero came straight back and you ended up typing around it.
+   *
+   *   2. That 0 reached scaleItem, which scales RELATIVE to the current qty. It
+   *      multiplied every macro by zero and destroyed the reference the next
+   *      edit scales from, so typing 150 afterwards gave 150 x 0 = 0. The item
+   *      was stuck at zero calories with no way back. That is the "it breaks".
+   *
+   * So the text being typed is held as a string — "" is a legal thing to be
+   * part-way through — and only a positive number is ever committed. Emptying
+   * the box and clicking away restores the previous quantity rather than
+   * zeroing the item; removing an item is what the ✕ is for.
+   */
+  const [qtyDraft, setQtyDraft] = useState<Record<number, string>>({});
+
+  function editQty(index: number, raw: string) {
+    setQtyDraft((d) => ({ ...d, [index]: raw }));
+    const n = Number(raw);
+    if (raw.trim() !== "" && Number.isFinite(n) && n > 0) setQty(index, n);
+  }
+
+  /** Blur with nothing usable in the box puts the old number back. */
+  function commitQty(index: number, fallback: number) {
+    setQtyDraft((d) => {
+      const raw = d[index];
+      const n = Number(raw);
+      if (raw !== undefined && (raw.trim() === "" || !Number.isFinite(n) || n <= 0)) {
+        setQty(index, fallback);
+      }
+      const next = { ...d };
+      delete next[index];
+      return next;
+    });
+  }
+
   function setQty(index: number, qty: number) {
     if (!shown) return;
+    // Second line of defence. scaleItem works from the item's CURRENT quantity,
+    // so a zero here is not "no food" — it permanently wipes the macros that
+    // every later edit is scaled from. Callers are careful; this makes it
+    // impossible rather than merely unlikely.
+    if (!Number.isFinite(qty) || qty <= 0) return;
     reviseItems(shown.items.map((it, i) => (i === index ? scaleItem(it, qty) : it)));
   }
 
@@ -514,10 +596,14 @@ export function MealCheckIn({ stats, prefs, dietNotes, seed, swaps, recent, star
                     {it.name}
                     {!it.explicit && <span className="text-slate-600"> (assumed)</span>}
                   </span>
+                  {/* See qtyDraft: the field has to be allowed to be EMPTY
+                      while you retype it, and a quantity of 0 must never reach
+                      scaleItem. */}
                   <input
-                    type="number" inputMode="numeric" min={0}
-                    value={it.qty}
-                    onChange={(e) => setQty(i, Number(e.target.value))}
+                    type="number" inputMode="numeric" min={1}
+                    value={qtyDraft[i] ?? String(it.qty)}
+                    onChange={(e) => editQty(i, e.target.value)}
+                    onBlur={() => commitQty(i, it.qty)}
                     aria-label={`${it.name} quantity`}
                     className="field w-16 shrink-0 px-2 py-1 text-center text-xs tabular-nums"
                   />

@@ -611,7 +611,7 @@ function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietN
         </div>
       </div>
 
-      <MealCheckIn stats={stats} prefs={prefs} dietNotes={dietNotes} seed={mealSeed} swaps={mealSwaps} recent={mealRecent} starred={mealStarred} context={context} onAdd={addEaten} />
+      <MealCheckIn userId={userId} stats={stats} prefs={prefs} dietNotes={dietNotes} seed={mealSeed} swaps={mealSwaps} recent={mealRecent} starred={mealStarred} context={context} onAdd={addEaten} />
 
       {/* EVERYTHING THAT ISN'T THE DAILY JOB, folded away.
           The rationale, the resting-rate working and the manual overrides are

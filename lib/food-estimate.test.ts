@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { estimateMeal, fromAiItems, fitDimensions, scaleItem, totalOf } from "./food-estimate";
+import { estimateMeal, fromAiItems, fitDimensions, scaleItem, totalOf, type EstimatedItem } from "./food-estimate";
 
 const names = (t: string) => estimateMeal(t).items.map((i) => i.name.toLowerCase());
 
@@ -233,4 +233,42 @@ test("negative macros can't drag a total downwards", () => {
   ]).items;
   assert.ok(item.macros.protein >= 0);
   assert.ok(item.macros.kcal > 0);
+});
+
+test("a quantity of zero can never reach scaleItem", () => {
+  /**
+   * REPORTED AS: "it doesn't let you delete the 0 so you can increase the
+   * amount of grams and it breaks."
+   *
+   * Two faults, the second caused by the first. The input was
+   * `value={it.qty}` with `Number(e.target.value)`, so clearing the box gave
+   * `Number("") === 0` and the field re-rendered as "0" instantly — it could
+   * never be emptied to type a new number.
+   *
+   * That 0 then reached scaleItem, which scales RELATIVE to the current
+   * quantity. It multiplied every macro by zero and destroyed the reference
+   * the next edit scales from, so typing 150 afterwards gave 150 x 0. The item
+   * was stuck at zero calories with no way back.
+   *
+   * This pins the destructive half. The UI half — holding the text as a string
+   * so "" is legal mid-edit — lives in MealCheckIn and is not reachable from
+   * here; the guard in setQty is the backstop that makes it impossible rather
+   * than merely unlikely.
+   */
+  const rice: EstimatedItem = {
+    foodId: "rice", name: "Rice (dry)", qty: 75, unit: "g", explicit: true,
+    macros: { kcal: 260, protein: 5, carbs: 58, fats: 1 },
+  };
+
+  // What the old code did, kept as the thing we must never go back to.
+  const wiped = scaleItem(rice, 0);
+  assert.equal(wiped.macros.kcal, 0, "scaleItem(_, 0) really does zero the macros");
+  assert.equal(scaleItem(wiped, 150).macros.kcal, 0,
+    "and the zero is unrecoverable — this is why 0 must be refused before it gets here");
+
+  // Doubling the quantity doubles the food, which is the whole point.
+  const doubled = scaleItem(rice, 150);
+  assert.equal(doubled.qty, 150);
+  assert.equal(doubled.macros.kcal, 520);
+  assert.equal(doubled.macros.protein, 10);
 });
