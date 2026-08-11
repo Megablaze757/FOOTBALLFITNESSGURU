@@ -646,13 +646,67 @@ function sessionTitle(focus: GoalType, day: number): string {
   return map[focus] ? `Day ${day + 1} · ${map[focus]}` : `Day ${day + 1}`;
 }
 
-function focusRotationFor(input: EngineInput): GoalType[] {
+/**
+ * Which quality each day of the week trains.
+ *
+ * THE BLOCK HAS TO LOOK LIKE THE GOAL THAT WAS ASKED FOR. It didn't. The
+ * generic branch was a fixed three-item rotation — `[goal, "strength",
+ * complement]` — indexed by `di % length`, so on the most common week length
+ * the chosen quality got exactly one day in three:
+ *
+ *   speed    3d  33%    speed, strength, agility
+ *   agility  3d  33%    agility, strength, speed
+ *   skill    3d  33%    ball skill, strength, speed
+ *   speed    5d  40%
+ *
+ * An athlete picks "Speed", trains three times, and does one speed session.
+ * That is a general athleticism block with a speed label on it, and it is the
+ * concrete reason the programs did not read like something a coach had written.
+ *
+ * Strength and endurance were never affected — they hit 67-80% through their
+ * own branches — so those are deliberately left exactly as they were rather
+ * than folded into one clever formula that would have moved numbers that were
+ * already right.
+ *
+ * WHAT A COACH ACTUALLY PRESCRIBES, and what this now returns:
+ *
+ *   2d  goal, strength                        50%
+ *   3d  goal, strength, goal                  67%
+ *   4d  goal, strength, goal, complement      50% on-goal, 75% related
+ *   5d  goal, strength, goal, complement, goal 60%
+ *
+ * The strength day stays, at every length. Dropping it to chase a higher
+ * percentage would be the wrong kind of alignment: speed is expressed through
+ * force, and a speed block with no lifting in it produces a fast-looking
+ * program and a slower athlete. Concurrent strength work is what the quality
+ * is built on.
+ *
+ * The complement is the adjacent quality — agility for a speed block, speed for
+ * agility and skill — and appears only from four days, when there is room for
+ * it without displacing the goal. A speed block containing one agility day is
+ * deliberate, not drift: they share the same qualities and a coach alternates
+ * them precisely so neither is trained on tired legs.
+ *
+ * Two goal days are never adjacent at 3 or 5 days, which matters because these
+ * are the high-CNS qualities: `[goal, strength, goal]` puts the support day
+ * between them by construction.
+ */
+function focusRotationFor(input: EngineInput, days: number): GoalType[] {
   const rehab = input.goal === "injury_recovery" || input.focus === "rehab";
   if (rehab) return ["injury_recovery", "injury_recovery", "endurance"];
   if (input.focus === "aesthetics") return ["strength", "strength", "endurance"];
   if (input.focus === "fitness") return ["endurance", "strength", "endurance"];
   if (input.goal === "endurance") return ["endurance", "endurance", "strength", "endurance"];
-  return [input.goal, "strength", input.goal === "speed" ? "agility" : "speed"];
+  // Already 67-80% on-goal through the generic pattern below's first two slots;
+  // kept verbatim so this change cannot regress it.
+  if (input.goal === "strength") return ["strength", "strength", "speed"];
+
+  const goal = input.goal;
+  const complement: GoalType = goal === "speed" ? "agility" : "speed";
+  if (days <= 2) return [goal, "strength"];
+  if (days === 3) return [goal, "strength", goal];
+  if (days === 4) return [goal, "strength", goal, complement];
+  return [goal, "strength", goal, complement, goal];
 }
 
 // --- Today's readiness actually changing today's session ---------------------
@@ -739,13 +793,29 @@ function easeIntensity(intensity?: string): string | undefined {
 export function buildBlock(input: EngineInput): ProgramPlan {
   const block = Math.max(1, input.block ?? 1);
   const blockScale = 1 + (block - 1) * 0.08; // +8% volume per completed block
+  /**
+   * IN-SEASON FREQUENCY IS ADVISED, NOT ENFORCED — and that is deliberate.
+   *
+   * I capped this at 3 and reverted it. The reasoning against is in
+   * programSummary() in coach.ts and it is better than mine: how often somebody
+   * trains is theirs to decide, and silently handing an athlete three days when
+   * they asked for five is a worse failure than the over-reach it prevents.
+   * They would have no way to tell it happened, which is the property that
+   * makes a silent override worse than a loud disagreement.
+   *
+   * So the professional standard (one to two gym sessions in-season, matches
+   * being the load) is stated in the plan summary whenever four or more are
+   * requested, and the week tapers into matchday. Volume already scales to
+   * IN_SEASON_VOLUME. What is missing is only the veto, and the veto is the
+   * part that should stay missing.
+   */
   const days = clamp(input.daysPerWeek ?? (input.goal === "endurance" ? 4 : 3), 2, 5);
   const pain = painByArea(input.painMap);
   const soreAreas = (Object.keys(pain) as BodyArea[]).filter((a) => (pain[a] ?? 0) >= 4);
   const constraints = input.constraints ?? EMPTY_CONSTRAINTS;
   const rehab = input.goal === "injury_recovery";
   const themes = rehab ? REHAB_THEMES : THEMES;
-  const rotation = focusRotationFor(input);
+  const rotation = focusRotationFor(input, days);
   /**
    * The coach's picks, plus the ones the sport makes non-negotiable.
    *

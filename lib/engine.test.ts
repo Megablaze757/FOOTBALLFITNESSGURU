@@ -484,3 +484,51 @@ test("an in-season week comes down towards the match", () => {
     p.weeks[0].sessions.reduce((n, s) => n + s.drills.reduce((m, d) => m + d.sets, 0), 0);
   assert.ok(total(inSeason) < total(off), "in-season should be a lighter week overall");
 });
+
+test("a block is mostly the goal it was asked for", () => {
+  /**
+   * MEASURED. The generic rotation was a fixed three-item list indexed by
+   * `di % length`, so on a 3-day week — the most common — the chosen quality
+   * got one day in three:
+   *
+   *   speed 3d    33% -> 67%
+   *   agility 3d  33% -> 67%
+   *   skill 3d    33% -> 67%
+   *   speed 5d    40% -> 60%
+   *
+   * An athlete picking "Speed" trained three times and did one speed session.
+   * That is a general athleticism block with a speed label on it.
+   *
+   * 0.6 is the floor, below the 0.67 measured at three days so ordinary
+   * changes don't fail the build. Four days is exempt and sits at 50% by
+   * design: the fourth day is the adjacent quality (agility for a speed
+   * block), which a coach alternates precisely so neither is trained on tired
+   * legs. If this fails, do not lower it — check focusRotationFor.
+   */
+  for (const goal of ["speed", "agility", "skill", "strength", "endurance"] as const) {
+    for (const days of [3, 5]) {
+      const wk = buildBlock({ goal, painMap: {}, sport: "football", daysPerWeek: days }).weeks[0];
+      const onGoal = wk.sessions.filter((s) => s.focus === goal).length;
+      assert.ok(
+        onGoal / days >= 0.6,
+        `${goal}/${days}d: only ${onGoal} of ${days} sessions train ${goal} — ${wk.sessions.map((s) => s.focus).join(", ")}`
+      );
+    }
+  }
+});
+
+test("a strength day sits between the two hard quality days", () => {
+  // Speed and agility are the high-CNS qualities. `[goal, strength, goal]` puts
+  // the support day between them by construction; two goal days back to back
+  // would be two maximal-intent sessions on consecutive days.
+  for (const goal of ["speed", "agility"] as const) {
+    const wk = buildBlock({ goal, painMap: {}, sport: "football", daysPerWeek: 3 }).weeks[0];
+    const focuses = wk.sessions.map((s) => s.focus);
+    for (let i = 1; i < focuses.length; i++) {
+      assert.ok(
+        !(focuses[i] === goal && focuses[i - 1] === goal),
+        `${goal}: two ${goal} sessions back to back — ${focuses.join(", ")}`
+      );
+    }
+  }
+});
