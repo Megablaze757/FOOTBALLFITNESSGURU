@@ -39,7 +39,7 @@ export default function NutritionPage() {
   const user = useCurrentUser();
   const today = todayLocal();
 
-  const { data, loading } = useAsync(async () => {
+  const { data, loading, reload } = useAsync(async () => {
     const supabase = createClient();
     const since = daysAgoLocal(14);
     const [{ data: sub }, { data: log }, { data: weightRow }, { data: program }, { data: training }, { data: profile }] = await Promise.all([
@@ -182,6 +182,7 @@ export default function NutritionPage() {
   return (
     <NutritionTabs
       userId={user.id}
+      reload={reload}
       today={today}
       log={data?.log}
       targets={targets}
@@ -291,8 +292,8 @@ const NUTRITION_TABS = [
   { id: "plan" as const, label: "Meal plan", icon: "clipboard" as IconName },
 ];
 
-function NutritionTabs({ userId, today, log, targets, stats, prefs, dietNotes, mealSeed, mealSwaps, mealRecent, mealStarred, sport, context }: {
-  userId: string; today: string; log: any; targets: NutritionTargets | null;
+function NutritionTabs({ userId, today, log, targets, stats, prefs, dietNotes, mealSeed, mealSwaps, mealRecent, mealStarred, sport, context, reload }: {
+  userId: string; today: string; log: any; targets: NutritionTargets | null; reload: () => void;
   stats: Partial<BodyStats> | null; prefs: Partial<MealPrefs> | null; dietNotes: string | null;
   mealSeed: number | null; mealSwaps: Record<string, string>; mealRecent: string[]; mealStarred: string[];
   sport: SportProfile; context: TargetContext;
@@ -323,6 +324,7 @@ function NutritionTabs({ userId, today, log, targets, stats, prefs, dietNotes, m
           sport={sport}
           context={context}
           onAddStats={() => setTab("plan")}
+          reload={reload}
         />
       ) : (
         <MealPlanner userId={userId} initial={stats} initialPrefs={prefs} initialNotes={dietNotes} initialSeed={mealSeed} initialSwaps={mealSwaps} initialRecent={mealRecent} initialStarred={mealStarred} context={context} />
@@ -342,8 +344,8 @@ function Header() {
   );
 }
 
-function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietNotes, mealSeed, mealSwaps, mealRecent, mealStarred, sport, context, onAddStats }: {
-  userId: string; today: string; initial: any; targets: NutritionTargets | null;
+function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietNotes, mealSeed, mealSwaps, mealRecent, mealStarred, sport, context, onAddStats, reload }: {
+  userId: string; today: string; initial: any; targets: NutritionTargets | null; reload: () => void;
   stats: Partial<BodyStats> | null; prefs: Partial<MealPrefs> | null; dietNotes: string | null;
   /** Shared with the planner so today?s tick-list matches the plan exactly. */
   context: TargetContext;
@@ -493,6 +495,26 @@ function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietN
       // over again — just one screen further along.
       invalidate(`nutrition:${userId}`);
       invalidate(`home:${userId}`);
+      /**
+       * REFETCH, don't just drop the cache — this is the water-reset bug.
+       *
+       * Switching to the Meal plan tab UNMOUNTS this component (the tabs are a
+       * ternary), and coming back remounts it, so every useState here re-reads
+       * `initial`. invalidate() clears the stored cache but does nothing to the
+       * `data` already held by the mounted useAsync above — so `initial` was
+       * still the row as it looked when the PAGE loaded. Tap +500ml, switch
+       * tab, switch back, and the bar was empty again.
+       *
+       * It was not only cosmetic. The remount also reset `entries` to that
+       * stale row's list, and the next save wrote the empty list back over the
+       * real one — which is why today's row in production reads 1,338 calories
+       * eaten against zero entries. The display lied and then the lie was
+       * persisted.
+       *
+       * reload() re-runs the page query, so `initial` reflects what was just
+       * written and a remount reads the truth.
+       */
+      reload();
     }
     setSaving(false);
   }
