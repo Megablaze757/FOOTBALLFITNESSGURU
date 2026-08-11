@@ -566,3 +566,41 @@ test("a sprint distance holds across the block and the sets carry the progressio
     assert.equal(set.size, 1, `${name} changed distance across the block: ${[...set].join(", ")}m`);
   }
 });
+
+test("a block that isn't about conditioning doesn't smuggle in a second hard session", () => {
+  /**
+   * A speed block was closing its strength day with "Kettlebell swing intervals
+   * 7 × 40s, RPE 9" — a hard metabolic workout tacked onto a lift, two days
+   * before a sprint session. The interference effect written down: the athlete
+   * reaches the day the block exists for with fatigued legs.
+   *
+   * The existing day-level filters could not catch it. That session's focus was
+   * "strength" inside a "speed" block, so every check keyed on the DAY passed;
+   * the ceiling has to key on the block's goal.
+   *
+   * Endurance blocks are exempt below and must stay exempt — there, hard
+   * conditioning is the training rather than a finisher.
+   */
+  for (const goal of ["speed", "agility", "strength", "skill"] as const) {
+    const plan = buildBlock({ goal, painMap: {}, sport: "football", daysPerWeek: 3 });
+    for (const wk of plan.weeks) {
+      for (const s of wk.sessions) {
+        for (const c of s.drills.filter((d) => d.slot === "conditioning")) {
+          const rpe = Number((c.intensity ?? "").replace(/[^\d.]/g, "")) || 0;
+          assert.ok(
+            rpe < 9,
+            `${goal} wk${wk.week} "${s.title}": ${c.name} at ${c.intensity} is a second hard session, not support`
+          );
+        }
+      }
+    }
+  }
+  // The exemption is load-bearing: an endurance block must still be allowed its
+  // hard intervals, or this guard would have quietly gutted the one goal whose
+  // conditioning IS the point.
+  const endurance = buildBlock({ goal: "endurance", painMap: {}, sport: "football", daysPerWeek: 3 });
+  const hard = endurance.weeks.flatMap((w) => w.sessions).flatMap((s) => s.drills)
+    .filter((d) => d.slot === "conditioning")
+    .some((d) => (Number((d.intensity ?? "").replace(/[^\d.]/g, "")) || 0) >= 9);
+  assert.ok(hard, "an endurance block lost its hard conditioning — the exemption is broken");
+});

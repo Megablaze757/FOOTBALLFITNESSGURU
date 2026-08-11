@@ -154,6 +154,22 @@ const BLUEPRINTS: Record<GoalType, Partial<Record<Slot, number>>> = {
 const RECOVERY_RPE_CEILING = 5;
 
 /**
+ * The hardest conditioning may be in a block that isn't about conditioning.
+ *
+ * 7 leaves tempo runs, sled work and easy aerobic minutes — everything whose
+ * job is to build the engine underneath the quality — while excluding the
+ * RPE 9 interval sessions that are a second hard workout wearing a finisher's
+ * clothes. See the filter in buildBlock for the failure this caught.
+ *
+ * Measured against the CATALOGUE's rpe, not the progressed one, so a tempo run
+ * that starts at 7 still reads RPE 8 in peak week. That is deliberate and not
+ * an escape: peaking a supportive session by one point is periodisation, while
+ * selecting a movement that was RPE 9 before any progression is choosing a
+ * second hard workout. It is the choice this filters, not the climb.
+ */
+const SUPPORT_CONDITIONING_RPE_CEILING = 7;
+
+/**
  * Sports whose athletes sprint, and the movements that keep their hamstrings
  * attached. See the bonus in `rankSlot`.
  *
@@ -1009,6 +1025,30 @@ export function buildBlock(input: EngineInput): ProgramPlan {
             (r) => !(r.m.dose.sets === 1 && (r.m.dose.reps ?? 0) >= LONG_EFFORT_MINUTES)
           );
           if (compatible.length) ranked = compatible;
+        }
+        /**
+         * IN A QUALITY BLOCK, CONDITIONING SUPPORTS THE WORK — IT DOESN'T
+         * COMPETE WITH IT.
+         *
+         * A speed block was closing its strength day with "Kettlebell swing
+         * intervals 7 × 40s, RPE 9". That is a hard metabolic session in its
+         * own right, tacked onto the end of a lift, two days before a sprint
+         * session — the interference effect written down. The athlete arrives
+         * at the day the block exists for with fatigued legs, and the quality
+         * they are supposedly training is the thing that suffers.
+         *
+         * Keyed on the BLOCK's goal, not the day's focus, which is why the
+         * existing filters missed it: the offending session had focus
+         * "strength" inside a "speed" block, so every day-level check passed.
+         *
+         * Endurance blocks are exempt and must be — hard conditioning is not a
+         * finisher there, it is the training. Deload keeps its stricter ceiling
+         * below. Falls back to the full list rather than emptying the slot, the
+         * same way the long-effort filter above does.
+         */
+        if (slot === "conditioning" && input.goal !== "endurance" && wi !== 3) {
+          const supportive = ranked.filter((r) => (r.m.dose.rpe ?? 10) <= SUPPORT_CONDITIONING_RPE_CEILING);
+          if (supportive.length) ranked = supportive;
         }
         if (slot === "conditioning" && wi === 3) {
           const easy = ranked.filter((r) => (r.m.dose.rpe ?? 10) <= RECOVERY_RPE_CEILING);

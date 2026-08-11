@@ -155,7 +155,19 @@ const META: Record<string, MovementMeta> = {
   // mechanism that tears hamstrings. The Nordic curl is the best-evidenced
   // injury-prevention exercise there is for sprinting athletes; it belongs in a
   // speed block by name, not by exception.
-  nordic_curl: { slot: "accessory", pattern: "hinge", targets: ["strength", "injury_recovery", "speed"], load: { hamstring: 2 }, level: 2, prog: "reps", dose: d(3, 6, REST.short, { tempo: "Resist the lower" }), region: "legs" },
+  // REST.moderate, not REST.short. The Nordic sits in the accessory slot and so
+  // inherited accessory rest — 45 seconds — but it is not accessory volume: it
+  // is a maximal eccentric, the highest-force thing most athletes will do all
+  // week, and the stimulus IS the force. Rushed back on 45s the reps get
+  // shorter and sloppier, which trains less and hurts more.
+  //
+  // RPE is deliberately left OFF. I set it explicitly to 8 first, which was
+  // worse than leaving it: the base value still progresses, so peak week came
+  // out at RPE 9 where the accessory default had produced 8. Effort is not the
+  // dial on this movement anyway — you resist until you cannot — so the
+  // accessory default is both harmless and correct, and the dose that matters
+  // is the reps.
+  nordic_curl: { slot: "accessory", pattern: "hinge", targets: ["strength", "injury_recovery", "speed"], load: { hamstring: 2 }, level: 2, prog: "reps", dose: d(3, 6, REST.moderate, { tempo: "Resist the lower" }), region: "legs" },
   copenhagen: { slot: "accessory", pattern: "core", targets: ["strength", "injury_recovery"], load: { hip: 1 }, level: 2, prog: "time", dose: d(3, 20, REST.short, { unit: "secs" }), region: "core" },
   spanish_squat: { slot: "accessory", pattern: "squat", targets: ["injury_recovery"], load: { knee: 1 }, level: 1, prog: "time", dose: d(3, 30, REST.short, { unit: "secs" }), region: "legs" },
   band_lateral_walk: { slot: "accessory", pattern: "rehab", targets: ["injury_recovery", "strength"], load: {}, level: 1, prog: "reps", dose: d(3, 12, REST.short, { unit: "each side" }), region: "legs" },
