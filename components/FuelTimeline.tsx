@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Icon } from "@/components/Icon";
 import type { NutritionPhase } from "@/lib/essentials";
 
 /**
@@ -49,7 +50,7 @@ export function FuelTimeline({ phases, label }: {
                   : "border-white/10 bg-white/[0.02] text-slate-400 hover:border-white/20"
               }`}
             >
-              <span className="text-sm" aria-hidden>{p.icon}</span>
+              <Icon name={p.icon} size={15} />
               {p.when}
             </button>
           );

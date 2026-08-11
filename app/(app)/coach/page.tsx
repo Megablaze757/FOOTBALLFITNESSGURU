@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { type IconName } from "@/components/Icon";
+import { Icon, type IconName } from "@/components/Icon";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { useCurrentUser } from "@/lib/auth";
 import { useAsync } from "@/lib/use-async";
@@ -393,7 +393,7 @@ function GoalBuilder({ painMap, latestBench, sport, initialPositions, initialFoc
                 <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white/[0.04] text-xl">
                   {isBuilding
                     ? <span className="h-5 w-5 animate-spin rounded-full border-2 border-pitch-500 border-t-transparent" />
-                    : t.icon}
+                    : <Icon name={t.icon} size={22} className="text-pitch-400" />}
                 </span>
                 {/* min-w-0 lets the text column shrink inside the flex row —
                     without it a flex child refuses to go below its content

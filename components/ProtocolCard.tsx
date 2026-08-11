@@ -1,6 +1,7 @@
 "use client";
 
 import { getExercise, type Exercise } from "@/lib/exercises";
+import { Icon } from "@/components/Icon";
 import type { RecoveryProtocol } from "@/lib/essentials";
 
 /**
@@ -36,7 +37,7 @@ export function ProtocolCard({ p, relevant, reason, onOpenExercise }: {
       }`}
     >
       <summary className="flex cursor-pointer list-none items-center gap-3 p-4">
-        <span className="text-xl" aria-hidden>{p.icon}</span>
+        <Icon name={p.icon} size={22} className="text-pitch-400" />
         <span className="min-w-0 flex-1">
           <span className="flex flex-wrap items-center gap-x-2">
             <span className="text-sm font-bold text-slate-100">{p.title}</span>

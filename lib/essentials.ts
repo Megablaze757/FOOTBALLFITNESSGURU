@@ -4,6 +4,7 @@
 // and position. Pure data + selectors (runs on Pages).
 // =============================================================================
 
+import type { IconName } from "@/components/Icon";
 import type { SportId } from "./exercises";
 import { positionList } from "./positions";
 import { sportTerms } from "./sport-terms";
@@ -210,11 +211,11 @@ export function gamedayLabel(sport: SportId): string {
 
 // --- Matchday / gameday nutrition -------------------------------------------
 
-export interface NutritionPhase { when: string; title: string; icon: string; tips: string[] }
+export interface NutritionPhase { when: string; title: string; icon: IconName; tips: string[] }
 
 export const GAMEDAY_NUTRITION: NutritionPhase[] = [
   {
-    when: "Night before", title: "Top up the tank", icon: "🍝",
+    when: "Night before", title: "Top up the tank", icon: "bowl",
     tips: [
       "High-carb dinner: pasta, rice or potatoes with lean protein",
       "Hydrate well through the evening",
@@ -222,7 +223,7 @@ export const GAMEDAY_NUTRITION: NutritionPhase[] = [
     ],
   },
   {
-    when: "3–4 hours before", title: "Main fuel", icon: "🥣",
+    when: "3–4 hours before", title: "Main fuel", icon: "bowl",
     tips: [
       "Slow-release carbs: porridge/oats, toast, rice or pasta",
       "Add some protein (eggs, chicken) and a little fruit",
@@ -230,7 +231,7 @@ export const GAMEDAY_NUTRITION: NutritionPhase[] = [
     ],
   },
   {
-    when: "60–90 min before", title: "Top-up snack", icon: "🍌",
+    when: "60–90 min before", title: "Top-up snack", icon: "snack",
     tips: [
       "Light, carb-rich snack: banana, energy bar or a bagel",
       "Start sipping water / an electrolyte drink",
@@ -238,7 +239,7 @@ export const GAMEDAY_NUTRITION: NutritionPhase[] = [
     ],
   },
   {
-    when: "During", title: "Stay fuelled", icon: "💧",
+    when: "During", title: "Stay fuelled", icon: "droplet",
     tips: [
       "Sip water or a sports drink at every break",
       "For efforts over ~60 min, take on carbs (gel or sports drink)",
@@ -246,7 +247,7 @@ export const GAMEDAY_NUTRITION: NutritionPhase[] = [
     ],
   },
   {
-    when: "Within 60 min after", title: "Recovery window", icon: "🥤",
+    when: "Within 60 min after", title: "Recovery window", icon: "shake",
     tips: [
       "Protein + carbs: recovery shake, chocolate milk, or chicken & rice",
       "Aim ~20–30g protein to kick-start muscle repair",
@@ -254,7 +255,7 @@ export const GAMEDAY_NUTRITION: NutritionPhase[] = [
     ],
   },
   {
-    when: "Rest of day", title: "Refuel & rebuild", icon: "🍽️",
+    when: "Rest of day", title: "Refuel & rebuild", icon: "plate",
     tips: [
       "A balanced meal with protein, carbs and veg",
       "Keep rehydrating through the evening",
@@ -269,7 +270,7 @@ export interface RecoveryProtocol {
   id: string;
   title: string;
   when: string;
-  icon: string;
+  icon: IconName;
   steps: string[];
   areas?: string[];       // body areas this protocol targets (for injury-specific ones)
   stages?: RehabStage[];  // staged return-to-play plan
@@ -294,22 +295,22 @@ export const REHAB_DISCLAIMER =
 
 export const RECOVERY_GENERAL: RecoveryProtocol[] = [
   {
-    id: "cooldown", title: "Cool down", when: "Right after", icon: "🚶",
+    id: "cooldown", title: "Cool down", when: "Right after", icon: "walk",
     steps: ["5–10 min easy walk/jog to flush the legs", "Gentle full-body stretch", "Start rehydrating and refuel within the hour"],
   },
   {
-    id: "evening", title: "Evening reset", when: "That night", icon: "🛁",
+    id: "evening", title: "Evening reset", when: "That night", icon: "bath",
     steps: ["Cold bath or shower 10–12 min (or contrast hot/cold) to reduce soreness", "Compression garments or 10 min legs-up-the-wall", "Get 8–9 hours of sleep — the biggest recovery lever there is"],
   },
   {
-    id: "active", title: "Active recovery", when: "Next day", icon: "🚴",
+    id: "active", title: "Active recovery", when: "Next day", icon: "bike",
     steps: ["20–30 min low-impact: easy bike, swim or walk", "Foam roll and mobility for tight areas", "Light protein + carbs, keep hydration up"],
   },
 ];
 
 export const RECOVERY_INJURY: RecoveryProtocol[] = [
   {
-    id: "ankle", title: "Sore / rolled ankle", when: "First 48h", icon: "🦶", areas: ["ankle"],
+    id: "ankle", title: "Sore / rolled ankle", when: "First 48h", icon: "foot", areas: ["ankle"],
     steps: [
       "First 48h follow PEACE: Protect, Elevate, Avoid anti-inflammatories, Compress, Educate",
       "Elevate above heart level — this does more for swelling than ice does",
@@ -327,7 +328,7 @@ export const RECOVERY_INJURY: RecoveryProtocol[] = [
     exerciseIds: ["ankle_alphabet", "single_leg_balance", "calf_raise_eccentric", "band_lateral_walk", "ankle_rocks"],
   },
   {
-    id: "knee", title: "Achy knee", when: "Ongoing", icon: "🦵", areas: ["knee"],
+    id: "knee", title: "Achy knee", when: "Ongoing", icon: "knee", areas: ["knee"],
     steps: [
       "Don't rest completely — tendons need load to heal, they just need the right amount",
       "Use pain as your dial: up to about 3/10 during and settled by the next morning is acceptable",
@@ -345,7 +346,7 @@ export const RECOVERY_INJURY: RecoveryProtocol[] = [
     exerciseIds: ["isometric_wall_sit", "spanish_squat", "terminal_knee_ext", "band_lateral_walk", "bulgarian_split"],
   },
   {
-    id: "hamstring", title: "Tight / tweaked hamstring", when: "Early stage", icon: "🦿", areas: ["hamstring"],
+    id: "hamstring", title: "Tight / tweaked hamstring", when: "Early stage", icon: "hamstring", areas: ["hamstring"],
     steps: [
       "Don't aggressively stretch a fresh strain — it can set healing back",
       "Start pain-free isometric holds within the first few days",
@@ -363,7 +364,7 @@ export const RECOVERY_INJURY: RecoveryProtocol[] = [
     exerciseIds: ["hamstring_slider", "nordic_curl", "single_leg_rdl", "glute_bridge", "tempo_runs"],
   },
   {
-    id: "groin", title: "Groin / adductor strain", when: "Early stage", icon: "🩹", areas: ["groin", "adductor", "hip"],
+    id: "groin", title: "Groin / adductor strain", when: "Early stage", icon: "plaster", areas: ["groin", "adductor", "hip"],
     steps: [
       "Very common in footballers — usually from kicking, lunging or a stretched tackle",
       "Start adductor isometric squeezes early; they settle pain and preserve strength",
@@ -381,7 +382,7 @@ export const RECOVERY_INJURY: RecoveryProtocol[] = [
     exerciseIds: ["adductor_iso_squeeze", "copenhagen", "band_lateral_walk", "world_greatest_stretch"],
   },
   {
-    id: "calf", title: "Calf strain / Achilles pain", when: "Ongoing", icon: "🦵", areas: ["calf", "achilles"],
+    id: "calf", title: "Calf strain / Achilles pain", when: "Ongoing", icon: "leg", areas: ["calf", "achilles"],
     steps: [
       "Distinguish the two: a calf strain is a sudden muscle tear, Achilles pain builds gradually",
       "For Achilles tendinopathy, heavy slow eccentric calf raises are the proven treatment",
@@ -399,7 +400,7 @@ export const RECOVERY_INJURY: RecoveryProtocol[] = [
     exerciseIds: ["calf_raise_eccentric", "calf_raise", "ankle_rocks", "pogo_hops", "bike_intervals"],
   },
   {
-    id: "lower_back", title: "Stiff lower back", when: "Ongoing", icon: "🧎", areas: ["lower_back"],
+    id: "lower_back", title: "Stiff lower back", when: "Ongoing", icon: "spine", areas: ["lower_back"],
     steps: [
       "Keep moving gently — bed rest makes back pain worse, not better",
       "Most back pain settles within a few weeks and is not structural damage",
@@ -417,7 +418,7 @@ export const RECOVERY_INJURY: RecoveryProtocol[] = [
     exerciseIds: ["bird_dog", "mcgill_curl_up", "dead_bug", "glute_bridge", "hip_thrust"],
   },
   {
-    id: "shoulder", title: "Niggly shoulder", when: "Ongoing", icon: "💪", areas: ["shoulder"],
+    id: "shoulder", title: "Niggly shoulder", when: "Ongoing", icon: "muscle", areas: ["shoulder"],
     steps: [
       "Reduce overhead and heavy pressing volume while it's irritated — don't stop training entirely",
       "Keep pain-free range daily so it doesn't stiffen up",
@@ -435,7 +436,7 @@ export const RECOVERY_INJURY: RecoveryProtocol[] = [
     exerciseIds: ["shoulder_external_rotation", "scap_pull_up", "thoracic_openers", "barbell_row"],
   },
   {
-    id: "hip", title: "Tight hips / hip flexor", when: "Ongoing", icon: "🕺", areas: ["hip", "hip_flexor", "quad"],
+    id: "hip", title: "Tight hips / hip flexor", when: "Ongoing", icon: "hip", areas: ["hip", "hip_flexor", "quad"],
     steps: [
       "Usually an overload issue from sprinting and kicking volume, or from long hours sitting",
       "Stretching alone rarely fixes it — the muscle usually needs strengthening too",
@@ -453,7 +454,7 @@ export const RECOVERY_INJURY: RecoveryProtocol[] = [
     exerciseIds: ["couch_stretch", "hip_90_90", "world_greatest_stretch", "glute_bridge", "bulgarian_split"],
   },
   {
-    id: "concussion", title: "Head knock / suspected concussion", when: "Immediately", icon: "🧠", areas: ["head", "neck"],
+    id: "concussion", title: "Head knock / suspected concussion", when: "Immediately", icon: "brain", areas: ["head", "neck"],
     steps: [
       "If in doubt, sit them out — no same-day return to play after a suspected concussion, ever",
       "You do not need to lose consciousness to have a concussion",
@@ -496,16 +497,16 @@ export function relevantInjuryProtocols(painMap: Record<string, number> | null |
 
 // Body areas an athlete can point at directly, rather than waiting for a daily
 // check-in to infer it.
-export const INJURY_AREAS: { id: string; label: string; icon: string }[] = [
-  { id: "ankle", label: "Ankle / foot", icon: "🦶" },
-  { id: "calf", label: "Calf / Achilles", icon: "🦵" },
-  { id: "knee", label: "Knee", icon: "🦵" },
-  { id: "hamstring", label: "Hamstring", icon: "🦿" },
-  { id: "groin", label: "Groin / adductor", icon: "🩹" },
-  { id: "hip", label: "Hip / quad", icon: "🕺" },
-  { id: "lower_back", label: "Lower back", icon: "🧎" },
-  { id: "shoulder", label: "Shoulder", icon: "💪" },
-  { id: "head", label: "Head / neck", icon: "🧠" },
+export const INJURY_AREAS: { id: string; label: string; icon: IconName }[] = [
+  { id: "ankle", label: "Ankle / foot", icon: "foot" },
+  { id: "calf", label: "Calf / Achilles", icon: "leg" },
+  { id: "knee", label: "Knee", icon: "knee" },
+  { id: "hamstring", label: "Hamstring", icon: "hamstring" },
+  { id: "groin", label: "Groin / adductor", icon: "plaster" },
+  { id: "hip", label: "Hip / quad", icon: "hip" },
+  { id: "lower_back", label: "Lower back", icon: "spine" },
+  { id: "shoulder", label: "Shoulder", icon: "muscle" },
+  { id: "head", label: "Head / neck", icon: "brain" },
 ];
 
 export function protocolsForAreas(areas: string[]): RecoveryProtocol[] {
