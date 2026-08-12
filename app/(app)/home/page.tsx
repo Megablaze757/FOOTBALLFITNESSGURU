@@ -532,22 +532,6 @@ function GettingStarted({ setup, showingProgramCta }: {
 }
 
 
-function QuickLink({ href, title, sub, icon }: { href: string; title: string; sub: string; icon: IconName }) {
-  return (
-    <Link href={href} className="card card-hover flex items-center gap-3 p-4">
-      {/* Takes the tile's own colour rather than arriving as a full-colour
-          bitmap, so this grid finally matches the tab bar underneath it. */}
-      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white/[0.04] text-pitch-400">
-        <Icon name={icon} />
-      </span>
-      <div className="min-w-0">
-        <div className="truncate text-sm font-bold text-slate-100">{title}</div>
-        <div className="truncate text-xs text-slate-400">{sub}</div>
-      </div>
-    </Link>
-  );
-}
-
 function Greeting({ name, sub, streak = 0 }: { name: string; sub: string; streak?: number }) {
   return (
     <header className="flex items-start justify-between">

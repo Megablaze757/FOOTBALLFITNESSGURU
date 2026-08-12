@@ -23,6 +23,19 @@ export interface SportTool {
   title: string;
   /** A name from components/Icon.tsx — not an emoji. See the note there. */
   icon: IconName;
+  /**
+   * This destination's own colour.
+   *
+   * The grid used to be seven identical gold outlines in seven identical
+   * squares, which gives the eye nothing to choose between — you had to READ
+   * every tile to find the one you wanted, so nothing invited a tap. Colour is
+   * the fastest thing the eye sorts on, well before shape and long before text.
+   *
+   * Chosen so no two adjacent tiles share a hue, and pulled from colours the
+   * theme already uses at text weight — so each has been checked against this
+   * background rather than picked for looking nice against white.
+   */
+  tint: string;
 }
 
 export interface SportProfile {
@@ -76,14 +89,16 @@ export type DashboardStat =
 
 // Every sport gets the same seven destinations; only the order changes.
 const TOOL: Record<string, SportTool> = {
-  plan: { href: "/coach", title: "My plan", icon: "barbell" },
-  exercises: { href: "/library", title: "Exercises", icon: "book" },
-  video: { href: "/train", title: "Video analysis", icon: "video" },
-  nutrition: { href: "/nutrition", title: "Nutrition", icon: "plate" },
-  guides: { href: "/essentials", title: "Guides", icon: "target" },
-  progress: { href: "/dashboard", title: "Progress", icon: "chart" },
+  plan: { href: "/coach", title: "My plan", icon: "barbell", tint: "#e3b53f" },
+  exercises: { href: "/library", title: "Exercises", icon: "book", tint: "#38bdf8" },
+  video: { href: "/train", title: "Video analysis", icon: "video", tint: "#c084fc" },
+  nutrition: { href: "/nutrition", title: "Nutrition", icon: "plate", tint: "#4ade80" },
+  guides: { href: "/essentials", title: "Guides", icon: "target", tint: "#fb923c" },
+  progress: { href: "/dashboard", title: "Progress", icon: "chart", tint: "#5fd3c4" },
   // Its own page now, not a deep link into a tab. See app/(app)/injury.
-  injury: { href: "/injury", title: "Injury", icon: "plaster" },
+  // Red, and the only tile that gets it. Reserved so the one destination you
+  // reach because something hurts is the one your eye lands on first.
+  injury: { href: "/injury", title: "Injury", icon: "plaster", tint: "#fb5d6b" },
 };
 
 const order = (...keys: (keyof typeof TOOL)[]) => keys.map((k) => TOOL[k]);

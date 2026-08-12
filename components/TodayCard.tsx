@@ -2,6 +2,26 @@
 
 import Link from "next/link";
 import type { LevelInfo, Quest } from "@/lib/gamification";
+import { Icon, type IconName } from "@/components/Icon";
+import { RankBadge } from "@/components/RankBadge";
+
+/**
+ * What each of the day's three jobs looks like.
+ *
+ * The colours match the destination each row leads to, so the tile you tap here
+ * is the colour of the page you land on. Kept to three because that is what
+ * dailyQuests() returns — check in, train, eat.
+ */
+const QUEST_ICON: Record<string, IconName> = {
+  checkin: "note",
+  train: "barbell",
+  nutrition: "plate",
+};
+const QUEST_TINT: Record<string, string> = {
+  checkin: "#38bdf8",
+  train: "#e3b53f",
+  nutrition: "#4ade80",
+};
 
 /**
  * The day, in one card.
@@ -73,14 +93,29 @@ export function TodayCard({ quests, level, sessionTitle, sessionSub, kcalLeft, r
               href={q.href}
               className="flex items-center gap-3 px-5 py-3.5 transition hover:bg-white/[0.03]"
             >
+              {/* WAS AN EMPTY CIRCLE — three identical grey rings down the one
+                  card an athlete opens every morning, with nothing to tell
+                  check-in from training from food until you read the label.
+                  Undone rows now show WHAT the row is, in that destination's
+                  own colour, so the card can be scanned rather than read. Done
+                  rows collapse to the tick, because once it is done the only
+                  thing worth saying is that it is done. */}
               <span
-                className={`grid h-7 w-7 shrink-0 place-items-center rounded-full border text-xs font-bold transition ${
-                  q.done
-                    ? "border-pitch-400 bg-pitch-400 text-ink-900"
-                    : "border-white/20 text-transparent"
+                className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl border transition ${
+                  q.done ? "border-pitch-400 bg-pitch-400 text-ink-900" : ""
                 }`}
+                style={
+                  q.done
+                    ? undefined
+                    : {
+                        color: QUEST_TINT[q.id] ?? "#94a3b8",
+                        background: `linear-gradient(150deg, ${QUEST_TINT[q.id] ?? "#94a3b8"}2e, ${QUEST_TINT[q.id] ?? "#94a3b8"}0d)`,
+                        borderColor: `${QUEST_TINT[q.id] ?? "#94a3b8"}3d`,
+                        boxShadow: `inset 0 1px 0 ${QUEST_TINT[q.id] ?? "#94a3b8"}40`,
+                      }
+                }
               >
-                ✓
+                {q.done ? <span className="text-xs font-bold">✓</span> : <Icon name={QUEST_ICON[q.id] ?? "check"} size={18} strokeWidth={2.2} />}
               </span>
               <span className="min-w-0 flex-1">
                 <span className={`block text-sm font-bold ${q.done ? "text-slate-400" : "text-slate-100"}`}>
@@ -101,7 +136,10 @@ export function TodayCard({ quests, level, sessionTitle, sessionSub, kcalLeft, r
         href="/rewards"
         className="flex items-center gap-3 border-t border-white/[0.06] bg-white/[0.02] px-5 py-3 transition hover:bg-white/[0.05]"
       >
-        <span className="text-base" aria-hidden>{level.emoji}</span>
+        {/* The insignia, not the medal emoji — three glyphs covered nine tiers,
+            so six of them wore a picture belonging to a rank they had nothing
+            to do with. See components/RankBadge.tsx. */}
+        <RankBadge tier={level.tier} division={level.division} color={level.color} size={22} />
         <span className="min-w-0 flex-1">
           <span className="flex items-baseline justify-between gap-2">
             <span className="truncate text-xs font-bold" style={{ color: level.color }}>{level.rank}</span>
