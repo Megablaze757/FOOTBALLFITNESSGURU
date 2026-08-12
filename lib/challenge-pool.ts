@@ -531,6 +531,65 @@ function rotate<T>(list: T[], by: number): T[] {
   return [...list.slice(k, depth), ...list.slice(0, k), ...list.slice(depth)];
 }
 
+/**
+ * Both boards for one athlete, on one day.
+ *
+ * A board is a list AND the activity it is measured against, built together.
+ * Picking against one window and scoring against another is what made daily
+ * cards arrive pre-ticked — "take the rest day" read 4/1 and complete on a
+ * Tuesday morning — and it is a one-word mistake, because `week` and `today`
+ * are the same type. Pairing them here means the mistake has to be made in one
+ * place rather than at every call site.
+ *
+ * Shared because the page needs the lists to award XP and the component needs
+ * them to render. Two copies of the seed arithmetic would eventually disagree,
+ * and the symptom would be XP paid for a challenge the athlete never saw.
+ */
+export interface Board {
+  window: ChallengeWindow;
+  /** Identifies which day or week this board belongs to, for recording XP once. */
+  period: string;
+  activity: WeekActivity;
+  list: Challenge[];
+}
+
+export interface BoardRequest {
+  who: Omit<ChallengeContext, "window" | "week" | "seed" | "count">;
+  /** The last 7 days. */
+  week: WeekActivity;
+  /** The same counters for today alone. */
+  today: WeekActivity;
+  /** Today's local date, which seeds both boards. */
+  todayIso: string;
+}
+
+/**
+ * Named rather than positional, deliberately: `week` and `today` are the same
+ * type, so `boardsFor(ctx, today, week, iso)` would typecheck perfectly and put
+ * every daily card back to arriving pre-ticked. Naming them makes the
+ * transposition something you have to write on purpose.
+ */
+export function boardsFor({ who, week, today, todayIso }: BoardRequest): { daily: Board; weekly: Board } {
+  const ctx = who;
+  /**
+   * Seeds, not randomness. The daily set turns over at midnight and the weekly
+   * set every seven days — a board that reshuffles on every page load is not a
+   * board, and it is the first thing anyone notices.
+   */
+  const dayNumber = Math.floor(Date.parse(`${todayIso}T00:00:00Z`) / 86_400_000);
+  const weekNumber = Math.floor(dayNumber / 7);
+  const build = (window: ChallengeWindow, activity: WeekActivity, seed: number, count: number): Board => ({
+    window,
+    period: window === "daily" ? todayIso : `w${weekNumber}`,
+    activity,
+    list: pickChallenges({ ...ctx, window, week: activity, seed, count }),
+  });
+  return {
+    daily: build("daily", today, dayNumber, 2),
+    weekly: build("weekly", week, weekNumber, 3),
+  };
+}
+
 export function toChallenge(t: ChallengeTemplate): Challenge {
   // Clamped and priced by lib/challenges, not here. A pool that sets its own
   // targets escapes "nobody is handed train 7 days this week", and a pool that

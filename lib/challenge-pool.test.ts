@@ -355,17 +355,24 @@ test("a busy week does not tick off today's card", () => {
 });
 
 /**
- * And the page has to actually pass the two windows separately. The component
- * takes `week` and `today`; handing it `week` twice compiles perfectly and puts
- * the bug straight back.
+ * The page has to hand `boardsFor` the two windows the right way round.
+ *
+ * `week` and `today` are the same type, so transposing them typechecks and puts
+ * every daily card back to arriving pre-ticked. The arguments are named for
+ * that reason — this checks the names are actually used, and used correctly,
+ * since `{ week: today, today: week }` is still writable.
  */
-test("the rewards page gives the daily board its own window", () => {
+test("the rewards page builds the boards from the right windows", () => {
   const src = readFileSync(new URL("../app/(app)/rewards/page.tsx", import.meta.url), "utf8")
     .replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
-  const tag = src.match(/<WeeklyChallenges[^/]*\/>/);
-  assert.ok(tag, "WeeklyChallenges is not rendered where this guard expects it");
-  assert.ok(/today=\{[^}]+\}/.test(tag[0]), `no today window passed: ${tag[0]}`);
-  assert.ok(!/today=\{data\.week\}/.test(tag[0]), "the daily board was handed the week again");
+  const call = src.match(/boardsFor\(\{[^}]*\}\)/);
+  assert.ok(call, "boardsFor is not called where this guard expects it");
+  // Shorthand (`week,`) is safe by definition; the explicit form has to name
+  // the right variable. Both accepted, a transposition caught either way.
+  const weekOk = /[{,]\s*week\s*[,}]/.test(call[0]) || /week:\s*week\b/.test(call[0]);
+  const todayOk = /today:\s*todayActivity\b/.test(call[0]) || /[{,]\s*today\s*[,}]/.test(call[0]);
+  assert.ok(weekOk, `the week window is not the week: ${call[0]}`);
+  assert.ok(todayOk, `the daily window is not today: ${call[0]}`);
 });
 
 /**
@@ -398,26 +405,16 @@ test("every position a template names is a real position", () => {
 });
 
 /**
- * And the same for the component: the page passes two windows, but the
- * component decides what to do with them. Picking against one and scoring
- * against the other is a one-word edit that compiles cleanly, so the pairing is
- * built by a helper — this checks the helper is still what feeds both.
+ * And the component must score each board against the activity that board was
+ * PICKED with, never against anything handed to it separately — that pairing is
+ * the entire reason `Board` carries its own activity.
  */
 test("the challenge component scores each board against the window it picked", () => {
   const src = readFileSync(new URL("../components/WeeklyChallenges.tsx", import.meta.url), "utf8")
     .replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
-  assert.ok(/week:\s*activity/.test(src),
-    "the board helper no longer scores against the activity it picked with");
-  // The helper being intact is not enough — it can still be handed the wrong
-  // window. `board("daily", week, ...)` is internally consistent and completely
-  // wrong, and pre-ticks every daily card exactly as before.
-  assert.ok(/board\(\s*"daily",\s*today\b/.test(src), "the daily board is not built from today");
-  assert.ok(/board\(\s*"weekly",\s*week\b/.test(src), "the weekly board is not built from the week");
-  // Nothing may pick with a window it did not also carry through to scoring.
-  const picks = [...src.matchAll(/pickChallenges\(\{[^}]*\}/g)].map((m) => m[0]);
-  assert.equal(picks.length, 1, `expected one pick site, found ${picks.length}: ${picks.join(" | ")}`);
-  for (const tag of src.matchAll(/<ChallengeGroup[\s\S]*?\/>/g)) {
-    assert.ok(/week=\{\w+\.activity\}/.test(tag[0]),
-      `a board is scored against something other than its own window: ${tag[0].slice(0, 120)}`);
-  }
+  assert.ok(/evaluateChallenges\(board\.list,\s*board\.activity\)/.test(src),
+    "a board is scored against something other than its own window");
+  // And it must not be picking at all — one pick site, in the lib, or the page
+  // awards XP for a set the athlete was never shown.
+  assert.ok(!/pickChallenges\(/.test(src), "the component picks its own challenges again");
 });

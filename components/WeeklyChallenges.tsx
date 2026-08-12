@@ -1,29 +1,21 @@
 "use client";
 
-import { evaluateChallenges, type Challenge, type WeekActivity } from "@/lib/challenges";
-import { pickChallenges, type ChallengeWindow } from "@/lib/challenge-pool";
-import { todayLocal } from "@/lib/day";
-import type { SportId } from "@/lib/exercises";
-import type { GoalType, TrainingFocus } from "@/lib/coach";
+import { evaluateChallenges } from "@/lib/challenges";
+import type { Board } from "@/lib/challenge-pool";
 
 interface Props {
-  /** The last 7 days, which the weekly board is scored against. */
-  week: WeekActivity;
   /**
-   * The same counters for TODAY ONLY, which the daily board is scored against.
+   * Both boards, built by lib/challenge-pool. Each carries the activity it was
+   * picked against, so a card cannot be scored against a window it was not
+   * chosen for — the bug that made daily cards arrive pre-ticked ("take the
+   * rest day", 4/1, complete on a Tuesday morning), because `week` and `today`
+   * are the same type and swapping them compiles cleanly.
    *
-   * Both boards read `week` at first, and a daily card is worthless that way:
-   * "take the rest day" showed 4/1 and complete on a Tuesday morning, because
-   * four rest days had happened somewhere in the previous seven. A card that is
-   * already ticked before you get out of bed is a receipt, not a challenge.
+   * Built on the page rather than here because the page also has to award XP
+   * for what is complete, and two copies of the seed arithmetic would
+   * eventually disagree — paying XP for a challenge the athlete never saw.
    */
-  today: WeekActivity;
-  ctx: {
-    sport?: SportId | null;
-    goal?: GoalType | null;
-    position?: string | string[] | null;
-    focus?: TrainingFocus | null;
-  };
+  boards: { daily: Board; weekly: Board };
 }
 
 /**
@@ -35,9 +27,9 @@ interface Props {
  * was the cost:
  *
  *   - The model was never allowed to write the RULE, only the words around a
- *     metric from a fixed seven-item vocabulary (see lib/challenges.ts — a
- *     free-text goal creates a challenge nothing can check). So the entire
- *     contribution of an inference was phrasing.
+ *     metric from a fixed vocabulary (see lib/challenges.ts — a free-text goal
+ *     creates a challenge nothing can check). So the entire contribution of an
+ *     inference was phrasing.
  *   - Nobody could read what it would say to an athlete next Tuesday. A written
  *     pool is reviewable; a prompt is a hope.
  *   - It was one call per athlete per week, forever, on free model tiers that
@@ -48,30 +40,8 @@ interface Props {
  * testable, free, and picked against sport, goal and position the way the
  * programme engine picks movements.
  */
-export function WeeklyChallenges({ week, today, ctx }: Props) {
-  /**
-   * Seeds, not randomness. The daily set turns over at midnight and the weekly
-   * set on the same day each week — a board that reshuffles on every page load
-   * is not a board, and it is the first thing anyone notices.
-   */
-  const dayNumber = Math.floor(Date.parse(`${todayLocal()}T00:00:00Z`) / 86_400_000);
-
-  /**
-   * A board is a list AND the activity it is measured against, built together.
-   *
-   * Picking against one window and scoring against another is the bug that made
-   * daily cards arrive pre-ticked, and it is a one-word mistake: `week` and
-   * `today` are the same type, so handing over the wrong one compiles cleanly.
-   * Binding the two into a single value means a future edit has to change this
-   * helper to reintroduce it, rather than one prop at a call site.
-   */
-  const board = (window: ChallengeWindow, activity: WeekActivity, seed: number, count: number) => ({
-    activity,
-    list: pickChallenges({ ...ctx, window, week: activity, seed, count }),
-  });
-  const daily = board("daily", today, dayNumber, 2);
-  const weekly = board("weekly", week, Math.floor(dayNumber / 7), 3);
-
+export function WeeklyChallenges({ boards }: Props) {
+  const { daily, weekly } = boards;
   if (!daily.list.length && !weekly.list.length) return null;
 
   return (
@@ -79,18 +49,14 @@ export function WeeklyChallenges({ week, today, ctx }: Props) {
       <ChallengeGroup
         heading="Today"
         note="Resets at midnight."
-        list={daily.list}
-        week={daily.activity}
-        window="daily"
+        board={daily}
       />
       {weekly.list.length > 0 && (
         <div className={daily.list.length ? "mt-5 border-t border-white/[0.06] pt-4" : ""}>
           <ChallengeGroup
             heading="This week"
             note="Aimed at whatever you've been skipping. Resets Monday."
-            list={weekly.list}
-            week={weekly.activity}
-            window="weekly"
+            board={weekly}
           />
         </div>
       )}
@@ -98,15 +64,15 @@ export function WeeklyChallenges({ week, today, ctx }: Props) {
   );
 }
 
-function ChallengeGroup({ heading, note, list, week, window: w }: {
+function ChallengeGroup({ heading, note, board }: {
   heading: string;
   note: string;
-  list: Challenge[];
-  week: WeekActivity;
-  window: ChallengeWindow;
+  board: Board;
 }) {
-  if (!list.length) return null;
-  const progress = evaluateChallenges(list, week);
+  if (!board.list.length) return null;
+  // Scored against the activity the board was PICKED with, never against
+  // anything passed separately — that pairing is the whole point of Board.
+  const progress = evaluateChallenges(board.list, board.activity);
   const done = progress.filter((p) => p.complete).length;
 
   return (
@@ -120,7 +86,7 @@ function ChallengeGroup({ heading, note, list, week, window: w }: {
       <ul className="space-y-2">
         {progress.map(({ challenge: c, current, pct, complete }) => (
           <li
-            key={`${w}-${c.id}`}
+            key={`${board.window}-${c.id}`}
             className={`rounded-2xl border p-3 transition ${
               complete ? "border-pitch-400/40 bg-pitch-400/[0.07]" : "border-white/10 bg-white/[0.03]"
             }`}

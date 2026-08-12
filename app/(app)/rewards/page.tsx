@@ -14,6 +14,8 @@ import type { WeekActivity } from "@/lib/challenges";
 import { Confetti } from "@/components/Confetti";
 import { LevelUpModal } from "@/components/LevelUpModal";
 import { WeeklyChallenges } from "@/components/WeeklyChallenges";
+import { boardsFor } from "@/lib/challenge-pool";
+import { completionsFrom, recordCompletions, fetchChallengeXp } from "@/lib/challenge-xp";
 import { Leaderboards } from "@/components/Leaderboards";
 import { RankLadder } from "@/components/RankLadder";
 import { RankBadge } from "@/components/RankBadge";
@@ -170,17 +172,34 @@ export default function RewardsPage() {
     const pr = profile.data as {
       sport?: string; position?: string; positions?: string[]; training_focus?: string;
     } | null;
+    const ctx = {
+      sport: (pr?.sport ?? null) as never,
+      position: pr?.positions?.length ? pr.positions : (pr?.position ?? null),
+      focus: (pr?.training_focus ?? null) as never,
+      goal: ((activeProgram.data as { goal_type?: string } | null)?.goal_type ?? null) as never,
+    };
+    const boards = boardsFor({ who: ctx, week, today: todayActivity, todayIso: today });
+
+    /**
+     * PAY FOR WHAT THE CARDS PROMISE.
+     *
+     * Every challenge has advertised "+45 XP" since the feature shipped and
+     * nothing ever added it — `challengeXp` was exported and called by nobody.
+     * It cannot simply be summed on the fly either: the boards rotate, so a
+     * total computed from "currently complete" would fall at midnight, and XP
+     * going down is the exact regression computeXp was fixed for.
+     *
+     * So completions are recorded, then the total is read back. Recording
+     * first means what was finished today counts on this very render rather
+     * than on the next visit. Both calls degrade to nothing on a database
+     * without 0075.
+     */
+    await recordCompletions(supabase, user.id, completionsFrom([boards.daily, boards.weekly]));
+    const earnedFromChallenges = await fetchChallengeXp(supabase, user.id);
+
     return {
-      stats, state, week, today: todayActivity,
-      // The context the challenge engine picks against. Same three things the
-      // programme engine reads, so a prop's challenges and a prop's sessions
-      // are aimed at the same athlete.
-      ctx: {
-        sport: (pr?.sport ?? null) as never,
-        position: pr?.positions?.length ? pr.positions : (pr?.position ?? null),
-        focus: (pr?.training_focus ?? null) as never,
-        goal: ((activeProgram.data as { goal_type?: string } | null)?.goal_type ?? null) as never,
-      },
+      stats, state, boards, ctx,
+      xp: computeXp(stats) + earnedFromChallenges,
     };
   }, [user.id], `rewards:${user.id}`);
 
@@ -206,7 +225,7 @@ export default function RewardsPage() {
     if (!data) return;
     let live = true;
     const supabase = createClient();
-    const ids = evaluateAchievements(data.stats, levelFor(computeXp(data.stats)).level)
+    const ids = evaluateAchievements(data.stats, levelFor(data.xp).level)
       .unlocked.map((a) => a.id);
     void recordUnlocks(supabase, user.id, ids)
       .then(() => fetchRarity(supabase))
@@ -226,7 +245,7 @@ export default function RewardsPage() {
   const [leveledUpTo, setLeveledUpTo] = useState<number | null>(null);
   useEffect(() => {
     if (!data) return;
-    const lvl = levelFor(computeXp(data.stats)).level;
+    const lvl = levelFor(data.xp).level;
     const key = `apex-level-${user.id}`;
     const prev = Number(localStorage.getItem(key) || "0");
     if (prev && lvl > prev) setLeveledUpTo(lvl);
@@ -235,7 +254,7 @@ export default function RewardsPage() {
 
   if (loading || !data) return <div className="card mx-auto max-w-2xl h-96 animate-pulse" />;
 
-  const xp = computeXp(data.stats);
+  const xp = data.xp;
   const level = levelFor(xp);
   const { unlocked, locked } = evaluateAchievements(data.stats, level.level);
   const quests = dailyQuests(data.state);
@@ -293,7 +312,7 @@ export default function RewardsPage() {
 
       <RankLadder level={level} />
 
-      <WeeklyChallenges week={data.week} today={data.today} ctx={data.ctx} />
+      <WeeklyChallenges boards={data.boards} />
 
       <Leaderboards userId={user.id} />
 
