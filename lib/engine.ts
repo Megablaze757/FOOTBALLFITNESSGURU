@@ -31,6 +31,7 @@
 import type { PainMap } from "./types";
 import type { SportId } from "./exercises";
 import { isExcluded, EMPTY_CONSTRAINTS, type Constraints } from "./constraints";
+import { positionProfile, type PositionProfile } from "./position-profile";
 import { skillForSession } from "./skills";
 import { runZoneLabel, runZoneFeel } from "./running";
 import {
@@ -388,9 +389,11 @@ interface Ctx {
   /** Coach's picks, as a set for cheap lookup. */
   picked?: Set<string>;
   forced?: Set<string>;
+  /** What this position actually has to do. See lib/position-profile.ts. */
+  position?: PositionProfile | null;
 }
 
-interface Scored { m: Movement; score: number; spares: boolean }
+interface Scored { m: Movement; score: number; spares: boolean; demoted: boolean }
 
 /**
  * Rank the movements that could fill a slot.
@@ -402,7 +405,7 @@ interface Scored { m: Movement; score: number; spares: boolean }
 function rankSlot(slot: Slot, ctx: Ctx): Scored[] {
   const goalScored = slot === "primary" || slot === "secondary" || slot === "accessory";
 
-  return MOVEMENTS
+  const ranked = MOVEMENTS
     .filter((m) => m.slot === slot)
     // An exclusion the athlete typed is a hard filter, not a penalty — "I don't
     // train legs" must mean zero leg work, not less of it.
@@ -447,6 +450,26 @@ function rankSlot(slot: Slot, ctx: Ctx): Scored[] {
       if (ctx.sport && SPRINT_SPORTS.has(ctx.sport)
         && (HAMSTRING_WORK.has(m.id) || CALF_WORK.has(m.id))) score += 8;
 
+      /**
+       * WHAT THE POSITION ACTUALLY DOES.
+       *
+       * Reported as "a prop's drills are the same as a flanker's" — and they
+       * were, because position was read in exactly two places: to pick a ball
+       * drill, and to print a name at the top of the programme. A front-rower
+       * whose job is a maximal static push and a back-rower covering 7km in
+       * repeat sprints got byte-identical strength, conditioning and accessory
+       * work.
+       *
+       * A nudge on pattern, not a separate catalogue. The movements are the
+       * same for everyone; what changes is which the selector reaches for
+       * first, which is also what a coach changes. ±3 to ±7 against a goal
+       * match of 10 — enough to reliably reorder the pool, never enough to beat
+       * an exclusion the athlete typed, a sore joint, or a coach's pick.
+       */
+      const positionBonus = (ctx.position?.patterns[m.pattern] ?? 0)
+        + (ctx.position?.movements?.[m.id] ?? 0);
+      score += positionBonus;
+
       if (ctx.trainingFocus === "aesthetics" && (m.kit === "barbell" || m.kit === "dumbbell" || m.kit === "machine")) score += 3;
       if (ctx.trainingFocus === "fitness" && m.targets.includes("endurance")) score += 3;
 
@@ -461,11 +484,44 @@ function rankSlot(slot: Slot, ctx: Ctx): Scored[] {
       // null by this point and nothing here can bring it back.
       if (ctx.picked?.has(m.id)) score += 50;
 
-      return { m, score, spares };
+      return { m, score, spares, demoted: positionBonus < 0 };
     })
     .filter((s): s is Scored => s !== null)
     .sort((a, b) => b.score - a.score || a.m.id.localeCompare(b.m.id));
+
+  /**
+   * A SCORING BONUS ALONE CHANGES NOTHING HERE, and measuring it is the only
+   * way to find that out.
+   *
+   * `pick` rotates a window over the strong end of this list and takes the
+   * first few distinct patterns. The window is fixed-width and the rotation
+   * offset does not depend on the athlete — so what actually decides a session
+   * is which movements are IN the window, not how they are ordered inside it.
+   * With the bonus alone, a prop and a flanker shared 83% of their block:
+   * every score moved, the top eight stayed the same eight, and the rotation
+   * handed back the same drills.
+   *
+   * So a pattern the position actively demotes is removed from the pool rather
+   * than merely pushed down it. A prop's block does not contain flying sprints
+   * and a marathoner's does not contain depth drops — which is the difference
+   * anyone would notice, and the one a coach would actually make.
+   *
+   * Only NEGATIVE weights do this, and only while enough movements remain to
+   * rotate through. Emptying a slot to honour an emphasis would be a much worse
+   * bug than an off-emphasis drill, and week-on-week variety needs something
+   * left to vary.
+   */
+  const kept = ranked.filter((s) => !s.demoted);
+  return kept.length >= MIN_POOL_AFTER_DEMOTION ? kept : ranked;
 }
+
+/**
+ * Below this the pool is too thin to rotate through, so demotions are ignored
+ * and the position gets an off-emphasis drill instead of an empty slot. Sized
+ * against the widest `count` any blueprint asks for (3) times the two passes
+ * `pick` makes, plus room for the pattern-uniqueness rule to skip a couple.
+ */
+const MIN_POOL_AFTER_DEMOTION = 6;
 
 function rotate<T>(arr: T[], by: number): T[] {
   if (arr.length < 2) return arr;
@@ -859,12 +915,29 @@ export function buildBlock(input: EngineInput): ProgramPlan {
    * Appended rather than prepended: a coach who has chosen specific movements
    * gets their days first, and the essentials fill in around them.
    */
+  /**
+   * What this position cannot sensibly go a block without — a lock without a
+   * jump, a prop without a scrum drive, a marathoner without a long run.
+   *
+   * Forced rather than scored for the same reason the sprint essentials are:
+   * `pick` rotates its window, so a bonus can always be rotated out. That is
+   * exactly how a 3-day speed block once reached zero hamstring sets while
+   * every test stayed green.
+   */
+  const positionProf = positionProfile(input.sport, input.position);
+
   const required = [
     ...(input.mustInclude ?? []),
     ...(input.sport && SPRINT_SPORTS.has(input.sport)
       ? sprintEssentials(days).filter((id) => !(input.mustInclude ?? []).includes(id))
       : []),
   ];
+  // Appended last: a coach's explicit picks come first, then the sport's
+  // non-negotiables, then the position's. De-duped so a movement that is both
+  // does not take two of the week's forced slots.
+  for (const id of positionProf?.essentials ?? []) {
+    if (!required.includes(id)) required.push(id);
+  }
 
   const weeks: ProgramWeek[] = THEMES.map((_, wi) => {
     // In-season, the matches are the training. Volume comes down so the sport
@@ -899,6 +972,7 @@ export function buildBlock(input: EngineInput): ProgramPlan {
       const ctx: Ctx = {
         focusGoal, pain, soreAreas, sport: input.sport, trainingFocus: input.focus, constraints,
         picked: required.length ? new Set(required) : undefined,
+        position: positionProf,
         // The picks that belong to THIS day (see `pick`), rather than all of them.
         forced: required.length
           ? new Set(required.filter((_, pi) => pi % days === di))

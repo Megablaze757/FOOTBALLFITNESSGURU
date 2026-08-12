@@ -12,6 +12,7 @@ import { progressionForName, type SportId } from "./exercises";
 import { parseConstraints, isExcluded, EMPTY_CONSTRAINTS, type Constraints, type Region } from "./constraints";
 import { buildHypertrophyProgram, type SplitStyle } from "./hypertrophy";
 import { positionLabel } from "./positions";
+import { positionProfile } from "./position-profile";
 import { sportTerms } from "./sport-terms";
 import { MOVEMENTS, regionOfMovement, type Movement, type GoalType, type BodyArea } from "./movements";
 import { buildBlock, painByArea, type ProgramPlan, type TrainingFocus } from "./engine";
@@ -418,7 +419,17 @@ function programSummary(goal: GoalType, sore: BodyArea[], inSeason: boolean, blo
   const t = sportTerms(sport);
   const season = inSeason ? t.inSeason : t.offSeason;
   const who = [positionLabel(position), sport].filter(Boolean).join(" · ");
-  const forWhom = who ? ` Tailored for a ${who}.` : "";
+  /**
+   * SAY WHAT THE POSITION CHANGED, not just that it was noticed.
+   *
+   * "Tailored for a Prop · rugby" was the whole of it — and until now it was
+   * also a lie, because the only thing position altered was the ball drill and
+   * that sentence. Now that a prop and a flanker genuinely get different work,
+   * the summary says which work and why, so the claim is checkable by the
+   * person reading it.
+   */
+  const prof = positionProfile(sport, position);
+  const forWhom = who ? ` Tailored for a ${who}.${prof ? ` ${prof.note}` : ""}` : "";
   // `profiles.training_focus` is a bare text column whose permitted values live
   // only in a SQL comment, and the app casts it to TrainingFocus on the way in.
   // An unlisted value read back as "Weighted toward undefined." in the summary
