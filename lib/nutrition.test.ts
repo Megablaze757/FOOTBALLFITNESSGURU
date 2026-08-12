@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { GOALS } from "./coach";
-import { nutritionTargets, activityFactor, basalRate, planTargets, type TargetInput, type BodyStats } from "./nutrition";
+import { nutritionTargets, activityFactor, basalRate, planTargets, clampWaterMl, type TargetInput, type BodyStats } from "./nutrition";
 
 // A fully-described adult, so the measured path is in play.
 const ADULT: TargetInput = {
@@ -278,4 +278,27 @@ test("every real goal combination produces finite targets", () => {
       }
     }
   }
+});
+
+/**
+ * WATER HAS A FLOOR, AND THE FLOOR IS EMPTY.
+ *
+ * The water buttons only ever counted up, so this arithmetic never had to hold:
+ * a mis-tapped +500 was permanent and there was nothing to clamp. Now that water
+ * can be removed and typed, one tap too many on "remove" would leave a negative
+ * litre count under the bar and a negative integer in `daily_water_intake_ml`,
+ * where it would go on to poison the hydration line in the daily verdict.
+ *
+ * The ceiling is the other half: `daily_water_intake_ml` is an integer column
+ * and the field is free text, so a fat-fingered 50000 is one keystroke away.
+ */
+test("today's water cannot go below empty, or past what a person could drink", () => {
+  assert.equal(clampWaterMl(1500 - 500), 1000);
+  assert.equal(clampWaterMl(-250), 0, "removing more than you logged empties it, it does not owe you water");
+  assert.equal(clampWaterMl(0), 0);
+  assert.equal(clampWaterMl(500_000), 20_000, "a typo should still render as a number, not break the card");
+  // The column is an integer; a rounded value is the only kind it can hold.
+  assert.equal(clampWaterMl(749.6), 750);
+  // NaN reaches here the moment an empty field is arithmetic'd against.
+  assert.equal(clampWaterMl(Number.NaN), 0);
 });

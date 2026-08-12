@@ -13,11 +13,12 @@ import { MealPlanner } from "@/components/MealPlanner";
 import { MealCheckIn } from "@/components/MealCheckIn";
 import { TodayFood } from "@/components/TodayFood";
 import { NumberInput } from "@/components/NumberInput";
+import { WaterRow } from "@/components/WaterRow";
 import { addEntry, logTotals, parseEntries, removeByRef, type FoodEntry } from "@/lib/food-log";
 import type { Macros } from "@/lib/meal-plan";
 import { Tabs, TabPanel } from "@/components/Tabs";
 import { FuelRings } from "@/components/FuelRings";
-import { nutritionTargets, type NutritionTargets, type TargetContext } from "@/lib/nutrition";
+import { clampWaterMl, nutritionTargets, type NutritionTargets, type TargetContext } from "@/lib/nutrition";
 import { sportProfile, type SportProfile } from "@/lib/sport-profile";
 import type { BodyStats, MealPrefs } from "@/lib/meal-plan";
 import type { GoalType } from "@/lib/coach";
@@ -36,11 +37,23 @@ const MACROS = [
   { key: "fats", label: "Fats", color: "#c084fc", kcal: 9 },
 ] as const;
 
+/** Exactly the shape written to `nutrition_logs`, so what we save and what we
+ *  hand back to the page cannot describe the row differently. */
+interface NutritionRow {
+  user_id: string;
+  log_date: string;
+  daily_calorie_target: number | null;
+  calories_eaten: number | null;
+  macros: { protein: number; carbs: number; fats: number };
+  daily_water_intake_ml: number;
+  entries: FoodEntry[];
+}
+
 export default function NutritionPage() {
   const user = useCurrentUser();
   const today = todayLocal();
 
-  const { data, loading, reload } = useAsync(async () => {
+  const { data, loading, mutate } = useAsync(async () => {
     const supabase = createClient();
     const since = daysAgoLocal(14);
     const [{ data: sub }, { data: log }, { data: weightRow }, { data: program }, { data: training }, { data: profile }] = await Promise.all([
@@ -183,7 +196,11 @@ export default function NutritionPage() {
   return (
     <NutritionTabs
       userId={user.id}
-      reload={reload}
+      // Fold the saved row straight into the loaded data. The tracker is
+      // unmounted and remounted every time the tabs switch, and it rebuilds its
+      // state from `log` — so this has to be current, and it is the only reason
+      // the page ever refetched after a save.
+      onSaved={(row) => mutate((d) => ({ ...d, log: { ...(d.log ?? {}), ...row } }))}
       today={today}
       log={data?.log}
       targets={targets}
@@ -293,8 +310,9 @@ const NUTRITION_TABS = [
   { id: "plan" as const, label: "Meal plan", icon: "clipboard" as IconName },
 ];
 
-function NutritionTabs({ userId, today, log, targets, stats, prefs, dietNotes, mealSeed, mealSwaps, mealRecent, mealStarred, sport, context, reload }: {
-  userId: string; today: string; log: any; targets: NutritionTargets | null; reload: () => void;
+function NutritionTabs({ userId, today, log, targets, stats, prefs, dietNotes, mealSeed, mealSwaps, mealRecent, mealStarred, sport, context, onSaved }: {
+  userId: string; today: string; log: any; targets: NutritionTargets | null;
+  onSaved: (row: NutritionRow) => void;
   stats: Partial<BodyStats> | null; prefs: Partial<MealPrefs> | null; dietNotes: string | null;
   mealSeed: number | null; mealSwaps: Record<string, string>; mealRecent: string[]; mealStarred: string[];
   sport: SportProfile; context: TargetContext;
@@ -325,7 +343,7 @@ function NutritionTabs({ userId, today, log, targets, stats, prefs, dietNotes, m
           sport={sport}
           context={context}
           onAddStats={() => setTab("plan")}
-          reload={reload}
+          onSaved={onSaved}
         />
       ) : (
         <MealPlanner userId={userId} initial={stats} initialPrefs={prefs} initialNotes={dietNotes} initialSeed={mealSeed} initialSwaps={mealSwaps} initialRecent={mealRecent} initialStarred={mealStarred} context={context} />
@@ -345,8 +363,10 @@ function Header() {
   );
 }
 
-function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietNotes, mealSeed, mealSwaps, mealRecent, mealStarred, sport, context, onAddStats, reload }: {
-  userId: string; today: string; initial: any; targets: NutritionTargets | null; reload: () => void;
+function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietNotes, mealSeed, mealSwaps, mealRecent, mealStarred, sport, context, onAddStats, onSaved }: {
+  userId: string; today: string; initial: any; targets: NutritionTargets | null;
+  /** Takes the row we just wrote, so a remount reads it without a refetch. */
+  onSaved: (row: NutritionRow) => void;
   stats: Partial<BodyStats> | null; prefs: Partial<MealPrefs> | null; dietNotes: string | null;
   /** Shared with the planner so today?s tick-list matches the plan exactly. */
   context: TargetContext;
@@ -449,6 +469,20 @@ function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietN
     applyEntries(addEntry(entries, { ...e.macros, label: e.label, source: e.source, ref: e.ref }));
   }
 
+  /**
+   * Move today's water and commit it, for the same reason a meal tick commits:
+   * a glass you logged and then navigated away from was never logged at all.
+   *
+   * Every route in — the +250 chips, the typed amount, remove, clear — goes
+   * through here, so the floor at zero and the rounding are applied once rather
+   * than at four call sites, one of which would eventually forget.
+   */
+  function changeWater(next: number) {
+    const ml = clampWaterMl(next);
+    setWater(ml);
+    void persist({ water: ml });
+  }
+
   function applyEntries(next: FoodEntry[]) {
     setEntries(next);
     const t = logTotals(next);
@@ -471,51 +505,51 @@ function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietN
     const m_ = over?.macros ?? macros;
     const w_ = over?.water ?? water;
     const en_ = over?.entries ?? entries;
-    const supabase = createClient();
-    const { error: e } = await supabase.from("nutrition_logs").upsert(
-      {
-        user_id: userId,
-        log_date: today,
-        daily_calorie_target: calories ? Number(calories) : null,
-        calories_eaten: e_ || null,
-        macros: {
-          protein: Number(m_.protein) || 0,
-          carbs: Number(m_.carbs) || 0,
-          fats: Number(m_.fats) || 0,
-        },
-        daily_water_intake_ml: w_,
-        entries: en_,
+    const row = {
+      user_id: userId,
+      log_date: today,
+      daily_calorie_target: calories ? Number(calories) : null,
+      calories_eaten: e_ || null,
+      macros: {
+        protein: Number(m_.protein) || 0,
+        carbs: Number(m_.carbs) || 0,
+        fats: Number(m_.fats) || 0,
       },
-      { onConflict: "user_id,log_date" }
-    );
+      daily_water_intake_ml: w_,
+      entries: en_,
+    };
+    const supabase = createClient();
+    const { error: e } = await supabase.from("nutrition_logs").upsert(row, { onConflict: "user_id,log_date" });
     if (e) setError(e.message);
     else {
       setSaved(true);
-      // Home and Progress both read this row from the same cache. Without this
-      // they keep serving the pre-tick numbers, which looks like the reset all
-      // over again — just one screen further along.
-      invalidate(`nutrition:${userId}`);
+      // Home reads this day from its own query and its own cache key, and it is
+      // not on screen — dropping it is the whole fix there.
       invalidate(`home:${userId}`);
       /**
-       * REFETCH, don't just drop the cache — this is the water-reset bug.
+       * HAND THE PAGE THE ROW WE JUST WROTE, rather than making it go and read
+       * it back.
        *
-       * Switching to the Meal plan tab UNMOUNTS this component (the tabs are a
-       * ternary), and coming back remounts it, so every useState here re-reads
-       * `initial`. invalidate() clears the stored cache but does nothing to the
-       * `data` already held by the mounted useAsync above — so `initial` was
-       * still the row as it looked when the PAGE loaded. Tap +500ml, switch
-       * tab, switch back, and the bar was empty again.
+       * This used to invalidate the nutrition cache and call reload(). That
+       * fixed a real bug — switching to the Meal plan tab UNMOUNTS this
+       * component (the tabs are a ternary), so coming back re-reads `initial`,
+       * and `initial` was the row as it looked when the PAGE loaded. Tap
+       * +500ml, switch tab, switch back, and the bar was empty again; worse,
+       * the remount reset `entries` to that stale list and the next save wrote
+       * the empty list back over the real one.
        *
-       * It was not only cosmetic. The remount also reset `entries` to that
-       * stale row's list, and the next save wrote the empty list back over the
-       * real one — which is why today's row in production reads 1,338 calories
-       * eaten against zero entries. The display lied and then the lie was
-       * persisted.
+       * But refetching to fix it is a sledgehammer. reload() drops the cache,
+       * which sends useAsync's `loading` back to true, which returns the page's
+       * SKELETON — so every meal tick and every water tap blanked the whole
+       * screen for six queries and then rebuilt it. It also threw away state
+       * that hadn't been persisted yet: tap +200 kcal, tick a meal, and the 200
+       * disappeared with the unmount.
        *
-       * reload() re-runs the page query, so `initial` reflects what was just
-       * written and a remount reads the truth.
+       * We already know what the row says: we just wrote it. onSaved() folds it
+       * into the loaded data in place, so a remount still reads the truth and
+       * nothing flashes. Same guarantee, no network, no skeleton.
        */
-      reload();
+      onSaved(row);
     }
     setSaving(false);
   }
@@ -631,32 +665,7 @@ function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietN
 
         {/* Water rides along the bottom as a slim bar. It is one number and two
             buttons and never justified a panel of its own. */}
-        <div className="mt-4 border-t border-white/[0.06] pt-3">
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-slate-400">💧 Water</span>
-            <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10">
-              <span
-                className="block h-full rounded-full bg-sky-400 transition-all"
-                style={{ width: `${Math.min(100, (water / waterGoal) * 100)}%` }}
-              />
-            </span>
-            <span className="shrink-0 text-xs tabular-nums text-sky-300">
-              {(water / 1000).toFixed(1)}<span className="text-slate-600">/{(waterGoal / 1000).toFixed(1)}L</span>
-            </span>
-            {[250, 500].map((ml) => (
-              <button
-                key={ml}
-                // Persisted on tap for the same reason the meal ticks are: a
-                // glass of water you logged and then navigated away from was
-                // never logged at all.
-                onClick={() => { const next = water + ml; setWater(next); void persist({ water: next }); }}
-                className="chip shrink-0 text-sky-300 hover:bg-white/[0.08]"
-              >
-                +{ml}
-              </button>
-            ))}
-          </div>
-        </div>
+        <WaterRow ml={water} goalMl={waterGoal} onChange={changeWater} />
       </div>
 
       {/* What you have eaten, before the ways to add more. Once anything is

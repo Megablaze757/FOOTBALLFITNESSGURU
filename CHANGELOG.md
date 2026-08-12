@@ -586,6 +586,48 @@ front-end bundle.
 
 ---
 
+## 2026-08-12 — Logging food stopped reloading the page, and water can be typed and taken back
+
+**Operator action: none.** Front-end only; no migration, no Worker, no keys.
+
+**The nutrition page rebuilt itself every time you logged anything.** Reported as
+"the page refreshes when I add calories and water", and it is exactly what
+happened. Saving called `invalidate()` and then `reload()`, and `reload()` drops
+the cache entry — which sends `useAsync`'s `loading` back to `true`, which
+returns the page's *skeleton*. So every meal tick and every +250ml blanked the
+whole screen for as long as six Supabase queries took, then rebuilt it.
+
+It was not only ugly. The remount threw away anything not yet written: the
+quick-add calorie buttons only move React state, so tapping **+200 and then
+ticking a meal lost the 200**.
+
+The refetch existed to fix a real bug — the tabs are a ternary, so switching to
+Meal plan unmounts the tracker and coming back re-reads the page's copy of
+today's row, which was the row as it looked when the page *loaded*. But
+refetching was never the way to fix it: the page already knows what the row says,
+because it just wrote it. `useAsync` gained `mutate()`, which folds a write you
+have already made into the loaded data and the cache in place. Same guarantee on
+a remount, no network, no skeleton. A newer local write also now wins over a
+read that was already in flight when it landed, so a tap during the background
+revalidate can't be undone by it.
+
+**Water is a control now, not two buttons that count up.** +250 and +500 covered
+one case: a 750ml bottle was two taps that left you 250 over, and a mis-tap was
+permanent, because nothing could take water off again. Tapping the "1.5/3.0L"
+readout opens a stepper — type any amount, add or remove it, or clear the day.
+The resting row is unchanged, so anyone who only taps +500 sees no difference.
+
+Rendered at 320 and 390px before shipping, which caught two things no test would
+have: the amount field came out 203×50px, making a four-digit box the loudest
+thing on a card whose headline is a set of rings, and the progress bar at 320px
+had been squeezed to **22px** — too short to read a proportion off — by a row
+that was already over-full before any of this. The bar is 69px there now.
+
+Water totals clamp at empty and round, which they never had to before, because
+until now the number could only go up.
+
+---
+
 ## 2026-08-08 (handover) — Programs that progress, meals that agree with each other, and four things only a human can do
 
 **Operator action: FOUR, and three of them are credential rotations.** Full

@@ -123,8 +123,16 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[] = [], cacheKey
   const fnRef = useRef(fn);
   fnRef.current = fn;
 
+  // What `data` holds right now, readable outside a render. mutate() needs it so
+  // two taps in the same tick both build on the first, and the loader below
+  // needs it to tell whether a local write beat it home.
+  const dataRef = useRef<T | null>(data);
+  dataRef.current = data;
+  const writes = useRef(0);
+
   useEffect(() => {
     let active = true;
+    const writesAtStart = writes.current;
     const seeded = cacheKey ? readCache(cacheKey) : undefined;
     // Only show the spinner when we have nothing to paint yet.
     if (seeded !== undefined) setData(seeded as T);
@@ -134,9 +142,23 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[] = [], cacheKey
     fnRef.current()
       .then((d) => {
         if (!active) return;
+        setLoading(false);
+        /**
+         * A LOCAL WRITE THAT LANDED WHILE THIS WAS IN FLIGHT IS NEWER THAN THIS.
+         *
+         * Stale-while-revalidate means a cached page is interactive before its
+         * background fetch returns, so someone can log a glass of water at the
+         * exact moment a read that started BEFORE the write comes back. Applying
+         * it would put the row back as it was and undo what they just did on
+         * screen — the same class of bug as the reset this all replaced, just
+         * with a narrower window.
+         *
+         * The read is discarded rather than merged: it cannot contain anything
+         * newer than what is already on screen, since it started earlier.
+         */
+        if (writes.current !== writesAtStart) return;
         if (cacheKey) { cache.set(cacheKey, d); writeStored(cacheKey, d); }
         setData(d);
-        setLoading(false);
       })
       // A swallowed error looked exactly like "there's no data" — an empty
       // table where the real answer was "the query was rejected". Surface it
@@ -159,6 +181,40 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[] = [], cacheKey
     reload: () => {
       if (cacheKey) { cache.delete(cacheKey); clearStored(cacheKey); }
       setTick((t) => t + 1);
+    },
+    /**
+     * Fold a write you have already made into the loaded data — no refetch, no
+     * skeleton.
+     *
+     * WHY THIS EXISTS. reload() is the wrong tool after a save, and on the
+     * nutrition page it was doing visible damage. It deletes the cache entry, so
+     * the effect re-runs with nothing seeded, so `loading` goes back to true —
+     * and the page returns its skeleton. Every tick of a meal and every tap of
+     * +250ml therefore blanked the entire screen for as long as six Supabase
+     * queries took, then rebuilt it. Reported as "the page refreshes when I add
+     * calories and water", and that is precisely what it did.
+     *
+     * It was not only ugly. The remount threw away every piece of state that had
+     * not been written yet — the quick-add calorie buttons only move React state,
+     * so tapping +200 and then ticking a meal lost the 200.
+     *
+     * And the refetch was never needed: the caller just wrote the row, so it
+     * already knows what the row now says. Patching it here keeps `data` and the
+     * cache correct for a remount (which is what reload() was really protecting
+     * against — the tabs are a ternary, so switching unmounts the tracker and
+     * coming back re-reads this data) at the cost of no network at all.
+     *
+     * Use reload() when something else may have changed the row; use mutate()
+     * when you are the one who changed it.
+     */
+    mutate: (update: (prev: T) => T) => {
+      const prev = dataRef.current;
+      if (prev === null) return; // nothing loaded to patch; the next read wins
+      const next = update(prev);
+      writes.current += 1;
+      dataRef.current = next;
+      setData(next);
+      if (cacheKey) { cache.set(cacheKey, next); writeStored(cacheKey, next); }
     },
   };
 }

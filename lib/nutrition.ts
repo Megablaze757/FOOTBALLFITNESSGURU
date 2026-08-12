@@ -187,6 +187,30 @@ const CARB_FLOOR_PER_KG = 2.0; // below this an athlete stops recovering between
 
 /** Drinking-water target ceiling. Past this, more water is a risk, not a goal. */
 const WATER_CAP_ML = 4500;
+
+/**
+ * The most a day's log will hold. Nobody drinks twenty litres; this is here so a
+ * mistyped 50000 writes something the bar and the "/3.0L" readout can still
+ * render, instead of a number that makes the whole card read as broken.
+ */
+const WATER_LOG_CAP_ML = 20_000;
+
+/**
+ * Where today's water lands after adding or removing some.
+ *
+ * Removing is the reason this is a function. The water buttons only ever went
+ * up, so a mis-tap was permanent — and the obvious fix, letting the number go
+ * where the arithmetic puts it, means one tap too many on "remove" leaves a
+ * negative litre count on screen and a negative integer in the database. Empty
+ * is the floor: you cannot have drunk less than nothing.
+ *
+ * Rounds, because the column is an integer and a typed "0.5" would otherwise be
+ * silently truncated somewhere further down.
+ */
+export function clampWaterMl(ml: number): number {
+  if (!Number.isFinite(ml)) return 0;
+  return Math.min(WATER_LOG_CAP_ML, Math.max(0, Math.round(ml)));
+}
 const WATER_PER_KG = 33;
 const WATER_PER_TRAINING_MIN = 12; // ~720 ml an hour of sweat loss
 
