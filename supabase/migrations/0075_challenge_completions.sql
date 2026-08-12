@@ -25,7 +25,10 @@ create table if not exists public.challenge_completions (
   challenge_id text not null,
   -- 'YYYY-MM-DD' for a daily board, 'wNNNNN' for a weekly one.
   period       text not null,
-  window       text not null check (window in ('daily', 'weekly')),
+  -- NOT `window`: that is a reserved word in PostgreSQL and `window text` is a
+  -- syntax error at CREATE TABLE, verified against 16.13. A migration that is
+  -- pasted by hand gets exactly one chance to be right.
+  board_window text not null check (board_window in ('daily', 'weekly')),
   -- Stored, not recomputed. If the pool later reprices a challenge, what was
   -- already earned must not change — an XP total that moves retroactively is
   -- the same broken promise from the other direction.

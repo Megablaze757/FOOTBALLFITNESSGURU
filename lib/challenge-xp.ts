@@ -20,7 +20,8 @@ import type { Board } from "./challenge-pool";
 export interface CompletionRow {
   challenge_id: string;
   period: string;
-  window: string;
+  /** Named to match the column, which cannot be `window` — reserved in Postgres. */
+  board_window: string;
   xp: number;
 }
 
@@ -33,7 +34,7 @@ export function completionsFrom(boards: Board[]): CompletionRow[] {
       out.push({
         challenge_id: p.challenge.id,
         period: b.period,
-        window: b.window,
+        board_window: b.window,
         // The price AT THE TIME. If the pool is later repriced, what was already
         // earned must not move — a total that changes retroactively is the same
         // broken promise from the other direction.
