@@ -87,44 +87,37 @@ export function AchievementDetail({ achievement, unlocked, rarity, sampled, onCl
             </p>
           </div>
 
-          {/* --- Rarity ---------------------------------------------------- */}
-          <div className="mt-5 rounded-2xl border border-white/[0.08] bg-white/[0.02] p-4 text-center">
-            {showPct ? (
-              <>
-                <p className="text-xs uppercase tracking-wider text-slate-500">How rare is it</p>
-                <p className="mt-1 text-3xl font-extrabold tabular-nums" style={{ color: rarityTone(pct!) }}>
-                  {pct!.toFixed(pct! < 10 ? 1 : 0)}%
-                </p>
-                <p className="mt-0.5 text-sm font-semibold" style={{ color: rarityTone(pct!) }}>
-                  {rarityLabel(pct!)}
-                </p>
-                <p className="mt-1 text-xs text-slate-500">
-                  of active athletes have this one
-                  {rarity?.holders ? ` · ${rarity.holders.toLocaleString()} ${rarity.holders === 1 ? "person" : "people"}` : ""}
-                </p>
-              </>
-            ) : (
-              /* A COUNT, NOT AN APOLOGY, AND NEVER A PERCENTAGE OFF FOUR PEOPLE.
-                 This used to say "not enough athletes yet" and explain itself,
-                 which reads as the app telling you it is empty — on the card
-                 that is supposed to make a badge feel worth having.
-                 The number of holders is true at any sample size and carries no
-                 false precision: "9 athletes have this" is a fact, while "25%
-                 of athletes" off a table of four is arithmetic pretending to be
-                 information. So the percentage waits until it means something
-                 and the count stands in until then, with nothing said about
-                 why. */
-              <>
-                <p className="text-xs uppercase tracking-wider text-slate-500">Who else has it</p>
-                <p className="mt-1 text-3xl font-extrabold tabular-nums text-slate-200">
-                  {(rarity?.holders ?? 0).toLocaleString()}
-                </p>
-                <p className="mt-0.5 text-sm text-slate-400">
-                  {rarity?.holders === 1 ? "athlete has this one" : "athletes have this one"}
-                </p>
-              </>
-            )}
-          </div>
+          {/* --- Rarity, or nothing at all ---------------------------------
+              THE BOX EARNS ITS PLACE OR IT ISN'T THERE.
+
+              Two earlier versions of this both filled the space rather than
+              yielding it: first an explanation that rarity "needs at least 20
+              people", then a holder count standing in for the percentage.
+              Each was honest and each was clutter — a panel on a small card
+              whose entire job is to say how rare a badge is, saying something
+              else instead.
+
+              A percentage off a handful of athletes is worse than no
+              percentage: with four people on the table one holder reads as
+              25%, which is arithmetically true and tells you only how new the
+              app is. So the number waits until it means something, and until
+              then the card is simply the badge — which is a complete thing on
+              its own. The box appears when it has an answer. */}
+          {showPct && (
+            <div className="mt-5 rounded-2xl border border-white/[0.08] bg-white/[0.02] p-4 text-center">
+              <p className="text-xs uppercase tracking-wider text-slate-500">How rare is it</p>
+              <p className="mt-1 text-3xl font-extrabold tabular-nums" style={{ color: rarityTone(pct!) }}>
+                {pct!.toFixed(pct! < 10 ? 1 : 0)}%
+              </p>
+              <p className="mt-0.5 text-sm font-semibold" style={{ color: rarityTone(pct!) }}>
+                {rarityLabel(pct!)}
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                of active athletes have this one
+                {rarity?.holders ? ` · ${rarity.holders.toLocaleString()} ${rarity.holders === 1 ? "person" : "people"}` : ""}
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </Portal>
