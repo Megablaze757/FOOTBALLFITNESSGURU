@@ -298,7 +298,10 @@ export default function HomePage() {
         days={data!.week.days}
         sessions={data!.week.sessions}
         minutes={data!.week.minutes}
-        accent={sport.accent}
+        // Progress's teal, not the sport accent — see the note on the prop.
+        // Rugby and basketball made this strip orange, which read as a warning
+        // on the card that exists to say the week has gone well.
+        accent="#5fd3c4"
         complete={data!.quests.every((q) => q.done)}
       />
 

@@ -24,7 +24,20 @@ export function WeekStrip({ days, sessions, minutes, accent, complete }: {
   days: { iso: string; letter: string; checkedIn: boolean; trained: boolean }[];
   sessions: number;
   minutes: number;
-  /** Sport accent, so this belongs to the same athlete as the rest of the page. */
+  /**
+   * NOT the sport accent any more.
+   *
+   * It used to take it, on the reasoning that the strip should belong to the
+   * same athlete as the rest of the page. In practice that made the seven-day
+   * tracker orange for rugby (#f0824a) and basketball (#fb923c) — the two
+   * accents nearest the warning colours — so the card that tells you the week
+   * has gone well read like something was wrong with it.
+   *
+   * It is Progress's teal for everybody now, which is also the colour of the
+   * page this strip links to. Sport tailoring belongs in what the app SAYS —
+   * positions, drills, the vocabulary in lib/sport-terms.ts — rather than in
+   * recolouring a chart per user until some of them get an ugly one.
+   */
   accent: string;
   /** All of today's quests are done — the card leads with that. */
   complete: boolean;

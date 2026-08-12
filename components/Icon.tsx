@@ -50,31 +50,71 @@ export type IconName =
   | "spine" | "shoulder" | "hip" | "lungs" | "impact" | "battery" | "jump"
   | "split" | "dumbbell";
 
+/**
+ * Body areas, drawn as one figure with the spot marked.
+ *
+ * These were seven separate attempts at drawing a knee, a hip, a hamstring in
+ * the abstract, and they were the worst icons in the set — unrelated squiggles
+ * that could have been anything. The feedback was that they "aren't descriptive
+ * of what they're meant to be", and it was right.
+ *
+ * A joint has no recognisable silhouette on its own. It is only legible in
+ * relation to a body, which is why a physiotherapist's chart is a body with a
+ * dot on it and why you can read one instantly. So each of these is the SAME
+ * figure with a filled marker in a different place. That also makes them a
+ * family: seven icons that obviously belong together, for seven things that
+ * obviously belong together.
+ */
+function BodyMark({ x, y }: { x: number; y: number }) {
+  return (
+    <>
+      {/* The figure sits back so the marker reads first. */}
+      <g opacity="0.4">
+        <circle cx="12" cy="3.6" r="1.9" />
+        <path d="M12 5.7v7.6" />
+        <path d="M7.6 8.4h8.8" />
+        <path d="M12 13.3 9.5 21M12 13.3l2.5 7.7" />
+      </g>
+      <circle cx={x} cy={y} r="2.7" fill="currentColor" stroke="none" />
+    </>
+  );
+}
+
 const PATHS: Record<IconName, React.ReactNode> = {
   // A loaded bar, read end-on: two plates each side of a knurled shaft.
   barbell: <><path d="M3 9v6M6 7v10M18 7v10M21 9v6" /><path d="M6 12h12" /></>,
   book: <><path d="M4 4.5A1.5 1.5 0 0 1 5.5 3H19v14H5.5A1.5 1.5 0 0 0 4 18.5Z" /><path d="M4 18.5A1.5 1.5 0 0 0 5.5 20H19v-3" /><path d="M8 7h7" /></>,
   video: <><rect x="2.5" y="6" width="13" height="12" rx="2.5" /><path d="m15.5 12 6-3.5v11l-6-3.5Z" /></>,
   // A plate with a fork and knife, rather than a full dinner service.
-  plate: <><circle cx="12" cy="12" r="8.5" /><circle cx="12" cy="12" r="4" /></>,
+  /**
+   * A fork and knife, not a plate seen from above.
+   *
+   * It WAS two concentric circles — which is the same drawing as `target` one
+   * line below, minus the centre dot. Two icons that mean "eat" and "your
+   * position" were near-identical at any size, and at 18px on the Today card
+   * indistinguishable. Nothing about a bare ring says food; cutlery is the one
+   *食 symbol everybody reads instantly, which is why it is on every motorway
+   * sign in Europe.
+   */
+  plate: <><path d="M7 3v7a2 2 0 0 0 4 0V3" /><path d="M9 10v11" /><path d="M17.5 3c-1.4 1.2-2 3-2 5s.6 2.8 2 3.2V3Z" /><path d="M17.5 11.2V21" /></>,
   target: <><circle cx="12" cy="12" r="8.5" /><circle cx="12" cy="12" r="4.5" /><circle cx="12" cy="12" r="0.8" /></>,
   chart: <><path d="M4 20V4" /><path d="M4 20h16" /><path d="m7 15 3.5-4 3 2.5L19 7" /></>,
   // A plaster on the diagonal. Reads as "something hurts" faster than a cross.
   plaster: <><rect x="2.6" y="8.5" width="18.8" height="7" rx="3.5" transform="rotate(-35 12 12)" /><path d="m10.4 10.4 3.2 3.2M13.6 10.4l-3.2 3.2" /></>,
   squad: <><circle cx="9" cy="8" r="3.2" /><path d="M3 20v-1.5A4.5 4.5 0 0 1 7.5 14h3a4.5 4.5 0 0 1 4.5 4.5V20" /><path d="M16 5.5a3.2 3.2 0 0 1 0 6M18 14h.5a4.5 4.5 0 0 1 4.5 4.5V20" /></>,
   // A figure mid-stretch — one arm overhead, one leg extended.
-  stretch: <><circle cx="12" cy="4.2" r="2" /><path d="M12 7v6" /><path d="M12 8.5 8 6M12 8.5l4-3.5" /><path d="m12 13-3 8M12 13l3.5 8" /></>,
+  stretch: <><circle cx="12" cy="4.2" r="2.1" /><path d="M12 6.6v6.4" /><path d="M12 8.4 7.6 5.4M12 8.4l4.4-3" /><path d="m12 13-3.2 8M12 13l3.4 8" /></>,
   flame: <><path d="M12 21c3.3 0 6-2.4 6-5.5 0-4-3-5.5-3-9C13 8 12 9.8 12 11c-1.2-1-1.5-2.6-1.5-4C8 9 6 11.6 6 15.5 6 18.6 8.7 21 12 21Z" /></>,
   trophy: <><path d="M8 4h8v4a4 4 0 0 1-8 0Z" /><path d="M8 5H5v2a3 3 0 0 0 3 3M16 5h3v2a3 3 0 0 1-3 3" /><path d="M12 12v4M9 20h6M10 20l.5-4M14 20l-.5-4" /></>,
   bolt: <><path d="M13 2 5 13h6l-1 9 8-11h-6Z" /></>,
   warning: <><path d="M12 3.5 21 19H3Z" /><path d="M12 9.5v4.5M12 16.6v.2" /></>,
   // A runner: head, driving arm, split legs.
-  run: <><circle cx="14.5" cy="4.5" r="2" /><path d="M13 8.5 9.5 11l2 3.5" /><path d="m13 8.5 3.5 2 1 3.5" /><path d="m11.5 14.5-2 6M11.5 14.5l4 2 1 4.5" /><path d="M4 10h3" /></>,
+  run: <><circle cx="15" cy="4.3" r="2.1" /><path d="M13.4 8.6 9.6 10.9l2.2 3.9" /><path d="m13.4 8.6 3.7 2.1.9 3.6" /><path d="m11.8 14.8-2.4 6.3M11.8 14.8l4 1.9 1.1 4.4" /></>,
   ball: <><circle cx="12" cy="12" r="8.5" /><path d="m12 7.5 3.2 2.4-1.2 3.8h-4l-1.2-3.8Z" /><path d="M12 3.5v4M19.8 9.4l-3.6 2.7M16 20.2l-2-4.5M8 20.2l2-4.5M4.2 9.4l3.6 2.7" /></>,
   brain: <><path d="M12 5.5a3 3 0 0 0-5.7 1.3A3 3 0 0 0 5 12a3 3 0 0 0 1.7 4.6A3 3 0 0 0 12 18.5Z" /><path d="M12 5.5a3 3 0 0 1 5.7 1.3A3 3 0 0 1 19 12a3 3 0 0 1-1.7 4.6A3 3 0 0 1 12 18.5Z" /><path d="M12 5.5v13" /></>,
   watch: <><rect x="6.5" y="6.5" width="11" height="11" rx="3" /><path d="M9 6.5 9.5 3h5l.5 3.5M9 17.5l.5 3.5h5l.5-3.5" /><path d="M12 10v2.2l1.5 1" /></>,
   // A leg: hip, knee, ankle. Used wherever the app talks about lower-body load.
-  leg: <><path d="M10 3v6.5l-2.5 5" /><path d="M10 9.5 14 13l-1 5" /><path d="M6 20h4M11.5 20h4" /></>,
+  leg: <BodyMark x={9.7} y={19.8} />,
   "trend-up": <><path d="M4 17 10 11l3.5 3L20 7" /><path d="M20 12V7h-5" /></>,
   "trend-down": <><path d="M4 7l6 6 3.5-3L20 17" /><path d="M20 12v5h-5" /></>,
   check: <><path d="m4 12.5 5.5 5.5L20 6.5" /></>,
@@ -84,7 +124,7 @@ const PATHS: Record<IconName, React.ReactNode> = {
 
   // A flexed arm, read as the outline the emoji is famous for — shoulder,
   // biceps peak, forearm — without the skin tone the emoji forces on you.
-  muscle: <><path d="M4 16.5V13a4 4 0 0 1 4-4h3.5" /><path d="M11.5 9a5 5 0 0 1 5-5 3.5 3.5 0 0 1 3.5 3.5c0 4-2.5 5.5-2.5 8A4.5 4.5 0 0 1 13 20H8a4 4 0 0 1-4-3.5" /><path d="M11.5 9v3.5" /></>,
+  muscle: <><path d="M4.5 17.5v-3A4.5 4.5 0 0 1 9 10h2" /><path d="M11 10c0-3.6 2.2-6 5-6a3.6 3.6 0 0 1 3.5 3.6c0 3.8-2.4 5.4-2.4 8A4.4 4.4 0 0 1 12.7 20H9a4.5 4.5 0 0 1-4.5-2.5" /></>,
   hourglass: <><path d="M7 3h10M7 21h10" /><path d="M8 3v3.5L12 11l4-4.5V3M8 21v-3.5L12 13l4 4.5V21" /></>,
   clipboard: <><rect x="5" y="4.5" width="14" height="16" rx="2" /><path d="M9 4.5a3 3 0 0 1 6 0" /><path d="M9 11h6M9 15h4" /></>,
   ruler: <><rect x="2.5" y="8" width="19" height="8" rx="1.5" transform="rotate(-20 12 12)" /><path d="m8.2 8.2 1 2.6M11.6 6.9l1 2.6M15 5.7l1 2.6" /></>,
@@ -113,23 +153,23 @@ const PATHS: Record<IconName, React.ReactNode> = {
   // --- Fuel timeline ---------------------------------------------------------
   bowl: <><path d="M3 11h18a9 9 0 0 1-9 9 9 9 0 0 1-9-9Z" /><path d="M8.5 7.5c0-1.5 1.2-2 1.2-3M12 7c0-1.8 1.4-2.4 1.4-3.6M15.5 7.5c0-1.2 1-1.7 1-2.6" /></>,
   // A piece of fruit, not a specific one — this slot is "small snack".
-  snack: <><path d="M12 8.5c-3.2-2.4-7 .4-7 4.3 0 3.4 2.9 7.2 5.4 7.2.9 0 1.1-.5 1.6-.5s.7.5 1.6.5c2.5 0 5.4-3.8 5.4-7.2 0-3.9-3.8-6.7-7-4.3Z" /><path d="M12 8.5V5.5M12 5.5c1.6 0 2.6-1 2.8-2.5-1.6-.2-2.8.8-2.8 2.5Z" /></>,
+  snack: <><path d="M12 8.8c-1-1-2.2-1.4-3.4-1.4C6.1 7.4 4.5 9.6 4.5 12.6c0 3.6 2.7 8 4.9 8 .9 0 1.4-.5 2.6-.5s1.7.5 2.6.5c2.2 0 4.9-4.4 4.9-8 0-3-1.6-5.2-4.1-5.2-1.2 0-2.4.4-3.4 1.4Z" /><path d="M12 8.8V5.6M12 5.6c1.8 0 3-1.2 3-3-1.8 0-3 1.2-3 3Z" /></>,
   shake: <><path d="M7 8h10l-1 12.5a1.5 1.5 0 0 1-1.5 1.4h-5A1.5 1.5 0 0 1 8 20.5Z" /><path d="M6.5 8 8 3.5h8L17.5 8" /><path d="M12 3.5V8" /></>,
   // --- Recovery --------------------------------------------------------------
-  walk: <><circle cx="13" cy="4" r="2" /><path d="m11 8 3.5 2 .5 4" /><path d="M14.5 14 17 20M14.5 14l-4 2.5L9 21" /><path d="m11 8-3 2.5" /></>,
+  walk: <><circle cx="13" cy="4.2" r="2.1" /><path d="M13 6.6v6.2" /><path d="m13 8.6-3.4 1.6M13 8.6l3.2 1.9" /><path d="m13 12.8-2.6 8.2M13 12.8l2.9 8.2" /></>,
   bath: <><path d="M3.5 12h17v3.5a4 4 0 0 1-4 4h-9a4 4 0 0 1-4-4Z" /><path d="M6 12V5.8A2.3 2.3 0 0 1 10.3 5" /><path d="M6.5 21l-1 1.5M17.5 21l1 1.5" /></>,
   // --- Body areas. One picture per area, which is the point. ------------------
-  foot: <><path d="M8 4.5c3.5 0 5.5 2.5 5.5 6 0 2.2-.6 3.3-.6 5 0 2.2 1.4 3 1.4 4.5s-1.6 2.5-4 2.5-4.3-1.4-4.3-3.6c0-3.4.8-4.4.8-7.4 0-2.6-1-4-1-5.4 0-1 .8-1.6 2.2-1.6Z" /></>,
-  knee: <><path d="M9 3v5.5c0 2 1.5 2.8 3 4" /><circle cx="13.5" cy="12.5" r="3" /><path d="M13.5 15.5c-1 2-1.5 3.5-1.5 5.5" /></>,
-  hamstring: <><path d="M8 3.5c2.6 0 4 1.8 4 4.4 0 3-1.4 4.4-1.4 7 0 2.4 1.4 3.6 1.4 5.6" /><path d="M12 8.5c2 .4 3.4 1.6 3.8 3.4M11.6 14.5c2.2.3 3.6 1.4 4.2 3" /></>,
-  spine: <><path d="M12 3v18" /><path d="M9 5.5h6M8.5 9h7M8.5 12.5h7M9 16h6M10 19h4" /></>,
-  shoulder: <><circle cx="9" cy="7" r="3" /><path d="M5 20v-3a4 4 0 0 1 4-4h1.5" /><path d="M11.5 13c3 0 5 1.6 6.5 4M14 9.5c2.4 0 4 1 5 2.5" /></>,
-  hip: <><path d="M6 4v5.5A3.5 3.5 0 0 0 9.5 13h5A3.5 3.5 0 0 0 18 9.5V4" /><path d="M9.5 13 8 21M14.5 13l1.5 8" /></>,
+  foot: <BodyMark x={9.5} y={21} />,
+  knee: <BodyMark x={10.1} y={18.2} />,
+  hamstring: <BodyMark x={10.7} y={16.4} />,
+  spine: <BodyMark x={12} y={10.5} />,
+  shoulder: <BodyMark x={8.4} y={8.4} />,
+  hip: <BodyMark x={12} y={13.3} />,
   // --- Programme templates ---------------------------------------------------
   lungs: <><path d="M12 3v9" /><path d="M12 8c-1-2.5-2.5-3.5-4-3.5S5 6 5 9.5c0 4 .8 6.5 1.6 8 .6 1.2 2.4 1.2 3.2 0 .8-1.2 2.2-3.6 2.2-6.5" /><path d="M12 8c1-2.5 2.5-3.5 4-3.5S19 6 19 9.5c0 4-.8 6.5-1.6 8-.6 1.2-2.4 1.2-3.2 0-.8-1.2-2.2-3.6-2.2-6.5" /></>,
   impact: <><path d="m12 2 2.2 5.2L20 6l-3 4.6L21 15l-5.6.3L14 21l-3.4-4.2L6 20l.6-5.4L2 12l5-2.3L5.5 4l5.3 2.4Z" /></>,
   battery: <><rect x="2.5" y="7" width="16" height="10" rx="2.5" /><path d="M21 10.5v3" /><path d="M6 10.5v3M9.5 10.5v3M13 10.5v3" /></>,
-  jump: <><circle cx="12" cy="4" r="2" /><path d="M12 7v5" /><path d="m12 8-4-2.5M12 8l4-2.5" /><path d="m12 12-3 4M12 12l3 4" /><path d="M5.5 20h13" /></>,
+  jump: <><circle cx="12" cy="4.2" r="2.1" /><path d="M12 6.6v5.6" /><path d="m12 8.2-4.2-2.4M12 8.2l4.2-2.4" /><path d="m12 12.2-2.8 4.6M12 12.2l2.8 4.6" /><path d="M5.5 20.5h13" /></>,
   split: <><rect x="3" y="4" width="7" height="16" rx="1.6" /><rect x="14" y="4" width="7" height="16" rx="1.6" /></>,
   dumbbell: <><path d="M5 9v6M8 7.5v9M16 7.5v9M19 9v6" /><path d="M8 12h8" /></>,
 };
