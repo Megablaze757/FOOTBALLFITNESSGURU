@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   computeXp, levelFor, rankFor, rankLadder, evaluateAchievements, dailyQuests, EMPTY_STATS,
-  ACHIEVEMENTS,
+  ACHIEVEMENTS, type ActivityStats,
 } from "./gamification";
 
 test("XP accumulates from activity and levels rise", () => {
@@ -149,4 +149,93 @@ test("no badge name tells an athlete to train harder", () => {
     offenders.map((a) => a.name), [],
     "a badge gated on session count must record what happened, not urge more of it"
   );
+});
+
+/**
+ * EVERY BADGE HAS TO BE EARNABLE, and two of them nearly weren't.
+ *
+ * `streak` is computed from the dates the pages load, and they load 60 days —
+ * a streak is broken by the first missing day, so fetching more would be waste.
+ * That caps `streak` at 60 whatever the athlete actually does, so a "90-day
+ * streak" badge would sit on the page forever, greyed out, unreachable, telling
+ * people the app was broken. Same for `longestStreak`, and for
+ * `perfectDaysLast7`, which cannot exceed 7.
+ *
+ * Asserted against a maxed-out athlete: everything must unlock for someone who
+ * has done all of it.
+ */
+test("no badge asks for something the app cannot measure", () => {
+  const WINDOW_DAYS = 60;
+  const maxed: ActivityStats = {
+    checkIns: 5000, streak: WINDOW_DAYS, trainingSessions: 5000, completedSessions: 5000,
+    completedBlocks: 200, benchmarks: 500, videos: 500, nutritionLogs: 5000,
+    checkInsLast7: 7, restDaysLogged: 2000,
+    longestStreak: WINDOW_DAYS, weeksActive: Math.floor(WINDOW_DAYS / 7), perfectDaysLast7: 7,
+  };
+  const { locked } = evaluateAchievements(maxed, 999);
+  assert.deepEqual(
+    locked.map((a) => a.id), [],
+    "these can never be unlocked by anyone, because the stat cannot reach the threshold"
+  );
+});
+
+test("a brand new athlete has everything to play for", () => {
+  const { unlocked } = evaluateAchievements(EMPTY_STATS, 1);
+  assert.deepEqual(unlocked.map((a) => a.id), [], "a badge unlocked before doing anything is not a badge");
+});
+
+/**
+ * Ids are the primary key of `achievement_unlocks` (migration 0074) and the key
+ * of the rarity map. Two badges sharing one would merge into a single row and
+ * each would report the other's rarity.
+ */
+test("badge ids are unique, stable slugs", () => {
+  const ids = ACHIEVEMENTS.map((a) => a.id);
+  assert.equal(new Set(ids).size, ids.length);
+  for (const id of ids) assert.match(id, /^[a-z0-9_]+$/, `${id} is stored — keep it a slug`);
+  const names = ACHIEVEMENTS.map((a) => a.name);
+  assert.equal(new Set(names).size, names.length, "two badges with the same name are indistinguishable on the grid");
+});
+
+/**
+ * THE LADDERS HAVE TO KEEP GOING.
+ *
+ * The first set stopped at "log 50 sessions", so a committed athlete collected
+ * everything inside a couple of months and the page had nothing left to say.
+ * Every counting ladder should reach somewhere a regular user is not.
+ */
+test("there is always something above where you are", () => {
+  const twoMonthsIn: ActivityStats = {
+    ...EMPTY_STATS,
+    checkIns: 60, streak: 20, trainingSessions: 45, completedSessions: 40,
+    completedBlocks: 2, benchmarks: 2, videos: 3, nutritionLogs: 25,
+    checkInsLast7: 7, restDaysLogged: 15, longestStreak: 20, weeksActive: 8, perfectDaysLast7: 2,
+  };
+  const { locked } = evaluateAchievements(twoMonthsIn, 12);
+  assert.ok(locked.length >= 8, `only ${locked.length} badges left for a two-month athlete to chase`);
+});
+
+/**
+ * A whole-loop day — checked in, trained, ate for it — is the thing this app is
+ * built around, and nothing marked it: every badge counted one habit alone.
+ */
+test("doing the whole loop in a day is worth something", () => {
+  const partial: ActivityStats = { ...EMPTY_STATS, checkIns: 1, trainingSessions: 1, perfectDaysLast7: 0 };
+  const whole: ActivityStats = { ...partial, perfectDaysLast7: 1 };
+  const before = evaluateAchievements(partial, 1).unlocked.map((a) => a.id);
+  const after = evaluateAchievements(whole, 1).unlocked.map((a) => a.id);
+  assert.ok(after.includes("full_house"));
+  assert.ok(!before.includes("full_house"));
+});
+
+/**
+ * COMING BACK IS THE HARD PART. `streak` pays only for the run you are ON, so
+ * one missed day of a forty-day run leaves nothing to show for the forty —
+ * which is exactly the moment someone decides whether to open the app again.
+ */
+test("a streak you had still counts after it breaks", () => {
+  const lapsed: ActivityStats = { ...EMPTY_STATS, checkIns: 40, streak: 0, longestStreak: 40 };
+  const ids = evaluateAchievements(lapsed, 5).unlocked.map((a) => a.id);
+  assert.ok(ids.includes("best_streak_21"), "a broken 40-day streak was worth nothing at all");
+  assert.ok(!ids.includes("streak_14"), "the current-streak badges must still need a current streak");
 });

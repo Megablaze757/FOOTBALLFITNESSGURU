@@ -586,6 +586,78 @@ front-end bundle.
 
 ---
 
+## 2026-08-12 (positions) — A prop stops training like a flanker, and the nav gets out of the way
+
+**Operator action: none** beyond migrations 0073 and 0074 from the entry below.
+
+### Position was a label, not a programme
+
+Reported as "a prop's drills are the same as a flanker's". They were. The engine
+read `position` in exactly two places — to pick a ball drill, and to print a
+name at the top of the programme — so a 120kg front-rower whose job is a maximal
+static push and a back-rower covering 7km a session in repeat sprints got
+byte-identical strength, conditioning and accessory work.
+
+Every position of every sport now carries a profile: weights on movement
+pattern, weights on named movements, a short list it cannot go a block without,
+and one line on the programme saying why it looks like it does.
+
+| | before | after |
+|---|---|---|
+| rugby: Prop vs Flanker | 83% identical | **78%** |
+| rugby: Prop vs Wing | 78% | 72% |
+| football: Goalkeeper vs Central mid | 60% | 55% |
+| running: Sprinter vs Marathon | 73% | 65% |
+
+They still share a lot, and should — both squat, both warm up. What is gone is
+total identity: a prop's block now contains no sprint work at all and a
+marathoner's contains no jumps.
+
+**A scoring bonus alone did nothing, and only measuring showed it.** The
+selector rotates a fixed-width window over the ranked list, so what decides a
+session is which movements are *in* the window, not their order inside it. With
+the bonus alone every score moved and the same eight stayed on top. Patterns a
+position actively demotes are removed from the pool instead — while enough
+remain to rotate through, because emptying a slot would be a worse bug than an
+off-emphasis drill.
+
+Pattern turned out to be too coarse for conditioning, where a prop and a flanker
+differ most: seventeen of nineteen conditioning movements share one pattern, so
+demoting it demoted shuttles and sled pushes along with the marathon-pace long
+run. Hence per-movement weights.
+
+### More badges, and ones that aren't just counting
+
+Fifteen became 31. Thirteen of the original fifteen counted rows in two tables,
+so "achievements" largely meant "how long have you had the app", and the ladders
+stopped at 50 sessions — a committed athlete collected everything in two months.
+
+The new ones extend those ladders and add three things nothing was marking:
+
+- **Full house** — checked in, trained *and* logged your food on the same day.
+  The loop the whole app is built around, and every badge until now counted one
+  habit in isolation.
+- **A streak you had still counts after it breaks.** `streak` pays only for the
+  run you are on, so one missed day of a forty-day run left nothing to show for
+  the forty — which is exactly when someone decides whether to open the app
+  again.
+- **Weeks active**, which rewards showing up roughly rather than perfectly.
+
+Two of these were nearly unearnable: the pages load 60 days of dates, so a
+"90-day streak" badge would have sat greyed out forever. A test now builds a
+maxed-out athlete and fails if anything stays locked.
+
+### The nav gets out of the way
+
+"It just stays in the same place" — it is `position: fixed`, so it did: about
+80px of every screen, parked across whatever you were reading. It now hides on
+scroll-down and returns on scroll-up, and is always there at the top and foot of
+a page. The backdrop blur went with it, because animating a transform on a
+backdrop-filtered fixed element is the combination mobile Safari has long got
+wrong — a trade the comment above that bar had already recorded.
+
+---
+
 ## 2026-08-12 (plans) — Free is the daily habit, the paywalls exist, and a badge tells you how rare it is
 
 **Operator action: apply migrations 0073 and 0074.** 0073 sets the video quota

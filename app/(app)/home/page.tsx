@@ -10,7 +10,7 @@ import { useAsync } from "@/lib/use-async";
 import { assessReadiness } from "@/lib/readiness";
 import { actionLabel } from "@/lib/insights";
 import { checkInStreak, computeACWR } from "@/lib/load";
-import { dailyQuests, computeXp, levelFor, type ActivityStats, type LevelInfo } from "@/lib/gamification";
+import { dailyQuests, computeXp, levelFor, activitySpans, type ActivityStats, type LevelInfo } from "@/lib/gamification";
 import { biometricSignal, type Biometric } from "@/lib/biometrics";
 import { sportProfile } from "@/lib/sport-profile";
 import { ReadinessGauge } from "@/components/ReadinessGauge";
@@ -138,6 +138,14 @@ export default function HomePage() {
       // A rest day is one you checked in on and did not train. Both lists are
       // already here, so this costs no extra query — see ActivityStats.
       restDaysLogged: checkDates.filter((d) => !trainRows.map((t) => t.log_date).includes(d)).length,
+      /**
+       * Derived from the same lists as Rewards, so the two cannot disagree —
+       * except for `perfectDaysLast7`, which is 0 here and honestly so: Home
+       * loads only TODAY's nutrition row, not the week's dates. Nothing on this
+       * page reads it (XP does not, and badges are rendered on Rewards), and an
+       * extra query to fill in a number nobody looks at would be worse.
+       */
+      ...activitySpans(checkDates, trainRows.map((t) => t.log_date), []),
     };
     /**
      * The last seven days, day by day.

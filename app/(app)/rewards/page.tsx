@@ -7,7 +7,7 @@ import { useCurrentUser } from "@/lib/auth";
 import { useAsync } from "@/lib/use-async";
 import { checkInStreak } from "@/lib/load";
 import {
-  computeXp, levelFor, rankFor, evaluateAchievements, dailyQuests,
+  computeXp, levelFor, rankFor, evaluateAchievements, dailyQuests, activitySpans,
   type ActivityStats, type DailyState,
 } from "@/lib/gamification";
 import type { WeekActivity } from "@/lib/challenges";
@@ -77,6 +77,9 @@ export default function RewardsPage() {
       // A rest day is one you checked in on and did not train. Both lists are
       // already here, so this costs no extra query — see ActivityStats.
       restDaysLogged: checkDates.filter((d) => !trainDates.includes(d)).length,
+      // Read across the same three date lists rather than counting rows. No
+      // extra query — all three are already loaded above.
+      ...activitySpans(checkDates, trainDates, nutriDates),
     };
     const state: DailyState = {
       checkedInToday: checkDates.includes(today),

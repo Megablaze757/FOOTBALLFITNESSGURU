@@ -133,6 +133,8 @@ export default function SquadPage() {
         checkIns: dates.length,
         streak: checkInStreak(dates),
         trainingSessions: trainCount.get(p.id) ?? 0,
+        // A coach's roster is ranked on XP, which reads none of these.
+        longestStreak: 0, weeksActive: 0, perfectDaysLast7: 0,
         completedSessions: prog?.completed_sessions.length ?? 0,
         completedBlocks: blocksByUser.get(p.id) ?? 0,
         // The squad roster counts an athlete's training logs but does not fetch

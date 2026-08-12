@@ -1,3 +1,4 @@
+import { todayLocal } from "./day";
 import type { IconName } from "@/components/Icon";
 // =============================================================================
 // Gamification engine — XP, levels/ranks, achievements and daily quests, all
@@ -29,13 +30,82 @@ export interface ActivityStats {
    * badge it argues in the direction that gets people hurt.
    */
   restDaysLogged: number;
+  /**
+   * The longest run of consecutive check-ins, whether or not it is still going.
+   *
+   * `streak` only ever rewards the run you are ON, so a 40-day streak broken by
+   * one holiday is worth exactly as much as never having started. That is the
+   * opposite of what this app tells people about consistency everywhere else.
+   *
+   * BOUNDED BY THE QUERY WINDOW. The pages load 60 days of dates (a streak is
+   * broken by the first missing day, so more would be waste), which caps this at
+   * 60. No badge may ask for more than that or it can never be earned — there is
+   * a test.
+   */
+  longestStreak: number;
+  /** Distinct calendar weeks with at least one check-in, within the window. */
+  weeksActive: number;
+  /** Days in the last 7 with a check-in, a training log AND food logged. */
+  perfectDaysLast7: number;
 }
 
 export const EMPTY_STATS: ActivityStats = {
   checkIns: 0, streak: 0, trainingSessions: 0, completedSessions: 0,
   completedBlocks: 0, benchmarks: 0, videos: 0, nutritionLogs: 0, checkInsLast7: 0,
-  restDaysLogged: 0,
+  restDaysLogged: 0, longestStreak: 0, weeksActive: 0, perfectDaysLast7: 0,
 };
+
+/**
+ * The stats that come from looking ACROSS the dates rather than counting rows.
+ *
+ * Shared because two pages build ActivityStats from the same three date lists,
+ * and a badge that unlocks on one screen and not the other would be a bug
+ * nobody could explain. Costs no query: every list here is already loaded.
+ *
+ * `DAY_MS` arithmetic on UTC midnights, not `setDate`, so a clock change in the
+ * middle of a streak does not silently break it.
+ */
+const DAY_MS = 86_400_000;
+
+export function activitySpans(
+  checkDates: string[],
+  trainDates: string[],
+  nutriDates: string[],
+  today: string = todayLocal()
+): Pick<ActivityStats, "longestStreak" | "weeksActive" | "perfectDaysLast7"> {
+  const days = [...new Set(checkDates)].sort();
+
+  let longestStreak = 0;
+  let run = 0;
+  let previous: number | null = null;
+  for (const d of days) {
+    const t = Date.parse(`${d}T00:00:00Z`);
+    if (Number.isNaN(t)) continue;
+    run = previous !== null && t - previous === DAY_MS ? run + 1 : 1;
+    previous = t;
+    if (run > longestStreak) longestStreak = run;
+  }
+
+  // Weeks counted from the epoch so the boundary is the same for everyone and
+  // does not depend on which day the athlete's locale calls first.
+  const weeks = new Set<number>();
+  for (const d of days) {
+    const t = Date.parse(`${d}T00:00:00Z`);
+    if (!Number.isNaN(t)) weeks.add(Math.floor(t / DAY_MS / 7));
+  }
+
+  const trained = new Set(trainDates);
+  const fed = new Set(nutriDates);
+  const checked = new Set(checkDates);
+  const from = Date.parse(`${today}T00:00:00Z`) - 6 * DAY_MS;
+  let perfectDaysLast7 = 0;
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(from + i * DAY_MS).toISOString().slice(0, 10);
+    if (checked.has(d) && trained.has(d) && fed.has(d)) perfectDaysLast7++;
+  }
+
+  return { longestStreak, weeksActive: weeks.size, perfectDaysLast7 };
+}
 
 // XP awarded per unit of activity.
 const XP = {
@@ -224,6 +294,68 @@ export const ACHIEVEMENTS: Achievement[] = [
   { id: "tested", name: "Benchmarked", desc: "Log a strength/speed test", icon: "ruler", test: (s) => s.benchmarks >= 1 },
   { id: "fuelled", name: "Fuelled", desc: "Log your nutrition", icon: "plate", test: (s) => s.nutritionLogs >= 1 },
   { id: "level_10", name: "Double digits", desc: "Reach level 10", icon: "medal", test: (_s, level) => level >= 10 },
+
+  /**
+   * A SECOND BATCH, and mostly not more of the same counting.
+   *
+   * The first fifteen marked one milestone each and then stopped: log ten
+   * sessions, log fifty, and after that the ladder ended — so anyone past a
+   * couple of months had collected everything there was and the page had
+   * nothing left to say to them. Worse, thirteen of the fifteen counted rows in
+   * two tables, so "achievements" meant "how long have you had the app".
+   *
+   * What these add is (a) the far end of the ladders that already existed, so
+   * there is something above where a committed athlete already is, and (b) the
+   * things the app cares about that nothing was marking: keeping several habits
+   * on the same day, coming back, and testing yourself more than once.
+   */
+
+  // --- The far end of the existing ladders ---------------------------------
+  { id: "streak_14", name: "Fortnight", desc: "14-day check-in streak", icon: "calendar", test: (s) => s.streak >= 14 },
+  {
+    id: "streak_60", name: "Two months unbroken", desc: "60-day check-in streak", icon: "trophy",
+    // 60 is the ceiling: the pages load 60 days of dates, so a longer streak
+    // cannot be measured. Asking for 90 would be a badge nobody could earn.
+    test: (s) => s.streak >= 60,
+  },
+  { id: "checkins_100", name: "A hundred mornings", desc: "Check in 100 times", icon: "calendar", test: (s) => s.checkIns >= 100 },
+  { id: "checkins_365", name: "A year of it", desc: "Check in 365 times", icon: "trophy", test: (s) => s.checkIns >= 365 },
+  { id: "sessions_100", name: "A hundred logged", desc: "Log 100 training sessions", icon: "muscle", test: (s) => s.trainingSessions >= 100 },
+  { id: "sessions_250", name: "Two-fifty", desc: "Log 250 training sessions", icon: "trophy", test: (s) => s.trainingSessions >= 250 },
+  { id: "rest_60", name: "Recovery is a skill", desc: "60 rest days logged", icon: "sleep", test: (s) => s.restDaysLogged >= 60 },
+  { id: "blocks_3", name: "Three blocks deep", desc: "Finish three 4-week blocks", icon: "clipboard", test: (s) => s.completedBlocks >= 3 },
+  { id: "sessions_done_50", name: "Fifty off the plan", desc: "Tick off 50 programmed sessions", icon: "check", test: (s) => s.completedSessions >= 50 },
+  { id: "nutrition_30", name: "A month of meals", desc: "Log your food on 30 days", icon: "plate", test: (s) => s.nutritionLogs >= 30 },
+  { id: "videos_10", name: "Ten on tape", desc: "Analyse 10 clips", icon: "camera", test: (s) => s.videos >= 10 },
+  { id: "level_25", name: "Quarter century", desc: "Reach level 25", icon: "medal", test: (_s, level) => level >= 25 },
+
+  // --- Things nothing was marking ------------------------------------------
+  /**
+   * Testing yourself ONCE is a number; testing yourself repeatedly is the only
+   * way to know whether any of this worked. "Benchmarked" paid for the first
+   * and nothing paid for the habit.
+   */
+  { id: "tested_5", name: "Retested", desc: "Log 5 strength or speed tests", icon: "ruler", test: (s) => s.benchmarks >= 5 },
+  /**
+   * All three in a day: checked in, trained, ate for it. This is the loop the
+   * whole app is built around and nothing rewarded doing the whole of it —
+   * every badge counted one habit in isolation.
+   */
+  { id: "full_house", name: "Full house", desc: "Check in, train and log your food on the same day", icon: "confetti", test: (s) => s.perfectDaysLast7 >= 1 },
+  { id: "full_house_3", name: "Three in a week", desc: "Three complete days in one week", icon: "flame", test: (s) => s.perfectDaysLast7 >= 3 },
+  /**
+   * COMING BACK IS THE HARD PART, and the streak counter actively punishes it:
+   * miss one day of a forty-day run and you are on zero, with nothing to show
+   * for the forty. This marks the run you HAD. It is the badge most likely to
+   * matter to someone deciding whether to open the app again after a week off.
+   */
+  { id: "best_streak_21", name: "Twenty-one straight", desc: "Reach a 21-day streak — it counts even after it ends", icon: "shield", test: (s) => s.longestStreak >= 21 },
+  /**
+   * Weeks with something in them, not consecutive days. Rewards showing up
+   * roughly rather than perfectly, which is what most people actually manage
+   * and what the app should be encouraging over an unbroken chain.
+   */
+  { id: "weeks_8", name: "Two months in", desc: "Check in during 8 different weeks", icon: "chart", test: (s) => s.weeksActive >= 8 },
 ];
 
 export function evaluateAchievements(s: ActivityStats, level: number): { unlocked: Achievement[]; locked: Achievement[] } {
