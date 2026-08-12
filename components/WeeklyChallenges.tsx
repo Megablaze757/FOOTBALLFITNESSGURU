@@ -55,29 +55,41 @@ export function WeeklyChallenges({ week, today, ctx }: Props) {
    * is not a board, and it is the first thing anyone notices.
    */
   const dayNumber = Math.floor(Date.parse(`${todayLocal()}T00:00:00Z`) / 86_400_000);
-  // Each board is both PICKED and SCORED against its own window, so "aim at the
-  // gap" means today's gap for today's card and the week's gap for the week's.
-  const daily = pickChallenges({ ...ctx, window: "daily", week: today, seed: dayNumber, count: 2 });
-  const weekly = pickChallenges({ ...ctx, window: "weekly", week, seed: Math.floor(dayNumber / 7), count: 3 });
 
-  if (!daily.length && !weekly.length) return null;
+  /**
+   * A board is a list AND the activity it is measured against, built together.
+   *
+   * Picking against one window and scoring against another is the bug that made
+   * daily cards arrive pre-ticked, and it is a one-word mistake: `week` and
+   * `today` are the same type, so handing over the wrong one compiles cleanly.
+   * Binding the two into a single value means a future edit has to change this
+   * helper to reintroduce it, rather than one prop at a call site.
+   */
+  const board = (window: ChallengeWindow, activity: WeekActivity, seed: number, count: number) => ({
+    activity,
+    list: pickChallenges({ ...ctx, window, week: activity, seed, count }),
+  });
+  const daily = board("daily", today, dayNumber, 2);
+  const weekly = board("weekly", week, Math.floor(dayNumber / 7), 3);
+
+  if (!daily.list.length && !weekly.list.length) return null;
 
   return (
     <div className="card p-5">
       <ChallengeGroup
         heading="Today"
         note="Resets at midnight."
-        list={daily}
-        week={today}
+        list={daily.list}
+        week={daily.activity}
         window="daily"
       />
-      {weekly.length > 0 && (
-        <div className={daily.length ? "mt-5 border-t border-white/[0.06] pt-4" : ""}>
+      {weekly.list.length > 0 && (
+        <div className={daily.list.length ? "mt-5 border-t border-white/[0.06] pt-4" : ""}>
           <ChallengeGroup
             heading="This week"
             note="Aimed at whatever you've been skipping. Resets Monday."
-            list={weekly}
-            week={week}
+            list={weekly.list}
+            week={weekly.activity}
             window="weekly"
           />
         </div>

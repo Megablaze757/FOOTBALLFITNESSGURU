@@ -367,3 +367,57 @@ test("the rewards page gives the daily board its own window", () => {
   assert.ok(/today=\{[^}]+\}/.test(tag[0]), `no today window passed: ${tag[0]}`);
   assert.ok(!/today=\{data\.week\}/.test(tag[0]), "the daily board was handed the week again");
 });
+
+/**
+ * A MISSPELLED POSITION IS A TEMPLATE NOBODY EVER SEES.
+ *
+ * `positions` is matched by exact string against POSITIONS_BY_SPORT, so
+ * "Goalkeepr" does not throw, does not fail to compile, and does not show up in
+ * any other test — the template simply scores `null` for every athlete alive
+ * and sits in the file looking like content. This was a live gap: an injected
+ * typo went undetected because a SECOND keeper template covered for it, so the
+ * keeper still got keeper challenges and every other guard stayed green.
+ */
+test("every position a template names is a real position", () => {
+  const bySport = new Map(SPORTS.map((s) => [s.id, new Set(positionsForSport(s.id))]));
+  const all = new Set([...bySport.values()].flatMap((set) => [...set]));
+
+  const bogus: string[] = [];
+  for (const t of CHALLENGE_POOL) {
+    for (const p of t.positions ?? []) {
+      if (!all.has(p)) { bogus.push(`${t.id} names "${p}", which no sport has`); continue; }
+      // And it must belong to a sport the template is FOR, or it is equally
+      // unreachable: "Centre" exists in rugby and basketball, so a template
+      // tagged sports:["football"] with positions:["Centre"] matches nobody.
+      if (t.sports && !t.sports.some((s) => bySport.get(s)?.has(p))) {
+        bogus.push(`${t.id} names "${p}", which is not a ${t.sports.join("/")} position`);
+      }
+    }
+  }
+  assert.deepEqual(bogus, []);
+});
+
+/**
+ * And the same for the component: the page passes two windows, but the
+ * component decides what to do with them. Picking against one and scoring
+ * against the other is a one-word edit that compiles cleanly, so the pairing is
+ * built by a helper — this checks the helper is still what feeds both.
+ */
+test("the challenge component scores each board against the window it picked", () => {
+  const src = readFileSync(new URL("../components/WeeklyChallenges.tsx", import.meta.url), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+  assert.ok(/week:\s*activity/.test(src),
+    "the board helper no longer scores against the activity it picked with");
+  // The helper being intact is not enough — it can still be handed the wrong
+  // window. `board("daily", week, ...)` is internally consistent and completely
+  // wrong, and pre-ticks every daily card exactly as before.
+  assert.ok(/board\(\s*"daily",\s*today\b/.test(src), "the daily board is not built from today");
+  assert.ok(/board\(\s*"weekly",\s*week\b/.test(src), "the weekly board is not built from the week");
+  // Nothing may pick with a window it did not also carry through to scoring.
+  const picks = [...src.matchAll(/pickChallenges\(\{[^}]*\}/g)].map((m) => m[0]);
+  assert.equal(picks.length, 1, `expected one pick site, found ${picks.length}: ${picks.join(" | ")}`);
+  for (const tag of src.matchAll(/<ChallengeGroup[\s\S]*?\/>/g)) {
+    assert.ok(/week=\{\w+\.activity\}/.test(tag[0]),
+      `a board is scored against something other than its own window: ${tag[0].slice(0, 120)}`);
+  }
+});
