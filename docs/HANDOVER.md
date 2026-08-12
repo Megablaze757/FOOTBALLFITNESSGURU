@@ -112,6 +112,36 @@ Migrations 0066–0070 are otherwise applied and verified live.
 (`achievement_unlocks` + `achievement_rarity()`) went in on 2026-08-12. Nothing
 in the app is waiting on a migration.
 
+## 1.5 Optional: give programme sessions a timestamp
+
+Not blocking anything, and nothing is broken while it is undone — but it is the
+one thing standing between the challenge board and a metric it would like back.
+
+`programs.completed_sessions` is a bare `["w1d1", ...]` with no timestamps
+(migration `0041` says as much in its own comment), so there is no way to ask
+"how many programme sessions did you tick off this week". The only number
+available is the lifetime total, and feeding that to a seven-day challenge made
+"tick off three sessions from your plan" read as complete on day one, forever,
+for anyone who had ever ticked one. So `program_sessions` was removed from the
+challenge vocabulary entirely and the type now stops anyone writing against it
+(`lib/challenges.ts`). Those challenges moved onto `training_sessions`, which is
+honest — ticking a session off the plan writes a dated `training_logs` row — but
+it cannot tell a planned session from a loose one.
+
+If you want the distinction back, the cheap version is one more column written
+by the same `UPDATE` that already runs in `toggleSession` (`app/(app)/coach/page.tsx`):
+
+```sql
+alter table public.programs
+  add column if not exists session_log jsonb not null default '[]'::jsonb;
+-- entries look like {"sid": "w1d1", "at": "2026-08-12"}
+```
+
+**Order matters:** the migration has to land BEFORE the code that writes the
+column, because an unknown column fails the whole `UPDATE` — and that `UPDATE`
+is the core habit of the app. That risk is the reason it was not done as part of
+the challenge work.
+
 ---
 
 # 2. Done — training programs
@@ -297,6 +327,9 @@ Each of these exists because something silently broke.
 | `predeploy` hook in `cloudflare/package.json` | `npm run deploy` overwriting a newer dashboard Worker. `WORKER_DEPLOY_OVERRIDE=1` bypasses. |
 | Drift step in `.github/workflows/deploy-worker.yml` | Same, for CI — `wrangler-action` never goes through npm, so the npm hook doesn't cover it. |
 | `lib/backend-routes.test.ts` | A backend call no backend serves, and anything quietly becoming Worker-only. |
+| `lib/challenge-pool.test.ts` | A challenge nobody can complete, a challenge already complete when it is handed over, a position name typo'd so the template reaches nobody, a daily card scored against the week, and the rewards page passing a lifetime total off as this week's. |
+| `lib/challenges.test.ts` | A metric in the challenge vocabulary that cannot be counted over the window. |
+| `lib/gamification.test.ts` | A badge whose threshold is above what the 60-day query window can ever produce. Caught two on the way in. |
 | `lib/theme-tokens.test.ts` | Tailwind classes naming colours the theme doesn't define. |
 | `.github/workflows/deploy-functions.yml` | — (new) one-click Edge Function deploy, verifies the function answers. |
 
