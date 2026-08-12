@@ -586,6 +586,49 @@ front-end bundle.
 
 ---
 
+## 2026-08-12 (quick-add) — The quick-add calorie buttons were writing to nothing
+
+**Operator action: none.** Front-end only.
+
+`+200` ran `setEaten(c => c + 200)` and stopped there. It never reached the
+database — and it never reached the food list either, which is worse, because
+every total on the page is computed by summing that list. So tapping +200 and
+then ticking your breakfast dropped the 200 on the floor. Measured on the real
+page, before and after:
+
+| | list after +200 | written to the database | total after ticking a 552 kcal meal |
+|---|---|---|---|
+| before | empty | **nothing** | **552** |
+| after | `Quick add · 200` | immediately | 752 |
+
+A quick-add is an entry now, like everything else: it saves on tap, it appears
+in Today's food where it can be corrected or removed, and nothing can overwrite
+it. The box beside the buttons used to bind straight to the total — the same
+"two answers, no rule for which wins" problem that took the macro boxes out
+months ago — and now adds an exact amount instead, which is the one thing three
+fixed buttons cannot do. `Reset` is gone: it zeroed the total while leaving the
+list untouched, so it *created* the disagreement, and per-row ✕ in Today's food
+already covers it.
+
+Underneath, `eaten` and `macros` stopped being state at all. They are summed
+from the list on every render, so the page can no longer hold two answers to
+"what have you eaten today". `persist()` derives the stored totals the same way
+rather than taking them as a parameter — passing them in beside the list is how
+a row gets written claiming 1,338 calories against no entries.
+
+**Days that already have that shape are repaired rather than left.** A row with
+totals and no list — one written before 0072 added the column, or by these very
+buttons — now carries its totals into a single "Logged earlier" entry when the
+page opens. Without it those days were a trap: the first meal ticked would
+replace 1,338 with the value of that one meal, and the day looked fine right up
+until you touched it.
+
+The three buttons were also rendering at 38px against this codebase's 44px
+floor — on the most-tapped control on the card, and invisible to the UI audit,
+which had only ever measured the paywall on this route.
+
+---
+
 ## 2026-08-12 — Logging food stopped reloading the page, and water can be typed and taken back
 
 **Operator action: none.** Front-end only; no migration, no Worker, no keys.

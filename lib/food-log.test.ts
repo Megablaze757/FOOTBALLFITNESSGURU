@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   logTotals, addEntry, removeEntry, removeByRef, rescaleEntry, updateEntry, parseEntries,
+  entriesForDay, addQuickCalories, QUICK_ADD_LABEL,
   type FoodEntry,
 } from "./food-log";
 
@@ -82,4 +83,80 @@ test("a day logged before this column existed reads as empty, not as a crash", (
   assert.deepEqual(parseEntries("[]"), []);
   // Junk inside the array is dropped rather than taking the whole day with it.
   assert.equal(parseEntries([entry(), null, { label: "no id" }, 7]).length, 1);
+});
+
+/**
+ * A QUICK-ADD IS A THING YOU ATE, NOT A NUMBER THAT WENT UP.
+ *
+ * The +200/+400/+600 buttons ran `setEaten(c => c + 200)` and stopped. Nothing
+ * reached the database, and nothing reached the list — so the next thing logged,
+ * which recomputes the day by summing the list, wiped it. Tap +200, tick your
+ * breakfast, and the 200 is gone. That is the regression this pins: a quick-add
+ * has to survive a later log, and it only can if it is IN the list.
+ */
+test("a quick-add survives the next thing you log", () => {
+  let list = addQuickCalories([], 200);
+  assert.equal(list.length, 1);
+  assert.equal(list[0].kcal, 200);
+  assert.equal(list[0].label, QUICK_ADD_LABEL);
+  assert.equal(list[0].source, "manual");
+  assert.deepEqual([list[0].protein, list[0].carbs, list[0].fats], [0, 0, 0],
+    "no macros were given, so none are invented");
+
+  // Ticking a meal. The totals are summed from the list, which is exactly how
+  // the 200 used to disappear.
+  list = addEntry(list, { label: "Porridge", kcal: 450, protein: 20, carbs: 60, fats: 10, source: "plan" });
+  assert.equal(logTotals(list).kcal, 650, "the quick-add is still part of the day");
+});
+
+test("a quick-add of nothing is not a log", () => {
+  // Zero and negative would make the day's arithmetic unexplainable, and
+  // removing is what the list's own ✕ is for.
+  assert.deepEqual(addQuickCalories([], 0), []);
+  assert.deepEqual(addQuickCalories([], -200), []);
+  assert.deepEqual(addQuickCalories([], Number.NaN), []);
+  assert.equal(addQuickCalories([], 249.6)[0].kcal, 250, "the column is an integer");
+});
+
+/**
+ * THE DAY THAT HAS TOTALS AND NO LIST.
+ *
+ * Two ways to get one: a row written before 0072 added the column, or a row
+ * written by the old quick-add buttons, which moved a number and recorded
+ * nothing. Today's row in production reads 1,338 calories eaten against zero
+ * entries for the second reason.
+ *
+ * Those days are a trap, not a display problem. Every total is summed from the
+ * list, so the first meal ticked on such a day REPLACES 1,338 with the value of
+ * that one meal. Carrying the totals into an entry is what stops the day being
+ * quietly destroyed by using it.
+ */
+test("a day with totals but no list keeps its totals", () => {
+  const carried = entriesForDay(null, { kcal: 1338, protein: 90, carbs: 140, fats: 40 });
+  assert.equal(carried.length, 1);
+  assert.deepEqual(logTotals(carried), { kcal: 1338, protein: 90, carbs: 140, fats: 40 });
+
+  // And it behaves like any other row from then on: nothing is lost when the
+  // next meal goes in.
+  const after = addEntry(carried, { label: "Porridge", kcal: 450, protein: 20, carbs: 60, fats: 10, source: "plan" });
+  assert.equal(logTotals(after).kcal, 1788);
+});
+
+test("an empty day is empty, and a listed day is left alone", () => {
+  assert.deepEqual(entriesForDay(null, { kcal: 0, protein: 0, carbs: 0, fats: 0 }), []);
+  assert.deepEqual(entriesForDay(null, null), []);
+  // Macros without a calorie figure is a real row shape — `calories_eaten` is
+  // written as null when it is zero. Dropping it would lose the protein.
+  assert.equal(entriesForDay(null, { protein: 90 })[0].protein, 90);
+  /**
+   * A REAL LIST ALWAYS WINS, and this is the assertion that carries weight.
+   *
+   * The page re-derives this on every mount, and the stored totals are only ever
+   * a summary OF the list. Carrying them in beside a list that already exists
+   * would add a phantom entry on every remount — a tab switch would double the
+   * day, and then double it again.
+   */
+  const real = [entry({ id: "x", kcal: 600 })];
+  assert.deepEqual(entriesForDay(real, { kcal: 9999 }), real);
+  assert.equal(logTotals(entriesForDay(real, { kcal: 9999 })).kcal, 600);
 });

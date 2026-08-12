@@ -102,8 +102,8 @@ export function updateEntry(entries: FoodEntry[], id: string, next: FoodEntry): 
  *
  * Tolerant on purpose: this column arrived in 0072, so every row written before
  * it has no entries at all, and a day that was logged the old way must not
- * render as a crash. It comes back as an empty list, the totals on the row keep
- * being shown, and the first thing logged today starts the list properly.
+ * render as a crash. It comes back as an empty list, and `entriesForDay` below
+ * is what turns the totals on such a row back into something the list can hold.
  */
 export function parseEntries(raw: unknown): FoodEntry[] {
   if (!Array.isArray(raw)) return [];
@@ -114,4 +114,65 @@ export function parseEntries(raw: unknown): FoodEntry[] {
       typeof (e as FoodEntry).label === "string" &&
       Number.isFinite(Number((e as FoodEntry).kcal))
   );
+}
+
+/** Fixed, so re-reading a row that already carries one cannot mint a second. */
+const CARRIED_ID = "carried";
+
+/**
+ * A day's list, INCLUDING the days that were logged before there was a list.
+ *
+ * Rows written before 0072 hold totals and no entries — and so does any row
+ * written by the old quick-add buttons, which moved a number and recorded
+ * nothing. Today's row in production reads 1,338 calories eaten against zero
+ * entries for exactly that reason.
+ *
+ * Left alone, those days are a trap rather than a display problem: the totals
+ * are recomputed by summing the list, so the first meal ticked on such a day
+ * replaces 1,338 with the value of that one meal and the rest is gone. The day
+ * looks fine right up until you touch it.
+ *
+ * So the totals are carried into a single entry and the list becomes the truth
+ * immediately. Nothing is lost, the day is visible and editable like any other,
+ * and the next save writes a row that agrees with itself.
+ */
+export function entriesForDay(raw: unknown, carried: Partial<Macros> | null): FoodEntry[] {
+  const parsed = parseEntries(raw);
+  if (parsed.length) return parsed;
+
+  const n = (v: unknown) => Math.max(0, Math.round(Number(v) || 0));
+  const kcal = n(carried?.kcal);
+  const protein = n(carried?.protein);
+  const carbs = n(carried?.carbs);
+  const fats = n(carried?.fats);
+  // Any of the four. A row can carry macros with a null calorie figure, and
+  // dropping it because kcal happened to be zero would lose the protein.
+  if (kcal + protein + carbs + fats === 0) return [];
+
+  return [{ id: CARRIED_ID, label: "Logged earlier", source: "manual", kcal, protein, carbs, fats }];
+}
+
+/** What a quick-add row is called in the list. */
+export const QUICK_ADD_LABEL = "Quick add";
+
+/**
+ * Log a bare calorie figure — a coffee and a banana, without describing them.
+ *
+ * An ENTRY, not a bump to a running total. The buttons used to call
+ * `setEaten(c => c + 200)` and stop there, which meant the 200 was never
+ * written to the database and, worse, was wiped by the next thing logged:
+ * ticking a meal recomputes the day by summing the list, and the 200 was not in
+ * the list. Tap +200, tick your breakfast, and the 200 is gone.
+ *
+ * No macros, because none were given. Guessing a split for an unnamed 200 kcal
+ * would put numbers in the protein ring that nobody ever told us.
+ */
+export function addQuickCalories(entries: FoodEntry[], kcal: number): FoodEntry[] {
+  const n = Math.round(Number(kcal) || 0);
+  // Zero or negative is not a log. Removing is what the list's own ✕ is for,
+  // and a "-200" entry would make the day's arithmetic unexplainable.
+  if (!Number.isFinite(n) || n <= 0) return entries ?? [];
+  return addEntry(entries ?? [], {
+    kcal: n, protein: 0, carbs: 0, fats: 0, label: QUICK_ADD_LABEL, source: "manual",
+  });
 }

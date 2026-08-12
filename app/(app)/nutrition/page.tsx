@@ -12,9 +12,9 @@ import { FeatureLock } from "@/components/FeatureLock";
 import { MealPlanner } from "@/components/MealPlanner";
 import { MealCheckIn } from "@/components/MealCheckIn";
 import { TodayFood } from "@/components/TodayFood";
-import { NumberInput } from "@/components/NumberInput";
+import { QuickCalories } from "@/components/QuickCalories";
 import { WaterRow } from "@/components/WaterRow";
-import { addEntry, logTotals, parseEntries, removeByRef, type FoodEntry } from "@/lib/food-log";
+import { addEntry, addQuickCalories, entriesForDay, logTotals, removeByRef, type FoodEntry } from "@/lib/food-log";
 import type { Macros } from "@/lib/meal-plan";
 import { Tabs, TabPanel } from "@/components/Tabs";
 import { FuelRings } from "@/components/FuelRings";
@@ -25,17 +25,6 @@ import type { GoalType } from "@/lib/coach";
 import type { Subscription, Tier, TrainingLog } from "@/lib/types";
 import { daysAgoLocal, todayLocal } from "@/lib/day";
 import { selectProfile } from "@/lib/profile-columns";
-
-// Same colours as the rings, in the same order — see RING_COLOURS in
-// components/FuelRings.tsx. They disagreed before: protein was gold here and
-// sky in the rings, carbs sky here and green there — the same macro in two
-// colours on one screen, which is worse than no colour coding at all. Gold
-// belongs to the calorie ring alone.
-const MACROS = [
-  { key: "protein", label: "Protein", color: "#38bdf8", kcal: 4 },
-  { key: "carbs", label: "Carbs", color: "#4ade80", kcal: 4 },
-  { key: "fats", label: "Fats", color: "#c084fc", kcal: 9 },
-] as const;
 
 /** Exactly the shape written to `nutrition_logs`, so what we save and what we
  *  hand back to the page cannot describe the row differently. */
@@ -383,24 +372,41 @@ function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietN
   const [calories, setCalories] = useState<string>(
     initial?.daily_calorie_target?.toString() ?? (targets ? String(targets.calories) : "")
   );
-  const [macros, setMacros] = useState<Record<string, string>>({
-    protein: initial?.macros?.protein?.toString() ?? "",
-    carbs: initial?.macros?.carbs?.toString() ?? "",
-    fats: initial?.macros?.fats?.toString() ?? "",
-  });
   const [water, setWater] = useState<number>(initial?.daily_water_intake_ml ?? 0);
-  const [eaten, setEaten] = useState<number>(initial?.calories_eaten ?? 0);
   /**
-   * Today's food, itemised. parseEntries tolerates a row written before 0072
-   * added the column — those days come back with an empty list and keep showing
-   * the totals already on the row, rather than failing to open.
+   * Today's food, itemised — and the ONLY record of what was eaten.
+   *
+   * A day written before 0072 added this column, or by the old quick-add
+   * buttons, carries totals and no list; entriesForDay brings those forward as
+   * one entry so the list is the truth from the first render rather than from
+   * the first tick.
    */
-  const [entries, setEntries] = useState<FoodEntry[]>(parseEntries((initial as { entries?: unknown } | null)?.entries));
+  const [entries, setEntries] = useState<FoodEntry[]>(() =>
+    entriesForDay((initial as { entries?: unknown } | null)?.entries, {
+      kcal: initial?.calories_eaten ?? 0,
+      protein: initial?.macros?.protein ?? 0,
+      carbs: initial?.macros?.carbs ?? 0,
+      fats: initial?.macros?.fats ?? 0,
+    })
+  );
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => { setSaved(false); }, [calories, macros, water, eaten]);
+  /**
+   * DERIVED, NOT STORED. `eaten` and `macros` used to be state of their own,
+   * set both by summing the list and by controls that wrote them directly — so
+   * the page held two answers to "what have you eaten today" and no rule for
+   * which won. Tapping +200 moved one of them; the next meal ticked recomputed
+   * from the other and the 200 vanished.
+   *
+   * Computing them here makes that disagreement unrepresentable. Every control
+   * on the page now changes the list, and the total follows.
+   */
+  const totals = logTotals(entries);
+  const eaten = totals.kcal;
+
+  useEffect(() => { setSaved(false); }, [calories, water, entries]);
 
   // macroKcal used to be here, feeding a second 4xl headline number that
   // competed with the calorie one. Both claimed to be "today", and they
@@ -483,38 +489,36 @@ function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietN
     void persist({ water: ml });
   }
 
+  /** Every change to today's food goes through here: set it, then save it. */
   function applyEntries(next: FoodEntry[]) {
     setEntries(next);
-    const t = logTotals(next);
-    setEaten(t.kcal);
-    const m = { protein: String(t.protein), carbs: String(t.carbs), fats: String(t.fats) };
-    setMacros(m);
-    void persist({ eaten: t.kcal, macros: m, entries: next });
+    void persist({ entries: next });
   }
 
   /**
    * Write today's row. Takes overrides because React state is not yet updated
-   * when a tap handler wants to persist what it just computed — reading `eaten`
-   * here would save the value from before the tap, which is the off-by-one-tap
-   * bug that makes autosave worse than no autosave.
+   * when a tap handler wants to persist what it just computed — reading
+   * `entries` here would save the list from before the tap, which is the
+   * off-by-one-tap bug that makes autosave worse than no autosave.
+   *
+   * The stored totals are summed from the list on the way out rather than
+   * passed in beside it. They are a convenience for the pages that read this row
+   * without wanting the itemisation (Home, Progress); making them a second
+   * parameter is what let a row be written claiming 1,338 calories against an
+   * empty list.
    */
-  async function persist(over?: { eaten?: number; macros?: Record<string, string>; water?: number; entries?: FoodEntry[] }) {
+  async function persist(over?: { water?: number; entries?: FoodEntry[] }) {
     setSaving(true);
     setError(null);
-    const e_ = over?.eaten ?? eaten;
-    const m_ = over?.macros ?? macros;
     const w_ = over?.water ?? water;
     const en_ = over?.entries ?? entries;
+    const t = logTotals(en_);
     const row = {
       user_id: userId,
       log_date: today,
       daily_calorie_target: calories ? Number(calories) : null,
-      calories_eaten: e_ || null,
-      macros: {
-        protein: Number(m_.protein) || 0,
-        carbs: Number(m_.carbs) || 0,
-        fats: Number(m_.fats) || 0,
-      },
+      calories_eaten: t.kcal || null,
+      macros: { protein: t.protein, carbs: t.carbs, fats: t.fats },
       daily_water_intake_ml: w_,
       entries: en_,
     };
@@ -590,11 +594,7 @@ function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietN
           <FuelRings
             eaten={eaten}
             targetKcal={targetKcal}
-            macros={{
-              protein: Number(macros.protein) || 0,
-              carbs: Number(macros.carbs) || 0,
-              fats: Number(macros.fats) || 0,
-            }}
+            macros={{ protein: totals.protein, carbs: totals.carbs, fats: totals.fats }}
             targets={targets}
           />
         ) : null}
@@ -637,31 +637,17 @@ function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietN
           </div>
         )}
 
-        {/* Quick-add: the fastest way to log a coffee and a banana without
-            describing them to anything.
-
-            Hidden until there are targets. These are calorie buttons whose only
-            label was the ring above them saying "kcal eaten" — with the ring
-            suppressed they became three bare numbers and an "edit" box floating
-            under a prompt about weight. They are also pointless in that state:
-            adding 200 towards a target that doesn't exist yet moves a bar that
-            isn't there. Water stays, because it carries its own label and its
-            own goal, neither of which depends on a weight. */}
-        <div className={`mt-5 flex-wrap items-center gap-2 ${targets ? "flex" : "hidden"}`}>
-          {[200, 400, 600].map((kc) => (
-            <button key={kc} onClick={() => setEaten((c) => c + kc)} className="btn-ghost flex-1 py-2 text-sm">+{kc}</button>
-          ))}
-          {/* `Number(e.target.value) || 0` meant backspace produced 0 and the
-              box redrew as "0" — the same trap as everywhere else. */}
-          <NumberInput
-            value={eaten || null}
-            onChange={(v) => setEaten(v ?? 0)}
-            min={0}
-            className="field w-20 text-center" placeholder="edit"
-            aria-label="Calories eaten today"
-          />
-          <button onClick={() => setEaten(0)} className="btn-ghost w-auto px-3 py-2 text-sm text-slate-400">Reset</button>
-        </div>
+        {/* Quick-add, hidden until there are targets. These are calorie buttons
+            whose only label is the ring above them saying "kcal eaten" — with
+            the ring suppressed they read as three bare numbers under a prompt
+            about weight, and they are pointless in that state anyway: adding
+            200 towards a target that doesn't exist yet moves a bar that isn't
+            there. Water stays, because it carries its own label and its own
+            goal, neither of which depends on a weight. */}
+        <QuickCalories
+          hidden={!targets}
+          onAdd={(kc) => applyEntries(addQuickCalories(entries, kc))}
+        />
 
         {/* Water rides along the bottom as a slim bar. It is one number and two
             buttons and never justified a panel of its own. */}
