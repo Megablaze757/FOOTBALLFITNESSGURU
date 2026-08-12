@@ -12,6 +12,7 @@ import { FeatureLock } from "@/components/FeatureLock";
 import { MealPlanner } from "@/components/MealPlanner";
 import { MealCheckIn } from "@/components/MealCheckIn";
 import { TodayFood } from "@/components/TodayFood";
+import { NumberInput } from "@/components/NumberInput";
 import { addEntry, logTotals, parseEntries, removeByRef, type FoodEntry } from "@/lib/food-log";
 import type { Macros } from "@/lib/meal-plan";
 import { Tabs, TabPanel } from "@/components/Tabs";
@@ -616,9 +617,12 @@ function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietN
           {[200, 400, 600].map((kc) => (
             <button key={kc} onClick={() => setEaten((c) => c + kc)} className="btn-ghost flex-1 py-2 text-sm">+{kc}</button>
           ))}
-          <input
-            type="number" inputMode="numeric" value={eaten || ""}
-            onChange={(e) => setEaten(Number(e.target.value) || 0)}
+          {/* `Number(e.target.value) || 0` meant backspace produced 0 and the
+              box redrew as "0" — the same trap as everywhere else. */}
+          <NumberInput
+            value={eaten || null}
+            onChange={(v) => setEaten(v ?? 0)}
+            min={0}
             className="field w-20 text-center" placeholder="edit"
             aria-label="Calories eaten today"
           />

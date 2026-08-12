@@ -1,6 +1,7 @@
 "use client";
 
 import type { TrainingDrill } from "@/lib/types";
+import { NumberInput } from "@/components/NumberInput";
 import type { SportId } from "@/lib/exercises";
 import { DrillPicker } from "@/components/DrillPicker";
 import { RUN_TYPES, ZONE_LIST, ZONES, runType, type RunTypeId, type ZoneId } from "@/lib/running";
@@ -79,11 +80,10 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all" 
       <div className="grid grid-cols-2 gap-3">
         <label className="block">
           <span className="field-label">Duration (min)</span>
-          <input
-            type="number" inputMode="numeric"
-            value={value.total_minutes ?? ""}
-            onChange={(e) => update({ total_minutes: e.target.value === "" ? null : Number(e.target.value) })}
-            placeholder="e.g. 75" className="field"
+          <NumberInput
+            value={value.total_minutes ?? null}
+            onChange={(v) => update({ total_minutes: v })}
+            min={0} placeholder="e.g. 75" className="field"
           />
         </label>
         <label className="block">
@@ -134,19 +134,19 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all" 
           <div className="grid grid-cols-2 gap-3">
             <label className="block">
               <span className="field-label">Distance (km)</span>
-              <input
-                type="number" inputMode="decimal" step="0.1" min={0} max={500}
-                value={value.distance_km ?? ""}
-                onChange={(e) => update({ distance_km: e.target.value === "" ? null : Number(e.target.value) })}
+              <NumberInput
+                decimal min={0} max={500}
+                value={value.distance_km ?? null}
+                onChange={(v) => update({ distance_km: v })}
                 placeholder="e.g. 8.5" className="field"
               />
             </label>
             <label className="block">
               <span className="field-label">Avg HR (optional)</span>
-              <input
-                type="number" inputMode="numeric" min={30} max={250}
-                value={value.avg_hr ?? ""}
-                onChange={(e) => update({ avg_hr: e.target.value === "" ? null : Number(e.target.value) })}
+              <NumberInput
+                min={30} max={250}
+                value={value.avg_hr ?? null}
+                onChange={(v) => update({ avg_hr: v })}
                 placeholder="off your watch" className="field"
               />
             </label>
@@ -184,10 +184,10 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all" 
       {sport === "running" && !value.run_type && (
         <label className="block">
           <span className="field-label">Distance (km)</span>
-          <input
-            type="number" inputMode="decimal" step="0.1" min={0} max={500}
-            value={value.distance_km ?? ""}
-            onChange={(e) => update({ distance_km: e.target.value === "" ? null : Number(e.target.value) })}
+          <NumberInput
+            decimal min={0} max={500}
+            value={value.distance_km ?? null}
+            onChange={(v) => update({ distance_km: v })}
             placeholder="e.g. 8.5" className="field"
           />
           <span className="mt-1 block text-xs text-slate-500">
@@ -199,10 +199,10 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all" 
       {sport === "rugby" && (
         <label className="block">
           <span className="field-label">Of that, contact minutes</span>
-          <input
-            type="number" inputMode="numeric" min={0} max={400}
-            value={value.contact_minutes ?? ""}
-            onChange={(e) => update({ contact_minutes: e.target.value === "" ? null : Number(e.target.value) })}
+          <NumberInput
+            min={0} max={400}
+            value={value.contact_minutes ?? null}
+            onChange={(v) => update({ contact_minutes: v })}
             placeholder="e.g. 20" className="field"
           />
           <span className="mt-1 block text-xs text-slate-500">
@@ -218,10 +218,15 @@ function NumField({ label, value, onChange, optional }: { label: string; value: 
   return (
     <label className="block">
       <span className="mb-1 block text-center text-[10px] uppercase tracking-wider text-slate-500">{label}</span>
-      <input
-        type="number" inputMode="numeric" min={0}
-        value={value}
-        onChange={(e) => onChange(e.target.value === "" ? "" : Number(e.target.value))}
+      {/* Sets, Reps and kg. This was bound straight to the number, so clearing
+          the box emitted "" and the Sets/Reps callers turned that into 0 with
+          `v || 0` — the field snapped back to "0" the instant you pressed
+          backspace and could not be emptied. Typing 12 meant overtyping a
+          selected 0, which on a phone is a long-press. See NumberInput. */}
+      <NumberInput
+        value={value === "" || value == null ? null : Number(value)}
+        onChange={(n) => onChange(n == null ? "" : n)}
+        min={0}
         placeholder={optional ? "–" : ""}
         className="field py-1.5 text-center"
       />
