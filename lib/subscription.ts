@@ -78,14 +78,27 @@ export type Capability =
   | "ai_challenges"   // personalised weekly objectives
   | "exercise_analytics"; // per-exercise progression, estimated 1RM, PR history
 
+/**
+ * WHAT FREE IS. The daily habit and what it shows you about yourself: check in,
+ * see your readiness, watch your own numbers move, and hold your place on the
+ * leaderboards. Nothing is generated for you and nothing is written for you.
+ *
+ * The coaching CONTENT moved out of it. The exercise library, the skill drills
+ * and the position guides used to be free on the reasoning that they earned the
+ * right to sell — but they are the product, not the advert for it, and giving
+ * away a full coaching library while charging for the plan that arranges it is
+ * the wrong way round.
+ *
+ * Leaderboards stay free deliberately. They cost nothing to run, they are worth
+ * more the more people are on them, and a leaderboard behind a paywall is a
+ * leaderboard with nobody on it.
+ */
 export const CAPABILITY_TIER: Record<Capability, Tier> = {
-  // Free is a real product: the daily habit, the whole coaching library, and
-  // your place on the leaderboards. That's what earns the right to sell.
   check_in: "bronze",
-  library: "bronze",
   leaderboards: "bronze",
 
   // Everything else is Pro. No second paid step to evaluate.
+  library: "silver",
   program: "silver",
   ai_chat: "silver",
   nutrition: "silver",
@@ -142,8 +155,7 @@ const FREE: TierPlan = {
   features: [
     "Daily check-in with the body pain map",
     "Readiness score, worked out on your device",
-    "Full exercise library and every skill drill",
-    "Position guides for your sport",
+    "Your progress: trends, history and personal records",
     "Leaderboards and rank progression",
   ],
 };
@@ -160,6 +172,7 @@ const PRO: TierPlan = {
     "Everything in Free",
     "Four-week training blocks — Base, Build, Peak, Deload",
     "Programs that obey your notes — “I don’t train legs” means no legs",
+    "The full exercise library, skill drills and position guides",
     "Ask the coach anything about your training",
     "Video form analysis — filmed on your phone, scored on your phone",
     "Injury planner: describe what hurts, get a plan built around it",
@@ -169,17 +182,28 @@ const PRO: TierPlan = {
 };
 
 /**
- * The unused tier. Nobody is on it — it existed as the £15 middle plan for a
- * few hours and was never sold to anyone. Kept in the list only so that if a
- * row somewhere still says "silver", it resolves to a paid plan with full
- * access rather than silently reading as free.
+ * The row value nobody should ever be shown.
+ *
+ * `silver` existed as a £15 middle plan for a few hours and was never sold. It
+ * survives only so a historic row saying "silver" resolves to a paid plan
+ * instead of silently reading as free — it is a DATA value, not a product.
+ *
+ * It used to present itself as one: named "Pro (legacy)", priced at £15, and
+ * carrying its own smaller video quota. So the handful of accounts holding that
+ * value were told, on their profile and on the video page, that they were on an
+ * inferior plan — with no way to leave it, because it is not for sale and their
+ * access is already identical to Pro. Being labelled legacy is a reason to
+ * churn, and it was describing something that isn't true.
+ *
+ * It answers to Pro's name, Pro's price and Pro's limits now. The id stays
+ * `silver` because that is what is written in the database.
  */
 const LEGACY_SILVER: TierPlan = {
   id: "silver",
-  name: "Pro (legacy)",
-  priceLabel: "£15/mo",
-  priceMonthly: 15,
-  tagline: "Everything in Pro.",
+  name: PRO.name,
+  priceLabel: PRO.priceLabel,
+  priceMonthly: PRO.priceMonthly,
+  tagline: PRO.tagline,
   paid: true,
   features: PRO.features,
 };
@@ -233,6 +257,13 @@ export function planFor(tier: Tier): TierPlan {
  */
 export const VIDEO_QUOTA: Record<Tier, number> = {
   gold: 40,
-  silver: 15,
-  bronze: 3,
+  // Pro is Pro. This was 15 — a quarter of the allowance, on a plan that grants
+  // identical access, shown to the athlete as "15 of this month's uploads on
+  // Pro (legacy)". See LEGACY_SILVER.
+  silver: 40,
+  // Video analysis IS Pro, so free gets none. Three was a taste of a paid
+  // feature that the paywall in front of it says you cannot have, which is the
+  // worst of both: it teaches free users the feature exists, lets them build a
+  // habit on it, and then takes it away on the fourth clip.
+  bronze: 0,
 };
