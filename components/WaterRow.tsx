@@ -102,7 +102,7 @@ export function WaterRow({ ml, goalMl, onChange }: {
             onClick={() => onChange(ml - step)}
             disabled={!step || ml === 0}
             aria-label={`Remove ${step} ml`}
-            className="chip w-11 shrink-0 justify-center text-base text-sky-300 hover:bg-white/[0.08] disabled:opacity-30 disabled:hover:bg-white/[0.05]"
+            className="chip w-11 shrink-0 justify-center text-base text-sky-300 hover:bg-white/[0.08] disabled:opacity-40 disabled:hover:bg-white/[0.05]"
           >
             −
           </button>
@@ -125,7 +125,7 @@ export function WaterRow({ ml, goalMl, onChange }: {
             onClick={() => onChange(ml + step)}
             disabled={!step}
             aria-label={`Add ${step} ml`}
-            className="chip w-11 shrink-0 justify-center text-base text-sky-300 hover:bg-white/[0.08] disabled:opacity-30 disabled:hover:bg-white/[0.05]"
+            className="chip w-11 shrink-0 justify-center text-base text-sky-300 hover:bg-white/[0.08] disabled:opacity-40 disabled:hover:bg-white/[0.05]"
           >
             +
           </button>
@@ -136,7 +136,7 @@ export function WaterRow({ ml, goalMl, onChange }: {
             type="button"
             onClick={() => onChange(0)}
             disabled={ml === 0}
-            className="tap-target ml-auto shrink-0 text-xs text-slate-500 transition hover:text-slate-200 disabled:opacity-30 disabled:hover:text-slate-500"
+            className="tap-target ml-auto shrink-0 text-xs text-slate-500 transition hover:text-slate-200 disabled:opacity-40 disabled:hover:text-slate-500"
           >
             Clear
           </button>

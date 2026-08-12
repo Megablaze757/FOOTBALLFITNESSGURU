@@ -626,6 +626,21 @@ that was already over-full before any of this. The bar is 69px there now.
 Water totals clamp at empty and round, which they never had to before, because
 until now the number could only go up.
 
+**Measured, on the real page, before and after.** `scripts/ui-audit.mjs`'s stubs
+were extended with an active subscription — without one `/nutrition/` renders the
+paywall, so every previous clean run on that route had measured a screen with no
+tracker on it. Tapping +250 with a MutationObserver watching:
+
+| | skeleton frames | tracker unmounted | readout after +250 |
+|---|---|---|---|
+| before | 1 | yes | **1.5L — the tap was lost** |
+| after | 0 | no | 1.8L |
+
+Remove-500 and a typed +750 land at 1.3L and 2.0L, the cached row carries the
+write (so a tab switch reads the truth, which is the only thing the refetch was
+ever for), all four controls in the panel measure 44×44, and axe reports no
+violations with it open.
+
 ---
 
 ## 2026-08-08 (handover) — Programs that progress, meals that agree with each other, and four things only a human can do
