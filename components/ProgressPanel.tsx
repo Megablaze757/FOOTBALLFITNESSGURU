@@ -1,5 +1,6 @@
 "use client";
 
+import { daysAgoLocal } from "@/lib/day";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useAsync } from "@/lib/use-async";
@@ -26,8 +27,11 @@ const EXERCISE_WINDOW_DAYS = 90;
  * doing", with one linking to the other, was one page with a door in it.
  */
 export function ProgressPanel({ userId }: { userId: string }) {
-  const since = new Date(Date.now() - WINDOW_DAYS * 86400_000).toISOString().slice(0, 10);
-  const sinceLong = new Date(Date.now() - EXERCISE_WINDOW_DAYS * 86400_000).toISOString().slice(0, 10);
+  // Local days. These are compared against `check_in_date` and `log_date`,
+  // which are the athlete's local day — a UTC cutoff pulls in or drops a day
+  // for anyone not on UTC. See lib/day.ts.
+  const since = daysAgoLocal(WINDOW_DAYS);
+  const sinceLong = daysAgoLocal(EXERCISE_WINDOW_DAYS);
 
   const { data, loading } = useAsync(async () => {
     const supabase = createClient();

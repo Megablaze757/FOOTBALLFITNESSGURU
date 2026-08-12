@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { toLocalDay, todayLocal, daysAgoLocal } from "./day";
+import { execFileSync } from "node:child_process";
+import { toLocalDay, todayLocal, daysAgoLocal, lastNDaysLocal } from "./day";
 
 /**
  * These tests pin the bug that made check-ins disappear.
@@ -93,4 +94,70 @@ test("millisecond arithmetic is what we are avoiding", () => {
   // In a non-DST zone these agree; the point is only that `correct` is right.
   assert.equal(correct, toLocalDay(new Date(2026, 2, 23, 12, 0, 0)));
   assert.ok(typeof naive === "string");
+});
+
+/**
+ * THE LAST SEVEN DAYS, IN THE ATHLETE'S TIMEZONE.
+ *
+ * Reported as "the last 7 days thing highlights the wrong day". Home built the
+ * strip with `Date.now() - n * 86400_000` and read it back with toISOString, so
+ * each dot was keyed on the UTC day while its weekday letter came from
+ * toLocaleDateString — the local one. The two disagree for everyone east of the
+ * meridian in the morning and everyone west of it in the evening, so the dots
+ * were looked up under the wrong dates and the cell marked "today" was not.
+ *
+ * RUN IN REAL TIMEZONES, IN CHILD PROCESSES. This is the only way the test can
+ * bite: CI runs in UTC, where local and UTC agree and the bug is invisible. TZ
+ * has to be set before the process starts, so a subprocess is not ceremony here
+ * — it is the difference between a test and a decoration.
+ */
+test("the last seven days are the athlete's days, in any timezone", () => {
+  const script = `
+    const { lastNDaysLocal, toLocalDay, todayLocal } = require("./lib/day.ts");
+    const at = (iso) => new Date(iso);
+    const out = [];
+    // 23:30 local and 00:30 local are where the local date and the UTC date
+    // most reliably disagree — the exact hours this bug was reported from.
+    for (const moment of [at("2026-08-12T11:30:00Z"), at("2026-08-12T23:30:00Z"), at("2026-03-29T01:30:00Z")]) {
+      const days = lastNDaysLocal(7, moment);
+      out.push({
+        last: days[days.length - 1].iso,
+        expected: toLocalDay(moment),
+        count: days.length,
+        distinct: new Set(days.map((d) => d.iso)).size,
+        // The Date handed back must describe the same day as the key.
+        aligned: days.every((d) => toLocalDay(d.date) === d.iso),
+      });
+    }
+    console.log(JSON.stringify(out));
+  `;
+  for (const tz of ["Pacific/Auckland", "America/Los_Angeles", "Europe/London", "UTC"]) {
+    const raw = execFileSync(process.execPath, ["--import", "tsx", "-e", script], {
+      env: { ...process.env, TZ: tz },
+      encoding: "utf8",
+      cwd: new URL("..", import.meta.url).pathname,
+    });
+    const results = JSON.parse(raw.trim().split("\n").pop()!);
+    for (const r of results) {
+      assert.equal(r.last, r.expected, `${tz}: the strip ends on ${r.last}, but today there is ${r.expected}`);
+      assert.equal(r.count, 7, `${tz}: got ${r.count} days`);
+      assert.equal(r.distinct, 7, `${tz}: only ${r.distinct} distinct days — a DST day was counted twice`);
+      assert.ok(r.aligned, `${tz}: a day's label does not match the date it is keyed on`);
+    }
+  }
+});
+
+/**
+ * A DST transition day is 23 or 25 hours long, so millisecond arithmetic lands
+ * on the wrong calendar date twice a year. 2026-03-29 is when the UK springs
+ * forward; the run above includes it, and this pins the underlying helper.
+ */
+test("a clock change does not repeat or skip a day", () => {
+  const days = lastNDaysLocal(7, new Date("2026-03-30T09:00:00Z"));
+  assert.equal(new Set(days.map((d) => d.iso)).size, 7);
+  for (let i = 1; i < days.length; i++) {
+    const prev = new Date(`${days[i - 1].iso}T00:00:00Z`).getTime();
+    const cur = new Date(`${days[i].iso}T00:00:00Z`).getTime();
+    assert.equal(cur - prev, 86_400_000, `${days[i - 1].iso} -> ${days[i].iso} is not one calendar day`);
+  }
 });

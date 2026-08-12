@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { todayLocal } from "@/lib/day";
 
 /**
  * The last seven days, as seven dots.
@@ -70,8 +71,21 @@ export function WeekStrip({ days, sessions, minutes, accent, complete }: {
       </div>
 
       <ol className="mt-4 flex items-end justify-between gap-1">
-        {days.map((d, i) => {
-          const isToday = i === days.length - 1;
+        {days.map((d) => {
+          /**
+           * ASK THE DATE, DON'T COUNT THE CELLS.
+           *
+           * This was `i === days.length - 1` — the last dot is today by
+           * construction. It is not an unreasonable assumption and it was
+           * wrong in exactly the way that matters: the caller built those
+           * dates in UTC while labelling them in local time, so the final
+           * cell was frequently yesterday or tomorrow, and the strip
+           * confidently highlighted it anyway. Positional logic cannot notice
+           * that; a date comparison can, and it also stops the component
+           * silently misreporting if a future caller passes a window that
+           * does not end today.
+           */
+          const isToday = d.iso === todayLocal();
           return (
             <li key={d.iso} className="flex flex-1 flex-col items-center gap-1.5">
               {/* Two marks, not one: checking in and training are different

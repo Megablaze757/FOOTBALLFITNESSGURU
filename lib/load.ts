@@ -4,7 +4,7 @@
 // =============================================================================
 
 import type { DailyCheckIn, NutritionLog, TrainingLog } from "./types";
-import { todayLocal } from "./day";
+import { todayLocal, daysAgoLocal } from "./day";
 
 /**
  * How much harder a minute of contact is than a minute of running.
@@ -81,11 +81,18 @@ function dailyLoadMap(logs: TrainingLog[]): Map<string, number> {
   return m;
 }
 
+/**
+ * The map is keyed by `log_date`, which is the athlete's LOCAL day (see
+ * lib/day.ts). Walking the window with `getTime() - i * 86400_000` and reading
+ * it back with toISOString produced UTC days, so for anyone whose local date
+ * differs from UTC's the whole window was offset by one — the acute:chronic
+ * ratio was computed over the wrong seven days, in an engine whose entire job
+ * is flagging load spikes.
+ */
 function windowAvg(map: Map<string, number>, asOf: Date, days: number): number {
   let total = 0;
   for (let i = 0; i < days; i++) {
-    const d = new Date(asOf.getTime() - i * 86400_000).toISOString().slice(0, 10);
-    total += map.get(d) ?? 0;
+    total += map.get(daysAgoLocal(i, asOf)) ?? 0;
   }
   return total / days;
 }
@@ -146,8 +153,9 @@ export function weeklyReport(
   nutrition: NutritionLog[],
   asOf = new Date()
 ): WeeklyReport {
-  const cutoff = new Date(asOf.getTime() - 7 * 86400_000).toISOString().slice(0, 10);
-  const prevCutoff = new Date(asOf.getTime() - 14 * 86400_000).toISOString().slice(0, 10);
+  // Local days, because every *_date column they are compared against is one.
+  const cutoff = daysAgoLocal(7, asOf);
+  const prevCutoff = daysAgoLocal(14, asOf);
 
   const weekCheck = checkIns.filter((c) => c.check_in_date > cutoff);
   const weekTrain = training.filter((t) => t.log_date > cutoff);

@@ -19,7 +19,7 @@ import { WeekStrip } from "@/components/WeekStrip";
 import { Notifications } from "@/components/Notifications";
 import type { CheckInInput, DailyInsight, TrainingLog } from "@/lib/types";
 import type { ProgramPlan } from "@/lib/engine";
-import { daysAgoLocal, todayLocal } from "@/lib/day";
+import { daysAgoLocal, todayLocal, lastNDaysLocal } from "@/lib/day";
 
 export default function HomePage() {
   const user = useCurrentUser();
@@ -161,18 +161,22 @@ export default function HomePage() {
      */
     const checkSet = new Set(checkDates);
     const trainSet = new Set(trainRows.map((r) => r.log_date));
-    const days = Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(Date.now() - (6 - i) * 86400_000);
-      const iso = d.toISOString().slice(0, 10);
-      return {
-        iso,
-        // Single letter, in the athlete's own locale rather than a hard-coded
-        // English array.
-        letter: d.toLocaleDateString(undefined, { weekday: "narrow" }),
-        checkedIn: checkSet.has(iso),
-        trained: trainSet.has(iso),
-      };
-    });
+    /**
+     * lastNDaysLocal, not `Date.now() - n * 86400_000` + toISOString.
+     *
+     * That combination keyed each dot on the UTC day while labelling it with
+     * the LOCAL weekday, so the strip looked up the wrong dates and marked the
+     * wrong cell as today for anyone whose local date differs from UTC's. See
+     * lib/day.ts, which exists for precisely this and now owns the arithmetic.
+     */
+    const days = lastNDaysLocal(7).map(({ iso, date }) => ({
+      iso,
+      // Single letter, in the athlete's own locale rather than a hard-coded
+      // English array — and off the same local date the dot is keyed on.
+      letter: date.toLocaleDateString(undefined, { weekday: "narrow" }),
+      checkedIn: checkSet.has(iso),
+      trained: trainSet.has(iso),
+    }));
     const week = {
       sessions: trainRows.filter((r) => r.log_date >= since7).length,
       minutes: trainRows.filter((r) => r.log_date >= since7).reduce((n, r) => n + (r.total_minutes ?? 0), 0),

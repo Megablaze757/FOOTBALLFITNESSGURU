@@ -57,3 +57,38 @@ export function daysAgoLocal(n: number, from: Date = new Date()): string {
   d.setDate(d.getDate() - n);
   return toLocalDay(d);
 }
+
+/**
+ * The last `n` local calendar days, oldest first, ending today.
+ *
+ * WHY THIS IS HERE AND NOT INLINE. It was inline, on Home, and it had both of
+ * the bugs this module exists to prevent:
+ *
+ *   const d = new Date(Date.now() - (6 - i) * 86400_000);
+ *   const iso = d.toISOString().slice(0, 10);              // UTC
+ *   letter: d.toLocaleDateString(undefined, { weekday: "narrow" });  // local
+ *
+ * The key was the UTC day and the label was the LOCAL day, so for anyone whose
+ * local date differs from UTC's — everyone east of the meridian in the morning,
+ * everyone west of it in the evening — the seven dots were looked up under the
+ * wrong dates and the cell marked "today" was not today. Reported as "the last
+ * 7 days thing highlights the wrong day", and that is exactly what it did.
+ *
+ * The millisecond arithmetic is the second bug, and `daysAgoLocal` above
+ * already spells it out: a DST-transition day is 23 or 25 hours long, so
+ * subtracting 86,400,000ms per day lands on the wrong calendar date twice a
+ * year — a strip that shows the same weekday twice, or skips one.
+ *
+ * Returns the Date too, at LOCAL midnight, so a caller formatting a weekday
+ * name is formatting the same day it just keyed on rather than a near-miss.
+ */
+export function lastNDaysLocal(n: number, from: Date = new Date()): { iso: string; date: Date }[] {
+  return Array.from({ length: Math.max(0, n) }, (_, i) => {
+    const d = new Date(from.getTime());
+    // setDate counts calendar days; setHours(0,0,0,0) puts it at local midnight
+    // so toLocaleDateString cannot be pushed over a boundary by the time of day.
+    d.setDate(d.getDate() - (n - 1 - i));
+    d.setHours(0, 0, 0, 0);
+    return { iso: toLocalDay(d), date: d };
+  });
+}
