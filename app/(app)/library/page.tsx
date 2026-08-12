@@ -4,6 +4,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Icon, type IconName } from "@/components/Icon";
 import { useCurrentUser } from "@/lib/auth";
+import { useTier } from "@/lib/use-tier";
+import { can } from "@/lib/subscription";
+import { FeatureLock } from "@/components/FeatureLock";
 import { EXERCISES, EXERCISE_CATEGORIES, SPORTS, DIFFICULTIES, EQUIPMENT_BUCKETS, getExercisesForSport, demoImplement, rowToExercise, exerciseEquip, withinLevel, type Exercise, type ExerciseCategory, type SportId, type Difficulty } from "@/lib/exercises";
 import { ExerciseDemo } from "@/components/ExerciseDemo";
 import { ExerciseModal } from "@/components/ExerciseDetail";
@@ -36,6 +39,7 @@ const DIFF_LABEL: Record<Difficulty, string> = { easy: "Beginner", medium: "Inte
 
 export default function LibraryPage() {
   const user = useCurrentUser();
+  const { tier, loading: tierLoading } = useTier();
   const [tab, setTab] = useState<(typeof LIBRARY_TABS)[number]["id"]>("moves");
   const [sport, setSport] = useState<SportId | "all">("all");
   const [cat, setCat] = useState<ExerciseCategory | "All">("All");
@@ -131,16 +135,54 @@ export default function LibraryPage() {
   // filter being applied and shouldn't be counted as one.
   const activeFilters = (level !== "advanced" ? 1 : 0) + (equip !== "all" ? 1 : 0) + (cat !== "All" ? 1 : 0);
 
+  const header = (
+    <header>
+      <h1 className="text-3xl font-extrabold tracking-tight">Library</h1>
+      <p className="mt-1 text-sm text-slate-400">
+        {tab === "moves"
+          ? `Look up any movement — how to do it, what it works, and when to use it. ${EXERCISES.length} in total.`
+          : `Every recipe the meal planner can serve — method, timings and macros. ${MEALS.length} in total.`}
+      </p>
+    </header>
+  );
+
+  /**
+   * THE LIBRARY IS THE COACHING CONTENT, so it is the paid product.
+   *
+   * It was free on the reasoning that it earned the right to sell — but this is
+   * several hundred movements, every skill drill, the position guides and now
+   * every recipe the planner can serve. Giving that away while charging for the
+   * plan that arranges it is the wrong way round: the plan is a few pages of
+   * output, and this is the thing it is made of.
+   *
+   * The lock is shown, not hidden. Someone who lands here from a program or a
+   * search should see what is behind it and what it costs, rather than a page
+   * that quietly isn't in the nav.
+   */
+  if (tierLoading) {
+    return (
+      <div className="animate-fade-up space-y-4">
+        {header}
+        <div className="card h-64 animate-pulse" />
+      </div>
+    );
+  }
+  if (!can(tier, "library")) {
+    return (
+      <div className="animate-fade-up space-y-4">
+        {header}
+        <FeatureLock
+          capability="library"
+          title="The library is part of Pro"
+          blurb={`Every movement in the catalogue with how to do it, what it works and when to use it — plus every skill drill, the position guides for your sport, and all ${MEALS.length} recipes the meal planner can serve.`}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="animate-fade-up space-y-4">
-      <header>
-        <h1 className="text-3xl font-extrabold tracking-tight">Library</h1>
-        <p className="mt-1 text-sm text-slate-400">
-          {tab === "moves"
-            ? `Look up any movement — how to do it, what it works, and when to use it. ${EXERCISES.length} in total.`
-            : `Every recipe the meal planner can serve — method, timings and macros. ${MEALS.length} in total.`}
-        </p>
-      </header>
+      {header}
 
       <Tabs tabs={LIBRARY_TABS} active={tab} onChange={setTab} label="Library sections" />
 

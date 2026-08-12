@@ -4,6 +4,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/lib/auth";
 import { useAsync } from "@/lib/use-async";
+import { useTier } from "@/lib/use-tier";
+import { can } from "@/lib/subscription";
+import { FeatureLock } from "@/components/FeatureLock";
 import {
   relevantInjuryProtocols, RECOVERY_INJURY, REHAB_DISCLAIMER,
   protocolsForAreas, matchInjuryText, baseAreaOf,
@@ -46,6 +49,7 @@ const MOBILITY_IDS = [
 
 export default function InjuryPage() {
   const user = useCurrentUser();
+  const { tier, loading: tierLoading } = useTier();
   const [open, setOpen] = useState<Exercise | null>(null);
   const [hurt, setHurt] = useState<Record<string, number>>({});
   const [desc, setDesc] = useState("");
@@ -106,7 +110,7 @@ export default function InjuryPage() {
   );
 
   // Title first, so a link that lands here says where you are while it loads.
-  if (loading || !data) {
+  if (loading || tierLoading || !data) {
     return (
       <div className="mx-auto max-w-3xl space-y-6">
         {header}
@@ -124,6 +128,30 @@ export default function InjuryPage() {
           </div>
           <div className="mt-5 h-11 animate-pulse rounded-2xl bg-white/[0.06]" />
         </div>
+      </div>
+    );
+  }
+
+  /**
+   * `injury_plan` was declared in CAPABILITY_TIER and checked nowhere.
+   *
+   * The staged loading plan, the rehab protocols behind it and the matching of
+   * a written description to a protocol are the paid product — this is the page
+   * the capability was named for, and it was open to everyone.
+   *
+   * Free keeps the pain map where it has always been: on the daily check-in.
+   * Saying where it hurts is part of checking in, and locking that would break
+   * the one thing free is FOR. What is paid is the plan that comes back.
+   */
+  if (!can(tier, "injury_plan")) {
+    return (
+      <div className="mx-auto max-w-3xl space-y-6">
+        {header}
+        <FeatureLock
+          capability="injury_plan"
+          title="The injury planner is part of Pro"
+          blurb="Tell it where it hurts and get a staged plan that loads the area back to full — with the rehab protocol behind every stage, and your training built around it rather than paused. You can still log pain on your daily check-in."
+        />
       </div>
     );
   }

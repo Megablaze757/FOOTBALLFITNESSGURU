@@ -7,7 +7,7 @@ import { MOVEMENTS, type MovementType } from "@/lib/movement";
 import { sportTerms } from "@/lib/sport-terms";
 import { MAX_CLIP_SECONDS } from "@/components/InBrowserAnalysis";
 import { todayLocal } from "@/lib/day";
-import { VIDEO_QUOTA, planFor } from "@/lib/subscription";
+import { VIDEO_QUOTA, PAID_TIER, planFor } from "@/lib/subscription";
 import type { Tier } from "@/lib/types";
 
 // Must match the bucket's file_size_limit in migration 0036 — this copy exists
@@ -73,8 +73,9 @@ export function VideoUploader({ sport, onUploaded }: { sport?: string; onUploade
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<{ url: string; seconds: number } | null>(null);
   const [done, setDone] = useState(false);
-  // Turns the error into an upgrade route rather than a dead end.
-  const [atCap, setAtCap] = useState(false);
+  // Turns the error into an upgrade route rather than a dead end. "locked" and
+  // "used up" are different sentences: one is a price, the other is a wait.
+  const [atCap, setAtCap] = useState<null | "locked" | "used-up">(null);
   const thumbFor = useRef<File | null>(null);
   // Held so the label's hidden input can be reached if we ever need to open the
   // picker programmatically. The tiles deliberately do NOT do that any more —
@@ -130,8 +131,9 @@ export function VideoUploader({ sport, onUploaded }: { sport?: string; onUploade
      * THE MONTHLY CAP, CHECKED BEFORE THE BYTES MOVE.
      *
      * `videos: insert own` (migration 0036) counts this month's rows inside the
-     * RLS policy — 3 on free, 15 on Silver, 40 on Gold. That is the right place
-     * to enforce it, because a client-side check only stops honest users.
+     * RLS policy, against `video_quota()` — 40 on Pro and 0 on free, since
+     * video analysis is a paid feature (0073). That is the right place to
+     * enforce it, because a client-side check only stops honest users.
      *
      * But the ORDER here was wrong, and it is why "upload not working" had no
      * useful symptom. The file went to storage first and the row second, so
@@ -152,13 +154,31 @@ export function VideoUploader({ sport, onUploaded }: { sport?: string; onUploade
     ]);
     const tier: Tier = subRow?.status === "active" && subRow.tier ? subRow.tier : "bronze";
     const quota = VIDEO_QUOTA[tier];
+    /**
+     * A QUOTA OF ZERO IS NOT A QUOTA, IT IS A PAYWALL, and it has to say so.
+     *
+     * Free used to get three clips and now gets none, which sends it down this
+     * branch — where the copy read "you've used all 0 of this month's uploads",
+     * a sentence that is true, absurd, and tells someone who has never uploaded
+     * anything that they are out of something. The two states need different
+     * words: "you've run out" is a wait, "this is Pro" is a price.
+     */
+    if (quota === 0) {
+      setError(
+        `Video analysis is part of ${planFor(PAID_TIER).name}. Film a lift on your phone and ` +
+        `it's scored on your phone — tempo, depth, bar path — with the drills to fix what it finds.`
+      );
+      setAtCap("locked");
+      setBusy(false);
+      return;
+    }
     if ((usedThisMonth ?? 0) >= quota) {
       setError(
         `You've used all ${quota} of this month's uploads on ${planFor(tier).name}. ` +
-        `The cap resets on the 1st — or a higher plan lifts it. Clips you've already ` +
-        `uploaded still analyse as many times as you like.`
+        `The cap resets on the 1st. Clips you've already uploaded still analyse as ` +
+        `many times as you like.`
       );
-      setAtCap(true);
+      setAtCap("used-up");
       setBusy(false);
       return;
     }
@@ -228,10 +248,14 @@ export function VideoUploader({ sport, onUploaded }: { sport?: string; onUploade
       // a documented limit. The pre-flight count above catches this first
       // almost always; this is the race and the direct-API case.
       const isQuota = /row-level security|violates.*policy/i.test(rowErr.message);
-      if (isQuota) setAtCap(true);
+      // Which sentence depends on whether they have an allowance at all — a
+      // free account reaching this path was never near a limit, it has none.
+      if (isQuota) setAtCap(quota === 0 ? "locked" : "used-up");
       setError(
         isQuota
-          ? "That's this month's upload limit reached. It resets on the 1st, and a higher plan lifts it."
+          ? quota === 0
+            ? `Video analysis is part of ${planFor(PAID_TIER).name}.`
+            : "That's this month's upload limit reached. It resets on the 1st."
           : `Upload failed: ${rowErr.message}`
       );
       setBusy(false);
@@ -384,10 +408,12 @@ export function VideoUploader({ sport, onUploaded }: { sport?: string; onUploade
       {error && (
         atCap
           ? <div className="rounded-xl border border-amber-400/25 bg-amber-400/[0.06] p-3">
-              <p className="text-sm font-bold text-amber-300">Monthly upload limit reached</p>
+              <p className="text-sm font-bold text-amber-300">
+                {atCap === "locked" ? "Video analysis is a Pro feature" : "Monthly upload limit reached"}
+              </p>
               <p className="mt-1 text-xs leading-relaxed text-slate-400">{error}</p>
               <Link href="/pricing" className="chip-option chip-option-sm mt-2 border-pitch-400/40 text-pitch-400">
-                See plans
+                {atCap === "locked" ? `See ${planFor(PAID_TIER).name}` : "See plans"}
               </Link>
             </div>
           : <p className="text-sm text-readiness-red">{error}</p>

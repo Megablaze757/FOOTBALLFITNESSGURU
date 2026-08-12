@@ -6,6 +6,9 @@ import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/lib/auth";
 import { useAsync } from "@/lib/use-async";
 import { VideoUploader } from "@/components/VideoUploader";
+import { FeatureLock } from "@/components/FeatureLock";
+import { useTier } from "@/lib/use-tier";
+import { can } from "@/lib/subscription";
 import { FormProgress, type Clip } from "@/components/FormProgress";
 import { MOVEMENTS } from "@/lib/movement";
 import type { Video, VideoStatus, VideoAnalysis } from "@/lib/types";
@@ -75,6 +78,7 @@ function DeleteVideo({ video, onDeleted }: { video: Video; onDeleted: () => void
 
 export default function TrainPage() {
   const user = useCurrentUser();
+  const { tier, loading: tierLoading } = useTier();
 
   const { data, loading, reload } = useAsync(async () => {
     const supabase = createClient();
@@ -109,7 +113,22 @@ export default function TrainPage() {
         </p>
       </header>
 
-      <VideoUploader sport={data?.sport} onUploaded={reload} />
+      {/* THE PAYWALL BEFORE THE FORM, not after the upload.
+          Video analysis is Pro, and free's quota is zero — so a free athlete
+          could still pick a file, name it, choose a movement and press upload,
+          and only then be told. The clips they already have stay listed below
+          and still play; what is gated is adding another. */}
+      {tierLoading ? (
+        <div className="card h-40 animate-pulse" />
+      ) : can(tier, "video_analysis") ? (
+        <VideoUploader sport={data?.sport} onUploaded={reload} />
+      ) : (
+        <FeatureLock
+          capability="video_analysis"
+          title="Video analysis is part of Pro"
+          blurb="Film a couple of reps on your phone and get them read frame by frame — tempo, depth, bar path, knee travel — with the drills for whatever it finds. The clip never leaves your device; the analysis runs on it."
+        />
+      )}
 
       {clips.length > 0 && <FormProgress clips={clips} />}
 

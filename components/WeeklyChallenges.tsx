@@ -7,6 +7,9 @@ import {
   type Challenge, type WeekActivity,
 } from "@/lib/challenges";
 import type { ActivityStats } from "@/lib/gamification";
+import { can } from "@/lib/subscription";
+import { useTier } from "@/lib/use-tier";
+import { UpgradeNote } from "@/components/FeatureLock";
 
 interface Props {
   userId: string;
@@ -35,8 +38,25 @@ function weekKey(userId: string): string {
 export function WeeklyChallenges({ userId, stats, week, sport, goal }: Props) {
   const [challenges, setChallenges] = useState<Challenge[]>([]);
   const [source, setSource] = useState<"ai" | "local">("local");
+  /**
+   * THIS CARD LIVES ON A FREE PAGE AND WAS CALLING A MODEL.
+   *
+   * Rewards is free, and mounting it fired `generate-challenges` for everyone —
+   * an inference a week per free athlete, for a capability (`ai_challenges`)
+   * that was declared paid and checked nowhere. The Edge Function's own gate
+   * refuses it, so what free accounts actually got was a wasted round trip and
+   * the local set anyway.
+   *
+   * DEGRADES, does not disappear. `localChallenges` picks the same objectives
+   * from the same fixed vocabulary on the device, so a free athlete still gets
+   * three things to aim at this week; what Pro buys is having them written for
+   * the way THEY train rather than chosen from a table.
+   */
+  const { tier, loading: tierLoading } = useTier();
+  const generated = can(tier, "ai_challenges");
 
   useEffect(() => {
+    if (tierLoading) return;
     const key = weekKey(userId);
     const cached = localStorage.getItem(key);
     if (cached) {
@@ -54,6 +74,11 @@ export function WeeklyChallenges({ userId, stats, week, sport, goal }: Props) {
     // in place if the AI answers.
     const fallback = localChallenges(stats, week);
     setChallenges(fallback);
+
+    if (!generated) {
+      localStorage.setItem(key, JSON.stringify({ list: fallback, src: "local" }));
+      return;
+    }
 
     let active = true;
     invokeAI<{ challenges?: unknown }>("generate-challenges", { activity: week, sport, goal })
@@ -75,7 +100,7 @@ export function WeeklyChallenges({ userId, stats, week, sport, goal }: Props) {
     return () => { active = false; };
     // Generated once per week — deliberately not re-run as activity changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId]);
+  }, [userId, tierLoading, generated]);
 
   if (!challenges.length) return null;
   const progress = evaluateChallenges(challenges, week);
@@ -91,6 +116,15 @@ export function WeeklyChallenges({ userId, stats, week, sport, goal }: Props) {
         {source === "ai" ? "Picked for you based on what you've been skipping." : "Aimed at whatever you've been skipping."}
         {" "}Resets Monday.
       </p>
+
+      {/* Offered once, under the card, not sold over the top of it. These are
+          still three real objectives and they still work — the note says what
+          the paid version does differently, and nothing here is disabled. */}
+      {!generated && (
+        <UpgradeNote capability="ai_challenges">
+          These are picked from a table. Pro writes them for the way you actually train.
+        </UpgradeNote>
+      )}
 
       <ul className="space-y-2">
         {progress.map(({ challenge: c, current, pct, complete }) => (
