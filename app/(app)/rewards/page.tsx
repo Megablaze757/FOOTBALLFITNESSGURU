@@ -18,6 +18,11 @@ import { Leaderboards } from "@/components/Leaderboards";
 import { RankLadder } from "@/components/RankLadder";
 import { RankBadge } from "@/components/RankBadge";
 import { Icon } from "@/components/Icon";
+import { AchievementDetail } from "@/components/AchievementDetail";
+import {
+  recordUnlocks, fetchRarity, MIN_SAMPLE, type RarityMap,
+} from "@/lib/achievement-rarity";
+import type { Achievement } from "@/lib/gamification";
 import { daysAgoLocal, todayLocal } from "@/lib/day";
 
 export default function RewardsPage() {
@@ -90,6 +95,44 @@ export default function RewardsPage() {
     };
     return { stats, state, week };
   }, [user.id], `rewards:${user.id}`);
+
+  /**
+   * Rarity, and the write that makes it possible.
+   *
+   * Achievements are derived in the browser, so an unlock exists nowhere until
+   * something records it. This posts the WHOLE unlocked set rather than just
+   * what changed: when this shipped every athlete already had badges that had
+   * never been written down, and a record-on-transition hook would only ever
+   * have caught their next one. The upsert ignores duplicates, so after the
+   * first visit it is a no-op.
+   *
+   * Fire-and-forget on both halves. A rewards page that fails to render because
+   * a decorative statistic could not be fetched would be a far worse bug than
+   * the missing statistic — so `rarity` simply stays empty and the card says
+   * there isn't enough data yet.
+   */
+  const [rarity, setRarity] = useState<RarityMap>({});
+  const [sampleSize, setSampleSize] = useState(0);
+  const [openBadge, setOpenBadge] = useState<Achievement | null>(null);
+  useEffect(() => {
+    if (!data) return;
+    let live = true;
+    const supabase = createClient();
+    const ids = evaluateAchievements(data.stats, levelFor(computeXp(data.stats)).level)
+      .unlocked.map((a) => a.id);
+    void recordUnlocks(supabase, user.id, ids)
+      .then(() => fetchRarity(supabase))
+      .then((map) => {
+        if (!live) return;
+        setRarity(map);
+        // The denominator the RPC divided by, recovered from the widest badge:
+        // holders / (pct/100). "First step" is unlocked by everyone who has
+        // anything, so the maximum is the population.
+        const n = Math.max(0, ...Object.values(map).map((r) => (r.pct > 0 ? Math.round(r.holders / (r.pct / 100)) : 0)));
+        setSampleSize(n);
+      });
+    return () => { live = false; };
+  }, [data, user.id]);
 
   // Detect crossing a level threshold since the last visit → celebrate.
   const [leveledUpTo, setLeveledUpTo] = useState<number | null>(null);
@@ -211,7 +254,18 @@ export default function RewardsPage() {
                  stays legible in daylight. These are the badges telling a new
                  athlete what to aim for, so they are the ones most worth being
                  able to read. */
-              <div key={a.id} className="card flex items-center gap-3 p-3">
+              /* A BUTTON, because it does something now. The tile carried a
+                 name and one line and nothing else — a locked badge said what
+                 to do but never how far off you were, and an unlocked one was
+                 a tile that had changed colour. Opening it says whether it is
+                 yours and how many other people managed it. */
+              <button
+                key={a.id}
+                type="button"
+                onClick={() => setOpenBadge(a)}
+                aria-label={`${a.name} — ${got ? "unlocked" : "locked"}. ${a.desc}. See details`}
+                className="card flex items-center gap-3 p-3 text-left transition hover:bg-white/[0.05]"
+              >
                 {/* `grayscale` went with the emoji it existed for — a filter is
                     the only way to mute a full-colour glyph, and it is the wrong
                     tool for an SVG that already takes the colour it is given. */}
@@ -229,11 +283,21 @@ export default function RewardsPage() {
                   </div>
                   <div className="truncate text-xs text-slate-500">{a.desc}</div>
                 </div>
-              </div>
+              </button>
             );
           })}
         </div>
       </div>
+
+      {openBadge && (
+        <AchievementDetail
+          achievement={openBadge}
+          unlocked={unlocked.includes(openBadge)}
+          rarity={rarity[openBadge.id]}
+          sampled={sampleSize >= MIN_SAMPLE}
+          onClose={() => setOpenBadge(null)}
+        />
+      )}
     </div>
   );
 }

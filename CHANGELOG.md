@@ -586,6 +586,89 @@ front-end bundle.
 
 ---
 
+## 2026-08-12 (plans) — Free is the daily habit, the paywalls exist, and a badge tells you how rare it is
+
+**Operator action: apply migrations 0073 and 0074.** 0073 sets the video quota
+(free to 0, `silver` to Pro's 40). 0074 adds `achievement_unlocks` and the
+`achievement_rarity()` RPC. Nothing else changes.
+
+### What Free is
+
+Check in, see your readiness, watch your own numbers move, hold your place on
+the leaderboards. **Nothing is generated, written or analysed for a free
+account.** The exercise library, skill drills and position guides moved to Pro —
+they are the coaching content, and giving them away while charging for the plan
+that arranges them is the wrong way round. Leaderboards stay free: they cost
+nothing to run and a leaderboard behind a paywall has nobody on it.
+
+Measured on the built app, three accounts, same nine routes:
+
+| | free | Pro | silver |
+|---|---|---|---|
+| `/library/` `/injury/` `/coach/` `/nutrition/` `/train/` | LOCKED | open | open |
+| `/journal/` `/dashboard/` `/rewards/` `/home/` | open | open | open |
+| Edge + Worker calls | **0** | 1 | 1 |
+
+Zero is the number that matters. `injury_plan`, `ai_challenges` and `library`
+were declared paid in `CAPABILITY_TIER` and checked by **nothing** in the
+client; `/injury` and `/library` had no gate at all, and the rewards page fired
+`generate-challenges` for every free athlete every week — which the Edge
+Function then refused, so what free actually got was a wasted round trip.
+
+Challenges degrade rather than disappear: the on-device set picks from the same
+vocabulary, so a free athlete still gets three real objectives.
+
+### Three free video clips are gone
+
+"Enough to see the feature, not enough to be a cost" is the worst of both — it
+teaches a free athlete the feature exists, lets them build a habit on it, and
+takes it away on the fourth clip while the paywall says they never had it. The
+uploader now shows the lock *before* the form, rather than after a 60MB upload.
+"You've used all **0** of this month's uploads" is gone with it: a quota of zero
+is a price, not a wait.
+
+### Nobody is on a legacy plan, and nobody is offered a plan they don't have
+
+`silver` was the £15 middle tier for a few hours, was never sold, and grants
+access identical to Pro — while introducing itself as "Pro (legacy)" at £15 with
+a 15-upload allowance. It answers to Pro's name, price and limits now.
+
+Separately, the profile decided whether to show billing controls with
+`!!stripe_customer_id`. That id is permanent, so **anyone who had ever paid kept
+being offered "Cancel or pause" on the Free plan** — under the words "you keep
+access until the end of the period you've paid for". Access and billing are two
+questions now (`past_due` proves it: no access, but a subscription that very
+much needs the portal).
+
+### The body map: 80% of it did nothing
+
+Reported as "some of the dots on injury hard to click". The figure renders
+144×288 on a phone, so a region drawn at r=8–10 is a 14–18px target against a
+44px floor — and only the dot responded. **Four fifths of the body was dead
+area.**
+
+Bigger dots can't fix it: 44px needs a hit radius of ~24 units and the closest
+pair of regions are 17 apart, so each would steal its neighbour's taps. Bodies
+are crowded. So a tap no longer has to land on anything — the whole figure is
+one target and the nearest region wins. Verified in a browser: five taps that
+previously hit nothing all resolve correctly. It also has keyboard access for
+the first time, with the dot lighting up as the focus indicator.
+
+### Badges say how rare they are
+
+Tap one for a card: what it takes, whether it's yours, and what percentage of
+active athletes have it. Achievements are derived in the browser and were
+therefore stored nowhere, so 0074 adds a table the client posts its unlocks to —
+deriving fifteen rules a second time in SQL would mean keeping two copies in
+step forever, for a number that is decoration.
+
+The denominator is athletes who have unlocked *anything*, not every signup;
+otherwise dormant accounts drag every badge toward zero and the rarest is
+indistinguishable from the most common. Below 20 athletes the card says there
+isn't enough data rather than quoting "25% of athletes" off a sample of four.
+
+---
+
 ## 2026-08-12 (quick-add) — The quick-add calorie buttons were writing to nothing
 
 **Operator action: none.** Front-end only.
