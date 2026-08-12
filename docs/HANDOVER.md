@@ -109,8 +109,15 @@ alter table public.profiles validate constraint profiles_training_focus_check;
 Migrations 0066–0070 are otherwise applied and verified live.
 
 **0071–0074 are applied.** `0073` (video quota: free 0, `silver` 40) and `0074`
-(`achievement_unlocks` + `achievement_rarity()`) went in on 2026-08-12. Nothing
-in the app is waiting on a migration.
+(`achievement_unlocks` + `achievement_rarity()`) went in on 2026-08-12.
+
+**`0075` is NOT applied — paste it.** It adds `challenge_completions`, which is
+what makes the challenge board pay the XP its cards advertise. Until it runs,
+every challenge still shows "+45 XP" and still awards nothing — which is exactly
+the state the app has been in since July, so nothing is broken by waiting; the
+writes and reads both degrade to zero on a database without the table. Verified
+in a browser at ledger 0, 145 and 1000: 258 XP, 403 XP, 1,258 XP, no console
+errors in any of them.
 
 ## 1.5 Optional: give programme sessions a timestamp
 
