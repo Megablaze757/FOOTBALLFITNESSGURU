@@ -1,26 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { PainMap } from "@/lib/types";
-
-// Tappable regions positioned on a simple front-facing body silhouette.
-const REGIONS: { key: string; label: string; cx: number; cy: number; r: number }[] = [
-  { key: "shoulder_left", label: "L shoulder", cx: 58, cy: 70, r: 9 },
-  { key: "shoulder_right", label: "R shoulder", cx: 102, cy: 70, r: 9 },
-  { key: "lower_back", label: "Lower back", cx: 80, cy: 120, r: 10 },
-  { key: "hip_left", label: "L hip", cx: 66, cy: 148, r: 9 },
-  { key: "hip_right", label: "R hip", cx: 94, cy: 148, r: 9 },
-  { key: "groin", label: "Groin", cx: 80, cy: 158, r: 9 },
-  { key: "hamstring_left", label: "L hamstring", cx: 68, cy: 195, r: 9 },
-  { key: "hamstring_right", label: "R hamstring", cx: 92, cy: 195, r: 9 },
-  { key: "knee_left", label: "L knee", cx: 68, cy: 235, r: 9 },
-  { key: "knee_right", label: "R knee", cx: 92, cy: 235, r: 9 },
-  { key: "calf_left", label: "L calf", cx: 68, cy: 262, r: 8 },
-  { key: "calf_right", label: "R calf", cx: 92, cy: 262, r: 8 },
-  { key: "ankle_left", label: "L ankle", cx: 68, cy: 285, r: 8 },
-  { key: "ankle_right", label: "R ankle", cx: 92, cy: 285, r: 8 },
-  { key: "head", label: "Head / neck", cx: 80, cy: 36, r: 10 },
-];
+import {
+  BODY_REGIONS as REGIONS, BODY_VIEWBOX, nearestRegion, type BodyRegion,
+} from "@/lib/body-map";
 
 // Untouched regions used to be slate-300 — a bright, solid dot. Fifteen of
 // them, all shouting, so the one area you'd actually marked was the quietest
@@ -50,6 +34,43 @@ export function BodyMap({
 }) {
   const [selected, setSelected] = useState<string | null>(null);
   const selectedLabel = REGIONS.find((r) => r.key === selected)?.label;
+  const svgRef = useRef<SVGSVGElement>(null);
+
+  /** Tap or keyboard, one path. `select` toggles; `pain` opens the slider. */
+  function choose(region: BodyRegion) {
+    setSelected(region.key);
+    if (mode !== "select") return;
+    const next = { ...value };
+    if (next[region.key]) delete next[region.key];
+    else next[region.key] = 5;
+    onChange(next);
+  }
+
+  /**
+   * THE WHOLE FIGURE IS THE TARGET.
+   *
+   * Every region was a ~14px circle and nothing but the circle responded, so
+   * half the taps did nothing at all. They cannot simply be made bigger: the
+   * closest pair are 17 units apart and a 44px target needs 24, so growing them
+   * would have each region stealing its neighbour's taps. Bodies are crowded.
+   *
+   * So the tap doesn't have to land on anything — the nearest region wins. See
+   * lib/body-map.ts, where the arithmetic is, and its tests, which sweep every
+   * point of the silhouette looking for a dead one.
+   *
+   * getScreenCTM, not getBoundingClientRect: the SVG scales to its container
+   * and preserveAspectRatio letterboxes it, so the box is not the drawing. The
+   * matrix knows about both and stays right at any size.
+   */
+  function onFigureTap(e: React.MouseEvent<SVGRectElement>) {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const ctm = svg.getScreenCTM();
+    if (!ctm) return;
+    const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(ctm.inverse());
+    const region = nearestRegion(p.x, p.y);
+    if (region) choose(region);
+  }
 
   function setLevel(level: number) {
     if (!selected) return;
@@ -61,7 +82,13 @@ export function BodyMap({
 
   return (
     <div>
-      <svg viewBox="0 0 160 320" className="mx-auto h-72" role="img" aria-label="Body pain map">
+      <svg
+        ref={svgRef}
+        viewBox={`0 0 ${BODY_VIEWBOX.width} ${BODY_VIEWBOX.height}`}
+        className="mx-auto h-72 touch-manipulation"
+        role="group"
+        aria-label="Body pain map — tap where it hurts"
+      >
         {/* Silhouette. Lifted from 0.06/0.12 — at that weight the figure was
             invisible next to the region dots, and "tap where it hurts" needs a
             body to point at. */}
@@ -74,6 +101,8 @@ export function BodyMap({
           <rect x="84" y="150" width="14" height="140" rx="7" /> {/* R leg */}
         </g>
 
+        {/* The dots are the READOUT now, not the target — they say where you
+            have marked and how badly. Hit-testing is the overlay below. */}
         {REGIONS.map((region) => {
           const level = value[region.key] ?? 0;
           const isSel = selected === region.key;
@@ -89,22 +118,60 @@ export function BodyMap({
               fill={painColor(level)}
               stroke={isSel ? "#e3b53f" : marked ? "rgba(255,255,255,0.5)" : UNSET_STROKE}
               strokeWidth={isSel ? 2.5 : 1.5}
-              className="cursor-pointer transition-all"
-              onClick={() => {
-                setSelected(region.key);
-                if (mode === "select") {
-                  const next = { ...value };
-                  if (next[region.key]) delete next[region.key];
-                  else next[region.key] = 5;
-                  onChange(next);
-                }
-              }}
-            >
-              <title>{`${region.label}: ${level}/10`}</title>
-            </circle>
+              // pointer-events-none, so the overlay below gets every tap. The
+              // <title> that used to be here went with it: a tooltip needs
+              // hover, and this can no longer be hovered. The sr-only list is
+              // where the same information lives now, once, for everyone.
+              className="pointer-events-none transition-all"
+            />
           );
         })}
+
+        {/* One target, over everything. Last in the document so it sits on top;
+            transparent rather than absent, because Safari does not dispatch
+            pointer events to a shape with `fill: none`. */}
+        <rect
+          x={0}
+          y={0}
+          width={BODY_VIEWBOX.width}
+          height={BODY_VIEWBOX.height}
+          fill="transparent"
+          className="cursor-pointer"
+          onClick={onFigureTap}
+        />
       </svg>
+
+      {/* KEYBOARD AND SCREEN READER ACCESS, which the map had none of.
+          Fifteen circles with onClick handlers announce as nothing and cannot
+          be reached with a keyboard at all — so the one control that answers
+          "where does it hurt" was unusable without a pointer.
+
+          Real buttons, positioned off-screen rather than `display: none`, so
+          they are reachable by tab and by a screen reader's element list while
+          the figure stays the visual. Each one says its own state, so moving
+          through them reads as a body rather than as fifteen anonymous dots. */}
+      <ul className="sr-only">
+        {REGIONS.map((region) => {
+          const level = value[region.key] ?? 0;
+          return (
+            <li key={region.key}>
+              <button
+                type="button"
+                onClick={() => choose(region)}
+                // Focus lights up the dot on the figure. These buttons are
+                // off-screen, so without this a keyboard user is tabbing
+                // through fifteen controls with no visible focus anywhere on
+                // the page — the ring IS the focus indicator.
+                onFocus={() => setSelected(region.key)}
+                aria-pressed={mode === "select" ? level > 0 : undefined}
+              >
+                {region.label}
+                {mode === "select" ? "" : `: ${level} out of 10`}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
 
       {/* Select mode gets chips, not a panel. A full-width rounded box to hold
           the words "Selected: L knee" was more furniture than content, and the

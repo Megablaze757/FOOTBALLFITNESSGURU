@@ -110,6 +110,37 @@ export const CAPABILITY_TIER: Record<Capability, Tier> = {
   exercise_analytics: "silver",
 };
 
+/**
+ * Statuses that mean "there is a subscription here to manage".
+ *
+ * NOT THE SAME QUESTION AS `can()`. That asks what to unlock; this asks whether
+ * to show someone the controls for a plan — cancel, pause, change card. The two
+ * diverge in both directions and both matter:
+ *
+ *   past_due  A payment failed and Stripe is retrying. Access is gone, but the
+ *             subscription very much exists, and this is the athlete who most
+ *             needs the portal. Hiding billing from them is how a card that
+ *             expired becomes a cancellation.
+ *   paused    Deliberately suspended, resumes itself. Access is off; there is
+ *             obviously still a plan.
+ *   canceled  Over. They are on Free.
+ *   incomplete  Checkout was started and never finished. Never a plan.
+ */
+const LIVE_STATUSES = new Set(["active", "past_due", "paused"]);
+
+/**
+ * Is this athlete on a paid plan right now?
+ *
+ * The profile page used to answer this with `!!stripe_customer_id`, which is
+ * not the same question at all: a Stripe customer id is permanent, so anyone
+ * who has EVER subscribed keeps one. Cancel, drop to Free, and the page went on
+ * offering "Cancel or pause" for a plan that no longer existed — under the
+ * words "you keep access until the end of the period you've paid for".
+ */
+export function hasLivePlan(sub: { status?: string | null } | null | undefined): boolean {
+  return !!sub?.status && LIVE_STATUSES.has(sub.status);
+}
+
 /** True if `have` tier includes everything in `need` tier. */
 export function tierMeets(have: Tier, need: Tier): boolean {
   return TIER_RANK[have] >= TIER_RANK[need];

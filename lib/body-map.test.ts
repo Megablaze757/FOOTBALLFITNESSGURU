@@ -1,0 +1,144 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import {
+  BODY_REGIONS, BODY_VIEWBOX, MAX_TAP_DISTANCE, nearestRegion, regionLabel,
+} from "./body-map";
+
+/**
+ * THE MEASUREMENT THAT MADE THIS NECESSARY.
+ *
+ * The figure renders about 144px wide on a phone, so one figure unit is roughly
+ * 0.9 CSS px. A region is drawn at r=8..10, which is a target about 14–18px
+ * across — against a 44px floor. Every one of the fifteen was under it, on the
+ * control that answers "where does it hurt".
+ */
+test("every region would be an illegal tap target if it had to be hit", () => {
+  const unitsToCss = 288 / BODY_VIEWBOX.height; // the figure renders at h-72
+  for (const r of BODY_REGIONS) {
+    const drawn = r.r * 2 * unitsToCss;
+    assert.ok(drawn < 44, `${r.key} is ${drawn.toFixed(0)}px — this test is out of date`);
+  }
+});
+
+/**
+ * AND WHY A BIGGER HIT CIRCLE CANNOT BE THE FIX.
+ *
+ * To reach 44px a region would need a hit radius of ~24 units. The closest pair
+ * are 17 apart, so at that size a hip would swallow taps meant for the groin.
+ * Bodies are crowded; that is not a spacing bug.
+ */
+test("the regions are too close together for per-region hit circles", () => {
+  let closest = Infinity;
+  for (const a of BODY_REGIONS) {
+    for (const b of BODY_REGIONS) {
+      if (a.key === b.key) continue;
+      closest = Math.min(closest, Math.hypot(a.cx - b.cx, a.cy - b.cy));
+    }
+  }
+  const neededForForty4px = 44 / 2 / (288 / BODY_VIEWBOX.height);
+  assert.ok(
+    closest < neededForForty4px,
+    `closest pair is ${closest.toFixed(1)} units apart and 44px needs ${neededForForty4px.toFixed(1)} — ` +
+      "if this ever passes, per-region hit circles became viable and this design can be simplified"
+  );
+});
+
+test("a tap on a region picks that region", () => {
+  for (const r of BODY_REGIONS) {
+    assert.equal(nearestRegion(r.cx, r.cy)?.key, r.key);
+  }
+});
+
+/** What the old scheme did: a tap counted only if it landed inside a drawn dot. */
+function oldSchemeHit(x: number, y: number): string | null {
+  const hit = BODY_REGIONS.find((r) => Math.hypot(x - r.cx, y - r.cy) <= r.r);
+  return hit?.key ?? null;
+}
+
+/**
+ * THE POINT OF THE WHOLE THING: a tap that misses every dot still works.
+ *
+ * Each case is checked BOTH ways — that the old per-dot scheme would have
+ * dropped it, and that it now resolves. Asserting only the second half would
+ * let a point that was always fine sit here looking like evidence, which is
+ * exactly what happened while writing this: three of the six points I first
+ * picked as "obvious misses" were comfortably inside a dot.
+ */
+test("a tap that lands on no dot still finds what it was aimed at", () => {
+  const cases: [x: number, y: number, expect: string][] = [
+    [80, 196, "hamstring_left"], // between the hamstrings, ties left
+    [60, 240, "knee_left"],      // below and outside the left knee
+    [48, 66, "shoulder_left"],   // off the shoulder, out on the arm
+    [80, 300, "ankle_left"],     // below the feet, between them
+    [80, 20, "head"],            // above the head
+    [104, 210, "hamstring_right"], // outside the right leg entirely
+  ];
+  for (const [x, y, expect] of cases) {
+    assert.equal(oldSchemeHit(x, y), null, `(${x},${y}) was never a miss — pick a better case`);
+    assert.equal(nearestRegion(x, y)?.key, expect, `(${x},${y})`);
+  }
+});
+
+/**
+ * How much of the figure was dead before. Not decoration: it is the size of the
+ * complaint ("some of the dots are hard to click"), and if a future change
+ * shrinks it back toward zero by growing the dots, this says so.
+ */
+test("most of the figure used to do nothing at all", () => {
+  let dead = 0;
+  let total = 0;
+  for (let x = 46; x <= 114; x += 2) {
+    for (let y = 18; y <= 290; y += 2) {
+      total++;
+      if (!oldSchemeHit(x, y)) dead++;
+    }
+  }
+  const pct = (dead / total) * 100;
+  assert.ok(pct > 70, `only ${pct.toFixed(0)}% of the body was unresponsive — has the design changed?`);
+});
+
+/**
+ * Every point ON the body resolves to something. Not a sample — the whole
+ * silhouette, so a dead patch cannot hide between the assertions above.
+ */
+test("no dead zones anywhere on the figure", () => {
+  // The silhouette's own extents (see the <g> in BodyMap): head circle through
+  // to the bottom of the legs.
+  const misses: string[] = [];
+  for (let x = 46; x <= 114; x += 2) {
+    for (let y = 18; y <= 290; y += 2) {
+      if (!nearestRegion(x, y)) misses.push(`${x},${y}`);
+    }
+  }
+  assert.deepEqual(misses.slice(0, 8), [], `${misses.length} points on the body select nothing`);
+});
+
+/**
+ * But the box is not the body. A tap in the empty margin should do nothing —
+ * an unexplained selection is worse than a missed one, because the athlete has
+ * to notice it happened before they can undo it.
+ */
+test("a tap in the empty margin selects nothing", () => {
+  assert.equal(nearestRegion(4, 4), null, "top-left corner");
+  assert.equal(nearestRegion(156, 316), null, "bottom-right corner");
+  assert.equal(nearestRegion(0, 160), null, "far left of the torso");
+});
+
+test("ties resolve the same way every time", () => {
+  // Exactly between the two shoulders, which are symmetric about x=80.
+  assert.equal(nearestRegion(80, 70)?.key, nearestRegion(80, 70)?.key);
+  const a = nearestRegion(80, 70)?.key;
+  assert.ok(a === "shoulder_left" || a === "lower_back", `unexpected tie winner: ${a}`);
+});
+
+test("the tap radius is generous but not unlimited", () => {
+  assert.ok(MAX_TAP_DISTANCE > 20, "too tight to be worth the mechanism");
+  assert.ok(MAX_TAP_DISTANCE < BODY_VIEWBOX.width / 2, "a tap anywhere would always hit something");
+});
+
+test("region keys are unique and every one has a label", () => {
+  const keys = BODY_REGIONS.map((r) => r.key);
+  assert.equal(new Set(keys).size, keys.length);
+  for (const k of keys) assert.notEqual(regionLabel(k), k, `${k} has no label`);
+  assert.equal(regionLabel("nonsense"), "nonsense", "unknown keys fall back to themselves");
+});

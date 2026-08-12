@@ -2,8 +2,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   tierMeets, planFor, PLANS, ALL_PLANS, CAPABILITY_TIER, can, tierNeededFor,
-  PAID_TIER, maxActivePrograms, TRIAL_DAYS, VIDEO_QUOTA, type Capability,
+  PAID_TIER, maxActivePrograms, TRIAL_DAYS, VIDEO_QUOTA, hasLivePlan, type Capability,
 } from "./subscription";
+import { tierOfSub } from "../components/FeatureLock";
 import { readFileSync, readdirSync } from "node:fs";
 
 test("tierMeets respects the ranking", () => {
@@ -181,4 +182,42 @@ test("VIDEO_QUOTA matches public.video_quota() in the migration", () => {
   assert.equal(VIDEO_QUOTA.gold, fromSql.gold);
   assert.equal(VIDEO_QUOTA.silver, fromSql.silver);
   assert.equal(VIDEO_QUOTA.bronze, fromSql.bronze);
+});
+
+/**
+ * "CANCEL OR PAUSE" ON THE FREE PLAN.
+ *
+ * The profile page decided whether to show the billing controls with
+ * `!!stripe_customer_id`. That id is permanent — Stripe keeps the customer
+ * after the subscription ends — so anyone who had ever paid kept being offered
+ * a cancellation for a plan they no longer had, under the reassurance "you keep
+ * access until the end of the period you've paid for". Pressing it opened a
+ * flow to cancel nothing.
+ *
+ * The two states that look like exceptions are not: past_due has no access but
+ * definitely has a subscription (and is the athlete who most needs the portal —
+ * hiding billing is how an expired card becomes a cancellation), and paused
+ * resumes itself.
+ */
+test("only someone with a live subscription is offered one to manage", () => {
+  assert.ok(hasLivePlan({ status: "active" }));
+  assert.ok(hasLivePlan({ status: "paused" }), "a paused plan is still a plan");
+  assert.ok(hasLivePlan({ status: "past_due" }), "dunning is exactly when billing must be reachable");
+
+  assert.ok(!hasLivePlan({ status: "canceled" }), "cancelled means they are on Free");
+  assert.ok(!hasLivePlan({ status: "incomplete" }), "an abandoned checkout was never a plan");
+  assert.ok(!hasLivePlan(null));
+  assert.ok(!hasLivePlan(undefined));
+  assert.ok(!hasLivePlan({}));
+});
+
+/**
+ * Access and billing-management are different questions, and the row that
+ * proves it is past_due: no access, but a subscription to fix. Answering both
+ * with one flag is what produced the bug above.
+ */
+test("access and billing are asked separately", () => {
+  const pastDue = { status: "past_due", tier: "gold" as const };
+  assert.ok(hasLivePlan(pastDue), "there is a plan to manage");
+  assert.equal(tierOfSub(pastDue), "bronze", "but no access until it is paid");
 });

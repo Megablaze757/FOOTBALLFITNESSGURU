@@ -11,7 +11,7 @@ import { CoachMessages } from "@/components/CoachMessages";
 import { ManageBilling } from "@/components/ManageBilling";
 import { PushToggle } from "@/components/PushToggle";
 import { DeleteAccount } from "@/components/DeleteAccount";
-import { planFor } from "@/lib/subscription";
+import { planFor, hasLivePlan } from "@/lib/subscription";
 import type { Profile, Subscription, Tier } from "@/lib/types";
 
 export default function ProfilePage() {
@@ -95,6 +95,10 @@ export default function ProfilePage() {
           Stripe customer behind it, so it gets the plans link instead. */}
       <ManageBilling
         hasBilling={!!subscription?.stripe_customer_id}
+        // Not the same question as hasBilling. A Stripe customer id is
+        // permanent, so someone who subscribed once and cancelled kept being
+        // offered "Cancel or pause" on the Free plan.
+        onPaidPlan={hasLivePlan(subscription)}
         cancelling={!!subscription?.cancel_at_period_end}
         paused={subscription?.status === "paused"}
         resumesAt={subscription?.pause_until ?? null}

@@ -23,8 +23,22 @@ import { CancelFlow } from "@/components/CancelFlow";
  * Someone on a comped or free plan has no Stripe customer to manage, so they
  * get the upgrade link instead of a button that would only ever error.
  */
-export function ManageBilling({ hasBilling, cancelling, paused, resumesAt, endsAt, onChanged }: {
+export function ManageBilling({ hasBilling, onPaidPlan, cancelling, paused, resumesAt, endsAt, onChanged }: {
+  /** Has a Stripe customer — so there are cards and invoices to look at. */
   hasBilling: boolean;
+  /**
+   * Is paying for something RIGHT NOW.
+   *
+   * Distinct from `hasBilling`, and that conflation is the bug this fixes: a
+   * Stripe customer id is permanent, so anyone who has ever subscribed keeps
+   * one forever. Cancel, drop to Free, and the profile went on offering
+   * "Cancel or pause" — for a plan they no longer have — with the reassurance
+   * "you keep access until the end of the period you've paid for" underneath.
+   * Pressing it opened a flow to cancel nothing.
+   *
+   * Their invoice history is still theirs, so the portal button stays.
+   */
+  onPaidPlan: boolean;
   /** Cancelled but still inside the paid period — reversible. */
   cancelling?: boolean;
   paused?: boolean;
@@ -104,6 +118,23 @@ export function ManageBilling({ hasBilling, cancelling, paused, resumesAt, endsA
           )}
         </div>
         {error && <p className="mt-2 text-sm text-readiness-red">{error}</p>}
+      </div>
+    );
+  }
+
+  /**
+   * A LAPSED SUBSCRIBER IS ON THE FREE PLAN, and should be sold to, not
+   * offered a cancellation. Their receipts are still theirs, so the portal
+   * stays — it is the only route to an invoice for a month they did pay for.
+   */
+  if (!onPaidPlan) {
+    return (
+      <div className="mb-4 flex flex-wrap gap-2">
+        <Link href="/pricing" className="btn-ghost w-auto flex-1 px-4">⭐ See plans</Link>
+        <button onClick={openPortal} disabled={busy} className="btn-ghost w-auto flex-1 px-4">
+          {busy ? "Opening…" : "🧾 Past invoices"}
+        </button>
+        {error && <p className="w-full text-sm text-readiness-red">{error}</p>}
       </div>
     );
   }
