@@ -103,7 +103,10 @@ export function WeekStrip({ days, sessions, minutes, accent, complete }: {
                 // so all seven labels were silently going nowhere. A dot that
                 // means "trained" IS a graphic, so this is also the honest role.
                 role="img"
-                aria-label={`${d.iso}: ${d.trained ? "trained" : "no session"}${d.checkedIn ? ", checked in" : ""}`}
+                // "Today" said out loud, not left to a colour — the marker
+                // below is aria-hidden, so without this a screen-reader user
+                // gets seven dates and no anchor among them.
+                aria-label={`${isToday ? "Today, " : ""}${d.iso}: ${d.trained ? "trained" : "no session"}${d.checkedIn ? ", checked in" : ""}`}
               >
                 <span
                   className="h-2 w-2 rounded-full transition"
@@ -113,8 +116,34 @@ export function WeekStrip({ days, sessions, minutes, accent, complete }: {
                   aria-hidden
                 />
               </span>
-              <span className={`text-[10px] font-semibold uppercase ${isToday ? "text-slate-300" : "text-slate-600"}`} aria-hidden>
-                {d.letter}
+              {/* TODAY HAS TO BE OBVIOUS, and slate-300 against slate-600 was
+                  not. It was a 10px uppercase letter one shade brighter than
+                  its six neighbours — a distinction you can find if you already
+                  know where to look, which is the opposite of what a "you are
+                  here" marker is for. Reported as not being able to see it.
+
+                  Two changes rather than one, because either alone is still a
+                  brightness judgement: the letter goes to full white, and a
+                  short accent bar sits under it. The bar is the part that
+                  reads instantly, and it survives being colour-blind or in
+                  sunlight, neither of which a shade of grey does.
+
+                  The bar is a separate mark rather than a border on the cell
+                  above, because that cell's border already means "trained" —
+                  overloading it would make today and a trained day
+                  indistinguishable. */}
+              <span className="flex flex-col items-center gap-1">
+                <span
+                  className={`text-[10px] font-semibold uppercase ${isToday ? "text-slate-100" : "text-slate-600"}`}
+                  aria-hidden
+                >
+                  {d.letter}
+                </span>
+                <span
+                  className="h-[3px] w-4 rounded-full transition"
+                  style={{ background: isToday ? accent : "transparent" }}
+                  aria-hidden
+                />
               </span>
             </li>
           );
@@ -122,7 +151,7 @@ export function WeekStrip({ days, sessions, minutes, accent, complete }: {
       </ol>
 
       <p className="mt-3 text-[11px] text-slate-600">
-        Outline = trained · dot = checked in
+        Outline = trained · dot = checked in · bar = today
       </p>
     </div>
   );

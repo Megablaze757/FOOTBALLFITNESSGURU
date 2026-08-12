@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { Portal } from "@/components/Portal";
 import { Icon } from "@/components/Icon";
-import { MIN_SAMPLE, rarityLabel, rarityTone, type Rarity } from "@/lib/achievement-rarity";
+import { rarityLabel, rarityTone, type Rarity } from "@/lib/achievement-rarity";
 import type { Achievement } from "@/lib/gamification";
 
 /**
@@ -41,11 +41,16 @@ export function AchievementDetail({ achievement, unlocked, rarity, sampled, onCl
   return (
     <Portal>
       <div
-        className="fixed inset-0 z-[100] flex items-end justify-center bg-black/70 p-0 backdrop-blur-sm sm:items-center sm:p-4"
+        className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
         onClick={onClose}
       >
         <div
-          className="animate-scale-in max-h-[88vh] w-full max-w-sm overflow-y-auto rounded-t-3xl border border-white/10 bg-ink-800 p-6 pb-28 shadow-card sm:rounded-3xl sm:pb-6"
+          // Centred on every size, not a bottom sheet on phones. A badge card is
+          // small, it is something you look AT rather than work in, and sliding
+          // it up from the bottom put it under the thumb it was opened with —
+          // the sheet pattern earns its keep for long, scrollable, form-like
+          // content, which this is the opposite of.
+          className="animate-scale-in max-h-[85vh] w-full max-w-sm overflow-y-auto rounded-3xl border border-white/10 bg-ink-800 p-6 shadow-card"
           onClick={(e) => e.stopPropagation()}
           role="dialog"
           aria-modal="true"
@@ -99,16 +104,23 @@ export function AchievementDetail({ achievement, unlocked, rarity, sampled, onCl
                 </p>
               </>
             ) : (
-              /* NOT "0% of athletes have this". With a handful of people on the
-                 table a single holder reads as 25%, which is arithmetically
-                 true and tells you only how new the app is. Saying so is more
-                 use than inventing a number, and it is the same rule the
-                 nutrition targets follow about false precision. */
+              /* A COUNT, NOT AN APOLOGY, AND NEVER A PERCENTAGE OFF FOUR PEOPLE.
+                 This used to say "not enough athletes yet" and explain itself,
+                 which reads as the app telling you it is empty — on the card
+                 that is supposed to make a badge feel worth having.
+                 The number of holders is true at any sample size and carries no
+                 false precision: "9 athletes have this" is a fact, while "25%
+                 of athletes" off a table of four is arithmetic pretending to be
+                 information. So the percentage waits until it means something
+                 and the count stands in until then, with nothing said about
+                 why. */
               <>
-                <p className="text-sm font-semibold text-slate-300">Not enough athletes yet</p>
-                <p className="mt-1 text-xs leading-relaxed text-slate-500">
-                  Rarity needs at least {MIN_SAMPLE} people before the percentage means anything.
-                  It&apos;ll appear here once there are.
+                <p className="text-xs uppercase tracking-wider text-slate-500">Who else has it</p>
+                <p className="mt-1 text-3xl font-extrabold tabular-nums text-slate-200">
+                  {(rarity?.holders ?? 0).toLocaleString()}
+                </p>
+                <p className="mt-0.5 text-sm text-slate-400">
+                  {rarity?.holders === 1 ? "athlete has this one" : "athletes have this one"}
                 </p>
               </>
             )}
