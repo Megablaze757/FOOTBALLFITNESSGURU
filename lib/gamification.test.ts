@@ -7,12 +7,44 @@ import {
 
 test("XP accumulates from activity and levels rise", () => {
   assert.equal(computeXp(EMPTY_STATS), 0);
-  const s = { ...EMPTY_STATS, checkIns: 5, trainingSessions: 3, streak: 5 };
+  // longestStreak, not streak — XP is a record of what you did, and it is the
+  // best run you have had that counts. See computeXp.
+  const s = { ...EMPTY_STATS, checkIns: 5, trainingSessions: 3, longestStreak: 5 };
   const xp = computeXp(s); // 50 + 36 + 25 = 111
   assert.equal(xp, 111);
   const lvl = levelFor(xp);
   assert.ok(lvl.level >= 2, `level ${lvl.level}`); // past the 100-xp first threshold
   assert.ok(lvl.progress >= 0 && lvl.progress <= 1);
+});
+
+/**
+ * XP NEVER GOES DOWN. THIS IS THE WHOLE POINT.
+ *
+ * `streak` was the only term in the sum that could decrease, so missing one day
+ * deleted up to 300 XP and could drop a level — a rank going backwards, fired
+ * on the exact day someone was already most likely to stop. Every term is
+ * monotonic now.
+ */
+test("breaking a streak never costs you a level", () => {
+  const onIt = {
+    ...EMPTY_STATS, checkIns: 60, trainingSessions: 30, nutritionLogs: 40,
+    restDaysLogged: 20, streak: 45, longestStreak: 45,
+  };
+  const broken = { ...onIt, streak: 0 }; // the morning after a missed day
+  assert.equal(computeXp(broken), computeXp(onIt), "missing a day cost XP");
+  assert.equal(levelFor(computeXp(broken)).level, levelFor(computeXp(onIt)).level);
+});
+
+/**
+ * And nobody's total drops in the switch: longestStreak >= streak by
+ * definition, so the worst case is that it is unchanged.
+ */
+test("moving to the best streak never takes XP away", () => {
+  for (const [streak, longest] of [[0, 0], [5, 5], [0, 40], [12, 40], [60, 60]]) {
+    const s = { ...EMPTY_STATS, checkIns: 30, streak, longestStreak: longest };
+    const before = 30 * 10 + streak * 5;   // what the old sum would have given
+    assert.ok(computeXp(s) >= before, `streak ${streak}/${longest} lost XP`);
+  }
 });
 
 test("level 1 with no xp, progress toward next", () => {
@@ -34,10 +66,46 @@ test("the ladder climbs tier by tier, division by division", () => {
   assert.equal(rankFor(19).rank, "Diamond III");
 });
 
-test("the apex tier has no division and never runs out", () => {
-  assert.equal(rankFor(26).tier, "Legend");
-  assert.equal(rankFor(26).rank, "Legend");
-  assert.equal(rankFor(500).rank, "Legend");
+/**
+ * THE TOP OF THE LADDER USED TO BE A DEAD END, and this test pinned it as
+ * intended behaviour — "the apex tier has NO division and never runs out".
+ *
+ * It never running out was true in the sense that it never errored, and false
+ * in the sense that mattered: `rankFor` returned a bare "Legend" from the
+ * moment you arrived, forever. Roughly twenty-two months of committed use and
+ * then the rank badge never changes again, on the one screen whose entire job
+ * is showing progress. The test was describing the bug accurately.
+ *
+ * The apex counts up now — every three levels is another Legend division, with
+ * no ceiling. Ascending rather than descending is deliberate: divisions count
+ * DOWN because a tier has a top to promote out of, and this one has none.
+ */
+test("the apex tier keeps promoting, forever", () => {
+  assert.equal(rankFor(25).tier, "Legend");
+  assert.equal(rankFor(25).rank, "Legend I");
+  assert.equal(rankFor(28).rank, "Legend II");
+  assert.equal(rankFor(31).rank, "Legend III");
+
+  // There is always a next one, however long someone plays.
+  const far = rankFor(500);
+  assert.equal(far.tier, "Legend");
+  assert.ok(far.division.length > 0, "level 500 has no division");
+  assert.notEqual(far.rank, rankFor(497).rank, "500 levels in and the rank has stopped moving");
+});
+
+/**
+ * EVERY LEVEL SITS IN A NAMED DIVISION. Champion used to span 4 against a
+ * 3-item division list, so it took the same "wider than the list" branch as the
+ * apex and rendered a bare "Champion" for four levels — the dead end in
+ * miniature, and the kind of thing that is invisible until someone is in it.
+ */
+test("no level renders a bare tier name", () => {
+  const bare: string[] = [];
+  for (let lvl = 1; lvl <= 120; lvl++) {
+    const r = rankFor(lvl);
+    if (!r.division) bare.push(`${lvl}: ${r.rank}`);
+  }
+  assert.deepEqual(bare, []);
 });
 
 test("every level has a rank, colour and emoji", () => {

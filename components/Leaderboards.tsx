@@ -40,9 +40,13 @@ export function Leaderboards({ userId }: { userId: string }) {
       checkIns: r.check_ins_7, streak: r.streak, trainingSessions: r.sessions_7,
       completedSessions: r.completed_7, completedBlocks: 0, benchmarks: 0,
       videos: 0, nutritionLogs: 0, checkInsLast7: r.check_ins_7,
-      // The leaderboard view aggregates seven days and has no date list to
-      // read across, and XP does not use these.
-      longestStreak: 0, weeksActive: 0, perfectDaysLast7: 0,
+      // XP reads longestStreak (it must never go down — see computeXp), and the
+      // leaderboard view has no date list to derive one from. The current
+      // streak IS the best streak we can see over a seven-day aggregate, and
+      // leaving it at 0 would drop the streak component from every row and
+      // silently re-order the board.
+      longestStreak: r.streak,
+      weeksActive: 0, perfectDaysLast7: 0,
       // The leaderboard view aggregates seven days of activity and does not
       // carry rest days. Zero, rather than a guess that would rank people on a
       // number nobody measured.

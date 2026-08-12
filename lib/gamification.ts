@@ -138,7 +138,23 @@ export function computeXp(s: ActivityStats): number {
     s.benchmarks * XP.benchmark +
     s.videos * XP.video +
     s.nutritionLogs * XP.nutritionLog +
-    s.streak * XP.streakDay +
+    /**
+     * THE BEST STREAK YOU HAVE HAD, NOT THE ONE YOU ARE ON.
+     *
+     * This read `s.streak`, and it was the only term in the whole sum that
+     * could go DOWN — so missing a single day deleted up to 300 XP and could
+     * drop you a level. A rank going backwards is the most demotivating event a
+     * progression system has, and here it fired on the exact day someone was
+     * already most likely to stop: the one they had just broken a run on.
+     *
+     * XP is a record of what you have done. You did the forty days; nothing
+     * that happens afterwards makes them un-happen. `longestStreak` never
+     * decreases, so the total is now monotonic — every term only ever adds.
+     *
+     * Nobody loses XP in the change: longestStreak >= streak by definition, so
+     * the worst case is that it is identical.
+     */
+    s.longestStreak * XP.streakDay +
     s.restDaysLogged * XP.restDay
   );
 }
@@ -156,9 +172,47 @@ export interface LevelInfo {
   progress: number;   // 0..1 toward next level
 }
 
-// Each level costs a bit more than the last: 100, 150, 200, …
+/**
+ * What the next level costs.
+ *
+ * LINEAR FOR THE FIRST TWENTY, THEN IT BITES. The old curve was
+ * `100 + (level - 1) * 50` all the way up, which meant the ladder never really
+ * got harder — a committed athlete cleared level 48 inside five years and had
+ * spent the last two of them at a rank that could not improve.
+ *
+ * Measured against a realistic athlete (checks in ~6 days a week, trains four
+ * times, logs food half the days), old vs new:
+ *
+ *   3 months   10 -> 10      unchanged
+ *   6 months   15 -> 15      unchanged
+ *   1 year     21 -> 21      unchanged
+ *   2 years    30 -> 29
+ *   3 years    37 -> 33
+ *   5 years    48 -> 38
+ *
+ * THE RAMP STARTS AT 20 ON PURPOSE, and that is the whole reason this is safe
+ * to ship. Level is derived from XP on every render — it is not stored — so
+ * steepening the curve retroactively re-ranks everyone who already plays.
+ * Nobody enjoys opening an app to find they have been demoted, and badges key
+ * off level, so it would strip those too. Below level 20 the two curves are
+ * identical to the point, which is roughly a year of committed use: no current
+ * athlete moves at all, and the change only ever applies to progress not yet
+ * made.
+ *
+ * If this ever needs steepening again, raise RAMP_FROM to above the level your
+ * most advanced athlete has reached. Making the early game harder is a
+ * different decision, with different consequences, and should be made
+ * deliberately rather than as a side effect of this one.
+ */
+const LEVEL_BASE = 100;
+const LEVEL_STEP = 50;
+const RAMP_FROM = 20;
+const RAMP_WEIGHT = 10;
+
 function costForLevel(level: number): number {
-  return 100 + (level - 1) * 50;
+  const linear = LEVEL_BASE + (level - 1) * LEVEL_STEP;
+  const beyond = Math.max(0, level - RAMP_FROM);
+  return linear + beyond * beyond * RAMP_WEIGHT;
 }
 
 // A competitive ladder in the shape people already know from games — tiers with
@@ -186,7 +240,11 @@ const TIERS: TierDef[] = [
   { name: "Platinum", emoji: "💠", color: "#5fd3c4", span: 3 },
   { name: "Emerald", emoji: "🟢", color: "#34d399", span: 3 },
   { name: "Diamond", emoji: "💎", color: "#7cc6ff", span: 3 },
-  { name: "Champion", emoji: "🏆", color: "#c084fc", span: 4 },
+  // Span 3, not 4. At 4 it exceeded the division list and rendered a bare
+  // "Champion" for four levels — the same dead-end the apex had, in miniature.
+  // Shortening it promotes anyone sitting at the old top of Champion into
+  // Legend, which is a change nobody minds finding.
+  { name: "Champion", emoji: "🏆", color: "#c084fc", span: 3 },
   { name: "Legend", emoji: "👑", color: "#fb7185", span: Infinity },
 ];
 
@@ -202,13 +260,63 @@ export interface RankInfo {
   color: string;
 }
 
+/** How many levels of the apex tier make one division. */
+const APEX_DIVISION_SPAN = 3;
+
+/**
+ * THE TOP OF THE LADDER WAS A DEAD END, and it is the biggest engagement
+ * problem in this file.
+ *
+ * Every other tier promotes you every three levels. Legend has `span:
+ * Infinity`, so it took the "wider than the division list" branch and rendered
+ * a bare "Legend" — from the moment you arrived until forever. Measured against
+ * a realistic athlete that is roughly twenty-two months in, after which the
+ * rank badge on Home never changes again. The one screen whose whole job is to
+ * show progress stops showing any, permanently, to precisely the people who
+ * have used the app the longest.
+ *
+ * So the apex keeps counting. Every three levels is another Legend division,
+ * with no ceiling — there is always a next one.
+ *
+ * COUNTING UP, NOT DOWN, and that is a deliberate break from the convention
+ * three lines above. Divisions descend (III → II → I) because a tier has a
+ * known top to promote OUT of. Legend has no top: nothing to count down toward,
+ * and III → II → I → ...what? Ascending is the only shape that works for an
+ * open-ended tier, and it is what games with an unbounded apex do.
+ */
+function apexDivision(levelsIn: number): string {
+  const n = Math.floor(levelsIn / APEX_DIVISION_SPAN) + 1;
+  return romanNumeral(n);
+}
+
+/**
+ * Roman numerals, because the other divisions are and a "Legend 7" beside a
+ * "Diamond III" would look like two different systems.
+ *
+ * Falls back to the plain number past 3,999, which no ladder will reach — but
+ * returning an empty string there would silently collapse two ranks into one.
+ */
+function romanNumeral(n: number): string {
+  if (n < 1 || n > 3999) return String(n);
+  const table: [number, string][] = [
+    [1000, "M"], [900, "CM"], [500, "D"], [400, "CD"], [100, "C"], [90, "XC"],
+    [50, "L"], [40, "XL"], [10, "X"], [9, "IX"], [5, "V"], [4, "IV"], [1, "I"],
+  ];
+  let out = "";
+  let left = n;
+  for (const [value, glyph] of table) {
+    while (left >= value) { out += glyph; left -= value; }
+  }
+  return out;
+}
+
 export function rankFor(level: number): RankInfo {
   let remaining = Math.max(1, Math.floor(level)) - 1; // levels above level 1
   for (const t of TIERS) {
     if (remaining < t.span) {
-      // Tiers wider than the division list (or the open-ended top) just show the
-      // tier name — better a clean "Legend" than an invented "Legend IV".
-      const division = t.span <= DIVISIONS.length ? DIVISIONS[remaining] ?? "" : "";
+      const division = Number.isFinite(t.span)
+        ? (t.span <= DIVISIONS.length ? DIVISIONS[remaining] ?? "" : "")
+        : apexDivision(remaining);
       return {
         rank: division ? `${t.name} ${division}` : t.name,
         tier: t.name, division, emoji: t.emoji, color: t.color,

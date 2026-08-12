@@ -9,7 +9,7 @@ import { useCurrentUser } from "@/lib/auth";
 import { useAsync } from "@/lib/use-async";
 import { assessReadiness } from "@/lib/readiness";
 import { checkInStreak, computeACWR } from "@/lib/load";
-import { computeXp, levelFor } from "@/lib/gamification";
+import { computeXp, levelFor, activitySpans } from "@/lib/gamification";
 import { TeamExercises } from "@/components/TeamExercises";
 import { AssignProgram } from "@/components/AssignProgram";
 import { positionList } from "@/lib/positions";
@@ -133,8 +133,11 @@ export default function SquadPage() {
         checkIns: dates.length,
         streak: checkInStreak(dates),
         trainingSessions: trainCount.get(p.id) ?? 0,
-        // A coach's roster is ranked on XP, which reads none of these.
-        longestStreak: 0, weeksActive: 0, perfectDaysLast7: 0,
+        // XP reads longestStreak, not streak — it must never go down (see
+        // computeXp). The roster HAS the dates, so it can answer properly;
+        // leaving this at 0 would have silently deleted the streak component
+        // from every athlete's XP and reshuffled the whole squad ranking.
+        ...activitySpans(dates, [], []),
         completedSessions: prog?.completed_sessions.length ?? 0,
         completedBlocks: blocksByUser.get(p.id) ?? 0,
         // The squad roster counts an athlete's training logs but does not fetch
