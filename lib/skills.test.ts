@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { SKILL_DRILLS, skillsForSport, skillCategories, hasSkills, drillsYouCanDo } from "./skills";
-import { POSITIONS_BY_SPORT } from "./coach";
+import { SKILL_DRILLS, skillsForSport, skillCategories, hasSkills, drillsYouCanDo, skillsForAthlete, skillForSession } from "./skills";
+import { POSITIONS_BY_SPORT, positionsForSport } from "./coach";
 import { SPORTS } from "./exercises";
 
 test("every drill is actually coachable, not just named", () => {
@@ -103,5 +103,103 @@ test("every sport in the picker is handled without throwing", () => {
   for (const s of SPORTS) {
     assert.doesNotThrow(() => skillsForSport(s.id, "Nonexistent position"));
     assert.ok(Array.isArray(skillCategories(s.id)));
+  }
+});
+
+/**
+ * FOUR POSITIONS HAD NO BALL WORK AT ALL, AND NOTHING NOTICED.
+ *
+ * `skillForSession` filters the pool to solo drills — a session has to be
+ * doable on the evening it lands, and one needing three team-mates is one that
+ * gets skipped. A prop, a lock, a flanker and a No. 8 had ZERO solo drills
+ * between them, so all four got `null` for every session of every block: four
+ * of the ten rugby positions had no technical work in their programme, ever.
+ *
+ * Nothing failed. The skill slot simply rendered nothing and the session looked
+ * like a normal session that happened to be gym-only. That is the shape of bug
+ * this file exists to catch and did not, so here is the floor.
+ */
+test("every position of every sport gets ball work it can actually do alone", () => {
+  const thin: string[] = [];
+  for (const s of SPORTS) {
+    for (const p of positionsForSport(s.id)) {
+      const pool = skillsForAthlete(s.id, p).filter((d) => d.needs === "solo");
+      if (pool.length < 4) thin.push(`${s.id}/${p}: ${pool.length} solo drills`);
+    }
+  }
+  assert.deepEqual(thin, [], "these positions have too little to rotate through");
+});
+
+/**
+ * And the programme actually receives them. The pool existing is not the same
+ * as the selector reaching it — `skillForSession` groups by skill first, and a
+ * position whose drills all share one skill would get the same drill every
+ * session while the pool looked healthy.
+ */
+test("a block's sessions get different ball work, not the same drill twelve times", () => {
+  const repeats: string[] = [];
+  for (const s of SPORTS) {
+    for (const p of positionsForSport(s.id)) {
+      const got = Array.from({ length: 12 }, (_, i) => skillForSession(s.id, p, i));
+      if (got.some((d) => d === null)) {
+        repeats.push(`${s.id}/${p}: no drill at all`);
+        continue;
+      }
+      const distinct = new Set(got.map((d) => d!.id)).size;
+      if (distinct < 4) repeats.push(`${s.id}/${p}: only ${distinct} different drills across 12 sessions`);
+    }
+  }
+  assert.deepEqual(repeats, []);
+});
+
+/**
+ * A position should also be practising more than one THING. Four drills that
+ * are all shooting is a pool, not a curriculum — the sprinter sits at the floor
+ * here (technique and speed), which is honest for the event.
+ */
+test("every position practises more than one skill", () => {
+  const narrow: string[] = [];
+  for (const s of SPORTS) {
+    for (const p of positionsForSport(s.id)) {
+      const skills = new Set(
+        skillsForAthlete(s.id, p).filter((d) => d.needs === "solo").map((d) => d.skill)
+      );
+      if (skills.size < 2) narrow.push(`${s.id}/${p}: only "${[...skills][0]}"`);
+    }
+  }
+  assert.deepEqual(narrow, []);
+});
+
+/**
+ * Every drill names positions that exist. A typo here is silent and total: the
+ * drill simply never reaches the athlete it was written for, and the position it
+ * was meant for keeps whatever thin pool it had.
+ */
+test("no drill is written for a position nobody can pick", () => {
+  const bad: string[] = [];
+  for (const d of SKILL_DRILLS) {
+    const offered = new Set(positionsForSport(d.sport));
+    for (const p of d.positions) if (!offered.has(p)) bad.push(`${d.id}: "${p}"`);
+  }
+  assert.deepEqual(bad, []);
+});
+
+/** Ids are used to key the rotation and to look drills up. Two the same and one
+ *  of them can never be reached. */
+test("drill ids and names are unique", () => {
+  const ids = SKILL_DRILLS.map((d) => d.id);
+  assert.equal(new Set(ids).size, ids.length);
+  const names = SKILL_DRILLS.map((d) => `${d.sport}:${d.name}`);
+  assert.equal(new Set(names).size, names.length, "two drills with one name are indistinguishable in a session");
+});
+
+/** Coaching content, not a title. "Practise crossing" is not a drill. */
+test("every drill says how to run it, how much, and what to look for", () => {
+  for (const d of SKILL_DRILLS) {
+    assert.ok(d.how.length >= 2, `${d.id} has ${d.how.length} steps`);
+    assert.ok(d.reps.length > 4, `${d.id} has no meaningful volume`);
+    assert.ok(d.coaching.length > 25, `${d.id}'s coaching point is too thin to be one`);
+    assert.ok(d.progression.length > 15, `${d.id} has nowhere to go`);
+    assert.ok(d.setup.length > 5, `${d.id} does not say what you need`);
   }
 });

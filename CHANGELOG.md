@@ -586,6 +586,71 @@ front-end bundle.
 
 ---
 
+## 2026-08-12 (ball work) — Four rugby positions had no technical work at all
+
+**Operator action: none.** Front-end and pure data.
+
+### The bug nothing was checking
+
+`skillForSession` filters the drill pool to **solo** work — a session has to be
+doable on the evening it lands, and a drill needing three team-mates is one that
+gets skipped. Measured across every position of every sport:
+
+| | solo drills before | after |
+|---|---|---|
+| rugby: Prop, Lock, Flanker, No. 8 | **0** | 6–7 |
+| rugby: Centre, Wing | 1 | 5–6 |
+| football: Centre back | 3 | 8 |
+| basketball: Power forward, Centre | 3 | 8 |
+
+Those four rugby positions got `null` for every session of every block — four of
+ten positions with no ball work in their programme, ever. Nothing failed; the
+skill slot simply rendered nothing and the session looked like a normal gym day.
+
+61 drills became 99. Every position of all six sports now has at least 5 solo
+drills across at least 2 skills, and a block serves 4+ different ones.
+
+### What was added
+
+**Rugby forwards** were the hole, and the reason is honest: forward play is
+contact play, and contact needs someone to hit. But most of what makes a good
+forward is trainable alone — scrum shape against a wall, ball presentation on
+the floor, jackal height, lifting grip and dip, lineout jump timing, tip-on
+passing, pick-and-go. Backs gained high-ball catching, sidestep reps, the
+scrum-half's clearing pass off the floor, and a place-kicking routine.
+
+**Football** defenders and holding midfielders had been practising wall passes
+and their weak foot while their own position guides talked about heading and
+aerial duels: jockeying footwork, self-served heading, switching the play,
+first-time clearing, scanning before you receive, overlap-and-deliver, tight-angle
+finishing, goal-kick range.
+
+**Basketball** big men had three drills, one of which was free throws — now drop
+step and jump hook, board taps, rebound-and-outlet. The two guards were also
+indistinguishable to the app; they now differ by change-of-pace and pocket
+passing against coming off a screen.
+
+**Running** gained three-point starts, a race-day fuelling rehearsal (the gut is
+trainable and race day is the wrong day to discover yours isn't), and finishing
+off tired legs. **Weightlifting's** three "positions" shared one pool, so an
+Olympic lifter got a powerlifter's technical work: snatch balance, jerk dip and
+drive, and competition-command rehearsal separate them.
+
+### The guard
+
+Nothing checked that a position had anything to do, which is why this shipped.
+There is now a floor — every position, 4+ solo drills, 2+ skills, 4+ different
+drills across twelve sessions — verified by putting the four rugby positions
+back to zero and watching three tests fail.
+
+One existing test was wrong and this exposed it: it asserted a multi-position
+athlete's block is byte-identical to their primary position's. That passed only
+because rugby's pool was too thin to differ. The real rule is that gym work
+follows the primary position while ball work covers **every** position played,
+and the test now pins that instead of the accident.
+
+---
+
 ## 2026-08-12 (positions) — A prop stops training like a flanker, and the nav gets out of the way
 
 **Operator action: none** beyond migrations 0073 and 0074 from the entry below.

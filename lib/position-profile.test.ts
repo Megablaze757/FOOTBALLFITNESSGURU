@@ -4,6 +4,7 @@ import { buildBlock } from "./engine";
 import { positionsForSport } from "./coach";
 import { MOVEMENT_BY_ID } from "./movements";
 import { positionProfile, profiledPositions } from "./position-profile";
+import { skillsForAthlete } from "./skills";
 import type { SportId } from "./exercises";
 
 const SPORTS: SportId[] = ["rugby", "football", "basketball", "running", "weightlifting"];
@@ -247,13 +248,45 @@ test("an unknown or missing position still builds a programme", () => {
 });
 
 /**
- * Primary position only. Someone who plays wing and full-back gets wing
- * training — averaging two profiles produces a programme built for nobody,
- * which is the thing being fixed. Ball work still covers both, because drills
- * are cheap to include and strength blocks are not.
+ * TWO DIFFERENT RULES, AND THE TEST HAD CONFLATED THEM.
+ *
+ * Gym work follows the PRIMARY position only: averaging two profiles produces a
+ * block built for nobody, which is the thing being fixed. Ball work follows
+ * EVERY position they play, because a drill is cheap to include and a strength
+ * block is not — someone who covers at prop should still practise scrummaging.
+ *
+ * This used to assert the whole block was identical to a wing-only one, and it
+ * passed — but only because rugby's drill pool was so thin that a wing and a
+ * wing-who-also-props were served the same thing anyway. Filling the pool made
+ * it fail, correctly: the ball work now differs, which is the documented
+ * intent. The test was pinning an accident.
  */
-test("a multi-position athlete is trained as their first position", () => {
-  const both = block("rugby", ["Wing", "Prop"] as never);
-  const wingOnly = block("rugby", "Wing");
-  assert.deepEqual(both, wingOnly);
+test("a multi-position athlete lifts as their first position and practises for both", () => {
+  const gym = (position: string | string[]) => {
+    const b = buildBlock({ goal: "strength", painMap: {}, sport: "rugby", daysPerWeek: 4, position } as never);
+    return b.weeks[2].sessions.flatMap((s) => s.drills.filter((d) => d.slot !== "skill").map((d) => d.name));
+  };
+  const ball = (position: string | string[]) => {
+    const b = buildBlock({ goal: "strength", painMap: {}, sport: "rugby", daysPerWeek: 4, position } as never);
+    return b.weeks[2].sessions.flatMap((s) => s.drills.filter((d) => d.slot === "skill").map((d) => d.name));
+  };
+
+  assert.deepEqual(gym(["Wing", "Prop"]), gym("Wing"), "the gym work must follow the primary position alone");
+
+  const both = ball(["Wing", "Prop"]);
+  const wingOnly = ball("Wing");
+  assert.notDeepEqual(both, wingOnly, "ball work should widen to cover the second position");
+  /**
+   * And it widens INTO the second position rather than merely reshuffling.
+   *
+   * Compared against the prop's whole POOL, not against the four drills a prop
+   * happens to be served in a block — those are one rotation of many, and a
+   * wing-who-props can legitimately be given a prop drill that a pure prop's
+   * rotation did not land on this time.
+   */
+  const propPool = new Set(skillsForAthlete("rugby", "Prop").map((d) => d.name));
+  assert.ok(
+    both.some((n) => propPool.has(n) && !wingOnly.includes(n)),
+    `nothing from the prop's pool appeared: ${both.join(", ")}`
+  );
 });
