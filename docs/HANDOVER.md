@@ -108,6 +108,10 @@ alter table public.profiles validate constraint profiles_training_focus_check;
 
 Migrations 0066–0070 are otherwise applied and verified live.
 
+**0071–0074 are applied.** `0073` (video quota: free 0, `silver` 40) and `0074`
+(`achievement_unlocks` + `achievement_rarity()`) went in on 2026-08-12. Nothing
+in the app is waiting on a migration.
+
 ---
 
 # 2. Done — training programs
