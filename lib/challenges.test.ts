@@ -1,120 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  parseChallenge, parseChallenges, localChallenges, evaluateChallenge,
-  evaluateChallenges, challengeXp, clampTarget, CHALLENGE_METRICS, EMPTY_WEEK,
-  type Challenge,
+  evaluateChallenge, evaluateChallenges, challengeXp, clampTarget, xpFor,
+  CHALLENGE_METRICS, EMPTY_WEEK, type Challenge, type ChallengeMetric,
 } from "./challenges";
-import { EMPTY_STATS } from "./gamification";
 
 const week = (over: Partial<typeof EMPTY_WEEK> = {}) => ({ ...EMPTY_WEEK, ...over });
-
-// --- the constraint this whole module exists for -----------------------------
-
-test("a challenge with an unmeasurable metric is rejected", () => {
-  // "Eat clean for a week" is exactly what must not get through: nothing in the
-  // app can decide whether it happened, so the badge could never unlock.
-  assert.equal(parseChallenge({ title: "Eat clean for a week", metric: "eat_clean", target: 7 }, 0), null);
-  assert.equal(parseChallenge({ title: "Feel great", metric: "vibes", target: 1 }, 0), null);
-  assert.equal(parseChallenge({ title: "No metric at all", target: 3 }, 0), null);
-});
-
-test("a challenge with no title is rejected", () => {
-  assert.equal(parseChallenge({ title: "  ", metric: "check_ins", target: 5 }, 0), null);
-});
-
-test("every accepted challenge can actually be evaluated", () => {
-  const c = parseChallenge({ title: "Fuel up", metric: "nutrition_logs", target: 5, icon: "🍽️" }, 0);
-  assert.ok(c);
-  assert.ok(CHALLENGE_METRICS.includes(c.metric));
-  const p = evaluateChallenge(c, week({ nutrition_logs: 5 }));
-  assert.equal(p.complete, true);
-});
-
-// --- targets -----------------------------------------------------------------
-
-test("impossible targets are clamped to a real week", () => {
-  assert.equal(clampTarget("check_ins", 99), 7);
-  assert.equal(clampTarget("training_sessions", 40), 6);
-  assert.equal(clampTarget("check_ins", 0), 1);
-  assert.equal(clampTarget("check_ins", -5), 1);
-});
-
-test("a garbage target becomes a usable one rather than NaN", () => {
-  const c = parseChallenge({ title: "T", metric: "check_ins", target: "lots" }, 0);
-  assert.ok(c);
-  assert.ok(Number.isInteger(c.target) && c.target >= 1);
-});
-
-test("harder challenges are worth more XP", () => {
-  const easy = parseChallenge({ title: "a", metric: "check_ins", target: 2 }, 0);
-  const hard = parseChallenge({ title: "b", metric: "check_ins", target: 6 }, 1);
-  assert.ok(easy && hard, "both should parse");
-  assert.ok(hard.xp > easy.xp);
-});
-
-// --- lists -------------------------------------------------------------------
-
-test("bad entries are dropped, good ones kept", () => {
-  const out = parseChallenges([
-    { title: "Eat clean", metric: "vibes", target: 7 },
-    { title: "Log your food", metric: "nutrition_logs", target: 5 },
-    { title: "Check in daily", metric: "check_ins", target: 6 },
-  ]);
-  assert.equal(out.length, 2);
-  assert.deepEqual(out.map((c) => c.metric), ["nutrition_logs", "check_ins"]);
-});
-
-test("three challenges on one metric is one challenge with three names", () => {
-  const out = parseChallenges([
-    { title: "A", metric: "check_ins", target: 3 },
-    { title: "B", metric: "check_ins", target: 5 },
-    { title: "C", metric: "check_ins", target: 7 },
-  ]);
-  assert.equal(out.length, 1);
-});
-
-test("never more than three, and never throws on rubbish", () => {
-  const many = Array.from({ length: 10 }, (_, i) => ({ title: `T${i}`, metric: CHALLENGE_METRICS[i % 7], target: 3 }));
-  assert.ok(parseChallenges(many).length <= 3);
-  assert.deepEqual(parseChallenges(null), []);
-  assert.deepEqual(parseChallenges("nonsense"), []);
-  assert.deepEqual(parseChallenges([null, undefined, 42]), []);
-});
-
-// --- the local generator -----------------------------------------------------
-
-test("there are always challenges, even with no history", () => {
-  const out = localChallenges(EMPTY_STATS, EMPTY_WEEK);
-  assert.equal(out.length, 3);
-  for (const c of out) assert.ok(CHALLENGE_METRICS.includes(c.metric));
-});
-
-test("challenges aim at what's being neglected", () => {
-  // Trains plenty, never logs food -> should be told to log food.
-  const out = localChallenges({ ...EMPTY_STATS, trainingSessions: 40 }, week({ training_sessions: 5, nutrition_logs: 0 }));
-  assert.ok(out.some((c) => c.metric === "nutrition_logs"), out.map((c) => c.metric).join(", "));
-});
-
-test("it doesn't nag about things already done", () => {
-  const out = localChallenges(
-    { ...EMPTY_STATS, videos: 5, benchmarks: 5 },
-    week({ nutrition_logs: 7, check_ins: 7, training_sessions: 5 })
-  );
-  assert.ok(!out.some((c) => c.metric === "videos"), "already analysing clips");
-  assert.ok(!out.some((c) => c.metric === "benchmarks"), "already benchmarking");
-});
-
-test("the same week produces the same challenges", () => {
-  const a = localChallenges(EMPTY_STATS, week({ check_ins: 2 }));
-  const b = localChallenges(EMPTY_STATS, week({ check_ins: 2 }));
-  assert.deepEqual(a, b, "challenges must not reshuffle on every page load");
-});
-
-test("no duplicate metrics from the local generator", () => {
-  const out = localChallenges(EMPTY_STATS, EMPTY_WEEK);
-  assert.equal(new Set(out.map((c) => c.metric)).size, out.length);
-});
 
 // --- evaluation --------------------------------------------------------------
 
@@ -144,4 +35,44 @@ test("XP is only awarded for completed challenges", () => {
 test("evaluating a list keeps the order", () => {
   const list = [c("check_ins", 3), c("videos", 1)];
   assert.deepEqual(evaluateChallenges(list, EMPTY_WEEK).map((p) => p.challenge.metric), ["check_ins", "videos"]);
+});
+
+// --- targets and pricing -----------------------------------------------------
+
+test("impossible targets are clamped to a real week", () => {
+  assert.equal(clampTarget("check_ins", 99), 7);
+  assert.equal(clampTarget("training_sessions", 40), 6);
+  assert.equal(clampTarget("check_ins", 0), 1);
+  assert.equal(clampTarget("check_ins", -5), 1);
+  assert.equal(clampTarget("rest_days", 7), 4, "a week does not hold 7 rest days and 7 sessions");
+});
+
+test("harder challenges are worth more XP", () => {
+  assert.ok(xpFor("check_ins", 6) > xpFor("check_ins", 2));
+  for (const m of CHALLENGE_METRICS) assert.ok(xpFor(m, 1) > 0, `${m} pays nothing`);
+});
+
+/**
+ * THE VOCABULARY RULE, as a test. A metric is only allowed here if it can be
+ * counted OVER THE WINDOW — `program_sessions` was removed because
+ * programs.completed_sessions carries no timestamps, so the only number
+ * available was the lifetime total, which read as complete on day one forever.
+ * Every metric must be a real field on WeekActivity or the evaluator reads
+ * undefined, scores 0, and the challenge can never be finished.
+ */
+test("every metric in the vocabulary is a field the week actually carries", () => {
+  for (const m of CHALLENGE_METRICS) {
+    assert.ok(m in EMPTY_WEEK, `"${m}" is in the vocabulary but not on WeekActivity`);
+    assert.equal(typeof EMPTY_WEEK[m], "number", `"${m}" is not a number`);
+  }
+  // And nothing on WeekActivity is missing from the vocabulary, which would be
+  // a counter nobody can ever write a challenge against.
+  for (const k of Object.keys(EMPTY_WEEK)) {
+    assert.ok(CHALLENGE_METRICS.includes(k as ChallengeMetric), `"${k}" is counted but unusable`);
+  }
+});
+
+test("a metric that cannot be counted over a week is not in the vocabulary", () => {
+  assert.ok(!CHALLENGE_METRICS.includes("program_sessions" as ChallengeMetric),
+    "program_sessions is back, and only a lifetime total exists to feed it");
 });

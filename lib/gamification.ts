@@ -47,12 +47,33 @@ export interface ActivityStats {
   weeksActive: number;
   /** Days in the last 7 with a check-in, a training log AND food logged. */
   perfectDaysLast7: number;
+  /**
+   * Complete days across the whole window, not just this one.
+   *
+   * `perfectDaysLast7` can only ever carry badges up to "three in a week" — it
+   * resets every seven days, so there is no ladder above that. This is the same
+   * measure without the reset, which is what makes doing the whole loop
+   * something you can be marked for repeatedly. Bounded by the 60-day query
+   * window like everything else here.
+   */
+  perfectDays: number;
+  /**
+   * Times they came back after a week or more away.
+   *
+   * The streak counter actively punishes this: miss a week of a forty-day run
+   * and you are on zero with nothing to show for the forty, which is exactly
+   * the moment someone stops opening the app. Nothing in the reward system
+   * marked returning, which made the whole ladder a punishment for having a
+   * life. This counts the returns.
+   */
+  comebacks: number;
 }
 
 export const EMPTY_STATS: ActivityStats = {
   checkIns: 0, streak: 0, trainingSessions: 0, completedSessions: 0,
   completedBlocks: 0, benchmarks: 0, videos: 0, nutritionLogs: 0, checkInsLast7: 0,
   restDaysLogged: 0, longestStreak: 0, weeksActive: 0, perfectDaysLast7: 0,
+  perfectDays: 0, comebacks: 0,
 };
 
 /**
@@ -72,16 +93,22 @@ export function activitySpans(
   trainDates: string[],
   nutriDates: string[],
   today: string = todayLocal()
-): Pick<ActivityStats, "longestStreak" | "weeksActive" | "perfectDaysLast7"> {
+): Pick<ActivityStats, "longestStreak" | "weeksActive" | "perfectDaysLast7" | "perfectDays" | "comebacks"> {
   const days = [...new Set(checkDates)].sort();
 
   let longestStreak = 0;
   let run = 0;
   let previous: number | null = null;
+  // A gap of a week or more, closed. Seven days because that is long enough to
+  // be a real absence — a missed weekend is not a comeback — and because it is
+  // the same window everything else on this page is measured over.
+  const COMEBACK_GAP = 7 * DAY_MS;
+  let comebacks = 0;
   for (const d of days) {
     const t = Date.parse(`${d}T00:00:00Z`);
     if (Number.isNaN(t)) continue;
     run = previous !== null && t - previous === DAY_MS ? run + 1 : 1;
+    if (previous !== null && t - previous >= COMEBACK_GAP) comebacks++;
     previous = t;
     if (run > longestStreak) longestStreak = run;
   }
@@ -103,8 +130,11 @@ export function activitySpans(
     const d = new Date(from + i * DAY_MS).toISOString().slice(0, 10);
     if (checked.has(d) && trained.has(d) && fed.has(d)) perfectDaysLast7++;
   }
+  // The same test over every day in the window. Walks the check-in days rather
+  // than the calendar, because a complete day needs a check-in by definition.
+  const perfectDays = days.filter((d) => trained.has(d) && fed.has(d)).length;
 
-  return { longestStreak, weeksActive: weeks.size, perfectDaysLast7 };
+  return { longestStreak, weeksActive: weeks.size, perfectDaysLast7, perfectDays, comebacks };
 }
 
 // XP awarded per unit of activity.
@@ -464,6 +494,106 @@ export const ACHIEVEMENTS: Achievement[] = [
    * and what the app should be encouraging over an unbroken chain.
    */
   { id: "weeks_8", name: "Two months in", desc: "Check in during 8 different weeks", icon: "chart", test: (s) => s.weeksActive >= 8 },
+
+  /**
+   * A THIRD BATCH. Two things drove it.
+   *
+   * The first is that the ladders still ended too early for anyone who sticks
+   * around: "Two-fifty" was the top of the training rung, level 25 the top of
+   * the level rung, and an athlete two years in had nothing above them. The XP
+   * curve now ramps past level 20, so the level badges have to reach further
+   * than they used to or the ramp leads nowhere.
+   *
+   * The second is that thirteen of the original fifteen counted rows in two
+   * tables, and adding more thresholds to the same two counters would just make
+   * that worse. So the new counters — complete days across the window, and
+   * coming back after time away — carry most of what is new here.
+   *
+   * THE CEILING RULE APPLIES TO ALL OF IT: anything derived from the loaded
+   * dates is bounded by the 60-day query window, so no badge may ask for more
+   * than 60 of them. There is a test.
+   */
+
+  // --- Further up the ladders that already existed --------------------------
+  { id: "checkins_200", name: "Two hundred mornings", desc: "Check in 200 times", icon: "calendar", test: (s) => s.checkIns >= 200 },
+  { id: "sessions_500", name: "Five hundred", desc: "Log 500 training sessions", icon: "trophy", test: (s) => s.trainingSessions >= 500 },
+  { id: "sessions_done_100", name: "A hundred off the plan", desc: "Tick off 100 programmed sessions", icon: "check", test: (s) => s.completedSessions >= 100 },
+  { id: "sessions_done_250", name: "Programme regular", desc: "Tick off 250 programmed sessions", icon: "clipboard", test: (s) => s.completedSessions >= 250 },
+  { id: "blocks_6", name: "Six blocks", desc: "Finish six 4-week blocks", icon: "clipboard", test: (s) => s.completedBlocks >= 6 },
+  { id: "blocks_12", name: "A year of blocks", desc: "Finish twelve 4-week blocks", icon: "trophy", test: (s) => s.completedBlocks >= 12 },
+  { id: "nutrition_100", name: "A hundred days fed", desc: "Log your food on 100 days", icon: "bowl", test: (s) => s.nutritionLogs >= 100 },
+  { id: "nutrition_365", name: "A year of meals", desc: "Log your food on 365 days", icon: "trophy", test: (s) => s.nutritionLogs >= 365 },
+  { id: "videos_25", name: "Twenty-five clips", desc: "Analyse 25 clips", icon: "camera", test: (s) => s.videos >= 25 },
+  { id: "tested_10", name: "Ten tests deep", desc: "Log 10 strength or speed tests", icon: "ruler", test: (s) => s.benchmarks >= 10 },
+  { id: "tested_25", name: "Measured", desc: "Log 25 strength or speed tests", icon: "chart", test: (s) => s.benchmarks >= 25 },
+  { id: "rest_100", name: "A hundred days off", desc: "100 rest days logged", icon: "sleep", test: (s) => s.restDaysLogged >= 100 },
+  // No rung above "Two months in" for weeksActive: the pages load 60 days of
+  // dates, so the counter cannot exceed 8 and a badge asking for 26 would sit
+  // greyed out forever. The ceiling test caught exactly that when it was tried.
+
+  /**
+   * The level rungs, spread to match the curve rather than the old flat one.
+   * Levels cost more the higher you go now, so 40 is a long way past 25 and 75
+   * is a long way past 50 — these are further apart on purpose.
+   */
+  { id: "level_5", name: "Getting going", desc: "Reach level 5", icon: "signal", test: (_s, level) => level >= 5 },
+  { id: "level_40", name: "Forty", desc: "Reach level 40", icon: "medal", test: (_s, level) => level >= 40 },
+  { id: "level_50", name: "Halfway to a hundred", desc: "Reach level 50", icon: "trophy", test: (_s, level) => level >= 50 },
+  { id: "level_75", name: "Seventy-five", desc: "Reach level 75", icon: "trophy", test: (_s, level) => level >= 75 },
+  { id: "level_100", name: "Century", desc: "Reach level 100", icon: "confetti", test: (_s, level) => level >= 100 },
+
+  // --- Doing the whole loop, repeatedly -------------------------------------
+  /**
+   * "Full house" paid for one complete day and "Three in a week" for three, and
+   * then it stopped, because `perfectDaysLast7` resets every seven days. These
+   * run off the unresetting count, so the hardest habit in the app — all three
+   * on the same day — has a ladder like everything else.
+   */
+  { id: "perfect_5", name: "Five complete days", desc: "Check in, train and eat for it — five days", icon: "target", test: (s) => s.perfectDays >= 5 },
+  { id: "perfect_10", name: "Ten complete days", desc: "Ten days with all three done", icon: "flame", test: (s) => s.perfectDays >= 10 },
+  { id: "perfect_25", name: "Twenty-five complete", desc: "Twenty-five days with all three done", icon: "medal", test: (s) => s.perfectDays >= 25 },
+  { id: "perfect_50", name: "Fifty complete", desc: "Fifty days with the whole loop closed", icon: "trophy", test: (s) => s.perfectDays >= 50 },
+  { id: "perfect_week_full", name: "A perfect week", desc: "All three, every day, for seven days", icon: "confetti", test: (s) => s.perfectDaysLast7 >= 7 },
+
+  // --- Coming back ----------------------------------------------------------
+  /**
+   * The badges most likely to matter to someone deciding whether to open the
+   * app again after a fortnight off, and the ones the streak counter can never
+   * give them. Nothing else in here rewards an interrupted history.
+   */
+  { id: "comeback_1", name: "Back at it", desc: "Return after a week or more away", icon: "run", test: (s) => s.comebacks >= 1 },
+  { id: "comeback_3", name: "Keeps coming back", desc: "Return from three separate breaks", icon: "shield", test: (s) => s.comebacks >= 3 },
+  { id: "comeback_5", name: "Hard to shake", desc: "Return from five separate breaks", icon: "battery", test: (s) => s.comebacks >= 5 },
+  { id: "best_streak_10", name: "Ten straight", desc: "Reach a 10-day streak — it counts even after it ends", icon: "flame", test: (s) => s.longestStreak >= 10 },
+  { id: "best_streak_45", name: "Forty-five straight", desc: "Reach a 45-day streak — it counts even after it ends", icon: "trophy", test: (s) => s.longestStreak >= 45 },
+
+  // --- Balance, rather than accumulation ------------------------------------
+  /**
+   * These pay for the SHAPE of a history, not its size, and they are the only
+   * badges here that a bigger number cannot buy. An athlete who trains hard and
+   * never rests fails the first one however many sessions they log — which is
+   * the point, in an app whose load engine treats that pattern as an injury
+   * risk.
+   */
+  {
+    id: "balanced", name: "Balanced", desc: "Log at least one rest day for every four sessions", icon: "scales",
+    test: (s) => s.trainingSessions >= 20 && s.restDaysLogged * 4 >= s.trainingSessions,
+  },
+  {
+    id: "all_rounder", name: "All-rounder", desc: "Use every part of the app: check in, train, eat, test and film",
+    icon: "confetti",
+    test: (s) => s.checkIns >= 1 && s.trainingSessions >= 1 && s.nutritionLogs >= 1 && s.benchmarks >= 1 && s.videos >= 1,
+  },
+  {
+    id: "planned", name: "Runs the plan", desc: "Tick off more programmed sessions than you log loose ones",
+    icon: "clipboard",
+    test: (s) => s.completedSessions >= 20 && s.completedSessions >= s.trainingSessions - s.completedSessions,
+  },
+  {
+    id: "fuelled_properly", name: "Eats like an athlete", desc: "Log food on more days than you train",
+    icon: "plate",
+    test: (s) => s.trainingSessions >= 20 && s.nutritionLogs >= s.trainingSessions,
+  },
 ];
 
 export function evaluateAchievements(s: ActivityStats, level: number): { unlocked: Achievement[]; locked: Achievement[] } {

@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   computeXp, levelFor, rankFor, rankLadder, evaluateAchievements, dailyQuests, EMPTY_STATS,
-  ACHIEVEMENTS, type ActivityStats,
+  ACHIEVEMENTS, activitySpans, type ActivityStats,
 } from "./gamification";
 
 test("XP accumulates from activity and levels rise", () => {
@@ -239,6 +239,11 @@ test("no badge asks for something the app cannot measure", () => {
     completedBlocks: 200, benchmarks: 500, videos: 500, nutritionLogs: 5000,
     checkInsLast7: 7, restDaysLogged: 2000,
     longestStreak: WINDOW_DAYS, weeksActive: Math.floor(WINDOW_DAYS / 7), perfectDaysLast7: 7,
+    // Both are derived from the same 60 days of dates, so both are capped by it.
+    perfectDays: WINDOW_DAYS,
+    // A comeback needs a gap of 7 days plus the day that closes it, so 60 days
+    // cannot hold more than this many however erratic the athlete is.
+    comebacks: Math.floor(WINDOW_DAYS / 8),
   };
   const { locked } = evaluateAchievements(maxed, 999);
   assert.deepEqual(
@@ -306,4 +311,52 @@ test("a streak you had still counts after it breaks", () => {
   const ids = evaluateAchievements(lapsed, 5).unlocked.map((a) => a.id);
   assert.ok(ids.includes("best_streak_21"), "a broken 40-day streak was worth nothing at all");
   assert.ok(!ids.includes("streak_14"), "the current-streak badges must still need a current streak");
+});
+
+// --- the two counters added for the third batch of badges --------------------
+
+/**
+ * COMING BACK, counted. The streak resets to zero the moment someone misses a
+ * day, so an athlete with an interrupted history has nothing the reward system
+ * can see. These badges are the only ones that pay for it, which makes the
+ * counter behind them worth pinning down.
+ */
+test("a comeback is a real absence closed, not a missed weekend", () => {
+  const spans = (dates: string[]) => activitySpans(dates, [], [], "2026-03-01");
+
+  // Straight through: no gaps, no comebacks.
+  assert.equal(spans(["2026-01-01", "2026-01-02", "2026-01-03"]).comebacks, 0);
+  // A weekend off is not a comeback — that is ordinary life, not a return.
+  assert.equal(spans(["2026-01-01", "2026-01-02", "2026-01-05"]).comebacks, 0);
+  // Six days away: still short of the week that makes it a return.
+  assert.equal(spans(["2026-01-01", "2026-01-07"]).comebacks, 0);
+  // Seven days away, then back. That is one.
+  assert.equal(spans(["2026-01-01", "2026-01-08"]).comebacks, 1);
+  // Two separate absences, two returns.
+  assert.equal(spans(["2026-01-01", "2026-01-20", "2026-01-21", "2026-02-15"]).comebacks, 2);
+});
+
+test("a comeback does not cost you the streak you had", () => {
+  // The whole point of the badge: forty days, a fortnight off, then back. The
+  // current streak is 1 and the app must still be able to see the forty.
+  const long = Array.from({ length: 40 }, (_, i) =>
+    new Date(Date.UTC(2026, 0, 1) + i * 86_400_000).toISOString().slice(0, 10));
+  const s = activitySpans([...long, "2026-03-01"], [], [], "2026-03-01");
+  assert.equal(s.longestStreak, 40);
+  assert.equal(s.comebacks, 1);
+});
+
+test("a complete day is all three, and it is counted beyond this week", () => {
+  const check = ["2026-01-01", "2026-01-02", "2026-01-03", "2026-01-04"];
+  const train = ["2026-01-01", "2026-01-02", "2026-01-04"];
+  const food = ["2026-01-01", "2026-01-02", "2026-01-03"];
+  // 01 and 02 have all three. 03 has no training, 04 has no food.
+  const s = activitySpans(check, train, food, "2026-03-01");
+  assert.equal(s.perfectDays, 2);
+  // Long past the seven-day window, so the resetting counter sees none of it —
+  // which is exactly why the unresetting one had to exist.
+  assert.equal(s.perfectDaysLast7, 0);
+
+  // Training and eating on a day you never checked in is not a complete day.
+  assert.equal(activitySpans([], ["2026-01-01"], ["2026-01-01"], "2026-01-01").perfectDays, 0);
 });

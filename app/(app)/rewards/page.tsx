@@ -47,16 +47,40 @@ export default function RewardsPage() {
      * definition.
      */
     const since60 = daysAgoLocal(59);
-    const [checks, training, programs, benchC, videoC, nutrition, checkC, trainC, nutriC] = await Promise.all([
+    const [checks, training, programs, benchC, videoC, nutrition, checkC, trainC, nutriC,
+           benchRows, videoRows, profile, activeProgram] = await Promise.all([
       supabase.from("daily_check_ins").select("check_in_date").eq("user_id", user.id).gte("check_in_date", since60),
-      supabase.from("training_logs").select("log_date").eq("user_id", user.id).gte("log_date", since60),
+      // rpe comes along for the ride — same rows, one more column — so an
+      // "easy session" challenge can be counted rather than guessed at.
+      supabase.from("training_logs").select("log_date, rpe").eq("user_id", user.id).gte("log_date", since60),
       supabase.from("programs").select("completed_sessions, status").eq("user_id", user.id),
       supabase.from("strength_benchmarks").select("id", head).eq("user_id", user.id),
       supabase.from("ai_plans").select("id", head).eq("user_id", user.id),
-      supabase.from("nutrition_logs").select("log_date").eq("user_id", user.id).gte("log_date", since60),
+      // Likewise: the target and what was eaten are on the row already, so
+      // "days on your calorie target" costs nothing beyond two column names.
+      supabase.from("nutrition_logs").select("log_date, calories_eaten, daily_calorie_target").eq("user_id", user.id).gte("log_date", since60),
       supabase.from("daily_check_ins").select("id", head).eq("user_id", user.id),
       supabase.from("training_logs").select("id", head).eq("user_id", user.id),
       supabase.from("nutrition_logs").select("id", head).eq("user_id", user.id),
+      /**
+       * The same two things again, but as DATES rather than a total.
+       *
+       * These have to be separate from the lifetime counts above, because the
+       * two numbers answer different questions and both are wanted on this
+       * page: an ACHIEVEMENT asks "have you ever" and a CHALLENGE asks "have
+       * you this week". Feeding the lifetime count to the week was the bug —
+       * "one benchmark test this week" read as already complete for anyone who
+       * had ever recorded one, forever.
+       *
+       * Dates rather than a windowed count because the board has two windows.
+       * A count answers one of them; the dates answer both.
+       */
+      supabase.from("strength_benchmarks").select("test_date").eq("user_id", user.id).gte("test_date", since60),
+      supabase.from("ai_plans").select("created_at").eq("user_id", user.id).gte("created_at", since60),
+      // Who they are, so challenges can be picked for a prop rather than for
+      // "a rugby player". Two small rows against nine existing queries.
+      supabase.from("profiles").select("sport, position, positions, training_focus").eq("id", user.id).maybeSingle(),
+      supabase.from("programs").select("goal_type").eq("user_id", user.id).eq("status", "active").maybeSingle(),
     ]);
 
     const checkDates = (checks.data ?? []).map((r) => r.check_in_date as string);
@@ -86,17 +110,78 @@ export default function RewardsPage() {
       trainedToday: trainDates.includes(today),
       nutritionToday: nutriDates.includes(today),
     };
-    // The last 7 days, which is the window every weekly challenge is scored on.
-    const week: WeekActivity = {
-      check_ins: checkDates.filter((d) => d >= since7).length,
-      training_sessions: trainDates.filter((d) => d >= since7).length,
-      program_sessions: stats.completedSessions,
-      nutrition_logs: nutriDates.filter((d) => d >= since7).length,
-      benchmarks: stats.benchmarks,
-      videos: stats.videos,
+    /**
+     * The last 7 days, which is the window every weekly challenge is scored on.
+     *
+     * The four extra counters are what let a DAILY challenge say anything a
+     * quest does not already say: over one day the cumulative metrics all
+     * collapse to "do the thing once", which is exactly the three fixed quests.
+     * All four are derived from rows this page already loads.
+     */
+    const trainRowsRecent = (training.data ?? []) as { log_date: string; rpe: number | null }[];
+    const nutriRows = (nutrition.data ?? []) as {
+      log_date: string; calories_eaten: number | null; daily_calorie_target: number | null;
+    }[];
+    // Inside 10% of the target counts. A calorie goal is an estimate, so
+    // demanding the exact number would be false precision — and unwinnable.
+    const CALORIE_TOLERANCE = 0.1;
+    const onTargetDays = nutriRows.filter((r) => {
+      const target = Number(r.daily_calorie_target) || 0;
+      const eaten = Number(r.calories_eaten) || 0;
+      if (target <= 0 || eaten <= 0) return false;
+      return Math.abs(eaten - target) <= target * CALORIE_TOLERANCE;
+    }).map((r) => r.log_date);
+    const benchDates = (benchRows.data ?? []).map((r) => String(r.test_date).slice(0, 10));
+    const videoDates = (videoRows.data ?? []).map((r) => String(r.created_at).slice(0, 10));
+    const easyDates = trainRowsRecent.filter((r) => (r.rpe ?? 99) <= 6).map((r) => r.log_date);
+    const restDates = checkDates.filter((d) => !trainDates.includes(d));
+    const perfectDates = checkDates.filter((d) => trainDates.includes(d) && nutriDates.includes(d));
+
+    /**
+     * The same counters over two windows, because the board asks two questions.
+     *
+     * Both boards were being scored against the week, which is wrong in the
+     * direction that makes a daily challenge worthless: "take the rest day"
+     * read 4/1 and complete on a Tuesday morning, because four rest days had
+     * happened at some point in the previous seven. A daily card that is
+     * already ticked before you get up is not a challenge, it is a receipt.
+     */
+    const inWindow = (dates: string[], from: string) => dates.filter((d) => d >= from).length;
+    const onDay = (dates: string[], day: string) => dates.filter((d) => d === day).length;
+    const activity = (count: (dates: string[]) => number): WeekActivity => ({
+      check_ins: count(checkDates),
+      training_sessions: count(trainDates),
+      nutrition_logs: count(nutriDates),
+      rest_days: count(restDates),
+      perfect_days: count(perfectDates),
+      calorie_goal_days: count(onTargetDays),
+      easy_sessions: count(easyDates),
+      // Windowed, NOT stats.benchmarks / stats.videos — those are lifetime.
+      benchmarks: count(benchDates),
+      videos: count(videoDates),
+      // The exception, and deliberately so: a streak is a running total by
+      // definition, and "push the streak to 14" is a real target precisely
+      // because it counts the days before this one. It means the same thing in
+      // both windows, so it is not narrowed for the daily board.
       streak: stats.streak,
+    });
+    const week = activity((dates) => inWindow(dates, since7));
+    const todayActivity = activity((dates) => onDay(dates, today));
+    const pr = profile.data as {
+      sport?: string; position?: string; positions?: string[]; training_focus?: string;
+    } | null;
+    return {
+      stats, state, week, today: todayActivity,
+      // The context the challenge engine picks against. Same three things the
+      // programme engine reads, so a prop's challenges and a prop's sessions
+      // are aimed at the same athlete.
+      ctx: {
+        sport: (pr?.sport ?? null) as never,
+        position: pr?.positions?.length ? pr.positions : (pr?.position ?? null),
+        focus: (pr?.training_focus ?? null) as never,
+        goal: ((activeProgram.data as { goal_type?: string } | null)?.goal_type ?? null) as never,
+      },
     };
-    return { stats, state, week };
   }, [user.id], `rewards:${user.id}`);
 
   /**
@@ -208,7 +293,7 @@ export default function RewardsPage() {
 
       <RankLadder level={level} />
 
-      <WeeklyChallenges userId={user.id} stats={data.stats} week={data.week} />
+      <WeeklyChallenges week={data.week} today={data.today} ctx={data.ctx} />
 
       <Leaderboards userId={user.id} />
 

@@ -99,7 +99,14 @@ const WORKER_ONLY = new Set([
   // Wearable OAuth/token exchange — needs the provider secrets.
   "connect-wearable",
   // Have on-device fallbacks, so these degrade rather than break.
-  "generate-challenges",
+  //
+  // `generate-challenges` was here and is gone: the challenge board is picked
+  // from a written pool now (lib/challenge-pool.ts), so nothing calls it. The
+  // model was never allowed to write the RULE of a challenge — only the words
+  // around a metric from a fixed vocabulary — so an inference per athlete per
+  // week was buying phrasing, and buying it on free model tiers that are rate
+  // limited and get deprecated without notice. This test is what noticed the
+  // entry had gone stale.
   "injury-plan",
   // No fallback and no Edge equivalent: the button reports the error and that
   // is all it can do. Found by this test rather than by reading the code —

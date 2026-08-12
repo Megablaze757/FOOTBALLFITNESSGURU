@@ -1,136 +1,117 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { invokeAI } from "@/lib/api";
-import {
-  parseChallenges, localChallenges, evaluateChallenges,
-  type Challenge, type WeekActivity,
-} from "@/lib/challenges";
-import type { ActivityStats } from "@/lib/gamification";
-import { can } from "@/lib/subscription";
-import { useTier } from "@/lib/use-tier";
-import { UpgradeNote } from "@/components/FeatureLock";
+import { evaluateChallenges, type Challenge, type WeekActivity } from "@/lib/challenges";
+import { pickChallenges, type ChallengeWindow } from "@/lib/challenge-pool";
+import { todayLocal } from "@/lib/day";
+import type { SportId } from "@/lib/exercises";
+import type { GoalType, TrainingFocus } from "@/lib/coach";
 
 interface Props {
-  userId: string;
-  stats: ActivityStats;
+  /** The last 7 days, which the weekly board is scored against. */
   week: WeekActivity;
-  sport?: string | null;
-  goal?: string | null;
-}
-
-/** Challenges are set once a week; the key changes when the week does. */
-function weekKey(userId: string): string {
-  const now = new Date();
-  const jan1 = new Date(now.getFullYear(), 0, 1);
-  const weekNo = Math.floor((now.getTime() - jan1.getTime()) / (7 * 86400_000));
-  return `apex-challenges-${userId}-${now.getFullYear()}-${weekNo}`;
+  /**
+   * The same counters for TODAY ONLY, which the daily board is scored against.
+   *
+   * Both boards read `week` at first, and a daily card is worthless that way:
+   * "take the rest day" showed 4/1 and complete on a Tuesday morning, because
+   * four rest days had happened somewhere in the previous seven. A card that is
+   * already ticked before you get out of bed is a receipt, not a challenge.
+   */
+  today: WeekActivity;
+  ctx: {
+    sport?: SportId | null;
+    goal?: GoalType | null;
+    position?: string | string[] | null;
+    focus?: TrainingFocus | null;
+  };
 }
 
 /**
- * Three personalised objectives for the week. The AI writes the wording and
- * picks the target; the metric comes from a fixed vocabulary so progress is
- * ordinary arithmetic — see lib/challenges.ts for why that matters.
+ * Today's and this week's objectives, picked for this athlete.
  *
- * Cached per week in localStorage: challenges that reshuffle on every page load
- * aren't challenges, and it keeps this to one AI call a week per athlete.
+ * WHAT THIS REPLACED. Every mount fired `generate-challenges` at a language
+ * model, cached the answer in localStorage for a week, and fell back to a local
+ * set when it failed. Three things were wrong with that and only one of them
+ * was the cost:
+ *
+ *   - The model was never allowed to write the RULE, only the words around a
+ *     metric from a fixed seven-item vocabulary (see lib/challenges.ts — a
+ *     free-text goal creates a challenge nothing can check). So the entire
+ *     contribution of an inference was phrasing.
+ *   - Nobody could read what it would say to an athlete next Tuesday. A written
+ *     pool is reviewable; a prompt is a hope.
+ *   - It was one call per athlete per week, forever, on free model tiers that
+ *     are rate-limited and get deprecated without notice — and when they fail
+ *     the athlete silently gets the local set anyway.
+ *
+ * The pool is the same output, chosen rather than generated: deterministic,
+ * testable, free, and picked against sport, goal and position the way the
+ * programme engine picks movements.
  */
-export function WeeklyChallenges({ userId, stats, week, sport, goal }: Props) {
-  const [challenges, setChallenges] = useState<Challenge[]>([]);
-  const [source, setSource] = useState<"ai" | "local">("local");
+export function WeeklyChallenges({ week, today, ctx }: Props) {
   /**
-   * THIS CARD LIVES ON A FREE PAGE AND WAS CALLING A MODEL.
-   *
-   * Rewards is free, and mounting it fired `generate-challenges` for everyone —
-   * an inference a week per free athlete, for a capability (`ai_challenges`)
-   * that was declared paid and checked nowhere. The Edge Function's own gate
-   * refuses it, so what free accounts actually got was a wasted round trip and
-   * the local set anyway.
-   *
-   * DEGRADES, does not disappear. `localChallenges` picks the same objectives
-   * from the same fixed vocabulary on the device, so a free athlete still gets
-   * three things to aim at this week; what Pro buys is having them written for
-   * the way THEY train rather than chosen from a table.
+   * Seeds, not randomness. The daily set turns over at midnight and the weekly
+   * set on the same day each week — a board that reshuffles on every page load
+   * is not a board, and it is the first thing anyone notices.
    */
-  const { tier, loading: tierLoading } = useTier();
-  const generated = can(tier, "ai_challenges");
+  const dayNumber = Math.floor(Date.parse(`${todayLocal()}T00:00:00Z`) / 86_400_000);
+  // Each board is both PICKED and SCORED against its own window, so "aim at the
+  // gap" means today's gap for today's card and the week's gap for the week's.
+  const daily = pickChallenges({ ...ctx, window: "daily", week: today, seed: dayNumber, count: 2 });
+  const weekly = pickChallenges({ ...ctx, window: "weekly", week, seed: Math.floor(dayNumber / 7), count: 3 });
 
-  useEffect(() => {
-    if (tierLoading) return;
-    const key = weekKey(userId);
-    const cached = localStorage.getItem(key);
-    if (cached) {
-      try {
-        const { list, src } = JSON.parse(cached) as { list: Challenge[]; src: "ai" | "local" };
-        if (Array.isArray(list) && list.length) {
-          setChallenges(list);
-          setSource(src === "ai" ? "ai" : "local");
-          return;
-        }
-      } catch { /* corrupt cache — fall through and regenerate */ }
-    }
-
-    // Show the local set immediately so the card is never empty, then upgrade
-    // in place if the AI answers.
-    const fallback = localChallenges(stats, week);
-    setChallenges(fallback);
-
-    if (!generated) {
-      localStorage.setItem(key, JSON.stringify({ list: fallback, src: "local" }));
-      return;
-    }
-
-    let active = true;
-    invokeAI<{ challenges?: unknown }>("generate-challenges", { activity: week, sport, goal })
-      .then((res) => {
-        if (!active) return;
-        const parsed = parseChallenges(res?.challenges);
-        // Fewer than three usable ones means the model mostly ignored the
-        // vocabulary; the local set is better than a half-empty card.
-        const list = parsed.length >= 3 ? parsed : fallback;
-        const src = parsed.length >= 3 ? "ai" : "local";
-        setChallenges(list);
-        setSource(src);
-        localStorage.setItem(key, JSON.stringify({ list, src }));
-      })
-      .catch(() => {
-        if (!active) return;
-        localStorage.setItem(key, JSON.stringify({ list: fallback, src: "local" }));
-      });
-    return () => { active = false; };
-    // Generated once per week — deliberately not re-run as activity changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId, tierLoading, generated]);
-
-  if (!challenges.length) return null;
-  const progress = evaluateChallenges(challenges, week);
-  const done = progress.filter((p) => p.complete).length;
+  if (!daily.length && !weekly.length) return null;
 
   return (
     <div className="card p-5">
+      <ChallengeGroup
+        heading="Today"
+        note="Resets at midnight."
+        list={daily}
+        week={today}
+        window="daily"
+      />
+      {weekly.length > 0 && (
+        <div className={daily.length ? "mt-5 border-t border-white/[0.06] pt-4" : ""}>
+          <ChallengeGroup
+            heading="This week"
+            note="Aimed at whatever you've been skipping. Resets Monday."
+            list={weekly}
+            week={week}
+            window="weekly"
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ChallengeGroup({ heading, note, list, week, window: w }: {
+  heading: string;
+  note: string;
+  list: Challenge[];
+  week: WeekActivity;
+  window: ChallengeWindow;
+}) {
+  if (!list.length) return null;
+  const progress = evaluateChallenges(list, week);
+  const done = progress.filter((p) => p.complete).length;
+
+  return (
+    <>
       <div className="mb-1 flex items-center justify-between">
-        <h2 className="field-label !mb-0">This week&apos;s challenges</h2>
+        <h2 className="field-label !mb-0">{heading}</h2>
         <span className="text-xs text-slate-400">{done}/{progress.length}</span>
       </div>
-      <p className="mb-3 text-xs text-slate-500">
-        {source === "ai" ? "Picked for you based on what you've been skipping." : "Aimed at whatever you've been skipping."}
-        {" "}Resets Monday.
-      </p>
-
-      {/* Offered once, under the card, not sold over the top of it. These are
-          still three real objectives and they still work — the note says what
-          the paid version does differently, and nothing here is disabled. */}
-      {!generated && (
-        <UpgradeNote capability="ai_challenges">
-          These are picked from a table. Pro writes them for the way you actually train.
-        </UpgradeNote>
-      )}
+      <p className="mb-3 text-xs text-slate-500">{note}</p>
 
       <ul className="space-y-2">
         {progress.map(({ challenge: c, current, pct, complete }) => (
           <li
-            key={c.id}
-            className={`rounded-2xl border p-3 transition ${complete ? "border-pitch-400/40 bg-pitch-400/[0.07]" : "border-white/10 bg-white/[0.03]"}`}
+            key={`${w}-${c.id}`}
+            className={`rounded-2xl border p-3 transition ${
+              complete ? "border-pitch-400/40 bg-pitch-400/[0.07]" : "border-white/10 bg-white/[0.03]"
+            }`}
           >
             <div className="flex items-center gap-3">
               <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white/[0.05] text-lg">{c.icon}</span>
@@ -140,20 +121,20 @@ export function WeeklyChallenges({ userId, stats, week, sport, goal }: Props) {
                 </span>
                 <span className="block text-xs text-slate-400">{c.blurb}</span>
               </span>
-              <span className="chip shrink-0 text-pitch-400">+{c.xp}</span>
-            </div>
-            <div className="mt-2 flex items-center gap-2">
-              <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10">
-                <span
-                  className={`block h-full rounded-full transition-all ${complete ? "bg-pitch-400" : "bg-slate-400"}`}
-                  style={{ width: `${pct}%` }}
-                />
+              <span className="shrink-0 text-right">
+                <span className="block text-xs font-bold tabular-nums text-slate-300">{current}/{c.target}</span>
+                <span className="block text-[10px] text-slate-500">+{c.xp} XP</span>
               </span>
-              <span className="shrink-0 text-[11px] tabular-nums text-slate-500">{Math.min(current, c.target)}/{c.target}</span>
             </div>
+            <span className="mt-2 block h-1 overflow-hidden rounded-full bg-white/[0.06]">
+              <span
+                className="block h-full rounded-full transition-all"
+                style={{ width: `${pct}%`, background: complete ? "#e3b53f" : "#5fd3c4" }}
+              />
+            </span>
           </li>
         ))}
       </ul>
-    </div>
+    </>
   );
 }
