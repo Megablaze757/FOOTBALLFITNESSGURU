@@ -237,7 +237,7 @@ function WaitlistAnnounce() {
   const launched = useLaunched();
   const { user } = useSession();
   const [stats, setStats] = useState<{ total: number; unsubscribed: number; emailed: number; pending: number } | null>(null);
-  const [busy, setBusy] = useState<null | "preview" | "send" | "test">(null);
+  const [busy, setBusy] = useState<null | "preview" | "send" | "test" | "key">(null);
   const [armed, setArmed] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -245,6 +245,39 @@ function WaitlistAnnounce() {
   // send is often to see it in a DIFFERENT client from your own.
   const [testTo, setTestTo] = useState("");
   useEffect(() => { if (user?.email) setTestTo((t) => t || user.email!); }, [user?.email]);
+
+  /**
+   * Whether Postgres can see a Resend key, and a box to give it one.
+   *
+   * The key already exists — in the Cloudflare Worker, as a secret. Secrets are
+   * write-only by design, so it cannot be read back out and handed to the
+   * database; the same key has to be pasted in a second place. That is a
+   * one-line SQL call, but the person doing it is on a phone, so it is a box
+   * instead. `has_resend_key` returns a boolean and never the key.
+   */
+  const [hasKey, setHasKey] = useState<boolean | null>(null);
+  const [keyInput, setKeyInput] = useState("");
+  const checkKey = useCallback(async () => {
+    const { data, error } = await createClient().rpc("has_resend_key");
+    if (error) { setHasKey(null); return; }
+    setHasKey(data === true);
+  }, []);
+  useEffect(() => { void checkKey(); }, [checkKey]);
+
+  async function saveKey() {
+    setBusy("key"); setErr(null); setNote(null);
+    const { data, error } = await createClient().rpc("set_resend_key", { p_key: keyInput.trim() });
+    setBusy(null);
+    if (error) {
+      setErr(/does not exist|schema cache|PGRST202/i.test(error.message)
+        ? "Paste supabase/announce-launch.sql into the SQL editor first."
+        : error.message);
+      return;
+    }
+    setKeyInput("");
+    setNote(data === "replaced" ? "Key replaced." : "Key stored. You can send now.");
+    void checkKey();
+  }
 
   const loadStats = useCallback(async () => {
     const { data, error } = await createClient().rpc("waitlist_launch_stats");
@@ -388,6 +421,39 @@ function WaitlistAnnounce() {
         <p className="mt-2 text-xs text-slate-400">
           This cannot be undone. Sends up to {BATCH} at a time — press again for the rest.
         </p>
+      )}
+
+      {/* Nothing can send without this, so it sits above the send controls and
+          only while it is missing. Once a key is in, the box disappears rather
+          than lingering as a field inviting someone to paste over a working
+          setup. */}
+      {hasKey === false && (
+        <div className="mt-4 rounded-2xl border border-amber-400/25 bg-amber-400/[0.06] p-3">
+          <p className="text-sm font-bold text-amber-300">Resend key needed</p>
+          <p className="mt-1 text-xs leading-relaxed text-slate-400">
+            Your key is in the Cloudflare Worker as a secret, and secrets cannot be read back out —
+            so the database needs its own copy of the same key. Paste it here once. If you no longer
+            have it, make another in Resend; extra keys are free and revoking one does not touch the
+            others.
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <input
+              type="password"
+              value={keyInput}
+              onChange={(e) => setKeyInput(e.target.value)}
+              placeholder="re_..."
+              autoComplete="off"
+              className="field !mb-0 max-w-xs flex-1"
+            />
+            <button
+              onClick={() => void saveKey()}
+              disabled={busy !== null || !keyInput.trim()}
+              className="btn-ghost shrink-0"
+            >
+              {busy === "key" ? "Saving…" : "Save key"}
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Separate from the buttons above on purpose. This one is safe, and

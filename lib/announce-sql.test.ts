@@ -71,3 +71,47 @@ test("the launch email sends from the address the app already sends from", () =>
   assert.equal(dflt, from,
     `the launch SQL sends from ${dflt}, but the app's working sender is ${from}`);
 });
+
+/**
+ * INSTALLING THE KEY WITHOUT A SQL EDITOR.
+ *
+ * The key already exists — in the Cloudflare Worker, as a secret. Secrets are
+ * write-only by design, so it cannot be read back and handed to Postgres; the
+ * same key has to be pasted in a second place. That is one SQL call, but the
+ * person doing it is on a phone, so the admin screen offers a box instead.
+ */
+test("the key can be installed and checked without exposing it", () => {
+  const sql = readFileSync(FILE, "utf8");
+  assert.match(sql, /function public\.set_resend_key\(p_key text\)/, "no way to store the key");
+  assert.match(sql, /function public\.has_resend_key\(\)/, "no way to tell whether a key is set");
+
+  // Both admin-only. A function that writes a credential, or reports on one, is
+  // not something any signed-in account should reach.
+  for (const fn of ["set_resend_key", "has_resend_key"]) {
+    const body = sql.slice(sql.indexOf(`function public.${fn}`));
+    assert.match(body.slice(0, 900), /is_admin\(\)/, `${fn} is not admin-gated`);
+    assert.ok(
+      new RegExp(`revoke execute on function public\\.${fn}\\([^)]*\\) from public, anon`).test(sql),
+      `anon can call ${fn}`
+    );
+  }
+
+  // has_resend_key returns a boolean. Returning the secret would make it the
+  // easiest way in the codebase to read a credential out of Vault.
+  const has = sql.slice(sql.indexOf("function public.has_resend_key"));
+  assert.match(has.slice(0, 400), /returns boolean/, "has_resend_key does not return a boolean");
+  assert.ok(!/return\s+.*decrypted_secret\s*;/.test(has.slice(0, 900)),
+    "has_resend_key hands back the key itself");
+});
+
+test("the admin screen offers the key box only when one is missing", () => {
+  const admin = readFileSync(`${ROOT}app/admin/page.tsx`, "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
+  assert.match(admin, /rpc\(\s*["']has_resend_key["']/, "the screen never checks for a key");
+  assert.match(admin, /rpc\(\s*["']set_resend_key["']/, "the screen cannot store a key");
+  assert.match(admin, /hasKey === false &&/,
+    "the key box is shown unconditionally, inviting a paste over a working setup");
+  // Typed as a password so it is not left on screen in a shared room, and not
+  // captured by a password manager as a login.
+  assert.match(admin, /type="password"[\s\S]{0,200}keyInput/, "the key field is not masked");
+});

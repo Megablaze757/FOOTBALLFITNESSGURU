@@ -80,6 +80,69 @@ create extension if not exists pg_net;
 -- Changing one that already exists:
 --   select vault.update_secret(id, 're_new') from vault.secrets where name = 'resend_api_key';
 
+-- --- Installing the key from the admin screen ---------------------------------
+--
+-- So the key can be stored without opening a SQL editor. The person doing this
+-- is usually on a phone, and "paste this into the SQL editor" is a worse
+-- instruction than "paste it into the box".
+
+create or replace function public.set_resend_key(p_key text)
+returns text
+language plpgsql
+security definer
+set search_path = public, pg_temp, vault
+as $key$
+declare
+  v_id uuid;
+begin
+  if not public.is_admin() then
+    raise exception 'forbidden' using errcode = '42501';
+  end if;
+  if coalesce(trim(p_key), '') = '' then
+    raise exception 'no key given';
+  end if;
+
+  select id into v_id from vault.secrets where name = 'resend_api_key';
+  if v_id is null then
+    perform vault.create_secret(trim(p_key), 'resend_api_key');
+    return 'stored';
+  else
+    perform vault.update_secret(v_id, trim(p_key));
+    return 'replaced';
+  end if;
+end;
+$key$;
+
+revoke execute on function public.set_resend_key(text) from public, anon;
+grant  execute on function public.set_resend_key(text) to authenticated;
+
+/**
+ * Whether a key is present. Never returns the key itself — the admin screen
+ * only needs to know whether to show the box, and a function that hands back a
+ * secret is one that eventually gets called by something that should not.
+ */
+create or replace function public.has_resend_key()
+returns boolean
+language plpgsql
+stable
+security definer
+set search_path = public, pg_temp
+as $has$
+begin
+  if not public.is_admin() then
+    raise exception 'forbidden' using errcode = '42501';
+  end if;
+  return exists (
+    select 1 from vault.decrypted_secrets
+     where name in ('resend_api_key', 'RESEND_API_KEY', 'resend', 'RESEND')
+       and coalesce(decrypted_secret, '') <> ''
+  );
+end;
+$has$;
+
+revoke execute on function public.has_resend_key() from public, anon;
+grant  execute on function public.has_resend_key() to authenticated;
+
 -- --- The sender ---------------------------------------------------------------
 
 create or replace function public.announce_launch(
