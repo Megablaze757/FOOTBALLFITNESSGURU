@@ -72,6 +72,24 @@ export function VideoUploader({ sport, onUploaded }: { sport?: string; onUploade
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<{ url: string; seconds: number } | null>(null);
+  /**
+   * A PLAYABLE preview of the chosen clip, which is a different job from the
+   * poster frame above.
+   *
+   * `preview` is a canvas grab, used as the stored thumbnail for the clip list.
+   * It is also asynchronous, takes up to 13 seconds before it gives up, and
+   * returns null outright for codecs the browser cannot decode. The confirmation
+   * card used to be gated on it — so while it worked, or whenever it failed, the
+   * box still read "Choose or drop a video" as though nothing had been picked,
+   * with a name field and an Upload button underneath it.
+   *
+   * A phone camera roll is full of near-identical clips of the same lift. The
+   * only reliable way to know you picked the right one is to watch it.
+   */
+  const [objectUrl, setObjectUrl] = useState<string | null>(null);
+  /** From the <video> itself, which knows better than the canvas grab does. */
+  const [duration, setDuration] = useState<number | null>(null);
+  const [previewBroken, setPreviewBroken] = useState(false);
   const [done, setDone] = useState(false);
   // Turns the error into an upgrade route rather than a dead end. "locked" and
   // "used up" are different sentences: one is a price, the other is a wait.
@@ -83,8 +101,9 @@ export function VideoUploader({ sport, onUploaded }: { sport?: string; onUploade
   // there is a visible upload box directly below.
   const fileInput = useRef<HTMLInputElement>(null);
 
-  // Build the preview as soon as a file is picked — that's the confirmation
-  // that it actually landed, rather than just a filename.
+  // Build the poster frame as soon as a file is picked. This is for the clip
+  // list later — the athlete's confirmation is the player below, which does not
+  // wait on this.
   useEffect(() => {
     if (!file) { setPreview(null); return; }
     let live = true;
@@ -93,6 +112,37 @@ export function VideoUploader({ sport, onUploaded }: { sport?: string; onUploade
     void makeThumb(file).then((t) => { if (live && thumbFor.current === file) setPreview(t); });
     return () => { live = false; };
   }, [file]);
+
+  /**
+   * The playable preview. Synchronous — the URL exists the instant a file is
+   * chosen, so the card appears immediately rather than after a decode.
+   *
+   * Revoked on every change and on unmount: a 60MB blob held after the picker
+   * has moved on is 60MB of memory on a phone, and this component is mounted on
+   * a page people revisit.
+   */
+  useEffect(() => {
+    if (!file) { setObjectUrl(null); setDuration(null); setPreviewBroken(false); return; }
+    const url = URL.createObjectURL(file);
+    setObjectUrl(url);
+    setDuration(null);
+    setPreviewBroken(false);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+
+  /**
+   * Clearing has to reset the input too, not just the state.
+   *
+   * <input type="file"> fires `change` only when the value CHANGES, so after
+   * "Change" the picker would open, you would tap the same clip again to check
+   * it, and nothing at all would happen — the one interaction most likely to
+   * follow "is this the right video?".
+   */
+  function clearFile() {
+    setFile(null);
+    setDone(false);
+    if (fileInput.current) fileInput.current.value = "";
+  }
 
   function defaultTitle(): string {
     const m = MOVEMENTS.find((x) => x.id === movement);
@@ -262,7 +312,7 @@ export function VideoUploader({ sport, onUploaded }: { sport?: string; onUploade
       return;
     }
 
-    setFile(null);
+    clearFile();
     setTitle("");
     setBusy(false);
     setDone(true);
@@ -271,17 +321,60 @@ export function VideoUploader({ sport, onUploaded }: { sport?: string; onUploade
 
   return (
     <form onSubmit={handleUpload} className="card space-y-4 p-5">
-      {file && preview ? (
-        <div className="flex items-center gap-3 rounded-2xl border border-pitch-400/30 bg-pitch-400/[0.05] p-3">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={preview.url} alt="" className="h-16 w-24 shrink-0 rounded-xl object-cover" />
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-semibold text-slate-100">{file.name}</div>
-            <div className="text-xs text-pitch-400">
-              ✓ Ready to upload{preview.seconds ? ` · ${preview.seconds.toFixed(1)}s` : ""} · {(file.size / 1048576).toFixed(1)}MB
+      {file ? (
+        /* Gated on `file` alone. It used to require the poster frame as well,
+           which meant the picker could return a clip and the screen would carry
+           on showing an empty dropzone for up to thirteen seconds — or forever,
+           if the codec would not decode. */
+        <div className="rounded-2xl border border-pitch-400/30 bg-pitch-400/[0.05] p-3">
+          {objectUrl && !previewBroken ? (
+            <video
+              key={objectUrl}
+              src={objectUrl}
+              controls
+              playsInline
+              muted
+              preload="metadata"
+              onLoadedMetadata={(e) => {
+                const d = e.currentTarget.duration;
+                if (Number.isFinite(d) && d > 0) setDuration(d);
+              }}
+              onError={() => setPreviewBroken(true)}
+              className="mb-3 max-h-64 w-full rounded-xl bg-black object-contain"
+            />
+          ) : (
+            /* Some phone codecs (HEVC in particular) will not play back in every
+               browser. That is not a reason to hide the fact that a file is
+               selected — it uploads and analyses regardless, so say so rather
+               than leaving a blank space that reads as a failure. */
+            <div className="mb-3 flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+              {preview ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={preview.url} alt="" className="h-16 w-24 shrink-0 rounded-lg object-cover" />
+              ) : (
+                <span className="grid h-16 w-24 shrink-0 place-items-center rounded-lg bg-black text-2xl" aria-hidden>🎬</span>
+              )}
+              <p className="text-xs leading-snug text-slate-400">
+                This clip won&apos;t play back in your browser, but it will still upload and analyse
+                normally. Check the name and size below.
+              </p>
             </div>
+          )}
+          <div className="flex items-center gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-semibold text-slate-100">{file.name}</div>
+              <div className="text-xs text-pitch-400">
+                ✓ Ready to upload{(duration ?? preview?.seconds) ? ` · ${(duration ?? preview!.seconds).toFixed(1)}s` : ""} · {(file.size / 1048576).toFixed(1)}MB
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={clearFile}
+              className="tap-target shrink-0 text-xs text-slate-400 hover:text-slate-200"
+            >
+              Change
+            </button>
           </div>
-          <button type="button" onClick={() => setFile(null)} className="shrink-0 text-xs text-slate-400 hover:text-slate-200">Change</button>
         </div>
       ) : (
         <div>
@@ -372,7 +465,7 @@ export function VideoUploader({ sport, onUploaded }: { sport?: string; onUploade
           <div className="flex items-center gap-2 text-xs text-slate-400">
             <span aria-hidden>{MOVEMENTS.find((m) => m.id === movement)?.icon}</span>
             Checking <span className="font-semibold text-slate-200">{MOVEMENTS.find((m) => m.id === movement)?.label}</span>
-            <button type="button" onClick={() => setFile(null)} className="tap-target text-slate-500 hover:text-pitch-400">change</button>
+            <button type="button" onClick={clearFile} className="tap-target text-slate-500 hover:text-pitch-400">change</button>
           </div>
 
           {/* Session type and in-season are for the training-load record, not
