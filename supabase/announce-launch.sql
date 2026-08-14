@@ -10,13 +10,22 @@
 
 create extension if not exists pg_net;
 
--- --- The key, stored once -----------------------------------------------------
--- Replace re_xxx with your Resend API key and run this line ONCE. It is stored
--- encrypted; nothing below ever prints it.
+-- --- The key -------------------------------------------------------------------
+-- FIRST, CHECK WHETHER IT IS ALREADY HERE. This lists names only, never values:
+--
+--   select name, created_at from vault.secrets order by created_at;
+--
+-- If you see resend_api_key (or RESEND_API_KEY / resend / RESEND) you are done —
+-- the function below accepts any of those spellings.
+--
+-- IF IT IS NOT THERE, that is expected even though your reminder emails work.
+-- Those are Edge Functions reading Deno.env.get('RESEND_API_KEY'), which is a
+-- function-runtime secret. Postgres cannot read it. Same key, different store.
+-- Add it here once:
 --
 --   select vault.create_secret('re_xxx', 'resend_api_key');
 --
--- Already stored one and want to change it:
+-- Changing one that already exists:
 --   select vault.update_secret(id, 're_new') from vault.secrets where name = 'resend_api_key';
 
 -- --- The sender ---------------------------------------------------------------
@@ -141,9 +150,22 @@ begin
     raise exception 'forbidden' using errcode = '42501';
   end if;
 
-  select decrypted_secret into v_key from vault.decrypted_secrets where name = 'resend_api_key';
+  -- SEVERAL NAMES, because the key may already be here under one of them.
+  -- Vault is not where the Edge Functions keep theirs — those read
+  -- Deno.env.get('RESEND_API_KEY'), which is a function-runtime secret that
+  -- Postgres cannot see. Same key, different cupboard. Checking the obvious
+  -- spellings costs nothing and saves a confusing "it is already set" round.
+  select decrypted_secret into v_key
+    from vault.decrypted_secrets
+   where name in ('resend_api_key', 'RESEND_API_KEY', 'resend', 'RESEND')
+   order by case name when 'resend_api_key' then 0 else 1 end
+   limit 1;
+
   if v_key is null then
-    raise exception 'No Resend key in Vault. Run: select vault.create_secret(''re_xxx'', ''resend_api_key'');';
+    raise exception
+      'No Resend key in Vault. See what is there:  select name from vault.secrets;  '
+      'Then add it:  select vault.create_secret(''re_xxx'', ''resend_api_key'');  '
+      'Note this is separate from the Edge Function secret of the same name - Postgres cannot read those.';
   end if;
 
   -- ONE ADDRESS, TOUCHING NOTHING. Returns before the real query so a test can
