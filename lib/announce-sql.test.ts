@@ -69,6 +69,49 @@ test("the copy refresh sends nothing and un-stamps nobody", () => {
     "the file does not say plainly that it sends nothing");
 });
 
+/**
+ * THE FILE ANSWERS "DID IT WORK?" ITSELF.
+ *
+ * Both times this went wrong, the question "is the new copy live?" was answered
+ * by looking at an inbox, and both times the answer was wrong — first because
+ * regenerating the repo file never touches Postgres, then because a paste
+ * silently did not run. A fingerprint stamped into the function body turns that
+ * into something the database can answer exactly, and the last statement of the
+ * file asks it, so there is nothing to remember to run afterwards.
+ *
+ * The id is derived from the rendered email, so it tracks the copy on its own —
+ * the byte-for-byte generator checks above are what keep it honest.
+ */
+test("the copy refresh stamps a fingerprint and reports its own result", () => {
+  const upd = readFileSync(`${ROOT}supabase/announce-launch-update.sql`, "utf8");
+  const full = readFileSync(FILE, "utf8");
+
+  const stamped = upd.match(/--\s*copy-id:\s*([0-9a-f]{12})\b/)?.[1];
+  assert.ok(stamped, "the function body carries no copy-id, so a paste cannot be verified");
+
+  // The check must look for the id THIS file installs. A hardcoded or stale id
+  // would report success after pasting the wrong file, which is worse than no
+  // check at all.
+  assert.ok(upd.includes(`copy-id: ${stamped}%'`),
+    "the self-check looks for a different copy-id than the one it installs");
+
+  // Both verdicts present, and the failure one has to say what to do.
+  assert.match(upd, /INSTALLED - new copy is live/, "no success verdict");
+  assert.match(upd, /NOT INSTALLED[\s\S]{0,120}Re-paste/, "the failure verdict does not say what to do");
+
+  // The full install stamps the same copy, or the two files disagree about what
+  // "installed" means and the check starts lying depending on which was pasted.
+  assert.ok(full.includes(`copy-id: ${stamped}`),
+    "the full install stamps a different copy-id than the refresh");
+
+  // Reads the catalogue only. A verification step that mutated anything would
+  // be a trap in a file whose whole promise is that it sends nothing.
+  const check = upd.slice(upd.indexOf("--- Did it take?"));
+  assert.match(check, /from pg_proc/, "the self-check does not read the catalogue");
+  assert.ok(!/\b(insert|update|delete|drop|net\.http_post)\b/i.test(check),
+    "the self-check does something other than read");
+});
+
 /** The properties that make it safe to paste, asserted on the artifact itself. */
 test("the generated SQL keeps its safety rails", () => {
   const sql = readFileSync(FILE, "utf8");

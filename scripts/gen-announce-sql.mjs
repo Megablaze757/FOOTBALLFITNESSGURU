@@ -19,6 +19,8 @@
 //   node scripts/gen-announce-sql.mjs > /tmp/announce.sql
 // =============================================================================
 
+import { createHash } from "node:crypto";
+
 import { launchEmail } from "../supabase/functions/announce-launch/email.ts";
 
 const APP_URL = process.env.APP_URL || "https://pocketathlete.com";
@@ -41,6 +43,25 @@ function withCta(s) {
 }
 const html = withCta(mail.html);
 const text = withCta(mail.text);
+
+/**
+ * A fingerprint of the copy, carried inside the function body as a comment.
+ *
+ * WHY. "Did the paste take?" was answered by eyeballing an inbox, and the answer
+ * was wrong twice — once because regenerating the repo file never touched the
+ * database at all, and once because a paste silently did not run. prosrc keeps
+ * comments verbatim, so stamping the id into the body makes the question exact
+ * and answerable in SQL: the id in the database either matches the copy you
+ * just pasted or it does not.
+ *
+ * Derived from the rendered email rather than from a version anyone maintains
+ * by hand, because a number you have to remember to bump is a number that does
+ * not get bumped.
+ */
+const copyId = createHash("sha256")
+  .update(`${mail.subject}\n${html}\n${text}`)
+  .digest("hex")
+  .slice(0, 12);
 
 /** Postgres dollar-quoting, with a tag that cannot appear in the body. */
 function dollar(s) {
@@ -177,6 +198,10 @@ security definer
 set search_path = public, pg_temp
 as $fn$
 declare
+  -- copy-id: ${copyId}
+  -- Fingerprint of the email copy below, kept where Postgres stores it verbatim.
+  -- The self-check at the bottom of announce-launch-update.sql looks for exactly
+  -- this string, which is how you tell a paste that took from one that did not.
   v_key   text;
   v_html  text := ${dollar(html)};
   v_text  text := ${dollar(text)};
@@ -332,10 +357,28 @@ const UPDATE = `-- =============================================================
 -- Safe to run repeatedly: create or replace, no drop, no data touched. It does
 -- not clear launch_emailed_at, so anyone already emailed stays emailed.
 --
--- Afterwards, check it from the admin screen's test button, or here:
---   select * from public.announce_launch(p_test_to => 'you@example.com');
+-- The last statement checks itself and prints the verdict, so there is nothing
+-- to remember to run afterwards and nothing to eyeball in an inbox.
 -- =============================================================================
 
-${SENDER}`;
+${SENDER}
+-- --- Did it take? -------------------------------------------------------------
+-- Reads one row from the catalogue. Sends nothing, changes nothing.
+--
+-- If this says INSTALLED, the new copy is live and the admin test button will
+-- send it. If it says anything else, the statements above did not run — the
+-- usual cause is a partial paste, because the email HTML is one long string and
+-- it has to go in whole.
+
+select case
+         when p.prosrc like '%copy-id: ${copyId}%'
+           then 'INSTALLED - new copy is live (copy-id ${copyId}). Send yourself a test.'
+         when p.prosrc is not null
+           then 'NOT INSTALLED - announce_launch still holds different copy. Re-paste this whole file.'
+       end as result
+  from pg_proc p
+  join pg_namespace n on n.oid = p.pronamespace
+ where p.proname = 'announce_launch' and n.nspname = 'public';
+`;
 
 process.stdout.write(process.argv.includes("--email-only") ? UPDATE : FULL);

@@ -9,8 +9,8 @@
 -- Safe to run repeatedly: create or replace, no drop, no data touched. It does
 -- not clear launch_emailed_at, so anyone already emailed stays emailed.
 --
--- Afterwards, check it from the admin screen's test button, or here:
---   select * from public.announce_launch(p_test_to => 'you@example.com');
+-- The last statement checks itself and prints the verdict, so there is nothing
+-- to remember to run afterwards and nothing to eyeball in an inbox.
 -- =============================================================================
 
 -- --- The sender ---------------------------------------------------------------
@@ -32,6 +32,10 @@ security definer
 set search_path = public, pg_temp
 as $fn$
 declare
+  -- copy-id: 39248fb9de92
+  -- Fingerprint of the email copy below, kept where Postgres stores it verbatim.
+  -- The self-check at the bottom of announce-launch-update.sql looks for exactly
+  -- this string, which is how you tell a paste that took from one that did not.
   v_key   text;
   v_html  text := $mail$<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -300,3 +304,21 @@ $fn$;
 
 revoke execute on function public.announce_launch(int, text, text) from public, anon;
 grant  execute on function public.announce_launch(int, text, text) to authenticated;
+
+-- --- Did it take? -------------------------------------------------------------
+-- Reads one row from the catalogue. Sends nothing, changes nothing.
+--
+-- If this says INSTALLED, the new copy is live and the admin test button will
+-- send it. If it says anything else, the statements above did not run — the
+-- usual cause is a partial paste, because the email HTML is one long string and
+-- it has to go in whole.
+
+select case
+         when p.prosrc like '%copy-id: 39248fb9de92%'
+           then 'INSTALLED - new copy is live (copy-id 39248fb9de92). Send yourself a test.'
+         when p.prosrc is not null
+           then 'NOT INSTALLED - announce_launch still holds different copy. Re-paste this whole file.'
+       end as result
+  from pg_proc p
+  join pg_namespace n on n.oid = p.pronamespace
+ where p.proname = 'announce_launch' and n.nspname = 'public';

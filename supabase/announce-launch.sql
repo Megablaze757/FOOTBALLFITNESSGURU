@@ -110,6 +110,10 @@ security definer
 set search_path = public, pg_temp
 as $fn$
 declare
+  -- copy-id: 39248fb9de92
+  -- Fingerprint of the email copy below, kept where Postgres stores it verbatim.
+  -- The self-check at the bottom of announce-launch-update.sql looks for exactly
+  -- this string, which is how you tell a paste that took from one that did not.
   v_key   text;
   v_html  text := $mail$<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
