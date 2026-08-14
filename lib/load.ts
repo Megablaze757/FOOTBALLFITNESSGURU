@@ -3,6 +3,7 @@
 // and a weekly report. Real sports-science used by pro setups; pure + tested.
 // =============================================================================
 
+import { totalReps } from "./training-sets";
 import type { DailyCheckIn, NutritionLog, TrainingLog } from "./types";
 import { todayLocal, daysAgoLocal } from "./day";
 
@@ -37,7 +38,10 @@ export function sessionLoad(t: TrainingLog): number {
   const minutes = (t.total_minutes ?? 0) + (t.contact_minutes ?? 0) * (CONTACT_WEIGHT - 1);
   const sRPE = minutes * (t.intensity ?? 0);
   if (sRPE > 0) return sRPE;
-  return (t.drills ?? []).reduce((s, d) => s + (Number(d.sets) || 0) * (Number(d.reps) || 0), 0);
+  // totalReps, not sets × reps. A drill logged set by set has varied reps, and
+  // multiplying the rounded average would quietly misreport volume — which
+  // feeds ACWR, which tells athletes when to back off.
+  return (t.drills ?? []).reduce((s, d) => s + totalReps(d), 0);
 }
 
 /**

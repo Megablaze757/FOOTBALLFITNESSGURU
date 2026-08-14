@@ -141,9 +141,19 @@ export interface AiPlan {
 
 export interface TrainingDrill {
   name: string;
+  /** Summary. Derived from sets_detail when that is present — see lib/training-sets.ts. */
   sets: number;
+  /** Summary: the rounded average when sets varied. Never the source of truth. */
   reps: number;
+  /** Summary: the heaviest set. */
   load_kg?: number | null;
+  /**
+   * Each set as it actually happened. Additive and optional: rows written
+   * before per-set logging existed have none, and the three fields above are
+   * the whole record for them. Ask lib/training-sets.ts rather than reading
+   * either shape directly.
+   */
+  sets_detail?: { reps: number; load_kg?: number | null }[];
   notes?: string | null;
 }
 

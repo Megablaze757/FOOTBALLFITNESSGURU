@@ -5,6 +5,7 @@ import { NumberInput } from "@/components/NumberInput";
 import type { SportId } from "@/lib/exercises";
 import { DrillPicker } from "@/components/DrillPicker";
 import { RUN_TYPES, ZONE_LIST, ZONES, runType, type RunTypeId, type ZoneId } from "@/lib/running";
+import { describeSets, hasSetDetail, setsOf, withSets } from "@/lib/training-sets";
 
 export interface TrainingState {
   drills: TrainingDrill[];
@@ -52,15 +53,113 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all" 
                   value={d.name}
                   onChange={(e) => setDrill(i, { name: e.target.value })}
                   placeholder="Drill name"
-                  className="field flex-1 py-2"
+                  className="field min-h-[44px] flex-1 py-2"
                 />
                 <button type="button" onClick={() => removeDrill(i)} className="tap-target px-2 text-slate-500 hover:text-readiness-red" aria-label="Remove">✕</button>
               </div>
-              <div className="mt-2 grid grid-cols-3 gap-2">
-                <NumField label="Sets" value={d.sets} onChange={(v) => setDrill(i, { sets: v || 0 })} />
-                <NumField label="Reps" value={d.reps} onChange={(v) => setDrill(i, { reps: v || 0 })} />
-                <NumField label="kg" value={d.load_kg ?? ""} onChange={(v) => setDrill(i, { load_kg: v === "" ? null : v })} optional />
-              </div>
+              {/* THE FAST PATH STAYS FAST.
+                  Most sets are three of ten at one weight, and making everyone
+                  type three rows to say that would be a worse form for the
+                  common case. Sets/Reps/kg stays the default; per-set rows are
+                  one tap away and only for the sessions that need them. */}
+              {!hasSetDetail(d) ? (
+                <>
+                  <div className="mt-2 grid grid-cols-3 gap-2">
+                    <NumField label="Sets" value={d.sets} onChange={(v) => setDrill(i, { sets: v || 0 })} />
+                    <NumField label="Reps" value={d.reps} onChange={(v) => setDrill(i, { reps: v || 0 })} />
+                    <NumField label="kg" value={d.load_kg ?? ""} onChange={(v) => setDrill(i, { load_kg: v === "" ? null : v })} optional />
+                  </div>
+                  <button
+                    type="button"
+                    /* Seeded from what they already typed rather than starting
+                       empty — someone who put 3 × 10 @ 40 and then wants to fix
+                       the last set should not retype the first two. */
+                    onClick={() => setDrill(i, withSets(d, setsOf(d)))}
+                    className="tap-target mt-1 text-xs font-semibold text-pitch-400"
+                  >
+                    Log each set separately
+                  </button>
+                </>
+              ) : (
+                <div className="mt-2 space-y-1.5">
+                  {/* COLUMN HEADERS ONCE, not on every row. Four repetitions of
+                      REPS and KG down a phone screen is noise, and the guide's
+                      bar for anything added here is whether it removes work. The
+                      inputs keep an aria-label each, so dropping the visible
+                      label per row costs nothing to a screen reader. */}
+                  <div className="flex items-center gap-2">
+                    <span className="w-11 shrink-0" aria-hidden="true" />
+                    <div className="grid flex-1 grid-cols-2 gap-2 text-center text-[10px] uppercase tracking-wider text-slate-500">
+                      <span>Reps</span>
+                      <span>kg</span>
+                    </div>
+                    <span className="w-9 shrink-0" aria-hidden="true" />
+                  </div>
+
+                  {(d.sets_detail ?? []).map((st, si) => (
+                    <div key={si} className="flex items-center gap-2">
+                      <span className="w-11 shrink-0 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                        Set {si + 1}
+                      </span>
+                      <div className="grid flex-1 grid-cols-2 gap-2">
+                        <NumberInput
+                          aria-label={`Set ${si + 1} reps`}
+                          value={st.reps || null}
+                          min={0}
+                          onChange={(v) => setDrill(i, withSets(d, (d.sets_detail ?? []).map((x, xi) =>
+                            xi === si ? { ...x, reps: v ?? 0 } : x)))}
+                          className="field min-h-[44px] py-1.5 text-center"
+                        />
+                        <NumberInput
+                          aria-label={`Set ${si + 1} weight in kilograms`}
+                          value={st.load_kg ?? null}
+                          min={0}
+                          decimal
+                          placeholder="–"
+                          onChange={(v) => setDrill(i, withSets(d, (d.sets_detail ?? []).map((x, xi) =>
+                            xi === si ? { ...x, load_kg: v } : x)))}
+                          className="field min-h-[44px] py-1.5 text-center"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setDrill(i, withSets(d, (d.sets_detail ?? []).filter((_, xi) => xi !== si)))}
+                        className="tap-target w-9 shrink-0 text-slate-600 hover:text-readiness-red"
+                        aria-label={`Remove set ${si + 1}`}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-0.5">
+                    <button
+                      type="button"
+                      /* Copies the last set, because the next one is usually the
+                         same weight and near the same reps. Starting blank makes
+                         every set a fresh two-field typing job on a phone. */
+                      onClick={() => {
+                        const cur = d.sets_detail ?? [];
+                        const last = cur[cur.length - 1] ?? { reps: 10, load_kg: d.load_kg ?? null };
+                        setDrill(i, withSets(d, [...cur, { ...last }]));
+                      }}
+                      className="tap-target text-xs font-semibold text-pitch-400"
+                    >
+                      + Add set
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDrill(i, { ...d, sets_detail: undefined })}
+                      className="tap-target text-xs text-slate-500 hover:text-slate-300"
+                    >
+                      Back to sets × reps
+                    </button>
+                    {/* Read back in one line, so the numbers just typed can be
+                        checked without re-reading four boxes. */}
+                    <span className="ml-auto text-xs tabular-nums text-slate-400">{describeSets(d)}</span>
+                  </div>
+                </div>
+              )}
             </li>
           ))}
         </ul>
@@ -228,7 +327,7 @@ function NumField({ label, value, onChange, optional }: { label: string; value: 
         onChange={(n) => onChange(n == null ? "" : n)}
         min={0}
         placeholder={optional ? "–" : ""}
-        className="field py-1.5 text-center"
+        className="field min-h-[44px] py-1.5 text-center"
       />
     </label>
   );

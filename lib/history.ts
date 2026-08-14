@@ -1,6 +1,9 @@
 // Pure aggregation of training + nutrition history into chartable series.
 // Drives the Progress page and (via the edge function) the AI worker payload.
 
+// Aliased: this file already has a `totalReps` accumulator, and importing
+// the helper under the same name shadowed it silently.
+import { setCount, topLoad, totalReps as drillReps } from "./training-sets";
 import type { NutritionLog, TrainingLog } from "./types";
 
 export interface DayPoint {
@@ -47,14 +50,17 @@ export function summarizeTraining(logs: TrainingLog[]): TrainingSummary {
   for (const log of sorted) {
     let dayVolume = 0;
     for (const d of log.drills ?? []) {
-      const reps = (Number(d.sets) || 0) * (Number(d.reps) || 0);
+      const reps = drillReps(d);
       dayVolume += reps;
       totalReps += reps;
       const key = d.name.trim() || "drill";
       const stat = byDrill.get(key) ?? { name: key, sessions: 0, totalSets: 0, bestLoad: null };
       stat.sessions += 1;
-      stat.totalSets += Number(d.sets) || 0;
-      if (d.load_kg != null) stat.bestLoad = Math.max(stat.bestLoad ?? 0, Number(d.load_kg));
+      stat.totalSets += setCount(d);
+      // topLoad, so a heavy top set inside a detailed log is not lost behind
+      // the summary's rounded figure.
+      const best = topLoad(d);
+      if (best != null) stat.bestLoad = Math.max(stat.bestLoad ?? 0, best);
       byDrill.set(key, stat);
     }
     volume.push({ date: log.log_date, value: dayVolume });

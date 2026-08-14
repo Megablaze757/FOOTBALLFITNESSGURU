@@ -17,6 +17,7 @@
 // Pure + tested.
 // =============================================================================
 
+import { setCount } from "./training-sets";
 import { MOVEMENT_BY_ID, type Movement, type Pattern } from "./movements";
 import { muscleGroupForName, type MuscleGroup } from "./hypertrophy";
 import type { ProgramPlan, ProgramWeek } from "./engine";
@@ -205,14 +206,14 @@ export function weeklyMuscleVolume(week: ProgramWeek): MuscleVolume {
         const plyo = PLYO_PATTERNS.has(movement.pattern) ? PLYO_CREDIT
           : ACTIVATION_PATTERNS.has(movement.pattern) ? ACTIVATION_CREDIT : 1;
         muscles.forEach((muscle, i) => {
-          out[muscle] += (drill.sets ?? 0) * plyo * (i === 0 ? 1 : SECONDARY_CREDIT);
+          out[muscle] += setCount(drill) * plyo * (i === 0 ? 1 : SECONDARY_CREDIT);
         });
         continue;
       }
       // The hypertrophy catalogue classifies to a single primary group, which
       // is the convention bodybuilding volume is counted in anyway.
       const group = muscleGroupForName(drill.name);
-      if (group) out[group] += drill.sets ?? 0;
+      if (group) out[group] += setCount(drill);
     }
   }
   for (const k of Object.keys(out) as MuscleGroup[]) out[k] = Math.round(out[k] * 10) / 10;
