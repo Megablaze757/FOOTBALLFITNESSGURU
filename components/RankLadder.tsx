@@ -40,7 +40,15 @@ export function RankLadder({ level }: { level: LevelInfo }) {
             // Where this tier's divisions start and end, so "how far to
             // Emerald?" is answerable rather than mysterious.
             const next = ladder[i + 1];
-            const range = next ? `Levels ${t.fromLevel}–${next.fromLevel - 1}` : `Level ${t.fromLevel}+`;
+            // A standing is not a level, so it gets its requirement instead of a
+            // level range — listing "Levels 28+" beside Apex would read as a rung
+            // you climb to, which is the one thing it is not.
+            const standing = t.earnedBy === "standing";
+            const range = standing
+              ? t.note ?? ""
+              : next && next.earnedBy === "level"
+                ? `Levels ${t.fromLevel}–${next.fromLevel - 1}`
+                : `Level ${t.fromLevel}+`;
             return (
               <li
                 key={t.tier}
@@ -68,7 +76,12 @@ export function RankLadder({ level }: { level: LevelInfo }) {
                   </span>
                   <span className="block text-[11px] text-slate-500">{range}</span>
                 </span>
-                {!reached && i === currentIndex + 1 && (
+                {standing && (
+                  <span className="shrink-0 rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                    Standing
+                  </span>
+                )}
+                {!standing && !reached && i === currentIndex + 1 && (
                   <span className="shrink-0 text-[11px] font-semibold text-pitch-400">
                     {t.fromLevel - level.level} level{t.fromLevel - level.level === 1 ? "" : "s"} away
                   </span>
@@ -77,6 +90,15 @@ export function RankLadder({ level }: { level: LevelInfo }) {
             );
           })}
         </ol>
+      )}
+
+      {open && (
+        <p className="mt-3 border-t border-white/5 pt-3 text-[11px] leading-relaxed text-slate-500">
+          The first nine are levels — you climb them and keep them. The last two are
+          standings: they compare you with everyone else, so they can be taken back if
+          somebody overtakes you. Neither is awarded until at least 100 athletes are on
+          the ladder, because &ldquo;top 1%&rdquo; of a dozen people is not a top 1%.
+        </p>
       )}
     </div>
   );

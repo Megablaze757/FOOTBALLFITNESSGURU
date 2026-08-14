@@ -10,7 +10,7 @@ import { useAsync } from "@/lib/use-async";
 import { assessReadiness } from "@/lib/readiness";
 import { actionLabel } from "@/lib/insights";
 import { checkInStreak, computeACWR } from "@/lib/load";
-import { dailyQuests, computeXp, levelFor, activitySpans, type ActivityStats, type LevelInfo, type Standing } from "@/lib/gamification";
+import { dailyQuests, computeXp, levelFor, activitySpans, type ActivityStats, type LevelInfo, type Standing, EMPTY_STATS } from "@/lib/gamification";
 import { biometricSignal, type Biometric } from "@/lib/biometrics";
 import { sportProfile } from "@/lib/sport-profile";
 import { ReadinessGauge } from "@/components/ReadinessGauge";
@@ -123,6 +123,9 @@ export default function HomePage() {
     const trainRows = (recentTraining ?? []) as { log_date: string; total_minutes: number | null }[];
     const programs = (progs ?? []) as { completed_sessions: string[] | null; status: string }[];
     const stats: ActivityStats = {
+      // Spread first so a new stat added to ActivityStats defaults sensibly
+      // here instead of breaking every call site that builds one by hand.
+      ...EMPTY_STATS,
       // Lifetime totals come from head-counts — the row data was only ever
       // being counted, so there was no reason to transfer it.
       checkIns: checkInCount ?? 0,
@@ -203,6 +206,7 @@ export default function HomePage() {
     // showing anyone. A null standing makes rankFor behave exactly as it did
     // before those ranks existed.
     let standing: Standing | null = null;
+    let tierDays = { apexDays: 0, apexBestRun: 0, eliteDays: 0, eliteBestRun: 0 };
     try {
       const { data: st } = await supabase.rpc("ladder_standing");
       const row = (Array.isArray(st) ? st[0] : st) as { athletes?: number; place?: number } | null;
@@ -211,12 +215,35 @@ export default function HomePage() {
       if (row?.athletes != null && row?.place != null) {
         standing = { athletes: Number(row.athletes), position: Number(row.place) };
       }
+
+      // TODAY IS RECORDED SERVER-SIDE, not from the standing above.
+      //
+      // The badges for Elite and Apex count days held, so a day has to be
+      // written down — and it is written by a function that recomputes the
+      // standing itself. A badge worth having cannot be awarded on the client's
+      // say-so, and this client has already been told its own position.
+      // Returns 'none' and writes nothing for anyone who has not earned one,
+      // including admins, who are off the ladder entirely.
+      await supabase.rpc("record_ladder_standing");
+
+      const { data: days } = await supabase.rpc("ladder_tier_days");
+      for (const r of (days ?? []) as { standing_tier: string; days: number; best_run: number }[]) {
+        if (r.standing_tier === "Apex") {
+          tierDays = { ...tierDays, apexDays: Number(r.days) || 0, apexBestRun: Number(r.best_run) || 0 };
+        } else if (r.standing_tier === "Elite") {
+          tierDays = { ...tierDays, eliteDays: Number(r.days) || 0, eliteBestRun: Number(r.best_run) || 0 };
+        }
+      }
     } catch {
-      // 0081 not applied yet, or offline. The ladder just ends at Legend.
+      // 0081/0082 not applied yet, or offline. The ladder just ends at Legend
+      // and the standing badges stay at zero — neither is an error worth
+      // showing anybody.
     }
 
     return {
-      profile, checkIn, insight, streak, quests, bioSignal, setup, stats, week, acwr, standing,
+      profile, checkIn, insight, streak, quests, bioSignal, setup,
+      stats: { ...stats, ...tierDays },
+      week, acwr, standing,
       nextSession, hasProgram: programCount > 0, trainedToday: !!trainToday,
       nutriToday: (nutriToday ?? null) as { calories_eaten: number | null; daily_calorie_target: number | null } | null,
     };

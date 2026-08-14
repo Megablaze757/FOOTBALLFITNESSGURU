@@ -8,8 +8,7 @@ import { useAsync } from "@/lib/use-async";
 import { checkInStreak } from "@/lib/load";
 import {
   computeXp, levelFor, rankFor, evaluateAchievements, dailyQuests, activitySpans,
-  type ActivityStats, type DailyState,
-} from "@/lib/gamification";
+  type ActivityStats, type DailyState, EMPTY_STATS } from "@/lib/gamification";
 import type { WeekActivity } from "@/lib/challenges";
 import { Confetti } from "@/components/Confetti";
 import { LevelUpModal } from "@/components/LevelUpModal";
@@ -91,6 +90,9 @@ export default function RewardsPage() {
     const progs = (programs.data ?? []) as { completed_sessions: string[] | null; status: string }[];
 
     const stats: ActivityStats = {
+      // Spread first so a new stat added to ActivityStats defaults sensibly
+      // here instead of breaking every call site that builds one by hand.
+      ...EMPTY_STATS,
       checkIns: checkC.count ?? 0,
       streak: checkInStreak(checkDates),
       trainingSessions: trainC.count ?? 0,

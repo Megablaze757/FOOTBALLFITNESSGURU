@@ -1,9 +1,11 @@
 "use client";
 
+import { RankBadge } from "@/components/RankBadge";
+
 import { useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAsync } from "@/lib/use-async";
-import { computeXp, levelFor } from "@/lib/gamification";
+import { computeXp, levelFor, EMPTY_STATS } from "@/lib/gamification";
 import { BOARDS, rankBoard, placeOf, type AthleteStats, type BoardId } from "@/lib/leaderboard";
 
 interface Row {
@@ -37,6 +39,9 @@ export function Leaderboards({ userId }: { userId: string }) {
 
   const athletes = useMemo<AthleteStats[]>(() => (data ?? []).map((r) => {
     const xp = computeXp({
+      // Spread first so a new stat added to ActivityStats defaults sensibly
+      // here instead of breaking every call site that builds one by hand.
+      ...EMPTY_STATS,
       checkIns: r.check_ins_7, streak: r.streak, trainingSessions: r.sessions_7,
       completedSessions: r.completed_7, completedBlocks: 0, benchmarks: 0,
       videos: 0, nutritionLogs: 0, checkInsLast7: r.check_ins_7,
@@ -135,6 +140,24 @@ export function Leaderboards({ userId }: { userId: string }) {
                   <span className={`w-6 shrink-0 text-center text-sm font-extrabold ${r.rank <= 3 ? "text-pitch-400" : "text-slate-500"}`}>
                     {["🥇", "🥈", "🥉"][r.rank - 1] ?? r.rank}
                   </span>
+                  {/* THE RANK, BESIDE THE NAME.
+                      A board is a list of strangers without it: 14 check-ins
+                      says nothing about whether that person is three weeks in
+                      or three years. The badge is drawn from their level, which
+                      the board already computes. */}
+                  {(() => {
+                    const lvl = levelFor(r.stats.xp);
+                    return (
+                      <RankBadge
+                        tier={lvl.tier}
+                        division={lvl.division}
+                        color={lvl.color}
+                        size={22}
+                        className="shrink-0"
+                        title={lvl.rank}
+                      />
+                    );
+                  })()}
                   <span className="min-w-0 flex-1 truncate text-sm text-slate-100">
                     {r.stats.name}{isMe && <span className="ml-1.5 text-xs text-pitch-400">you</span>}
                   </span>

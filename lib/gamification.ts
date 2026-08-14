@@ -67,6 +67,18 @@ export interface ActivityStats {
    * life. This counts the returns.
    */
   comebacks: number;
+  /**
+   * Days held at each of the two standing ranks, and the best unbroken run.
+   *
+   * Kept separate from everything above because they are the only stats that
+   * depend on other people. They arrive from ladder_standing_log (0082) rather
+   * than being derived from this athlete's own rows, and they are zero for
+   * anyone the ladder excludes — see the note on LADDER_MIN_ATHLETES.
+   */
+  apexDays: number;
+  apexBestRun: number;
+  eliteDays: number;
+  eliteBestRun: number;
 }
 
 export const EMPTY_STATS: ActivityStats = {
@@ -74,6 +86,7 @@ export const EMPTY_STATS: ActivityStats = {
   completedBlocks: 0, benchmarks: 0, videos: 0, nutritionLogs: 0, checkInsLast7: 0,
   restDaysLogged: 0, longestStreak: 0, weeksActive: 0, perfectDaysLast7: 0,
   perfectDays: 0, comebacks: 0,
+  apexDays: 0, apexBestRun: 0, eliteDays: 0, eliteBestRun: 0,
 };
 
 /**
@@ -422,13 +435,43 @@ export function rankFor(level: number, standing?: Standing | null): RankInfo {
 }
 
 /** The whole ladder, for a "how do I climb?" view. */
-export function rankLadder(): { tier: TierName; emoji: string; color: string; fromLevel: number }[] {
+export interface LadderRung {
+  tier: TierName;
+  emoji: string;
+  color: string;
+  fromLevel: number;
+  /**
+   * Levels are climbed and kept; standings are held and can be lost. The view
+   * has to say which, or the last two rungs look like levels nobody can reach.
+   */
+  earnedBy: "level" | "standing";
+  /** How to get it. Only the standing tiers need one — a level range says it. */
+  note?: string;
+}
+
+/** The whole ladder, for a "how do I climb?" view. */
+export function rankLadder(): LadderRung[] {
   let level = 1;
-  return TIERS.map((t) => {
-    const entry = { tier: t.name, emoji: t.emoji, color: t.color, fromLevel: level };
+  const rungs: LadderRung[] = TIERS.map((t) => {
+    const entry: LadderRung = {
+      tier: t.name, emoji: t.emoji, color: t.color, fromLevel: level, earnedBy: "level" as const,
+    };
     level += Number.isFinite(t.span) ? t.span : 0;
     return entry;
   });
+
+  // The two above Legend. Shown even though nobody can hold them yet: a ladder
+  // that hides its top two rungs until they are reachable is a ladder whose
+  // best rungs nobody knows exist, and "there is something above Legend" is the
+  // part worth knowing early.
+  return rungs.concat(STANDING_TIERS.map((t) => ({
+    tier: t.name,
+    emoji: t.emoji,
+    color: t.color,
+    fromLevel: level,
+    earnedBy: "standing" as const,
+    note: t.note,
+  })));
 }
 
 export function levelFor(xp: number, standing?: Standing | null): LevelInfo {
@@ -458,7 +501,29 @@ export interface Achievement {
   test: (s: ActivityStats, level: number) => boolean;
 }
 
+/**
+ * BADGES FOR THE TWO STANDING RANKS.
+ *
+ * Held, not reached — so these count days rather than firing once on arrival.
+ * "Best unbroken run" is the honest measure of "was Apex for a week": a
+ * cumulative seven days spread over three months is a different achievement,
+ * and it gets its own badge rather than being quietly counted as the same one.
+ *
+ * Every one of these is zero for anybody the ladder excludes, which includes
+ * the owner — see 0082. Nothing here needs to know that; the stats simply never
+ * arrive.
+ */
+const STANDING_ACHIEVEMENTS: Achievement[] = [
+  { id: "elite_reached", name: "One percent", desc: "Reach Elite — the top 1% of athletes", icon: "star", test: (s) => s.eliteDays >= 1 },
+  { id: "elite_30", name: "Fixture at the top", desc: "30 days in the top 1%", icon: "star", test: (s) => s.eliteDays >= 30 },
+  { id: "apex_reached", name: "Best in the world", desc: "Reach Apex — no. 1 on the ladder", icon: "trophy", test: (s) => s.apexDays >= 1 },
+  { id: "apex_week", name: "A week on top", desc: "Hold Apex seven days running", icon: "trophy", test: (s) => s.apexBestRun >= 7 },
+  { id: "apex_month", name: "Untouchable", desc: "Hold Apex thirty days running", icon: "crown", test: (s) => s.apexBestRun >= 30 },
+  { id: "apex_100", name: "Era", desc: "100 days at no. 1, however they fell", icon: "crown", test: (s) => s.apexDays >= 100 },
+];
+
 export const ACHIEVEMENTS: Achievement[] = [
+  ...STANDING_ACHIEVEMENTS,
   { id: "first_checkin", name: "First step", desc: "Log your first check-in", icon: "foot", test: (s) => s.checkIns >= 1 },
   { id: "streak_7", name: "Week warrior", desc: "7-day check-in streak", icon: "flame", test: (s) => s.streak >= 7 },
   { id: "streak_30", name: "Unstoppable", desc: "30-day check-in streak", icon: "bolt", test: (s) => s.streak >= 30 },

@@ -9,7 +9,7 @@ import { useCurrentUser } from "@/lib/auth";
 import { useAsync } from "@/lib/use-async";
 import { assessReadiness } from "@/lib/readiness";
 import { checkInStreak, computeACWR } from "@/lib/load";
-import { computeXp, levelFor, activitySpans } from "@/lib/gamification";
+import { computeXp, levelFor, activitySpans, EMPTY_STATS } from "@/lib/gamification";
 import { TeamExercises } from "@/components/TeamExercises";
 import { AssignProgram } from "@/components/AssignProgram";
 import { positionList } from "@/lib/positions";
@@ -130,6 +130,9 @@ export default function SquadPage() {
       const total = prog ? prog.plan.weeks.reduce((n, w) => n + w.sessions.length, 0) : 0;
       const dates = checkDatesByUser.get(p.id) ?? [];
       const xp = computeXp({
+      // Spread first so a new stat added to ActivityStats defaults sensibly
+      // here instead of breaking every call site that builds one by hand.
+      ...EMPTY_STATS,
         checkIns: dates.length,
         streak: checkInStreak(dates),
         trainingSessions: trainCount.get(p.id) ?? 0,

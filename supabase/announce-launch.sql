@@ -110,7 +110,7 @@ security definer
 set search_path = public, pg_temp
 as $fn$
 declare
-  -- copy-id: a09d6011aecb
+  -- copy-id: 71ab185cd001
   -- Fingerprint of the email copy below, kept where Postgres stores it verbatim.
   -- The self-check at the bottom of announce-launch-update.sql looks for exactly
   -- this string, which is how you tell a paste that took from one that did not.
@@ -198,7 +198,7 @@ declare
         <div class="pa-h" style="font-size:22px;font-weight:800;color:#0e1411;">136</div>
         <div class="pa-muted" style="font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:#5d6860;">challenges</div>
       </td><td align="center" style="padding:0 4px;">
-        <div class="pa-h" style="font-size:22px;font-weight:800;color:#0e1411;">62</div>
+        <div class="pa-h" style="font-size:22px;font-weight:800;color:#0e1411;">68</div>
         <div class="pa-muted" style="font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:#5d6860;">badges</div>
       </td></tr>
     </table>
@@ -240,7 +240,7 @@ declare
       <td width="34" valign="top" style="font-size:20px;line-height:1.3;">🏆</td>
       <td valign="top">
         <div class="pa-h" style="font-size:15px;font-weight:700;color:#0e1411;padding-bottom:3px;">Something to chase</div>
-        <div class="pa-body" style="font-size:14px;line-height:1.55;color:#495751;">136 challenges, 62 badges and a rank ladder from Iron to Legend. It pays you for rest days too, not just for grinding.</div>
+        <div class="pa-body" style="font-size:14px;line-height:1.55;color:#495751;">136 challenges, 68 badges and a rank ladder from Iron to Legend. It pays you for rest days too, not just for grinding.</div>
       </td>
     </tr></table>
   </td></tr>
@@ -288,7 +288,7 @@ WHAT'S WAITING FOR YOU
   It watches your training load and tells you to back off BEFORE the niggle.
 - Food that adds up. Calorie and macro targets, meal plans built round your
   training, a shopping list with prices on it.
-- Something to chase. 136 challenges, 62 badges, and a rank ladder from Iron
+- Something to chase. 136 challenges, 68 badges, and a rank ladder from Iron
   to Legend. It pays you for rest days too, not just for grinding.
 
 Start here: @@CTA@@
@@ -351,7 +351,7 @@ begin
         -- wrong, the database is fine and the mail client is the problem.
         --
         -- Test sends only. A real recipient never sees this.
-        'subject', '[TEST a09d6011aecb] ' || v_subj,
+        'subject', '[TEST 71ab185cd001] ' || v_subj,
         'html', replace(replace(v_html, '@@CTA@@', v_cta), '@@UNSUB@@', v_unsub),
         'text', replace(replace(v_text, '@@CTA@@', v_cta), '@@UNSUB@@', v_unsub))
     );
@@ -422,8 +422,8 @@ grant  execute on function public.announce_launch(int, text, text) to authentica
 -- silently reinstalls the old email.
 
 select case
-         when p.prosrc like '%copy-id: a09d6011aecb%'
-           then 'INSTALLED - new copy is live (copy-id a09d6011aecb). Send yourself a test.'
+         when p.prosrc like '%copy-id: 71ab185cd001%'
+           then 'INSTALLED - new copy is live (copy-id 71ab185cd001). Send yourself a test.'
          when p.prosrc is not null
            then 'NOT INSTALLED - announce_launch still holds different copy. Re-paste this whole file.'
        end as result

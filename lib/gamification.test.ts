@@ -131,10 +131,34 @@ test("ranks never go backwards as you level up", () => {
 test("the ladder view lists where each tier starts", () => {
   const ladder = rankLadder();
   assert.equal(ladder[0].fromLevel, 1);
-  for (let i = 1; i < ladder.length; i++) {
-    assert.ok(ladder[i].fromLevel > ladder[i - 1].fromLevel, "tiers must start in order");
-    assert.equal(rankFor(ladder[i].fromLevel).tier, ladder[i].tier);
+  const byLevel = ladder.filter((t) => t.earnedBy === "level");
+  for (let i = 1; i < byLevel.length; i++) {
+    assert.ok(byLevel[i].fromLevel > byLevel[i - 1].fromLevel, "tiers must start in order");
+    assert.equal(rankFor(byLevel[i].fromLevel).tier, byLevel[i].tier);
   }
+});
+
+/**
+ * The last two rungs are NOT levels, and the ladder has to say so.
+ *
+ * Elite and Apex are standings — held against everyone else, and losable. Shown
+ * anyway, because a ladder that hides its top two rungs until they are
+ * reachable is one whose best rungs nobody knows exist. But listing them
+ * without saying how they are earned would read as two levels nobody can climb
+ * to, which is worse than not showing them.
+ */
+test("the ladder shows the standing ranks, and explains them", () => {
+  const ladder = rankLadder();
+  const standing = ladder.filter((t) => t.earnedBy === "standing");
+  assert.deepEqual(standing.map((t) => t.tier), ["Elite", "Apex"]);
+  for (const t of standing) {
+    assert.ok(t.note && t.note.length > 0, `${t.tier} does not say how it is earned`);
+    // And no level can produce one, however high — otherwise the note lies.
+    assert.notEqual(rankFor(t.fromLevel).tier, t.tier);
+    assert.notEqual(rankFor(9999).tier, t.tier);
+  }
+  // They sit at the top, after Legend.
+  assert.equal(ladder[ladder.length - 1].tier, "Apex");
 });
 
 test("achievements unlock from stats", () => {
@@ -244,6 +268,9 @@ test("no badge asks for something the app cannot measure", () => {
     // A comeback needs a gap of 7 days plus the day that closes it, so 60 days
     // cannot hold more than this many however erratic the athlete is.
     comebacks: Math.floor(WINDOW_DAYS / 8),
+    // Lifetime counters from ladder_standing_log rather than derived from the
+    // 60-day activity window, so the window's cap does not apply to them.
+    apexDays: 5000, apexBestRun: 5000, eliteDays: 5000, eliteBestRun: 5000,
   };
   const { locked } = evaluateAchievements(maxed, 999);
   assert.deepEqual(

@@ -43,6 +43,9 @@ export type IconName =
   | "note" | "person" | "building" | "medal" | "basketball" | "rugby"
   | "signal" | "calendar" | "chat" | "droplet" | "lock" | "pan" | "confetti"
   | "swimmer" | "bike" | "shield"
+  // The two standing ranks. Reusing trophy for "no. 1 in the world" would make
+  // the top of the ladder look like any other award.
+  | "star" | "crown"
   // Third batch: the guides and the programme templates. Body areas are their
   // own icons because "🦵" was doing knee AND calf, and a rehab page that shows
   // the same picture for two different injuries is worse than no picture.
@@ -107,6 +110,10 @@ const PATHS: Record<IconName, React.ReactNode> = {
   flame: <><path d="M12 21c3.3 0 6-2.4 6-5.5 0-4-3-5.5-3-9C13 8 12 9.8 12 11c-1.2-1-1.5-2.6-1.5-4C8 9 6 11.6 6 15.5 6 18.6 8.7 21 12 21Z" /></>,
   trophy: <><path d="M8 4h8v4a4 4 0 0 1-8 0Z" /><path d="M8 5H5v2a3 3 0 0 0 3 3M16 5h3v2a3 3 0 0 1-3 3" /><path d="M12 12v4M9 20h6M10 20l.5-4M14 20l-.5-4" /></>,
   bolt: <><path d="M13 2 5 13h6l-1 9 8-11h-6Z" /></>,
+  // Five-pointed, drawn on the same 24-grid as the rest so it sits at the same
+  // optical weight beside them.
+  star: <><path d="M12 3.2l2.7 5.5 6 .9-4.35 4.24 1.03 6-5.38-2.83L6.62 19.84l1.03-6L3.3 9.6l6-.9Z" /></>,
+  crown: <><path d="M4 18h16" /><path d="M4 8.5 8 13l4-7 4 7 4-4.5-1.6 8.5H5.6Z" /></>,
   warning: <><path d="M12 3.5 21 19H3Z" /><path d="M12 9.5v4.5M12 16.6v.2" /></>,
   // A runner: head, driving arm, split legs.
   run: <><circle cx="15" cy="4.3" r="2.1" /><path d="M13.4 8.6 9.6 10.9l2.2 3.9" /><path d="m13.4 8.6 3.7 2.1.9 3.6" /><path d="m11.8 14.8-2.4 6.3M11.8 14.8l4 1.9 1.1 4.4" /></>,
