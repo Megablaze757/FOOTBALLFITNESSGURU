@@ -88,22 +88,43 @@ name means the chain silently skips Groq.
 Then: Actions → **Deploy Edge Functions** → Run workflow. It verifies the
 function answers afterwards rather than trusting the CLI's exit code.
 
-## 1.4 Validate two database constraints
+## 1.4 Validate one database constraint
 
-Migration `0070` added both `NOT VALID`, so they guard new writes but were never
-checked against existing rows — and those rows are exactly the ones that produce
-`NaN` macros and "Weighted toward undefined." in an athlete's plan.
+**This said "two constraints" and it was wrong.** `0071` added
+`profiles_training_focus_check` fully validated — it checked the existing values
+first and they were all legal — so that one needs nothing. Only
+`programs_goal_type_check` from `0070` is still `NOT VALID`: it guards new
+writes but was never checked against the rows already there, and those rows are
+exactly the ones that produce `NaN` macros and "Weighted toward undefined." in
+an athlete's plan.
+
+Safe to paste as-is. It counts first and only validates if there is nothing to
+trip over, so running it can report a problem but cannot cause one. Tested
+against PostgreSQL 16.13 on all four paths: clean data (validates), a bad row
+(skips, changes nothing), constraint absent, and table absent.
 
 ```sql
-select distinct goal_type from public.programs
-  where goal_type not in ('speed','agility','strength','endurance','injury_recovery','skill');
-select distinct training_focus from public.profiles
-  where training_focus is not null
-    and training_focus not in ('performance','fitness','aesthetics','rehab');
+do $$
+declare
+  bad_rows int;
+begin
+  select count(*) into bad_rows
+    from public.programs
+   where goal_type is not null
+     and goal_type <> all (array['speed','agility','strength','endurance','injury_recovery','skill']);
 
--- if both are empty:
-alter table public.programs validate constraint programs_goal_type_check;
-alter table public.profiles validate constraint profiles_training_focus_check;
+  if bad_rows > 0 then
+    raise notice 'SKIPPED: % programs row(s) have a goal_type outside the allowed list. Nothing was changed.', bad_rows;
+  else
+    execute 'alter table public.programs validate constraint programs_goal_type_check';
+    raise notice 'OK: programs_goal_type_check is now validated (0 bad rows).';
+  end if;
+exception
+  when undefined_object then
+    raise notice 'SKIPPED: programs_goal_type_check is not present on this database.';
+  when undefined_table then
+    raise notice 'SKIPPED: public.programs not found.';
+end $$;
 ```
 
 Migrations 0066–0070 are otherwise applied and verified live.
