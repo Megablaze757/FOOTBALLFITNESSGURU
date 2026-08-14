@@ -429,7 +429,7 @@ function overBudget(state: BudgetState): Response {
 // nobody is watching a spinner and the budget can be what the work actually
 // needs. Callers pass their own client-side timeout to match.
 // Bump on every paste into the Cloudflare dashboard. GET /health reports it.
-const WORKER_VERSION = "2026-08-14.1";
+const WORKER_VERSION = "2026-08-14.2";
 
 const CHAIN_BUDGET_MS = 55_000;
 /**

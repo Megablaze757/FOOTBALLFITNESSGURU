@@ -113,42 +113,92 @@ declare
   v_key   text;
   v_html  text := $mail$<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Pocket Athlete is live — your spot is ready 🔥</title></head>
+<title>Pocket Athlete is live 🔥 you're in</title></head>
 <body style="margin:0;padding:0;background:#0b0f0d;">
-<div style="display:none;max-height:0;overflow:hidden;opacity:0;">Your position. Your plan. Your numbers. It's open.</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0b0f0d;padding:24px 12px;">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;">It's open. 33 positions, 6 sports, and your first plan is two minutes away.</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0b0f0d;padding:20px 12px;">
 <tr><td align="center">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#121714;border-radius:20px;padding:32px 26px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#121714;border-radius:20px;padding:30px 26px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
 
-  <tr><td style="font-size:30px;line-height:1.15;font-weight:800;color:#f1f5f3;padding-bottom:6px;">
-    It's live. 🔥
+  <tr><td style="padding-bottom:20px;">
+    <span style="font-size:18px;font-weight:800;letter-spacing:-0.01em;color:#f1f5f3;">
+      <span style="color:#e3b53f;">&#9670;</span> PocketAthlete
+    </span>
   </td></tr>
 
-  <tr><td style="font-size:16px;line-height:1.6;color:#9fb0a8;padding-bottom:22px;">
-    You put your name down for Pocket Athlete. It's open — go and use it.
+  <tr><td style="font-size:12px;font-weight:800;letter-spacing:0.16em;text-transform:uppercase;color:#e3b53f;padding-bottom:8px;">
+    Now live
   </td></tr>
 
-  <tr><td style="padding-bottom:22px;">
-    <a href="@@CTA@@" style="display:inline-block;background:#e3b53f;color:#0b0f0d;font-size:17px;font-weight:800;text-decoration:none;padding:15px 30px;border-radius:999px;">
-      Open Pocket Athlete →
-    </a>
+  <tr><td style="font-size:34px;line-height:1.1;font-weight:800;letter-spacing:-0.02em;color:#f1f5f3;padding-bottom:12px;">
+    Pocket Athlete<br><span style="color:#e3b53f;">is live.</span>
+  </td></tr>
+
+  <tr><td style="font-size:16px;line-height:1.55;color:#9fb0a8;padding-bottom:20px;">
+    You put your name down before there was anything to see. It's open now — and you're
+    getting this before anyone else.
+  </td></tr>
+
+  <tr><td style="padding-bottom:12px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+      <tr><td align="center" bgcolor="#e3b53f" style="background:#e3b53f;border-radius:999px;">
+        <a href="@@CTA@@" style="display:block;padding:17px 20px;font-size:18px;font-weight:800;color:#0b0f0d;text-decoration:none;letter-spacing:-0.01em;">Open Pocket Athlete →</a>
+      </td></tr>
+    </table>
+  </td></tr>
+
+  <tr><td align="center" style="font-size:13px;line-height:1.5;color:#9fb0a8;padding-bottom:26px;">
+    Free to start. No card. About two minutes to your first four-week block.
+  </td></tr>
+
+  <tr><td style="border-top:1px solid rgba(255,255,255,0.07);padding-top:26px;font-size:23px;line-height:1.22;font-weight:800;letter-spacing:-0.01em;color:#f1f5f3;padding-bottom:10px;">
+    Most plans know your sport.<br><span style="color:#e3b53f;">This one knows your position.</span>
+  </td></tr>
+
+  <tr><td style="font-size:15px;line-height:1.6;color:#9fb0a8;padding-bottom:18px;">
+    A prop and a winger need different bodies, so they get different sessions.
+  </td></tr>
+
+  <tr><td style="padding-bottom:20px;"><span style="display:inline-block;background:rgba(227,181,63,0.10);border:1px solid rgba(227,181,63,0.22);color:#e3b53f;font-size:12px;font-weight:700;padding:6px 11px;border-radius:999px;margin:0 5px 7px 0;white-space:nowrap;">Prop</span><span style="display:inline-block;background:rgba(227,181,63,0.10);border:1px solid rgba(227,181,63,0.22);color:#e3b53f;font-size:12px;font-weight:700;padding:6px 11px;border-radius:999px;margin:0 5px 7px 0;white-space:nowrap;">Winger</span><span style="display:inline-block;background:rgba(227,181,63,0.10);border:1px solid rgba(227,181,63,0.22);color:#e3b53f;font-size:12px;font-weight:700;padding:6px 11px;border-radius:999px;margin:0 5px 7px 0;white-space:nowrap;">Goalkeeper</span><span style="display:inline-block;background:rgba(227,181,63,0.10);border:1px solid rgba(227,181,63,0.22);color:#e3b53f;font-size:12px;font-weight:700;padding:6px 11px;border-radius:999px;margin:0 5px 7px 0;white-space:nowrap;">Point guard</span><span style="display:inline-block;background:rgba(227,181,63,0.10);border:1px solid rgba(227,181,63,0.22);color:#e3b53f;font-size:12px;font-weight:700;padding:6px 11px;border-radius:999px;margin:0 5px 7px 0;white-space:nowrap;">Scrum-half</span><span style="display:inline-block;background:rgba(227,181,63,0.10);border:1px solid rgba(227,181,63,0.22);color:#e3b53f;font-size:12px;font-weight:700;padding:6px 11px;border-radius:999px;margin:0 5px 7px 0;white-space:nowrap;">Marathon</span><span style="display:inline-block;background:rgba(227,181,63,0.10);border:1px solid rgba(227,181,63,0.22);color:#e3b53f;font-size:12px;font-weight:700;padding:6px 11px;border-radius:999px;margin:0 5px 7px 0;white-space:nowrap;">+27 more</span></td></tr>
+
+  <tr><td style="padding-bottom:26px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+      style="background:rgba(255,255,255,0.03);border-radius:14px;padding:14px 6px;">
+      <tr><td align="center" style="padding:0 4px;">
+        <div style="font-size:22px;font-weight:800;color:#f1f5f3;">33</div>
+        <div style="font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:#6b7a73;">positions</div>
+      </td><td align="center" style="padding:0 4px;">
+        <div style="font-size:22px;font-weight:800;color:#f1f5f3;">6</div>
+        <div style="font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:#6b7a73;">sports</div>
+      </td><td align="center" style="padding:0 4px;">
+        <div style="font-size:22px;font-weight:800;color:#f1f5f3;">136</div>
+        <div style="font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:#6b7a73;">challenges</div>
+      </td><td align="center" style="padding:0 4px;">
+        <div style="font-size:22px;font-weight:800;color:#f1f5f3;">62</div>
+        <div style="font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:#6b7a73;">badges</div>
+      </td></tr>
+    </table>
+  </td></tr>
+
+  <tr><td style="font-size:12px;font-weight:800;letter-spacing:0.14em;text-transform:uppercase;color:#6b7a73;padding-bottom:16px;">
+    What's waiting for you
   </td></tr>
 
   <tr><td style="padding-bottom:18px;">
     <table role="presentation" cellpadding="0" cellspacing="0" width="100%"><tr>
-      <td width="34" valign="top" style="font-size:20px;line-height:1.3;">🎯</td>
+      <td width="34" valign="top" style="font-size:20px;line-height:1.3;">🎥</td>
       <td valign="top">
-        <div style="font-size:15px;font-weight:700;color:#f1f5f3;padding-bottom:3px;">Built for your position</div>
-        <div style="font-size:14px;line-height:1.55;color:#9fb0a8;">A prop and a winger get different sessions. 33 positions across 6 sports — not one generic plan with your sport's name on it.</div>
+        <div style="font-size:15px;font-weight:700;color:#f1f5f3;padding-bottom:3px;">Film a rep, watch it get read</div>
+        <div style="font-size:14px;line-height:1.55;color:#9fb0a8;">Depth, tempo, bar path, the knee caving in on rep 8 — with the drills to fix what it finds. The analysis runs on your own phone.</div>
       </td>
     </tr></table>
   </td></tr>
   <tr><td style="padding-bottom:18px;">
     <table role="presentation" cellpadding="0" cellspacing="0" width="100%"><tr>
-      <td width="34" valign="top" style="font-size:20px;line-height:1.3;">🎥</td>
+      <td width="34" valign="top" style="font-size:20px;line-height:1.3;">🩺</td>
       <td valign="top">
-        <div style="font-size:15px;font-weight:700;color:#f1f5f3;padding-bottom:3px;">Film a rep, have it read</div>
-        <div style="font-size:14px;line-height:1.55;color:#9fb0a8;">Depth, tempo, bar path, the knee collapsing on rep 8 — with the drills to fix what it finds. The analysis runs on your own phone.</div>
+        <div style="font-size:15px;font-weight:700;color:#f1f5f3;padding-bottom:3px;">A plan that reacts</div>
+        <div style="font-size:14px;line-height:1.55;color:#9fb0a8;">Slept badly? Three taps and today eases off by itself. It watches your training load and tells you to back off before the niggle, not after.</div>
       </td>
     </tr></table>
   </td></tr>
@@ -166,16 +216,21 @@ declare
       <td width="34" valign="top" style="font-size:20px;line-height:1.3;">🏆</td>
       <td valign="top">
         <div style="font-size:15px;font-weight:700;color:#f1f5f3;padding-bottom:3px;">Something to chase</div>
-        <div style="font-size:14px;line-height:1.55;color:#9fb0a8;">136 challenges, 62 badges, and a rank ladder that runs Iron to Legend. It tracks your load too — so when you need to back off, it says so, and pays you for the rest day.</div>
+        <div style="font-size:14px;line-height:1.55;color:#9fb0a8;">136 challenges, 62 badges and a rank ladder from Iron to Legend. It pays you for rest days too, not just for grinding.</div>
       </td>
     </tr></table>
   </td></tr>
 
-  <tr><td style="padding-top:8px;padding-bottom:26px;font-size:16px;line-height:1.6;color:#9fb0a8;">
-    Free to start. No card needed.
+  <tr><td style="padding-top:8px;"></td></tr>
+  <tr><td style="padding-bottom:12px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+      <tr><td align="center" bgcolor="#e3b53f" style="background:#e3b53f;border-radius:999px;">
+        <a href="@@CTA@@" style="display:block;padding:17px 20px;font-size:18px;font-weight:800;color:#0b0f0d;text-decoration:none;letter-spacing:-0.01em;">Build my first plan →</a>
+      </td></tr>
+    </table>
   </td></tr>
 
-  <tr><td style="border-top:1px solid rgba(255,255,255,0.08);padding-top:18px;font-size:12px;line-height:1.6;color:#6b7a73;">
+  <tr><td style="border-top:1px solid rgba(255,255,255,0.08);padding-top:22px;font-size:12px;line-height:1.6;color:#6b7a73;">
     You're getting this because you joined the Pocket Athlete waitlist.<br>
     <a href="@@UNSUB@@" style="color:#9fb0a8;text-decoration:underline;">Unsubscribe</a> — one click, no questions.
   </td></tr>
@@ -183,31 +238,43 @@ declare
 </table>
 </td></tr></table>
 </body></html>$mail$;
-  v_text  text := $mail$It's live.
+  v_text  text := $mail$POCKET ATHLETE IS LIVE.
 
-You put your name down for Pocket Athlete. It's open — go and use it.
+You put your name down before there was anything to see. It's open now, and
+you're getting this before anyone else.
 
-What you get:
+Open it: @@CTA@@
 
-- Training built for your POSITION, not just your sport. A prop and a winger
-  get different sessions. 33 positions across 6 sports.
-- Film a rep and have it read frame by frame — depth, tempo, bar path, the
-  knee collapsing on rep 8 — with the drills to fix what it finds. The
-  analysis runs on your own phone.
-- Nutrition that adds up: targets, meal plans, a shopping list with prices.
-- 136 challenges, 62 badges and a rank ladder from Iron to Legend.
+Free to start. No card. About two minutes to your first four-week block.
 
-And it watches your training load, so when you need to back off it says so —
-and pays you for the rest day rather than only for the grind.
+---
+
+MOST PLANS KNOW YOUR SPORT. THIS ONE KNOWS YOUR POSITION.
+
+A prop and a winger need different bodies, so they get different sessions.
+33 positions across 6 sports, each with their own movements, drills and
+challenges. Not one generic plan with your sport's name on the front.
+
+WHAT'S WAITING FOR YOU
+
+- Film a rep, watch it get read. Depth, tempo, bar path, the knee caving in
+  on rep 8 - with the drills to fix what it finds. The analysis runs on your
+  own phone.
+- A plan that reacts. Slept badly? Three taps and today eases off by itself.
+  It watches your training load and tells you to back off BEFORE the niggle.
+- Food that adds up. Calorie and macro targets, meal plans built round your
+  training, a shopping list with prices on it.
+- Something to chase. 136 challenges, 62 badges, and a rank ladder from Iron
+  to Legend. It pays you for rest days too, not just for grinding.
 
 Start here: @@CTA@@
 
-Free to start. No card needed.
+See you in there.
 
-—
+-
 You're getting this because you joined the Pocket Athlete waitlist.
 Unsubscribe: @@UNSUB@@$mail$;
-  v_subj  text := $mail$Pocket Athlete is live — your spot is ready 🔥$mail$;
+  v_subj  text := $mail$Pocket Athlete is live 🔥 you're in$mail$;
   v_app   text := $mail$https://pocketathlete.com$mail$;
   r       record;
   v_cta   text;

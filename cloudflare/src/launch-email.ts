@@ -17,11 +17,24 @@
 // through the send loop — and so a test can assert the things that are legally
 // or commercially load-bearing rather than trusting a template literal.
 //
-// WHAT THE COPY WILL AND WILL NOT CLAIM. Everything here is checkable against
-// the app: 6 sports, 33 positions, 136 challenges, 62 badges, the Iron→Legend
-// ladder, and on-device video analysis. It does NOT say the clip never leaves
-// the phone — it is uploaded to the account, and only the ANALYSIS is local.
-// An announcement that overclaims is one the first reply corrects.
+// THE FIRST SCREEN IS THE WHOLE EMAIL. Rendered at 390px — a phone — the button
+// used to land 855px down, which is roughly two swipes past where most people
+// stop. So the order is: what happened, why they're getting it, and the button.
+// Everything that argues the case sits BELOW the first press. Someone already
+// convinced should never have to scroll to act, and someone who isn't still
+// gets the full pitch.
+//
+// IT SAYS THE SAME THING AS THE FRONT DOOR. Under the fold it leads with the
+// landing page's line — "Most plans know your sport. This one knows your
+// position." — and the numbers under it are the same numbers: 33 positions,
+// 6 sports, 136 challenges, 62 badges, each asserted against the app by a test.
+//
+// WHAT IT WILL NOT CLAIM. It does NOT say the clip never leaves the phone — the
+// clip is uploaded to the account, and only the ANALYSIS is local. And it does
+// not mention founding-member pricing, which the waitlist page promised and the
+// app does not implement: there is no discounted tier in lib/subscription.ts.
+// Announcing a price that does not exist is a worse first impression than not
+// mentioning one.
 //
 // The plain-text part is not an afterthought. A bulk HTML email with no text
 // alternative scores worse in every spam filter, and this is the first bulk
@@ -47,31 +60,46 @@ export function launchEmail({ appUrl, ref, unsubscribeUrl }: LaunchEmailInput): 
   // the only signal for someone who signs up with a different address.
   const cta = ref ? `${appUrl}/?ref=${encodeURIComponent(ref)}` : `${appUrl}/`;
 
-  const subject = "Pocket Athlete is live — your spot is ready 🔥";
+  // Leads with the event, not with the reader. "You're in" is meaningless in a
+  // notification bar next to twelve other subjects; the product name and the
+  // word live are the two things worth spending the truncation budget on.
+  const subject = "Pocket Athlete is live 🔥 you're in";
 
   const text = [
-    "It's live.",
+    "POCKET ATHLETE IS LIVE.",
     "",
-    "You put your name down for Pocket Athlete. It's open — go and use it.",
+    "You put your name down before there was anything to see. It's open now, and",
+    "you're getting this before anyone else.",
     "",
-    "What you get:",
+    `Open it: ${cta}`,
     "",
-    "- Training built for your POSITION, not just your sport. A prop and a winger",
-    "  get different sessions. 33 positions across 6 sports.",
-    "- Film a rep and have it read frame by frame — depth, tempo, bar path, the",
-    "  knee collapsing on rep 8 — with the drills to fix what it finds. The",
-    "  analysis runs on your own phone.",
-    "- Nutrition that adds up: targets, meal plans, a shopping list with prices.",
-    "- 136 challenges, 62 badges and a rank ladder from Iron to Legend.",
+    "Free to start. No card. About two minutes to your first four-week block.",
     "",
-    "And it watches your training load, so when you need to back off it says so —",
-    "and pays you for the rest day rather than only for the grind.",
+    "---",
+    "",
+    "MOST PLANS KNOW YOUR SPORT. THIS ONE KNOWS YOUR POSITION.",
+    "",
+    "A prop and a winger need different bodies, so they get different sessions.",
+    "33 positions across 6 sports, each with their own movements, drills and",
+    "challenges. Not one generic plan with your sport's name on the front.",
+    "",
+    "WHAT'S WAITING FOR YOU",
+    "",
+    "- Film a rep, watch it get read. Depth, tempo, bar path, the knee caving in",
+    "  on rep 8 - with the drills to fix what it finds. The analysis runs on your",
+    "  own phone.",
+    "- A plan that reacts. Slept badly? Three taps and today eases off by itself.",
+    "  It watches your training load and tells you to back off BEFORE the niggle.",
+    "- Food that adds up. Calorie and macro targets, meal plans built round your",
+    "  training, a shopping list with prices on it.",
+    "- Something to chase. 136 challenges, 62 badges, and a rank ladder from Iron",
+    "  to Legend. It pays you for rest days too, not just for grinding.",
     "",
     `Start here: ${cta}`,
     "",
-    "Free to start. No card needed.",
+    "See you in there.",
     "",
-    "—",
+    "-",
     "You're getting this because you joined the Pocket Athlete waitlist.",
     `Unsubscribe: ${unsubscribeUrl}`,
   ].join("\n");
@@ -80,35 +108,61 @@ export function launchEmail({ appUrl, ref, unsubscribeUrl }: LaunchEmailInput): 
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${escapeHtml(subject)}</title></head>
 <body style="margin:0;padding:0;background:#0b0f0d;">
-<div style="display:none;max-height:0;overflow:hidden;opacity:0;">Your position. Your plan. Your numbers. It's open.</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0b0f0d;padding:24px 12px;">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;">It's open. 33 positions, 6 sports, and your first plan is two minutes away.</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0b0f0d;padding:20px 12px;">
 <tr><td align="center">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#121714;border-radius:20px;padding:32px 26px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#121714;border-radius:20px;padding:30px 26px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
 
-  <tr><td style="font-size:30px;line-height:1.15;font-weight:800;color:#f1f5f3;padding-bottom:6px;">
-    It's live. 🔥
+  <tr><td style="padding-bottom:20px;">
+    <span style="font-size:18px;font-weight:800;letter-spacing:-0.01em;color:#f1f5f3;">
+      <span style="color:#e3b53f;">&#9670;</span> PocketAthlete
+    </span>
   </td></tr>
 
-  <tr><td style="font-size:16px;line-height:1.6;color:#9fb0a8;padding-bottom:22px;">
-    You put your name down for Pocket Athlete. It's open — go and use it.
+  <tr><td style="font-size:12px;font-weight:800;letter-spacing:0.16em;text-transform:uppercase;color:#e3b53f;padding-bottom:8px;">
+    Now live
   </td></tr>
 
-  <tr><td style="padding-bottom:22px;">
-    <a href="${escapeAttr(cta)}" style="display:inline-block;background:#e3b53f;color:#0b0f0d;font-size:17px;font-weight:800;text-decoration:none;padding:15px 30px;border-radius:999px;">
-      Open Pocket Athlete →
-    </a>
+  <tr><td style="font-size:34px;line-height:1.1;font-weight:800;letter-spacing:-0.02em;color:#f1f5f3;padding-bottom:12px;">
+    Pocket Athlete<br><span style="color:#e3b53f;">is live.</span>
   </td></tr>
 
-  ${row("🎯", "Built for your position", "A prop and a winger get different sessions. 33 positions across 6 sports — not one generic plan with your sport's name on it.")}
-  ${row("🎥", "Film a rep, have it read", "Depth, tempo, bar path, the knee collapsing on rep 8 — with the drills to fix what it finds. The analysis runs on your own phone.")}
+  <tr><td style="font-size:16px;line-height:1.55;color:#9fb0a8;padding-bottom:20px;">
+    You put your name down before there was anything to see. It's open now — and you're
+    getting this before anyone else.
+  </td></tr>
+
+  ${ctaButton(cta, "Open Pocket Athlete →")}
+
+  <tr><td align="center" style="font-size:13px;line-height:1.5;color:#9fb0a8;padding-bottom:26px;">
+    Free to start. No card. About two minutes to your first four-week block.
+  </td></tr>
+
+  <tr><td style="border-top:1px solid rgba(255,255,255,0.07);padding-top:26px;font-size:23px;line-height:1.22;font-weight:800;letter-spacing:-0.01em;color:#f1f5f3;padding-bottom:10px;">
+    Most plans know your sport.<br><span style="color:#e3b53f;">This one knows your position.</span>
+  </td></tr>
+
+  <tr><td style="font-size:15px;line-height:1.6;color:#9fb0a8;padding-bottom:18px;">
+    A prop and a winger need different bodies, so they get different sessions.
+  </td></tr>
+
+  ${positionStrip()}
+
+  ${statRow()}
+
+  <tr><td style="font-size:12px;font-weight:800;letter-spacing:0.14em;text-transform:uppercase;color:#6b7a73;padding-bottom:16px;">
+    What's waiting for you
+  </td></tr>
+
+  ${row("🎥", "Film a rep, watch it get read", "Depth, tempo, bar path, the knee caving in on rep 8 — with the drills to fix what it finds. The analysis runs on your own phone.")}
+  ${row("🩺", "A plan that reacts", "Slept badly? Three taps and today eases off by itself. It watches your training load and tells you to back off before the niggle, not after.")}
   ${row("🍽️", "Food that adds up", "Calorie and macro targets, meal plans built round your training, and a shopping list with prices on it.")}
-  ${row("🏆", "Something to chase", "136 challenges, 62 badges, and a rank ladder that runs Iron to Legend. It tracks your load too — so when you need to back off, it says so, and pays you for the rest day.")}
+  ${row("🏆", "Something to chase", "136 challenges, 62 badges and a rank ladder from Iron to Legend. It pays you for rest days too, not just for grinding.")}
 
-  <tr><td style="padding-top:8px;padding-bottom:26px;font-size:16px;line-height:1.6;color:#9fb0a8;">
-    Free to start. No card needed.
-  </td></tr>
+  <tr><td style="padding-top:8px;"></td></tr>
+  ${ctaButton(cta, "Build my first plan →")}
 
-  <tr><td style="border-top:1px solid rgba(255,255,255,0.08);padding-top:18px;font-size:12px;line-height:1.6;color:#6b7a73;">
+  <tr><td style="border-top:1px solid rgba(255,255,255,0.08);padding-top:22px;font-size:12px;line-height:1.6;color:#6b7a73;">
     You're getting this because you joined the Pocket Athlete waitlist.<br>
     <a href="${escapeAttr(unsubscribeUrl)}" style="color:#9fb0a8;text-decoration:underline;">Unsubscribe</a> — one click, no questions.
   </td></tr>
@@ -118,6 +172,73 @@ export function launchEmail({ appUrl, ref, unsubscribeUrl }: LaunchEmailInput): 
 </body></html>`;
 
   return { subject, html, text };
+}
+
+/**
+ * The button.
+ *
+ * Full width and table-based rather than a padded inline-block anchor. Two
+ * reasons, both about where this actually gets read: on a phone a full-bleed
+ * target is the easiest thing on the screen to hit, and Outlook ignores padding
+ * on an <a>, which turns an inline-block button into bare underlined text. The
+ * bgcolor attribute is there for the same client — it reads that when it
+ * refuses to read the style.
+ */
+function ctaButton(href: string, label: string): string {
+  return `<tr><td style="padding-bottom:12px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+      <tr><td align="center" bgcolor="#e3b53f" style="background:#e3b53f;border-radius:999px;">
+        <a href="${escapeAttr(href)}" style="display:block;padding:17px 20px;font-size:18px;font-weight:800;color:#0b0f0d;text-decoration:none;letter-spacing:-0.01em;">${escapeHtml(label)}</a>
+      </td></tr>
+    </table>
+  </td></tr>`;
+}
+
+/**
+ * A strip of real position names.
+ *
+ * The email was entirely text, and the one thing worth looking at is also the
+ * thing being claimed: these are genuinely different plans. Naming them is a
+ * better argument than a stock photo of somebody squatting, and it renders
+ * everywhere — chips are spans with a background, not images.
+ */
+function positionStrip(): string {
+  const chip = (s: string) =>
+    `<span style="display:inline-block;background:rgba(227,181,63,0.10);border:1px solid rgba(227,181,63,0.22);` +
+    `color:#e3b53f;font-size:12px;font-weight:700;padding:6px 11px;border-radius:999px;margin:0 5px 7px 0;` +
+    `white-space:nowrap;">${escapeHtml(s)}</span>`;
+  const names = ["Prop", "Winger", "Goalkeeper", "Point guard", "Scrum-half", "Marathon", "+27 more"];
+  return `<tr><td style="padding-bottom:20px;">${names.map(chip).join("")}</td></tr>`;
+}
+
+/**
+ * The numbers, as a row of tiles.
+ *
+ * Every one is checkable in the app and pinned by a test, which is the only
+ * reason to put figures in an announcement at all — a number that turns out to
+ * be wrong costs more trust than four vague adjectives ever bought.
+ */
+function statRow(): string {
+  const stats: [string, string][] = [
+    ["33", "positions"],
+    ["6", "sports"],
+    ["136", "challenges"],
+    ["62", "badges"],
+  ];
+  const cells = stats
+    .map(
+      ([n, label]) => `<td align="center" style="padding:0 4px;">
+        <div style="font-size:22px;font-weight:800;color:#f1f5f3;">${n}</div>
+        <div style="font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:#6b7a73;">${label}</div>
+      </td>`
+    )
+    .join("");
+  return `<tr><td style="padding-bottom:26px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+      style="background:rgba(255,255,255,0.03);border-radius:14px;padding:14px 6px;">
+      <tr>${cells}</tr>
+    </table>
+  </td></tr>`;
 }
 
 function row(icon: string, title: string, body: string): string {
