@@ -87,8 +87,11 @@ test("there is a dry run that sends nothing", () => {
   const fn = code(FN);
   assert.match(fn, /dryRun/, "no dry run");
   const dryIdx = fn.indexOf("if (dryRun)");
-  const resendIdx = fn.indexOf("api.resend.com");
-  assert.ok(dryIdx > 0 && dryIdx < resendIdx, "the dry run does not return before sending");
+  // The LAST send is the bulk loop. There is an earlier one in the test-send
+  // branch, and measuring against that was a false failure — the dry run is
+  // about not mailing the LIST, not about the single test message.
+  const bulkIdx = fn.lastIndexOf("api.resend.com");
+  assert.ok(dryIdx > 0 && dryIdx < bulkIdx, "the dry run does not return before the bulk send");
 });
 
 /**
@@ -147,4 +150,44 @@ test("the stats function returns counts only, and only to an admin", () => {
   assert.ok(!/\bw\.email\b/.test(stats.split("$$;")[0]), "the stats function selects email addresses");
   assert.match(SQL, /revoke execute on function public\.waitlist_launch_stats\(\) from public, anon/i,
     "anon can call the stats function");
+});
+
+/**
+ * A TEST SEND MUST NOT COST A REAL ONE.
+ *
+ * The whole value of a test is that you can fire it repeatedly while tweaking
+ * the copy. If it selected rows, stamped anyone, or consumed a place in the
+ * batch, then checking the email would quietly remove people from the send it
+ * was checking — and you would not find out until the numbers looked wrong.
+ */
+test("a test send touches nobody on the waitlist", () => {
+  const fn = code(FN);
+  const testIdx = fn.indexOf("if (testTo)");
+  assert.ok(testIdx > 0, "there is no test send");
+
+  // It returns before the code that selects and stamps the real recipients.
+  const selectIdx = fn.indexOf('.from("waitlist")\n    .select("id, email');
+  const stampIdx = fn.indexOf("launch_emailed_at: new Date()");
+  assert.ok(testIdx < stampIdx, "the test path runs after rows are stamped");
+
+  // And its own branch never stamps: everything between `if (testTo)` and the
+  // return that closes it must be free of the update.
+  const branch = fn.slice(testIdx, fn.indexOf("const { data: rows", testIdx));
+  assert.ok(!/launch_emailed_at:/.test(branch), "the test send marks somebody as emailed");
+  assert.ok(!/unsubscribed_at/.test(branch), "the test send touches unsubscribe state");
+  assert.ok(selectIdx === -1 || testIdx < selectIdx, "the test path runs after the recipient query");
+});
+
+test("the test send is admin-gated like everything else here", () => {
+  const fn = code(FN);
+  // The role check must come BEFORE the test branch, or anyone with a login
+  // could make the app send mail to an address of their choosing.
+  const roleIdx = fn.indexOf('!== "admin"');
+  const testIdx = fn.indexOf("if (testTo)");
+  assert.ok(roleIdx > 0 && roleIdx < testIdx, "the test send is reachable without being an admin");
+});
+
+test("a test send refuses something that is not an email", () => {
+  assert.match(code(FN), /that is not an email address/,
+    "the test address is not validated, so a typo becomes a provider error");
 });

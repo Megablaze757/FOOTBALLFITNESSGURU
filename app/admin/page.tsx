@@ -218,11 +218,16 @@ function LaunchToggle() {
  */
 function WaitlistAnnounce() {
   const launched = useLaunched();
+  const { user } = useSession();
   const [stats, setStats] = useState<{ total: number; unsubscribed: number; emailed: number; pending: number } | null>(null);
-  const [busy, setBusy] = useState<null | "preview" | "send">(null);
+  const [busy, setBusy] = useState<null | "preview" | "send" | "test">(null);
   const [armed, setArmed] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  // Prefilled with whoever is signed in, but editable — the point of a test
+  // send is often to see it in a DIFFERENT client from your own.
+  const [testTo, setTestTo] = useState("");
+  useEffect(() => { if (user?.email) setTestTo((t) => t || user.email!); }, [user?.email]);
 
   const loadStats = useCallback(async () => {
     const { data, error } = await createClient().rpc("waitlist_launch_stats");
@@ -239,6 +244,28 @@ function WaitlistAnnounce() {
   }, []);
 
   useEffect(() => { void loadStats(); }, [loadStats]);
+
+  /**
+   * One copy of the real email, to one address, touching nothing.
+   *
+   * Reading the copy on screen is not the same as receiving it: dark mode,
+   * Gmail stripping CSS, whether the button survives Outlook, whether the
+   * subject gets cut off on a phone. The launch send is a bad moment to learn
+   * any of that.
+   */
+  async function sendTest() {
+    setBusy("test");
+    setErr(null);
+    setNote(null);
+    const { data, error } = await createClient().functions.invoke("announce-launch", {
+      body: { testTo: testTo.trim() },
+    });
+    setBusy(null);
+    if (error) { setErr(error.message); return; }
+    const r = data as { error?: string; note?: string; to?: string };
+    if (r?.error) { setErr(r.error); return; }
+    setNote(`Test sent to ${r.to}. ${r.note ?? ""}`);
+  }
 
   async function run(dryRun: boolean) {
     setBusy(dryRun ? "preview" : "send");
@@ -322,6 +349,31 @@ function WaitlistAnnounce() {
           This cannot be undone. Sends up to 100 at a time — press again for the rest.
         </p>
       )}
+
+      {/* Separate from the buttons above on purpose. This one is safe, and
+          sitting it next to the irreversible one invites the wrong click. */}
+      <div className="mt-5 border-t border-white/[0.06] pt-4">
+        <span className="field-label">Send yourself a test first</span>
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            type="email"
+            value={testTo}
+            onChange={(e) => setTestTo(e.target.value)}
+            placeholder="you@example.com"
+            className="field !mb-0 max-w-xs flex-1"
+          />
+          <button
+            onClick={() => void sendTest()}
+            disabled={busy !== null || !testTo.trim()}
+            className="btn-ghost shrink-0"
+          >
+            {busy === "test" ? "Sending…" : "Send test"}
+          </button>
+        </div>
+        <p className="mt-2 text-xs text-slate-500">
+          The real email, to one address. Nobody on the waitlist is emailed, marked or skipped.
+        </p>
+      </div>
       {note && <p className="mt-3 text-sm text-slate-300">{note}</p>}
       {err && <p className="mt-2 text-sm text-readiness-red">{err}</p>}
     </div>

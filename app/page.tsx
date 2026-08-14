@@ -19,7 +19,16 @@ const FEATURES = [
   { icon: "🩺", title: "Readiness that changes the plan", body: "Three taps — sleep, how the body feels, anything sore. Today's session actually changes because of it, and a load spike caps the verdict even when you feel fine." },
   { icon: "🤖", title: "A coach that reads your notes", body: "Type “I don't train legs” or “no barbell” and it's obeyed — not once, not lightened, anywhere in the four-week block." },
   { icon: "🎯", title: "Built for your position", body: "A centre back and a winger need different bodies. Programs include the ball work for yours: heading, crossing, first touch." },
-  { icon: "🎥", title: "Form analysis on your phone", body: "Film a lift or a sprint and pose tracking flags knee collapse and left–right asymmetry. The clip never leaves your device to be analysed." },
+  // "The clip never leaves your device" was here and it is not true — the clip
+  // is saved to your account so you can open it again later. Only the ANALYSIS
+  // is local. The distinction is the whole answer to "where does my video go?",
+  // and a marketing page that blurs it is one a user is right to be annoyed by.
+  { icon: "🎥", title: "Form analysis on your phone", body: "Film a lift or a sprint and pose tracking flags knee collapse and left–right asymmetry. The analysis runs on your phone, not on a server." },
+  // The whole progression layer was missing from this page — 136 challenges, 62
+  // badges and a nine-tier ladder, none of it mentioned anywhere a stranger
+  // could see. It is the reason people open the app on a day they weren't
+  // planning to.
+  { icon: "🏆", title: "A reason to come back", body: "Daily and weekly challenges picked for your position, 62 badges, and a rank ladder from Iron to Legend. It pays you for rest days too, not just for grinding." },
   { icon: "🍽️", title: "Food that fits your week", body: "Say you eat out on Tuesdays and Tuesday is left alone. The shopping list thinks in packs, so one bag of rice covers three meals." },
   { icon: "👥", title: "Coach & squad", body: "Coaches build a program once and assign it across the roster, with every athlete's readiness on one screen." },
 ];
@@ -121,7 +130,11 @@ const FAQ = [
   },
   {
     q: "Do my videos get uploaded somewhere?",
-    a: "Pose tracking runs in your browser, on your phone. The clip is analysed on the device and never sent anywhere to be processed.",
+    // The old answer — "never sent anywhere to be processed" — answered a
+    // narrower question than the one asked, and someone asking this means
+    // storage. The clip does get saved. Say so, then say the part that is
+    // genuinely unusual.
+    a: "The clip is saved to your account so you can open it again later, and you can delete it in two taps. The analysis itself never leaves your phone — pose tracking runs in your browser, not on our servers.",
   },
   {
     q: "Can I cancel?",
@@ -176,24 +189,44 @@ export default function Landing() {
               impression shouldn't be spent on it. Replaced with the one fact
               that removes the risk of reading on. */}
           <div className="chip mb-6 text-pitch-400">Free forever tier · no card to start</div>
-          {/* The old headline — "Train like you have a full-time performance
-              team" — sold a metaphor. This names the thing that's actually wrong
-              with how most people train, which is the thing they recognise. */}
+          {/* THE HOOK HAS TO DO ONE JOB: say what makes this different, in the
+              first line, in words a stranger already understands.
+
+              Two previous attempts did not. "Train like you have a full-time
+              performance team" sold a metaphor. "Stop training to a plan that's
+              never heard of you" named the problem — better, but it is a
+              negative, it is abstract, and after reading it you still cannot say
+              what the product IS.
+
+              This says the one thing no other training app can say. It is
+              concrete, it is instantly checkable against your own experience,
+              and it is true: 33 positions, each with their own movements, drills
+              and challenges. */}
           <h1 className="text-4xl font-extrabold leading-[1.05] tracking-tight sm:text-6xl">
-            Stop training to a plan that&apos;s{" "}
-            <span className="gold-text">never heard of you.</span>
+            Most plans know your sport.{" "}
+            <span className="gold-text">This one knows your position.</span>
           </h1>
           <p className="mx-auto mt-5 max-w-lg text-lg text-slate-400 lg:mx-0">
-            Four weeks of sessions built from your sport, your position, your kit and the days you
-            can actually train — every movement explained. Slept badly? Three taps and today eases
-            off by itself.
+            A prop and a winger need different bodies — so they get different sessions. Film a rep
+            and have your form read on your phone. Slept badly? Three taps and today eases off by
+            itself.
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center lg:justify-start">
             <Link href="/login" className="btn-primary sm:w-auto sm:px-8">Build my first plan — free</Link>
             <Link href="#how" className="btn-ghost sm:w-auto sm:px-8">See how it works</Link>
           </div>
+          {/* Numbers, not adjectives. Every one is checkable in the app and
+              there is a test that they still match it — marketing figures drift
+              away from the product silently, and the first person to notice is
+              a customer. */}
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 lg:justify-start">
+            <HeroStat n="33" label="positions" />
+            <HeroStat n="6" label="sports" />
+            <HeroStat n="136" label="challenges" />
+            <HeroStat n="62" label="badges" />
+          </div>
           <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-slate-500 lg:justify-start">
-            <span>✓ On-device video analysis</span>
+            <span>✓ Form analysis on your phone</span>
             <span>✓ Cancel anytime</span>
             {/* Naming all six beats "& more" now that each has its own tests,
                 drills, vocabulary and tool order rather than football's with a
@@ -485,6 +518,15 @@ function HeroMock() {
         ))}
       </div>
     </div>
+  );
+}
+
+function HeroStat({ n, label }: { n: string; label: string }) {
+  return (
+    <span className="text-center lg:text-left">
+      <span className="block text-2xl font-extrabold tabular-nums text-slate-100">{n}</span>
+      <span className="block text-[11px] uppercase tracking-wider text-slate-500">{label}</span>
+    </span>
   );
 }
 

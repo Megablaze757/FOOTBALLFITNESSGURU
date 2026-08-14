@@ -76,10 +76,68 @@ Deno.serve(async (req) => {
   }
 
   // --- what they asked for -------------------------------------------------
-  let body: { dryRun?: boolean; limit?: number } = {};
+  let body: { dryRun?: boolean; limit?: number; testTo?: string } = {};
   try { body = await req.json(); } catch { /* empty body means defaults */ }
   const dryRun = body.dryRun === true;
   const limit = Math.min(MAX_LIMIT, Math.max(1, Number(body.limit) || DEFAULT_LIMIT));
+
+  /**
+   * A TEST SEND, to one address, touching nothing.
+   *
+   * Reading the copy in a browser is not the same as receiving it. Dark mode,
+   * Gmail's CSS stripping, whether the button survives Outlook, whether the
+   * subject line gets truncated on a phone — none of that is visible until it
+   * lands in an inbox, and the launch send is a bad time to find out.
+   *
+   * Deliberately BEFORE the waitlist query and returning early: a test must not
+   * select anybody, must not stamp anybody, and must not consume a place in the
+   * batch. The only thing it shares with the real send is the email itself.
+   */
+  const testTo = typeof body.testTo === "string" ? body.testTo.trim() : "";
+  if (testTo) {
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(testTo)) return json({ error: "that is not an email address" }, 400);
+
+    const key = Deno.env.get("RESEND_API_KEY");
+    if (!key) return json({ error: "RESEND_API_KEY is not set" }, 500);
+    const testFrom = Deno.env.get("LAUNCH_FROM") ?? Deno.env.get("REMINDER_FROM");
+    if (!testFrom) return json({ error: "LAUNCH_FROM is not set" }, 500);
+    const base = Deno.env.get("APP_URL") ?? "https://pocketathlete.com";
+
+    // If this address is on the waitlist, use its real token so the unsubscribe
+    // link is genuinely clickable — but DO NOT mark them as emailed, or testing
+    // the copy would quietly remove someone from the real send.
+    const { data: own } = await admin
+      .from("waitlist").select("unsub_token, referral_code, source")
+      .eq("email", testTo.toLowerCase()).maybeSingle();
+    const row = own as { unsub_token?: string; referral_code?: string | null; source?: string | null } | null;
+
+    const mail = launchEmail({
+      appUrl: base,
+      ref: row?.referral_code ?? row?.source ?? null,
+      unsubscribeUrl: `${base}/unsubscribe?t=${encodeURIComponent(row?.unsub_token ?? crypto.randomUUID())}`,
+    });
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from: testFrom,
+        to: testTo,
+        subject: `[TEST] ${mail.subject}`,
+        html: mail.html,
+        text: mail.text,
+      }),
+    });
+    if (!res.ok) return json({ error: `Resend refused it: ${await res.text()}` }, 502);
+    return json({
+      test: true,
+      to: testTo,
+      onWaitlist: Boolean(row),
+      // Said plainly, because a dead link in a test read as a bug otherwise.
+      note: row
+        ? "Sent. You are on the waitlist, so the unsubscribe link in it is real — clicking it will unsubscribe you."
+        : "Sent. You are not on the waitlist, so the unsubscribe link is a placeholder and will say the link didn't work.",
+    }, 200);
+  }
 
   // Only people who have not unsubscribed and have not already been told.
   const { data: rows, error } = await admin
