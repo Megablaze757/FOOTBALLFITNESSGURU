@@ -104,71 +104,84 @@ export function launchEmail({ appUrl, ref, unsubscribeUrl }: LaunchEmailInput): 
     `Unsubscribe: ${unsubscribeUrl}`,
   ].join("\n");
 
-  // THE COLOUR-SCHEME DECLARATION IS LOAD-BEARING, not decoration.
+  // WHY THIS EMAIL IS LIGHT, WHEN THE APP IS DARK.
   //
-  // Without it, Gmail's dark mode assumes an email was designed light and
-  // inverts it. Applied to a near-black design that produces the exact opposite
-  // of the intent: the background came out white and the gold came out brown.
-  // Declaring `dark` tells the client the email is already dark-optimised and
-  // to leave the colours alone. Apple Mail and Outlook read the meta tags,
-  // newer Gmail reads the `color-scheme` property, so all three are stated.
+  // Gmail's dark mode inverts emails and cannot be talked out of it. A dark
+  // design was tried first with every documented opt-out — the color-scheme and
+  // supported-color-schemes meta tags, the CSS property, bgcolor attributes on
+  // every surface — and Gmail inverted it anyway: white background, gold turned
+  // brown. That was confirmed in a real inbox, twice, with the copy-id in the
+  // subject line proving the right version was being looked at.
   //
-  // The bgcolor attributes are the belt to that braces. Gmail is far more
-  // willing to override a CSS `background` than the presentational attribute,
-  // so every element carrying the dark ground states it both ways — if the
-  // style is dropped the panel is still dark rather than white.
+  // So the inversion is used rather than fought. Gmail flips luminance and keeps
+  // hue, which means a light design arrives DARK for anyone reading in dark
+  // mode, and the deep gold #8a6510 lands back on roughly the brand gold. The
+  // palette is chosen so both directions work: every pairing here clears WCAG AA
+  // against its own background as designed.
+  //
+  // Clients that honour prefers-color-scheme — Apple Mail, Outlook.com — get a
+  // real dark palette from the media query instead of an approximation, which
+  // is what the pa-* classes are for. Inline styles win over a stylesheet unless
+  // the stylesheet says !important, which is why those rules all do.
   const html = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="color-scheme" content="dark">
-<meta name="supported-color-schemes" content="dark">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
 <title>${escapeHtml(subject)}</title>
 <style>
-  :root { color-scheme: dark; supported-color-schemes: dark; }
-  /* Reasserted for clients that keep their own stylesheet in play. */
-  body, .pa-bg { background-color: #0b0f0d !important; }
-  .pa-card { background-color: #121714 !important; }
+  :root { color-scheme: light dark; supported-color-schemes: light dark; }
+  /* For clients that actually honour the query — Apple Mail, Outlook.com. Gmail
+     ignores it and inverts the light design instead, which lands in the same
+     place. !important is what lets a stylesheet beat the inline styles. */
   @media (prefers-color-scheme: dark) {
-    body, .pa-bg { background-color: #0b0f0d !important; }
-    .pa-card { background-color: #121714 !important; }
+    .pa-bg    { background-color: #0b0f0d !important; }
+    .pa-card  { background-color: #121714 !important; }
+    .pa-h     { color: #f1f5f3 !important; }
+    .pa-gold  { color: #e3b53f !important; }
+    .pa-body  { color: #9fb0a8 !important; }
+    .pa-muted { color: #6b7a73 !important; }
+    .pa-tile  { background-color: #1a201c !important; }
+    .pa-rule  { border-color: rgba(255,255,255,0.09) !important; }
+    .pa-chip  { background-color: #1e1c14 !important; border-color: #4a3d17 !important; color: #e3b53f !important; }
   }
 </style>
 </head>
-<body bgcolor="#0b0f0d" style="margin:0;padding:0;background-color:#0b0f0d;">
+<body bgcolor="#eef1ec" style="margin:0;padding:0;background-color:#eef1ec;">
 <div style="display:none;max-height:0;overflow:hidden;opacity:0;">It's open. 33 positions, 6 sports, and your first plan is two minutes away.</div>
-<table role="presentation" class="pa-bg" width="100%" cellpadding="0" cellspacing="0" bgcolor="#0b0f0d" style="background-color:#0b0f0d;padding:20px 12px;">
-<tr><td align="center" bgcolor="#0b0f0d" style="background-color:#0b0f0d;">
-<table role="presentation" class="pa-card" width="100%" cellpadding="0" cellspacing="0" bgcolor="#121714" style="max-width:560px;background-color:#121714;border-radius:20px;padding:30px 26px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+<table role="presentation" class="pa-bg" width="100%" cellpadding="0" cellspacing="0" bgcolor="#eef1ec" style="background-color:#eef1ec;padding:20px 12px;">
+<tr><td align="center">
+<table role="presentation" class="pa-card" width="100%" cellpadding="0" cellspacing="0" bgcolor="#ffffff" style="max-width:560px;background-color:#ffffff;border-radius:20px;padding:30px 26px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
 
   <tr><td style="padding-bottom:20px;">
-    <span style="font-size:18px;font-weight:800;letter-spacing:-0.01em;color:#f1f5f3;">
-      <span style="color:#e3b53f;">&#9670;</span> PocketAthlete
+    <span class="pa-h" style="font-size:18px;font-weight:800;letter-spacing:-0.01em;color:#0e1411;">
+      <span class="pa-gold" style="color:#8a6510;">&#9670;</span> PocketAthlete
     </span>
   </td></tr>
 
-  <tr><td style="font-size:12px;font-weight:800;letter-spacing:0.16em;text-transform:uppercase;color:#e3b53f;padding-bottom:8px;">
+  <tr><td class="pa-gold" style="font-size:12px;font-weight:800;letter-spacing:0.16em;text-transform:uppercase;color:#8a6510;padding-bottom:8px;">
     Now live
   </td></tr>
 
-  <tr><td style="font-size:34px;line-height:1.1;font-weight:800;letter-spacing:-0.02em;color:#f1f5f3;padding-bottom:12px;">
-    Pocket Athlete<br><span style="color:#e3b53f;">is live.</span>
+  <tr><td class="pa-h" style="font-size:34px;line-height:1.1;font-weight:800;letter-spacing:-0.02em;color:#0e1411;padding-bottom:12px;">
+    Pocket Athlete<br><span class="pa-gold" style="color:#8a6510;">is live.</span>
   </td></tr>
 
-  <tr><td style="font-size:16px;line-height:1.55;color:#9fb0a8;padding-bottom:20px;">
+  <tr><td class="pa-body" style="font-size:16px;line-height:1.55;color:#495751;padding-bottom:20px;">
     You put your name down before there was anything to see. It's open now — and you're
     getting this before anyone else.
   </td></tr>
 
   ${ctaButton(cta, "Open Pocket Athlete →")}
 
-  <tr><td align="center" style="font-size:13px;line-height:1.5;color:#9fb0a8;padding-bottom:26px;">
+  <tr><td class="pa-muted" align="center" style="font-size:13px;line-height:1.5;color:#5d6860;padding-bottom:26px;">
     Free to start. No card. About two minutes to your first four-week block.
   </td></tr>
 
-  <tr><td style="border-top:1px solid rgba(255,255,255,0.07);padding-top:26px;font-size:23px;line-height:1.22;font-weight:800;letter-spacing:-0.01em;color:#f1f5f3;padding-bottom:10px;">
-    Most plans know your sport.<br><span style="color:#e3b53f;">This one knows your position.</span>
+  <tr><td class="pa-h pa-rule" style="border-top:1px solid #e4e8e3;padding-top:26px;font-size:23px;line-height:1.22;font-weight:800;letter-spacing:-0.01em;color:#0e1411;padding-bottom:10px;">
+    Most plans know your sport.<br><span class="pa-gold" style="color:#8a6510;">This one knows your position.</span>
   </td></tr>
 
-  <tr><td style="font-size:15px;line-height:1.6;color:#9fb0a8;padding-bottom:18px;">
+  <tr><td class="pa-body" style="font-size:15px;line-height:1.6;color:#495751;padding-bottom:18px;">
     A prop and a winger need different bodies, so they get different sessions.
   </td></tr>
 
@@ -176,7 +189,7 @@ export function launchEmail({ appUrl, ref, unsubscribeUrl }: LaunchEmailInput): 
 
   ${statRow()}
 
-  <tr><td style="font-size:12px;font-weight:800;letter-spacing:0.14em;text-transform:uppercase;color:#6b7a73;padding-bottom:16px;">
+  <tr><td class="pa-muted" style="font-size:12px;font-weight:800;letter-spacing:0.14em;text-transform:uppercase;color:#5d6860;padding-bottom:16px;">
     What's waiting for you
   </td></tr>
 
@@ -188,9 +201,9 @@ export function launchEmail({ appUrl, ref, unsubscribeUrl }: LaunchEmailInput): 
   <tr><td style="padding-top:8px;"></td></tr>
   ${ctaButton(cta, "Build my first plan →")}
 
-  <tr><td style="border-top:1px solid rgba(255,255,255,0.08);padding-top:22px;font-size:12px;line-height:1.6;color:#6b7a73;">
+  <tr><td class="pa-muted pa-rule" style="border-top:1px solid #e4e8e3;padding-top:22px;font-size:12px;line-height:1.6;color:#5d6860;">
     You're getting this because you joined the Pocket Athlete waitlist.<br>
-    <a href="${escapeAttr(unsubscribeUrl)}" style="color:#9fb0a8;text-decoration:underline;">Unsubscribe</a> — one click, no questions.
+    <a href="${escapeAttr(unsubscribeUrl)}" class="pa-body" style="color:#495751;text-decoration:underline;">Unsubscribe</a> — one click, no questions.
   </td></tr>
 
 </table>
@@ -230,8 +243,8 @@ function ctaButton(href: string, label: string): string {
  */
 function positionStrip(): string {
   const chip = (s: string) =>
-    `<span style="display:inline-block;background:rgba(227,181,63,0.10);border:1px solid rgba(227,181,63,0.22);` +
-    `color:#e3b53f;font-size:12px;font-weight:700;padding:6px 11px;border-radius:999px;margin:0 5px 7px 0;` +
+    `<span class="pa-chip" style="display:inline-block;background-color:#fbf4e0;border:1px solid #ecdfb6;` +
+    `color:#7d5c0c;font-size:12px;font-weight:700;padding:6px 11px;border-radius:999px;margin:0 5px 7px 0;` +
     `white-space:nowrap;">${escapeHtml(s)}</span>`;
   const names = ["Prop", "Winger", "Goalkeeper", "Point guard", "Scrum-half", "Marathon", "+27 more"];
   return `<tr><td style="padding-bottom:20px;">${names.map(chip).join("")}</td></tr>`;
@@ -254,14 +267,14 @@ function statRow(): string {
   const cells = stats
     .map(
       ([n, label]) => `<td align="center" style="padding:0 4px;">
-        <div style="font-size:22px;font-weight:800;color:#f1f5f3;">${n}</div>
-        <div style="font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:#6b7a73;">${label}</div>
+        <div class="pa-h" style="font-size:22px;font-weight:800;color:#0e1411;">${n}</div>
+        <div class="pa-muted" style="font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:#5d6860;">${label}</div>
       </td>`
     )
     .join("");
   return `<tr><td style="padding-bottom:26px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
-      style="background:rgba(255,255,255,0.03);border-radius:14px;padding:14px 6px;">
+      class="pa-tile" bgcolor="#f5f7f4" style="background-color:#f5f7f4;border-radius:14px;padding:14px 6px;">
       <tr>${cells}</tr>
     </table>
   </td></tr>`;
@@ -272,8 +285,8 @@ function row(icon: string, title: string, body: string): string {
     <table role="presentation" cellpadding="0" cellspacing="0" width="100%"><tr>
       <td width="34" valign="top" style="font-size:20px;line-height:1.3;">${icon}</td>
       <td valign="top">
-        <div style="font-size:15px;font-weight:700;color:#f1f5f3;padding-bottom:3px;">${escapeHtml(title)}</div>
-        <div style="font-size:14px;line-height:1.55;color:#9fb0a8;">${escapeHtml(body)}</div>
+        <div class="pa-h" style="font-size:15px;font-weight:700;color:#0e1411;padding-bottom:3px;">${escapeHtml(title)}</div>
+        <div class="pa-body" style="font-size:14px;line-height:1.55;color:#495751;">${escapeHtml(body)}</div>
       </td>
     </tr></table>
   </td></tr>`;

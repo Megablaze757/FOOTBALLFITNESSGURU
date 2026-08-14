@@ -126,21 +126,33 @@ test("the email does not claim the video never leaves the phone", () => {
  * None of this is visible in a screenshot taken outside a mail client, which is
  * exactly why it needs asserting rather than eyeballing.
  */
-test("the email declares itself dark and states its background twice", () => {
-  assert.match(EMAIL, /<meta name="color-scheme" content="dark">/,
-    "no color-scheme meta, so Gmail will invert the dark design to white");
-  assert.match(EMAIL, /<meta name="supported-color-schemes" content="dark">/,
+test("the email is light-first with a real dark palette behind the media query", () => {
+  assert.match(EMAIL, /<meta name="color-scheme" content="light dark">/,
+    "no color-scheme meta");
+  assert.match(EMAIL, /<meta name="supported-color-schemes" content="light dark">/,
     "no supported-color-schemes meta");
-  assert.match(EMAIL, /color-scheme:\s*dark/,
-    "the CSS color-scheme property is missing, which is what newer Gmail reads");
 
-  // Every element carrying the dark ground states it as an attribute as well as
-  // a style. Checked individually — the body was the one that mattered most in
-  // the reported failure, because that is the surface behind everything else.
-  assert.match(EMAIL, /<body bgcolor="#0b0f0d"/,
-    "the body has no bgcolor attribute, so a stripped style leaves it white");
-  assert.match(EMAIL, /bgcolor="#121714"/,
-    "the card has no bgcolor attribute");
+  // LIGHT IS THE DEFAULT, and that is the whole design decision. A dark-first
+  // email is what Gmail inverted to white; a light one inverts to dark, which is
+  // what a dark-mode reader actually wants to see.
+  assert.match(EMAIL, /<body bgcolor="#eef1ec"/,
+    "the body is not light-first, so Gmail's inversion will produce a white email again");
+  assert.match(EMAIL, /bgcolor="#ffffff"/, "the card has no light bgcolor attribute");
+
+  // And a genuine dark palette for clients that honour the query, rather than
+  // leaving them the inverted approximation.
+  const dark = EMAIL.slice(EMAIL.indexOf("@media (prefers-color-scheme: dark)"));
+  assert.ok(dark.length > 200, "there is no dark-mode block at all");
+  for (const cls of ["pa-bg", "pa-card", "pa-h", "pa-gold", "pa-body", "pa-muted"]) {
+    assert.ok(new RegExp(`\\.${cls}\\s*\\{`).test(dark), `the dark block never restyles .${cls}`);
+    assert.ok(EMAIL.includes(`class="${cls}`) || EMAIL.includes(`${cls}"`),
+      `.${cls} is styled for dark mode but never applied to anything`);
+  }
+  // Inline styles beat a stylesheet unless it says !important, so a dark block
+  // without it is decorative and changes nothing in any client.
+  assert.ok(!/\.pa-bg\s*\{[^}]*background-color:[^;]*;\s*\}/.test(dark.replace(/!important/g, "")) ||
+    /\.pa-bg\s*\{[^}]*!important/.test(dark),
+    "the dark overrides lack !important, so the inline styles win and they do nothing");
 });
 
 test("the numbers in the email match the app", async () => {

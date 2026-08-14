@@ -110,48 +110,55 @@ security definer
 set search_path = public, pg_temp
 as $fn$
 declare
-  -- copy-id: 75c7424dbb84
+  -- copy-id: a09d6011aecb
   -- Fingerprint of the email copy below, kept where Postgres stores it verbatim.
   -- The self-check at the bottom of announce-launch-update.sql looks for exactly
   -- this string, which is how you tell a paste that took from one that did not.
   v_key   text;
   v_html  text := $mail$<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="color-scheme" content="dark">
-<meta name="supported-color-schemes" content="dark">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
 <title>Pocket Athlete is live 🔥 you're in</title>
 <style>
-  :root { color-scheme: dark; supported-color-schemes: dark; }
-  /* Reasserted for clients that keep their own stylesheet in play. */
-  body, .pa-bg { background-color: #0b0f0d !important; }
-  .pa-card { background-color: #121714 !important; }
+  :root { color-scheme: light dark; supported-color-schemes: light dark; }
+  /* For clients that actually honour the query — Apple Mail, Outlook.com. Gmail
+     ignores it and inverts the light design instead, which lands in the same
+     place. !important is what lets a stylesheet beat the inline styles. */
   @media (prefers-color-scheme: dark) {
-    body, .pa-bg { background-color: #0b0f0d !important; }
-    .pa-card { background-color: #121714 !important; }
+    .pa-bg    { background-color: #0b0f0d !important; }
+    .pa-card  { background-color: #121714 !important; }
+    .pa-h     { color: #f1f5f3 !important; }
+    .pa-gold  { color: #e3b53f !important; }
+    .pa-body  { color: #9fb0a8 !important; }
+    .pa-muted { color: #6b7a73 !important; }
+    .pa-tile  { background-color: #1a201c !important; }
+    .pa-rule  { border-color: rgba(255,255,255,0.09) !important; }
+    .pa-chip  { background-color: #1e1c14 !important; border-color: #4a3d17 !important; color: #e3b53f !important; }
   }
 </style>
 </head>
-<body bgcolor="#0b0f0d" style="margin:0;padding:0;background-color:#0b0f0d;">
+<body bgcolor="#eef1ec" style="margin:0;padding:0;background-color:#eef1ec;">
 <div style="display:none;max-height:0;overflow:hidden;opacity:0;">It's open. 33 positions, 6 sports, and your first plan is two minutes away.</div>
-<table role="presentation" class="pa-bg" width="100%" cellpadding="0" cellspacing="0" bgcolor="#0b0f0d" style="background-color:#0b0f0d;padding:20px 12px;">
-<tr><td align="center" bgcolor="#0b0f0d" style="background-color:#0b0f0d;">
-<table role="presentation" class="pa-card" width="100%" cellpadding="0" cellspacing="0" bgcolor="#121714" style="max-width:560px;background-color:#121714;border-radius:20px;padding:30px 26px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+<table role="presentation" class="pa-bg" width="100%" cellpadding="0" cellspacing="0" bgcolor="#eef1ec" style="background-color:#eef1ec;padding:20px 12px;">
+<tr><td align="center">
+<table role="presentation" class="pa-card" width="100%" cellpadding="0" cellspacing="0" bgcolor="#ffffff" style="max-width:560px;background-color:#ffffff;border-radius:20px;padding:30px 26px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
 
   <tr><td style="padding-bottom:20px;">
-    <span style="font-size:18px;font-weight:800;letter-spacing:-0.01em;color:#f1f5f3;">
-      <span style="color:#e3b53f;">&#9670;</span> PocketAthlete
+    <span class="pa-h" style="font-size:18px;font-weight:800;letter-spacing:-0.01em;color:#0e1411;">
+      <span class="pa-gold" style="color:#8a6510;">&#9670;</span> PocketAthlete
     </span>
   </td></tr>
 
-  <tr><td style="font-size:12px;font-weight:800;letter-spacing:0.16em;text-transform:uppercase;color:#e3b53f;padding-bottom:8px;">
+  <tr><td class="pa-gold" style="font-size:12px;font-weight:800;letter-spacing:0.16em;text-transform:uppercase;color:#8a6510;padding-bottom:8px;">
     Now live
   </td></tr>
 
-  <tr><td style="font-size:34px;line-height:1.1;font-weight:800;letter-spacing:-0.02em;color:#f1f5f3;padding-bottom:12px;">
-    Pocket Athlete<br><span style="color:#e3b53f;">is live.</span>
+  <tr><td class="pa-h" style="font-size:34px;line-height:1.1;font-weight:800;letter-spacing:-0.02em;color:#0e1411;padding-bottom:12px;">
+    Pocket Athlete<br><span class="pa-gold" style="color:#8a6510;">is live.</span>
   </td></tr>
 
-  <tr><td style="font-size:16px;line-height:1.55;color:#9fb0a8;padding-bottom:20px;">
+  <tr><td class="pa-body" style="font-size:16px;line-height:1.55;color:#495751;padding-bottom:20px;">
     You put your name down before there was anything to see. It's open now — and you're
     getting this before anyone else.
   </td></tr>
@@ -164,40 +171,40 @@ declare
     </table>
   </td></tr>
 
-  <tr><td align="center" style="font-size:13px;line-height:1.5;color:#9fb0a8;padding-bottom:26px;">
+  <tr><td class="pa-muted" align="center" style="font-size:13px;line-height:1.5;color:#5d6860;padding-bottom:26px;">
     Free to start. No card. About two minutes to your first four-week block.
   </td></tr>
 
-  <tr><td style="border-top:1px solid rgba(255,255,255,0.07);padding-top:26px;font-size:23px;line-height:1.22;font-weight:800;letter-spacing:-0.01em;color:#f1f5f3;padding-bottom:10px;">
-    Most plans know your sport.<br><span style="color:#e3b53f;">This one knows your position.</span>
+  <tr><td class="pa-h pa-rule" style="border-top:1px solid #e4e8e3;padding-top:26px;font-size:23px;line-height:1.22;font-weight:800;letter-spacing:-0.01em;color:#0e1411;padding-bottom:10px;">
+    Most plans know your sport.<br><span class="pa-gold" style="color:#8a6510;">This one knows your position.</span>
   </td></tr>
 
-  <tr><td style="font-size:15px;line-height:1.6;color:#9fb0a8;padding-bottom:18px;">
+  <tr><td class="pa-body" style="font-size:15px;line-height:1.6;color:#495751;padding-bottom:18px;">
     A prop and a winger need different bodies, so they get different sessions.
   </td></tr>
 
-  <tr><td style="padding-bottom:20px;"><span style="display:inline-block;background:rgba(227,181,63,0.10);border:1px solid rgba(227,181,63,0.22);color:#e3b53f;font-size:12px;font-weight:700;padding:6px 11px;border-radius:999px;margin:0 5px 7px 0;white-space:nowrap;">Prop</span><span style="display:inline-block;background:rgba(227,181,63,0.10);border:1px solid rgba(227,181,63,0.22);color:#e3b53f;font-size:12px;font-weight:700;padding:6px 11px;border-radius:999px;margin:0 5px 7px 0;white-space:nowrap;">Winger</span><span style="display:inline-block;background:rgba(227,181,63,0.10);border:1px solid rgba(227,181,63,0.22);color:#e3b53f;font-size:12px;font-weight:700;padding:6px 11px;border-radius:999px;margin:0 5px 7px 0;white-space:nowrap;">Goalkeeper</span><span style="display:inline-block;background:rgba(227,181,63,0.10);border:1px solid rgba(227,181,63,0.22);color:#e3b53f;font-size:12px;font-weight:700;padding:6px 11px;border-radius:999px;margin:0 5px 7px 0;white-space:nowrap;">Point guard</span><span style="display:inline-block;background:rgba(227,181,63,0.10);border:1px solid rgba(227,181,63,0.22);color:#e3b53f;font-size:12px;font-weight:700;padding:6px 11px;border-radius:999px;margin:0 5px 7px 0;white-space:nowrap;">Scrum-half</span><span style="display:inline-block;background:rgba(227,181,63,0.10);border:1px solid rgba(227,181,63,0.22);color:#e3b53f;font-size:12px;font-weight:700;padding:6px 11px;border-radius:999px;margin:0 5px 7px 0;white-space:nowrap;">Marathon</span><span style="display:inline-block;background:rgba(227,181,63,0.10);border:1px solid rgba(227,181,63,0.22);color:#e3b53f;font-size:12px;font-weight:700;padding:6px 11px;border-radius:999px;margin:0 5px 7px 0;white-space:nowrap;">+27 more</span></td></tr>
+  <tr><td style="padding-bottom:20px;"><span class="pa-chip" style="display:inline-block;background-color:#fbf4e0;border:1px solid #ecdfb6;color:#7d5c0c;font-size:12px;font-weight:700;padding:6px 11px;border-radius:999px;margin:0 5px 7px 0;white-space:nowrap;">Prop</span><span class="pa-chip" style="display:inline-block;background-color:#fbf4e0;border:1px solid #ecdfb6;color:#7d5c0c;font-size:12px;font-weight:700;padding:6px 11px;border-radius:999px;margin:0 5px 7px 0;white-space:nowrap;">Winger</span><span class="pa-chip" style="display:inline-block;background-color:#fbf4e0;border:1px solid #ecdfb6;color:#7d5c0c;font-size:12px;font-weight:700;padding:6px 11px;border-radius:999px;margin:0 5px 7px 0;white-space:nowrap;">Goalkeeper</span><span class="pa-chip" style="display:inline-block;background-color:#fbf4e0;border:1px solid #ecdfb6;color:#7d5c0c;font-size:12px;font-weight:700;padding:6px 11px;border-radius:999px;margin:0 5px 7px 0;white-space:nowrap;">Point guard</span><span class="pa-chip" style="display:inline-block;background-color:#fbf4e0;border:1px solid #ecdfb6;color:#7d5c0c;font-size:12px;font-weight:700;padding:6px 11px;border-radius:999px;margin:0 5px 7px 0;white-space:nowrap;">Scrum-half</span><span class="pa-chip" style="display:inline-block;background-color:#fbf4e0;border:1px solid #ecdfb6;color:#7d5c0c;font-size:12px;font-weight:700;padding:6px 11px;border-radius:999px;margin:0 5px 7px 0;white-space:nowrap;">Marathon</span><span class="pa-chip" style="display:inline-block;background-color:#fbf4e0;border:1px solid #ecdfb6;color:#7d5c0c;font-size:12px;font-weight:700;padding:6px 11px;border-radius:999px;margin:0 5px 7px 0;white-space:nowrap;">+27 more</span></td></tr>
 
   <tr><td style="padding-bottom:26px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
-      style="background:rgba(255,255,255,0.03);border-radius:14px;padding:14px 6px;">
+      class="pa-tile" bgcolor="#f5f7f4" style="background-color:#f5f7f4;border-radius:14px;padding:14px 6px;">
       <tr><td align="center" style="padding:0 4px;">
-        <div style="font-size:22px;font-weight:800;color:#f1f5f3;">33</div>
-        <div style="font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:#6b7a73;">positions</div>
+        <div class="pa-h" style="font-size:22px;font-weight:800;color:#0e1411;">33</div>
+        <div class="pa-muted" style="font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:#5d6860;">positions</div>
       </td><td align="center" style="padding:0 4px;">
-        <div style="font-size:22px;font-weight:800;color:#f1f5f3;">6</div>
-        <div style="font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:#6b7a73;">sports</div>
+        <div class="pa-h" style="font-size:22px;font-weight:800;color:#0e1411;">6</div>
+        <div class="pa-muted" style="font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:#5d6860;">sports</div>
       </td><td align="center" style="padding:0 4px;">
-        <div style="font-size:22px;font-weight:800;color:#f1f5f3;">136</div>
-        <div style="font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:#6b7a73;">challenges</div>
+        <div class="pa-h" style="font-size:22px;font-weight:800;color:#0e1411;">136</div>
+        <div class="pa-muted" style="font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:#5d6860;">challenges</div>
       </td><td align="center" style="padding:0 4px;">
-        <div style="font-size:22px;font-weight:800;color:#f1f5f3;">62</div>
-        <div style="font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:#6b7a73;">badges</div>
+        <div class="pa-h" style="font-size:22px;font-weight:800;color:#0e1411;">62</div>
+        <div class="pa-muted" style="font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:#5d6860;">badges</div>
       </td></tr>
     </table>
   </td></tr>
 
-  <tr><td style="font-size:12px;font-weight:800;letter-spacing:0.14em;text-transform:uppercase;color:#6b7a73;padding-bottom:16px;">
+  <tr><td class="pa-muted" style="font-size:12px;font-weight:800;letter-spacing:0.14em;text-transform:uppercase;color:#5d6860;padding-bottom:16px;">
     What's waiting for you
   </td></tr>
 
@@ -205,8 +212,8 @@ declare
     <table role="presentation" cellpadding="0" cellspacing="0" width="100%"><tr>
       <td width="34" valign="top" style="font-size:20px;line-height:1.3;">🎥</td>
       <td valign="top">
-        <div style="font-size:15px;font-weight:700;color:#f1f5f3;padding-bottom:3px;">Film a rep, watch it get read</div>
-        <div style="font-size:14px;line-height:1.55;color:#9fb0a8;">Depth, tempo, bar path, the knee caving in on rep 8 — with the drills to fix what it finds. The analysis runs on your own phone.</div>
+        <div class="pa-h" style="font-size:15px;font-weight:700;color:#0e1411;padding-bottom:3px;">Film a rep, watch it get read</div>
+        <div class="pa-body" style="font-size:14px;line-height:1.55;color:#495751;">Depth, tempo, bar path, the knee caving in on rep 8 — with the drills to fix what it finds. The analysis runs on your own phone.</div>
       </td>
     </tr></table>
   </td></tr>
@@ -214,8 +221,8 @@ declare
     <table role="presentation" cellpadding="0" cellspacing="0" width="100%"><tr>
       <td width="34" valign="top" style="font-size:20px;line-height:1.3;">🩺</td>
       <td valign="top">
-        <div style="font-size:15px;font-weight:700;color:#f1f5f3;padding-bottom:3px;">A plan that reacts</div>
-        <div style="font-size:14px;line-height:1.55;color:#9fb0a8;">Slept badly? Three taps and today eases off by itself. It watches your training load and tells you to back off before the niggle, not after.</div>
+        <div class="pa-h" style="font-size:15px;font-weight:700;color:#0e1411;padding-bottom:3px;">A plan that reacts</div>
+        <div class="pa-body" style="font-size:14px;line-height:1.55;color:#495751;">Slept badly? Three taps and today eases off by itself. It watches your training load and tells you to back off before the niggle, not after.</div>
       </td>
     </tr></table>
   </td></tr>
@@ -223,8 +230,8 @@ declare
     <table role="presentation" cellpadding="0" cellspacing="0" width="100%"><tr>
       <td width="34" valign="top" style="font-size:20px;line-height:1.3;">🍽️</td>
       <td valign="top">
-        <div style="font-size:15px;font-weight:700;color:#f1f5f3;padding-bottom:3px;">Food that adds up</div>
-        <div style="font-size:14px;line-height:1.55;color:#9fb0a8;">Calorie and macro targets, meal plans built round your training, and a shopping list with prices on it.</div>
+        <div class="pa-h" style="font-size:15px;font-weight:700;color:#0e1411;padding-bottom:3px;">Food that adds up</div>
+        <div class="pa-body" style="font-size:14px;line-height:1.55;color:#495751;">Calorie and macro targets, meal plans built round your training, and a shopping list with prices on it.</div>
       </td>
     </tr></table>
   </td></tr>
@@ -232,8 +239,8 @@ declare
     <table role="presentation" cellpadding="0" cellspacing="0" width="100%"><tr>
       <td width="34" valign="top" style="font-size:20px;line-height:1.3;">🏆</td>
       <td valign="top">
-        <div style="font-size:15px;font-weight:700;color:#f1f5f3;padding-bottom:3px;">Something to chase</div>
-        <div style="font-size:14px;line-height:1.55;color:#9fb0a8;">136 challenges, 62 badges and a rank ladder from Iron to Legend. It pays you for rest days too, not just for grinding.</div>
+        <div class="pa-h" style="font-size:15px;font-weight:700;color:#0e1411;padding-bottom:3px;">Something to chase</div>
+        <div class="pa-body" style="font-size:14px;line-height:1.55;color:#495751;">136 challenges, 62 badges and a rank ladder from Iron to Legend. It pays you for rest days too, not just for grinding.</div>
       </td>
     </tr></table>
   </td></tr>
@@ -247,9 +254,9 @@ declare
     </table>
   </td></tr>
 
-  <tr><td style="border-top:1px solid rgba(255,255,255,0.08);padding-top:22px;font-size:12px;line-height:1.6;color:#6b7a73;">
+  <tr><td class="pa-muted pa-rule" style="border-top:1px solid #e4e8e3;padding-top:22px;font-size:12px;line-height:1.6;color:#5d6860;">
     You're getting this because you joined the Pocket Athlete waitlist.<br>
-    <a href="@@UNSUB@@" style="color:#9fb0a8;text-decoration:underline;">Unsubscribe</a> — one click, no questions.
+    <a href="@@UNSUB@@" class="pa-body" style="color:#495751;text-decoration:underline;">Unsubscribe</a> — one click, no questions.
   </td></tr>
 
 </table>
@@ -344,7 +351,7 @@ begin
         -- wrong, the database is fine and the mail client is the problem.
         --
         -- Test sends only. A real recipient never sees this.
-        'subject', '[TEST 75c7424dbb84] ' || v_subj,
+        'subject', '[TEST a09d6011aecb] ' || v_subj,
         'html', replace(replace(v_html, '@@CTA@@', v_cta), '@@UNSUB@@', v_unsub),
         'text', replace(replace(v_text, '@@CTA@@', v_cta), '@@UNSUB@@', v_unsub))
     );
@@ -415,8 +422,8 @@ grant  execute on function public.announce_launch(int, text, text) to authentica
 -- silently reinstalls the old email.
 
 select case
-         when p.prosrc like '%copy-id: 75c7424dbb84%'
-           then 'INSTALLED - new copy is live (copy-id 75c7424dbb84). Send yourself a test.'
+         when p.prosrc like '%copy-id: a09d6011aecb%'
+           then 'INSTALLED - new copy is live (copy-id a09d6011aecb). Send yourself a test.'
          when p.prosrc is not null
            then 'NOT INSTALLED - announce_launch still holds different copy. Re-paste this whole file.'
        end as result
