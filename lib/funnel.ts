@@ -35,9 +35,27 @@ export const FUNNEL_EVENTS = [
 
 export type FunnelEvent = (typeof FUNNEL_EVENTS)[number];
 
+/**
+ * A STEP IS NOT ALWAYS AN EVENT.
+ *
+ * `confirmed_email` is never inserted by anything — funnel_summary derives it
+ * from auth.users.email_confirmed_at, because confirming an email happens on
+ * Supabase's side and the app never sees the moment it does. It earns a place in
+ * the funnel anyway: it sits between signing up and reaching the product, and
+ * without it "Signed up -> Onboarded" silently merges two unrelated failures —
+ * mail that never arrived, and a screen people abandoned — which need opposite
+ * fixes.
+ *
+ * Kept out of FUNNEL_EVENTS deliberately. That list is the set of names track()
+ * may insert and must match the CHECK constraint; putting a derived step in it
+ * would invite a call that the database would then reject.
+ */
+export type FunnelStep = FunnelEvent | "confirmed_email";
+
 /** The steps that make up the headline conversion story, in order. */
-export const FUNNEL_STEPS: { event: FunnelEvent; label: string; note: string }[] = [
+export const FUNNEL_STEPS: { event: FunnelStep; label: string; note: string }[] = [
   { event: "signup", label: "Signed up", note: "Created an account" },
+  { event: "confirmed_email", label: "Confirmed email", note: "Clicked the link — until they do, they cannot reach the app at all" },
   { event: "onboarded", label: "Onboarded", note: "Told us their sport and position" },
   { event: "first_check_in", label: "Activated", note: "Completed a first check-in — the habit starts here" },
   { event: "paywall_hit", label: "Hit a paywall", note: "Wanted something a free plan doesn't include" },
@@ -118,7 +136,18 @@ export function worstStep(
   counts: Record<string, number>,
   minimum = 20,
 ): { from: string; to: string; lost: number; rate: number } | null {
-  const steps = FUNNEL_STEPS.filter((s) => s.event !== "paywall_hit" && s.event !== "plan_view");
+  // A STEP THAT WAS NOT MEASURED IS NOT A STEP WHERE EVERYONE DIED.
+  //
+  // Reading an absent key as 0 makes an unmeasured step look like a total wipe
+  // out, and it will always be the biggest "drop" on the report. That is not
+  // hypothetical: `confirmed_email` only exists once migration 0079 is applied,
+  // and the client ships before anyone runs it — so between those two moments
+  // this would have reported a catastrophic loss at a step nobody had data for.
+  // Absent and zero are different facts and are kept different here.
+  const steps = FUNNEL_STEPS.filter(
+    (s) => s.event !== "paywall_hit" && s.event !== "plan_view" && s.event in counts,
+  );
+  if (steps.length < 2) return null;
   const top = counts[steps[0].event] ?? 0;
   if (top < minimum) return null;
 
@@ -135,3 +164,4 @@ export function worstStep(
   }
   return worst;
 }
+

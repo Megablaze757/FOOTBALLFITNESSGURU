@@ -39,6 +39,10 @@ export function FunnelReport() {
      * signs up and returns three weeks later ruins an average.
      */
     const { data: timing } = await supabase.rpc("funnel_timing", { p_days: days });
+    // Why the first step leaks. Its two causes need opposite fixes — mail that
+    // never arrived versus a screen people abandoned — and one merged number
+    // cannot tell you which you have.
+    const { data: breakdown } = await supabase.rpc("funnel_signup_breakdown", { p_days: days });
     const medians: Record<string, number | null> = {};
     for (const r of (timing ?? []) as { event: string; median_seconds: number | null }[]) {
       medians[r.event] = r.median_seconds;
@@ -47,6 +51,7 @@ export function FunnelReport() {
     return {
       counts,
       medians,
+      breakdown: (breakdown ?? []) as { bucket: string; people: number; note: string }[],
       daily: (daily ?? []) as { day: string; signups: number; activated: number; paid: number }[],
     };
   }, [days], `funnel:${days}`);
@@ -57,6 +62,7 @@ export function FunnelReport() {
   const top = counts[FUNNEL_STEPS[0].event] ?? 0;
   const worst = worstStep(counts);
   const medians = data?.medians;
+  const breakdown = data?.breakdown ?? [];
 
   return (
     <div>
@@ -103,6 +109,30 @@ export function FunnelReport() {
               retention a week later.
             </p>
           </div>
+
+          {/* WHERE THE FIRST DROP ACTUALLY GOES.
+              Signed up -> Onboarded was the biggest loss on the report and also
+              the least actionable, because it contained three different things:
+              people whose confirmation mail never landed, people who reached the
+              app and stopped, and people who only signed up an hour ago. The
+              first needs deliverability work, the second needs the onboarding
+              screen changing, and the third needs nothing at all. */}
+          {breakdown.length > 0 && (
+            <div className="card mb-3 p-4">
+              <div className="stat-label mb-2">What happened to this month&apos;s signups</div>
+              <ul className="space-y-2">
+                {breakdown.map((b) => (
+                  <li key={b.bucket} className="flex items-baseline justify-between gap-3">
+                    <span className="min-w-0">
+                      <span className="text-sm font-semibold text-slate-200">{b.bucket}</span>
+                      <span className="block text-xs leading-snug text-slate-500">{b.note}</span>
+                    </span>
+                    <span className="shrink-0 text-lg font-extrabold tabular-nums text-slate-100">{b.people}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           <div className="card divide-y divide-white/[0.06] overflow-hidden">
             {FUNNEL_STEPS.map((step, i) => {

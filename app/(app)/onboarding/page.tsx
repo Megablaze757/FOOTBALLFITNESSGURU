@@ -47,6 +47,13 @@ export default function OnboardingPage() {
     const { error } = await createClient().from("profiles").update({ onboarded: true }).eq("id", user.id);
     setSaving(false);
     if (error) { setError(`Couldn't skip: ${error.message}`); return; }
+    // SKIPPING IS STILL GETTING THROUGH THE STEP. This was missing, and it made
+    // the funnel lie in the most expensive direction: the profile was marked
+    // onboarded so the app never asked again, while the report counted the
+    // person as lost at exactly the step being investigated. `skipped` keeps
+    // them distinguishable — they cleared the gate without telling us anything,
+    // so they should not be read as a successful onboarding.
+    track("onboarded", { skipped: true });
     router.replace("/home");
   }
 
