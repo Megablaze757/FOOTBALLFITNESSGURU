@@ -160,26 +160,15 @@ export default function Landing() {
   }, [user, loading, router]);
 
   return (
-    <main className="mx-auto max-w-6xl px-6 pb-24">
+    <>
+      <SiteHeader />
+      <main className="mx-auto max-w-6xl px-6 pb-24">
       {deleted && (
         <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-slate-300">
           Your account and all of its data have been deleted. Any subscription was cancelled.
           Thanks for training with us.
         </div>
       )}
-
-      {/* Nav */}
-      <header className="flex items-center justify-between py-6">
-        <div className="flex items-center gap-2">
-          <Logo size={36} />
-          <span className="text-lg font-extrabold tracking-tight">PocketAthlete</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <Link href="/plans" className="hidden rounded-2xl px-4 py-2 text-sm font-medium text-slate-300 transition hover:text-white sm:inline-block">Pricing</Link>
-          <Link href="/login" className="hidden rounded-2xl px-4 py-2 text-sm font-medium text-slate-300 transition hover:text-white sm:inline-block">Sign in</Link>
-          <Link href="/login" className="rounded-2xl bg-white/[0.06] px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/[0.1]">Start free</Link>
-        </div>
-      </header>
 
       {/* Hero */}
       <section className="grid items-center gap-12 pt-10 lg:grid-cols-2 lg:pt-16">
@@ -304,7 +293,7 @@ export default function Landing() {
       </section>
 
       {/* How it works */}
-      <section id="how" className="mt-24 scroll-mt-8">
+      <section id="how" className="mt-24 scroll-mt-24">
         <div className="text-center">
           <h2 className="text-3xl font-extrabold tracking-tight sm:text-4xl">From guesswork to game plan</h2>
           <p className="mx-auto mt-3 max-w-xl text-slate-400">
@@ -402,7 +391,7 @@ export default function Landing() {
       </section>
 
       {/* Pricing */}
-      <section id="pricing" className="mt-24 scroll-mt-8">
+      <section id="pricing" className="mt-24 scroll-mt-24">
         <div className="text-center">
           <h2 className="text-3xl font-extrabold tracking-tight sm:text-4xl">Simple pricing for athletes and teams.</h2>
           <p className="mx-auto mt-3 max-w-xl text-slate-400">A private performance coach runs £100+ an hour. PocketAthlete is the whole staff, every day, from £20 a month.</p>
@@ -477,7 +466,76 @@ export default function Landing() {
           starting a programme, and stop if something hurts.
         </p>
       </footer>
-    </main>
+      </main>
+    </>
+  );
+}
+
+/**
+ * The header follows you down the page.
+ *
+ * It used to scroll away with everything else, which on a page this long means
+ * the only route to signing up is scrolling back to the top or reaching the
+ * final CTA. Sticky, so the way in is always one tap away.
+ *
+ * AND LOG IN WAS INVISIBLE ON A PHONE. It existed — `hidden sm:inline-block` —
+ * so on the device most people arrive on, the header offered "Start free" and
+ * nothing else. An existing user landing here had no way back into their
+ * account without guessing a URL. It shows at every width now; Pricing is the
+ * one that gives way on the narrowest screens, because it is the link a
+ * returning user least needs.
+ *
+ * Transparent at the very top so it does not sit as a bar across the hero, and
+ * it takes a background the moment you move — a blurred panel over nothing
+ * reads as a rendering fault.
+ */
+function SiteHeader() {
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 8);
+    onScroll();
+    // Passive: this only reads scrollY and flips a boolean, and a non-passive
+    // scroll listener blocks the compositor for no reason.
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  return (
+    <header
+      className={`sticky top-0 z-50 w-full transition-colors duration-200 ${
+        scrolled
+          ? "border-b border-white/[0.08] bg-[#0b0f0d]/85 backdrop-blur-md"
+          : "border-b border-transparent"
+      }`}
+    >
+      <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+        <Link href="/" className="flex min-h-[44px] items-center gap-2" aria-label="PocketAthlete home">
+          <Logo size={32} />
+          <span className="text-lg font-extrabold tracking-tight">PocketAthlete</span>
+        </Link>
+        <nav className="flex items-center gap-1 sm:gap-2">
+          <Link
+            href="/plans"
+            className="hidden min-h-[44px] items-center rounded-2xl px-3 text-sm font-medium text-slate-300 transition hover:text-white sm:inline-flex"
+          >
+            Pricing
+          </Link>
+          <Link
+            href="/login"
+            className="inline-flex min-h-[44px] items-center rounded-2xl px-3 text-sm font-medium text-slate-300 transition hover:text-white"
+          >
+            Log in
+          </Link>
+          <Link
+            href="/login"
+            className="inline-flex min-h-[44px] items-center rounded-2xl bg-white/[0.06] px-4 text-sm font-semibold text-white transition hover:bg-white/[0.1]"
+          >
+            Start free
+          </Link>
+        </nav>
+      </div>
+    </header>
   );
 }
 
