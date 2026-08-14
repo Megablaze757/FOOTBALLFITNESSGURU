@@ -341,8 +341,41 @@ const HOWTO = `
 -- =============================================================================
 `;
 
-// The full install, byte-identical to what it emitted before the split.
-const FULL = HEADER + SENDER + HOWTO;
+/**
+ * The verdict, appended to BOTH files.
+ *
+ * WHY BOTH. The full installer used to end on a grant, and a grant makes the
+ * Supabase SQL editor say "Success. No rows returned." That is indistinguishable
+ * from having pasted a stale copy of this file — which is precisely what
+ * happened: an older announce-launch.sql was pasted several times, reported
+ * success each time, and reinstalled the previous email on every run. Nothing
+ * in the output could have told anyone.
+ *
+ * Now every file that installs the sender ends by saying which copy is now
+ * live. "No rows returned" therefore means the file was not this one.
+ */
+const VERDICT = `
+-- --- Did it take? -------------------------------------------------------------
+-- Reads one row from the catalogue. Sends nothing, changes nothing.
+--
+-- THIS ALWAYS RETURNS EXACTLY ONE ROW. If your SQL editor said "Success. No
+-- rows returned", you pasted a different (older) file — check you are on the
+-- right branch, because the copy lives inside the function body and an old file
+-- silently reinstalls the old email.
+
+select case
+         when p.prosrc like '%copy-id: ${copyId}%'
+           then 'INSTALLED - new copy is live (copy-id ${copyId}). Send yourself a test.'
+         when p.prosrc is not null
+           then 'NOT INSTALLED - announce_launch still holds different copy. Re-paste this whole file.'
+       end as result
+  from pg_proc p
+  join pg_namespace n on n.oid = p.pronamespace
+ where p.proname = 'announce_launch' and n.nspname = 'public';
+`;
+
+// The full install: docs, key management, the sender, then the verdict.
+const FULL = HEADER + SENDER + VERDICT + HOWTO;
 
 // Just the sender. For a database that already has the key and the helper
 // functions and only needs the copy refreshed.
@@ -361,24 +394,6 @@ const UPDATE = `-- =============================================================
 -- to remember to run afterwards and nothing to eyeball in an inbox.
 -- =============================================================================
 
-${SENDER}
--- --- Did it take? -------------------------------------------------------------
--- Reads one row from the catalogue. Sends nothing, changes nothing.
---
--- If this says INSTALLED, the new copy is live and the admin test button will
--- send it. If it says anything else, the statements above did not run — the
--- usual cause is a partial paste, because the email HTML is one long string and
--- it has to go in whole.
-
-select case
-         when p.prosrc like '%copy-id: ${copyId}%'
-           then 'INSTALLED - new copy is live (copy-id ${copyId}). Send yourself a test.'
-         when p.prosrc is not null
-           then 'NOT INSTALLED - announce_launch still holds different copy. Re-paste this whole file.'
-       end as result
-  from pg_proc p
-  join pg_namespace n on n.oid = p.pronamespace
- where p.proname = 'announce_launch' and n.nspname = 'public';
-`;
+${SENDER}${VERDICT}`;
 
 process.stdout.write(process.argv.includes("--email-only") ? UPDATE : FULL);

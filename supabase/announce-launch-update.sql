@@ -308,10 +308,10 @@ grant  execute on function public.announce_launch(int, text, text) to authentica
 -- --- Did it take? -------------------------------------------------------------
 -- Reads one row from the catalogue. Sends nothing, changes nothing.
 --
--- If this says INSTALLED, the new copy is live and the admin test button will
--- send it. If it says anything else, the statements above did not run — the
--- usual cause is a partial paste, because the email HTML is one long string and
--- it has to go in whole.
+-- THIS ALWAYS RETURNS EXACTLY ONE ROW. If your SQL editor said "Success. No
+-- rows returned", you pasted a different (older) file — check you are on the
+-- right branch, because the copy lives inside the function body and an old file
+-- silently reinstalls the old email.
 
 select case
          when p.prosrc like '%copy-id: 39248fb9de92%'

@@ -104,6 +104,22 @@ test("the copy refresh stamps a fingerprint and reports its own result", () => {
   assert.ok(full.includes(`copy-id: ${stamped}`),
     "the full install stamps a different copy-id than the refresh");
 
+  // BOTH files must end on the verdict, and this is the guard that matters most.
+  // The full installer used to end on a grant, which makes the Supabase SQL
+  // editor say "Success. No rows returned" — indistinguishable from having
+  // pasted a stale copy of the same file. That is not hypothetical: an older
+  // announce-launch.sql was pasted repeatedly, reported success every time, and
+  // reinstalled the previous email on each run. Ending on a select means "no
+  // rows returned" can only mean "that was not this file".
+  for (const [name, sql] of [["full install", full], ["copy refresh", upd]] as const) {
+    const lastStatement = sql
+      .split("\n")
+      .filter((l) => l.trim() && !l.trim().startsWith("--"))
+      .pop();
+    assert.match(lastStatement ?? "", /nspname = 'public';/,
+      `the ${name} does not end on the verdict, so a stale paste looks like a successful one`);
+  }
+
   // Reads the catalogue only. A verification step that mutated anything would
   // be a trap in a file whose whole promise is that it sends nothing.
   const check = upd.slice(upd.indexOf("--- Did it take?"));

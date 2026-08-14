@@ -383,6 +383,24 @@ $fn$;
 revoke execute on function public.announce_launch(int, text, text) from public, anon;
 grant  execute on function public.announce_launch(int, text, text) to authenticated;
 
+-- --- Did it take? -------------------------------------------------------------
+-- Reads one row from the catalogue. Sends nothing, changes nothing.
+--
+-- THIS ALWAYS RETURNS EXACTLY ONE ROW. If your SQL editor said "Success. No
+-- rows returned", you pasted a different (older) file — check you are on the
+-- right branch, because the copy lives inside the function body and an old file
+-- silently reinstalls the old email.
+
+select case
+         when p.prosrc like '%copy-id: 39248fb9de92%'
+           then 'INSTALLED - new copy is live (copy-id 39248fb9de92). Send yourself a test.'
+         when p.prosrc is not null
+           then 'NOT INSTALLED - announce_launch still holds different copy. Re-paste this whole file.'
+       end as result
+  from pg_proc p
+  join pg_namespace n on n.oid = p.pronamespace
+ where p.proname = 'announce_launch' and n.nspname = 'public';
+
 -- =============================================================================
 -- HOW TO USE IT
 --
