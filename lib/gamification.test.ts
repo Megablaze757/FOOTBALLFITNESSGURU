@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   computeXp, levelFor, rankFor, rankLadder, evaluateAchievements, dailyQuests, EMPTY_STATS,
-  ACHIEVEMENTS, activitySpans, type ActivityStats,
+  ACHIEVEMENTS, activitySpans, standingRank, LADDER_MIN_ATHLETES, type ActivityStats,
 } from "./gamification";
 
 test("XP accumulates from activity and levels rise", () => {
@@ -359,4 +359,64 @@ test("a complete day is all three, and it is counted beyond this week", () => {
 
   // Training and eating on a day you never checked in is not a complete day.
   assert.equal(activitySpans([], ["2026-01-01"], ["2026-01-01"], "2026-01-01").perfectDays, 0);
+});
+
+// --- the two rungs above Legend ----------------------------------------------
+
+/**
+ * "TOP 1%" OF TWELVE PEOPLE IS NOT A PERCENTILE.
+ *
+ * These two ranks make claims about everybody else, so they are the only ones
+ * that cannot be earned by grinding alone. Below the population floor the
+ * ladder simply ends at Legend — a badge asserting a percentile that has not
+ * been measured is a lie the first person to notice never trusts again.
+ */
+test("no standing rank is awarded below the athlete floor", () => {
+  for (const athletes of [1, 12, 99]) {
+    assert.equal(standingRank({ athletes, position: 1 }), null,
+      `world number one was awarded with only ${athletes} athletes`);
+  }
+  assert.ok(standingRank({ athletes: LADDER_MIN_ATHLETES, position: 1 }),
+    "the floor itself should qualify");
+});
+
+test("the top two ranks go to the standing, not the level", () => {
+  // 200 athletes: the top 1% is two people. First is the world number one, the
+  // other is Elite.
+  assert.equal(standingRank({ athletes: 200, position: 1 })?.tier, "Apex");
+  assert.equal(standingRank({ athletes: 200, position: 2 })?.tier, "Elite");
+  assert.equal(standingRank({ athletes: 200, position: 3 }), null, "third of 200 is not the top 1%");
+
+  // At exactly 100 the top 1% is one person, who is also number one — so Elite
+  // is genuinely empty until the ladder passes 200. Correct rather than
+  // convenient, and worth asserting so nobody 'fixes' it into a rounding error.
+  assert.equal(standingRank({ athletes: 100, position: 1 })?.tier, "Apex");
+  assert.equal(standingRank({ athletes: 100, position: 2 }), null);
+});
+
+test("a standing outranks any level, and its absence changes nothing", () => {
+  // Level 4 is Bronze. Being number one of a real ladder beats it.
+  assert.equal(rankFor(4, { athletes: 500, position: 1 }).tier, "Apex");
+  // And every existing caller passes no standing at all, which must behave
+  // exactly as it did before these tiers existed.
+  assert.equal(rankFor(4).tier, "Bronze");
+  assert.equal(rankFor(999).tier, "Legend");
+});
+
+test("nonsense standings are refused rather than rendered", () => {
+  for (const s of [
+    { athletes: 500, position: 0 },
+    { athletes: 500, position: 501 },
+    { athletes: Number.NaN, position: 1 },
+    { athletes: 500, position: Number.POSITIVE_INFINITY },
+  ]) {
+    assert.equal(standingRank(s), null, `${JSON.stringify(s)} should not earn a rank`);
+  }
+  assert.equal(standingRank(null), null);
+  assert.equal(standingRank(undefined), null);
+});
+
+test("the standing ranks say what they mean", () => {
+  assert.match(standingRank({ athletes: 500, position: 1 })?.note ?? "", /No\. 1 in the world/);
+  assert.match(standingRank({ athletes: 500, position: 3 })?.note ?? "", /Top 1%/);
 });

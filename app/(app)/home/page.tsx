@@ -10,7 +10,7 @@ import { useAsync } from "@/lib/use-async";
 import { assessReadiness } from "@/lib/readiness";
 import { actionLabel } from "@/lib/insights";
 import { checkInStreak, computeACWR } from "@/lib/load";
-import { dailyQuests, computeXp, levelFor, activitySpans, type ActivityStats, type LevelInfo } from "@/lib/gamification";
+import { dailyQuests, computeXp, levelFor, activitySpans, type ActivityStats, type LevelInfo, type Standing } from "@/lib/gamification";
 import { biometricSignal, type Biometric } from "@/lib/biometrics";
 import { sportProfile } from "@/lib/sport-profile";
 import { ReadinessGauge } from "@/components/ReadinessGauge";
@@ -195,8 +195,28 @@ export default function HomePage() {
     };
 
     const acwr = computeACWR(trainRows as unknown as TrainingLog[]);
+
+    // WHERE THIS ATHLETE SITS AGAINST EVERYONE ELSE.
+    //
+    // Only the two ranks above Legend need it, and they are unreachable until
+    // there are a hundred athletes — so this failing is not an error worth
+    // showing anyone. A null standing makes rankFor behave exactly as it did
+    // before those ranks existed.
+    let standing: Standing | null = null;
+    try {
+      const { data: st } = await supabase.rpc("ladder_standing");
+      const row = (Array.isArray(st) ? st[0] : st) as { athletes?: number; place?: number } | null;
+      // `place` in SQL, `position` here: position() is a built-in in Postgres
+      // and a column of that name will not compile. Mapped once, at the edge.
+      if (row?.athletes != null && row?.place != null) {
+        standing = { athletes: Number(row.athletes), position: Number(row.place) };
+      }
+    } catch {
+      // 0081 not applied yet, or offline. The ladder just ends at Legend.
+    }
+
     return {
-      profile, checkIn, insight, streak, quests, bioSignal, setup, stats, week, acwr,
+      profile, checkIn, insight, streak, quests, bioSignal, setup, stats, week, acwr, standing,
       nextSession, hasProgram: programCount > 0, trainedToday: !!trainToday,
       nutriToday: (nutriToday ?? null) as { calories_eaten: number | null; daily_calorie_target: number | null } | null,
     };
@@ -215,7 +235,7 @@ export default function HomePage() {
 
   if (loading || needsOnboarding) return <Skeleton />;
 
-  const level = levelFor(computeXp(data!.stats));
+  const level = levelFor(computeXp(data!.stats), data!.standing);
   // From the saved target — not recomputed. Three places already worked out
   // calories and two of them disagreed; a fourth here would be the same bug.
   const kcalLeft = data!.nutriToday?.daily_calorie_target

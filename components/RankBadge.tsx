@@ -24,7 +24,7 @@
  */
 import type { TierName } from "@/lib/gamification";
 
-type MarkKind = "chevron" | "bar" | "diamond" | "star" | "winged";
+type MarkKind = "chevron" | "bar" | "diamond" | "star" | "winged" | "laurel" | "crown";
 
 /** Which hardware a tier wears. Ordered the way the ladder is climbed. */
 const MARK_FOR: Record<TierName, MarkKind> = {
@@ -37,6 +37,11 @@ const MARK_FOR: Record<TierName, MarkKind> = {
   Diamond: "star",
   Champion: "star",
   Legend: "winged",
+  // The two standing tiers. Wings were the old summit, so these have to read as
+  // beyond it at a glance: a laurel is the classical mark of a victor, and only
+  // one athlete ever wears the crown.
+  Elite: "laurel",
+  Apex: "crown",
 };
 
 /** "I" -> 1 … "IV" -> 4. An empty division (the open-ended top tier) shows one. */
@@ -53,6 +58,71 @@ function Star({ x, y, r }: { x: number; y: number; r: number }) {
     pts.push(`${(x + rr * Math.cos(rad)).toFixed(2)},${(y + rr * Math.sin(rad)).toFixed(2)}`);
   }
   return <polygon points={pts.join(" ")} />;
+}
+
+/**
+ * A laurel branch, mirrored to make a wreath.
+ *
+ * Drawn as an arc with leaves hung off it rather than as one filled shape,
+ * because a filled wreath turns into a blob at 24px — which is the size this
+ * appears at on Home, and the size that decides whether the design works.
+ */
+function Laurel({ color }: { color: string }) {
+  const branch = (dir: 1 | -1) => {
+    const leaves = [0.18, 0.42, 0.66, 0.88].map((t, i) => {
+      // Along the arc, angled outward so the wreath opens upward like a victor's.
+      const x = 32 + dir * (9 + t * 8);
+      const y = 44 - t * 17;
+      return (
+        <ellipse
+          key={i}
+          cx={x} cy={y} rx={3.1} ry={1.7}
+          transform={`rotate(${dir * (58 - t * 26)} ${x} ${y})`}
+          fill={color} fillOpacity={0.92} stroke="none"
+        />
+      );
+    });
+    return (
+      <g key={dir}>
+        <path
+          d={`M${32 + dir * 7} 47 Q${32 + dir * 15} 40 ${32 + dir * 17} 27`}
+          fill="none" stroke={color} strokeWidth={1.7} strokeLinecap="round" strokeOpacity={0.85}
+        />
+        {leaves}
+      </g>
+    );
+  };
+  return <g>{branch(-1)}{branch(1)}</g>;
+}
+
+/** Five points, because three reads as a jester's hat and seven as a scribble. */
+function Crown({ color }: { color: string }) {
+  return (
+    <g fill={color} stroke="none">
+      <path d="M22 24 L26 29 L32 21.5 L38 29 L42 24 L42.6 32 L21.4 32 Z" />
+      <circle cx="22" cy="22.4" r="1.9" />
+      <circle cx="32" cy="19.6" r="2.1" />
+      <circle cx="42" cy="22.4" r="1.9" />
+    </g>
+  );
+}
+
+/** Light coming off the emblem. Only the top tier gets it. */
+function Rays({ color }: { color: string }) {
+  const rays = Array.from({ length: 12 }, (_, i) => {
+    const a = (Math.PI * 2 * i) / 12 - Math.PI / 2;
+    const inner = 12.5;
+    const outer = i % 2 === 0 ? 18.5 : 16;
+    return (
+      <line
+        key={i}
+        x1={(32 + inner * Math.cos(a)).toFixed(2)} y1={(38 + inner * Math.sin(a)).toFixed(2)}
+        x2={(32 + outer * Math.cos(a)).toFixed(2)} y2={(38 + outer * Math.sin(a)).toFixed(2)}
+        stroke={color} strokeWidth={1.1} strokeLinecap="round" strokeOpacity={0.5}
+      />
+    );
+  });
+  return <g>{rays}</g>;
 }
 
 function Marks({ kind, count, y }: { kind: MarkKind; count: number; y: number }) {
@@ -91,6 +161,10 @@ export function RankBadge({
   const kind = MARK_FOR[tier] ?? "chevron";
   const count = markCount(division);
   const id = `rank-${tier}`.toLowerCase();
+  // The two standing tiers get a brighter plate and an outer halo. Ornament
+  // alone is not enough at 24px — at that size the difference a viewer actually
+  // registers is that the whole badge is glowing.
+  const standing = kind === "laurel" || kind === "crown";
 
   return (
     <svg
@@ -112,7 +186,26 @@ export function RankBadge({
           <stop offset="55%" stopColor={color} stopOpacity="0.55" />
           <stop offset="100%" stopColor={color} stopOpacity="0.95" />
         </linearGradient>
+        {standing && (
+          // A soft bloom behind the plate. stdDeviation stays small so it reads
+          // as a halo rather than a smear when the badge is scaled down.
+          <filter id={`${id}-glow`} x="-40%" y="-40%" width="180%" height="180%">
+            <feGaussianBlur stdDeviation="2.6" result="b" />
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        )}
       </defs>
+
+      {standing && (
+        <path
+          d="M32 3 58 17.5V50.5L32 65 6 50.5V17.5Z"
+          fill="none" stroke={color} strokeOpacity="0.5" strokeWidth={2}
+          filter={`url(#${id}-glow)`}
+        />
+      )}
 
       {/* The plate. Dark underneath so the face reads on a dark page whatever
           the tier colour is — a light tier over a light fill loses the marks. */}
@@ -123,9 +216,20 @@ export function RankBadge({
           a flat outline, and it costs one path. */}
       <path d="M32 9 53 20.5V47.5L32 59 11 47.5V20.5Z" fill="none" stroke={color} strokeOpacity="0.28" strokeWidth={1.2} strokeLinejoin="round" />
 
-      <g fill={color} stroke={color} strokeLinecap="round" strokeLinejoin="round">
-        <Marks kind={kind} count={count} y={kind === "chevron" ? 33 : 34} />
-      </g>
+      {standing ? (
+        <>
+          {kind === "crown" && <Rays color={color} />}
+          <Laurel color={color} />
+          {kind === "crown" && <Crown color={color} />}
+          <g fill={color} stroke="none">
+            <Star x={32} y={kind === "crown" ? 39 : 35} r={kind === "crown" ? 7 : 8} />
+          </g>
+        </>
+      ) : (
+        <g fill={color} stroke={color} strokeLinecap="round" strokeLinejoin="round">
+          <Marks kind={kind} count={count} y={kind === "chevron" ? 33 : 34} />
+        </g>
+      )}
 
       {/* Wings, top tier only. The ladder's last promotion should look like one. */}
       {kind === "winged" && (
@@ -135,7 +239,13 @@ export function RankBadge({
         </g>
       )}
       {/* The base bar. Present on every tier so the set reads as one family. */}
-      <path d="M23 45h18" stroke={color} strokeOpacity="0.75" strokeWidth={2.4} strokeLinecap="round" />
+      {/* The base bar. On every tier so the set reads as one family — dropped
+          lower on the standing tiers so it closes the wreath instead of cutting
+          through it. */}
+      <path
+        d={standing ? "M26 51h12" : "M23 45h18"}
+        stroke={color} strokeOpacity="0.75" strokeWidth={2.4} strokeLinecap="round"
+      />
     </svg>
   );
 }

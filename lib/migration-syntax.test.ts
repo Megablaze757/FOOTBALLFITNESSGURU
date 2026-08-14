@@ -22,7 +22,11 @@ import { join } from "node:path";
  * reserved too, and nobody is going to name a column `select`.
  */
 const RESERVED = new Set([
-  "window", "order", "user", "check", "default", "primary", "references",
+  // `position` earned its place the same way `window` did: `returns table
+  // (athletes int, position int)` in 0081 failed at CREATE time, because
+  // position() is a built-in. Added after the fact, which is the only honest
+  // way a list like this ever grows.
+  "position", "window", "order", "user", "check", "default", "primary", "references",
   "table", "column", "constraint", "unique", "using", "when", "where", "case",
   "end", "all", "any", "array", "asc", "desc", "limit", "offset", "group",
   "having", "union", "distinct", "on", "in", "is", "not", "null", "and", "or",
@@ -63,6 +67,49 @@ function columnsIn(sql: string): { table: string; column: string }[] {
   }
   return out;
 }
+
+/**
+ * The same problem in `returns table (...)`.
+ *
+ * columnsIn only reads `create table`, so it watched the wrong half of the
+ * schema: 0081 declared `returns table (athletes int, position int)` and failed
+ * at CREATE time with the guard reporting green. A function's output columns are
+ * declared exactly like a table's and break in exactly the same way, so they
+ * need the same check — otherwise this test protects the half of the codebase
+ * that already got burned and none of the half that hasn't yet.
+ */
+function returnColumnsIn(sql: string): { fn: string; column: string }[] {
+  const out: { fn: string; column: string }[] = [];
+  const re = /create\s+or\s+replace\s+function\s+([\w.]+)[\s\S]*?returns\s+table\s*\(([^)]*)\)/gi;
+  for (const m of sql.matchAll(re)) {
+    const [, fn, body] = m;
+    // Comments stripped BEFORE splitting on commas, not after. A comma inside a
+    // comment — "a cost of revenue, not an afterthought" — otherwise starts a
+    // new "column" whose first word is `not`, which is reserved. That false
+    // positive fired against 0080 the moment this guard was added.
+    const clean = body.replace(/--[^\n]*/g, "");
+    for (const part of clean.split(",")) {
+      const line = part.trim();
+      if (!line || line.startsWith('"')) continue;
+      const word = line.match(/^([a-zA-Z_][\w]*)\s/)?.[1];
+      if (word) out.push({ fn, column: word });
+    }
+  }
+  return out;
+}
+
+test("no migration names a returned column with a reserved word", () => {
+  const files = readdirSync(DIR).filter((f) => f.endsWith(".sql")).sort();
+  const bad: string[] = [];
+  for (const f of files) {
+    const sql = readFileSync(join(DIR, f), "utf8");
+    for (const { fn, column } of returnColumnsIn(sql)) {
+      if (RESERVED.has(column.toLowerCase())) bad.push(`${f}: ${fn} returns ${column}`);
+    }
+  }
+  assert.deepEqual(bad, [],
+    "a function returns a column named with a reserved word — it will fail at CREATE time");
+});
 
 test("no migration names a column with a reserved word", () => {
   const files = readdirSync(DIR).filter((f) => f.endsWith(".sql")).sort();

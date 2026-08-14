@@ -196,6 +196,8 @@ export interface LevelInfo {
   tier: TierName;     // e.g. "Gold"
   division: string;   // "III" | "II" | "I", or "" at the apex
   color: string;      // tier colour for badges/rings
+  /** Only the standing tiers carry one: "Top 1% of athletes". */
+  note?: string;
   xp: number;
   xpIntoLevel: number;
   xpForNext: number;
@@ -256,9 +258,11 @@ function costForLevel(level: number): number {
 // plan names are display copy, while a rank is the thing people screenshot.
 export type TierName =
   | "Iron" | "Bronze" | "Silver" | "Gold" | "Platinum"
-  | "Emerald" | "Diamond" | "Champion" | "Legend";
+  | "Emerald" | "Diamond" | "Champion" | "Legend"
+  // The two above Legend are STANDINGS, not levels — see STANDING_TIERS.
+  | "Elite" | "Apex";
 
-interface TierDef { name: TierName; emoji: string; color: string; span: number }
+interface TierDef { name: TierName; emoji: string; color: string; span: number; note?: string }
 
 // Ordered lowest first. `span` is how many levels the tier covers; the last
 // tier is open-ended.
@@ -278,6 +282,56 @@ const TIERS: TierDef[] = [
   { name: "Legend", emoji: "👑", color: "#fb7185", span: Infinity },
 ];
 
+/**
+ * THE TWO ABOVE LEGEND ARE EARNED BY STANDING, NOT BY GRINDING.
+ *
+ * Every tier below is a level you reach and keep. These two are positions you
+ * hold: "top 1%" and "best in the world" are claims about everyone else, so
+ * they cannot be computed from one person's XP, and they have to be losable.
+ * Someone who overtakes you takes the title with them — which is the only way
+ * the words on the badge stay true.
+ *
+ * NOT AWARDED BELOW A HUNDRED ATHLETES. "Top 1%" of twelve people is not a
+ * percentile, it is a rounding error, and a badge that says it would be a lie
+ * the first person to notice would never trust again. Below the floor the
+ * ladder simply ends at Legend, which is a real achievement on its own.
+ */
+export const LADDER_MIN_ATHLETES = 100;
+
+const STANDING_TIERS: TierDef[] = [
+  { name: "Elite", emoji: "🌟", color: "#dcd3ff", span: 0, note: "Top 1% of athletes" },
+  { name: "Apex", emoji: "☀️", color: "#ffe9a8", span: 0, note: "No. 1 in the world" },
+];
+
+/** Where an athlete sits against everybody else. */
+export interface Standing {
+  /** How many athletes are on the ladder at all. */
+  athletes: number;
+  /** This athlete's position by XP. 1 is the highest. */
+  position: number;
+}
+
+/**
+ * The rank a standing earns, or null if it earns none.
+ *
+ * Exported so the ladder view can explain the top two rungs without having to
+ * fake a standing to discover them.
+ */
+export function standingRank(standing?: Standing | null): RankInfo | null {
+  if (!standing) return null;
+  const { athletes, position } = standing;
+  if (!Number.isFinite(athletes) || !Number.isFinite(position)) return null;
+  if (athletes < LADDER_MIN_ATHLETES || position < 1 || position > athletes) return null;
+
+  // Ceil, so the top 1% of exactly 100 athletes is one person rather than none.
+  const onePercent = Math.max(1, Math.ceil(athletes * 0.01));
+  const def = position === 1 ? STANDING_TIERS[1]
+            : position <= onePercent ? STANDING_TIERS[0]
+            : null;
+  if (!def) return null;
+  return { rank: def.name, tier: def.name, division: "", emoji: def.emoji, color: def.color, note: def.note };
+}
+
 // Divisions count DOWN as you improve, as in every game that uses them: you
 // enter a tier at III and promote out of I.
 const DIVISIONS = ["III", "II", "I"];
@@ -288,6 +342,8 @@ export interface RankInfo {
   division: string;
   emoji: string;
   color: string;
+  /** Only the standing tiers carry one: "Top 1% of athletes". */
+  note?: string;
 }
 
 /** How many levels of the apex tier make one division. */
@@ -340,7 +396,14 @@ function romanNumeral(n: number): string {
   return out;
 }
 
-export function rankFor(level: number): RankInfo {
+export function rankFor(level: number, standing?: Standing | null): RankInfo {
+  // A standing outranks anything the level ladder can award, because the two
+  // above Legend sit above every level. Checked first so the walk below is not
+  // wasted, and so a missing standing behaves exactly as it did before these
+  // tiers existed — every existing caller keeps working untouched.
+  const earned = standingRank(standing);
+  if (earned) return earned;
+
   let remaining = Math.max(1, Math.floor(level)) - 1; // levels above level 1
   for (const t of TIERS) {
     if (remaining < t.span) {
@@ -368,7 +431,7 @@ export function rankLadder(): { tier: TierName; emoji: string; color: string; fr
   });
 }
 
-export function levelFor(xp: number): LevelInfo {
+export function levelFor(xp: number, standing?: Standing | null): LevelInfo {
   let level = 1;
   let acc = 0;
   let need = costForLevel(1);
@@ -377,10 +440,10 @@ export function levelFor(xp: number): LevelInfo {
     level++;
     need = costForLevel(level);
   }
-  const { rank, emoji, tier, division, color } = rankFor(level);
+  const { rank, emoji, tier, division, color, note } = rankFor(level, standing);
   const xpIntoLevel = xp - acc;
   return {
-    level, rank, emoji, tier, division, color,
+    level, rank, emoji, tier, division, color, note,
     xp, xpIntoLevel, xpForNext: need, progress: need ? xpIntoLevel / need : 0,
   };
 }
