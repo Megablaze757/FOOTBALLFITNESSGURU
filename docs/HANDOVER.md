@@ -140,9 +140,31 @@ every challenge showed "+45 XP" and awarded nothing, which is the state the app
 had been in since July. Verified in a browser at ledger 0, 145 and 1000: 258 XP,
 403 XP, 1,258 XP, no console errors in any of them.
 
+**`0076` is applied (2026-08-14, reported by the owner).** It adds
+`unsubscribed_at`, `launch_emailed_at` and `unsub_token` to `waitlist`, plus
+`unsubscribe_waitlist(uuid)` and `waitlist_launch_stats()` — the ledger and the
+opt-out behind the launch announcement.
+
+To confirm it from the app rather than the database: open `/admin` and look at
+the "Announce to the waitlist" card. If it shows counts, `waitlist_launch_stats`
+exists and 0076 is in. If it shows an error, it is not.
+
 **Nothing in the app is now waiting on a migration.** The only remaining SQL in
 this document is §1.5, which is a sketch and must NOT be run — the code that
 writes that column does not exist yet.
+
+**The announce-launch Edge Function is NOT deployed.** 0076 gives the admin card
+its numbers, but every button on it calls a function that does not exist yet:
+
+```
+supabase functions deploy announce-launch
+```
+
+Secrets it needs: `LAUNCH_FROM` (e.g. `Pocket Athlete <hello@pocketathlete.com>`)
+and `APP_URL`. `RESEND_API_KEY` is already set for the two reminder jobs. Verify
+the sending domain in Resend before any real send — a first bulk send from an
+unverified domain lands in spam and takes the app's password-reset mail down
+with it.
 
 ## 1.5 Optional: give programme sessions a timestamp
 
