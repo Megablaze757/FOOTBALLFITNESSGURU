@@ -308,21 +308,65 @@ function WaitlistAnnounce() {
    * It is admin-gated inside the function, not out here. A button is not a
    * permission check, and rpc is callable by anyone with a session.
    */
-  async function callSend(args: Record<string, unknown>): Promise<{ row?: SendResult; failed?: boolean }> {
+  /**
+   * TWO SENDERS, WORKER FIRST.
+   *
+   * The Worker is where RESEND_API_KEY already lives — a Cloudflare secret that
+   * cannot be read back out, so the send happening there is the only way to use
+   * the key that is already configured. That is the preferred path.
+   *
+   * The database function is the fallback, for the window before the Worker
+   * route is deployed (it ships on the next push to main) and for anyone
+   * running without a Worker at all. It needs its own copy of the key in Vault,
+   * which is what the box above is for.
+   *
+   * Tried in that order so the common case needs nothing installed, and the
+   * uncommon one still works.
+   */
+  async function callSend(args: { p_limit?: number; p_test_to?: string }): Promise<{ note?: string; failed?: boolean }> {
+    const base = process.env.NEXT_PUBLIC_API_URL;
+    if (base) {
+      try {
+        const { data: { session } } = await createClient().auth.getSession();
+        const res = await fetch(`${base}/announce-launch`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+          },
+          body: JSON.stringify({ limit: args.p_limit, testTo: args.p_test_to }),
+        });
+        // A 404 means the route is not deployed yet — fall through to the
+        // database. Anything else is a real answer and should be reported.
+        if (res.status !== 404) {
+          const j = await res.json().catch(() => ({})) as
+            { error?: string; note?: string; sent?: number; failed?: number; remaining?: number };
+          if (!res.ok || j.error) { setErr(j.error || `Send failed (${res.status})`); return { failed: true }; }
+          if (args.p_test_to) return { note: j.note ?? `Test sent to ${args.p_test_to}.` };
+          return {
+            note: `Sent ${j.sent ?? 0}.` +
+              (j.failed ? ` ${j.failed} failed - they stay on the list for the next run.` : "") +
+              (j.remaining ? ` ${j.remaining} still to go - press again.` : " Nobody left to email."),
+          };
+        }
+      } catch {
+        // Network trouble reaching the Worker. The database path may still work.
+      }
+    }
+
     const { data, error } = await createClient().rpc("announce_launch", args);
     if (error) {
-      // The likeliest error by far is that the SQL has not been pasted yet, and
-      // "function does not exist" tells you nothing about what to do about it.
       setErr(
         /does not exist|schema cache|PGRST202/i.test(error.message)
           ? "The sender is not installed yet. Paste supabase/announce-launch.sql into the Supabase SQL editor, then try again."
           : /resend key in vault/i.test(error.message)
-            ? "No Resend key stored. Run: select vault.create_secret('re_xxx', 'resend_api_key');"
+            ? "No Resend key stored. Paste it into the box above, or deploy the Worker route."
             : error.message
       );
       return { failed: true };
     }
-    return { row: (Array.isArray(data) ? data[0] : data) as SendResult };
+    const row = (Array.isArray(data) ? data[0] : data) as SendResult;
+    return { note: row?.note };
   }
 
   /**
@@ -335,19 +379,19 @@ function WaitlistAnnounce() {
    */
   async function sendTest() {
     setBusy("test"); setErr(null); setNote(null);
-    const { row, failed } = await callSend({ p_test_to: testTo.trim() });
+    const { note: n, failed } = await callSend({ p_test_to: testTo.trim() });
     setBusy(null);
     if (failed) return;
-    setNote(row?.note ?? `Test queued to ${testTo.trim()}.`);
+    setNote(n ?? `Test queued to ${testTo.trim()}.`);
   }
 
   async function send() {
     setBusy("send"); setErr(null); setNote(null);
-    const { row, failed } = await callSend({ p_limit: BATCH });
+    const { note: n, failed } = await callSend({ p_limit: BATCH });
     setBusy(null);
     setArmed(false);
     if (failed) return;
-    setNote(row?.note ?? "Done.");
+    setNote(n ?? "Done.");
     void loadStats();
   }
 

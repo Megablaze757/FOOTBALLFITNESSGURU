@@ -1,3 +1,5 @@
+import { launchEmail } from "./launch-email";
+
 // =============================================================================
 // PocketAthlete API — a single Cloudflare Worker for the app's server-side needs:
 //   • AI (coach chat + program generation) via OpenRouter
@@ -112,6 +114,7 @@ export default {
       if (pathname.endsWith("/delete-account")) return await deleteAccount(req, env);
       if (pathname.endsWith("/stripe-webhook")) return await stripeWebhook(req, env);
       if (pathname.endsWith("/admin-create-user")) return await adminCreateUser(req, env);
+      if (pathname.endsWith("/announce-launch")) return await announceLaunch(req, env);
       if (pathname.endsWith("/connect-wearable")) return await connectWearable(req, env);
       if (pathname.endsWith("/ingest-token")) return await mintIngestToken(req, env);
       // NOT session-authenticated — see the function. An Apple Shortcut cannot
@@ -426,7 +429,7 @@ function overBudget(state: BudgetState): Response {
 // nobody is watching a spinner and the budget can be what the work actually
 // needs. Callers pass their own client-side timeout to match.
 // Bump on every paste into the Cloudflare dashboard. GET /health reports it.
-const WORKER_VERSION = "2026-08-09.2";
+const WORKER_VERSION = "2026-08-14.1";
 
 const CHAIN_BUDGET_MS = 55_000;
 /**
@@ -1426,6 +1429,108 @@ async function estimateFood(req: Request, env: Env): Promise<Response> {
  * tomorrow's cron is indistinguishable from a broken one, and the athlete has
  * no way to tell which they're looking at.
  */
+/**
+ * Tell the waitlist the app is live.
+ *
+ * THIS LIVES IN THE WORKER BECAUSE THE KEY DOES. RESEND_API_KEY is a Cloudflare
+ * secret, and a secret cannot be read back out — not through the dashboard, not
+ * through the API. So either the same key gets pasted somewhere else, or the
+ * send happens here, where it already is. This is the second option.
+ *
+ * Every rail the other two senders have, for the same reasons:
+ *   - admin verified server-side; a button is not a permission check and anyone
+ *     can POST to this URL with their own token;
+ *   - never mails someone who unsubscribed, filtered in the query;
+ *   - never mails the same person twice — each row is stamped as it goes, so
+ *     the reload that follows "did that work?" sends nothing;
+ *   - stamped AFTER a confirmed 2xx, one row at a time, so a crash costs at
+ *     most one duplicate rather than dropping a whole failed batch;
+ *   - a test mode that returns before the recipient query and touches nobody;
+ *   - one-click List-Unsubscribe, without which a first bulk send damages
+ *     deliverability for password resets too.
+ */
+async function announceLaunch(req: Request, env: Env): Promise<Response> {
+  const user = await authUser(req, env);
+  if (!user) return json({ error: "unauthorized" }, 401);
+  if (!(await isAdmin(env, user.id))) return json({ error: "forbidden" }, 403);
+  if (!env.RESEND_API_KEY) return json({ error: "RESEND_API_KEY is not set on this Worker" }, 500);
+
+  const body = (await req.json().catch(() => ({}))) as
+    { limit?: number; testTo?: string; dryRun?: boolean };
+  const appUrl = env.APP_URL || "https://pocketathlete.com";
+  const from = env.REMINDER_FROM || "PocketAthlete <info@pocketathlete.com>";
+  const limit = Math.min(250, Math.max(1, Number(body.limit) || 100));
+
+  const send = async (to: string, subject: string, html: string, text: string, unsub: string) => {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from, to, subject, html, text,
+        headers: {
+          "List-Unsubscribe": `<${unsub}>`,
+          "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+        },
+      }),
+    });
+    return res.ok;
+  };
+
+  // ONE ADDRESS, TOUCHING NOTHING. Before the recipient query on purpose: a
+  // test must not select anybody, stamp anybody, or use up a place in the
+  // batch, or checking the copy would remove people from the send it checks.
+  const testTo = (body.testTo || "").trim();
+  if (testTo) {
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(testTo)) return json({ error: "that is not an email address" }, 400);
+    const own = (await (await supa(env,
+      `waitlist?email=eq.${encodeURIComponent(testTo.toLowerCase())}&select=unsub_token,referral_code,source`
+    )).json()) as { unsub_token?: string; referral_code?: string | null; source?: string | null }[] | null;
+    const row = own?.[0];
+    const unsub = `${appUrl}/unsubscribe?t=${encodeURIComponent(row?.unsub_token ?? crypto.randomUUID())}`;
+    const mail = launchEmail({ appUrl, ref: row?.referral_code ?? row?.source ?? null, unsubscribeUrl: unsub });
+    const ok = await send(testTo, `[TEST] ${mail.subject}`, mail.html, mail.text, unsub);
+    return ok
+      ? json({ test: true, to: testTo, note: "Sent. Nobody on the waitlist was emailed, marked or skipped." })
+      : json({ error: "Resend refused it — check the sending domain is verified." }, 502);
+  }
+
+  const pending = (await (await supa(env,
+    "waitlist?unsubscribed_at=is.null&launch_emailed_at=is.null" +
+    `&select=id,email,referral_code,source,unsub_token&order=created_at.asc&limit=${limit}`
+  )).json()) as
+    { id: string; email: string; referral_code: string | null; source: string | null; unsub_token: string }[] | null;
+
+  const rows = pending ?? [];
+  const remaining = async () => {
+    const r = await supa(env, "waitlist?unsubscribed_at=is.null&launch_emailed_at=is.null&select=id", {
+      headers: { Prefer: "count=exact", Range: "0-0" },
+    });
+    return Number((r.headers.get("content-range") || "/0").split("/")[1]) || 0;
+  };
+
+  if (body.dryRun) return json({ dryRun: true, wouldSend: rows.length, remaining: await remaining() });
+
+  let sent = 0;
+  let failed = 0;
+  for (const row of rows) {
+    // The affiliate code that brought them in. Attribution does not depend on
+    // this — migration 0057 binds the email to its referrer permanently and
+    // signup reads that ledger — but it covers someone who signs up with a
+    // different address from the one they joined with.
+    const unsub = `${appUrl}/unsubscribe?t=${encodeURIComponent(row.unsub_token)}`;
+    const mail = launchEmail({ appUrl, ref: row.referral_code ?? row.source ?? null, unsubscribeUrl: unsub });
+    const ok = await send(row.email, mail.subject, mail.html, mail.text, unsub);
+    if (!ok) { failed++; continue; }
+    await supa(env, `waitlist?id=eq.${row.id}`, {
+      method: "PATCH",
+      headers: { Prefer: "return=minimal" },
+      body: JSON.stringify({ launch_emailed_at: new Date().toISOString() }),
+    });
+    sent++;
+  }
+  return json({ sent, failed, remaining: await remaining() });
+}
+
 async function connectWearable(req: Request, env: Env): Promise<Response> {
   const u = await authUser(req, env);
   if (!u) return json({ error: "unauthorized" }, 401);

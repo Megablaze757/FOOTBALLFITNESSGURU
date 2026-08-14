@@ -201,3 +201,99 @@ test("a test send refuses something that is not an email", () => {
   assert.match(code(FN), /that is not an email address/,
     "the test address is not validated, so a typo becomes a provider error");
 });
+
+// --- the Worker route, which is where the key already lives -------------------
+
+const WORKER = readFileSync(new URL("../cloudflare/src/index.ts", import.meta.url), "utf8");
+const WORKER_EMAIL = readFileSync(new URL("../cloudflare/src/launch-email.ts", import.meta.url), "utf8");
+
+/**
+ * ONE SOURCE FOR THE COPY, ACROSS THREE SENDERS.
+ *
+ * The email is now rendered by the Edge Function, the SQL sender and the Worker
+ * route. The Worker cannot import out of supabase/functions, so the module is
+ * copied into its source — and a copy is only safe while something fails when
+ * it drifts. Three hand-maintained versions of the same HTML is how half a
+ * mailing list ends up with last week's wording.
+ */
+test("the Worker's copy of the launch email is identical to the original", () => {
+  const original = readFileSync(new URL("../supabase/functions/announce-launch/email.ts", import.meta.url), "utf8");
+  const copied = WORKER_EMAIL.slice(WORKER_EMAIL.indexOf("// ====", WORKER_EMAIL.indexOf("GENERATED")));
+  assert.ok(
+    WORKER_EMAIL.endsWith(original),
+    "cloudflare/src/launch-email.ts has drifted - regenerate it:\n  node scripts/sync-launch-email.mjs"
+  );
+  assert.ok(copied.length > 0);
+});
+
+test("the Worker route keeps every rail the other senders have", () => {
+  const w = code(WORKER);
+  const fn = w.slice(w.indexOf("async function announceLaunch"), w.indexOf("async function connectWearable"));
+  assert.ok(fn.length > 500, "the announce-launch route is missing from the Worker");
+
+  assert.match(fn, /isAdmin\(env, user\.id\)/, "not admin-gated");
+  assert.match(fn, /403/, "a non-admin is not refused");
+  assert.match(fn, /unsubscribed_at=is\.null/, "would email people who unsubscribed");
+  assert.match(fn, /launch_emailed_at=is\.null/, "would email people twice");
+  assert.match(fn, /launch_emailed_at: new Date\(\)/, "never marks anyone as sent");
+  assert.match(fn, /List-Unsubscribe-Post/, "no one-click unsubscribe header");
+  assert.match(fn, /testTo/, "no test mode");
+
+  // Stamped only after a confirmed send. `if (!ok) { failed++; continue; }`
+  // before the PATCH is what stops a rejected address being marked as done.
+  const okIdx = fn.indexOf("if (!ok)");
+  const stampIdx = fn.indexOf("launch_emailed_at: new Date()");
+  assert.ok(okIdx > 0 && okIdx < stampIdx, "rows are stamped without checking the send succeeded");
+
+  // The test branch returns before the recipient query, or checking the copy
+  // would consume places in the real batch.
+  const testIdx = fn.indexOf("const testTo");
+  const queryIdx = fn.indexOf("waitlist?unsubscribed_at=is.null");
+  assert.ok(testIdx > 0 && testIdx < queryIdx, "the test send runs after the recipient query");
+});
+
+test("the Worker route is actually reachable", () => {
+  assert.match(code(WORKER), /pathname\.endsWith\("\/announce-launch"\)/,
+    "the handler exists but nothing routes to it");
+});
+
+/**
+ * The version is how anyone answers "is the fix live?" without an authorised
+ * request, and the drift guard compares it against /health. Adding a route
+ * without bumping it makes both useless.
+ */
+test("adding the route bumped the Worker version", () => {
+  const v = WORKER.match(/const WORKER_VERSION = "([^"]+)"/)?.[1];
+  assert.ok(v, "WORKER_VERSION is gone");
+  assert.notEqual(v, "2026-08-09.2", "the route was added without bumping the version");
+});
+
+test("the admin screen prefers the Worker but still works without it", () => {
+  const admin = code(ADMIN);
+  const idxWorker = admin.indexOf("/announce-launch");
+  const idxRpc = admin.indexOf('rpc("announce_launch"');
+  assert.ok(idxWorker > 0, "the Worker route is never called");
+  assert.ok(idxRpc > 0, "the database fallback is gone");
+  assert.ok(idxWorker < idxRpc, "the database is tried before the Worker that already holds the key");
+  // A 404 is the one status that means "not deployed yet" and must fall through.
+  assert.match(admin, /res\.status !== 404/, "an undeployed route would surface as an error rather than falling back");
+});
+
+/**
+ * THE PASTEABLE BUNDLE HAS TO MATCH THE SOURCE THAT DEPLOYS.
+ *
+ * wrangler ships cloudflare/src/index.ts. cloudflare/worker.js is the bundle
+ * for pasting into the dashboard by hand, and it is where worker-drift.mjs
+ * reads the version. Let it fall behind and two things break quietly: pasting
+ * it deploys a Worker missing whatever src gained, and the drift guard starts
+ * comparing a version belonging to neither the repo nor production.
+ */
+test("the Worker bundle is rebuilt from the source it claims to be", () => {
+  const bundle = readFileSync(new URL("../cloudflare/worker.js", import.meta.url), "utf8");
+  const srcV = WORKER.match(/const WORKER_VERSION = "([^"]+)"/)?.[1];
+  const bundleV = bundle.match(/WORKER_VERSION\s*=\s*"([^"]+)"/)?.[1];
+  assert.equal(bundleV, srcV,
+    "cloudflare/worker.js is stale - rebuild it:\n  node scripts/build-worker-bundle.mjs");
+  assert.match(bundle, /announce-launch/,
+    "the bundle does not contain the route its version claims");
+});
