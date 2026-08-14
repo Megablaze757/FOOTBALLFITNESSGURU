@@ -52,7 +52,12 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
     <div className="space-y-4">
       {value.drills.length > 0 && (
         <ul className="space-y-2">
-          {value.drills.map((d, i) => (
+          {value.drills.map((d, i) => {
+            // Last time's sets, read once per drill. Used three ways below: the
+            // hint, the seed when switching to per-set rows, and the greyed
+            // placeholder in each load box.
+            const prev = lastSetsFor(history, d.name);
+            return (
             <li key={i} className="rounded-2xl bg-white/[0.03] p-3">
               <div className="flex items-center gap-2">
                 <input
@@ -69,17 +74,13 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
                   helpful default from last week's data they forgot to change.
                   Saying it out loud makes the default checkable, and doubles as
                   the thing they are trying to beat. */}
-              {(() => {
-                const prev = lastSetsFor(history, d.name);
-                if (!prev) return null;
-                return (
-                  <p className="mt-1.5 text-[11px] text-slate-500">
-                    Last time: <span className="tabular-nums text-slate-400">
-                      {describeSets({ sets: prev.length, reps: prev[0]?.reps ?? 0, sets_detail: prev })}
-                    </span>
-                  </p>
-                );
-              })()}
+              {prev && (
+                <p className="mt-1.5 text-[11px] text-slate-500">
+                  Last time: <span className="tabular-nums text-slate-400">
+                    {describeSets({ sets: prev.length, reps: prev[0]?.reps ?? 0, sets_detail: prev })}
+                  </span>
+                </p>
+              )}
 
               {/* THE FAST PATH STAYS FAST.
                   Most sets are three of ten at one weight, and making everyone
@@ -98,7 +99,19 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
                     /* Seeded from what they already typed rather than starting
                        empty — someone who put 3 × 10 @ 40 and then wants to fix
                        the last set should not retype the first two. */
-                    onClick={() => setDrill(i, withSets(d, lastSetsFor(history, d.name) ?? setsOf(d)))}
+                    /* REPS CARRY OVER, LOAD DOES NOT.
+                       A pre-filled box has to be CLEARED before you can type —
+                       NumberInput has no select-on-focus, so on a phone that is
+                       a long-press or a run of backspaces. An empty box costs
+                       one tap. Pre-filling therefore only pays when it is
+                       usually right, and the two halves differ: rep schemes
+                       repeat week to week, while load is the thing progressive
+                       overload exists to change. Filling the weight made the
+                       most-edited field the most expensive one to edit. It
+                       shows as a placeholder instead — visible, not in the way. */
+                    onClick={() => setDrill(i, withSets(d, prev
+                      ? prev.map((st) => ({ reps: st.reps, load_kg: null }))
+                      : setsOf(d)))}
                     className="tap-target mt-1 text-xs font-semibold text-pitch-400"
                   >
                     Log each set separately
@@ -139,7 +152,7 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
                           value={st.load_kg ?? null}
                           min={0}
                           decimal
-                          placeholder="–"
+                          placeholder={prev?.[si]?.load_kg != null ? String(prev[si].load_kg) : "–"}
                           onChange={(v) => setDrill(i, withSets(d, (d.sets_detail ?? []).map((x, xi) =>
                             xi === si ? { ...x, load_kg: v } : x)))}
                           className="field min-h-[44px] py-1.5 text-center"
@@ -171,6 +184,22 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
                     >
                       + Add set
                     </button>
+                    {/* One tap for the common case where nothing changed. The
+                        placeholders already show what it would fill in, so this
+                        is a confirmation rather than a surprise. Hidden once
+                        every box has a weight, when it would do nothing. */}
+                    {prev?.some((st) => st.load_kg != null) &&
+                      (d.sets_detail ?? []).some((st) => st.load_kg == null) && (
+                      <button
+                        type="button"
+                        onClick={() => setDrill(i, withSets(d, (d.sets_detail ?? []).map((st, xi) => ({
+                          ...st, load_kg: st.load_kg ?? prev[xi]?.load_kg ?? null,
+                        }))))}
+                        className="tap-target text-xs font-semibold text-pitch-400"
+                      >
+                        Same weight as last time
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => setDrill(i, { ...d, sets_detail: undefined })}
@@ -193,7 +222,8 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
                 </div>
               )}
             </li>
-          ))}
+            );
+          })}
         </ul>
       )}
 

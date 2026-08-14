@@ -122,13 +122,23 @@ test("per-set logging is opt-in, and seeded from what was already typed", () => 
     "the form no longer branches on whether this drill was logged set by set");
   assert.match(INPUT, /Log each set separately/, "there is no way into per-set logging");
   assert.match(INPUT, /Back to sets × reps/, "there is no way back out");
-  // Never starts empty. Preference order matters: last time's real sets first,
-  // because the page already holds 28 days of logs for ACWR and retyping
-  // Tuesday's squat on Thursday is asking for something the app can see. Falls
-  // back to expanding whatever is in the boxes, so a brand-new exercise still
-  // opens filled rather than blank.
-  assert.match(INPUT, /withSets\(d, lastSetsFor\(history, d\.name\) \?\? setsOf\(d\)\)/,
-    "switching to per-set rows does not pre-fill from the last session");
+  // REPS CARRY OVER, LOAD DOES NOT — and that asymmetry is the whole point.
+  // A pre-filled box must be cleared before you can type, which on a phone is a
+  // long-press; an empty one costs a tap. So pre-filling only pays where it is
+  // usually right. Rep schemes repeat week to week; load is precisely what
+  // progressive overload changes, so filling it made the most-edited field the
+  // most expensive to edit.
+  assert.match(INPUT, /prev\s*\n?\s*\? prev\.map\(\(st\) => \(\{ reps: st\.reps, load_kg: null \}\)\)/,
+    "switching to per-set rows pre-fills the weight, which then has to be cleared to change it");
+  assert.match(INPUT, /: setsOf\(d\)\)\)/,
+    "with no history it should still open filled from whatever is in the boxes, not blank");
+
+  // Last time's load is still visible — as a placeholder, so the box is empty
+  // and typing goes straight in.
+  assert.match(INPUT, /placeholder=\{prev\?\.\[si\]\?\.load_kg != null \? String\(prev\[si\]\.load_kg\) : "–"\}/,
+    "last time's weight is not shown in the empty load box");
+  assert.match(INPUT, /Same weight as last time/,
+    "there is no one-tap way to accept last time's weights when nothing changed");
   assert.match(INPUT, /Last time:/,
     "numbers are pre-filled with no indication of where they came from, which makes a " +
     "stale default indistinguishable from a deliberate one");
