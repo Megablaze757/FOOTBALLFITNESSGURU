@@ -34,25 +34,42 @@ Rotation steps:
    Plaintext. `GROQ_SECRET` and `OPENROUTER_API_KEY` are already correct;
    `NVIDIA_SECRET` is the odd one out.
 
-## 1.2 Get the deployed Worker into version control
+## 1.2 Add CLOUDFLARE_API_TOKEN so the Worker can deploy from CI
 
-**The single biggest risk in this repo.**
+**Updated 2026-08-14.** The drift this section used to describe is GONE — repo
+and production agreed at `2026-08-09.2` before the launch-email work. What
+remains is that nothing can deploy the Worker automatically.
 
-`cloudflare/worker.js` and `cloudflare/src/index.ts` are both at `2026-08-01.1`.
-Production is at `2026-08-04.2` and its source exists **only in the Cloudflare
-dashboard**, where it is edited by hand. Four separately-reported bugs during
-this work traced back to that gap, each costing a debugging session that started
-by reading the wrong code.
+`.github/workflows/deploy-worker.yml` runs on every push touching `cloudflare/**`
+and has succeeded 23 times. **None of those runs deployed anything.** The
+wrangler step is `if: env.CF_TOKEN != ''`, and with no token it is skipped while
+the run still reports success — deliberate, so a missing secret does not put a
+permanent red X on `main`, but it means "the workflow passed" has never meant
+"the Worker shipped". Confirmed by reading the job steps of run 31797505695:
+
+```
+Refuse to overwrite a newer Worker  skipped
+Run cloudflare/wrangler-action@v3   skipped
+No deploy token — skipped           success
+```
+
+To fix, once: Cloudflare dashboard → My Profile → API Tokens → Create Token →
+"Edit Cloudflare Workers" template. Then GitHub → Settings → Secrets and
+variables → Actions → `CLOUDFLARE_API_TOKEN`. After that a push to `main` under
+`cloudflare/**` deploys, and the drift guard starts protecting something real.
+
+Until then the Worker only changes by hand: dashboard → Workers & Pages →
+`apex-api` → Edit code → select all → paste `cloudflare/worker.js` over it.
+Rebuild that bundle first with `node scripts/build-worker-bundle.mjs`, which
+bundles from `src/index.ts` offline and needs no token.
 
 ```bash
 npm run worker:drift -- https://apex-api.fitnessguru.workers.dev
 ```
 
-Exit 0 they agree, 1 they differ, 2 the check could not run. It currently
-reports drift.
-
-To fix: dashboard → Workers & Pages → `apex-api` → Edit code → select all →
-paste over `cloudflare/worker.js` → commit.
+Exit 0 they agree, 1 they differ, 2 the check could not run. It reports drift
+right now on purpose: the repo carries the `/announce-launch` route at
+`2026-08-14.1` and production is still `2026-08-09.2`.
 
 **Do NOT run `wrangler deploy` to close the gap.** That pushes the repo's older
 script over production and loses the dashboard changes. Guards are in place
