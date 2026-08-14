@@ -297,3 +297,23 @@ test("the Worker bundle is rebuilt from the source it claims to be", () => {
   assert.match(bundle, /announce-launch/,
     "the bundle does not contain the route its version claims");
 });
+
+/**
+ * THE KEY BOX MUST NOT APPEAR WHEN NOTHING IS MISSING.
+ *
+ * The Worker already holds RESEND_API_KEY, so once its route is deployed no
+ * key needs installing anywhere. Showing an amber "Resend key needed" warning
+ * in that state describes a problem that does not exist, and the natural
+ * response — pasting a key — sets up a second copy nobody asked for.
+ */
+test("the key box only shows when the database is the sender", () => {
+  const admin = code(ADMIN);
+  assert.match(admin, /sender === "database" && hasKey === false &&/,
+    "the key box is shown regardless of which sender is live");
+
+  // Probed with dryRun. A plain POST to check whether the route exists would
+  // have RUN THE SEND — the route answers dryRun before it mails anybody.
+  const probe = admin.slice(admin.indexOf('const [sender, setSender]'), admin.indexOf("const checkKey"));
+  assert.match(probe, /dryRun: true/, "the probe does not use dryRun, so checking would send");
+  assert.match(probe, /res\.status !== 404/, "404 is not what decides whether the route exists");
+});

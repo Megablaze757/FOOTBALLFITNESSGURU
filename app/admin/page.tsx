@@ -255,14 +255,56 @@ function WaitlistAnnounce() {
    * one-line SQL call, but the person doing it is on a phone, so it is a box
    * instead. `has_resend_key` returns a boolean and never the key.
    */
+  /**
+   * WHICH SENDER IS ACTUALLY LIVE, and therefore which setup is required.
+   *
+   * The Worker already holds RESEND_API_KEY, so when its route is deployed
+   * nothing needs installing and the key box below would be a scary amber
+   * warning about a problem that does not exist. The database function is the
+   * fallback and needs its own copy of the key in Vault.
+   *
+   * Probed with `dryRun`, which the route answers before it sends anything —
+   * a plain POST would have run the real send. A 404 is the one status that
+   * means "route not deployed"; anything else, including 401 and 403, means it
+   * is there.
+   */
+  const [sender, setSender] = useState<"worker" | "database" | null>(null);
   const [hasKey, setHasKey] = useState<boolean | null>(null);
   const [keyInput, setKeyInput] = useState("");
+
+  useEffect(() => {
+    let live = true;
+    void (async () => {
+      const base = process.env.NEXT_PUBLIC_API_URL;
+      if (base) {
+        try {
+          const { data: { session } } = await createClient().auth.getSession();
+          const res = await fetch(`${base}/announce-launch`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+            },
+            body: JSON.stringify({ dryRun: true }),
+          });
+          if (!live) return;
+          if (res.status !== 404) { setSender("worker"); return; }
+        } catch {
+          // Unreachable Worker. Fall through and ask the database instead.
+        }
+      }
+      if (!live) return;
+      setSender("database");
+      const { data, error } = await createClient().rpc("has_resend_key");
+      if (live) setHasKey(error ? null : data === true);
+    })();
+    return () => { live = false; };
+  }, []);
+
   const checkKey = useCallback(async () => {
     const { data, error } = await createClient().rpc("has_resend_key");
-    if (error) { setHasKey(null); return; }
-    setHasKey(data === true);
+    setHasKey(error ? null : data === true);
   }, []);
-  useEffect(() => { void checkKey(); }, [checkKey]);
 
   async function saveKey() {
     setBusy("key"); setErr(null); setNote(null);
@@ -421,7 +463,14 @@ function WaitlistAnnounce() {
             One email telling everyone the app is open. Each person gets it once.
           </p>
         </div>
-        <span className="chip text-pitch-400">{pending} to send</span>
+        <span className="text-right">
+          <span className="chip text-pitch-400">{pending} to send</span>
+          {sender && (
+            <span className="mt-1 block text-[11px] text-slate-500">
+              via {sender === "worker" ? "the Worker" : "the database"}
+            </span>
+          )}
+        </span>
       </div>
 
       {stats && (
@@ -471,7 +520,7 @@ function WaitlistAnnounce() {
           only while it is missing. Once a key is in, the box disappears rather
           than lingering as a field inviting someone to paste over a working
           setup. */}
-      {hasKey === false && (
+      {sender === "database" && hasKey === false && (
         <div className="mt-4 rounded-2xl border border-amber-400/25 bg-amber-400/[0.06] p-3">
           <p className="text-sm font-bold text-amber-300">Resend key needed</p>
           <p className="mt-1 text-xs leading-relaxed text-slate-400">
