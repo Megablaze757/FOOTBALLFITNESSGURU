@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useLaunched, setLaunched } from "@/lib/launch";
@@ -87,6 +87,10 @@ export default function AdminPage() {
 
       <section className="mt-8">
         <LaunchToggle />
+      </section>
+
+      <section className="mt-8">
+        <WaitlistAnnounce />
       </section>
 
       <section className="mt-10">
@@ -190,6 +194,145 @@ function LaunchToggle() {
         {busy ? "Saving…" : isLaunched ? "Put back into beta" : "Mark app as fully launched"}
       </button>
       {err && <p className="mt-2 text-sm text-readiness-red">{err}</p>}
+    </div>
+  );
+}
+
+/**
+ * Tell the waitlist the app is live.
+ *
+ * THIS IS THE ONE CONTROL IN THE PANEL THAT CANNOT BE UNDONE. Everything else
+ * here flips a flag or edits a row; this puts mail in other people's inboxes,
+ * and there is no recalling it. So the design is deliberately slower than the
+ * rest of the admin page:
+ *
+ *   - the count is shown BEFORE anything is pressed, because a bulk send whose
+ *     size you learn afterwards is one you cannot sanity-check;
+ *   - "Preview" sends nothing and reports exactly who would get it;
+ *   - the send itself takes two deliberate presses, not one;
+ *   - it goes in batches and tells you what is left, because the function has a
+ *     wall clock and the mail provider has a rate limit.
+ *
+ * Repeat presses are safe by construction: each row is stamped as it sends and
+ * the query only picks unstamped ones. Nobody gets it twice.
+ */
+function WaitlistAnnounce() {
+  const launched = useLaunched();
+  const [stats, setStats] = useState<{ total: number; unsubscribed: number; emailed: number; pending: number } | null>(null);
+  const [busy, setBusy] = useState<null | "preview" | "send">(null);
+  const [armed, setArmed] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  const loadStats = useCallback(async () => {
+    const { data, error } = await createClient().rpc("waitlist_launch_stats");
+    if (error) { setErr(error.message); return; }
+    const row = Array.isArray(data) ? data[0] : data;
+    if (row) {
+      setStats({
+        total: Number(row.total) || 0,
+        unsubscribed: Number(row.unsubscribed) || 0,
+        emailed: Number(row.emailed) || 0,
+        pending: Number(row.pending) || 0,
+      });
+    }
+  }, []);
+
+  useEffect(() => { void loadStats(); }, [loadStats]);
+
+  async function run(dryRun: boolean) {
+    setBusy(dryRun ? "preview" : "send");
+    setErr(null);
+    setNote(null);
+    // Called directly rather than through invokeAI: that helper prefers the
+    // Cloudflare Worker whenever NEXT_PUBLIC_API_URL is set, and the Worker has
+    // no announce-launch route — it would 404 in production and nowhere else.
+    const { data, error } = await createClient().functions.invoke("announce-launch", {
+      body: { dryRun },
+    });
+    setBusy(null);
+    setArmed(false);
+    if (error) { setErr(error.message); return; }
+    const r = data as { wouldSend?: number; sent?: number; failed?: number; remaining?: number };
+    if (dryRun) {
+      setNote(`Preview only — nothing sent. ${r.wouldSend ?? 0} would go out now, ${r.remaining ?? 0} on the list in total.`);
+    } else {
+      setNote(
+        `Sent ${r.sent ?? 0}.` +
+        (r.failed ? ` ${r.failed} failed — they stay on the list and go out on the next run.` : "") +
+        (r.remaining ? ` ${r.remaining} still to go — press send again.` : " Nobody left to email.")
+      );
+      void loadStats();
+    }
+  }
+
+  const pending = stats?.pending ?? 0;
+
+  return (
+    <div className="card p-5">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 className="field-label !mb-0">📣 Announce to the waitlist</h2>
+          <p className="mt-1 text-sm text-slate-300">
+            One email telling everyone the app is open. Each person gets it once.
+          </p>
+        </div>
+        <span className="chip text-pitch-400">{pending} to send</span>
+      </div>
+
+      {stats && (
+        <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+          <Stat label="On the list" value={stats.total} />
+          <Stat label="Already emailed" value={stats.emailed} />
+          <Stat label="Unsubscribed" value={stats.unsubscribed} />
+        </div>
+      )}
+
+      {/* Announcing a launch while the app still shows a beta badge is almost
+          certainly a mistake, but it is not mine to block — someone may be
+          deliberately warming the list first. */}
+      {!launched && (
+        <p className="mt-3 rounded-xl border border-amber-400/25 bg-amber-400/[0.06] px-3 py-2 text-xs text-amber-200">
+          The app is still marked as <span className="font-semibold">Beta</span>. This email says it is
+          live. Flip the switch above first unless you mean to.
+        </p>
+      )}
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        <button onClick={() => void run(true)} disabled={busy !== null || pending === 0} className="btn-ghost">
+          {busy === "preview" ? "Checking…" : "Preview (sends nothing)"}
+        </button>
+
+        {!armed ? (
+          <button onClick={() => { setArmed(true); setNote(null); }} disabled={busy !== null || pending === 0} className="btn-primary">
+            Send the announcement
+          </button>
+        ) : (
+          <>
+            <button onClick={() => void run(false)} disabled={busy !== null} className="btn-primary !bg-readiness-red !text-white">
+              {busy === "send" ? "Sending…" : `Yes — email ${Math.min(pending, 100)} people now`}
+            </button>
+            <button onClick={() => setArmed(false)} disabled={busy !== null} className="btn-ghost">Cancel</button>
+          </>
+        )}
+      </div>
+
+      {armed && (
+        <p className="mt-2 text-xs text-slate-400">
+          This cannot be undone. Sends up to 100 at a time — press again for the rest.
+        </p>
+      )}
+      {note && <p className="mt-3 text-sm text-slate-300">{note}</p>}
+      {err && <p className="mt-2 text-sm text-readiness-red">{err}</p>}
+    </div>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-xl bg-white/[0.03] px-2 py-2">
+      <div className="text-lg font-bold tabular-nums text-slate-100">{value}</div>
+      <div className="text-[11px] text-slate-500">{label}</div>
     </div>
   );
 }
