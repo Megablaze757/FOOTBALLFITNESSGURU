@@ -88,20 +88,22 @@ name means the chain silently skips Groq.
 Then: Actions → **Deploy Edge Functions** → Run workflow. It verifies the
 function answers afterwards rather than trusting the CLI's exit code.
 
-## 1.4 Validate one database constraint
+## 1.4 Validate one database constraint — RUN 2026-08-14
 
-**This said "two constraints" and it was wrong.** `0071` added
+**Done.** Kept here for the record, and because the block is re-runnable.
+
+**This section said "two constraints" and it was wrong.** `0071` added
 `profiles_training_focus_check` fully validated — it checked the existing values
-first and they were all legal — so that one needs nothing. Only
-`programs_goal_type_check` from `0070` is still `NOT VALID`: it guards new
-writes but was never checked against the rows already there, and those rows are
-exactly the ones that produce `NaN` macros and "Weighted toward undefined." in
-an athlete's plan.
+first and they were all legal — so that one never needed anything. Only
+`programs_goal_type_check` from `0070` was still `NOT VALID`: it guarded new
+writes but had never been checked against the rows already there, and those rows
+are exactly the ones that produce `NaN` macros and "Weighted toward undefined."
+in an athlete's plan.
 
-Safe to paste as-is. It counts first and only validates if there is nothing to
-trip over, so running it can report a problem but cannot cause one. Tested
-against PostgreSQL 16.13 on all four paths: clean data (validates), a bad row
-(skips, changes nothing), constraint absent, and table absent.
+Safe to re-run. It counts first and only validates if there is nothing to trip
+over, so running it can report a problem but cannot cause one. Tested against
+PostgreSQL 16.13 on all four paths: clean data (validates), a bad row (skips,
+changes nothing), constraint absent, and table absent.
 
 ```sql
 do $$
@@ -132,13 +134,15 @@ Migrations 0066–0070 are otherwise applied and verified live.
 **0071–0074 are applied.** `0073` (video quota: free 0, `silver` 40) and `0074`
 (`achievement_unlocks` + `achievement_rarity()`) went in on 2026-08-12.
 
-**`0075` is NOT applied — paste it.** It adds `challenge_completions`, which is
-what makes the challenge board pay the XP its cards advertise. Until it runs,
-every challenge still shows "+45 XP" and still awards nothing — which is exactly
-the state the app has been in since July, so nothing is broken by waiting; the
-writes and reads both degrade to zero on a database without the table. Verified
-in a browser at ledger 0, 145 and 1000: 258 XP, 403 XP, 1,258 XP, no console
-errors in any of them.
+**`0075` is applied (2026-08-14).** It adds `challenge_completions`, which is
+what makes the challenge board pay the XP its cards advertise — before it,
+every challenge showed "+45 XP" and awarded nothing, which is the state the app
+had been in since July. Verified in a browser at ledger 0, 145 and 1000: 258 XP,
+403 XP, 1,258 XP, no console errors in any of them.
+
+**Nothing in the app is now waiting on a migration.** The only remaining SQL in
+this document is §1.5, which is a sketch and must NOT be run — the code that
+writes that column does not exist yet.
 
 ## 1.5 Optional: give programme sessions a timestamp
 
