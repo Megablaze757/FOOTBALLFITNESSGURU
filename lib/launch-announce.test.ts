@@ -139,8 +139,18 @@ test("the admin screen shows the size of the send before it is sent", () => {
   assert.match(admin, /waitlist_launch_stats/, "the count is never fetched");
   // Two presses, not one, for something that cannot be undone.
   assert.match(admin, /armed/, "the send fires on a single click");
-  assert.match(admin, /functions\.invoke\(\s*["']announce-launch["']/,
-    "the admin page does not call the function, or calls it through the Worker-preferring helper");
+  // The button calls the DATABASE function by rpc, not the Edge Function.
+  // That is what lets it work with nothing deployed — which is the whole reason
+  // the SQL sender exists. Calling functions.invoke here would put the deploy
+  // requirement back without anyone noticing until the button 404s.
+  assert.match(admin, /rpc\(\s*["']announce_launch["']/,
+    "the admin page no longer calls the SQL sender");
+  assert.ok(!/functions\.invoke\(\s*["']announce-launch["']/.test(admin),
+    "the admin page is back to requiring a deployed Edge Function");
+  // And it must explain the likeliest failure rather than surfacing raw
+  // Postgres. "function does not exist" tells nobody what to do about it.
+  assert.match(admin, /Paste supabase\/announce-launch\.sql/,
+    "a missing sender surfaces as a raw database error");
 });
 
 /** The stats RPC must not hand out addresses, and must refuse non-admins. */

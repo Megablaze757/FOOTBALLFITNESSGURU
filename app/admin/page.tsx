@@ -223,6 +223,16 @@ function LaunchToggle() {
  * Repeat presses are safe by construction: each row is stamped as it sends and
  * the query only picks unstamped ones. Nobody gets it twice.
  */
+/** What the SQL sender returns: one row of (emailed, remaining, note). */
+interface SendResult { emailed?: number; remaining?: number; note?: string }
+
+/**
+ * How many go out per press. pg_net queues each request rather than waiting on
+ * it, so this is not bounded by a wall clock the way the Edge Function was, but
+ * a smaller number is still a smaller mistake and the button says what is left.
+ */
+const BATCH = 50;
+
 function WaitlistAnnounce() {
   const launched = useLaunched();
   const { user } = useSession();
@@ -253,6 +263,36 @@ function WaitlistAnnounce() {
   useEffect(() => { void loadStats(); }, [loadStats]);
 
   /**
+   * THE SEND GOES THROUGH THE DATABASE, NOT AN EDGE FUNCTION.
+   *
+   * `announce_launch` is a security-definer Postgres function (see
+   * supabase/announce-launch.sql) that calls Resend over pg_net. Calling it by
+   * rpc means this button works with nothing deployed - no CLI, no CI secret,
+   * no function editor. That matters because the person who needs to press it
+   * is usually holding a phone, and "wait until you are at a laptop" is not a
+   * launch plan.
+   *
+   * It is admin-gated inside the function, not out here. A button is not a
+   * permission check, and rpc is callable by anyone with a session.
+   */
+  async function callSend(args: Record<string, unknown>): Promise<{ row?: SendResult; failed?: boolean }> {
+    const { data, error } = await createClient().rpc("announce_launch", args);
+    if (error) {
+      // The likeliest error by far is that the SQL has not been pasted yet, and
+      // "function does not exist" tells you nothing about what to do about it.
+      setErr(
+        /does not exist|schema cache|PGRST202/i.test(error.message)
+          ? "The sender is not installed yet. Paste supabase/announce-launch.sql into the Supabase SQL editor, then try again."
+          : /resend key in vault/i.test(error.message)
+            ? "No Resend key stored. Run: select vault.create_secret('re_xxx', 'resend_api_key');"
+            : error.message
+      );
+      return { failed: true };
+    }
+    return { row: (Array.isArray(data) ? data[0] : data) as SendResult };
+  }
+
+  /**
    * One copy of the real email, to one address, touching nothing.
    *
    * Reading the copy on screen is not the same as receiving it: dark mode,
@@ -261,43 +301,36 @@ function WaitlistAnnounce() {
    * any of that.
    */
   async function sendTest() {
-    setBusy("test");
-    setErr(null);
-    setNote(null);
-    const { data, error } = await createClient().functions.invoke("announce-launch", {
-      body: { testTo: testTo.trim() },
-    });
+    setBusy("test"); setErr(null); setNote(null);
+    const { row, failed } = await callSend({ p_test_to: testTo.trim() });
     setBusy(null);
-    if (error) { setErr(error.message); return; }
-    const r = data as { error?: string; note?: string; to?: string };
-    if (r?.error) { setErr(r.error); return; }
-    setNote(`Test sent to ${r.to}. ${r.note ?? ""}`);
+    if (failed) return;
+    setNote(row?.note ?? `Test queued to ${testTo.trim()}.`);
   }
 
-  async function run(dryRun: boolean) {
-    setBusy(dryRun ? "preview" : "send");
-    setErr(null);
-    setNote(null);
-    // Called directly rather than through invokeAI: that helper prefers the
-    // Cloudflare Worker whenever NEXT_PUBLIC_API_URL is set, and the Worker has
-    // no announce-launch route — it would 404 in production and nowhere else.
-    const { data, error } = await createClient().functions.invoke("announce-launch", {
-      body: { dryRun },
-    });
+  async function send() {
+    setBusy("send"); setErr(null); setNote(null);
+    const { row, failed } = await callSend({ p_limit: BATCH });
     setBusy(null);
     setArmed(false);
-    if (error) { setErr(error.message); return; }
-    const r = data as { wouldSend?: number; sent?: number; failed?: number; remaining?: number };
-    if (dryRun) {
-      setNote(`Preview only — nothing sent. ${r.wouldSend ?? 0} would go out now, ${r.remaining ?? 0} on the list in total.`);
-    } else {
-      setNote(
-        `Sent ${r.sent ?? 0}.` +
-        (r.failed ? ` ${r.failed} failed — they stay on the list and go out on the next run.` : "") +
-        (r.remaining ? ` ${r.remaining} still to go — press send again.` : " Nobody left to email.")
-      );
-      void loadStats();
-    }
+    if (failed) return;
+    setNote(row?.note ?? "Done.");
+    void loadStats();
+  }
+
+  /**
+   * Preview is a read, not a send. It costs nothing and answers the only
+   * question worth asking first: how many people is this about to reach.
+   */
+  async function preview() {
+    setBusy("preview"); setErr(null); setNote(null);
+    await loadStats();
+    setBusy(null);
+    setNote(
+      pending === 0
+        ? "Nobody is waiting - everyone on the list has either been emailed or unsubscribed."
+        : `Nothing sent. ${pending} would be emailed, ${Math.min(pending, BATCH)} on the next press.`
+    );
   }
 
   const pending = stats?.pending ?? 0;
@@ -333,7 +366,7 @@ function WaitlistAnnounce() {
       )}
 
       <div className="mt-4 flex flex-wrap gap-2">
-        <button onClick={() => void run(true)} disabled={busy !== null || pending === 0} className="btn-ghost">
+        <button onClick={() => void preview()} disabled={busy !== null} className="btn-ghost">
           {busy === "preview" ? "Checking…" : "Preview (sends nothing)"}
         </button>
 
@@ -343,8 +376,8 @@ function WaitlistAnnounce() {
           </button>
         ) : (
           <>
-            <button onClick={() => void run(false)} disabled={busy !== null} className="btn-primary !bg-readiness-red !text-white">
-              {busy === "send" ? "Sending…" : `Yes — email ${Math.min(pending, 100)} people now`}
+            <button onClick={() => void send()} disabled={busy !== null} className="btn-primary !bg-readiness-red !text-white">
+              {busy === "send" ? "Sending…" : `Yes — email ${Math.min(pending, BATCH)} people now`}
             </button>
             <button onClick={() => setArmed(false)} disabled={busy !== null} className="btn-ghost">Cancel</button>
           </>
@@ -353,7 +386,7 @@ function WaitlistAnnounce() {
 
       {armed && (
         <p className="mt-2 text-xs text-slate-400">
-          This cannot be undone. Sends up to 100 at a time — press again for the rest.
+          This cannot be undone. Sends up to {BATCH} at a time — press again for the rest.
         </p>
       )}
 
