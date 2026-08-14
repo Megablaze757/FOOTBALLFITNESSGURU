@@ -9,6 +9,7 @@
 
 import { FOODS, FOOD_BY_ID, packPriceFor, isCorrected, type Aisle, type Food, type FoodTag, type PriceOverrides, type StoreId } from "./food-db";
 import { skipReason, EMPTY_SCHEDULE, type DietSchedule } from "./meal-schedule";
+import { ingredientFatigue, monotonyCost, newServedLog, recordServing } from "./meal-monotony";
 import type { PlanTargets } from "./nutrition"; // used below; also re-exported
 
 // The energy maths moved to ./nutrition so the Coach targets card and the meal
@@ -533,6 +534,68 @@ const FAVOURITE_BONUS = 5.0; // £
 const MAX_REPEATS = 3;
 
 /**
+ * How much worse a fit the planner will accept to stop serving one ingredient
+ * every day, in pounds.
+ *
+ * Only SIZE can move. The second pass already requires a replacement either to
+ * be at least as protein-dense as what it displaces or to leave the day at its
+ * target, so of the three things in `fit` this tolerance can buy nothing but
+ * calorie mismatch — a slightly small dinner, never a thin one.
+ *
+ * Swept over the 90-plan audit. It is a small effect and, unusually, it is free
+ * in both directions:
+ *
+ *   0    top ingredient 6.2 days a week   £109.66
+ *   3    6.1                              £110.24
+ *   6    6.0                              £108.48
+ *   12   6.0                              £108.24
+ *
+ * Six is where it stops moving. It comes out CHEAPER than zero rather than
+ * dearer, which is not the trade this looked like it would be: a wider door
+ * lets the pass find a fresher meal whose ingredients are already in the
+ * trolley, instead of settling for a repeat. Twelve buys nothing further, so
+ * this stops at the knee rather than taking slack it has no use for.
+ */
+const INGREDIENT_FIT_TOLERANCE = 6; // £
+
+/**
+ * What eating a different protein may add to the WEEK's shop, in pounds.
+ *
+ * A PER-WEEK CAP, and it has to be, because a per-slot allowance does not
+ * compose. Every other budget in this file is spent one meal at a time, which
+ * works when the thing being bought is a different recipe — its ingredients are
+ * mostly already in the trolley. A different PROTEIN is a whole new pack, and a
+ * pack is a fixed cost amortised over however many meals use it.
+ *
+ * That difference is invisible on a full week and glaring on a short one. This
+ * pass, budgeted per slot, cost an athlete cooking every night £1 and an
+ * athlete eating out twice SIXTEEN pounds — reproducing exactly the inversion a
+ * previous round removed the old slot-scaling to fix: telling the app you eat
+ * out on Tuesdays made your shop dearer, which is indefensible however varied
+ * the week is.
+ *
+ * Measured in real money rather than score, because "at most £10 a week" is a
+ * promise that can be kept and checked, and the score is not pounds of
+ * shopping. Scaled by how much of the week is cooked — see `ingredientBudget`.
+ *
+ * Swept against both invariants at once, which is the only way it means
+ * anything: the ingredient rotation has to be strong enough that an omnivore
+ * with real choice is not served one protein all week, and weak enough that
+ * eating out twice still makes the shop cheaper rather than dearer.
+ *
+ *        one ingredient owns the week?   eating out cheaper?   shop
+ *   £6   no                              NO                    £104.88
+ *   £8   no                              yes                   £105.41
+ *   £10  yes                             yes                   £105.69
+ *   £14  yes                             yes                   £106.12
+ *
+ * Ten is the first value that satisfies both. Fourteen buys nothing further and
+ * costs another 43p, so this stops at the point the two constraints meet rather
+ * than taking slack neither of them asked for.
+ */
+const INGREDIENT_WEEKLY_BUDGET = 10; // £
+
+/**
  * What a fresh dish is allowed to add to the shopping bill, per meal.
  *
  * The reason last week's meals keep winning is not that they're better — it's
@@ -706,10 +769,12 @@ const UNDERSIZE_BIAS = 3;
  *
  * The exponent does the work instead. At weight 4: one repeat costs 4, two
  * costs 14. The second serving stays affordable, the third rarely wins.
+ *
+ * MOVED TO ./meal-variety, where it gained the two things it was missing: WHEN
+ * the dish was last served, and WHAT it is made of. Counting servings alone let
+ * three identical days sit next to each other, and counting recipes alone let
+ * seven different tofu dinners register as seven different dinners.
  */
-function repeatCost(uses: number, weight: number): number {
-  return Math.pow(uses, 1.8) * weight;
-}
 
 function sizeMismatch(meal: Meal, slotKcal: number): number {
   if (slotKcal <= 0) return 0;
@@ -831,7 +896,9 @@ export function buildWeek(
   };
 
   const basket: Basket = new Map();
-  const uses = new Map<string, number>();
+  // Dishes AND ingredients, with the day each was last served. See
+  // ./meal-variety for why a bare serving count was not enough.
+  const served = newServedLog();
 
   /**
    * Last week's picks, entered into the repeat counter at a discount.
@@ -841,7 +908,7 @@ export function buildWeek(
    * — feeding raw counts in would make anything served three times last week
    * effectively unreachable, which is how you starve a vegan's Thursday.
    *
-   * Held separately from `uses` so it does not count toward MAX_REPEATS: last
+   * Held separately from the served log so it does not count toward MAX_REPEATS: last
    * week must not be able to cap a meal out of this week entirely.
    */
   const lastWeek = new Map<string, number>();
@@ -1072,6 +1139,26 @@ export function buildWeek(
    */
   const repeatPenalty = REPEAT_PENALTY * budgetScale;
 
+  /**
+   * The ingredient rotation's allowance, scaled to how much of the week is
+   * actually cooked — and this one genuinely is a pack-amortisation problem,
+   * which is what makes the scaling right here and wrong for `repeatPenalty`.
+   *
+   * The note above explains why slot-scaling was removed from the dish repeat
+   * penalty: it treated a pack problem by suppressing variety, which is the
+   * wrong lever for a term about recipes, whose ingredients are mostly in the
+   * trolley already. A different PROTEIN is a different matter. It is a whole
+   * new pack, a fixed cost divided by however many meals use it, so what an
+   * athlete can afford to diversify falls with the number of meals they cook.
+   *
+   * Left flat, this pass put £16 on the shop of someone eating out twice a week
+   * against £1 for someone cooking every night, and re-created the inversion
+   * that removal was meant to end — telling the app you eat out on Tuesdays
+   * made your shopping DEARER. Budget mode scales it too, for the same reason
+   * it scales everything else: that tick means "I would rather have the money".
+   */
+  const ingredientBudget = INGREDIENT_WEEKLY_BUDGET * Math.min(1, weeklySlots / 28) * budgetScale;
+
   const shareTotal = wanted.reduce((s, w) => s + SLOT_SHARE[w.slot], 0);
   /**
    * The calories this slot should carry.
@@ -1082,6 +1169,50 @@ export function buildWeek(
    */
   const slotKcal = (slot: Slot, dayIndex: number): number =>
     shareTotal > 0 ? dayCalories(dayIndex) * (SLOT_SHARE[slot] / shareTotal) : 0;
+
+  /**
+   * The day's protein, banked as it is filled.
+   *
+   * WHY THIS EXISTS. The ingredient rotation below sometimes wants a slightly
+   * less protein-dense meal — a different dinner instead of tofu for the fifth
+   * time — and whether that is affordable is a fact about the DAY, not about
+   * the meal. Judging it per meal is what broke the first two attempts: a dense
+   * breakfast looks over-provisioned on its own, but its surplus is what covers
+   * a thinner lunch, so spending it twice took vegan weeks from 98% of target
+   * to 86%.
+   *
+   * Counted in slot-target calories rather than the recipe's own, because every
+   * meal is scaled to its slot afterwards and scaling preserves density. So
+   * these two running totals are what the finished day will actually contain.
+   *
+   * Reset by `buildDay`. A day that cannot reach its requirement at all — a
+   * vegan cut, usually — simply never has anything spare, and the rotation
+   * below correctly does nothing for them.
+   */
+  let dayProtein = 0;
+  let daySlotKcal = 0;
+
+  /**
+   * Pounds the ingredient rotation has already added to this week's shop.
+   *
+   * Runs for the whole week rather than resetting per day, because a pack is
+   * bought once and the promise being kept is about the shop, not the Tuesday.
+   */
+  let ingredientSpend = 0;
+
+  /** Would serving this leave the day, so far, still at or above target? */
+  const staysOnTarget = (meal: Meal, slot: Slot, dayIndex: number): boolean => {
+    const kcal = slotKcal(slot, dayIndex);
+    const need = proteinPerKcalOn(dayIndex);
+    if (need <= 0 || kcal <= 0) return true;
+    return dayProtein + proteinDensity(meal) * kcal >= need * (daySlotKcal + kcal) - 1e-9;
+  };
+
+  const bank = (meal: Meal, slot: Slot, dayIndex: number): void => {
+    const kcal = slotKcal(slot, dayIndex);
+    dayProtein += proteinDensity(meal) * kcal;
+    daySlotKcal += kcal;
+  };
 
   const choose = (slot: Slot, dayIndex: number, nth = 0, avoid: Set<string> = new Set()): Meal | undefined => {
     const list = pools[slot].filter((m) => !avoid.has(m.id));
@@ -1103,7 +1234,14 @@ export function buildWeek(
           // carry, so a big athlete is offered big meals rather than a small
           // one scaled past the point of sense.
           + sizeMismatch(meal, slotKcal(slot, dayIndex)) * SIZE_WEIGHT
-          + repeatCost(uses.get(meal.id) ?? 0, repeatPenalty);
+          // How tired of this dish the athlete would be — how often this week,
+          // and how recently. Sits in `fit` rather than beside it so the
+          // variety tie-break below inherits it: a contender has to be at least
+          // as good as the winner on fit, which now includes not being
+          // yesterday's dinner.
+          // The serving count is budget-scaled; WHEN it lands is not, because
+          // rearranging a week costs nothing at the till.
+          + monotonyCost(served, meal, dayIndex, repeatPenalty, REPEAT_PENALTY);
         return {
           meal,
           fit,
@@ -1119,7 +1257,7 @@ export function buildWeek(
             - (starred.has(meal.id) ? STARRED_BONUS : 0)
             + fit
             + ((idx + seed + nth) % list.length) * 0.001,
-          capped: (uses.get(meal.id) ?? 0) >= MAX_REPEATS,
+          capped: (served.mealUses.get(meal.id) ?? 0) >= MAX_REPEATS,
         };
       })
       .sort((a, b) => a.score - b.score);
@@ -1170,7 +1308,7 @@ export function buildWeek(
       // unseen meal every time added £7 a week to the shop, because an unseen
       // meal is usually one whose ingredients aren't in the trolley yet.
       && r.score <= best.score + varietyBudget);
-    const pick = contenders.length > 1
+    let pick = contenders.length > 1
       ? contenders.reduce((a, b) => {
           // A starred dish counts as unseen however often it was served. The
           // athlete asked for it; "you had this last week" is the reason they
@@ -1180,8 +1318,102 @@ export function buildWeek(
           return seenB < seenA || (seenB === seenA && b.score < a.score) ? b : a;
         })
       : best;
-    uses.set(pick.meal.id, (uses.get(pick.meal.id) ?? 0) + 1);
+
+    /**
+     * SECOND PASS: THE SAME INGREDIENT AGAIN.
+     *
+     * Everything above rotates DISHES, and an athlete does not eat dishes. The
+     * book has 37 tofu meals and 7 tuna ones, so a week of nothing but tofu
+     * clears every rotation rule in this function with a repeat count of zero —
+     * which is exactly the "tuna every day" complaint, and why it survived the
+     * variety work that came before it.
+     *
+     * WHY A SEPARATE PASS RATHER THAN A TERM IN THE SCORE. Charging ingredient
+     * repetition was tried first, both flat and bounded by the athlete's
+     * protein surplus, and both broke the plans. The bounded version fell into
+     * the trap the contender filter above is already commented for: a
+     * protein-dense breakfast looks over-provisioned in isolation, but the
+     * surplus is what covers a thinner lunch, so taxing it drops the DAY.
+     * Vegan weeks went from 98% of target to 86%.
+     *
+     * So the swap is made unable to cost protein rather than merely discouraged
+     * from it. A replacement qualifies on either of two grounds, and both are
+     * guarantees rather than preferences:
+     *
+     *   - it is AT LEAST AS PROTEIN-DENSE as the meal it displaces, so the
+     *     trade cannot lose anything; or
+     *   - the day it is being served into is still at or above its protein
+     *     target with it in, counted on the running total rather than on the
+     *     meal in isolation. This is the surplus idea done correctly: spent
+     *     once, out of what has actually been banked, and never twice.
+     *
+     * The first alone is nearly inert — the ingredient that takes over a week
+     * does so PRECISELY because it is the densest thing in the pool, so almost
+     * nothing clears it. The second is what makes the rotation work, and it
+     * does nothing at all for a diet with no surplus to spend, which is the
+     * correct answer for a vegan cut rather than a compromise.
+     */
+    const seenLastWeek = (m: Meal) => (starred.has(m.id) ? 0 : lastWeek.get(m.id) ?? 0);
+    const pickFatigue = starred.has(pick.meal.id) ? 0 : ingredientFatigue(served, pick.meal, dayIndex);
+    if (pickFatigue > 0) {
+      const pickDensity = proteinDensity(pick.meal);
+      const pickSeen = seenLastWeek(pick.meal);
+      // What is left of the week's allowance for eating something different.
+      const left = ingredientBudget - ingredientSpend;
+      // The real pounds this swap would add to the trolley — not the score,
+      // which mixes money with protein and portion size and cannot be promised
+      // to an athlete in any units they recognise.
+      const extraCost = (m: Meal) => Math.max(0, marginalCost(m, basket) - marginalCost(pick.meal, basket));
+      const fresher = ranked
+        .filter((r) => !r.capped
+          && extraCost(r.meal) <= left
+          // The guarantee. Everything else here is a preference; this is why
+          // the audit does not move.
+          && (proteinDensity(r.meal) >= pickDensity - 1e-9 || staysOnTarget(r.meal, slot, dayIndex))
+          // ONE VARIETY BUDGET PER SLOT, not one per pass. Measured against
+          // `best` rather than against `pick` deliberately: anchoring it to the
+          // dish rotation's winner would let a slot spend the £3 twice, and it
+          // did — £108.32 a week against £102.59, for £3 of that being an
+          // accounting mistake rather than a decision.
+          && r.score <= best.score + varietyBudget
+          && r.fit <= best.fit + INGREDIENT_FIT_TOLERANCE
+          // Never undo the dish rotation. Without this the ingredient pass can
+          // reach back for yesterday's dinner because its INGREDIENT is fresher
+          // than today's winner, which reintroduces exactly the back-to-back
+          // repeat the first half of this fixed — one plan in ninety, but the
+          // complaint was about that one.
+          && (served.mealDay.get(r.meal.id) ?? -99) < dayIndex - 1
+          // And never undo the WEEK-on-week rotation either, for the same
+          // reason. Left off, this pass reached back for last week's dish
+          // whenever its ingredient happened to be fresher, and a cutting
+          // vegetarian's second week went to 0% changed — the exact "Regenerate
+          // week does nothing" bug a previous round was built to kill.
+          && seenLastWeek(r.meal) <= pickSeen
+          && (starred.has(r.meal.id) ? 0 : ingredientFatigue(served, r.meal, dayIndex)) < pickFatigue);
+      if (fresher.length) {
+        // Last week still gets its say among the fresher options, and it has to.
+        // Without this tie-break the ingredient pass silently overrode the
+        // week-on-week rotation — a cutting pescatarian's second week went back
+        // to 11% changed, against a 15% floor that a previous complaint about
+        // "Regenerate week does nothing" is the whole reason for.
+        const swapped = fresher.reduce((a, b) => {
+          const fa = starred.has(a.meal.id) ? 0 : ingredientFatigue(served, a.meal, dayIndex);
+          const fb = starred.has(b.meal.id) ? 0 : ingredientFatigue(served, b.meal, dayIndex);
+          if (fa !== fb) return fb < fa ? b : a;
+          const seenA = starred.has(a.meal.id) ? 0 : lastWeek.get(a.meal.id) ?? 0;
+          const seenB = starred.has(b.meal.id) ? 0 : lastWeek.get(b.meal.id) ?? 0;
+          return seenB < seenA || (seenB === seenA && b.score < a.score) ? b : a;
+        });
+        // Charged BEFORE the reassignment, because `extraCost` is measured
+        // against the meal being displaced — reading it afterwards would price
+        // the swap against itself and always come out free.
+        ingredientSpend += extraCost(swapped.meal);
+        pick = swapped;
+      }
+    }
+    recordServing(served, pick.meal, dayIndex);
     addToBasket(pick.meal, basket);
+    bank(pick.meal, slot, dayIndex);
     return pick.meal;
   };
 
@@ -1191,6 +1423,10 @@ export function buildWeek(
     // A 5-meal day has two snack slots; without this they'd both resolve to the
     // cheapest snack and the day would list the same thing twice.
     const usedToday = new Set<string>();
+    // A new day banks its own protein. Carrying yesterday's surplus over would
+    // let a good Monday pay for a thin Tuesday, which is not how eating works.
+    dayProtein = 0;
+    daySlotKcal = 0;
     for (const { slot, nth } of wanted) {
       const reason = skipReason(schedule, i, slot);
       if (reason) {
@@ -1215,8 +1451,9 @@ export function buildWeek(
         ? pools[slot].find((x) => x.id === chosen && !usedToday.has(x.id))
         : undefined;
       if (forced) {
-        uses.set(forced.id, (uses.get(forced.id) ?? 0) + 1);
+        recordServing(served, forced, i);
         addToBasket(forced, basket);
+        bank(forced, slot, i);
         picks.push(forced);
         usedToday.add(forced.id);
         continue;
