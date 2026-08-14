@@ -248,7 +248,17 @@ begin
                                     'Authorization', 'Bearer ' || v_key),
       body    := jsonb_build_object(
         'from', p_from, 'to', p_test_to,
-        'subject', '[TEST] ' || v_subj,
+        -- THE COPY-ID RIDES IN THE TEST SUBJECT.
+        --
+        -- "Is this the new email?" has cost several rounds, because an inbox
+        -- cannot tell you which version of the function produced what you are
+        -- looking at — and the answer changes what to fix. If the id in the
+        -- subject is not the one you just installed, the send is stale and the
+        -- database is the problem. If it matches and the email still looks
+        -- wrong, the database is fine and the mail client is the problem.
+        --
+        -- Test sends only. A real recipient never sees this.
+        'subject', '[TEST ${copyId}] ' || v_subj,
         'html', replace(replace(v_html, '@@CTA@@', v_cta), '@@UNSUB@@', v_unsub),
         'text', replace(replace(v_text, '@@CTA@@', v_cta), '@@UNSUB@@', v_unsub))
     );
