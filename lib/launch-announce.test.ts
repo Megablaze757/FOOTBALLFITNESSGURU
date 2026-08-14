@@ -108,6 +108,41 @@ test("the email does not claim the video never leaves the phone", () => {
   assert.match(EMAIL, /analysis runs on your own phone/i, "the on-device claim is gone entirely");
 });
 
+/**
+ * IT MUST SURVIVE DARK MODE, AND THE PROOF IS THAT IT DIDN'T.
+ *
+ * The email declared no colour scheme, so Gmail's dark mode assumed it had been
+ * designed light and inverted it. On a near-black design that produced the
+ * opposite of the intent — white background, brown where the gold should be —
+ * and it reached a real inbox that way.
+ *
+ * Two mechanisms, because they fail in different clients. The declarations tell
+ * Apple Mail, Outlook and newer Gmail that the email is already dark and to
+ * leave it alone. The bgcolor attributes cover the case where the CSS
+ * background is overridden anyway: Gmail will drop a style long before it drops
+ * a presentational attribute, and an inverted panel with no bgcolor renders
+ * white.
+ *
+ * None of this is visible in a screenshot taken outside a mail client, which is
+ * exactly why it needs asserting rather than eyeballing.
+ */
+test("the email declares itself dark and states its background twice", () => {
+  assert.match(EMAIL, /<meta name="color-scheme" content="dark">/,
+    "no color-scheme meta, so Gmail will invert the dark design to white");
+  assert.match(EMAIL, /<meta name="supported-color-schemes" content="dark">/,
+    "no supported-color-schemes meta");
+  assert.match(EMAIL, /color-scheme:\s*dark/,
+    "the CSS color-scheme property is missing, which is what newer Gmail reads");
+
+  // Every element carrying the dark ground states it as an attribute as well as
+  // a style. Checked individually — the body was the one that mattered most in
+  // the reported failure, because that is the surface behind everything else.
+  assert.match(EMAIL, /<body bgcolor="#0b0f0d"/,
+    "the body has no bgcolor attribute, so a stripped style leaves it white");
+  assert.match(EMAIL, /bgcolor="#121714"/,
+    "the card has no bgcolor attribute");
+});
+
 test("the numbers in the email match the app", async () => {
   const { SPORTS } = await import("./exercises");
   const { positionsForSport } = await import("./coach");

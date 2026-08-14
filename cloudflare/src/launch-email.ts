@@ -104,14 +104,40 @@ export function launchEmail({ appUrl, ref, unsubscribeUrl }: LaunchEmailInput): 
     `Unsubscribe: ${unsubscribeUrl}`,
   ].join("\n");
 
+  // THE COLOUR-SCHEME DECLARATION IS LOAD-BEARING, not decoration.
+  //
+  // Without it, Gmail's dark mode assumes an email was designed light and
+  // inverts it. Applied to a near-black design that produces the exact opposite
+  // of the intent: the background came out white and the gold came out brown.
+  // Declaring `dark` tells the client the email is already dark-optimised and
+  // to leave the colours alone. Apple Mail and Outlook read the meta tags,
+  // newer Gmail reads the `color-scheme` property, so all three are stated.
+  //
+  // The bgcolor attributes are the belt to that braces. Gmail is far more
+  // willing to override a CSS `background` than the presentational attribute,
+  // so every element carrying the dark ground states it both ways — if the
+  // style is dropped the panel is still dark rather than white.
   const html = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${escapeHtml(subject)}</title></head>
-<body style="margin:0;padding:0;background:#0b0f0d;">
+<meta name="color-scheme" content="dark">
+<meta name="supported-color-schemes" content="dark">
+<title>${escapeHtml(subject)}</title>
+<style>
+  :root { color-scheme: dark; supported-color-schemes: dark; }
+  /* Reasserted for clients that keep their own stylesheet in play. */
+  body, .pa-bg { background-color: #0b0f0d !important; }
+  .pa-card { background-color: #121714 !important; }
+  @media (prefers-color-scheme: dark) {
+    body, .pa-bg { background-color: #0b0f0d !important; }
+    .pa-card { background-color: #121714 !important; }
+  }
+</style>
+</head>
+<body bgcolor="#0b0f0d" style="margin:0;padding:0;background-color:#0b0f0d;">
 <div style="display:none;max-height:0;overflow:hidden;opacity:0;">It's open. 33 positions, 6 sports, and your first plan is two minutes away.</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0b0f0d;padding:20px 12px;">
-<tr><td align="center">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#121714;border-radius:20px;padding:30px 26px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+<table role="presentation" class="pa-bg" width="100%" cellpadding="0" cellspacing="0" bgcolor="#0b0f0d" style="background-color:#0b0f0d;padding:20px 12px;">
+<tr><td align="center" bgcolor="#0b0f0d" style="background-color:#0b0f0d;">
+<table role="presentation" class="pa-card" width="100%" cellpadding="0" cellspacing="0" bgcolor="#121714" style="max-width:560px;background-color:#121714;border-radius:20px;padding:30px 26px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
 
   <tr><td style="padding-bottom:20px;">
     <span style="font-size:18px;font-weight:800;letter-spacing:-0.01em;color:#f1f5f3;">
