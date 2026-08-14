@@ -124,3 +124,62 @@ test("describeAge reads like a person wrote it", () => {
   assert.equal(describeAge(60 * 60_000), "1 hour ago");
   assert.equal(describeAge(3 * 60 * 60_000), "3 hours ago");
 });
+
+// --- the form that uses them --------------------------------------------------
+
+import { readFileSync } from "node:fs";
+const FORM = readFileSync(new URL("../components/JournalForm.tsx", import.meta.url), "utf8");
+
+/**
+ * A DEBOUNCED SAVE THAT GETS CANCELLED IS NOT A SAVE.
+ *
+ * The draft is written on a 400ms timer whose cleanup clears it. Log a set,
+ * switch to the timer app inside 400ms, and nothing was ever stored — which is
+ * precisely when it matters, because logging set by set means leaving the app
+ * mid-session is the normal case. A backgrounded mobile PWA is also frozen, so
+ * a pending timer may never fire however long it had left.
+ */
+test("the draft is flushed before the app can be backgrounded", () => {
+  assert.match(FORM, /addEventListener\("visibilitychange"/,
+    "nothing writes the draft when the phone is backgrounded");
+  assert.match(FORM, /addEventListener\("pagehide", flushDraft\)/,
+    "nothing writes the draft when the page is discarded");
+  assert.match(FORM, /visibilityState === "hidden"/,
+    "visibilitychange fires on becoming visible too — flushing then is pointless work");
+  // The cleanup must flush, not merely unsubscribe: navigating to another
+  // screen inside the app unmounts the form.
+  const effect = FORM.slice(FORM.indexOf('addEventListener("visibilitychange"'));
+  assert.match(effect.slice(0, 600), /removeEventListener[\s\S]{0,220}flushDraft\(\);/,
+    "unmount tears down the listeners without saving what was in the form");
+});
+
+/**
+ * AND IT MUST NOT WRITE THE DRAFT BACK AFTER SUBMITTING.
+ *
+ * The flush effect's cleanup runs whenever its dependencies change, closing over
+ * the previous render's values — so keying it on `result` would fire with
+ * result still null immediately after handleSubmit cleared the draft, and
+ * restore the whole thing on the next visit. A ref is read at call time.
+ */
+test("a flush cannot resurrect a draft that was already saved", () => {
+  assert.match(FORM, /submittedRef\.current = true;\s*\n\s*clearDraft/,
+    "the submitted flag is not set before the draft is cleared, so a flush can race it back in");
+  assert.match(FORM, /if \(submittedRef\.current\) return;/,
+    "the flush does not check whether the check-in was already stored");
+});
+
+/**
+ * RESTORED BUT INVISIBLE IS THE SAME AS LOST.
+ *
+ * `logTraining` is seeded from the SAVED entry, and a draft is read later in an
+ * effect — so drills came back into state behind a collapsed panel. The athlete
+ * sees an empty form either way.
+ */
+test("restoring a draft opens the training panel it restored into", () => {
+  const restore = FORM.slice(FORM.indexOf("if (draft.training)"), FORM.indexOf("const age = draftAge"));
+  assert.match(restore, /setTraining\(draft\.training\)/, "the draft's training is not restored");
+  assert.match(restore, /setLogTraining\(true\)/,
+    "the panel stays shut, so restored drills are invisible");
+  assert.match(restore, /drills\?\.length \?\? 0\) > 0 \|\| draft\.training\.total_minutes != null/,
+    "the panel is opened even for an empty training log, which is noise");
+});

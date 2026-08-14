@@ -2,7 +2,7 @@
 
 import { invalidate } from "@/lib/use-async";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { sportTerms } from "@/lib/sport-terms";
@@ -152,8 +152,16 @@ export function JournalForm({ initial, initialTraining, sport, planned = [], his
   // already has one opens expanded, and clearing the box doesn't snap it shut
   // under the cursor mid-edit.
   const [weighing, setWeighing] = useState(false);
-  // Quick mode: is the training log open? Starts open when there is already
-  // something logged, so a restored draft doesn't hide the drills in it.
+  /**
+   * Quick mode: is the training log open?
+   *
+   * Starts open when today's SAVED entry already has something in it. It cannot
+   * also cover a restored draft, whatever the previous comment here claimed: a
+   * draft is read in an effect, which runs after this has already resolved to
+   * false. The restore itself opens the section — see below — because drills
+   * that come back into state but stay behind a collapsed panel are, from the
+   * athlete's side, indistinguishable from work that was lost.
+   */
   const [logTraining, setLogTraining] = useState(
     (initialTraining?.drills.length ?? 0) > 0 || initialTraining?.total_minutes != null
   );
@@ -231,22 +239,79 @@ export function JournalForm({ initial, initialTraining, sport, planned = [], his
     setWeight(draft.weight ?? "");
     setIsMatchDay(draft.isMatchDay ?? false);
     setMinutes(draft.minutes ?? "0");
-    if (draft.training) setTraining(draft.training);
+    if (draft.training) {
+      setTraining(draft.training);
+      // Open the panel, or the restored session is invisible.
+      if ((draft.training.drills?.length ?? 0) > 0 || draft.training.total_minutes != null) {
+        setLogTraining(true);
+      }
+    }
     const age = draftAge("checkin", userId, today);
     setRestored(age === null ? "earlier" : describeAge(age));
   }, [initial, userId, today]);
+
+  /**
+   * THE CURRENT FORM, READABLE WITHOUT WAITING FOR THE DEBOUNCE.
+   *
+   * A ref rather than state because the flush below has to run from an event
+   * handler registered once — reading state there would close over whatever the
+   * values were at registration, which is empty.
+   */
+  const draftRef = useRef<DraftShape | null>(null);
+  draftRef.current = { painMap, fatigue, sleep, nutrition, weight, isMatchDay, minutes, training };
+
+  /**
+   * Set the moment the check-in is stored, and read at flush time.
+   *
+   * `result` cannot do this job. Flushing is wired to an effect whose cleanup
+   * runs whenever its dependencies change — including when `result` becomes
+   * set — and that cleanup closes over the PREVIOUS render's value. It would
+   * therefore fire with result still null, immediately after handleSubmit had
+   * cleared the draft, and write the whole thing back. A ref is read at call
+   * time, so it cannot resurrect a draft that has already been saved.
+   */
+  const submittedRef = useRef(false);
+
+  const flushDraft = useCallback(() => {
+    if (submittedRef.current) return;
+    const d = draftRef.current;
+    if (d) saveDraft<DraftShape>("checkin", userId, d, today);
+  }, [userId, today]);
 
   // Save as they go. Debounced because a slider drag fires continuously and
   // there's no reason to serialise the whole form on every pixel.
   useEffect(() => {
     if (result) return; // already submitted — nothing in progress to keep
-    const t = setTimeout(() => {
-      saveDraft<DraftShape>("checkin", userId, {
-        painMap, fatigue, sleep, nutrition, weight, isMatchDay, minutes, training,
-      }, today);
-    }, 400);
+    const t = setTimeout(flushDraft, 400);
     return () => clearTimeout(t);
-  }, [painMap, fatigue, sleep, nutrition, weight, isMatchDay, minutes, training, result, userId, today]);
+  }, [painMap, fatigue, sleep, nutrition, weight, isMatchDay, minutes, training, result, flushDraft]);
+
+  /**
+   * WRITE IT DOWN BEFORE THE APP GOES AWAY.
+   *
+   * The debounce above is a 400ms timer, and the cleanup CANCELS it. Log a set,
+   * switch to the timer app inside 400ms, and the save never happened — which
+   * is exactly the moment this matters, because logging set by set means
+   * leaving the app mid-session is the normal case, not the edge case.
+   *
+   * It is worse than a race, too: a backgrounded mobile PWA gets frozen, so a
+   * pending timer may never fire however long it had left.
+   *
+   * `visibilitychange` and `pagehide` are the two events that reliably arrive
+   * before a phone suspends or discards a page. `beforeunload` is not one of
+   * them — mobile browsers frequently skip it entirely. The cleanup also
+   * flushes, which covers navigating to another screen inside the app.
+   */
+  useEffect(() => {
+    const onHidden = () => { if (document.visibilityState === "hidden") flushDraft(); };
+    document.addEventListener("visibilitychange", onHidden);
+    window.addEventListener("pagehide", flushDraft);
+    return () => {
+      document.removeEventListener("visibilitychange", onHidden);
+      window.removeEventListener("pagehide", flushDraft);
+      flushDraft();
+    };
+  }, [flushDraft]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -340,6 +405,11 @@ export function JournalForm({ initial, initialTraining, sport, planned = [], his
 
     // It's in the database now, so the local copy has done its job. Left
     // behind, it would be restored over their saved entry next time.
+    //
+    // The ref is set FIRST: a flush racing in between — an unmount, or the
+    // phone being backgrounded on the same tap — would otherwise write the
+    // draft straight back after this cleared it.
+    submittedRef.current = true;
     clearDraft("checkin", userId, today);
 
     // A check-in changes readiness on Home, Stats and Coach — drop the cached
