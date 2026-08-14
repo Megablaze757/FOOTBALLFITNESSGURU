@@ -207,7 +207,7 @@ test("the key can be installed and checked without exposing it", () => {
 });
 
 test("the admin screen offers the key box only when one is missing", () => {
-  const admin = readFileSync(`${ROOT}app/admin/page.tsx`, "utf8")
+  const admin = readFileSync(`${ROOT}components/admin/WaitlistAnnounce.tsx`, "utf8")
     .replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
   assert.match(admin, /rpc\(\s*["']has_resend_key["']/, "the screen never checks for a key");
   assert.match(admin, /rpc\(\s*["']set_resend_key["']/, "the screen cannot store a key");

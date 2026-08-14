@@ -134,38 +134,62 @@ export function FunnelReport() {
             </div>
           )}
 
-          <div className="card divide-y divide-white/[0.06] overflow-hidden">
-            {FUNNEL_STEPS.map((step, i) => {
-              const n = counts[step.event] ?? 0;
-              const prev = i === 0 ? n : counts[FUNNEL_STEPS[i - 1].event] ?? 0;
-              const pctOfTop = top > 0 ? Math.round((n / top) * 100) : 0;
-              const fromPrev = i === 0 ? 100 : conversion(prev, n);
-              return (
-                <div key={step.event} className="p-4">
-                  <div className="flex items-baseline justify-between gap-3">
-                    <span className="text-sm font-semibold text-slate-100">{step.label}</span>
-                    <span className="shrink-0 text-sm">
-                      <b className="text-slate-100">{n}</b>
-                      {i > 0 && (
-                        <span className={fromPrev >= 50 ? "text-slate-400" : "text-readiness-red"}>
-                          {" "}· {fromPrev}% of previous
-                        </span>
-                      )}
-                    </span>
-                  </div>
-                  {/* A bar relative to the top of the funnel makes the shape
-                      readable at a glance; the numbers give the detail. */}
-                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/[0.06]">
-                    <div
-                      className="h-full rounded-full bg-pitch-400"
-                      style={{ width: `${Math.max(pctOfTop, n > 0 ? 2 : 0)}%` }}
-                    />
-                  </div>
-                  <p className="mt-1 text-xs text-slate-400">{step.note}</p>
+          {/* TWO CHAINS, RENDERED APART.
+              As one list this said "Activated 0 · Hit a paywall 2 · 0% of
+              previous", which is a category error rather than a drop: a paywall
+              is reachable without ever checking in. Percentages are computed
+              against the step above within the same chain, and only when that
+              step actually has people in it — "0% of previous" against a
+              baseline of nobody is a number with nothing behind it. */}
+          {(["activation", "revenue"] as const).map((group) => {
+            const steps = FUNNEL_STEPS.filter((s) => s.group === group && s.event in counts);
+            if (steps.length === 0) return null;
+            const base = counts[steps[0].event] ?? 0;
+            return (
+              <div key={group} className="mb-3">
+                <div className="stat-label mb-1.5 px-1">
+                  {group === "activation" ? "Getting started" : "Becoming a customer"}
                 </div>
-              );
-            })}
-          </div>
+                <div className="card divide-y divide-white/[0.06] overflow-hidden">
+                  {steps.map((step, i) => {
+                    const n = counts[step.event] ?? 0;
+                    const prev = i === 0 ? null : counts[steps[i - 1].event] ?? 0;
+                    const pct = base > 0 ? Math.round((n / base) * 100) : 0;
+                    const rate = prev && prev > 0 ? conversion(prev, n) : null;
+                    return (
+                      <div key={step.event} className="p-4">
+                        <div className="flex items-baseline justify-between gap-3">
+                          <span className="text-sm font-semibold text-slate-100">{step.label}</span>
+                          <span className="shrink-0 text-sm">
+                            <b className="text-slate-100">{n}</b>
+                            {rate !== null && (
+                              <span className={rate >= 50 ? "text-slate-400" : "text-readiness-red"}>
+                                {" "}· {rate}% of previous
+                              </span>
+                            )}
+                            {/* Said plainly rather than shown as 0%. Nobody
+                                reached the step above, so there is no rate to
+                                report — that is a gap in the data, not a
+                                collapse in conversion. */}
+                            {rate === null && i > 0 && (
+                              <span className="text-slate-500"> · no one above yet</span>
+                            )}
+                          </span>
+                        </div>
+                        <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/[0.06]">
+                          <div
+                            className="h-full rounded-full bg-pitch-400"
+                            style={{ width: `${Math.min(100, Math.max(pct, n > 0 ? 2 : 0))}%` }}
+                          />
+                        </div>
+                        <p className="mt-1 text-xs text-slate-400">{step.note}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
 
           {worst ? (
             <p className="mt-3 rounded-2xl border border-pitch-400/20 bg-pitch-400/[0.04] p-4 text-sm text-slate-300">

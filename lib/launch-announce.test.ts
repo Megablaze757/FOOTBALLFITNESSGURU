@@ -14,7 +14,12 @@ import { readFileSync } from "node:fs";
 const FN = readFileSync(new URL("../supabase/functions/announce-launch/index.ts", import.meta.url), "utf8");
 const EMAIL = readFileSync(new URL("../supabase/functions/announce-launch/email.ts", import.meta.url), "utf8");
 const SQL = readFileSync(new URL("../supabase/migrations/0076_waitlist_announce.sql", import.meta.url), "utf8");
-const ADMIN = readFileSync(new URL("../app/admin/page.tsx", import.meta.url), "utf8");
+// The announce controls live in their own component now — app/admin was one
+// 980-line page and got split by job. These guards follow the code rather than
+// the filename: they protect a send that cannot be undone, which is worth more
+// than the convenience of a single path.
+const ADMIN = readFileSync(
+  new URL("../components/admin/WaitlistAnnounce.tsx", import.meta.url), "utf8");
 
 /**
  * Comments out, URLs intact.

@@ -53,15 +53,31 @@ export type FunnelEvent = (typeof FUNNEL_EVENTS)[number];
 export type FunnelStep = FunnelEvent | "confirmed_email";
 
 /** The steps that make up the headline conversion story, in order. */
-export const FUNNEL_STEPS: { event: FunnelStep; label: string; note: string }[] = [
-  { event: "signup", label: "Signed up", note: "Created an account" },
-  { event: "confirmed_email", label: "Confirmed email", note: "Clicked the link — until they do, they cannot reach the app at all" },
-  { event: "onboarded", label: "Onboarded", note: "Told us their sport and position" },
-  { event: "first_check_in", label: "Activated", note: "Completed a first check-in — the habit starts here" },
-  { event: "paywall_hit", label: "Hit a paywall", note: "Wanted something a free plan doesn't include" },
-  { event: "plan_view", label: "Viewed plans", note: "Opened the pricing page" },
-  { event: "checkout_start", label: "Started checkout", note: "Opened Stripe" },
-  { event: "checkout_complete", label: "Paid", note: "Subscription active" },
+/**
+ * TWO PATHS, NOT ONE LINE.
+ *
+ * These used to render as a single sequence, and the report then said things
+ * like "Activated 0 · Hit a paywall 2 · 0% of previous" — which is not a drop,
+ * it is a category error. Hitting a paywall does not require a check-in; the
+ * two happen independently, and dividing one by the other produced a percentage
+ * with nothing behind it.
+ *
+ * `activation` is a genuine ordered chain: each step can only happen after the
+ * one above it, so a fall between them is a real loss with a place to fix it.
+ * `revenue` is its own chain, entered from anywhere in the app. Percentages are
+ * only ever computed inside a group, never across the boundary.
+ */
+export type StepGroup = "activation" | "revenue";
+
+export const FUNNEL_STEPS: { event: FunnelStep; label: string; note: string; group: StepGroup }[] = [
+  { event: "signup", label: "Signed up", note: "Created an account", group: "activation" },
+  { event: "confirmed_email", label: "Confirmed email", note: "Clicked the link — until they do, they cannot reach the app at all", group: "activation" },
+  { event: "onboarded", label: "Onboarded", note: "Told us their sport and position", group: "activation" },
+  { event: "first_check_in", label: "Activated", note: "Completed a first check-in — the habit starts here", group: "activation" },
+  { event: "paywall_hit", label: "Hit a paywall", note: "Wanted something a free plan doesn't include", group: "revenue" },
+  { event: "plan_view", label: "Viewed plans", note: "Opened the pricing page", group: "revenue" },
+  { event: "checkout_start", label: "Started checkout", note: "Opened Stripe", group: "revenue" },
+  { event: "checkout_complete", label: "Paid", note: "Subscription active", group: "revenue" },
 ];
 
 /**
@@ -144,24 +160,28 @@ export function worstStep(
   // and the client ships before anyone runs it — so between those two moments
   // this would have reported a catastrophic loss at a step nobody had data for.
   // Absent and zero are different facts and are kept different here.
-  const steps = FUNNEL_STEPS.filter(
-    (s) => s.event !== "paywall_hit" && s.event !== "plan_view" && s.event in counts,
-  );
-  if (steps.length < 2) return null;
-  const top = counts[steps[0].event] ?? 0;
+  const present = FUNNEL_STEPS.filter((s) => s.event in counts);
+  const top = counts[FUNNEL_STEPS[0].event] ?? 0;
   if (top < minimum) return null;
 
   let worst: { from: string; to: string; lost: number; rate: number } | null = null;
-  for (let i = 0; i < steps.length - 1; i++) {
-    const a = counts[steps[i].event] ?? 0;
-    const b = counts[steps[i + 1].event] ?? 0;
-    if (a <= 0) continue;
-    const lost = Math.max(0, a - b);
-    const rate = conversion(a, b);
+  for (let i = 0; i < present.length - 1; i++) {
+    const a = present[i];
+    const b = present[i + 1];
+    // Only inside a chain. Comparing the last activation step with the first
+    // revenue one measured nothing — a paywall is reachable without a check-in,
+    // so the "drop" between them was an artifact of the list order.
+    if (a.group !== b.group) continue;
+    const from = counts[a.event] ?? 0;
+    const to = counts[b.event] ?? 0;
+    if (from <= 0) continue;
+    const lost = Math.max(0, from - to);
+    const rate = conversion(from, to);
     if (!worst || lost > worst.lost) {
-      worst = { from: steps[i].label, to: steps[i + 1].label, lost, rate };
+      worst = { from: a.label, to: b.label, lost, rate };
     }
   }
   return worst;
 }
+
 
