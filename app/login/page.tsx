@@ -168,12 +168,20 @@ export default function LoginPage() {
       } else {
         // Attribution already happened server-side, in handle_new_user().
         if (ref) clearRef();
-        // Only recordable once there's a session — the insert is RLS'd to the
-        // signed-in user. On a confirm-by-email flow the row lands on first
-        // sign-in instead, which is the right moment anyway: an unconfirmed
-        // address isn't a signup yet.
+        // THE SIGNUP EVENT IS NOT RECORDED HERE, and deliberately so.
+        //
+        // It used to be, inside this same `if (data.session)`. With email
+        // confirmation on there is no session at signUp, so it never ran, and
+        // the comment that used to sit here claimed the event would "land on
+        // first sign-in instead" — which was simply false: the sign-in branch
+        // above redirects and records nothing. Every account created this way
+        // was missing from the funnel's first step, which is the denominator
+        // for every conversion rate on the report.
+        //
+        // handle_new_user() emits it now (0078) — once per account, server
+        // side, whichever auth flow was used. Same move 0054 made for referral
+        // attribution, which was lost to this identical missing-session problem.
         if (data.session) {
-          track("signup", { referred: !!ref, ...(wantedPlan ? { plan: wantedPlan } : {}) });
           router.push(wantedPlan ? "/pricing" : "/home");
         }
         else {
