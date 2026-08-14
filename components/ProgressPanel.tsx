@@ -8,6 +8,7 @@ import { summarizeTraining, summarizeNutrition } from "@/lib/history";
 import { MiniBars } from "@/components/MiniBars";
 import { ShareButton } from "@/components/ShareButton";
 import { ExerciseProgress } from "@/components/ExerciseProgress";
+import { StrengthRanks } from "@/components/StrengthRanks";
 import { FeatureLock, tierOfSub } from "@/components/FeatureLock";
 import { can } from "@/lib/subscription";
 import type { NutritionLog, Subscription, TrainingLog } from "@/lib/types";
@@ -39,7 +40,7 @@ export function ProgressPanel({ userId }: { userId: string }) {
     const [{ data: training }, { data: nutrition }, { data: profile }, { data: sub }] = await Promise.all([
       supabase.from("training_logs").select("*").eq("user_id", userId).gte("log_date", sinceLong).order("log_date", { ascending: true }),
       supabase.from("nutrition_logs").select("*").eq("user_id", userId).gte("log_date", since).order("log_date", { ascending: true }),
-      supabase.from("profiles").select("full_name").eq("id", userId).maybeSingle(),
+      supabase.from("profiles").select("full_name, weight_kg, sex").eq("id", userId).maybeSingle(),
       supabase.from("subscriptions").select("*").eq("user_id", userId).maybeSingle(),
     ]);
     const all = (training ?? []) as TrainingLog[];
@@ -48,6 +49,10 @@ export function ProgressPanel({ userId }: { userId: string }) {
       trainingLong: all,
       nutrition: (nutrition ?? []) as NutritionLog[],
       name: profile?.full_name ?? "Athlete",
+      // Ranks are multiples of bodyweight, so both of these are load-bearing.
+      // Already on the row that was being fetched for the name — no extra query.
+      weightKg: (profile as { weight_kg?: number | null } | null)?.weight_kg ?? null,
+      sex: ((profile as { sex?: string | null } | null)?.sex === "female" ? "female" : "male") as "male" | "female",
       sub: (sub ?? null) as Subscription | null,
     };
   }, [userId], `history:v2:${userId}`);
@@ -78,6 +83,16 @@ export function ProgressPanel({ userId }: { userId: string }) {
         </div>
         {hasTraining ? <MiniBars data={t.volume} color="#e3b53f" unit=" reps" /> : <Empty label="Log training in your daily check-in." />}
       </section>
+
+      {/* AM I STRONG — which is a different question from am I improving, and
+          the one the volume bars and the per-lift chart both leave unanswered.
+          Sits above the chart because a rank is the headline and a trend line
+          is the evidence for it. */}
+      <StrengthRanks
+        logs={data?.trainingLong ?? []}
+        weightKg={data?.weightKg ?? null}
+        sex={data?.sex ?? "male"}
+      />
 
       {/* The one chart that answers "am I getting stronger", which is why it's
           the thing worth paying for. */}

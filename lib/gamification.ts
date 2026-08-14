@@ -79,6 +79,19 @@ export interface ActivityStats {
   apexBestRun: number;
   eliteDays: number;
   eliteBestRun: number;
+  /**
+   * Strength tiers earned across the body — see lib/strength-standards.ts.
+   *
+   * Summed over BODY PARTS rather than over lifts, and that choice is the whole
+   * anti-farming design: paying per lift rewards logging the same squat under
+   * six spellings, while paying per body part rewards actually getting stronger
+   * somewhere new and caps naturally at however many parts a person has.
+   *
+   * Monotonic like every other term here, because it is computed from best-ever
+   * efforts. A bad session cannot cost you XP — see the note on `computeXp`,
+   * where this app already had the argument about ranks going backwards.
+   */
+  strengthTiers: number;
 }
 
 export const EMPTY_STATS: ActivityStats = {
@@ -87,6 +100,7 @@ export const EMPTY_STATS: ActivityStats = {
   restDaysLogged: 0, longestStreak: 0, weeksActive: 0, perfectDaysLast7: 0,
   perfectDays: 0, comebacks: 0,
   apexDays: 0, apexBestRun: 0, eliteDays: 0, eliteBestRun: 0,
+  strengthTiers: 0,
 };
 
 /**
@@ -170,6 +184,16 @@ const XP = {
    * being built, but no longer a penalty for following the advice.
    */
   restDay: 6,
+  /**
+   * A rung of strength, anywhere on the body.
+   *
+   * Worth more than a session because it IS many sessions — nobody moves from
+   * Novice to Intermediate on a bodyweight-relative standard in a week. Sized
+   * against the block bonus (100): finishing a four-week block and adding a
+   * tier to one body part are comparable achievements, and the tier is the
+   * harder of the two.
+   */
+  strengthTier: 60,
 };
 
 export function computeXp(s: ActivityStats): number {
@@ -198,7 +222,8 @@ export function computeXp(s: ActivityStats): number {
      * the worst case is that it is identical.
      */
     s.longestStreak * XP.streakDay +
-    s.restDaysLogged * XP.restDay
+    s.restDaysLogged * XP.restDay +
+    s.strengthTiers * XP.strengthTier
   );
 }
 

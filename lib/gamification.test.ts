@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { RANKABLE_MUSCLES, TOP_TIER } from "./strength-standards";
 import {
   computeXp, levelFor, rankFor, rankLadder, evaluateAchievements, dailyQuests, EMPTY_STATS,
   ACHIEVEMENTS, activitySpans, standingRank, LADDER_MIN_ATHLETES, type ActivityStats,
@@ -271,6 +272,10 @@ test("no badge asks for something the app cannot measure", () => {
     // Lifetime counters from ladder_standing_log rather than derived from the
     // 60-day activity window, so the window's cap does not apply to them.
     apexDays: 5000, apexBestRun: 5000, eliteDays: 5000, eliteBestRun: 5000,
+    // Every rankable body part at the top of the ladder. Bounded by the ladder
+    // itself rather than by the window, so it is a real ceiling: no strength
+    // badge may ask for more tiers than a body has parts to earn them in.
+    strengthTiers: RANKABLE_MUSCLES.length * TOP_TIER,
   };
   const { locked } = evaluateAchievements(maxed, 999);
   assert.deepEqual(
