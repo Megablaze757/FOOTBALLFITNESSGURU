@@ -5,7 +5,7 @@ import { NumberInput } from "@/components/NumberInput";
 import type { SportId } from "@/lib/exercises";
 import { DrillPicker } from "@/components/DrillPicker";
 import { RUN_TYPES, ZONE_LIST, ZONES, runType, type RunTypeId, type ZoneId } from "@/lib/running";
-import { describeSets, hasSetDetail, setsOf, withSets } from "@/lib/training-sets";
+import { describeSets, drillTonnage, hasSetDetail, lastSetsFor, setsOf, totalReps, withSets } from "@/lib/training-sets";
 
 export interface TrainingState {
   drills: TrainingDrill[];
@@ -24,13 +24,19 @@ export interface TrainingState {
   avg_hr?: number | null;
 }
 
-export function TrainingLogInput({ value, onChange, planned = [], sport = "all" }: {
+export function TrainingLogInput({ value, onChange, planned = [], sport = "all", history = [] }: {
   value: TrainingState;
   onChange: (v: TrainingState) => void;
   /** Today's scheduled drills, so they can be logged with one tap. */
   planned?: TrainingDrill[];
   /** Passed to the picker so search stays inside the athlete's own sport. */
   sport?: SportId | "all";
+  /**
+   * Recent sessions. Already loaded by the page for the ACWR calculation, so
+   * pre-filling a drill from the last time it was done costs no extra query —
+   * and it is the difference between typing six numbers and checking three.
+   */
+  history?: { log_date?: string; drills?: TrainingDrill[] | null }[];
 }) {
   const update = (patch: Partial<TrainingState>) => onChange({ ...value, ...patch });
 
@@ -57,6 +63,24 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all" 
                 />
                 <button type="button" onClick={() => removeDrill(i)} className="tap-target px-2 text-slate-500 hover:text-readiness-red" aria-label="Remove">✕</button>
               </div>
+              {/* WHERE THE NUMBERS CAME FROM.
+                  Pre-filling silently is worse than not pre-filling: an athlete
+                  who does not know why 12/10/8 is in the boxes cannot tell a
+                  helpful default from last week's data they forgot to change.
+                  Saying it out loud makes the default checkable, and doubles as
+                  the thing they are trying to beat. */}
+              {(() => {
+                const prev = lastSetsFor(history, d.name);
+                if (!prev) return null;
+                return (
+                  <p className="mt-1.5 text-[11px] text-slate-500">
+                    Last time: <span className="tabular-nums text-slate-400">
+                      {describeSets({ sets: prev.length, reps: prev[0]?.reps ?? 0, sets_detail: prev })}
+                    </span>
+                  </p>
+                );
+              })()}
+
               {/* THE FAST PATH STAYS FAST.
                   Most sets are three of ten at one weight, and making everyone
                   type three rows to say that would be a worse form for the
@@ -74,7 +98,7 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all" 
                     /* Seeded from what they already typed rather than starting
                        empty — someone who put 3 × 10 @ 40 and then wants to fix
                        the last set should not retype the first two. */
-                    onClick={() => setDrill(i, withSets(d, setsOf(d)))}
+                    onClick={() => setDrill(i, withSets(d, lastSetsFor(history, d.name) ?? setsOf(d)))}
                     className="tap-target mt-1 text-xs font-semibold text-pitch-400"
                   >
                     Log each set separately
@@ -154,9 +178,17 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all" 
                     >
                       Back to sets × reps
                     </button>
-                    {/* Read back in one line, so the numbers just typed can be
-                        checked without re-reading four boxes. */}
-                    <span className="ml-auto text-xs tabular-nums text-slate-400">{describeSets(d)}</span>
+                    {/* WHAT IT ADDS UP TO. Both halves are already recorded, so
+                        this asks nothing — and total reps and tonnage are the
+                        numbers that make a session feel like it counted. Reading
+                        them back also catches a mistyped set without re-checking
+                        every box. */}
+                    <span className="ml-auto text-right text-xs tabular-nums text-slate-400">
+                      {totalReps(d)} reps
+                      {drillTonnage(d) > 0 && (
+                        <span className="text-slate-500"> · {Math.round(drillTonnage(d)).toLocaleString()} kg</span>
+                      )}
+                    </span>
                   </div>
                 </div>
               )}

@@ -54,6 +54,10 @@ export default function JournalPage() {
       existing,
       streak: checkInStreak(((recent ?? []) as { check_in_date: string }[]).map((r) => r.check_in_date)),
       acwr: computeACWR((recentTraining ?? []) as unknown as TrainingLog[]).ratio,
+      // The same 28 days the ACWR is built from, handed on so the form can
+      // pre-fill a drill with what it actually was last time. No extra query —
+      // this data was already on the page and only being counted.
+      recentTraining: (recentTraining ?? []) as unknown as TrainingLog[],
       training: (training ?? null) as TrainingLog | null,
       bio: (bio ?? null) as Biometric | null,
       sport: (profile as { sport?: string } | null)?.sport ?? "football",
@@ -134,7 +138,7 @@ export default function JournalPage() {
           and overwrite what was just saved. */}
       {(!done || editing) && (
         <div className={done ? "mt-5" : undefined}>
-          <JournalForm initial={initial} initialTraining={initialTraining} sport={data?.sport} planned={data?.planned ?? []} />
+          <JournalForm initial={initial} initialTraining={initialTraining} sport={data?.sport} planned={data?.planned ?? []} history={data?.recentTraining ?? []} />
         </div>
       )}
 

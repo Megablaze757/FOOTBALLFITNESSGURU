@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { describeSets, hasSetDetail, setCount, setsOf, topLoad, totalReps, withSets } from "./training-sets";
+import { describeSets, drillTonnage, hasSetDetail, lastSetsFor, setCount, setsOf, topLoad, totalReps, withSets } from "./training-sets";
 import { sessionLoad } from "./load";
 import type { TrainingDrill } from "./types";
 
@@ -122,10 +122,16 @@ test("per-set logging is opt-in, and seeded from what was already typed", () => 
     "the form no longer branches on whether this drill was logged set by set");
   assert.match(INPUT, /Log each set separately/, "there is no way into per-set logging");
   assert.match(INPUT, /Back to sets × reps/, "there is no way back out");
-  // Seeded via setsOf, so 3 × 10 @ 40 becomes three filled rows rather than
-  // three empty ones the athlete has to retype.
-  assert.match(INPUT, /withSets\(d, setsOf\(d\)\)/,
-    "switching to per-set rows starts empty instead of carrying the numbers over");
+  // Never starts empty. Preference order matters: last time's real sets first,
+  // because the page already holds 28 days of logs for ACWR and retyping
+  // Tuesday's squat on Thursday is asking for something the app can see. Falls
+  // back to expanding whatever is in the boxes, so a brand-new exercise still
+  // opens filled rather than blank.
+  assert.match(INPUT, /withSets\(d, lastSetsFor\(history, d\.name\) \?\? setsOf\(d\)\)/,
+    "switching to per-set rows does not pre-fill from the last session");
+  assert.match(INPUT, /Last time:/,
+    "numbers are pre-filled with no indication of where they came from, which makes a " +
+    "stale default indistinguishable from a deliberate one");
 });
 
 /**
@@ -154,4 +160,33 @@ test("the set rows meet the playbook the rest of the app follows", () => {
   const rowBody = block.slice(block.indexOf("(d.sets_detail ?? []).map"));
   assert.ok(!/uppercase tracking-wider text-slate-500">\s*Reps/.test(rowBody),
     "REPS is repeated on every row rather than sitting above the column");
+});
+
+/**
+ * The app already holds 28 days of logs for ACWR, so making someone retype
+ * last Tuesday's squat is asking for something it can see.
+ */
+test("last time's sets are found, newest first and name-insensitively", () => {
+  const logs = [
+    { log_date: "2026-08-01", drills: [{ name: "Back squat", sets: 3, reps: 8, load_kg: 30 }] },
+    { log_date: "2026-08-10", drills: [{ name: "  BACK SQUAT ", sets: 2, reps: 5, load_kg: 60 }] },
+    { log_date: "2026-08-05", drills: [{ name: "Bench", sets: 3, reps: 10, load_kg: 40 }] },
+  ];
+  const found = lastSetsFor(logs, "back squat");
+  assert.deepEqual(found, [{ reps: 5, load_kg: 60 }, { reps: 5, load_kg: 60 }],
+    "should take the 10 August entry, not the 1 August one");
+  assert.equal(lastSetsFor(logs, "Deadlift"), null, "an exercise never done has no history");
+  assert.equal(lastSetsFor(logs, "   "), null);
+  assert.equal(lastSetsFor(null, "Back squat"), null);
+});
+
+test("a drill logged with nothing in it is not a previous performance", () => {
+  const logs = [{ log_date: "2026-08-10", drills: [{ name: "Squat", sets: 0, reps: 0 }] }];
+  assert.equal(lastSetsFor(logs, "Squat"), null);
+});
+
+test("tonnage counts weight moved, and bodyweight moves none", () => {
+  assert.equal(drillTonnage(detailed), 12 * 40 + 10 * 50 + 8 * 60, "12@40 + 10@50 + 8@60");
+  assert.equal(drillTonnage(summary), 3 * 10 * 40);
+  assert.equal(drillTonnage({ sets: 3, reps: 10, load_kg: null }), 0, "press-ups are not tonnage");
 });

@@ -46,7 +46,14 @@ function isOffline(err: { message?: string; code?: string } | null): boolean {
          m.includes("network request failed") || m.includes("load failed");
 }
 
-export function JournalForm({ initial, initialTraining, sport, planned = [] }: { initial?: Partial<CheckInInput>; initialTraining?: TrainingState; sport?: string; planned?: TrainingDrill[] }) {
+export function JournalForm({ initial, initialTraining, sport, planned = [], history = [] }: {
+  initial?: Partial<CheckInInput>;
+  initialTraining?: TrainingState;
+  sport?: string;
+  planned?: TrainingDrill[];
+  /** Recent sessions, so a drill can be pre-filled with what it really was. */
+  history?: { log_date?: string; drills?: TrainingDrill[] | null }[];
+}) {
   // A basketball player being asked "Match today?" is the tell that a product
   // wasn't built for them. The column is still is_match_day — only the wording
   // changes, so no data migration is involved.
@@ -560,6 +567,7 @@ export function JournalForm({ initial, initialTraining, sport, planned = [] }: {
                 value={training}
                 onChange={setTraining}
                 planned={planned}
+                history={history}
                 sport={(SPORTS.some((sp) => sp.id === sport) ? sport : "all") as SportId | "all"}
               />
             </section>
@@ -624,6 +632,7 @@ export function JournalForm({ initial, initialTraining, sport, planned = [] }: {
           value={training}
           onChange={setTraining}
           planned={planned}
+          history={history}
           sport={(SPORTS.some((s) => s.id === sport) ? sport : "all") as SportId | "all"}
         />
       </section>

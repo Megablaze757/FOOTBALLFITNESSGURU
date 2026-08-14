@@ -127,3 +127,48 @@ export function describeSets(drill: Pick<TrainingDrill, "sets" | "reps" | "load_
 function trim(n: number): string {
   return String(Math.round(n * 100) / 100);
 }
+
+/**
+ * What this drill looked like the last time it was done.
+ *
+ * DERIVE RATHER THAN ASK — docs/UI-AUDIT.md is explicit that the best remaining
+ * ideas for the check-in form are subtractive, and this is one: the page
+ * already loads 28 days of training logs for the ACWR calculation, so the app
+ * knows you squatted 12/10/8 at 40kg on Tuesday and was still making you type
+ * it again on Thursday. Nothing new is fetched.
+ *
+ * Names are matched case-insensitively and trimmed, because "Back squat" typed
+ * once and "back squat " typed later are the same exercise to everyone except a
+ * string comparison.
+ */
+export function lastSetsFor(
+  logs: { log_date?: string; drills?: TrainingDrill[] | null }[] | null | undefined,
+  name: string,
+): DrillSet[] | null {
+  const wanted = name.trim().toLowerCase();
+  if (!wanted) return null;
+
+  // Newest first. Sorted here rather than trusted, because the query that
+  // supplies these is ordered for a different purpose and could change.
+  const sorted = [...(logs ?? [])].sort((a, b) => String(b.log_date ?? "").localeCompare(String(a.log_date ?? "")));
+  for (const log of sorted) {
+    for (const d of log.drills ?? []) {
+      if (String(d.name ?? "").trim().toLowerCase() !== wanted) continue;
+      const sets = setsOf(d);
+      // A drill recorded with zero sets is not a previous performance.
+      if (sets.length > 0 && sets.some((s) => s.reps > 0)) return sets;
+    }
+  }
+  return null;
+}
+
+/**
+ * Reps times load, summed. The number that makes a session feel like it counted
+ * — and it costs nothing, because both halves are already recorded.
+ *
+ * Bodyweight sets contribute zero rather than being skipped: the total is
+ * tonnage lifted, and a set with no bar on it did not lift any.
+ */
+export function drillTonnage(drill: Pick<TrainingDrill, "sets" | "reps" | "load_kg" | "sets_detail">): number {
+  return setsOf(drill).reduce((n, s) => n + s.reps * (s.load_kg ?? 0), 0);
+}
