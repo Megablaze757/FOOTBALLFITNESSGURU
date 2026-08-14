@@ -30,6 +30,17 @@ on:
         description: "Also push GROQ_API_KEY / OPENROUTER_API_KEY to Supabase"
         type: boolean
         default: true
+      # For announce-launch. Left blank it changes nothing, and the function
+      # falls back to REMINDER_FROM — already set for the two reminder jobs — so
+      # the common case needs no new secret at all.
+      launch_from:
+        description: "Sender for the launch email, e.g. Pocket Athlete <hello@pocketathlete.com> (blank = leave as is)"
+        type: string
+        default: ""
+      app_url:
+        description: "Public site URL, used for links in emails (blank = leave as is)"
+        type: string
+        default: ""
 
 concurrency:
   group: deploy-functions
@@ -100,6 +111,23 @@ jobs:
           if [ -z "${GROQ_API_KEY:-}" ] && [ -z "${OPENROUTER_API_KEY:-}" ]; then
             echo "::error::Neither model key is set, so every AI call will fail."
             exit 1
+          fi
+
+      # These are not secrets — a From address appears in every email it sends
+      # and the site URL is on the tin. They are inputs rather than repo secrets
+      # so this can be run start to finish from a phone, without first creating
+      # anything in the Settings screens.
+      - name: Set mail settings
+        if: inputs.launch_from != '' || inputs.app_url != ''
+        run: |
+          set -euo pipefail
+          if [ -n "${{ inputs.launch_from }}" ]; then
+            supabase secrets set "LAUNCH_FROM=${{ inputs.launch_from }}" --project-ref "$PROJECT_REF"
+            echo "LAUNCH_FROM set"
+          fi
+          if [ -n "${{ inputs.app_url }}" ]; then
+            supabase secrets set "APP_URL=${{ inputs.app_url }}" --project-ref "$PROJECT_REF"
+            echo "APP_URL set"
           fi
 
       # Proves it answers, rather than reporting success because the CLI exited
