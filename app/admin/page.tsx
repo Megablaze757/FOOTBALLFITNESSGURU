@@ -17,7 +17,7 @@ import type { Video } from "@/lib/types";
 
 interface Metrics {
   total_users: number;
-  subscribers: { silver: number; gold: number };
+  subscribers: { silver: number; gold: number; comped: number };
   dau: number;
   check_ins_today: number;
   videos_processing: number;
@@ -59,8 +59,17 @@ export default function AdminPage() {
   }
 
   const m = data.metrics;
+  /**
+   * STRIPE-BACKED ONLY, and that is the whole point of 0077.
+   *
+   * These counts used to include comped accounts — beta testers on free Pro —
+   * so the dashboard reported them as customers and then multiplied them by a
+   * price to produce an MRR that did not exist. Comped is counted separately
+   * below: worth seeing, not worth billing.
+   */
   const silver = m?.subscribers.silver ?? 0;
   const gold = m?.subscribers.gold ?? 0;
+  const comped = m?.subscribers.comped ?? 0;
   const mrr = silver * planFor("silver").priceMonthly + gold * planFor("gold").priceMonthly;
 
   return (
@@ -80,6 +89,9 @@ export default function AdminPage() {
         <Metric label="Total users" value={`${m?.total_users ?? 0}`} />
         <Metric label="Silver" value={`${silver}`} />
         <Metric label="Gold" value={`${gold}`} />
+        {/* Beta testers and anyone else on comped Pro. Shown so they are not
+            invisible, kept out of "Paid subs" and MRR so those mean revenue. */}
+        <Metric label="Comped (beta)" value={`${comped}`} />
         <Metric label="Videos processing" value={`${m?.videos_processing ?? 0}`} />
         <Metric label="Videos failed" value={`${m?.videos_failed ?? 0}`} />
       </section>
