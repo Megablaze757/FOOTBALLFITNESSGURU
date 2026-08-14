@@ -1,0 +1,120 @@
+name: Apply SQL to Supabase
+
+# Runs a checked-in .sql file against the database, from the Actions tab.
+#
+# WHY THIS EXISTS. Everything the database needs — migrations, the launch email
+# sender — has so far been applied by copying a file out of GitHub and pasting
+# it into the SQL editor by hand. That works until it doesn't, and when it
+# doesn't it fails silently: the repo says one thing, the database says another,
+# and the only symptom is a feature behaving like last week. That is exactly how
+# the launch email kept going out with the old copy after every artifact in the
+# repo had been regenerated and pushed.
+#
+# Pasting is also the step that cannot be verified from here. This can: it runs
+# the file, prints what the database returned, and fails the job on a non-2xx —
+# so "did it apply?" has an answer in the run log instead of in an inbox.
+#
+# ONE-TIME SETUP — a single repo secret:
+#
+#   SUPABASE_ACCESS_TOKEN   supabase.com/dashboard/account/tokens → Generate new
+#
+# It is a personal access token for the Management API, NOT the database
+# password and NOT the service_role key. It never appears in the checked-in
+# file, and nothing here echoes it.
+#
+# WHAT IT WILL NOT DO. It only runs files under supabase/, so a run cannot be
+# pointed at arbitrary text, and it refuses a path that escapes the directory.
+
+on:
+  workflow_dispatch:
+    inputs:
+      file:
+        description: "Path to the .sql file to run (must be under supabase/)"
+        type: string
+        default: "supabase/announce-launch-update.sql"
+
+concurrency:
+  group: apply-sql
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    env:
+      # Not a secret: the project ref ships in the browser bundle already.
+      PROJECT_REF: txqhstackgidjqkkrzyj
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SQL_FILE: ${{ inputs.file }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the access token is set
+        run: |
+          if [ -z "$SUPABASE_ACCESS_TOKEN" ]; then
+            echo "::error::SUPABASE_ACCESS_TOKEN is not set."
+            echo "Add it under Settings → Secrets and variables → Actions."
+            echo "Generate one at https://supabase.com/dashboard/account/tokens"
+            exit 1
+          fi
+
+      # The path comes from a workflow input, so it is treated as untrusted.
+      # Confined to supabase/ and resolved before use, or a run could be pointed
+      # at any file in the checkout.
+      - name: Check the file
+        run: |
+          set -euo pipefail
+          case "$SQL_FILE" in
+            supabase/*.sql) ;;
+            *) echo "::error::$SQL_FILE must be a .sql file under supabase/"; exit 1 ;;
+          esac
+          resolved=$(readlink -f "$SQL_FILE" || true)
+          root=$(readlink -f supabase)
+          case "$resolved" in
+            "$root"/*) ;;
+            *) echo "::error::$SQL_FILE resolves outside supabase/"; exit 1 ;;
+          esac
+          if [ ! -s "$SQL_FILE" ]; then
+            echo "::error::$SQL_FILE does not exist or is empty"; exit 1
+          fi
+          echo "will run $SQL_FILE ($(wc -l < "$SQL_FILE") lines, $(wc -c < "$SQL_FILE") bytes)"
+
+      # jq builds the JSON body, so quoting, newlines and the email's emoji
+      # survive intact. Hand-rolled string interpolation is how a apostrophe in
+      # the copy becomes a syntax error at 3am.
+      - name: Run it
+        run: |
+          set -euo pipefail
+          jq -Rs '{query: .}' "$SQL_FILE" > /tmp/body.json
+
+          code=$(curl -sS -o /tmp/out.json -w '%{http_code}' -m 120 \
+            -X POST "https://api.supabase.com/v1/projects/$PROJECT_REF/database/query" \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data-binary @/tmp/body.json)
+
+          echo "HTTP $code"
+          echo "--- what the database returned ---"
+          jq . /tmp/out.json 2>/dev/null || cat /tmp/out.json
+
+          if [ "$code" -lt 200 ] || [ "$code" -ge 300 ]; then
+            echo "::error::the database refused it (HTTP $code) — see the output above"
+            exit 1
+          fi
+
+      # The file's own last statement reports whether the new copy is installed.
+      # Reading it back here is what turns "the request succeeded" into "the
+      # thing you wanted is true" — those are not the same claim, and the whole
+      # reason this workflow exists is that the second one kept being assumed.
+      - name: Report the verdict
+        run: |
+          set -euo pipefail
+          verdict=$(jq -r '.. | objects | .result? // empty' /tmp/out.json 2>/dev/null | tail -1)
+          if [ -n "$verdict" ]; then
+            echo "$verdict"
+            case "$verdict" in
+              INSTALLED*) echo "::notice::$verdict" ;;
+              *) echo "::error::$verdict"; exit 1 ;;
+            esac
+          else
+            echo "::notice::applied — this file reports no verdict of its own"
+          fi
