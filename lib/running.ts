@@ -324,7 +324,9 @@ export function formatPaceRange(r: PaceZoneRange, unit: "km" | "mile" = "km"): s
 export type RunTypeId =
   | "recovery" | "easy" | "long" | "steady" | "progression"
   | "tempo" | "cruise" | "vo2" | "reps" | "fartlek"
-  | "hills" | "strides" | "shakeout" | "timetrial";
+  | "hills" | "strides" | "shakeout" | "timetrial"
+  // Not a run, and it belongs here anyway — see the entry in RUN_TYPES.
+  | "incline";
 
 export interface RunType {
   id: RunTypeId;
@@ -389,6 +391,36 @@ export const RUN_TYPES: RunType[] = [
     hardFraction: 0,
     recoveryDays: 0,
     watchFor: "Creeping into Zone 2. This is the run people most often ruin by treating it as an easy run.",
+  },
+  {
+    /**
+     * A WALK, IN THE RUN LIST, ON PURPOSE.
+     *
+     * It was only in the exercise catalogue, which meant an athlete who did
+     * forty minutes on a 12% incline had to log it as a drill — sets and reps
+     * for something that has neither. Everything about it behaves like an easy
+     * run and nothing about it behaves like an exercise: it is prescribed in
+     * minutes, it is steady Zone 2, it accrues aerobic load, and it is the
+     * session people are told to do INSTEAD of an easy run when their joints
+     * need a week off. Filing it by whether the feet leave the ground put it in
+     * the one place it could not be logged properly.
+     *
+     * It stays in lib/exercises.ts as well, because the programme engine
+     * prescribes it by id and the library is where its how-to lives.
+     */
+    id: "incline",
+    label: "Incline treadmill walk",
+    zones: [2],
+    primaryZone: 2,
+    purpose: "Aerobic work with almost no joint load. The easy run for a week your legs can't take one.",
+    howTo:
+      "20–40 minutes at 10–15% and a pace you could talk at. Hands off the handrails — holding on " +
+      "takes most of the load out and turns a real session into nothing.",
+    hard: false,
+    minutes: [20, 40],
+    hardFraction: 0,
+    recoveryDays: 0,
+    watchFor: "Gripping the rails, or walking so fast you're braking with every step. Steep and slow beats flat and fast.",
   },
   {
     id: "easy",
