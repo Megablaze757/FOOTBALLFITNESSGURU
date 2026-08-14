@@ -26,6 +26,49 @@ test("the checked-in launch SQL matches the generator", () => {
     "  npx tsx scripts/gen-announce-sql.mjs > supabase/announce-launch.sql");
 });
 
+/**
+ * THE DATABASE GOING STALE IS THE REAL FAILURE, NOT THE FILE.
+ *
+ * The email HTML is a string literal inside the function body, so a wording
+ * change only reaches Postgres when the function is replaced. This is not
+ * hypothetical: the copy was rewritten, every checked-in artifact regenerated
+ * and pushed, and the admin button carried on sending the previous email —
+ * because none of that touches the database. announce-launch-update.sql is the
+ * smallest thing that fixes it, and it is generated from the same module, so it
+ * rots exactly as fast as the file above unless something checks.
+ */
+test("the checked-in copy-refresh SQL matches the generator", () => {
+  const onDisk = readFileSync(`${ROOT}supabase/announce-launch-update.sql`, "utf8");
+  const fresh = execFileSync("npx", ["tsx", "scripts/gen-announce-sql.mjs", "--email-only"], {
+    cwd: ROOT, encoding: "utf8", maxBuffer: 8 * 1024 * 1024,
+  });
+  assert.equal(onDisk, fresh,
+    "supabase/announce-launch-update.sql is stale — regenerate it:\n" +
+    "  npx tsx scripts/gen-announce-sql.mjs --email-only > supabase/announce-launch-update.sql");
+});
+
+/**
+ * It replaces the sender and does nothing else. Two properties matter: it must
+ * not send (a file described as "refresh the copy" that mails the list would be
+ * the worst possible surprise), and it must not un-stamp anyone — clearing
+ * launch_emailed_at would re-mail everybody who already received it.
+ */
+test("the copy refresh sends nothing and un-stamps nobody", () => {
+  const sql = readFileSync(`${ROOT}supabase/announce-launch-update.sql`, "utf8");
+  // The only executable statements are the replace and its grants.
+  const stmts = sql
+    .replace(/\$fn\$[\s\S]*\$fn\$/, "$fn$BODY$fn$")   // the function body is data, not statements
+    .split("\n").filter((l) => l.trim() && !l.trim().startsWith("--"));
+  const bad = stmts.filter((l) => /^\s*(drop|delete|truncate|insert|select\s+\*\s+from\s+public\.announce_launch)/i.test(l));
+  assert.deepEqual(bad, [], "the copy refresh runs something other than a replace");
+  assert.ok(!/update\s+public\.waitlist\s+set\s+launch_emailed_at\s*=\s*null/i.test(sql),
+    "the copy refresh clears launch_emailed_at, which would re-email everyone already sent to");
+  assert.match(sql, /create or replace function public\.announce_launch/,
+    "the copy refresh does not replace the sender");
+  assert.match(sql, /NOTHING IS SENT BY RUNNING THIS/,
+    "the file does not say plainly that it sends nothing");
+});
+
 /** The properties that make it safe to paste, asserted on the artifact itself. */
 test("the generated SQL keeps its safety rails", () => {
   const sql = readFileSync(FILE, "utf8");
