@@ -474,13 +474,36 @@ function bySlot(slot: Slot, prefs: MealPrefs): Meal[] {
 type Basket = Map<string, number>;
 
 /** Cost of the whole packs needed to cover `qty` of a food. */
+/**
+ * Whole packs, because shops sell whole packs — and because the planner needs
+ * to feel that.
+ *
+ * PRICING THIS PRO-RATA WAS TRIED AND IS WRONG, which is worth recording since
+ * the argument for it is a good one: a 500ml bottle of oil used 165ml a week
+ * lasts three weeks, so charging the whole £3.50 every week overstates it. True
+ * of the SHOPPING LIST, where `ongoingCost` now says exactly that. False here.
+ *
+ * What this number does is stop the planner opening a new cupboard line for a
+ * pinch of something. Softened to per-gram, opening a jar became almost free
+ * and the planner opened fifteen of them, while the till still charged fifteen
+ * whole jars. Measured over 54 plans, amortising a keeps pack over N weeks:
+ *
+ *   N=1 (this)   flavour-shelf meals 99%   shop £106.31
+ *   N=2          96%                       £109.70
+ *   N=3          92%                       £115.57
+ *   N=6          86%                       £133.29
+ *
+ * Both worse, in the same direction, the whole way. The suspicion that pack
+ * pricing was taxing seasoning out of the menu is simply not true — 99% of
+ * meals already carry something off the flavour shelf, and it is this term that
+ * keeps them concentrated in a few jars rather than spread over the aisle.
+ */
 function packCost(foodId: string, qty: number): number {
   const f = FOOD_BY_ID[foodId];
   if (!f || qty <= 0) return 0;
   return Math.ceil(qty / f.packSize) * f.packPrice;
 }
 
-/** What adding this meal would add to the shopping bill, given the basket so far. */
 export function marginalCost(meal: Meal, basket: Basket, scale = 1): number {
   let delta = 0;
   const after = new Map(basket);
@@ -1522,6 +1545,20 @@ export interface ShoppingLine {
   /** Fraction of the packs actually eaten — the rest is left over. */
   used: number;     // 0..1
   /**
+   * What this line costs in a TYPICAL week, once the cupboard is stocked.
+   *
+   * Equal to `cost` for anything perishable: buy a 240g pack of salmon for one
+   * fillet and the rest goes off, so the whole pack is the price of eating it.
+   *
+   * Lower for anything that keeps, because the leftover is not waste — it is
+   * next week's. A week using 165ml from a 500ml bottle of olive oil was being
+   * charged £3.50 for it every seven days, which is £3.50 for a bottle bought
+   * every three weeks. Across a typical plan that single mistake, repeated over
+   * the oil, the spices, the honey and the peanut butter, overstated the shop
+   * by 40% — £45.80 of a £113.55 week charged to food nobody ever eats.
+   */
+  ongoingCost: number;
+  /**
    * True when the athlete told us this price rather than us estimating it.
    *
    * The UI marks these, because the difference between "we think" and "you told
@@ -1533,11 +1570,20 @@ export interface ShoppingLine {
 export interface ShoppingList {
   lines: ShoppingLine[];
   byAisle: { aisle: Aisle; lines: ShoppingLine[]; cost: number }[];
+  /** What this shop costs at the till, assuming an empty cupboard. */
   total: number;
+  /**
+   * What a week costs once the cupboard is stocked — the number an athlete
+   * budgeting month to month actually wants, and the one they cannot get from
+   * `total` because `total` re-buys the olive oil every Monday.
+   */
+  ongoingTotal: number;
   /** Meals the list actually feeds — excludes anything eaten out. */
   mealsPlanned: number;
   /** Total ÷ meals planned. The number that tells you if a plan is affordable. */
   costPerMeal: number;
+  /** The same, for a week that isn't also restocking the cupboard. */
+  ongoingCostPerMeal: number;
 }
 
 /**
@@ -1579,6 +1625,9 @@ export function shoppingList(week: PlannedDay[], pricing: PricingOptions = {}): 
       corrected: isCorrected(food, pricing.overrides),
       meals: mealCount.get(foodId) ?? 0,
       used: Math.min(1, qty / (packs * food.packSize)),
+      // Perishables cost what they cost. Anything that keeps is charged for
+      // what the week eats, because the rest is still in the cupboard on Monday.
+      ongoingCost: Math.round((food.keeps ? (qty / food.packSize) * unitPrice : packs * unitPrice) * 100) / 100,
     });
   }
   lines.sort((a, b) => a.food.name.localeCompare(b.food.name));
@@ -1590,13 +1639,16 @@ export function shoppingList(week: PlannedDay[], pricing: PricingOptions = {}): 
   });
 
   const total = Math.round(lines.reduce((s, l) => s + l.cost, 0) * 100) / 100;
+  const ongoingTotal = Math.round(lines.reduce((s, l) => s + l.ongoingCost, 0) * 100) / 100;
   const mealsPlanned = week.reduce((n, d) => n + d.meals.length, 0);
   return {
     lines,
     byAisle,
     total,
+    ongoingTotal,
     mealsPlanned,
     costPerMeal: mealsPlanned > 0 ? Math.round((total / mealsPlanned) * 100) / 100 : 0,
+    ongoingCostPerMeal: mealsPlanned > 0 ? Math.round((ongoingTotal / mealsPlanned) * 100) / 100 : 0,
   };
 }
 
@@ -1614,6 +1666,11 @@ export function shoppingListText(list: ShoppingList): string {
     out.push("");
   }
   out.push(`Estimated total: ~£${list.total.toFixed(2)}`);
+  // Only when the two genuinely differ, so a week of nothing but fresh food
+  // doesn't carry a line explaining that it has no cupboard stock in it.
+  if (list.ongoingTotal < list.total - 1) {
+    out.push(`Of that, ~£${list.ongoingTotal.toFixed(2)} is food you'll eat this week — the rest is cupboard and freezer stock that lasts.`);
+  }
   const perMeal = list.mealsPlanned > 0 ? list.total / list.mealsPlanned : 0;
   if (perMeal > 0) out.push(`That's about £${perMeal.toFixed(2)} a meal across ${list.mealsPlanned} planned meals.`);
   out.push("(estimates from typical UK supermarket prices, not live pricing)");

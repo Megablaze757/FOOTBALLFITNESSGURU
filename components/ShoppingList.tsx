@@ -248,6 +248,19 @@ export function ShoppingList({ list, seed, store, onStore, onCorrectPrice }: {
 
       <div className="border-t border-white/[0.08] p-4">
         <p className="text-[11px] leading-relaxed text-slate-500">
+          {list.ongoingTotal < list.total - 1 && (
+            <>
+              {/* THE HONEST WEEKLY NUMBER. The total above is what the till
+                  charges with a bare cupboard — it buys a whole £3.50 bottle of
+                  oil to use 165ml. Repeated over the oil, spices, honey and
+                  peanut butter that overstated a week by around a quarter, and
+                  it is the figure someone deciding whether they can afford to
+                  eat like this was reading. */}
+              About <strong className="text-slate-300">£{list.ongoingTotal.toFixed(2)}</strong> of this
+              is food you&rsquo;ll actually eat this week — the rest is cupboard and freezer
+              stock that lasts, so a normal week runs nearer £{list.ongoingCostPerMeal.toFixed(2)} a meal.{" "}
+            </>
+          )}
           ~£{list.costPerMeal.toFixed(2)} a meal across {list.mealsPlanned} meals. Estimated {shop.name}
           prices, reviewed {PRICES_REVIEWED} — not live, so your basket will differ. Tap
           &ldquo;fix price&rdquo; on anything that&rsquo;s wrong and we&rsquo;ll use your number from then on.

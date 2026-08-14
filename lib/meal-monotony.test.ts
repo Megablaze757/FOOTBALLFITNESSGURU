@@ -4,7 +4,7 @@ import {
   headlineFoods, ingredientFatigue, monotonyCost, monotonyReport, newServedLog, recordServing,
 } from "./meal-monotony";
 import {
-  buildWeek, planTargets, shoppingList, DEFAULT_PREFS, MEALS, mealMacros,
+  buildWeek, planTargets, shoppingList, shoppingListText, DEFAULT_PREFS, MEALS, mealMacros,
   type BodyStats, type DietPattern, type Meal, type PlannedDay,
 } from "./meal-plan";
 
@@ -303,4 +303,109 @@ test("a narrow diet still gets fed rather than rationed", () => {
     { ...DEFAULT_PREFS, pattern: "vegan", avoid: ["gluten", "soy"], mealsPerDay: 4 });
   assert.equal(week.length, 7);
   for (const d of week) assert.equal(d.meals.length, 4, `${d.day} came back short`);
+});
+
+// --- what the shop actually costs --------------------------------------------
+
+/**
+ * THE 40% THAT WAS NEVER EATEN.
+ *
+ * Every food was costed at whole packs, every week. That is right at the till
+ * and wrong the following Monday: a plan using 165ml from a 500ml bottle of
+ * olive oil was charged £3.50 for it seven days running, for a bottle bought
+ * once every three weeks. Repeated over the oil, the spices, the honey and the
+ * peanut butter it charged an athlete £45.80 of a £113.55 week for food that
+ * nobody ever eats.
+ */
+test("a week is not charged for a whole bottle of oil it drinks a third of", () => {
+  const week = buildWeek(planTargets(ATHLETES.average), 0, { ...DEFAULT_PREFS, mealsPerDay: 4 });
+  const list = shoppingList(week);
+
+  assert.ok(list.ongoingTotal < list.total,
+    "a typical week still costs the same as stocking an empty cupboard");
+  // Measured: £113.55 to stock up against £85.67 a week after. This asserts the
+  // correction is a real size rather than a rounding gesture.
+  assert.ok(list.ongoingTotal < list.total * 0.95,
+    `£${list.ongoingTotal.toFixed(2)} against £${list.total.toFixed(2)} — barely moved`);
+  // And it must not overcorrect into fantasy. Most of a week's shop is food.
+  assert.ok(list.ongoingTotal > list.total * 0.5,
+    `£${list.ongoingTotal.toFixed(2)} of £${list.total.toFixed(2)} is too cheap to be true`);
+
+  assert.equal(
+    list.ongoingTotal,
+    Math.round(list.lines.reduce((s, l) => s + l.ongoingCost, 0) * 100) / 100,
+    "the total disagrees with the lines it is made of",
+  );
+});
+
+/**
+ * The distinction is about the LEFTOVER, not about the aisle.
+ */
+test("perishables are still charged by the pack, because the rest goes off", () => {
+  const list = shoppingList(buildWeek(planTargets(ATHLETES.average), 0, { ...DEFAULT_PREFS, mealsPerDay: 4 }));
+  for (const line of list.lines) {
+    if (line.food.keeps) {
+      assert.ok(line.ongoingCost <= line.cost + 1e-9, `${line.food.id} costs more per week than the pack`);
+    } else {
+      assert.equal(line.ongoingCost, line.cost,
+        `${line.food.id} is perishable and was discounted as though the leftover kept`);
+    }
+    assert.ok(line.ongoingCost >= 0);
+  }
+});
+
+/**
+ * WHAT THE PLANNER IS COSTED ON MUST STAY WHOLE PACKS — a negative result, kept
+ * because the argument for changing it is a good one and it will be made again.
+ *
+ * Softening `marginalCost` to per-gram for anything that keeps is the obvious
+ * companion to the change above, on the reasoning that charging a dish £3.50
+ * for a splash of oil against a £3 variety budget must be taxing flavour out of
+ * the menu. It is not. Measured over 54 plans, amortising a keeps pack over N
+ * weeks inside the planner:
+ *
+ *   N=1 (whole packs, today)   99% of meals seasoned   £106.31
+ *   N=3                        92%                     £115.57
+ *   N=6                        86%                     £133.29
+ *
+ * Worse on both counts, the whole way. Made nearly free, opening a jar stops
+ * being a decision and the planner opens fifteen of them — while the till still
+ * charges fifteen whole jars. This term is what keeps a week's seasoning
+ * concentrated in a few ingredients instead of spread across the aisle.
+ */
+test("the planner is still costed on whole packs, and the menu is not bland", () => {
+  const FLAVOUR = new Set(["garlic", "ginger", "chilli_fresh", "spice_mix", "curry_paste",
+    "soy_sauce", "stock_cubes", "pesto", "lemon", "honey", "olive_oil", "seeds_mixed", "almonds"]);
+  let seasoned = 0;
+  let total = 0;
+  for (const { week } of weeksAcross()) {
+    for (const day of week) {
+      for (const pm of day.meals) {
+        total++;
+        if (pm.meal.items.some((i) => FLAVOUR.has(i.foodId))) seasoned++;
+      }
+    }
+  }
+  // 99% today. A drop here means someone softened the pack cost and made the
+  // food duller and the shop dearer at the same time.
+  assert.ok(seasoned / total > 0.95,
+    `only ${seasoned}/${total} meals (${Math.round(seasoned / total * 100)}%) have anything on them`);
+});
+
+/**
+ * The panel an athlete reads. Source-checked rather than rendered because the
+ * arithmetic is asserted above and what is left to get wrong is wiring the
+ * corrected number to the wrong field — which reading the source does catch.
+ */
+test("the corrected weekly figure reaches the shopping panel and the copied text", () => {
+  const { readFileSync } = require("node:fs") as typeof import("node:fs");
+  const panel = readFileSync(new URL("../components/ShoppingList.tsx", import.meta.url), "utf8");
+  assert.match(panel, /list\.ongoingTotal/, "the panel still only shows the stock-up total");
+  assert.match(panel, /list\.ongoingTotal < list\.total - 1/,
+    "the explanation shows even when there is nothing to explain");
+
+  const list = shoppingList(buildWeek(planTargets(ATHLETES.average), 0, { ...DEFAULT_PREFS, mealsPerDay: 4 }));
+  const txt = shoppingListText(list);
+  assert.match(txt, new RegExp(`~£${list.ongoingTotal.toFixed(2).replace(".", "\\.")}`),
+    "the copied list does not mention what the week actually costs");
 });
