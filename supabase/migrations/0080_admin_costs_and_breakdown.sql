@@ -26,7 +26,18 @@ returns table (
   ai_calls int,
   paid_subs int,
   videos_this_month int,
-  emails_sent int
+  emails_sent int,
+  -- AFFILIATE COMMISSION IS A COST OF REVENUE, not an afterthought. Every
+  -- pound of MRR that came through an affiliate costs a percentage of itself,
+  -- so a profit figure that ignores it overstates the business by exactly the
+  -- amount being paid away. Recorded in pennies by 0052 and converted at the
+  -- edge, because money in floating point loses a penny and then the ledger
+  -- stops reconciling.
+  commission_month_pennies int,
+  -- Earned but not yet paid out. A liability rather than a monthly cost, shown
+  -- separately so it is not double counted against this month's profit.
+  commission_owed_pennies int,
+  active_users int
 )
 language plpgsql
 stable
@@ -53,7 +64,20 @@ begin
     coalesce((select count(*)::int from public.videos
                where created_at >= date_trunc('month', current_date)), 0),
     coalesce((select count(*)::int from public.waitlist
-               where launch_emailed_at >= date_trunc('month', current_date)), 0);
+               where launch_emailed_at >= date_trunc('month', current_date)), 0),
+    -- Reversed commission is excluded: a refunded or charged-back sale costs
+    -- nothing in commission, and counting it would understate profit.
+    coalesce((select sum(c.amount_pennies)::int from public.affiliate_commissions c
+               where c.earned_at >= date_trunc('month', current_date)
+                 and c.status <> 'reversed'), 0),
+    coalesce((select sum(c.amount_pennies)::int from public.affiliate_commissions c
+               where c.status in ('pending', 'approved')), 0),
+    -- Denominator for cost per user. Checked in within 30 days, because a
+    -- dormant account costs almost nothing and including it flatters the number.
+    coalesce((select count(distinct d.user_id)::int from public.daily_check_ins d
+               join public.profiles p on p.id = d.user_id
+              where d.check_in_date >= current_date - 30
+                and not coalesce(p.beta, false)), 0);
 end;
 $$;
 

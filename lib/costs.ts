@@ -61,9 +61,21 @@ export interface Usage {
   paidSubs: number;
   /** Monthly recurring revenue in GBP, for the margin. */
   mrr: number;
+  /**
+   * Affiliate commission earned this month, in GBP. Measured — 0052 records it
+   * per invoice in pennies, reversals excluded.
+   *
+   * This is a COST OF REVENUE and not optional: every pound that arrived
+   * through an affiliate costs a percentage of itself. A profit figure that
+   * leaves it out overstates the business by exactly the amount being paid
+   * away, and the error grows with every affiliate sale.
+   */
+  commissionGbp?: number;
+  /** Distinct people who checked in within 30 days. For cost per active user. */
+  activeUsers?: number;
 }
 
-export function costLines({ aiSpendUsd, paidSubs, mrr }: Usage): CostLine[] {
+export function costLines({ aiSpendUsd, paidSubs, mrr, commissionGbp = 0 }: Usage): CostLine[] {
   const lines: CostLine[] = PLATFORM.map((p) => ({
     label: p.label,
     monthly: p.gbp,
@@ -90,6 +102,13 @@ export function costLines({ aiSpendUsd, paidSubs, mrr }: Usage): CostLine[] {
     basis: "estimated",
   });
 
+  lines.push({
+    label: "Affiliate commission",
+    monthly: round2(commissionGbp),
+    note: "Earned this month, reversals excluded — recorded per invoice",
+    basis: "measured",
+  });
+
   return lines;
 }
 
@@ -107,7 +126,7 @@ export function stripeFees(mrr: number, paidSubs: number): number {
 export function totalMonthlyCost(usage: Usage): number {
   const platform = PLATFORM.reduce((n, p) => n + p.gbp, 0);
   const ai = usage.aiSpendUsd * USD_TO_GBP;
-  return round2(platform + ai + stripeFees(usage.mrr, usage.paidSubs));
+  return round2(platform + ai + stripeFees(usage.mrr, usage.paidSubs) + (usage.commissionGbp ?? 0));
 }
 
 /**
@@ -130,4 +149,57 @@ export function monthlyMargin(usage: Usage): { profit: number; breakEvenSubs: nu
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
+}
+
+/**
+ * THE NUMBERS THAT DECIDE THINGS.
+ *
+ * Total cost divided by customers is the wrong figure for almost every decision,
+ * because the platform bill is paid whether there is one customer or a thousand.
+ * What matters when weighing growth is CONTRIBUTION: the price minus the costs
+ * that customer personally causes — Stripe's cut, their affiliate's commission,
+ * their share of AI spend. That is the amount each additional subscriber leaves
+ * behind, and the figure to hold against whatever it costs to win one.
+ *
+ * Gross margin is the same idea as a percentage, and the one to watch over time:
+ * if it falls as you grow, something variable is scaling faster than revenue.
+ */
+export interface UnitEconomics {
+  /** Average revenue per paying customer. */
+  arpu: number;
+  /** Costs a single subscriber causes: Stripe, commission, their AI usage. */
+  variableCostPerSub: number;
+  /** What each additional subscriber leaves after their own costs. */
+  contributionPerSub: number;
+  /** Contribution as a percentage of revenue. */
+  grossMarginPct: number;
+  /** Total monthly cost spread over people actually using it. */
+  costPerActiveUser: number;
+}
+
+export function unitEconomics(usage: Usage): UnitEconomics {
+  const { mrr, paidSubs, aiSpendUsd, commissionGbp = 0, activeUsers = 0 } = usage;
+
+  const variable = stripeFees(mrr, paidSubs) + commissionGbp + aiSpendUsd * USD_TO_GBP;
+
+  // Every division guarded. A dashboard that renders NaN or Infinity on its
+  // first day is one nobody opens again, and "no customers yet" is a normal
+  // state rather than an error.
+  const arpu = paidSubs > 0 ? mrr / paidSubs : 0;
+  const variableCostPerSub = paidSubs > 0 ? variable / paidSubs : 0;
+  const contributionPerSub = round2(arpu - variableCostPerSub);
+  const grossMarginPct = mrr > 0 ? round1(((mrr - variable) / mrr) * 100) : 0;
+  const costPerActiveUser = activeUsers > 0 ? round2(totalMonthlyCost(usage) / activeUsers) : 0;
+
+  return {
+    arpu: round2(arpu),
+    variableCostPerSub: round2(variableCostPerSub),
+    contributionPerSub,
+    grossMarginPct,
+    costPerActiveUser,
+  };
+}
+
+function round1(n: number): number {
+  return Math.round(n * 10) / 10;
 }

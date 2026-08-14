@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/client";
 import { useAsync } from "@/lib/use-async";
 import { planFor } from "@/lib/subscription";
-import { costLines, monthlyMargin, totalMonthlyCost } from "@/lib/costs";
+import { costLines, monthlyMargin, totalMonthlyCost, unitEconomics } from "@/lib/costs";
 import { AdminShell, AdminArea } from "@/components/admin/AdminShell";
 
 interface Metrics {
@@ -21,6 +21,9 @@ interface Costs {
   paid_subs: number;
   videos_this_month: number;
   emails_sent: number;
+  commission_month_pennies: number;
+  commission_owed_pennies: number;
+  active_users: number;
 }
 
 /**
@@ -67,9 +70,15 @@ export default function AdminOverview() {
     aiSpendUsd: Number(data?.costs?.ai_spend_usd ?? 0),
     paidSubs: data?.costs?.paid_subs ?? silver + gold,
     mrr,
+    // Pennies at the source, because money in floating point loses a penny and
+    // then the ledger stops reconciling. Converted once, here, at the edge.
+    commissionGbp: (data?.costs?.commission_month_pennies ?? 0) / 100,
+    activeUsers: data?.costs?.active_users ?? 0,
   };
   const cost = totalMonthlyCost(usage);
   const { profit, breakEvenSubs } = monthlyMargin(usage);
+  const unit = unitEconomics(usage);
+  const owed = (data?.costs?.commission_owed_pennies ?? 0) / 100;
 
   const dim = (name: string) =>
     (data?.breakdown ?? []).filter((b) => b.dimension === name).sort((a, b) => b.people - a.people);
@@ -175,6 +184,47 @@ export default function AdminOverview() {
         </AdminArea>
       )}
 
+      {data?.costs && usage.paidSubs > 0 && (
+        <AdminArea
+          title="Per customer"
+          note="What one more subscriber is actually worth"
+        >
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Figure label="Revenue each" value={`£${unit.arpu.toFixed(2)}`} note="Average paid" />
+            <Figure label="Their costs" value={`£${unit.variableCostPerSub.toFixed(2)}`} note="Stripe, commission, AI" />
+            {/* THE DECISION NUMBER. Average cost per customer includes the
+                platform bill, which is paid whether you have one customer or a
+                thousand — so it says nothing about whether the NEXT one is worth
+                having. Contribution does, and it is what to weigh against
+                whatever winning a customer costs. */}
+            <Figure
+              label="You keep"
+              value={`£${unit.contributionPerSub.toFixed(2)}`}
+              note="Each extra subscriber"
+              accent
+            />
+            <Figure label="Gross margin" value={`${unit.grossMarginPct}%`} note="Of revenue" />
+          </div>
+          <p className="text-xs text-slate-500">
+            &ldquo;You keep&rdquo; excludes the fixed platform bill on purpose — that is paid whether
+            you have one customer or a thousand, so it does not change what the next one is worth.
+            Spending more than £{unit.contributionPerSub.toFixed(2)} to win a subscriber loses money
+            in month one.
+            {unit.costPerActiveUser > 0 && (
+              <> Everything costs £{unit.costPerActiveUser.toFixed(2)} per active user a month.</>
+            )}
+          </p>
+          {owed > 0 && (
+            // A liability, not this month's cost — kept out of the profit figure
+            // so it cannot be counted twice.
+            <p className="text-xs text-slate-500">
+              £{owed.toFixed(2)} of commission is earned but unpaid. Not in the figures above; it
+              leaves when you pay it.
+            </p>
+          )}
+        </AdminArea>
+      )}
+
       {(data?.breakdown.length ?? 0) > 0 && (
         <AdminArea title="Who the users are" note="Testers excluded throughout">
           <div className="grid gap-4 sm:grid-cols-3">
@@ -185,6 +235,16 @@ export default function AdminOverview() {
         </AdminArea>
       )}
     </AdminShell>
+  );
+}
+
+function Figure({ label, value, note, accent }: { label: string; value: string; note: string; accent?: boolean }) {
+  return (
+    <div className={`card p-3 ${accent ? "ring-1 ring-pitch-400/40" : ""}`}>
+      <div className="stat-label">{label}</div>
+      <div className={`mt-0.5 text-xl font-extrabold ${accent ? "text-pitch-400" : "text-slate-100"}`}>{value}</div>
+      <div className="text-[11px] leading-tight text-slate-500">{note}</div>
+    </div>
   );
 }
 
