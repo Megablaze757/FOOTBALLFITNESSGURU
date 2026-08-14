@@ -33,7 +33,13 @@ create extension if not exists pg_net;
 create or replace function public.announce_launch(
   p_limit    int  default 50,
   p_test_to  text default null,
-  p_from     text default 'Pocket Athlete <hello@pocketathlete.com>'
+  -- MATCHES cloudflare/wrangler.toml's REMINDER_FROM, which is the address the
+  -- Worker's reminder emails already go out from — so it is a mailbox on a
+  -- domain Resend has already verified. The default used to be hello@, which
+  -- nothing sends from: a launch blast is the worst possible moment to find out
+  -- an address is unconfigured, and the failure would be one opaque 4xx per
+  -- recipient.
+  p_from     text default 'PocketAthlete <info@pocketathlete.com>'
 )
 returns table (emailed int, remaining int, note text)
 language plpgsql

@@ -50,3 +50,24 @@ test("the generated SQL keeps its safety rails", () => {
     assert.ok(sql.includes(s), `${s} is not in the template at all`);
   }
 });
+
+/**
+ * THE SENDER ADDRESS HAS TO BE ONE THAT ALREADY WORKS.
+ *
+ * The Worker sends its reminder emails from REMINDER_FROM, and that address is
+ * on a domain Resend has verified — it is the proof the whole setup functions.
+ * The launch SQL defaulted to a different mailbox on the same domain, which
+ * nothing sends from. A bulk send is the worst moment to discover an address is
+ * unconfigured: the failure is one opaque 4xx per recipient, after they have
+ * all been stamped as emailed.
+ */
+test("the launch email sends from the address the app already sends from", () => {
+  const toml = readFileSync(`${ROOT}cloudflare/wrangler.toml`, "utf8");
+  const from = toml.match(/^REMINDER_FROM\s*=\s*"([^"]+)"/m)?.[1];
+  assert.ok(from, "REMINDER_FROM is no longer declared in wrangler.toml");
+
+  const sql = readFileSync(FILE, "utf8");
+  const dflt = sql.match(/p_from\s+text default '([^']+)'/)?.[1];
+  assert.equal(dflt, from,
+    `the launch SQL sends from ${dflt}, but the app's working sender is ${from}`);
+});
