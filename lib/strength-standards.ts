@@ -361,6 +361,47 @@ export function strengthTierTotal(parts: BodyPartStrength[]): number {
 }
 
 /**
+ * The part of you that has fallen behind the rest, if any has.
+ *
+ * THIS IS THE MOST USEFUL THING A SET OF RANKS CAN SAY, and it is the one thing
+ * a per-lift list cannot: an athlete reading six progress bars has to do the
+ * comparison themselves, and the comparison is the whole point of ranking
+ * against a standard rather than against last month.
+ *
+ * TWO TIERS, not one. One tier apart is ordinary — nobody is level across their
+ * whole body, and flagging that would have the app nagging about noise every
+ * time somebody opened the page. Two is a gap a coach would actually mention.
+ *
+ * Only compares muscles that HAVE a rank. A muscle with nothing logged is not
+ * lagging, it is untested, and telling somebody their hamstrings are weak
+ * because they have never deadlifted is the app inventing a finding.
+ */
+export interface WeakLink {
+  muscle: MuscleGroup;
+  tier: StrengthTier;
+  behind: number;
+  /** A lift that would move it, so the finding comes with something to do. */
+  suggest: string;
+}
+
+const LAG_TIERS = 2;
+
+export function weakestLink(parts: BodyPartStrength[]): WeakLink | null {
+  const ranked = parts.filter((p) => p.tier != null);
+  // Two ranked muscles is not a body to compare across — the "weakest" of two
+  // is just the smaller number.
+  if (ranked.length < 3) return null;
+
+  const best = Math.max(...ranked.map((p) => p.tier!.index));
+  const worst = ranked.reduce((a, b) => (b.tier!.index < a.tier!.index ? b : a));
+  const behind = best - worst.tier!.index;
+  if (behind < LAG_TIERS) return null;
+
+  const lift = LIFT_STANDARDS.find((l) => l.muscles.includes(worst.muscle));
+  return { muscle: worst.muscle, tier: worst.tier!, behind, suggest: lift?.label ?? "" };
+}
+
+/**
  * The one line to put at the top of the panel.
  *
  * Priority is deliberate and matches the rule the rest of the app is held to —
@@ -373,6 +414,18 @@ export function strengthTierTotal(parts: BodyPartStrength[]): number {
 export function strengthHeadline(ranks: LiftRank[], parts: BodyPartStrength[]): string {
   if (ranks.length === 0) {
     return "Log a squat, bench, deadlift or press with a weight and you'll get ranked.";
+  }
+  /**
+   * A LAG OUTRANKS A NEAR MISS, and the order matters more than either line.
+   *
+   * "5kg to Intermediate" is nice and it is also the smaller thing: two tiers
+   * of imbalance is how people get hurt and is the harder problem to notice
+   * yourself. A coach would lead with it, so this does.
+   */
+  const weak = weakestLink(parts);
+  if (weak) {
+    return `Your ${MUSCLE_WORD[weak.muscle]} are ${weak.behind} tiers behind the rest of you`
+      + `${weak.suggest ? ` — some ${weak.suggest.toLowerCase()} would close it` : ""}.`;
   }
   const closest = ranks
     .filter((r) => r.toNextKg != null && r.nextTier)

@@ -3,10 +3,11 @@
 import { useMemo, useState } from "react";
 import type { MuscleGroup } from "@/lib/hypertrophy";
 import type { TrainingLog } from "@/lib/types";
+import { loggedWeeklySets, verdictFor, volumeAdvice } from "@/lib/muscle-volume";
 import { BodyStrengthFigure, FIGURE_ZONES } from "@/components/BodyStrengthFigure";
 import {
   MUSCLE_WORD, RANKABLE_MUSCLES, STRENGTH_TIERS, bodyPartStrength, rankedLifts,
-  strengthHeadline, type BodyPartStrength, type LiftRank, type Sex,
+  strengthHeadline, weakestLink, type BodyPartStrength, type LiftRank, type Sex,
 } from "@/lib/strength-standards";
 
 /**
@@ -17,6 +18,10 @@ import {
  * which half of you was actually being trained. This answers all three off
  * training logs that were already being loaded.
  */
+/** The window the sets-per-week figure is averaged over. Matches the log the
+ *  Progress tab already loads, so this costs no extra query. */
+const VOLUME_WINDOW_DAYS = 28;
+
 export function StrengthRanks({
   logs,
   weightKg,
@@ -28,11 +33,23 @@ export function StrengthRanks({
 }) {
   const [selected, setSelected] = useState<MuscleGroup | null>(null);
 
-  const { ranks, parts, headline } = useMemo(() => {
+  const { ranks, parts, headline, weak } = useMemo(() => {
     const r = weightKg ? rankedLifts(logs, weightKg, sex) : [];
     const p = bodyPartStrength(r);
-    return { ranks: r, parts: p, headline: strengthHeadline(r, p) };
+    return { ranks: r, parts: p, headline: strengthHeadline(r, p), weak: weakestLink(p) };
   }, [logs, weightKg, sex]);
+
+  /**
+   * WHAT THEY ARE ACTUALLY DOING, beside what they have achieved.
+   *
+   * A rank on its own is a scoreboard. "Chest: Novice" and "chest: 4 sets a
+   * week" together are a decision — the first says where you are, the second
+   * says why, and neither alone tells anybody what to change on Thursday.
+   */
+  const weeklySets = useMemo(
+    () => loggedWeeklySets((logs ?? []).filter((l) => String(l.log_date ?? "") >= sinceVolume()), VOLUME_WINDOW_DAYS),
+    [logs],
+  );
 
   /**
    * A ratio needs a denominator. Without bodyweight the only honest thing is to
@@ -69,6 +86,19 @@ export function StrengthRanks({
           wall of equal-weight numbers — the single most useful sentence. */}
       <p className="mt-1 text-sm text-slate-300">{headline}</p>
 
+      {/* AND THE LAGGING PART IS TAPPABLE FROM THE SENTENCE THAT NAMES IT.
+          A finding you have to go and look for yourself is half a finding: this
+          selects it on the figure and in the list below, so "your shoulders are
+          two tiers behind" and the picture agree without the reader hunting. */}
+      {weak && selected !== weak.muscle && (
+        <button
+          onClick={() => setSelected(weak.muscle)}
+          className="tap-target mt-2 inline-flex min-h-[44px] items-center gap-1.5 text-sm font-semibold text-pitch-400"
+        >
+          Show me <span aria-hidden>→</span>
+        </button>
+      )}
+
       <div className="mt-4 grid gap-4 sm:grid-cols-[minmax(0,200px)_1fr] sm:items-start">
         <BodyStrengthFigure parts={parts} selected={selected} onSelect={setSelected} />
 
@@ -101,8 +131,15 @@ export function StrengthRanks({
                       <span className="ml-1.5 text-[10px] font-medium uppercase tracking-wide text-slate-600">rear</span>
                     )}
                   </span>
-                  <span className="text-xs font-bold" style={{ color: tier?.color ?? "#64748b" }}>
-                    {tier ? tier.name : "—"}
+                  <span className="text-right">
+                    <span className="block text-xs font-bold" style={{ color: tier?.color ?? "#64748b" }}>
+                      {tier ? tier.name : "—"}
+                    </span>
+                    {/* The sets that produced it. Muted, because the rank is the
+                        headline and this is the reason for it. */}
+                    <span className={`block text-[10px] tabular-nums ${VERDICT_TONE[verdictFor(weeklySets[muscle] ?? 0)]}`}>
+                      {(weeklySets[muscle] ?? 0) > 0 ? `${weeklySets[muscle]} sets/wk` : "no sets logged"}
+                    </span>
                   </span>
                 </button>
               </li>
@@ -117,7 +154,11 @@ export function StrengthRanks({
           {detail.tier
             ? <>Your <strong className="capitalize text-slate-100">{MUSCLE_WORD[detail.muscle]}</strong> are{" "}
                 <strong style={{ color: detail.tier.color }}>{detail.tier.name}</strong> — {detail.tier.blurb.toLowerCase()}.
-                Earned from your {detail.from?.toLowerCase()}.</>
+                Earned from your {detail.from?.toLowerCase()}.{" "}
+                {/* The actionable half: how much work is going in, and whether
+                    that amount is doing anything. */}
+                You are averaging <strong className="tabular-nums text-slate-100">{weeklySets[detail.muscle] ?? 0}</strong>{" "}
+                sets a week over the last {VOLUME_WINDOW_DAYS} days — {volumeAdvice(weeklySets[detail.muscle] ?? 0)}.</>
             : <>Nothing that trains your <strong className="capitalize text-slate-100">{MUSCLE_WORD[detail.muscle]}</strong>{" "}
                 has been logged with a weight yet, so there is nothing to rank. That is not the same as being weak.</>}
         </p>
@@ -179,6 +220,21 @@ export function StrengthLadder() {
       ))}
     </ol>
   );
+}
+
+/** Muted, and only the two that need attention carry a colour. */
+const VERDICT_TONE: Record<string, string> = {
+  untrained: "text-slate-600",
+  maintenance: "text-amber-500/80",
+  productive: "text-slate-500",
+  excessive: "text-rose-400/80",
+};
+
+/** The first day of the volume window, in the athlete's own local days. */
+function sinceVolume(): string {
+  const d = new Date();
+  d.setDate(d.getDate() - (VOLUME_WINDOW_DAYS - 1));
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 export type { BodyPartStrength };

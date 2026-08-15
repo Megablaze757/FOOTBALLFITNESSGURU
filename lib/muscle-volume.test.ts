@@ -7,6 +7,7 @@ import {
   weeklyMuscleVolume, musclesOf, auditWeek, verdictFor, LANDMARKS,
   type MuscleGroup,
 } from "./muscle-volume";
+import { loggedWeeklySets, volumeAdvice } from "./muscle-volume";
 
 /**
  * Weekly sets per muscle group is the number strength coaches program against
@@ -252,4 +253,53 @@ test("every session in a sprint week carries posterior-chain work", () => {
       `session "${s.title}" has no hamstring or calf work: ${s.drills.map((d) => d.name).join(", ")}`
     );
   }
+});
+
+// --- what was actually done --------------------------------------------------
+
+/**
+ * THE NUMBER THAT DRIVES A DECISION IS THE ONE ABOUT WHAT HAPPENED.
+ *
+ * Everything else in this file audits a programme — what the engine intends to
+ * prescribe. Nobody trains their plan exactly, and a rank without the volume
+ * behind it is a scoreboard: "chest: Novice" says where you are and "chest: 4
+ * sets a week" says why, and only the pair tells anybody what to change.
+ */
+test("weekly sets come out of the log, averaged not totalled", () => {
+  const logs = [
+    { log_date: "2026-01-01", drills: [{ name: "Bench Press", sets: 4, reps: 5 }] },
+    { log_date: "2026-01-08", drills: [{ name: "bench press", sets: 4, reps: 5 }] },
+    { log_date: "2026-01-15", drills: [{ name: "Back Squat", sets: 5, reps: 5 }] },
+  ];
+  const sets = loggedWeeklySets(logs, 28);
+  // 8 bench sets over 4 weeks is 2 a week — a 28-day TOTAL would read four
+  // times too high against landmarks that are all expressed per week.
+  assert.equal(sets.chest, 2);
+  // A squat is quad volume AND glute volume — full credit to each primary
+  // mover, the same way the programme auditor counts them. And "Back Squat"
+  // resolves through the lift standards, because the hypertrophy catalogue has
+  // never heard of it.
+  // 5 sets over 4 weeks, rounded to one decimal for display.
+  assert.equal(sets.quads, 1.3);
+  assert.equal(sets.glutes, 1.3);
+  // Free-text casing must not split one exercise into two.
+  assert.ok(sets.chest !== undefined, "'Bench Press' and 'bench press' counted separately");
+});
+
+test("a drill the catalogue does not know trains nothing, rather than everything", () => {
+  const sets = loggedWeeklySets([{ log_date: "2026-01-01", drills: [{ name: "Wobble board", sets: 3, reps: 10 }] }], 28);
+  assert.deepEqual(sets, {});
+  assert.deepEqual(loggedWeeklySets(null, 28), {});
+  assert.deepEqual(loggedWeeklySets([], 0), {}, "a zero-day window must not divide by zero");
+});
+
+test("the advice says what the number means, not what the literature calls it", () => {
+  assert.match(volumeAdvice(0), /nothing logged/);
+  assert.match(volumeAdvice(3), /hold what you have/);
+  assert.match(volumeAdvice(14), /productive/);
+  assert.match(volumeAdvice(30), /recovery is the limit/);
+  // Each verdict has to produce a distinct sentence, or the panel says the same
+  // thing about doing too little and doing too much.
+  const said = new Set([0, 3, 14, 30].map(volumeAdvice));
+  assert.equal(said.size, 4);
 });

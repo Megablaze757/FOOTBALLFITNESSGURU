@@ -20,6 +20,7 @@
 import { setCount } from "./training-sets";
 import { MOVEMENT_BY_ID, type Movement, type Pattern } from "./movements";
 import { muscleGroupForName, type MuscleGroup } from "./hypertrophy";
+import { standardFor } from "./strength-standards";
 import type { ProgramPlan, ProgramWeek } from "./engine";
 
 /**
@@ -293,4 +294,81 @@ export function auditWeek(week: ProgramWeek): VolumeAudit {
 
 export function auditPlan(plan: ProgramPlan): VolumeAudit[] {
   return plan.weeks.map(auditWeek);
+}
+
+// --- what was actually done, as opposed to what was planned ------------------
+
+/**
+ * Weekly sets per muscle from the TRAINING LOG.
+ *
+ * Everything above this line audits a programme — what the engine intends to
+ * prescribe. Nobody trains their plan exactly, and the number that should drive
+ * a decision is the one describing what happened. An athlete looking at "chest:
+ * Novice" needs to see "chest: 4 sets a week" beside it before the rank means
+ * anything they can act on: those two facts together say "train it more", and
+ * either one alone says nothing.
+ *
+ * AVERAGED OVER THE WINDOW, not totalled, because weekly sets is the unit every
+ * landmark in this file is expressed in and a 28-day total silently reads four
+ * times too high against them.
+ *
+ * Names, not catalogue ids, because a training log is free text — the same
+ * `muscleGroupForName` the programme auditor uses, so a logged "Bench Press"
+ * and a prescribed one cannot be counted as different exercises.
+ */
+export function loggedWeeklySets(
+  logs: { log_date?: string; drills?: { name?: string; sets?: number; reps?: number; load_kg?: number | null; sets_detail?: unknown }[] | null }[] | null | undefined,
+  windowDays: number,
+): Partial<Record<MuscleGroup, number>> {
+  const weeks = Math.max(1, windowDays / 7);
+  const total = new Map<MuscleGroup, number>();
+
+  for (const log of logs ?? []) {
+    for (const drill of log.drills ?? []) {
+      const name = String(drill.name ?? "").trim();
+      if (!name) continue;
+      /**
+       * TWO VOCABULARIES, BECAUSE THE APP HAS TWO.
+       *
+       * `muscleGroupForName` only knows the hypertrophy catalogue, and the
+       * catalogue does not contain "Back squat" — so the single most commonly
+       * logged lift in the app contributed exactly zero quad volume, and an
+       * athlete squatting three times a week was told they had trained nothing.
+       *
+       * The barbell lifts live in lib/strength-standards.ts instead, with their
+       * own aliases, because that is where they are ranked. Falling back to
+       * them joins the two up: a logged "back squat" now counts toward the same
+       * quads its rank is computed from, which is the whole point of showing
+       * the two numbers side by side.
+       */
+      const groups = muscleGroupForName(name)
+        ? [muscleGroupForName(name)!]
+        : standardFor(name)?.muscles ?? [];
+      if (groups.length === 0) continue;
+      const sets = setCount(drill as never);
+      if (sets <= 0) continue;
+      // Full credit to each primary mover, exactly as the programme auditor
+      // above counts PATTERN_MUSCLES — a squat is quad volume AND glute volume.
+      for (const group of groups) total.set(group, (total.get(group) ?? 0) + sets);
+    }
+  }
+
+  const out: Partial<Record<MuscleGroup, number>> = {};
+  for (const [group, sets] of total) out[group] = Math.round((sets / weeks) * 10) / 10;
+  return out;
+}
+
+/**
+ * The plainest sentence that can be said about a muscle's weekly volume.
+ *
+ * Written as advice rather than as a category, because "maintenance" is a word
+ * from the literature and "enough to hold what you have, not to build" is what
+ * it means to somebody deciding what to do on Thursday.
+ */
+export function volumeAdvice(sets: number): string {
+  const v = verdictFor(sets);
+  if (v === "untrained") return "nothing logged for this";
+  if (v === "maintenance") return "enough to hold what you have, not to build";
+  if (v === "excessive") return "more than the evidence supports — recovery is the limit here";
+  return "in the productive range";
 }

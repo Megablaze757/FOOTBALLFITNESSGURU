@@ -5,7 +5,7 @@ import { FIGURE_REGIONS } from "../components/BodyStrengthFigure";
 import { BODY_OUTLINE, BODY_VIEWBOX } from "./body-outline";
 import {
   LIFT_STANDARDS, RANKABLE_MUSCLES, STRENGTH_TIERS, TOP_TIER, bodyPartStrength,
-  rankLift, rankedLifts, standardFor, strengthHeadline, strengthTierTotal, tierAt,
+  rankLift, rankedLifts, standardFor, strengthHeadline, strengthTierTotal, tierAt, weakestLink,
 } from "./strength-standards";
 import { computeXp, EMPTY_STATS } from "./gamification";
 import type { TrainingLog } from "./types";
@@ -416,4 +416,78 @@ test("the rewards page shows strength as well as attendance", () => {
   assert.match(code, /stats\.strengthTiers === 0/, "an athlete with no ranked lift is not handled");
   assert.ok(!/Untrained/.test(code),
     "the summary calls an unranked athlete Untrained, which is a verdict from an absence");
+});
+
+// --- the weak link -----------------------------------------------------------
+
+/**
+ * THE MOST USEFUL THING A SET OF RANKS CAN SAY. Six progress bars leave the
+ * comparison to the reader, and the comparison is the whole reason for ranking
+ * against a standard rather than against last month.
+ */
+test("a body that is two tiers out of balance says so", () => {
+  const logs = [log("2026-01-10", [
+    { name: "Back squat", sets: 1, reps: 1, load_kg: 200 },     // Master-ish
+    { name: "Deadlift", sets: 1, reps: 1, load_kg: 240 },
+    { name: "Overhead press", sets: 1, reps: 1, load_kg: 30 },  // barely Novice
+  ])];
+  const parts = bodyPartStrength(rankedLifts(logs, 80, "male"));
+  const weak = weakestLink(parts)!;
+  assert.ok(weak, "a squat at Master beside a press at Novice is not flagged");
+  assert.ok(["shoulders", "triceps"].includes(weak.muscle), `flagged ${weak.muscle}`);
+  assert.ok(weak.behind >= 2);
+  assert.ok(weak.suggest.length > 0, "the finding comes with nothing to do about it");
+
+  // And it leads, because a two-tier gap matters more than a few kilos.
+  assert.match(strengthHeadline(rankedLifts(logs, 80, "male"), parts), /behind the rest of you/);
+});
+
+/**
+ * A muscle with nothing logged is UNTESTED, not weak. Telling somebody their
+ * hamstrings are lagging because they have never deadlifted is the app
+ * inventing a finding — the same absent-versus-zero mistake as everywhere else.
+ */
+test("never having trained something is not a weakness", () => {
+  const logs = [log("2026-01-10", [
+    { name: "Back squat", sets: 1, reps: 1, load_kg: 200 },
+    { name: "Bench press", sets: 1, reps: 1, load_kg: 140 },
+    { name: "Barbell row", sets: 1, reps: 1, load_kg: 110 },
+  ])];
+  const parts = bodyPartStrength(rankedLifts(logs, 80, "male"));
+  const weak = weakestLink(parts);
+  if (weak) {
+    assert.ok(parts.find((p) => p.muscle === weak.muscle)!.tier != null,
+      `${weak.muscle} was flagged as weak and has never been ranked`);
+  }
+});
+
+test("one tier of difference is not worth mentioning", () => {
+  // Nobody is level across their whole body. Flagging normal variation would
+  // have the page nagging every time it is opened.
+  const logs = [log("2026-01-10", [
+    { name: "Back squat", sets: 1, reps: 1, load_kg: 120 },
+    { name: "Bench press", sets: 1, reps: 1, load_kg: 85 },
+    { name: "Barbell row", sets: 1, reps: 1, load_kg: 80 },
+  ])];
+  const parts = bodyPartStrength(rankedLifts(logs, 80, "male"));
+  const weak = weakestLink(parts);
+  assert.ok(weak == null || weak.behind >= 2, "a one-tier spread was flagged as an imbalance");
+});
+
+test("two ranked muscles are not a body to compare across", () => {
+  const logs = [log("2026-01-10", [{ name: "Bench press", sets: 1, reps: 1, load_kg: 140 }])];
+  assert.equal(weakestLink(bodyPartStrength(rankedLifts(logs, 80, "male"))), null);
+  assert.equal(weakestLink([]), null);
+});
+
+/**
+ * A finding you have to go and hunt for is half a finding. If the headline
+ * names a lagging muscle, the panel has to be able to show it.
+ */
+test("the lagging muscle can be shown on the figure from the sentence that names it", () => {
+  const panel = readFileSync(new URL("../components/StrengthRanks.tsx", import.meta.url), "utf8");
+  const code = panel.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+  assert.match(code, /weakestLink\(/, "the panel never works out which muscle is behind");
+  assert.match(code, /setSelected\(weak\.muscle\)/,
+    "the headline names a lagging muscle with no way to see it on the body");
 });
