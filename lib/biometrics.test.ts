@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { biometricSignal, parseBiometricCsv, parseOuraSleep, parseIngestPayload, syncHealth, daysSinceSync } from "./biometrics";
@@ -196,4 +197,45 @@ test("days since sync counts whole days", () => {
   assert.equal(daysSinceSync("2026-08-15T04:00:00Z", now), 0);
   assert.equal(daysSinceSync("2026-08-11T04:00:00Z", now), 4);
   assert.equal(daysSinceSync(null, now), null);
+});
+
+/**
+ * THE TWO COPIES OF THE OURA PARSER MUST NOT DRIFT.
+ *
+ * Edge Functions run in Deno with their own module graph and cannot import
+ * from this app's lib/, so supabase/functions/sync-oura/index.ts carries its
+ * own copy of parseOuraSleep — the same arrangement wearable-ingest already
+ * has for the push parser. A duplicate nobody checks is a duplicate that
+ * quietly diverges, and the symptom here would be a nap counted as a night's
+ * sleep for anyone whose data came through the cron rather than the backfill.
+ *
+ * This does not prove the two behave identically — nothing short of running
+ * the Deno function could — but it does prove the parts most likely to be
+ * dropped in a rewrite are still present on both sides.
+ */
+test("the edge function's copy of the Oura parser keeps the rules that matter", () => {
+  const src = readFileSync(new URL("../supabase/functions/sync-oura/index.ts", import.meta.url), "utf8");
+
+  // Naps: the longest sleep period for a date wins.
+  assert.match(src, /existing\.seconds >= seconds/,
+    "the nap rule is gone — an afternoon nap will be recorded as the night's sleep");
+  // Resting HR comes from the lowest heart rate, not the average.
+  assert.match(src, /lowest_heart_rate \?\? r\.average_heart_rate/,
+    "resting HR no longer prefers lowest_heart_rate, so the trend will drift by several bpm");
+  // Non-sleep records are skipped.
+  assert.match(src, /long_sleep\|sleep/,
+    "rest periods are no longer filtered out");
+  // Seconds to hours.
+  assert.match(src, /seconds \/ 3600/, "sleep is no longer converted from seconds");
+  // And it still points at the real API.
+  assert.match(src, /api\.ouraring\.com\/v2\/usercollection\/sleep/, "the Oura endpoint changed");
+});
+
+test("the sync function refuses to run without a configured secret", () => {
+  // A misconfigured deploy must fail closed. `if (secret && ...)` would leave
+  // an endpoint that reads every athlete's ring token wide open.
+  const src = readFileSync(new URL("../supabase/functions/sync-oura/index.ts", import.meta.url), "utf8");
+  assert.match(src, /if \(!secret\) return json\(\{ error: "CRON_SECRET is not set" \}, 500\)/,
+    "the function no longer fails closed when CRON_SECRET is missing");
+  assert.match(src, /x-cron-secret/, "the shared-secret check is gone");
 });
