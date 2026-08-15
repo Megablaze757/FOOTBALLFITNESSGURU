@@ -2,10 +2,11 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { METRIC_CATALOG } from "./benchmarks";
+import { EXERCISES } from "./exercises";
 import { FIGURE_REGIONS } from "../components/BodyStrengthFigure";
 import { BODY_OUTLINE, BODY_VIEWBOX } from "./body-outline";
 import {
-  LIFT_STANDARDS, RANKABLE_MUSCLES, STRENGTH_TIERS, TOP_TIER, bodyPartStrength,
+  LIFT_STANDARDS, MUSCLE_WORD, RANKABLE_MUSCLES, STRENGTH_TIERS, TOP_TIER, bodyPartStrength,
   rankLift, rankedLifts, standardFor, strengthHeadline, strengthTierTotal, tierAt, weakestLink,
   testedMaxesFrom,
 } from "./strength-standards";
@@ -611,4 +612,33 @@ test("tested maxes survive the shape the benchmarks table actually returns", () 
   assert.deepEqual(out.map((t) => t.metricKey).sort(), ["bench_1rm", "smoke", "sprint_10m", "squat_1rm"].filter((k) => k !== "smoke").sort());
   assert.equal(out.find((t) => t.metricKey === "bench_1rm")?.kg, 90);
   assert.equal(testedMaxesFrom(null).length, 0);
+});
+
+/**
+ * A FINDING HAS TO LEAD SOMEWHERE.
+ *
+ * The weak-link sentence names a lagging muscle and now links to the library
+ * pre-filtered for it. That link is built from MUSCLE_WORD, and the library
+ * matches on exercise names and muscle tags — two vocabularies that were never
+ * required to agree. If one drifts, the button still renders, still looks
+ * clickable, and lands on "no exercises found", which is a worse dead end than
+ * the one it replaced.
+ */
+test("every muscle the ranks can name has exercises to train it", () => {
+  for (const muscle of RANKABLE_MUSCLES) {
+    const q = MUSCLE_WORD[muscle].toLowerCase();
+    const hits = EXERCISES.filter((e) =>
+      e.name.toLowerCase().includes(q) || e.muscles.some((m) => m.toLowerCase().includes(q)));
+    assert.ok(hits.length >= 5,
+      `"${MUSCLE_WORD[muscle]}" finds only ${hits.length} exercises in the library, so the ` +
+      `"Train ${MUSCLE_WORD[muscle]}" link lands on an empty page`);
+  }
+});
+
+test("the library seeds its search from the URL", () => {
+  // The link above is inert without this, and nothing else on the page would
+  // look broken — the filter would just silently be empty.
+  const page = readFileSync(new URL("../app/(app)/library/page.tsx", import.meta.url), "utf8");
+  assert.match(page, /URLSearchParams\(window\.location\.search\)/,
+    "the library no longer reads ?q=, so every deep link into it is dead");
 });

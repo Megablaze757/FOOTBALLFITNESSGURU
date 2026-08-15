@@ -45,7 +45,24 @@ export default function LibraryPage() {
   const [cat, setCat] = useState<ExerciseCategory | "All">("All");
   const [level, setLevel] = useState<Difficulty>("advanced");
   const [equip, setEquip] = useState<string | "all">("all");
+  /**
+   * SEEDED FROM THE URL, so a finding elsewhere can lead here.
+   *
+   * The search already matched muscle names, but the box was local state with
+   * no way in — so "your shoulders are two tiers behind" on the Progress tab
+   * could name the problem and then leave the athlete to type the word in
+   * themselves. A finding you have to act on manually is half a finding.
+   *
+   * `useSearchParams` needs a Suspense boundary under `output: "export"`; the
+   * static export has no server to read a query string on, so the value is
+   * pulled straight off `location` on mount instead. First paint is the empty
+   * box either way, and this avoids wrapping the page for one string.
+   */
   const [q, setQ] = useState("");
+  useEffect(() => {
+    const seed = new URLSearchParams(window.location.search).get("q");
+    if (seed) setQ(seed);
+  }, []);
   const [open, setOpen] = useState<Exercise | null>(null);
   const [custom, setCustom] = useState<Exercise[]>([]);
   const [shown, setShown] = useState(PAGE);

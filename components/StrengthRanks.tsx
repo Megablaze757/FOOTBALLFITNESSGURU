@@ -110,16 +110,31 @@ export function StrengthRanks({
           A finding you have to go and look for yourself is half a finding: this
           selects it on the figure and in the list below, so "your shoulders are
           two tiers behind" and the picture agree without the reader hunting. */}
-      {weak && selected !== weak.muscle && (
-        <button
-          onClick={() => {
-            setSelected(weak.muscle);
-            setView(BACK_MUSCLES.has(weak.muscle) ? "back" : "front");
-          }}
-          className="tap-target mt-2 inline-flex min-h-[44px] items-center gap-1.5 text-sm font-semibold text-pitch-400"
-        >
-          Show me <span aria-hidden>→</span>
-        </button>
+      {weak && (
+        <div className="mt-2 flex flex-wrap items-center gap-x-4">
+          {selected !== weak.muscle && (
+            <button
+              onClick={() => {
+                setSelected(weak.muscle);
+                setView(BACK_MUSCLES.has(weak.muscle) ? "back" : "front");
+              }}
+              className="tap-target inline-flex min-h-[44px] items-center gap-1.5 text-sm font-semibold text-pitch-400"
+            >
+              Show me <span aria-hidden>→</span>
+            </button>
+          )}
+          {/* AND THEN THE THING THAT FIXES IT.
+              Naming a lagging muscle and stopping there is a diagnosis with no
+              prescription: the athlete now knows their shoulders are behind and
+              still has to go and think of shoulder exercises themselves. The
+              library already searched muscle names — it just had no way in. */}
+          <Link
+            href={`/library?q=${encodeURIComponent(MUSCLE_WORD[weak.muscle])}`}
+            className="tap-target inline-flex min-h-[44px] items-center gap-1.5 text-sm font-semibold text-pitch-400"
+          >
+            Train {MUSCLE_WORD[weak.muscle]} <span aria-hidden>→</span>
+          </Link>
+        </div>
       )}
 
       <div className="mt-4 grid gap-4 sm:grid-cols-[minmax(0,200px)_1fr] sm:items-start">
