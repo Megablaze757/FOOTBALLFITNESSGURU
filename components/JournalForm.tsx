@@ -16,9 +16,26 @@ import { TrainingLogInput, type TrainingState } from "@/components/TrainingLogIn
 import { enqueue, browserStore, queueCount } from "@/lib/offline-queue";
 import { track } from "@/lib/funnel";
 import { useCurrentUser } from "@/lib/auth";
-import { saveDraft, loadDraft, clearDraft, draftAge, describeAge } from "@/lib/drafts";
+import { saveDraft, loadDraft, clearDraft, draftAge, describeAge, checkInIsDirty } from "@/lib/drafts";
 
-/** What a half-finished check-in looks like on disk. */
+/**
+ * What a half-finished check-in looks like on disk.
+ *
+ * THE VALUES ARE ONLY HALF OF IT. This used to be the eight fields above the
+ * line and nothing else, and restoring them alone put the athlete back in front
+ * of a form that did not look like the one they left:
+ *
+ *   * `detailed` reset, so somebody halfway through the full check-in came back
+ *     to the quick one — a different form, with their match-day answer nowhere
+ *     on screen.
+ *   * `sore` reset to null, so "Anything hurting?" showed unanswered and the
+ *     body map was HIDDEN — with their marked-up knee still in `painMap`,
+ *     invisible. From the athlete's side that is indistinguishable from the
+ *     soreness having been thrown away, and it is the single loudest way this
+ *     felt like losing everything.
+ *
+ * Where you were in a form is part of the work. It is restored with the rest.
+ */
 interface DraftShape {
   painMap: PainMap;
   fatigue: number;
@@ -28,6 +45,15 @@ interface DraftShape {
   isMatchDay: boolean;
   minutes: string;
   training: TrainingState;
+  // --- where they were, not just what they typed ---------------------------
+  /** Quick or full. */
+  detailed?: boolean;
+  /** Answered "anything hurting?" — null means not yet asked. */
+  sore?: boolean | null;
+  /** Training panel open. */
+  logTraining?: boolean;
+  /** Weight field opened, even if nothing was typed into it yet. */
+  weighing?: boolean;
 }
 import type { CheckInInput, PainMap, ReadinessResult, TrainingDrill, TrainingLog } from "@/lib/types";
 import { daysAgoLocal, todayLocal } from "@/lib/day";
@@ -225,13 +251,14 @@ export function JournalForm({ initial, initialTraining, sport, planned = [], his
     return () => { cancelled = true; };
   }, [userId]);
 
-  // Restore anything unsaved from earlier. Only when the form is otherwise
-  // untouched — `initial` means they already checked in today and are editing,
-  // and a draft must never quietly overwrite what's actually stored.
-  useEffect(() => {
-    if (initial) return;
-    const draft = loadDraft<DraftShape>("checkin", userId, today);
-    if (!draft) return;
+  /**
+   * Put the form back exactly as they left it.
+   *
+   * Applied silently when there is no saved check-in yet, because there is
+   * nothing it could overwrite. When they HAVE already checked in today it is
+   * offered instead — see `pendingDraft` below.
+   */
+  const applyDraft = useCallback((draft: DraftShape) => {
     setPainMap(draft.painMap ?? {});
     setFatigue(draft.fatigue ?? 5);
     setSleep(draft.sleep ?? 7);
@@ -239,16 +266,49 @@ export function JournalForm({ initial, initialTraining, sport, planned = [], his
     setWeight(draft.weight ?? "");
     setIsMatchDay(draft.isMatchDay ?? false);
     setMinutes(draft.minutes ?? "0");
-    if (draft.training) {
-      setTraining(draft.training);
-      // Open the panel, or the restored session is invisible.
-      if ((draft.training.drills?.length ?? 0) > 0 || draft.training.total_minutes != null) {
-        setLogTraining(true);
-      }
-    }
+    if (draft.training) setTraining(draft.training);
+
+    // The form's own position. `sore` falls back to whether anything is marked,
+    // so a draft written before these were saved still opens with the body map
+    // showing rather than hiding somebody's knee behind an unanswered question.
+    setDetailed(draft.detailed ?? false);
+    setSore(draft.sore ?? (Object.keys(draft.painMap ?? {}).length > 0 ? true : null));
+    setWeighing(draft.weighing ?? false);
+    setLogTraining(
+      draft.logTraining ??
+        ((draft.training?.drills?.length ?? 0) > 0 || draft.training?.total_minutes != null),
+    );
+  }, []);
+
+  /**
+   * A draft that exists alongside a saved check-in, waiting to be offered.
+   *
+   * THE CASE THIS EXISTS FOR. Somebody checks in at 7am, trains in the evening,
+   * opens the page to add the session, gets halfway through the drills and puts
+   * the phone down. `initial` is populated — they checked in this morning — so
+   * the restore used to be skipped outright and the evening's work was simply
+   * gone. That is the same loss as any other, and it happens to the people who
+   * use the app most.
+   *
+   * Offered rather than applied, because here there IS something it could
+   * overwrite. One tap, and it says how old it is.
+   */
+  const [pendingDraft, setPendingDraft] = useState<DraftShape | null>(null);
+
+  useEffect(() => {
+    const draft = loadDraft<DraftShape>("checkin", userId, today);
+    if (!draft) return;
     const age = draftAge("checkin", userId, today);
-    setRestored(age === null ? "earlier" : describeAge(age));
-  }, [initial, userId, today]);
+    const when = age === null ? "earlier" : describeAge(age);
+
+    if (initial) {
+      setPendingDraft(draft);
+      setRestored(when);
+      return;
+    }
+    applyDraft(draft);
+    setRestored(when);
+  }, [initial, userId, today, applyDraft]);
 
   /**
    * THE CURRENT FORM, READABLE WITHOUT WAITING FOR THE DEBOUNCE.
@@ -258,7 +318,20 @@ export function JournalForm({ initial, initialTraining, sport, planned = [], his
    * values were at registration, which is empty.
    */
   const draftRef = useRef<DraftShape | null>(null);
-  draftRef.current = { painMap, fatigue, sleep, nutrition, weight, isMatchDay, minutes, training };
+  draftRef.current = {
+    painMap, fatigue, sleep, nutrition, weight, isMatchDay, minutes, training,
+    detailed, sore, logTraining, weighing,
+  };
+
+  /**
+   * Has anything actually been entered? The rules live in lib/drafts.ts, where
+   * they can be tested without rendering a form — a wrong answer here is work
+   * silently not kept, which is the exact failure this whole thing is for.
+   */
+  const dirty = checkInIsDirty(
+    { painMap, fatigue, sleep, nutrition, weight, isMatchDay, sore, training },
+    initial,
+  );
 
   /**
    * Set the moment the check-in is stored, and read at flush time.
@@ -272,10 +345,19 @@ export function JournalForm({ initial, initialTraining, sport, planned = [], his
    */
   const submittedRef = useRef(false);
 
+  /** Read at flush time, for the same reason `submittedRef` is — see above. */
+  const dirtyRef = useRef(false);
+  dirtyRef.current = dirty;
+
+  /** When the last successful autosave happened, so the form can say so. */
+  const [savedAt, setSavedAt] = useState<number | null>(null);
+
   const flushDraft = useCallback(() => {
-    if (submittedRef.current) return;
+    if (submittedRef.current || !dirtyRef.current) return;
     const d = draftRef.current;
-    if (d) saveDraft<DraftShape>("checkin", userId, d, today);
+    if (!d) return;
+    saveDraft<DraftShape>("checkin", userId, d, today);
+    setSavedAt(Date.now());
   }, [userId, today]);
 
   // Save as they go. Debounced because a slider drag fires continuously and
@@ -284,7 +366,8 @@ export function JournalForm({ initial, initialTraining, sport, planned = [], his
     if (result) return; // already submitted — nothing in progress to keep
     const t = setTimeout(flushDraft, 400);
     return () => clearTimeout(t);
-  }, [painMap, fatigue, sleep, nutrition, weight, isMatchDay, minutes, training, result, flushDraft]);
+  }, [painMap, fatigue, sleep, nutrition, weight, isMatchDay, minutes, training,
+      detailed, sore, logTraining, weighing, result, flushDraft]);
 
   /**
    * WRITE IT DOWN BEFORE THE APP GOES AWAY.
@@ -462,7 +545,39 @@ export function JournalForm({ initial, initialTraining, sport, planned = [], his
         </div>
       )}
 
-      {restored && (
+      {/* A DRAFT ALONGSIDE A SAVED CHECK-IN IS OFFERED, NOT APPLIED.
+          Checking in at 7am and adding the evening's session later is the
+          normal pattern for anyone who uses this daily, and that half-finished
+          session used to be dropped on the floor because a saved entry existed.
+          Restoring it silently would be the opposite mistake — overwriting what
+          is actually stored — so it is one tap, and it says how old it is. */}
+      {pendingDraft && (
+        <div className="flex items-center justify-between gap-3 rounded-2xl border border-pitch-400/30 bg-pitch-400/[0.06] px-4 py-3 text-sm text-slate-200">
+          <span>📝 You have unfinished changes from {restored}.</span>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={() => { applyDraft(pendingDraft); setPendingDraft(null); }}
+              className="chip text-pitch-400 hover:bg-white/[0.08]"
+            >
+              Restore
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                clearDraft("checkin", userId, today);
+                setPendingDraft(null);
+                setRestored(null);
+              }}
+              className="tap-target text-xs font-semibold text-slate-400 hover:text-slate-200"
+            >
+              Discard
+            </button>
+          </div>
+        </div>
+      )}
+
+      {restored && !pendingDraft && (
         <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-slate-300">
           <span>📝 Picked up where you left off — saved {restored}.</span>
           <button
@@ -474,7 +589,11 @@ export function JournalForm({ initial, initialTraining, sport, planned = [], his
               setPainMap({}); setFatigue(5); setSleep(7); setNutrition(6);
               setWeight(""); setIsMatchDay(false); setMinutes("0");
               setTraining({ drills: [], total_minutes: null, intensity: null });
+              // The form's position resets with the values, or "start fresh"
+              // leaves the body map open over a pain map it just emptied.
+              setSore(null); setWeighing(false); setLogTraining(false); setDetailed(false);
               setRestored(null);
+              setSavedAt(null);
             }}
             className="tap-target shrink-0 text-xs font-semibold text-slate-400 hover:text-pitch-400"
           >
@@ -719,6 +838,19 @@ export function JournalForm({ initial, initialTraining, sport, planned = [], his
       <button type="submit" disabled={saving} className="btn-primary">
         {saving ? "Saving…" : "Submit check-in"}
       </button>
+
+      {/* SAY THAT IT IS BEING KEPT.
+          The autosave has existed for a while and was invisible, so people
+          filling this in still believed — correctly, from what they could see —
+          that leaving the app would cost them the lot. A feature nobody can
+          tell is running earns none of the trust it should. Under the submit
+          button, which is where the eye is when deciding whether it's safe to
+          put the phone down. */}
+      {savedAt !== null && !result && (
+        <p className="text-center text-xs text-slate-500">
+          ✓ Kept on this device as you go — you can leave and come back.
+        </p>
+      )}
     </form>
   );
 }

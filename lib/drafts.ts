@@ -109,6 +109,78 @@ export function clearAllDrafts(userId?: string): void {
   } catch { /* nothing to do */ }
 }
 
+// --- Is there anything worth keeping? ---------------------------------------
+
+/**
+ * The subset of a check-in that decides whether a draft is worth writing.
+ *
+ * Structural, not the component's own state type, so this can be tested without
+ * rendering a form. The component passes its state straight in.
+ */
+export interface CheckInDraftState {
+  painMap?: Record<string, unknown> | null;
+  fatigue?: number | null;
+  sleep?: number | null;
+  nutrition?: number | null;
+  weight?: string | null;
+  isMatchDay?: boolean | null;
+  /** Answered "anything hurting?" — null means not asked yet. */
+  sore?: boolean | null;
+  training?: {
+    drills?: unknown[] | null;
+    total_minutes?: number | null;
+    run_type?: string | null;
+    distance_km?: number | null;
+  } | null;
+}
+
+/** What the form starts at, so "unchanged" can be told from "empty". */
+export interface CheckInDraftBaseline {
+  fatigue_score?: number | null;
+  sleep_quality?: number | null;
+  nutrition_quality?: number | null;
+  weight_kg?: number | null;
+  is_match_day?: boolean | null;
+}
+
+export const CHECKIN_DEFAULTS = { fatigue: 5, sleep: 7, nutrition: 6 } as const;
+
+/**
+ * Has the athlete actually put anything in?
+ *
+ * WHY THIS EXISTS. The autosave used to fire 400ms after the page mounted
+ * whatever happened, so opening the check-in and closing it again wrote a draft
+ * of untouched defaults — and the next visit opened with "restored from 2 hours
+ * ago" over a form nobody had filled in. A restore notice that is usually about
+ * nothing is a notice people learn to ignore, and then it fails them on the one
+ * morning it was real.
+ *
+ * The sliders count as untouched at their defaults. That is a deliberate false
+ * negative: an athlete whose honest answer IS 5/7/6 loses nothing by not having
+ * it restored, and the alternative — treating any interaction as work — would
+ * call a thumb grazing a slider on the way past "unfinished business".
+ *
+ * `sore` counts, though. Answering "anything hurting?" either way is a real
+ * answer, and "no" is the one most likely to be given first and then
+ * interrupted.
+ */
+export function checkInIsDirty(s: CheckInDraftState, baseline?: CheckInDraftBaseline | null): boolean {
+  const t = s.training;
+  return (
+    Object.keys(s.painMap ?? {}).length > 0 ||
+    (s.fatigue ?? CHECKIN_DEFAULTS.fatigue) !== (baseline?.fatigue_score ?? CHECKIN_DEFAULTS.fatigue) ||
+    (s.sleep ?? CHECKIN_DEFAULTS.sleep) !== (baseline?.sleep_quality ?? CHECKIN_DEFAULTS.sleep) ||
+    (s.nutrition ?? CHECKIN_DEFAULTS.nutrition) !== (baseline?.nutrition_quality ?? CHECKIN_DEFAULTS.nutrition) ||
+    (s.weight ?? "") !== (baseline?.weight_kg?.toString() ?? "") ||
+    (s.isMatchDay ?? false) !== (baseline?.is_match_day ?? false) ||
+    (t?.drills?.length ?? 0) > 0 ||
+    t?.total_minutes != null ||
+    t?.run_type != null ||
+    t?.distance_km != null ||
+    s.sore != null
+  );
+}
+
 /** Human-friendly age, for the "we restored this" notice. */
 export function describeAge(ms: number): string {
   const mins = Math.round(ms / 60000);

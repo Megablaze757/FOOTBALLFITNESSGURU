@@ -1,7 +1,7 @@
 import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import {
-  saveDraft, loadDraft, clearDraft, clearAllDrafts, draftAge, describeAge,
+  saveDraft, loadDraft, clearDraft, clearAllDrafts, draftAge, describeAge, checkInIsDirty,
 } from "./drafts";
 
 // A minimal localStorage. The module reaches for the global, so tests provide
@@ -164,7 +164,9 @@ test("the draft is flushed before the app can be backgrounded", () => {
 test("a flush cannot resurrect a draft that was already saved", () => {
   assert.match(FORM, /submittedRef\.current = true;\s*\n\s*clearDraft/,
     "the submitted flag is not set before the draft is cleared, so a flush can race it back in");
-  assert.match(FORM, /if \(submittedRef\.current\) return;/,
+  // The guard may carry other conditions alongside it — it also skips an
+  // untouched form — so this pins that the flag is consulted, not the line.
+  assert.match(FORM, /if \(submittedRef\.current[^)]*\) return;/,
     "the flush does not check whether the check-in was already stored");
 });
 
@@ -175,11 +177,105 @@ test("a flush cannot resurrect a draft that was already saved", () => {
  * effect — so drills came back into state behind a collapsed panel. The athlete
  * sees an empty form either way.
  */
-test("restoring a draft opens the training panel it restored into", () => {
-  const restore = FORM.slice(FORM.indexOf("if (draft.training)"), FORM.indexOf("const age = draftAge"));
+test("restoring a draft puts the form back where it was, not just what was typed", () => {
+  const restore = FORM.slice(FORM.indexOf("const applyDraft"), FORM.indexOf("const [pendingDraft"));
+  assert.ok(restore.length > 0, "applyDraft has been renamed or moved");
+
   assert.match(restore, /setTraining\(draft\.training\)/, "the draft's training is not restored");
-  assert.match(restore, /setLogTraining\(true\)/,
-    "the panel stays shut, so restored drills are invisible");
-  assert.match(restore, /drills\?\.length \?\? 0\) > 0 \|\| draft\.training\.total_minutes != null/,
+  assert.match(restore, /setLogTraining\(/, "the panel stays shut, so restored drills are invisible");
+  assert.match(restore, /drills\?\.length \?\? 0\) > 0 \|\| draft\.training\?\.total_minutes != null/,
     "the panel is opened even for an empty training log, which is noise");
+
+  /**
+   * THE POSITION IS PART OF THE WORK.
+   *
+   * `sore` is the loud one: without it the body map is hidden and a marked-up
+   * knee sits in `painMap` invisible, which from the athlete's side is
+   * identical to the soreness having been thrown away. `detailed` is the other
+   * — halfway through the full check-in, back to the quick one.
+   */
+  assert.match(restore, /setSore\(/, "soreness is not restored, so the body map hides the marks");
+  assert.match(restore, /setDetailed\(/, "quick/full mode is not restored");
+  assert.match(restore, /setWeighing\(/, "the weight field's open state is not restored");
+  // And `sore` falls back to the pain map for drafts written before it was saved.
+  assert.match(restore, /Object\.keys\(draft\.painMap \?\? \{\}\)\.length > 0/,
+    "an older draft with marks in it will open with the body map shut");
+});
+
+test("a draft alongside a saved check-in is offered rather than applied", () => {
+  // Checking in at 7am and adding the evening's session later is the normal
+  // pattern for a daily user, and that half-finished session used to be dropped
+  // because `initial` existed. Restoring it silently would be the opposite
+  // mistake — overwriting what is actually stored.
+  assert.match(FORM, /if \(initial\) \{\s*\n\s*setPendingDraft\(draft\);/,
+    "a draft is no longer held back when a check-in already exists");
+  assert.match(FORM, /applyDraft\(pendingDraft\)/, "there is no way to accept the offered draft");
+  assert.match(FORM, /clearDraft\("checkin", userId, today\);\s*\n\s*setPendingDraft\(null\)/,
+    "discarding the offer leaves the draft on disk to be offered again forever");
+});
+
+test("an untouched form is never written as a draft", () => {
+  assert.match(FORM, /!dirtyRef\.current/,
+    "the flush no longer checks whether anything was entered");
+  assert.match(FORM, /const dirty = checkInIsDirty\(/,
+    "the dirtiness rules are inlined again rather than tested in lib/drafts.ts");
+});
+
+// --- Is there anything worth keeping? ---------------------------------------
+
+/** An untouched quick check-in, exactly as the form mounts it. */
+const fresh = () => ({
+  painMap: {}, fatigue: 5, sleep: 7, nutrition: 6, weight: "", isMatchDay: false,
+  sore: null, training: { drills: [], total_minutes: null, intensity: null },
+});
+
+test("an untouched check-in is not worth saving", () => {
+  // THE BUG THIS FIXES. The autosave fired 400ms after mount whatever happened,
+  // so opening the page and closing it wrote a draft of the defaults — and the
+  // next visit said "restored from 2 hours ago" over a form nobody had filled
+  // in. A restore notice that is usually about nothing is one people learn to
+  // ignore, and then it fails them on the morning it was real.
+  assert.equal(checkInIsDirty(fresh()), false);
+  assert.equal(checkInIsDirty({}), false, "an empty object is not work in progress");
+});
+
+test("every way of starting the check-in counts as work", () => {
+  const cases: [string, object][] = [
+    ["marked a sore knee", { painMap: { knee_left: 3 } }],
+    ["answered 'nothing hurts'", { sore: false }],
+    ["answered 'something hurts'", { sore: true }],
+    ["moved the sleep scale", { sleep: 3 }],
+    ["moved fatigue", { fatigue: 9 }],
+    ["moved nutrition", { nutrition: 2 }],
+    ["typed a weight", { weight: "82" }],
+    ["said it was a match day", { isMatchDay: true }],
+    ["added a drill", { training: { drills: [{ name: "Back squat" }] } }],
+    ["typed a duration", { training: { total_minutes: 45 } }],
+    ["picked a run type", { training: { run_type: "hills" } }],
+    ["logged a distance", { training: { distance_km: 8 } }],
+  ];
+  for (const [what, patch] of cases) {
+    assert.equal(checkInIsDirty({ ...fresh(), ...patch }), true, `${what} should be kept`);
+  }
+});
+
+test("'no' to soreness is as real an answer as 'yes'", () => {
+  // It is also the one most likely to be given first and then interrupted, so
+  // treating null and false alike would lose the commonest first tap there is.
+  assert.equal(checkInIsDirty({ ...fresh(), sore: false }), true);
+  assert.equal(checkInIsDirty({ ...fresh(), sore: null }), false);
+});
+
+test("dirtiness is measured against an existing entry, not against zero", () => {
+  // Re-opening a saved check-in seeds the form FROM it. Comparing to the
+  // hardcoded defaults would call that untouched form dirty and immediately
+  // write a draft of the athlete's own saved answers back over itself.
+  const saved = { fatigue_score: 8, sleep_quality: 3, nutrition_quality: 9, weight_kg: 82, is_match_day: true };
+  const seeded = {
+    ...fresh(), fatigue: 8, sleep: 3, nutrition: 9, weight: "82", isMatchDay: true,
+  };
+  assert.equal(checkInIsDirty(seeded, saved), false, "re-opening an entry is not editing it");
+  assert.equal(checkInIsDirty({ ...seeded, sleep: 4 }, saved), true, "changing one thing is");
+  // And against no baseline the same form obviously IS full of work.
+  assert.equal(checkInIsDirty(seeded), true);
 });
