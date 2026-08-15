@@ -352,6 +352,11 @@ export function JournalForm({ initial, initialTraining, sport, planned = [], his
           run_type: training.run_type ?? null,
           zone: training.zone ?? null,
           avg_hr: training.avg_hr ?? null,
+          // How the session was broken up. What makes the intensity above a
+          // measurement rather than a guess — see migration 0084.
+          intervals: training.intervals ?? null,
+          interval_seconds: training.interval_seconds ?? null,
+          recovery_seconds: training.recovery_seconds ?? null,
         }
       : null;
 

@@ -174,6 +174,15 @@ export interface TrainingLog {
   zone?: import("./running").ZoneId | null;
   /** Average heart rate from a watch. */
   avg_hr?: number | null;
+  /**
+   * Interval structure — how many efforts, how long each was, how long the jog
+   * between them was. See migration 0084 and `intervalEffort` in lib/running.ts,
+   * which turns these into the session's intensity instead of asking the athlete
+   * to guess it on a slider.
+   */
+  intervals?: number | null;
+  interval_seconds?: number | null;
+  recovery_seconds?: number | null;
   created_at: string;
 }
 

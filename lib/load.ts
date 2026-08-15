@@ -4,6 +4,7 @@
 // =============================================================================
 
 import { totalReps } from "./training-sets";
+import { intervalEffort } from "./running";
 import type { DailyCheckIn, NutritionLog, TrainingLog } from "./types";
 import { todayLocal, daysAgoLocal } from "./day";
 
@@ -35,8 +36,37 @@ export const CONTACT_WEIGHT = 2;
  * anyone who logs both.
  */
 export function sessionLoad(t: TrainingLog): number {
-  const minutes = (t.total_minutes ?? 0) + (t.contact_minutes ?? 0) * (CONTACT_WEIGHT - 1);
-  const sRPE = minutes * (t.intensity ?? 0);
+  /**
+   * INTERVAL SESSIONS CARRY THEIR OWN DURATION.
+   *
+   * An athlete logging 8 × 90 seconds with 2 minutes jog has described a
+   * 26-minute session precisely, and if they didn't also fill in the duration
+   * box this used to fall through to counting reps — scoring a hill session by
+   * how many drills were in it. The efforts plus the recoveries are a floor on
+   * how long the session was, so use them when there is nothing better.
+   *
+   * A logged duration still wins where there is one: it includes the warm-up
+   * and cool-down, which the interval fields cannot see.
+   */
+  const measured = intervalEffort({
+    intervals: t.intervals,
+    effortSeconds: t.interval_seconds,
+    recoverySeconds: t.recovery_seconds,
+    totalMinutes: t.total_minutes,
+    zone: t.zone,
+    type: t.run_type,
+  });
+  const duration = t.total_minutes ?? (measured ? measured.workMinutes + measured.recoveryMinutes : 0);
+
+  const minutes = duration + (t.contact_minutes ?? 0) * (CONTACT_WEIGHT - 1);
+  /**
+   * The athlete's own rating wins where they gave one — it is the only input
+   * that knows they were ill, or that the hill was steeper than usual. The
+   * derived intensity is the fallback, and it is a far better one than nothing:
+   * see `intervalEffort`, which blends the zone of the efforts with the easy
+   * running around them by their actual minutes.
+   */
+  const sRPE = minutes * (t.intensity ?? measured?.intensity ?? 0);
   if (sRPE > 0) return sRPE;
   // totalReps, not sets × reps. A drill logged set by set has varied reps, and
   // multiplying the rounded average would quietly misreport volume — which

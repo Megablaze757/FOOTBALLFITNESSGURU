@@ -7,6 +7,7 @@ import {
   RUN_TYPES, runType, isHardRun, HARD_RUN_TYPES,
   weeklyVolumePlan, buildRunWeek, easyShare, buildRunProgram,
   MAX_HARD_SESSIONS, EASY_SHARE_TARGET,
+  intervalEffort, describeShape, shapeMidpoint, formatEffort,
   type RunTypeId,
 } from "./running";
 import type { ProgramPlan } from "./engine";
@@ -204,6 +205,191 @@ test("the sessions that need recovery are marked hard", () => {
 test("runType returns null for an unknown id instead of throwing", () => {
   assert.equal(runType("nonsense" as RunTypeId), null);
   assert.equal(isHardRun("nonsense" as RunTypeId), false);
+});
+
+/**
+ * THE LIST IN THE DATABASE AND THE LIST IN THE CODE ARE ONE LIST.
+ *
+ * `training_logs_run_type_check` enumerates the run type ids. The dropdown on
+ * the check-in is built from RUN_TYPES. When 'incline' was added to RUN_TYPES
+ * and not to the constraint, it became selectable and unsaveable — a run type
+ * you could pick and then lose, with a database error for an explanation.
+ *
+ * This reads the migrations rather than restating the list, so it fails when
+ * they drift instead of when somebody remembers to update a copy.
+ */
+test("every run type the app offers is allowed by the database", async () => {
+  const { readdirSync, readFileSync } = await import("node:fs");
+  const dir = new URL("../supabase/migrations/", import.meta.url).pathname;
+
+  // The last migration that defines the constraint wins — 0084 replaces 0064's.
+  let allowed: Set<string> | null = null;
+  for (const file of readdirSync(dir).sort()) {
+    const sql = readFileSync(dir + file, "utf8");
+    const m = /add constraint training_logs_run_type_check\s+check\s*\([^)]*run_type in \(([^)]*)\)/i.exec(sql);
+    // [a-z0-9_], with the digit: 'vo2' is a run type id, and a pattern without
+    // it drops exactly one entry and still parses a plausible-looking list.
+    if (m) allowed = new Set([...m[1].matchAll(/'([a-z0-9_]+)'/g)].map((x) => x[1]));
+  }
+
+  assert.ok(allowed, "no migration defines training_logs_run_type_check — did it get renamed?");
+  assert.equal(allowed!.size, RUN_TYPES.length,
+    `parsed ${allowed!.size} ids against ${RUN_TYPES.length} run types — check the regex before the schema`);
+  for (const r of RUN_TYPES) {
+    assert.ok(allowed!.has(r.id), `run type '${r.id}' is offered in the app but rejected by the database`);
+  }
+});
+
+// --- Interval sessions -------------------------------------------------------
+
+test("interval shapes are ordered and plausible", () => {
+  for (const r of RUN_TYPES) {
+    if (!r.interval) continue;
+    const { reps, seconds, recovery } = r.interval;
+    assert.ok(reps[0] <= reps[1] && reps[0] >= 1, `${r.id} rep range`);
+    assert.ok(seconds[0] <= seconds[1] && seconds[0] > 0, `${r.id} effort range`);
+    if (recovery) assert.ok(recovery[0] <= recovery[1] && recovery[0] >= 0, `${r.id} recovery range`);
+    // The work has to fit inside the session it belongs to.
+    const workMin = (reps[1] * seconds[1]) / 60;
+    assert.ok(workMin <= r.minutes[1], `${r.id}: ${workMin} min of efforts inside a ${r.minutes[1]} min session`);
+  }
+});
+
+test("the runs with no reps have no shape", () => {
+  // Fartlek is the one worth pinning: it HAS surges, and the whole point is
+  // that they're unplanned. Asking someone to count them would turn the only
+  // unstructured session in the list into homework.
+  for (const id of ["easy", "long", "recovery", "fartlek", "progression"] as RunTypeId[]) {
+    assert.equal(runType(id)!.interval, undefined, `${id} should not prescribe reps`);
+  }
+});
+
+/**
+ * THE BUG THIS WHOLE THING EXISTS TO FIX.
+ *
+ * Session load is duration x intensity, and people rate an interval session by
+ * how hard the REPS felt — so twelve minutes of efforts inside fifty minutes got
+ * a 9, and the session outscored a 90-minute long run. It should not.
+ */
+test("an interval session does not cost more than a long run", () => {
+  const hills = intervalEffort({ intervals: 8, effortSeconds: 90, recoverySeconds: 120, totalMinutes: 50, type: "hills" })!;
+  const byFeel = 50 * 9;
+  const derived = 50 * hills.intensity;
+  assert.ok(derived < byFeel, `derived ${derived} should be under the by-feel ${byFeel}`);
+  assert.ok(derived < 90 * 4, "a 50-minute hill session still outscores a 90-minute easy run");
+});
+
+test("more efforts is more work, and the old constant could not tell", () => {
+  const small = intervalEffort({ intervals: 6, effortSeconds: 45, totalMinutes: 50, type: "hills" })!;
+  const big = intervalEffort({ intervals: 12, effortSeconds: 90, totalMinutes: 50, type: "hills" })!;
+  assert.ok(big.hardFraction > small.hardFraction * 3, "four times the work should not read as the same session");
+  assert.ok(big.intensity > small.intensity);
+  // And the type's flat estimate sat between them, matching neither.
+  assert.equal(runType("hills")!.hardFraction, 0.2);
+  assert.ok(small.hardFraction < 0.2 && big.hardFraction > 0.2);
+});
+
+test("recovery is counted between the efforts, not after the last one", () => {
+  // 5 efforts have 4 gaps. Counting 5 inflates every session by one rest.
+  const e = intervalEffort({ intervals: 5, effortSeconds: 60, recoverySeconds: 60, totalMinutes: 40, type: "vo2" })!;
+  assert.equal(e.recoveryMinutes, 4);
+});
+
+test("a single continuous block has no recovery at all", () => {
+  const tempo = intervalEffort({ intervals: 1, effortSeconds: 1800, recoverySeconds: 90, totalMinutes: 60, type: "tempo" })!;
+  assert.equal(tempo.recoveryMinutes, 0, "one effort cannot have a gap between efforts");
+  assert.equal(tempo.workMinutes, 30);
+  assert.equal(tempo.hardFraction, 0.5);
+});
+
+test("short rests score higher than full recovery", () => {
+  // Same efforts, same session length. Cruise intervals off 60s keep the heart
+  // rate up; rep work off 3 minutes does not, and that is the actual difference
+  // between the two sessions.
+  const short = intervalEffort({ intervals: 5, effortSeconds: 300, recoverySeconds: 60, totalMinutes: 70, zone: 4 })!;
+  const full = intervalEffort({ intervals: 5, effortSeconds: 300, recoverySeconds: 600, totalMinutes: 70, zone: 4 })!;
+  assert.equal(short.incompleteRecovery, true);
+  assert.equal(full.incompleteRecovery, false);
+  assert.ok(short.intensity >= full.intensity);
+});
+
+test("the zone the efforts were actually run at drives the intensity", () => {
+  const z5 = intervalEffort({ intervals: 6, effortSeconds: 180, totalMinutes: 50, zone: 5 })!;
+  const z3 = intervalEffort({ intervals: 6, effortSeconds: 180, totalMinutes: 50, zone: 3 })!;
+  assert.ok(z5.intensity > z3.intensity, "an effort run easier should cost less");
+});
+
+test("a duration shorter than the work in it raises the duration, not the fraction", () => {
+  // 8 x 3 min is 24 minutes. "20 minutes" is a mistyped duration, and the
+  // efforts are the half worth trusting.
+  const e = intervalEffort({ intervals: 8, effortSeconds: 180, totalMinutes: 20, type: "vo2" })!;
+  assert.ok(e.hardFraction <= 1, `hardFraction was ${e.hardFraction}`);
+  assert.equal(e.easyMinutes, 0);
+  assert.equal(e.workMinutes, 24);
+});
+
+test("no duration means the session is the efforts and the rests", () => {
+  const e = intervalEffort({ intervals: 8, effortSeconds: 90, recoverySeconds: 120, type: "hills" })!;
+  assert.equal(e.workMinutes, 12);
+  assert.equal(e.recoveryMinutes, 14);
+  assert.equal(e.easyMinutes, 0);
+});
+
+test("intensity stays inside the 1-10 the slider uses", () => {
+  const all = [
+    intervalEffort({ intervals: 1, effortSeconds: 3600, totalMinutes: 60, zone: 5 })!,
+    intervalEffort({ intervals: 2, effortSeconds: 20, totalMinutes: 120, zone: 1 })!,
+  ];
+  for (const e of all) assert.ok(e.intensity >= 1 && e.intensity <= 10, `intensity ${e.intensity}`);
+});
+
+test("nothing usable returns null rather than a zero-interval session", () => {
+  // Absent is not zero: a run with no interval data must keep its old
+  // behaviour everywhere, not be scored as having done no work.
+  assert.equal(intervalEffort({}), null);
+  assert.equal(intervalEffort({ intervals: 8, effortSeconds: null }), null);
+  assert.equal(intervalEffort({ intervals: 0, effortSeconds: 90 }), null);
+  assert.equal(intervalEffort({ intervals: -3, effortSeconds: 90 }), null);
+  assert.equal(intervalEffort({ intervals: 8, effortSeconds: 0 }), null);
+});
+
+test("a mis-keyed effort length is refused rather than believed", () => {
+  // "90" meaning 90 MINUTES in a seconds field would report 8 x 90 minutes of
+  // threshold work and hand ACWR twenty times the athlete's real week — which
+  // is the number that tells them to rest.
+  assert.equal(intervalEffort({ intervals: 8, effortSeconds: 90 * 60 * 2, totalMinutes: 50 }), null);
+  assert.equal(intervalEffort({ intervals: 500, effortSeconds: 60, totalMinutes: 50 }), null);
+});
+
+test("easyShare measures the session it was given over the average of its kind", () => {
+  const flat = easyShare([{ type: "hills", minutes: 50 }])!;
+  const small = easyShare([{ type: "hills", minutes: 50, intervals: 6, effortSeconds: 45 }])!;
+  const big = easyShare([{ type: "hills", minutes: 50, intervals: 12, effortSeconds: 90 }])!;
+  assert.ok(small.hardPct < flat.hardPct, "a short hill session should read easier than the type's average");
+  assert.ok(big.hardPct > flat.hardPct, "a long one should read harder");
+});
+
+test("describeShape reads the way a runner says it", () => {
+  assert.equal(describeShape(runType("hills")!.interval!), "6–10 × 45–90s off 60–120s");
+  // "1 × 20:00" is how a spreadsheet writes a tempo run, not how anyone says it.
+  assert.equal(describeShape(runType("tempo")!.interval!), "20:00–40:00 continuous");
+  assert.equal(describeShape({ reps: [8, 8], seconds: [60, 60], recovery: null }), "8 × 60s");
+});
+
+test("formatEffort switches to mm:ss once seconds stop being readable", () => {
+  assert.equal(formatEffort(45), "45s");
+  assert.equal(formatEffort(90), "90s");
+  assert.equal(formatEffort(120), "2:00");
+  assert.equal(formatEffort(305), "5:05");
+  assert.equal(formatEffort(0), "–");
+});
+
+test("a prescription can be pre-filled into a log", () => {
+  const mid = shapeMidpoint(runType("hills")!.interval!);
+  assert.equal(mid.intervals, 8);
+  assert.ok(mid.effortSeconds >= 45 && mid.effortSeconds <= 90);
+  assert.ok(mid.recoverySeconds! > 0);
+  assert.equal(shapeMidpoint(runType("tempo")!.interval!).recoverySeconds, null);
 });
 
 // --- Week structure ----------------------------------------------------------

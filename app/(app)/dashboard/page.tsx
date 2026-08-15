@@ -214,7 +214,18 @@ export default function DashboardPage() {
   const runSplit = easyShare(
     data!.training
       .filter((t) => t.log_date >= since14 && t.run_type)
-      .map((t) => ({ type: t.run_type!, km: t.distance_km, minutes: t.total_minutes })),
+      // The interval fields go through too, or the split falls back to the run
+      // type's average and a 6 × 45s hill session reads the same as a 12 × 90s
+      // one — which is the whole thing migration 0084 exists to stop.
+      .map((t) => ({
+        type: t.run_type!,
+        km: t.distance_km,
+        minutes: t.total_minutes,
+        zone: t.zone,
+        intervals: t.intervals,
+        effortSeconds: t.interval_seconds,
+        recoverySeconds: t.recovery_seconds,
+      })),
   );
 
   return (

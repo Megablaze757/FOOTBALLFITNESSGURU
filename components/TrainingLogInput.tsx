@@ -4,7 +4,11 @@ import type { TrainingDrill } from "@/lib/types";
 import { NumberInput } from "@/components/NumberInput";
 import type { SportId } from "@/lib/exercises";
 import { DrillPicker } from "@/components/DrillPicker";
-import { RUN_TYPES, ZONE_LIST, ZONES, runType, type RunTypeId, type ZoneId } from "@/lib/running";
+import {
+  RUN_TYPES, ZONE_LIST, ZONES, runType, describeShape, shapeMidpoint, intervalEffort,
+  type RunTypeId, type ZoneId,
+} from "@/lib/running";
+import { useRef } from "react";
 import { describeSets, drillTonnage, hasSetDetail, lastSetsFor, setsOf, totalReps, withSets } from "@/lib/training-sets";
 
 export interface TrainingState {
@@ -22,6 +26,10 @@ export interface TrainingState {
   zone?: ZoneId | null;
   /** Average heart rate off a watch, if they have one. */
   avg_hr?: number | null;
+  /** How the session was built — see migration 0084 and `intervalEffort`. */
+  intervals?: number | null;
+  interval_seconds?: number | null;
+  recovery_seconds?: number | null;
 }
 
 export function TrainingLogInput({ value, onChange, planned = [], sport = "all", history = [] }: {
@@ -38,7 +46,61 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
    */
   history?: { log_date?: string; drills?: TrainingDrill[] | null }[];
 }) {
+  /**
+   * INTENSITY IS DERIVED UNTIL THE ATHLETE OVERRIDES IT.
+   *
+   * The slider asks "how hard was that session" about a session with two
+   * intensities in it, and people answer with how hard the REPS felt — so a
+   * 50-minute session with 12 minutes of efforts got rated a 9 and outscored a
+   * 90-minute long run. Once the efforts are logged, that number is arithmetic
+   * (see `intervalEffort`), so the form fills it in.
+   *
+   * But the athlete's own rating wins the moment they give one. They are the
+   * only input that knows they were ill, or that the hill was steeper than
+   * usual, and a form that keeps overwriting a deliberate answer is a form
+   * people stop trusting. A ref rather than state: this decides what a later
+   * edit does, and it should never itself cause a render.
+   */
+  const ratedItThemselves = useRef(false);
+
   const update = (patch: Partial<TrainingState>) => onChange({ ...value, ...patch });
+
+  /**
+   * Change something the derivation reads, and let the intensity follow.
+   *
+   * Every input `intervalEffort` looks at goes through here — the efforts, the
+   * duration and the zone — because an intensity that only refreshed on two of
+   * the three would be silently stale after editing the third.
+   */
+  const updateDerived = (patch: Partial<TrainingState>) => {
+    const next = { ...value, ...patch };
+    const e = intervalEffort({
+      intervals: next.intervals,
+      effortSeconds: next.interval_seconds,
+      recoverySeconds: next.recovery_seconds,
+      totalMinutes: next.total_minutes,
+      zone: next.zone,
+      type: next.run_type,
+    });
+    onChange(e && !ratedItThemselves.current ? { ...next, intensity: e.intensity } : next);
+  };
+
+  const shape = value.run_type ? runType(value.run_type)?.interval ?? null : null;
+  const shapeFill = shape
+    ? (() => {
+        const m = shapeMidpoint(shape);
+        return { intervals: m.intervals, interval_seconds: m.effortSeconds, recovery_seconds: m.recoverySeconds };
+      })()
+    : { intervals: 0, interval_seconds: 0, recovery_seconds: null as number | null };
+
+  const effort = intervalEffort({
+    intervals: value.intervals,
+    effortSeconds: value.interval_seconds,
+    recoverySeconds: value.recovery_seconds,
+    totalMinutes: value.total_minutes,
+    zone: value.zone,
+    type: value.run_type,
+  });
 
   const setDrill = (i: number, patch: Partial<TrainingDrill>) =>
     update({ drills: value.drills.map((d, idx) => (idx === i ? { ...d, ...patch } : d)) });
@@ -243,16 +305,27 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
           <span className="field-label">Duration (min)</span>
           <NumberInput
             value={value.total_minutes ?? null}
-            onChange={(v) => update({ total_minutes: v })}
+            onChange={(v) => updateDerived({ total_minutes: v })}
             min={0} placeholder="e.g. 75" className="field"
           />
         </label>
         <label className="block">
-          <span className="field-label">Intensity {value.intensity ?? "–"}</span>
+          <span className="field-label">
+            Intensity {value.intensity ?? "–"}
+            {/* Where the number came from. A slider that moved on its own with
+                no explanation reads as a bug, and the athlete needs to know it
+                is theirs to change. */}
+            {effort && !ratedItThemselves.current && (
+              <span className="ml-1 font-normal text-pitch-400">· from your intervals</span>
+            )}
+          </span>
           <input
             type="range" min={1} max={10}
             value={value.intensity ?? 5}
-            onChange={(e) => update({ intensity: Number(e.target.value) })}
+            onChange={(e) => {
+              ratedItThemselves.current = true;
+              update({ intensity: Number(e.target.value) });
+            }}
             className="mt-3 w-full"
           />
         </label>
@@ -272,6 +345,15 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
           value={value.run_type ?? ""}
           onChange={(e) => {
             const id = (e.target.value || null) as RunTypeId | null;
+            // Changing the run type clears the structure with it. Switching
+            // from hill repeats to an easy run and leaving "8 × 90s" behind
+            // would save efforts against a session that has none, and the
+            // fields are hidden by then so nobody could see it happen.
+            if (!id || !runType(id)?.interval) {
+              update({ run_type: id, zone: id ? runType(id)?.primaryZone ?? null : null,
+                       intervals: null, interval_seconds: null, recovery_seconds: null });
+              return;
+            }
             // Default the zone to the one the run type prescribes. It's the
             // right answer most of the time and they can override it — which
             // is the interesting case, because an easy run logged at Zone 3 is
@@ -313,6 +395,78 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
             </label>
           </div>
 
+          {/* HOW THE SESSION WAS BUILT.
+              Only for the runs that HAVE a structure — an easy run has no reps
+              and asking for them is two empty boxes on every log. */}
+          {shape && (
+            <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3">
+              <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+                <span className="field-label !mb-0">How was it broken up?</span>
+                <button
+                  type="button"
+                  onClick={() => updateDerived(shapeFill)}
+                  className="chip shrink-0 text-pitch-400 hover:bg-white/[0.08]"
+                >
+                  Use {describeShape(shape)}
+                </button>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <label className="block">
+                  <span className="field-label">Efforts</span>
+                  <NumberInput
+                    min={1} max={100}
+                    value={value.intervals ?? null}
+                    onChange={(v) => updateDerived({ intervals: v })}
+                    placeholder={String(shapeFill.intervals)} className="field"
+                  />
+                </label>
+                <label className="block">
+                  <span className="field-label">Each (sec)</span>
+                  <NumberInput
+                    min={1} max={7200}
+                    value={value.interval_seconds ?? null}
+                    onChange={(v) => updateDerived({ interval_seconds: v })}
+                    placeholder={String(shapeFill.interval_seconds)} className="field"
+                  />
+                </label>
+                <label className="block">
+                  <span className="field-label">Jog (sec)</span>
+                  <NumberInput
+                    min={0} max={7200}
+                    value={value.recovery_seconds ?? null}
+                    onChange={(v) => updateDerived({ recovery_seconds: v })}
+                    placeholder={shapeFill.recovery_seconds == null ? "–" : String(shapeFill.recovery_seconds)}
+                    className="field"
+                  />
+                </label>
+              </div>
+
+              {/* WHAT IT BOUGHT THEM, IMMEDIATELY.
+                  Two numbers going in and a changed intensity coming out is the
+                  whole feature, and it is invisible unless the form says so. */}
+              {effort ? (
+                <p className="mt-2 text-xs text-slate-400">
+                  {effort.note}{" "}
+                  <span className="text-slate-300">
+                    Intensity {effort.intensity}/10, worked out from that rather than guessed.
+                  </span>
+                  {effort.incompleteRecovery && (
+                    <span className="mt-1 block text-slate-500">
+                      Rests shorter than the efforts — you never fully recovered between them, so this
+                      counted harder than the clock alone would say.
+                    </span>
+                  )}
+                </p>
+              ) : (
+                <p className="mt-2 text-xs text-slate-500">
+                  How many, and how long each one was. Two numbers and the app works out the intensity
+                  itself — {describeShape(shape)} is the usual shape of this session.
+                </p>
+              )}
+            </div>
+          )}
+
           <div>
             <span className="field-label">Which zone was it really?</span>
             <div className="flex flex-wrap gap-2">
@@ -322,7 +476,7 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
                   <button
                     key={z.id}
                     type="button"
-                    onClick={() => update({ zone: z.id })}
+                    onClick={() => updateDerived({ zone: z.id })}
                     className={`tap-target rounded-full border px-3 text-xs font-semibold transition ${
                       active ? "text-ink-900" : "border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.06]"
                     }`}

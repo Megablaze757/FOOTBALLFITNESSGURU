@@ -366,6 +366,41 @@ export interface RunType {
   recoveryDays: number;
   /** What to watch for — the failure mode of this specific session. */
   watchFor: string;
+  /**
+   * The shape of the session, when it HAS a shape.
+   *
+   * `howTo` already says "6–10 × 45–90 seconds" in English, and English is not
+   * something the log form can pre-fill or the load maths can read. This is the
+   * same prescription as numbers, so a runner opening the log for a hill session
+   * starts from the session they were given rather than an empty box.
+   *
+   * Null for the runs that genuinely have no reps — an easy run, a long run, a
+   * fartlek. Fartlek is the interesting exclusion: it has surges, but the whole
+   * point is that they are unplanned, and asking someone to count them turns the
+   * one unstructured session in the list into homework.
+   */
+  interval?: IntervalShape;
+}
+
+/**
+ * How an interval session is built: how many efforts, how long each one is, and
+ * how long the jog between them is.
+ *
+ * Every field is a [low, high] range because these are prescriptions, not
+ * measurements — "6–10 × 45–90 seconds" is the actual coaching instruction, and
+ * collapsing it to a single number would invent a precision the session doesn't
+ * have.
+ */
+export interface IntervalShape {
+  /** Number of efforts, [low, high]. [1, 1] for a continuous block like a tempo. */
+  reps: [number, number];
+  /** Length of ONE effort in seconds, [low, high]. */
+  seconds: [number, number];
+  /**
+   * Jog or walk between efforts in seconds, [low, high]. Null where the
+   * recovery is untimed by design — you go again when you're ready.
+   */
+  recovery: [number, number] | null;
 }
 
 /**
@@ -498,6 +533,12 @@ export const RUN_TYPES: RunType[] = [
     hardFraction: 0.45,
     recoveryDays: 1,
     watchFor: "Racing it. A tempo run finished at full stretch was an interval session with no rest.",
+    // One continuous block, which is exactly what makes it a tempo rather than
+    // cruise intervals. Logged the same way as everything else so the hard
+    // fraction is measured here too — a "tempo" with 12 minutes at threshold
+    // inside an hour is a different session from one with 40, and until this
+    // existed both scored as 45%.
+    interval: { reps: [1, 1], seconds: [1200, 2400], recovery: null },
   },
   {
     id: "cruise",
@@ -513,6 +554,10 @@ export const RUN_TYPES: RunType[] = [
     hardFraction: 0.5,
     recoveryDays: 1,
     watchFor: "Taking long rests and running the reps faster. That turns it into a VO2 session with a different cost.",
+    // The short recovery is the session's identity, not an afterthought, which
+    // is why it is worth logging: 5 × 6min off 60s and 5 × 6min off 4min are
+    // different workouts wearing the same name.
+    interval: { reps: [4, 6], seconds: [300, 480], recovery: [60, 90] },
   },
   {
     id: "vo2",
@@ -529,6 +574,7 @@ export const RUN_TYPES: RunType[] = [
     recoveryDays: 2,
     watchFor:
       "Going too fast early and fading. Every rep should be the same speed — the last one is the one that counts.",
+    interval: { reps: [5, 6], seconds: [180, 240], recovery: [120, 180] },
   },
   {
     id: "reps",
@@ -546,6 +592,10 @@ export const RUN_TYPES: RunType[] = [
     watchFor:
       "Cutting the recovery to make it 'harder'. Short rest turns speed work into a lactate session and you " +
       "lose the thing you came for.",
+    // 200–400m at rep pace is roughly 30–90 seconds, and the recovery is longer
+    // than the effort on purpose. Logging it is what lets the app notice when
+    // somebody has quietly cut it — see `incompleteRecovery`.
+    interval: { reps: [8, 12], seconds: [30, 90], recovery: [120, 180] },
   },
   {
     id: "fartlek",
@@ -578,6 +628,9 @@ export const RUN_TYPES: RunType[] = [
     watchFor:
       "Hammering the descent. Downhill running is where the muscle damage comes from — jog it, or you'll " +
       "pay for it two days later.",
+    // The recovery is the jog back down, so it is roughly the length of the
+    // climb — which is why it is a range rather than a fixed rest.
+    interval: { reps: [6, 10], seconds: [45, 90], recovery: [60, 120] },
   },
   {
     id: "strides",
@@ -593,6 +646,7 @@ export const RUN_TYPES: RunType[] = [
     hardFraction: 0,
     recoveryDays: 0,
     watchFor: "Treating them as sprints. They should feel fast and easy, never maximal.",
+    interval: { reps: [4, 6], seconds: [15, 20], recovery: [45, 60] },
   },
   {
     id: "shakeout",
@@ -626,6 +680,193 @@ export const RUN_TYPES: RunType[] = [
 
 export function runType(id: RunTypeId): RunType | null {
   return RUN_TYPES.find((r) => r.id === id) ?? null;
+}
+
+// --- What an interval session actually cost ----------------------------------
+//
+// THE PROBLEM THIS SOLVES. Until now an interval session was logged as a
+// duration and a 1–10 intensity slider the athlete dragged by feel, and the two
+// were multiplied into a session load. Both halves were wrong in the same
+// direction:
+//
+//   * The slider asks "how hard was that session" about a session that had two
+//     intensities in it. People answer with how hard the REPS felt, because that
+//     is what they remember, so 8 × 90 seconds inside a 50-minute session got
+//     rated a 9 — and 50 × 9 says that session cost more than a 90-minute long
+//     run. It did not.
+//
+//   * `hardFraction` on the run type was a constant. Every hill session scored
+//     20% at intensity whether it was 6 × 45s or 12 × 90s — a threefold
+//     difference in the only part of the session that was actually hard.
+//
+// Number of efforts and how long each one was is all it takes to replace both
+// guesses with arithmetic, and they are two numbers a runner already knows
+// without looking anything up.
+//
+// WHY A TIME-WEIGHTED BLEND. Session RPE means the average intensity of the
+// whole session, and an interval session is mostly easy running by the clock.
+// Weighting each part of the session by its own minutes is what coaches do on
+// paper, and it is the only version that makes an interval session and a steady
+// run comparable — which is the entire job of a load number.
+
+/** The middle of a zone's RPE band. */
+function midRpe(z: ZoneId): number {
+  const [lo, hi] = ZONES[z].rpe;
+  return (lo + hi) / 2;
+}
+
+/**
+ * Absurd inputs to reject outright.
+ *
+ * A mistyped effort length is the dangerous one: "90" meaning 90 seconds typed
+ * into a field read as minutes would report 8 × 90 minutes and hand ACWR a
+ * number twenty times the athlete's real week, which is what tells them to rest.
+ * Two hours is longer than any interval anybody runs.
+ */
+const MAX_EFFORT_SECONDS = 7200;
+const MAX_INTERVALS = 100;
+
+export interface RunEffort {
+  /** Minutes actually spent at the working intensity. */
+  workMinutes: number;
+  /** Minutes of jog recovery between efforts. Zero when it wasn't logged. */
+  recoveryMinutes: number;
+  /** The rest of the session — warm-up and cool-down. */
+  easyMinutes: number;
+  /** Share of the session at the working intensity. MEASURED, not the type's estimate. */
+  hardFraction: number;
+  /** Session RPE, 1–10. This is what `sessionLoad` multiplies the minutes by. */
+  intensity: number;
+  /** Rests shorter than the efforts — deliberate in cruise intervals, a mistake in rep work. */
+  incompleteRecovery: boolean;
+  /** One line for the athlete, so the number isn't unexplained. */
+  note: string;
+}
+
+export interface RunEffortInput {
+  intervals?: number | null;
+  /** Length of ONE effort, in seconds. */
+  effortSeconds?: number | null;
+  /** Jog between efforts, in seconds. Optional — the maths works without it. */
+  recoverySeconds?: number | null;
+  /** Whole session including warm-up and cool-down. */
+  totalMinutes?: number | null;
+  /** The zone the efforts were run at. Falls back to the one the type prescribes. */
+  zone?: ZoneId | null;
+  type?: RunTypeId | null;
+}
+
+/**
+ * Intensity and hard-time from the shape of the session.
+ *
+ * Returns null when there is no usable interval data, which is the common case —
+ * every caller has to keep its existing behaviour for an ordinary run, and
+ * "absent" must not collapse to "zero intervals".
+ */
+export function intervalEffort(input: RunEffortInput): RunEffort | null {
+  const reps = Math.floor(Number(input.intervals) || 0);
+  const effort = Number(input.effortSeconds) || 0;
+  if (reps <= 0 || effort <= 0) return null;
+  if (reps > MAX_INTERVALS || effort > MAX_EFFORT_SECONDS) return null;
+
+  const workMinutes = (reps * effort) / 60;
+
+  // reps − 1, not reps. There is no recovery after the last effort — that is
+  // the cool-down — and counting one extra inflates every session by a rest.
+  const rest = Number(input.recoverySeconds) || 0;
+  const recoveryMinutes = reps > 1 && rest > 0 ? ((reps - 1) * rest) / 60 : 0;
+
+  const zone = input.zone ?? (input.type ? runType(input.type)?.primaryZone : null) ?? 4;
+
+  /**
+   * A logged duration shorter than the work it contains is contradictory, and
+   * the work is the half we trust: somebody who typed 8 × 3 min and then "20
+   * minutes" has mistyped the duration, not run 24 minutes of efforts inside
+   * 20. Raising the total keeps `hardFraction` inside 0–1 without discarding
+   * either number.
+   */
+  const logged = Number(input.totalMinutes) || 0;
+  const total = Math.max(logged, workMinutes + recoveryMinutes);
+
+  /**
+   * Short rests keep the heart rate up, so the jog between cruise intervals is
+   * not easy running and should not be scored as it. Shorter recovery than
+   * effort is the standard line between complete and incomplete recovery, and
+   * it is the difference between a threshold session and a VO2 one.
+   */
+  const incompleteRecovery = rest > 0 && rest < effort;
+  const restRpe = midRpe(incompleteRecovery ? 3 : 2);
+
+  const easyMinutes = Math.max(0, total - workMinutes - recoveryMinutes);
+  const blended =
+    (workMinutes * midRpe(zone) + recoveryMinutes * restRpe + easyMinutes * midRpe(2)) / total;
+
+  const hardFraction = workMinutes / total;
+  const intensity = Math.max(1, Math.min(10, Math.round(blended)));
+
+  return {
+    workMinutes: round1(workMinutes),
+    recoveryMinutes: round1(recoveryMinutes),
+    easyMinutes: round1(easyMinutes),
+    hardFraction: +hardFraction.toFixed(3),
+    intensity,
+    incompleteRecovery,
+    note:
+      `${reps} × ${formatEffort(effort)} at Zone ${zone} — ` +
+      `${round1(workMinutes)} of ${round1(total)} minutes at intensity (${Math.round(hardFraction * 100)}%).`,
+  };
+}
+
+/**
+ * "8–10 × 45–90s off 60–120s" — a prescription in the words a runner uses.
+ *
+ * A single rep collapses to the block it is: "20:00–40:00 continuous", because
+ * "1 × 20:00" is how a spreadsheet writes a tempo run and not how anyone says it.
+ */
+export function describeShape(shape: IntervalShape): string {
+  const effort = timeRange(shape.seconds);
+  if (shape.reps[0] === 1 && shape.reps[1] === 1) return `${effort} continuous`;
+
+  const reps = shape.reps[0] === shape.reps[1] ? String(shape.reps[0]) : `${shape.reps[0]}–${shape.reps[1]}`;
+  const rest = shape.recovery ? ` off ${timeRange(shape.recovery)}` : "";
+  return `${reps} × ${effort}${rest}`;
+}
+
+/**
+ * "45–90s", not "45s–90s".
+ *
+ * When both ends of a range are in the same unit the unit belongs once, at the
+ * end — which is how the range is said out loud. Mixed units ("60s–2:00") have
+ * to carry both, because dropping one would read as a single number.
+ */
+function timeRange([lo, hi]: [number, number]): string {
+  if (lo === hi) return formatEffort(lo);
+  // Inclusive of 120: "60–120s" is the way that range is said, even though a
+  // lone 120 reads better as "2:00".
+  if (hi <= 120) return `${Math.round(lo)}–${Math.round(hi)}s`;
+  return `${formatEffort(lo)}–${formatEffort(hi)}`;
+}
+
+/** The middle of a prescription, for pre-filling a log. */
+export function shapeMidpoint(shape: IntervalShape): { intervals: number; effortSeconds: number; recoverySeconds: number | null } {
+  const mid = (r: [number, number]) => Math.round((r[0] + r[1]) / 2);
+  return {
+    intervals: mid(shape.reps),
+    effortSeconds: mid(shape.seconds),
+    recoverySeconds: shape.recovery ? mid(shape.recovery) : null,
+  };
+}
+
+/** "90s" or "6:00" — seconds under two minutes, mm:ss above. */
+export function formatEffort(seconds: number): string {
+  if (!isFinite(seconds) || seconds <= 0) return "–";
+  const s = Math.round(seconds);
+  if (s < 120) return `${s}s`;
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+function round1(n: number): number {
+  return Math.round(n * 10) / 10;
 }
 
 /** Run types that count against the week's hard-day budget. */
@@ -1023,7 +1264,15 @@ function runDrill(s: RunSession, zonePaces: PaceZoneRange[] | null): RunProgramD
   const pace = zonePaces?.find((p) => p.zone === s.zone);
   // Distance where we have one, minutes otherwise — a tempo session is
   // prescribed by time and turning that into a distance would be inventing it.
-  const amount = s.hard ? `${s.minutes} min` : s.km ? `${s.km}km` : `${s.minutes} min`;
+  //
+  // Except for the sessions that have a SHAPE. "50 min · Zone 5" is not a hill
+  // session, it's a duration; the athlete still has to read the how-to to find
+  // out it means 6–10 × 45–90 seconds. Leading with the reps puts the actual
+  // prescription where the eye lands, and it is the same structure the log now
+  // asks for back, so the plan and the record finally speak in one unit.
+  const amount = t.interval
+    ? `${describeShape(t.interval)} · ${s.minutes} min total`
+    : s.hard ? `${s.minutes} min` : s.km ? `${s.km}km` : `${s.minutes} min`;
 
   return {
     name: t.label,
@@ -1037,7 +1286,16 @@ function runDrill(s: RunSession, zonePaces: PaceZoneRange[] | null): RunProgramD
   };
 }
 
-export function easyShare(runs: { type: RunTypeId; km?: number | null; minutes?: number | null }[]): {
+export function easyShare(runs: {
+  type: RunTypeId;
+  km?: number | null;
+  minutes?: number | null;
+  /** Logged interval structure, when there was one. Beats the type's estimate. */
+  intervals?: number | null;
+  effortSeconds?: number | null;
+  recoverySeconds?: number | null;
+  zone?: ZoneId | null;
+}[]): {
   easyPct: number;
   hardPct: number;
   meetsTarget: boolean;
@@ -1053,9 +1311,23 @@ export function easyShare(runs: { type: RunTypeId; km?: number | null; minutes?:
   // An hour-long tempo run is roughly 25 minutes at threshold wrapped in 35
   // minutes of easy running, and calling the whole hour hard reported an
   // ordinary week as 66% easy and told the athlete to do less.
+  //
+  // The type's `hardFraction` is an ESTIMATE of that split. Where the athlete
+  // logged the actual intervals, the split is a measurement instead, and a
+  // measurement of the specific session beats an average of the kind: 6 × 45s
+  // and 12 × 90s are both "hill repeats" and one is four times the work.
   const hardMinutes = runs.reduce((s, r) => {
     const t = runType(r.type);
-    return s + (t ? weight(r) * t.hardFraction : 0);
+    if (!t) return s;
+    const measured = intervalEffort({
+      intervals: r.intervals,
+      effortSeconds: r.effortSeconds,
+      recoverySeconds: r.recoverySeconds,
+      totalMinutes: r.minutes,
+      zone: r.zone,
+      type: r.type,
+    });
+    return s + weight(r) * (measured?.hardFraction ?? t.hardFraction);
   }, 0);
   const easyPct = Math.round(((total - hardMinutes) / total) * 100);
   const hardPct = 100 - easyPct;
