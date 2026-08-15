@@ -76,7 +76,7 @@ export default function AdminOverview() {
     activeUsers: data?.costs?.active_users ?? 0,
   };
   const cost = totalMonthlyCost(usage);
-  const { profit, breakEvenSubs } = monthlyMargin(usage);
+  const { commission, net, profit, breakEvenSubs } = monthlyMargin(usage);
   const unit = unitEconomics(usage);
   const owed = (data?.costs?.commission_owed_pennies ?? 0) / 100;
 
@@ -89,9 +89,21 @@ export default function AdminOverview() {
           dashboard — you read all nine every time to find the one you came for. */}
       <section className="mb-9">
         <div className="grid gap-3 sm:grid-cols-2">
+          {/* GROSS, THEN WHAT ACTUALLY LANDS. Commission used to be buried in
+              the cost stack, which made £500 billed with £50 paid away read as
+              "£500 of income and a £50 expense". It is not — it is £450 of
+              income, and the gap is the number that grows with affiliate sales
+              rather than with usage. The headline is what you charged; the line
+              under it is what you keep. */}
           <div className="card p-5 shadow-glow ring-1 ring-pitch-400/40">
             <div className="stat-label">Monthly recurring revenue</div>
             <div className="mt-0.5 text-4xl font-extrabold tracking-tight text-pitch-400">£{mrr}</div>
+            {commission > 0 && (
+              <div className="mt-1 text-sm text-slate-400">
+                −£{commission.toFixed(2)} to affiliates ·{" "}
+                <b className="text-slate-200">£{net.toFixed(2)} actually yours</b>
+              </div>
+            )}
             <div className="mt-2 text-sm text-slate-400">
               <b className="text-slate-200">{silver + gold}</b> paying · {silver} silver, {gold} gold
               {comped > 0 && (
@@ -177,9 +189,24 @@ export default function AdminOverview() {
               <span className="text-sm font-extrabold tabular-nums text-slate-100">£{cost.toFixed(2)}</span>
             </div>
           </div>
+
+          {/* THE WHOLE STORY IN FOUR ROWS, because a cost list on its own does
+              not tell you whether you are making money. Commission sits here
+              rather than in the list above: it is revenue that never arrived,
+              not something the business bought. */}
+          <div className="card mt-3 divide-y divide-white/[0.06] overflow-hidden">
+            <Waterfall label="Billed" value={mrr} note="Gross MRR" />
+            <Waterfall label="To affiliates" value={-commission} note="Commission earned this month" />
+            <Waterfall label="Actually yours" value={net} note="What lands before costs" strong />
+            <Waterfall label="Running costs" value={-cost} note="Platform, AI and Stripe" />
+            <Waterfall label={profit >= 0 ? "Profit" : "Shortfall"} value={profit} note="Per month" strong />
+          </div>
+
           <p className="text-xs text-slate-500">
             Subscription prices come from published rates in <code>lib/costs.ts</code> — edit that file if
-            a plan changes. AI spend is the only figure read from real usage.
+            a plan changes. AI spend is the only figure read from real usage. Affiliate commission is
+            deducted from revenue rather than listed as a cost: billing £100 and paying £10 away is
+            £90 of income, not £100 with an expense.
           </p>
         </AdminArea>
       )}
@@ -244,6 +271,34 @@ function Figure({ label, value, note, accent }: { label: string; value: string; 
       <div className="stat-label">{label}</div>
       <div className={`mt-0.5 text-xl font-extrabold ${accent ? "text-pitch-400" : "text-slate-100"}`}>{value}</div>
       <div className="text-[11px] leading-tight text-slate-500">{note}</div>
+    </div>
+  );
+}
+
+/**
+ * One row of the revenue-to-profit waterfall.
+ *
+ * Negatives are shown with a real minus sign rather than red-and-positive: a
+ * column of unsigned numbers where some are additions and some are subtractions
+ * cannot be checked by adding it up, which is the only thing a waterfall is for.
+ */
+function Waterfall({ label, value, note, strong }: {
+  label: string; value: number; note: string; strong?: boolean;
+}) {
+  const negative = value < 0;
+  return (
+    <div className={`flex items-baseline justify-between gap-3 px-4 py-3 ${strong ? "bg-white/[0.02]" : ""}`}>
+      <span className="min-w-0">
+        <span className={`text-sm ${strong ? "font-bold text-slate-100" : "font-semibold text-slate-200"}`}>{label}</span>
+        <span className="block text-xs leading-snug text-slate-500">{note}</span>
+      </span>
+      <span
+        className={`shrink-0 tabular-nums ${strong ? "text-sm font-extrabold" : "text-sm font-bold"} ${
+          strong && value < 0 ? "text-readiness-red" : negative ? "text-slate-400" : "text-slate-100"
+        }`}
+      >
+        {negative ? "−" : ""}£{Math.abs(value).toFixed(2)}
+      </span>
     </div>
   );
 }

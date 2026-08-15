@@ -102,14 +102,35 @@ export function costLines({ aiSpendUsd, paidSubs, mrr, commissionGbp = 0 }: Usag
     basis: "estimated",
   });
 
-  lines.push({
-    label: "Affiliate commission",
-    monthly: round2(commissionGbp),
-    note: "Earned this month, reversals excluded — recorded per invoice",
-    basis: "measured",
-  });
+  // AFFILIATE COMMISSION IS NOT HERE ANY MORE, and that is the point.
+  //
+  // It used to sit in this list beside the hosting bill and the AI spend, which
+  // made the arithmetic right and the story wrong. Commission is not something
+  // the business BUYS — it is revenue that never arrives. Billing £500 and
+  // paying £50 away is not £500 of income with a £50 expense; it is £450 of
+  // income. Accountants call it contra-revenue for that reason.
+  //
+  // Practically it is the difference between "what did I charge" and "what
+  // landed", and that gap is the thing an owner most needs to see, because it
+  // scales with affiliate sales rather than with usage. It is now a deduction
+  // from revenue — see `netRevenue` — so the page reads gross, then what you
+  // actually take, then profit.
+  //
+  // The profit number is unchanged: MRR - commission - costs is the same
+  // arithmetic as MRR - (costs + commission). Only where it is subtracted moved.
 
   return lines;
+}
+
+/**
+ * What actually landed, after affiliates take their cut.
+ *
+ * Reversed commission is already excluded upstream, in 0080 — a refunded or
+ * charged-back sale costs nothing in commission, and counting it would
+ * understate this.
+ */
+export function netRevenue(usage: Usage): number {
+  return round2(usage.mrr - (usage.commissionGbp ?? 0));
 }
 
 /**
@@ -122,29 +143,52 @@ export function stripeFees(mrr: number, paidSubs: number): number {
   return round2(mrr * STRIPE_PERCENT + paidSubs * STRIPE_FIXED_GBP);
 }
 
-/** Everything, in GBP. */
+/**
+ * What it costs to run the thing, in GBP.
+ *
+ * Commission is deliberately NOT in here — it is netted off revenue instead,
+ * see `netRevenue`. Leaving it in would double-count it against profit now that
+ * profit is computed from net revenue.
+ */
 export function totalMonthlyCost(usage: Usage): number {
   const platform = PLATFORM.reduce((n, p) => n + p.gbp, 0);
   const ai = usage.aiSpendUsd * USD_TO_GBP;
-  return round2(platform + ai + stripeFees(usage.mrr, usage.paidSubs) + (usage.commissionGbp ?? 0));
+  return round2(platform + ai + stripeFees(usage.mrr, usage.paidSubs));
 }
 
 /**
- * Revenue minus cost. Negative is the normal state early on and is reported as
- * such rather than clamped — a dashboard that cannot show a loss is not telling
- * you anything you need to hear.
+ * The three numbers, in the order an owner actually asks for them: what did I
+ * charge, what landed, what is left.
+ *
+ * Negative profit is the normal state early on and is reported as such rather
+ * than clamped — a dashboard that cannot show a loss is not telling you
+ * anything you need to hear.
  */
-export function monthlyMargin(usage: Usage): { profit: number; breakEvenSubs: number } {
+export function monthlyMargin(usage: Usage): {
+  gross: number;
+  commission: number;
+  net: number;
+  profit: number;
+  breakEvenSubs: number;
+} {
   const cost = totalMonthlyCost(usage);
-  const profit = round2(usage.mrr - cost);
+  const commission = round2(usage.commissionGbp ?? 0);
+  const net = netRevenue(usage);
+  const profit = round2(net - cost);
 
-  // How many subscriptions would cover it, at the revenue per subscription you
-  // currently have. Undefined with no customers, because there is no price to
-  // divide by — reported as 0 rather than Infinity.
-  const perSub = usage.paidSubs > 0 ? usage.mrr / usage.paidSubs : 0;
+  /**
+   * How many subscriptions would cover the running costs, at what a
+   * subscription is currently WORTH — net of the commission being paid away on
+   * an average one, not its sticker price. Using gross ARPU here would say you
+   * break even at a customer count that does not, in fact, break even.
+   *
+   * Undefined with no customers, because there is no price to divide by, and
+   * reported as 0 rather than Infinity.
+   */
+  const perSub = usage.paidSubs > 0 ? net / usage.paidSubs : 0;
   const breakEvenSubs = perSub > 0 ? Math.ceil(cost / perSub) : 0;
 
-  return { profit, breakEvenSubs };
+  return { gross: round2(usage.mrr), commission, net, profit, breakEvenSubs };
 }
 
 function round2(n: number): number {
@@ -178,17 +222,28 @@ export interface UnitEconomics {
 }
 
 export function unitEconomics(usage: Usage): UnitEconomics {
-  const { mrr, paidSubs, aiSpendUsd, commissionGbp = 0, activeUsers = 0 } = usage;
+  const { mrr, paidSubs, aiSpendUsd, activeUsers = 0 } = usage;
 
-  const variable = stripeFees(mrr, paidSubs) + commissionGbp + aiSpendUsd * USD_TO_GBP;
+  /**
+   * ARPU IS NET OF COMMISSION, for the same reason profit is: what a subscriber
+   * is worth is what they leave behind, not what their invoice said. Commission
+   * used to be counted here as a variable COST per subscriber, which produced
+   * the identical contribution figure by a route that reads as "every customer
+   * costs you commission" — and most of them do not, because most do not come
+   * through an affiliate. Netting it off revenue says the true thing: on
+   * average, this is what a subscription is actually worth to you.
+   */
+  const net = netRevenue(usage);
+  const variable = stripeFees(mrr, paidSubs) + aiSpendUsd * USD_TO_GBP;
 
   // Every division guarded. A dashboard that renders NaN or Infinity on its
   // first day is one nobody opens again, and "no customers yet" is a normal
   // state rather than an error.
-  const arpu = paidSubs > 0 ? mrr / paidSubs : 0;
+  const arpu = paidSubs > 0 ? net / paidSubs : 0;
   const variableCostPerSub = paidSubs > 0 ? variable / paidSubs : 0;
   const contributionPerSub = round2(arpu - variableCostPerSub);
-  const grossMarginPct = mrr > 0 ? round1(((mrr - variable) / mrr) * 100) : 0;
+  // Against NET revenue, so it cannot read above 100% of what you actually take.
+  const grossMarginPct = net > 0 ? round1(((net - variable) / net) * 100) : 0;
   const costPerActiveUser = activeUsers > 0 ? round2(totalMonthlyCost(usage) / activeUsers) : 0;
 
   return {

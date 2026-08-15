@@ -39,7 +39,10 @@ test("only the lines the app actually measures are marked as measured", () => {
   // Named rather than counted. Counting broke the moment commission was added —
   // a second genuinely measured line — and a count cannot tell a new measured
   // line from an estimate that has been mislabelled as one.
-  assert.deepEqual(measured, ["AI providers", "Affiliate commission"],
+  // Commission left this list when it became a deduction from revenue rather
+  // than an operating cost — it is netted off MRR now, so counting it here too
+  // would subtract it twice. AI spend is the only thing the app measures.
+  assert.deepEqual(measured, ["AI providers"],
     "the set of measured lines changed; an estimate may be posing as a measurement");
   assert.ok(lines.every((l) => l.basis === "measured" || l.basis === "estimated"),
     "a line has no basis, so the UI cannot label it");
@@ -96,26 +99,53 @@ test("every platform line is named and priced, so the total can be explained", (
 });
 
 /**
- * COMMISSION IS A COST OF REVENUE.
+ * COMMISSION IS CONTRA-REVENUE, NOT AN OPERATING COST.
  *
  * Every pound of MRR that arrived through an affiliate costs a percentage of
- * itself. Leaving it out of profit overstates the business by exactly the amount
- * being paid away, and the error grows with every affiliate sale — so it is the
- * one omission that gets worse the better things go.
+ * itself, so leaving it out of profit overstates the business by exactly the
+ * amount being paid away — the one omission that gets worse the better things
+ * go. It used to be subtracted as a cost line beside hosting and AI, which got
+ * the arithmetic right and the story wrong: billing £500 and paying £50 away is
+ * not £500 of income with a £50 expense, it is £450 of income.
+ *
+ * So it is netted off revenue, and the page reads gross → net → profit. Profit
+ * is unchanged by the move; only where it is subtracted differs.
  */
-test("affiliate commission is deducted from profit", () => {
+test("affiliate commission comes off revenue, not off the cost list", () => {
   const without = monthlyMargin({ aiSpendUsd: 0, paidSubs: 5, mrr: 100 });
   const with20 = monthlyMargin({ aiSpendUsd: 0, paidSubs: 5, mrr: 100, commissionGbp: 20 });
+
   assert.equal(round(without.profit - with20.profit), 20,
     "commission does not reduce profit pound for pound");
-  assert.ok(with20.breakEvenSubs > without.breakEvenSubs,
-    "break-even ignores commission, so it is reported as easier than it is");
 
-  // And it appears as its own line rather than being buried in the total.
-  const line = costLines({ aiSpendUsd: 0, paidSubs: 5, mrr: 100, commissionGbp: 20 })
-    .find((l) => l.label === "Affiliate commission");
-  assert.ok(line, "commission is not shown as a cost line");
-  assert.equal(line.monthly, 20);
+  // The waterfall itself: what you charged, what landed, and the gap.
+  assert.equal(with20.gross, 100);
+  assert.equal(with20.commission, 20);
+  assert.equal(with20.net, 80, "net revenue is not gross minus commission");
+  assert.equal(without.net, without.gross, "no affiliates means net is gross");
+
+  // Running costs must NOT contain it, or profit is reduced by it twice.
+  const total = totalMonthlyCost({ aiSpendUsd: 0, paidSubs: 5, mrr: 100, commissionGbp: 20 });
+  assert.equal(total, totalMonthlyCost({ aiSpendUsd: 0, paidSubs: 5, mrr: 100 }),
+    "commission is still inside running costs, so it is being double counted");
+  assert.equal(
+    costLines({ aiSpendUsd: 0, paidSubs: 5, mrr: 100, commissionGbp: 20 })
+      .find((l) => l.label === "Affiliate commission"),
+    undefined,
+    "commission is still a cost line as well as a revenue deduction");
+});
+
+/**
+ * Break-even has to price a subscription at what it is WORTH, not at its
+ * sticker. Half the revenue going to affiliates means you need more customers
+ * to cover the same bill, and a break-even built on gross ARPU would report a
+ * customer count that does not in fact break even.
+ */
+test("break-even counts what a subscription actually leaves behind", () => {
+  const gross = monthlyMargin({ aiSpendUsd: 0, paidSubs: 5, mrr: 100 });
+  const heavy = monthlyMargin({ aiSpendUsd: 0, paidSubs: 5, mrr: 100, commissionGbp: 50 });
+  assert.ok(heavy.breakEvenSubs > gross.breakEvenSubs,
+    `break-even ignores commission: ${gross.breakEvenSubs} vs ${heavy.breakEvenSubs} at half the revenue paid away`);
 });
 
 /**
@@ -131,8 +161,11 @@ test("contribution per subscriber excludes fixed costs", () => {
   const u = { aiSpendUsd: 20, paidSubs: 10, mrr: 200, commissionGbp: 30 };
   const e = unitEconomics(u);
 
-  assert.equal(e.arpu, 20, "revenue per paying customer is wrong");
-  // Variable only: Stripe + commission + AI. Never the Supabase bill.
+  // NET of commission: £200 billed less £30 paid away, over 10 subscribers.
+  // What a subscriber is worth is what they leave behind, not what their
+  // invoice said.
+  assert.equal(e.arpu, 17, "revenue per paying customer is not net of commission");
+  // Variable only: Stripe + AI. Never the Supabase bill.
   const fixed = PLATFORM.reduce((n, p) => n + p.gbp, 0);
   assert.ok(e.contributionPerSub > e.arpu - (totalMonthlyCost(u) / u.paidSubs),
     "contribution is being reduced by fixed costs, which the next customer does not add");
