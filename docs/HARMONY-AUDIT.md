@@ -85,36 +85,46 @@ exercises, and the library must still read the query string.
 
 ---
 
+### 6. Reported pain never expired
+*Shape 2 again. Commit "Let a reported injury heal".*
+
+A knee marked 7/10 in March kept shaping things in April: a stale 7 and a
+current 7 were the same value, because the number had no date attached at the
+point of use. `lib/pain.ts` fades a report — full weight for three days, the
+window the injury page already used, then tapering to nothing at fourteen — and
+says out loud that it is doing so.
+
+Only two screens were actually affected. Most check-in queries ask for TODAY's
+row; `injury` and `train/view` took the latest whatever its date.
+
+---
+
 ## Found, not yet fixed
 
 Ordered by how much they cost the athlete.
 
-### A. Reported pain never expires
-`relevantInjuryProtocols` reads the latest pain map, but nothing ages it out.
-An athlete who marked a knee at 7/10 in March and recovered in April has to
-remember to go back and zero it, or the engine keeps programming around an
-injury that healed. **A stale 7/10 is indistinguishable from a current one.**
-Likely fix: decay pain toward zero over ~14 days without a re-report, or ask
-"still sore?" on the next check-in that follows a gap.
-
-### B. The check-in and the program do not close the loop
+### A. The check-in and the program do not close the loop
 The check-in captures RPE and the engine prescribed one. Nothing compares them.
 If an athlete reports 9/10 on a session prescribed at RPE 7 for three weeks
 running, the block is too hard and the app has every number it needs to say so.
 `docs/UI-AUDIT.md` already argues the prescribed RPE should not be asked back;
 the more useful move is to use the answer.
 
-### C. Nutrition targets ignore the injury state
+### B. Nutrition targets ignore the injury state
 Calorie and protein targets read training load. An athlete in a rehab block is
 eating for a training volume they are not doing, and protein needs go *up*
 during tissue repair, not down. Both facts are already in the database.
 
-### D. `hip` and `lower_back` are thinly loaded
-Seven and six movements respectively, against 29–38 for the areas fixed above.
-Marking either does change the program, but much less than it should. This is a
-data-completeness gap rather than a structural one.
+### C. The challenge board no longer aims at your weakest habit
+Selection used to score challenges by how far you were from each target. That
+made the board unwinnable — see the commit "Stop the challenge board deleting
+the work you just did" — so selection is now activity-independent. Aiming at a
+neglected habit is still the right idea; it needs a window the current period
+cannot move (last month's activity, or a board persisted at period start).
 
-### E. Achievements do not know about the strength ladder's own vocabulary
+---
+
+### D. Achievements do not know about the strength ladder's own vocabulary
 `lib/gamification.ts` owns Iron→Apex and `lib/strength-standards.ts` owns
 Untrained→World Class, deliberately kept apart so "Gold" cannot mean two things.
 That separation is right, but nothing explains it on screen, so an athlete sees
@@ -124,7 +134,7 @@ two ladders and no statement of how they relate.
 
 ## The pattern worth remembering
 
-Three of the five fixed findings were the **same bug**: a missing value that
+Four of the six fixed findings were the **same bug**: a missing value that
 read as a real one. `profiles.weight_kg` was null and became `?? 0`. An
 unmodelled body area became `?? 0`. This codebase has hit it before — the funnel
 counted absent as zero, and the strength figure nearly labelled untested muscles
