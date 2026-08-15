@@ -15,6 +15,7 @@ import { adjustForReadiness, type ReadinessStatus } from "@/lib/engine";
 import { repairPlan } from "@/lib/program-repair";
 import { useJobs } from "@/lib/jobs";
 import { positionList } from "@/lib/positions";
+import { currentPain, painAgeNote } from "@/lib/pain";
 import { PositionPicker } from "@/components/PositionPicker";
 import { FeatureLock, tierOfSub } from "@/components/FeatureLock";
 import { can } from "@/lib/subscription";
@@ -163,7 +164,10 @@ export default function CoachPage() {
   if (!data?.program) {
     return (
       <GoalBuilder
-        painMap={data?.checkIn?.pain_map ?? {}}
+        // Aged. This is where a NEW block is generated, so a knee reported once
+        // in March would otherwise be designed around for the rest of the year.
+        painMap={currentPain(data?.checkIn?.pain_map, data?.checkIn?.check_in_date, todayLocal())}
+        painNote={painAgeNote(data?.checkIn?.check_in_date, todayLocal())}
         latestBench={data?.latestBench ?? {}}
         sport={data?.sport ?? "football"}
         initialPositions={data?.positions ?? []}
@@ -193,7 +197,7 @@ export default function CoachPage() {
 
 // --- Goal builder -----------------------------------------------------------
 
-function GoalBuilder({ painMap, latestBench, sport, initialPositions, initialFocus, userId, onCreated }: { painMap: Record<string, number>; latestBench: Record<string, number>; sport: SportId; initialPositions: string[]; initialFocus: TrainingFocus; userId: string; onCreated: () => void }) {
+function GoalBuilder({ painMap, painNote, latestBench, sport, initialPositions, initialFocus, userId, onCreated }: { painMap: Record<string, number>; painNote: string | null; latestBench: Record<string, number>; sport: SportId; initialPositions: string[]; initialFocus: TrainingFocus; userId: string; onCreated: () => void }) {
   const goals = goalsForSport(sport);
   const [goal, setGoal] = useState<GoalType | null>(null);
   const [positions, setPositions] = useState<string[]>(initialPositions);
@@ -662,7 +666,13 @@ function ActiveProgram({
 }) {
   const plan = program.plan;
   const goal = program.goal_type as GoalType;
-  const painMap = checkIn?.pain_map ?? {};
+  /**
+   * AGED, not raw. A knee marked 7/10 in March used to keep shaping every
+   * programme built afterwards, because a stale report and a current one were
+   * the same number — see lib/pain.ts. This is the screen that builds the
+   * training, so it is the screen where a memory did the most damage.
+   */
+  const painMap = currentPain(checkIn?.pain_map, checkIn?.check_in_date, today);
   const readiness = readinessOf(checkIn, training);
   const insights = analyzeProgress(training, checkHist);
   const totalSessions = plan.weeks.reduce((n, w) => n + w.sessions.length, 0);

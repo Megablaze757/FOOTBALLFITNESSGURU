@@ -12,6 +12,8 @@ import { useAsync } from "@/lib/use-async";
 import { VideoAnalysisView } from "@/components/VideoAnalysisView";
 import { InBrowserAnalysis } from "@/components/InBrowserAnalysis";
 import type { AiPlan, PainMap, Subscription, Video } from "@/lib/types";
+import { currentPain } from "@/lib/pain";
+import { todayLocal } from "@/lib/day";
 
 export default function VideoDetailPage() {
   return (
@@ -36,7 +38,7 @@ function VideoDetailInner() {
       supabase.storage.from("videos").createSignedUrl(video.storage_path, 600),
       supabase.from("subscriptions").select("*").eq("user_id", user.id).maybeSingle(),
       supabase.from("ai_plans").select("*").eq("video_id", video.id).maybeSingle(),
-      supabase.from("daily_check_ins").select("pain_map").eq("user_id", user.id)
+      supabase.from("daily_check_ins").select("pain_map, check_in_date").eq("user_id", user.id)
         .order("check_in_date", { ascending: false }).limit(1).maybeSingle(),
       supabase.from("programs").select("in_season").eq("user_id", user.id).eq("status", "active")
         .order("created_at", { ascending: false }).limit(1).maybeSingle(),
@@ -46,7 +48,12 @@ function VideoDetailInner() {
       src: signed?.signedUrl ?? "",
       sub: (subRow ?? null) as Subscription | null,
       plan: (planRow ?? null) as AiPlan | null,
-      painMap: ((checkRow as { pain_map: PainMap | null } | null)?.pain_map ?? {}) as PainMap,
+      // Aged, so a months-old report cannot still be steering the analysis.
+      painMap: currentPain(
+        (checkRow as { pain_map: PainMap | null } | null)?.pain_map,
+        (checkRow as { check_in_date?: string } | null)?.check_in_date,
+        todayLocal(),
+      ),
       inSeason: Boolean((progRow as { in_season: boolean } | null)?.in_season),
     };
   }, [user.id, id]);

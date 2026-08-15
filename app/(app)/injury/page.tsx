@@ -14,7 +14,10 @@ import {
 import { getExercise, type Exercise, type SportId } from "@/lib/exercises";
 import { ExerciseModal } from "@/components/ExerciseDetail";
 import { InjuryPlanner } from "@/components/InjuryPlanner";
+import Link from "next/link";
 import { ProtocolCard } from "@/components/ProtocolCard";
+import { currentPain, painAgeNote, daysBetween, PAIN_FRESH_DAYS } from "@/lib/pain";
+import { todayLocal } from "@/lib/day";
 
 /**
  * Injury, rehab and mobility — its own page.
@@ -72,17 +75,24 @@ export default function InjuryPage() {
         .order("check_in_date", { ascending: false }).limit(1).maybeSingle(),
     ]);
     const ci = checkIn as { pain_map?: Record<string, number>; check_in_date?: string } | null;
-    // Only carry pain forward from a check-in in the last three days. The query
-    // takes the most recent check-in whatever its date, and pre-filling a sore
-    // knee from three weeks ago onto today's map would be a confident lie about
-    // where it hurts — which then feeds the rehab plan.
-    const fresh = ci?.check_in_date
-      ? Date.now() - new Date(ci.check_in_date).getTime() < 3 * 86400_000
-      : false;
+    /**
+     * This page had the right instinct first — it refused to pre-fill the body
+     * map from a check-in older than three days, because seeding a three-week-
+     * old knee onto today's map "would be a confident lie about where it hurts".
+     * It was the only screen that did, which is what made the rest of the app
+     * program around injuries that had healed months earlier.
+     *
+     * Same rule, now shared and tapered rather than a cliff — see lib/pain.ts.
+     * Seeding the MAP still uses the strict fresh window: a pre-ticked body part
+     * is a claim about right now, and a faded 4 is not one.
+     */
+    const today = todayLocal();
+    const fresh = ci?.check_in_date ? daysBetween(ci.check_in_date, today) <= PAIN_FRESH_DAYS : false;
     return {
       sport: ((profile as { sport?: string } | null)?.sport ?? "football") as SportId,
-      painMap: ci?.pain_map ?? {},
+      painMap: currentPain(ci?.pain_map, ci?.check_in_date, today),
       recentPain: fresh ? (ci?.pain_map ?? {}) : {},
+      painNote: painAgeNote(ci?.check_in_date, today),
     };
   }, [user.id], `injury:${user.id}`);
 
@@ -106,6 +116,18 @@ export default function InjuryPage() {
         A staged plan to load an injury safely, the rehab guides behind it, and the mobility
         warm-up that prevents most of it.
       </p>
+      {/* SAY THAT THE DISCOUNT IS HAPPENING. Pain now fades out of the
+          programme if it is not re-reported (lib/pain.ts), which is right —
+          but an athlete whose training quietly stops avoiding a knee deserves
+          to be told why, and given the one tap that fixes it. */}
+      {data?.painNote && (
+        <p className="mt-2 flex flex-wrap items-center gap-x-2 text-xs text-amber-500/90">
+          {data.painNote}
+          <Link href="/journal" className="font-semibold text-pitch-400 underline-offset-2 hover:underline">
+            Check in
+          </Link>
+        </p>
+      )}
     </header>
   );
 
