@@ -144,36 +144,71 @@ test("a goal-specific challenge never reaches the wrong goal", () => {
  * your food five days" to someone already logging seven is a tick-box, not a
  * challenge.
  */
-test("challenges aim at what you have been skipping", () => {
-  const week: WeekActivity = {
-    ...EMPTY_WEEK,
-    // Everything covered except food.
-    check_ins: 7, training_sessions: 5, nutrition_logs: 0,
-    rest_days: 2, perfect_days: 0, calorie_goal_days: 0, easy_sessions: 3, streak: 30,
-  };
-  const picked = pickChallenges(ctxFor({ week, count: 3 }));
-  assert.ok(
-    picked.some((c) => c.metric === "nutrition_logs" || c.metric === "calorie_goal_days"),
-    `nothing aimed at the gap: ${picked.map((c) => c.metric).join(", ")}`
-  );
-  // And nothing already finished is offered as a target.
-  const finished = picked.filter((c) => (week[c.metric] ?? 0) >= c.target).map((c) => c.id);
-  assert.deepEqual(finished, [], "handed a challenge that was already complete");
+/**
+ * THE INVARIANT THAT REPLACED "AIM AT THE GAP".
+ *
+ * Selection used to score every template by how far the athlete was from its
+ * target, and dock 12 points from anything already finished. Both sound right.
+ * Together they made the feature unwinnable, because the board is rebuilt from
+ * current activity on every page load: doing any of the work dropped that
+ * challenge below the ones you had not touched, so it left the board and took
+ * its XP with it. Measured on a board that opened the week with "train twice",
+ * a SINGLE session replaced all three cards.
+ *
+ * So the board is now fixed for its period. These two tests are the old ones,
+ * inverted — they used to assert the board moves with your activity, and they
+ * now assert it cannot.
+ */
+test("progress on a challenge never changes the board", () => {
+  const base = { sport: "football" as const, position: "Goalkeeper", count: 3 };
+  const start = pickChallenges(ctxFor({ ...base, week: { ...EMPTY_WEEK } }));
+  const card = start.find((c) => c.metric === "training_sessions");
+
+  // Every level of progress on every metric on the board, including past the
+  // target — the set of questions must be identical each time.
+  for (const metric of start.map((c) => c.metric)) {
+    for (const n of [1, 2, 3, 5, 7, 12]) {
+      const later = pickChallenges(ctxFor({ ...base, week: { ...EMPTY_WEEK, [metric]: n } }));
+      assert.deepEqual(later.map((c) => c.id), start.map((c) => c.id),
+        `doing ${n} of "${metric}" changed the board from [${start.map((c) => c.id)}] to [${later.map((c) => c.id)}]`);
+    }
+  }
+
+  // And the specific report: three sessions, and the training card is still
+  // there to be completed and paid.
+  if (card) {
+    const after = pickChallenges(ctxFor({ ...base, week: { ...EMPTY_WEEK, training_sessions: 3 } }));
+    assert.ok(after.some((c) => c.id === card.id),
+      "the training challenge vanished once the training was done");
+  }
 });
 
 /**
- * The case above does not actually exercise the completed-challenge penalty:
- * with no sport or position every candidate scores on the gap alone, so a
- * finished one sinks to the bottom on its own. The penalty only has to do work
- * when a challenge written FOR this athlete is already done — position (+10)
- * and sport (+6) would otherwise carry it straight to the top of the board.
+ * WHAT THE OLD SCORING WAS HIDING.
+ *
+ * Rotation ran over the top ten TEMPLATES and the board then discarded anything
+ * sharing a metric with an earlier pick. For an athlete with no sport, goal or
+ * position every generic template scored the same, so the sort fell back to
+ * alphabetical by id — and the top ten ids were three benchmark variants, four
+ * calorie variants and three check-in variants. Ten templates, three metrics.
+ *
+ * training_sessions ranked THIRTY-FIRST, with 26 templates in the pool, more
+ * than any other metric. It could never be offered to a general athlete. Nor
+ * could rest days, videos, streaks, perfect days or food logging.
  */
-test("a challenge written for you is still not offered once you have done it", () => {
-  const week: WeekActivity = { ...EMPTY_WEEK, training_sessions: 7 };
-  const picked = pickChallenges(ctxFor({ sport: "football", position: "Goalkeeper", week, count: 3 }));
-  const finished = picked.filter((c) => (week[c.metric] ?? 0) >= c.target).map((c) => c.id);
-  assert.deepEqual(finished, [], "the keeper's own challenge was handed over already complete");
-  assert.ok(picked.length === 3, `only got ${picked.length}`);
+test("every metric can actually reach a general athlete's board", () => {
+  const seen = new Set<string>();
+  for (let seed = 0; seed < 40; seed++) {
+    for (const c of pickChallenges(ctxFor({ week: { ...EMPTY_WEEK }, seed, count: 3 }))) {
+      seen.add(c.metric);
+    }
+  }
+  const reachable = [...new Set(CHALLENGE_POOL.filter((t) => t.window === "weekly" && !t.sports && !t.goals && !t.positions && !t.focus).map((t) => t.metric))];
+  const missing = reachable.filter((m) => !seen.has(m));
+  assert.deepEqual(missing, [],
+    `these metrics have generic weekly templates that no rotation can ever reach: ${missing.join(", ")}`);
+  assert.ok(seen.has("training_sessions"),
+    "a fitness app never offers a training challenge, which is how this was found");
 });
 
 test("three challenges are three different things", () => {
@@ -417,4 +452,45 @@ test("the challenge component scores each board against the window it picked", (
   // And it must not be picking at all — one pick site, in the lib, or the page
   // awards XP for a set the athlete was never shown.
   assert.ok(!/pickChallenges\(/.test(src), "the component picks its own challenges again");
+});
+
+/**
+ * THE CORE HABIT IS NOT LEFT TO A ROTATION.
+ *
+ * Rotating fairly over ten metrics moves the window by one per week, so any
+ * one metric shows up three weeks in ten. For filming a set that is correct.
+ * For training it means that seven weeks out of ten a TRAINING app asks an
+ * athlete for everything except training — which, combined with the two bugs
+ * above, is why three logged sessions could earn nothing at all.
+ */
+test("the weekly board always asks you to train", () => {
+  for (let seed = 0; seed < 30; seed++) {
+    const picked = pickChallenges(ctxFor({ week: { ...EMPTY_WEEK }, seed, count: 3 }));
+    assert.ok(picked.some((c) => c.metric === "training_sessions"),
+      `week ${seed} has no training challenge: ${picked.map((c) => c.metric).join(", ")}`);
+    assert.equal(new Set(picked.map((c) => c.metric)).size, picked.length, "duplicate metric on the board");
+  }
+});
+
+test("but the daily board is not pinned, so the two never say the same thing", () => {
+  // Only two slots there; pinning one would leave a single rotating card and
+  // both boards would open with the same question every single day.
+  const dailyMetrics = new Set<string>();
+  for (let seed = 0; seed < 30; seed++) {
+    for (const c of pickChallenges(ctxFor({ window: "daily", week: { ...EMPTY_WEEK }, seed, count: 2 }))) {
+      dailyMetrics.add(c.metric);
+    }
+  }
+  assert.ok(dailyMetrics.size >= 5, `the daily board only ever shows ${dailyMetrics.size} metrics`);
+});
+
+test("the training target moves week to week", () => {
+  const targets = new Set<number>();
+  for (let seed = 0; seed < 20; seed++) {
+    const c = pickChallenges(ctxFor({ week: { ...EMPTY_WEEK }, seed, count: 3 }))
+      .find((x) => x.metric === "training_sessions");
+    if (c) targets.add(c.target);
+  }
+  assert.ok(targets.size >= 3,
+    `the pinned training slot always asks for the same thing: ${[...targets].join(", ")}`);
 });

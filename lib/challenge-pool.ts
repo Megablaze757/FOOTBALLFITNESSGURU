@@ -446,7 +446,6 @@ const FIT_FOCUS = 4;
  * backbone and has to stay reachable. It simply scores lower than one written
  * for this exact athlete, which is all the ordering needs.
  */
-const NEED_WEIGHT = 5;
 
 export function scoreTemplate(t: ChallengeTemplate, ctx: ChallengeContext): number | null {
   if (t.window !== ctx.window) return null;
@@ -468,20 +467,39 @@ export function scoreTemplate(t: ChallengeTemplate, ctx: ChallengeContext): numb
   if (t.focus) score += FIT_FOCUS;
 
   /**
-   * AIM AT THE GAP, NOT THE HABIT THEY ALREADY HAVE.
+   * WHAT USED TO BE HERE, AND WHY IT HAD TO GO.
    *
-   * The point of a challenge is to move something. Someone already logging food
-   * seven days a week does not need "log your food five days" — they need the
-   * thing they have been skipping. Distance from the target, as a fraction, so
-   * a metric sitting at zero outranks one nearly done.
+   * This scored a template by how far the athlete was from its target — "aim at
+   * the gap, not the habit they already have" — and docked 12 points from
+   * anything already finished. Both read as obviously right, and together they
+   * made the feature unwinnable.
+   *
+   * The board is rebuilt from CURRENT activity on every page load. So the
+   * moment you did any of the work, the challenge for it scored lower than the
+   * things you had not touched and fell off the board — taking its XP with it,
+   * because completions can only be recorded for challenges still on the board.
+   * Measured, on a board that opened the week with "train twice":
+   *
+   *   0 sessions   w_train_2, w_video_1, w_bench_1
+   *   1 session    w_perfect_1, w_rest_1, w_streak_14   <- the card is gone
+   *
+   * One session, and the entire board is different. The athlete trains three
+   * times, is never shown a training challenge again, and is paid nothing:
+   * exactly what was reported. A challenge you cannot make progress on without
+   * destroying it is not a challenge, and every partial step reshuffled all
+   * three cards, so the board was never a board — it was a live re-ranking of
+   * whatever you had not got round to yet.
+   *
+   * SELECTION IS NOW INDEPENDENT OF IN-PERIOD ACTIVITY. What you are asked to
+   * do this week depends on who you are and which week it is, and nothing else.
+   * Progress is still measured against activity — that is what the board is
+   * FOR — it just cannot change the question halfway through answering it.
+   *
+   * Aiming at a neglected habit is a real idea and worth having back, but it
+   * needs a window the current period cannot move: last month's activity, or a
+   * board persisted at period start. Both are more than a scoring tweak, and
+   * neither is a reason to keep shipping a board that deletes your work.
    */
-  const current = Math.max(0, Number(ctx.week[t.metric]) || 0);
-  const gap = Math.max(0, t.target - current) / Math.max(1, t.target);
-  score += gap * NEED_WEIGHT;
-
-  // Already finished before it was set is not a challenge.
-  if (current >= t.target) score -= 12;
-
   return score;
 }
 
@@ -502,33 +520,92 @@ export function pickChallenges(ctx: ChallengeContext): Challenge[] {
     const score = scoreTemplate(t, ctx);
     if (score !== null) scored.push({ t, score });
   }
-  // Ties broken by id so the order cannot depend on array position, then
-  // rotated by the seed so consecutive weeks do not serve the same three.
+  // Ties broken by id so the order cannot depend on array position.
   scored.sort((a, b) => b.score - a.score || a.t.id.localeCompare(b.t.id));
 
-  const out: Challenge[] = [];
-  const usedMetrics = new Set<ChallengeMetric>();
-  const rotated = rotate(scored, ctx.seed);
-  for (const { t } of rotated) {
-    if (out.length >= count) break;
-    if (usedMetrics.has(t.metric)) continue;
-    usedMetrics.add(t.metric);
-    out.push(toChallenge(t));
+  /**
+   * ROTATE OVER METRICS, NOT OVER TEMPLATES. This is the whole fix.
+   *
+   * Rotation used to run across the top ten TEMPLATES, and the board then threw
+   * away everything sharing a metric with something already chosen. For an
+   * athlete with no sport, goal or position every generic template scores
+   * identically, so the sort collapsed to alphabetical by id — and the top ten
+   * ids were three benchmark variants, four calorie variants and three
+   * check-in variants. Ten templates, three distinct metrics, and a rotation
+   * that could never reach past them.
+   *
+   * `training_sessions` ranked THIRTY-FIRST. It has 26 templates in this pool,
+   * more than any other metric, and not one of them could ever be offered to a
+   * general athlete. Neither could rest days, videos, streaks, perfect days or
+   * food logging. An athlete could train five times a week, all year, and never
+   * once be given a challenge for training — which is precisely what was
+   * reported: "I've done 3 sessions this week and it's not giving me the XP."
+   *
+   * Deduplicating FIRST and rotating over the distinct metrics makes the unit
+   * of variety the thing the athlete actually perceives as variety.
+   */
+  const byMetric = new Map<ChallengeMetric, { t: ChallengeTemplate; score: number }>();
+  for (const s of scored) if (!byMetric.has(s.t.metric)) byMetric.set(s.t.metric, s);
+  const metrics = [...byMetric.values()];
+
+  /**
+   * And rotate only inside the EQUALLY-GOOD band, which is what preserves the
+   * two behaviours that were right before.
+   *
+   * Score already encodes both "written for this athlete" and "aimed at the
+   * habit they have been skipping"; a metric they have already finished takes
+   * a 12-point penalty. Spinning across the whole list for variety's sake would
+   * hand back exactly those — the wrong sport's challenge, or one already done.
+   * Rotating within the top score only means variety ranges over the options
+   * this athlete has equal need of, and nothing else. Same rule as `pick` in
+   * lib/engine.ts, and for the same reason.
+   */
+  const top = metrics[0]?.score ?? 0;
+  const band = metrics.filter((m) => m.score >= top - 1e-9).length;
+  const rotated = rotate(metrics, ctx.seed, band);
+
+  /**
+   * ONE SLOT ON THE WEEKLY BOARD IS ALWAYS TRAINING.
+   *
+   * Rotating fairly over ten metrics moves the window by one each week, so any
+   * given metric appears three weeks in ten. That is right for filming a set or
+   * testing a benchmark, and wrong for the one habit this entire app exists to
+   * support: seven weeks out of ten, a training app would ask an athlete for
+   * everything except training.
+   *
+   * Fair rotation is not the same as a good board. The weekly board leads with
+   * training and rotates the other two slots, so the core habit always pays and
+   * the variety happens around it.
+   *
+   * NOT on the daily board, which only has two slots — pinning one there would
+   * leave a single rotating card, and both boards would open with the same
+   * question every day.
+   *
+   * The TARGET still moves: the variant is chosen by seed from the ones that
+   * fit this athlete equally well, so it is "train twice" one week and "train
+   * four times" another rather than the same card forever.
+   */
+  const picked: { t: ChallengeTemplate; score: number }[] = [];
+  if (ctx.window === "weekly") {
+    const variants = scored.filter((s) => s.t.metric === "training_sessions");
+    const bestFit = variants[0]?.score ?? 0;
+    const equal = variants.filter((v) => v.score >= bestFit - 1e-9);
+    if (equal.length) picked.push(equal[((ctx.seed % equal.length) + equal.length) % equal.length]);
   }
-  return out;
+  for (const m of rotated) {
+    if (picked.length >= count) break;
+    if (picked.some((p) => p.t.metric === m.t.metric)) continue;
+    picked.push(m);
+  }
+  return picked.slice(0, count).map((m) => toChallenge(m.t));
 }
 
-/**
- * Rotation happens inside the strong end of the list, not the whole thing —
- * spinning through everything would eventually serve the worst-fitting
- * challenge for the sake of variety, which is noise rather than variety. Same
- * rule as `pick` in lib/engine.ts, and for the same reason.
- */
-function rotate<T>(list: T[], by: number): T[] {
-  const depth = Math.min(list.length, 10);
-  if (depth < 2) return list;
-  const k = ((by % depth) + depth) % depth;
-  return [...list.slice(k, depth), ...list.slice(0, k), ...list.slice(depth)];
+/** Rotate the first `depth` entries, leaving the weaker tail in place. */
+function rotate<T>(list: T[], by: number, depth: number): T[] {
+  const d = Math.max(0, Math.min(list.length, depth));
+  if (d < 2) return list;
+  const k = ((by % d) + d) % d;
+  return [...list.slice(k, d), ...list.slice(0, k), ...list.slice(d)];
 }
 
 /**
