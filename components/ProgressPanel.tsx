@@ -9,6 +9,7 @@ import { MiniBars } from "@/components/MiniBars";
 import { ShareButton } from "@/components/ShareButton";
 import { ExerciseProgress } from "@/components/ExerciseProgress";
 import { StrengthRanks } from "@/components/StrengthRanks";
+import { MuscleGains } from "@/components/MuscleGains";
 import { latestBodyweight } from "@/lib/bodyweight";
 import { testedMaxesFrom } from "@/lib/strength-standards";
 import { FeatureLock, tierOfSub } from "@/components/FeatureLock";
@@ -40,7 +41,7 @@ export function ProgressPanel({ userId }: { userId: string }) {
     const supabase = createClient();
     // One query for the wider window, sliced below — cheaper than asking twice.
     const [{ data: training }, { data: nutrition }, { data: profile }, { data: sub },
-           { data: weighCheck }, { data: weighBody }, { data: benchmarks }] = await Promise.all([
+           { data: weighCheck }, { data: weighBody }, { data: benchmarks }, { data: allDrills }] = await Promise.all([
       supabase.from("training_logs").select("*").eq("user_id", userId).gte("log_date", sinceLong).order("log_date", { ascending: true }),
       supabase.from("nutrition_logs").select("*").eq("user_id", userId).gte("log_date", since).order("log_date", { ascending: true }),
       // NOT weight_kg. That column does not exist on profiles — it lives on
@@ -77,6 +78,20 @@ export function ProgressPanel({ userId }: { userId: string }) {
        */
       supabase.from("strength_benchmarks").select("test_date, metrics").eq("user_id", userId)
         .order("test_date", { ascending: false }),
+      /**
+       * EVERY logged drill, not the 90-day window above.
+       *
+       * MuscleGains measures from your best effort in your FIRST four weeks on
+       * a lift, and a 90-day window would silently make "since you started"
+       * mean "since three months ago" — anchoring a beginner's baseline to a
+       * point they were already strong at, and reporting a fraction of the real
+       * gain. A label that says "since you started" has to be given the start.
+       *
+       * Two columns and only rows that carry drills, which is the same shape
+       * the Rewards page already loads for the ranks.
+       */
+      supabase.from("training_logs").select("log_date, drills").eq("user_id", userId)
+        .not("drills", "is", null).order("log_date", { ascending: true }),
     ]);
     const all = (training ?? []) as TrainingLog[];
     return {
@@ -92,8 +107,12 @@ export function ProgressPanel({ userId }: { userId: string }) {
       sex: ((profile as { sex?: string | null } | null)?.sex === "female" ? "female" : "male") as "male" | "female",
       sub: (sub ?? null) as Subscription | null,
       tested: testedMaxesFrom(benchmarks ?? []),
+      allDrills: (allDrills ?? []) as TrainingLog[],
     };
-  }, [userId], `history:v2:${userId}`);
+    // v3: the payload gained allDrills. A cached v2 entry has no such key, so
+    // the gains card would read [] and claim "not enough history yet" to
+    // somebody with two years of it, until the background revalidation landed.
+  }, [userId], `history:v3:${userId}`);
 
   if (loading) {
     return (
@@ -122,7 +141,9 @@ export function ProgressPanel({ userId }: { userId: string }) {
         * trend, then the detail.
         */}
       <StrengthRanks
-        logs={data?.trainingLong ?? []}
+        // Full history, not the 90-day window: ranks are best-ever, and a PR
+        // from last winter is still a PR. This panel was quietly capping them.
+        logs={data?.allDrills ?? []}
         bodyweight={data?.bodyweight ?? null}
         sex={data?.sex ?? "male"}
         tested={data?.tested ?? []}
@@ -185,6 +206,11 @@ export function ProgressPanel({ userId }: { userId: string }) {
           </div>
         )}
       </section>
+
+      {/* HOW MUCH STRONGER, per part of the body. Sits between the rank and
+          the per-lift chart because that is the order the questions come in:
+          am I strong, how much have I gained, and then which lift and when. */}
+      <MuscleGains logs={data?.allDrills ?? []} />
 
       {/* The one chart that answers "am I getting stronger", which is why it's
           the thing worth paying for. */}
