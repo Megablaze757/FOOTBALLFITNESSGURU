@@ -48,24 +48,49 @@ const out = await page.evaluate(async () => {
   const W = 430, H = Math.round((W * vb[3]) / vb[2]);
   const scale = vb[2] / W;
 
-  /** Where a path sits decides which muscle it belongs to. */
-  const zoneOf = (cx, cy) => {
-    const off = Math.abs(cx - 430);
-    if (cy < 235) return "head";
-    if (off > 132) return cy < 430 ? "shoulders" : cy < 640 ? "biceps" : "forearms";
-    if (cy < 335) return "shoulders";
-    if (cy < 480) return "chest";
-    if (cy < 760) return "core";
-    if (cy < 1225) return "quads";
-    return "calves";
+  /**
+   * WHERE EACH MUSCLE IS, measured off the source under a 50-unit grid rather
+   * than judged by eye. [x0, y0, x1, y1] per side.
+   *
+   * Coarse bands were tried first — "anything past x=132 from the centre at
+   * chest height is an arm" — and they are why the highlights overflowed onto
+   * their neighbours: a band that catches the deltoid also catches the top of
+   * the pectoral, because a band is a rectangle and a shoulder is not.
+   *
+   * Read from the grid: pectorals 248-612 x 352-545, deltoids 150-290 x
+   * 300-490, upper arm 115-255 x 450-655, rectus 350-512 x 545-795, thighs
+   * from y 852.
+   */
+  const MUSCLE_BOXES = {
+    shoulders: [[145, 292, 302, 500], [558, 292, 715, 500]],
+    chest: [[246, 344, 428, 552], [432, 344, 614, 552]],
+    biceps: [[108, 442, 262, 664], [598, 442, 752, 664]],
+    core: [[344, 536, 516, 802]],
+    quads: [[222, 846, 428, 1214], [432, 846, 638, 1214]],
+    forearms: [[60, 640, 250, 1010], [610, 640, 800, 1010]],
+    calves: [[296, 1250, 424, 1600], [436, 1250, 566, 1600]],
   };
 
   const byZone = new Map();
+  const paths = [];
   for (const el of src.querySelectorAll("path")) {
     const b = el.getBBox();
-    const zone = zoneOf(b.x + b.width / 2, b.y + b.height / 2);
-    if (!byZone.has(zone)) byZone.set(zone, []);
-    byZone.get(zone).push(el.getAttribute("d"));
+    paths.push({ d: el.getAttribute("d"), x: b.x, y: b.y, w: b.width, h: b.height });
+  }
+  for (const [zone, boxes] of Object.entries(MUSCLE_BOXES)) {
+    const picked = [];
+    for (const [x0, y0, x1, y1] of boxes) {
+      for (const p of paths) {
+        const cx = p.x + p.w / 2, cy = p.y + p.h / 2;
+        if (cx < x0 || cx > x1 || cy < y0 || cy > y1) continue;
+        // A path far larger than the box it sits in is a shading sheet, not a
+        // muscle. One of those in the chest bucket is what made the chest light
+        // up from the collarbone to the hips.
+        if (p.w > (x1 - x0) * 1.5 || p.h > (y1 - y0) * 1.5) continue;
+        picked.push(p.d);
+      }
+    }
+    byZone.set(zone, picked);
   }
 
   /** Paint a set of paths and hand back the alpha mask. */
@@ -172,18 +197,17 @@ const out = await page.evaluate(async () => {
     return shapes;
   };
 
-  // The whole body: everything painted at once.
-  const all = [...byZone.values()].flat();
-  const body = traceAll(await maskOf(all), 1.4, 400)[0];
+  // The whole body: every path, including the ones no muscle box claims.
+  const body = traceAll(await maskOf(paths.map((p) => p.d)), 1.4, 400)[0];
 
   // Each muscle region, from its own paths only.
   const regions = {};
-  for (const [zone, paths] of byZone) {
-    if (zone === "head") continue;
+  for (const [zone, zonePaths] of byZone) {
+    if (zonePaths.length === 0) continue;
     // A coarser epsilon and a much bigger minimum: these are read at 220px, so
     // anything smaller than a thumbnail is a spike of striation rather than a
     // muscle, and it shows up as a jagged edge on the highlight.
-    regions[zone] = traceAll(await maskOf(paths), 3.0, 700);
+    regions[zone] = traceAll(await maskOf(zonePaths), 3.0, 700);
   }
   return { vb, body, regions };
 });

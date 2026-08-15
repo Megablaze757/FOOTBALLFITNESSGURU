@@ -261,11 +261,26 @@ test("every region sits where that muscle actually is", () => {
   // AND MUST NOT REACH WHERE THE MUSCLE IS NOT. The first chest curve sat 50
   // units low and 100 too tall, so it crossed the ribs; the first shoulder
   // shape was one band and it coloured the throat.
+  // The shapes are traced now, so what this guards is the BOX that selects them
+  // in scripts/gen-body-figure.mjs — widen it and the chest starts eating the
+  // collarbone or the navel, which is what the earlier band-bucketed version did.
   const chest = extentOf(FIGURE_REGIONS.find((r) => r.muscle === "chest")!);
-  assert.ok(chest.y0 >= 320 && chest.y1 <= 520, `chest spans ${chest.y0}..${chest.y1}, pecs are 330..510`);
-  const delts = FIGURE_REGIONS.find((r) => r.muscle === "shoulders")!;
-  assert.equal(delts.d.length, 2, "the deltoids are one shape, which means it crosses the neck");
+  assert.ok(chest.y0 >= 320, `chest reaches up to ${chest.y0}, above the pectorals`);
+  assert.ok(chest.y1 <= 570, `chest reaches down to ${chest.y1}, past the pectorals`);
+
+  // Paired muscles are two shapes. One band across the top of a torso lights
+  // the throat, which is what the first shoulder version did.
+  for (const m of ["shoulders", "chest", "biceps", "quads"]) {
+    assert.equal(FIGURE_REGIONS.find((r) => r.muscle === m)!.d.length, 2,
+      `${m} is not two shapes — a single one spans the midline`);
+  }
   assert.ok(!holds("shoulders", 430, 250), "the deltoid shape covers the throat");
+
+  // And the arms are on the arms, not on the ribs — the mistake the by-eye
+  // version made, where the upper arm shape sat at x 194 against a torso edge
+  // of 298.
+  const arms = extentOf(FIGURE_REGIONS.find((r) => r.muscle === "biceps")!);
+  assert.ok(arms.x0 < 270, `the upper arm shape starts at x=${arms.x0}, which is on the torso`);
 });
 
 /**
