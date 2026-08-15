@@ -13,7 +13,23 @@ name: Site check
 # APP — and it runs on a schedule, because the failure had nothing to do with a
 # deploy and no deploy-time check would ever have fired.
 #
-# A failed run emails whoever owns the repo. That is the entire point.
+# A failed run emails whoever owns the repo. That is the entire point — and it
+# is also why every request below retries.
+#
+# On 15 August run 370 emailed "the built app is not being served" because one
+# TCP connection to /icon-192.png was reset mid-transfer:
+#
+#   ok  /login/ -> 200
+#   ok  /manifest.webmanifest -> 200
+#   curl: (35) Recv failure: Connection reset by peer
+#
+# The requests either side of it were fine, the next run passed on the same
+# commit, and nothing was ever wrong. An alarm that cries wolf is an alarm you
+# learn to swipe away, which would leave this workflow catching the real outage
+# and nobody reading it. Every failure this exists to catch — Jekyll serving the
+# README, a wrong domain, a bad publish, a 404 webhook — PERSISTS, so retrying a
+# few seconds later costs nothing in detection and removes the entire class of
+# one-off network blips.
 
 on:
   schedule:
@@ -30,6 +46,11 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-latest
+    # Retrying means a total outage now takes ~40s to report instead of ~3s,
+    # and the theoretical worst case (every request timing out at 20s) is about
+    # seven minutes. Ten bounds it without ever cutting a real run short — the
+    # default is six hours, which is a long time to hold a runner for a monitor.
+    timeout-minutes: 10
     steps:
       # Pages' CDN takes a few seconds to serve a new publish. Without this a
       # post-deploy run can read the previous build and cry wolf.
@@ -37,18 +58,77 @@ jobs:
         if: github.event_name == 'workflow_run'
         run: sleep 30
 
+      # WHY THIS IS HAND-ROLLED AND NOT `curl --retry`.
+      #
+      # curl's own retry was tried first and is quietly broken for this job. It
+      # refuses to retry while `-o /dev/null` is in play: to redo a request it
+      # rewinds and truncates the output file, cannot truncate /dev/null, and
+      # gives up with exit 23 and an EMPTY `-w` status — so the check would see
+      # "" instead of a code and still fail the run. Pointed at a real file it
+      # retries, then reports "200" for a transfer that was reset mid-body,
+      # which is worse: a false PASS on a monitor.
+      #
+      # MEASURED, against a server that RSTs the connection before sending any
+      # status line, which is the shape of the real failure:
+      #
+      #   old code, one reset then healthy   000000  <- the string in the email
+      #   probe,    one reset then healthy   200 in 5s, 2 connections
+      #   probe,    reset every time         000 in 10s, 3 connections
+      #   probe,    live 200                 200 in 0s
+      #   probe,    genuine 404              404 in 1s, no retry
+      #
+      # A 200 header followed by a reset mid-body counts as a pass, deliberately:
+      # -o /dev/null throws the body away, so this only ever asked "does the
+      # route answer 200", and it did.
+      - name: A blip is not an outage
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/probe.sh" <<'SH'
+          # probe <url> [curl args...] -> echoes the HTTP status, 000 for no reply.
+          probe() {
+            url="$1"; shift
+            code=""
+            for attempt in 1 2 3; do
+              # `|| true` and not `|| echo 000`: -w already prints curl's own 000
+              # when nothing came back, so the old fallback printed a second one
+              # and reported the nonsense code "000000". The `|| true` is still
+              # needed or `set -e` kills the step with no message at all.
+              code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 20 "$@" "$url" 2>/dev/null || true)
+              case "$code" in
+                ""|000|5??) ;;  # nothing came back, or the server stumbled: go again
+                *) break ;;     # an answer. 404 is an answer, and it means what it says,
+              esac              # so a genuinely missing asset still fails at full speed.
+              if [ "$attempt" != 3 ]; then sleep 5; fi
+            done
+            printf '%s' "${code:-000}"
+          }
+
+          # fetch <url> -> echoes the body. Empty only after three failed tries.
+          fetch() {
+            body=""
+            for attempt in 1 2 3; do
+              body=$(curl -sS --max-time 20 "$1" 2>/dev/null || true)
+              if [ -n "$body" ]; then break; fi
+              if [ "$attempt" != 3 ]; then sleep 5; fi
+            done
+            printf '%s' "$body"
+          }
+          SH
+          echo "retry helper written to $RUNNER_TEMP/probe.sh"
+
       - name: The site is the app, not a README
         run: |
           set -euo pipefail
+          . "$RUNNER_TEMP/probe.sh"
           SITE="https://pocketathlete.com"
           fail=0
 
           # 1. The routes that only exist if the Next.js export was published.
           #    Jekyll-from-README serves / just fine and 404s all of these.
           for path in /login/ /manifest.webmanifest /icon-192.png; do
-            code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 20 "$SITE$path" || echo 000)
+            code=$(probe "$SITE$path")
             if [ "$code" != "200" ]; then
-              echo "::error::$path returned $code (expected 200) — the built app is not being served"
+              echo "::error::$path returned $code on three attempts (expected 200) — the built app is not being served"
               fail=1
             else
               echo "ok  $path -> $code"
@@ -56,7 +136,17 @@ jobs:
           done
 
           # 2. The homepage must carry the Next.js runtime.
-          home=$(curl -sS --max-time 20 "$SITE/" || true)
+          home=$(fetch "$SITE/")
+
+          # A failed FETCH is not a failed CHECK, and conflating them names the
+          # wrong cause. Every test below reads $home, so an empty one used to
+          # report both "no /_next/ assets" and "does not mention PocketAthlete"
+          # — two confident diagnoses of a build that was never downloaded.
+          if [ -z "$home" ]; then
+            echo "::error::the homepage could not be fetched at all after 3 attempts — the site is unreachable, which is not the same as misconfigured"
+            exit 1
+          fi
+
           if ! printf '%s' "$home" | grep -q "/_next/"; then
             echo "::error::the homepage has no /_next/ assets — this is not the built app"
             fail=1
@@ -81,17 +171,18 @@ jobs:
       - name: The API the app depends on is answering
         run: |
           set -euo pipefail
+          . "$RUNNER_TEMP/probe.sh"
           API="https://apex-api.fitnessguru.workers.dev"
 
-          code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 20 "$API/health" || echo 000)
-          [ "$code" = "200" ] || { echo "::error::Worker /health returned $code — AI, checkout and email are all down"; exit 1; }
+          code=$(probe "$API/health")
+          [ "$code" = "200" ] || { echo "::error::Worker /health returned $code on three attempts — AI, checkout and email are all down"; exit 1; }
           echo "ok  worker health -> 200"
 
           # The webhook route specifically. An unsigned POST must be REFUSED
           # (400), not 404 — a 404 here is what silently broke every
           # subscription, because Stripe was posting to a path that didn't
           # exist and nothing anywhere reported it.
-          code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 20 -X POST "$API/stripe-webhook" || echo 000)
+          code=$(probe "$API/stripe-webhook" -X POST)
           if [ "$code" = "404" ]; then
             echo "::error::/stripe-webhook is 404 — Stripe deliveries will fail and no subscription will ever activate"
             exit 1
