@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import type { MuscleGroup } from "@/lib/hypertrophy";
 import type { TrainingLog } from "@/lib/types";
 import { loggedWeeklySets, verdictFor, volumeAdvice } from "@/lib/muscle-volume";
-import { BodyStrengthFigure, FIGURE_ZONES } from "@/components/BodyStrengthFigure";
+import { BodyStrengthFigure, FIGURE_VIEWS, type BodyView } from "@/components/BodyStrengthFigure";
 import {
   MUSCLE_WORD, RANKABLE_MUSCLES, STRENGTH_TIERS, bodyPartStrength, rankedLifts,
   strengthHeadline, weakestLink, type BodyPartStrength, type LiftRank, type Sex,
@@ -32,6 +32,7 @@ export function StrengthRanks({
   sex: Sex;
 }) {
   const [selected, setSelected] = useState<MuscleGroup | null>(null);
+  const [view, setView] = useState<BodyView>("front");
 
   const { ranks, parts, headline, weak } = useMemo(() => {
     const r = weightKg ? rankedLifts(logs, weightKg, sex) : [];
@@ -69,7 +70,6 @@ export function StrengthRanks({
   }
 
   const detail = selected ? parts.find((p) => p.muscle === selected) ?? null : null;
-  const shownOnFigure = new Set(FIGURE_ZONES.map((z) => z.muscle));
 
   return (
     <section className="card">
@@ -92,7 +92,10 @@ export function StrengthRanks({
           two tiers behind" and the picture agree without the reader hunting. */}
       {weak && selected !== weak.muscle && (
         <button
-          onClick={() => setSelected(weak.muscle)}
+          onClick={() => {
+            setSelected(weak.muscle);
+            setView(BACK_MUSCLES.has(weak.muscle) ? "back" : "front");
+          }}
           className="tap-target mt-2 inline-flex min-h-[44px] items-center gap-1.5 text-sm font-semibold text-pitch-400"
         >
           Show me <span aria-hidden>→</span>
@@ -100,7 +103,13 @@ export function StrengthRanks({
       )}
 
       <div className="mt-4 grid gap-4 sm:grid-cols-[minmax(0,200px)_1fr] sm:items-start">
-        <BodyStrengthFigure parts={parts} selected={selected} onSelect={setSelected} />
+        <BodyStrengthFigure
+          parts={parts}
+          selected={selected}
+          onSelect={setSelected}
+          view={view}
+          onViewChange={setView}
+        />
 
         {/* The list is not a legend for the figure — it is the other half of it.
             Lats, triceps, glutes and hamstrings have no front view to appear on,
@@ -114,7 +123,13 @@ export function StrengthRanks({
             return (
               <li key={muscle}>
                 <button
-                  onClick={() => setSelected(isSel ? null : muscle)}
+                  onClick={() => {
+                    setSelected(isSel ? null : muscle);
+                    // Turn the body round rather than lighting a muscle on the
+                    // side you cannot see. Tapping "glutes" and having nothing
+                    // visibly happen reads as a broken control.
+                    if (!isSel) setView(BACK_MUSCLES.has(muscle) ? "back" : "front");
+                  }}
                   aria-pressed={isSel}
                   className={`tap-target flex min-h-[44px] w-full items-center gap-2.5 rounded-xl px-2.5 text-left transition ${
                     isSel ? "bg-white/[0.10]" : "hover:bg-white/[0.05]"
@@ -127,9 +142,6 @@ export function StrengthRanks({
                   />
                   <span className="flex-1 text-sm font-semibold capitalize text-slate-200">
                     {MUSCLE_WORD[muscle]}
-                    {!shownOnFigure.has(muscle) && (
-                      <span className="ml-1.5 text-[10px] font-medium uppercase tracking-wide text-slate-600">rear</span>
-                    )}
                   </span>
                   <span className="text-right">
                     <span className="block text-xs font-bold" style={{ color: tier?.color ?? "#64748b" }}>
@@ -221,6 +233,9 @@ export function StrengthLadder() {
     </ol>
   );
 }
+
+/** Which side of the body each muscle is on, so the list can turn the figure. */
+const BACK_MUSCLES = new Set<MuscleGroup>(FIGURE_VIEWS.back.map((r) => r.muscle));
 
 /** Muted, and only the two that need attention carry a colour. */
 const VERDICT_TONE: Record<string, string> = {

@@ -344,12 +344,10 @@ test("the figure never claims a rank it cannot justify", () => {
   for (const { muscle } of FIGURE_REGIONS) {
     assert.ok(RANKABLE_MUSCLES.includes(muscle), `the figure shows ${muscle}, which nothing can rank`);
   }
-  // And the muscles it cannot show must still reach the athlete, in the list.
-  const hidden = RANKABLE_MUSCLES.filter((m) => !FIGURE_REGIONS.some((r) => r.muscle === m));
+  // The list still walks every rankable muscle, so nothing depends on hitting a
+  // shape on a drawing.
   const panel = readFileSync(new URL("../components/StrengthRanks.tsx", import.meta.url), "utf8");
-  assert.ok(hidden.length > 0, "the front view now shows every muscle, which it cannot");
-  assert.match(panel, /RANKABLE_MUSCLES\.map/,
-    "the list no longer walks every rankable muscle, so the rear ones vanish");
+  assert.match(panel, /RANKABLE_MUSCLES\.map/, "the list no longer walks every rankable muscle");
 });
 
 /**
@@ -490,4 +488,62 @@ test("the lagging muscle can be shown on the figure from the sentence that names
   assert.match(code, /weakestLink\(/, "the panel never works out which muscle is behind");
   assert.match(code, /setSelected\(weak\.muscle\)/,
     "the headline names a lagging muscle with no way to see it on the body");
+});
+
+// --- both sides of the body --------------------------------------------------
+
+/**
+ * EVERY RANKABLE MUSCLE IS NOW ON THE FIGURE. Four of them — lats, triceps,
+ * glutes and hamstrings — used to exist only as a row in a list, on a panel
+ * whose whole point is a body you can look at.
+ */
+test("the figure shows every muscle the standards can rank", () => {
+  const shown = new Set(FIGURE_REGIONS.map((r) => r.muscle));
+  const missing = RANKABLE_MUSCLES.filter((m) => !shown.has(m));
+  assert.deepEqual(missing, [], `ranked but never drawn: ${missing.join(", ")}`);
+});
+
+test("no muscle is drawn on both sides of the body", () => {
+  const { FIGURE_VIEWS } = require("../components/BodyStrengthFigure") as typeof import("../components/BodyStrengthFigure");
+  const front = new Set(FIGURE_VIEWS.front.map((r) => r.muscle));
+  for (const r of FIGURE_VIEWS.back) {
+    assert.ok(!front.has(r.muscle), `${r.muscle} appears on the front AND the back`);
+  }
+  // And every region has something to draw, or it is a dead tap target.
+  for (const r of FIGURE_REGIONS) {
+    assert.ok(r.d.length > 0, `${r.muscle} has no shape`);
+  }
+});
+
+/**
+ * NOTHING FROM THE FRONT MAY APPEAR ON THE BACK. The silhouette is honestly
+ * shared — a standing body has the same outline from either side — but showing
+ * pectorals or abdominals on a back would be claiming to draw something it is
+ * not, which is the reason mirroring the whole front figure was rejected.
+ */
+test("the back view never shows the front's anatomy", () => {
+  const { FIGURE_VIEWS } = require("../components/BodyStrengthFigure") as typeof import("../components/BodyStrengthFigure");
+  const backShapes = new Set(FIGURE_VIEWS.back.flatMap((r) => r.d));
+  for (const m of ["chest", "core"] as const) {
+    for (const d of FIGURE_VIEWS.front.find((r) => r.muscle === m)!.d) {
+      assert.ok(!backShapes.has(d), `a ${m} shape is drawn on the back view`);
+    }
+  }
+
+  const src = readFileSync(new URL("../components/BodyStrengthFigure.tsx", import.meta.url), "utf8");
+  const def = src.slice(src.indexOf("const DEFINITION"), src.indexOf("};", src.indexOf("const DEFINITION")));
+  assert.ok(!/back:[^]*shapesOf\("chest"\)/.test(def), "chest outlines are drawn behind the back view");
+  assert.ok(!/back:[^]*shapesOf\("core"\)/.test(def), "ab outlines are drawn behind the back view");
+});
+
+/**
+ * Tapping a rear muscle in the list has to turn the body round. Lighting
+ * something on the side you cannot see reads as a control that does nothing.
+ */
+test("choosing a rear muscle turns the figure round", () => {
+  const panel = readFileSync(new URL("../components/StrengthRanks.tsx", import.meta.url), "utf8");
+  assert.match(panel, /BACK_MUSCLES\.has\(muscle\) \? "back" : "front"/,
+    "the list selects rear muscles without switching the view");
+  assert.match(panel, /BACK_MUSCLES\.has\(weak\.muscle\)/,
+    "the weak-link shortcut does not turn the body round");
 });

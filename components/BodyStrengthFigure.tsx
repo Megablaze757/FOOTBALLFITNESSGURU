@@ -28,11 +28,26 @@ import { MUSCLE_WORD, type BodyPartStrength } from "@/lib/strength-standards";
  * encode becomes unreadable. The body stays neutral, the region you asked about
  * lights up, and the list beside it carries every rank at once in words.
  *
- * FRONT ONLY, ON PURPOSE. There is no comparable public-domain posterior view —
- * both candidates found were raster images in an SVG wrapper. Mirroring the
- * front was considered and rejected: it would claim to show a back while
- * showing a chest. Lats, triceps, glutes and hamstrings are ranked identically
- * and listed beside this, which is honest rather than clever.
+ * FRONT AND BACK, AND THE BACK NEEDED NO SECOND SOURCE.
+ *
+ * There is no usable public-domain posterior anatomy: the two SVG candidates
+ * were raster images in a wrapper, and the one real vector is CC BY-SA, whose
+ * share-alike is a licensing decision for the business rather than something to
+ * adopt quietly.
+ *
+ * It turns out not to be needed. A standing figure's SILHOUETTE is the same
+ * from behind — same head, same shoulders, same arms at the sides, same legs —
+ * so the outline is reused rather than mirrored or redrawn. What differs is
+ * what is inside it, and nothing from the front is shown on the back: no
+ * pectorals, no abdominals.
+ *
+ * THREE OF THE FOUR BACK MUSCLES REUSE A TRACED SHAPE, and that is a fact about
+ * anatomy rather than a shortcut. The triceps occupy the back of the same upper
+ * arm the biceps occupy the front of, and within a silhouette that is the same
+ * area; likewise hamstrings and quadriceps on the thigh. Only the trapezius,
+ * the latissimus and the glutes are shapes the front has no counterpart for,
+ * and those three are drawn — measured against the same landmarks, and large
+ * simple forms rather than the fiddly ones that kept going wrong.
  */
 
 /**
@@ -65,15 +80,55 @@ import { MUSCLE_WORD, type BodyPartStrength } from "@/lib/strength-standards";
  * makes it read as a body and what decides where a highlight lands are one
  * thing, which is why they cannot drift apart.
  */
-type Region = { muscle: MuscleGroup };
+export type BodyView = "front" | "back";
 
-const REGIONS: Region[] = [
-  { muscle: "shoulders" },
-  { muscle: "chest" },
-  { muscle: "biceps" },
-  { muscle: "core" },
-  { muscle: "quads" },
+type Region = { muscle: MuscleGroup; d: string[] };
+
+/**
+ * The three posterior forms the front has no counterpart for.
+ *
+ * Placed against the same landmarks the front boxes came from — the body's
+ * proportions do not change when you walk round it. Large, simple shapes on
+ * purpose: the fiddly ones are what kept coming out wrong, and a lat is a big
+ * plain triangle in any case.
+ */
+const TRAPS = ["M430,258 C372,262 320,286 292,330 C330,356 380,372 430,376 C480,372 530,356 568,330 C540,286 488,262 430,258 Z"];
+const LATS = [
+  "M428,392 C374,396 322,420 292,458 C286,516 300,576 328,628 C356,678 392,706 428,714 Z",
+  "M432,392 C486,396 538,420 568,458 C574,516 560,576 532,628 C504,678 468,706 432,714 Z",
 ];
+const GLUTES = [
+  "M428,760 C376,760 326,780 298,816 C292,864 308,906 342,928 C380,946 412,938 428,912 Z",
+  "M432,760 C484,760 534,780 562,816 C568,864 552,906 518,928 C480,946 448,938 432,912 Z",
+];
+
+const shapesOf = (muscle: string) => MUSCLE_SHAPES[muscle] ?? [];
+
+const VIEWS: Record<BodyView, Region[]> = {
+  front: [
+    { muscle: "shoulders", d: shapesOf("shoulders") },
+    { muscle: "chest", d: shapesOf("chest") },
+    { muscle: "biceps", d: shapesOf("biceps") },
+    { muscle: "core", d: shapesOf("core") },
+    { muscle: "quads", d: shapesOf("quads") },
+  ],
+  back: [
+    // Traps and lats are one muscle group to this app, and one shape to a
+    // person: "my back". Splitting them would rank two things the standards
+    // measure as one.
+    { muscle: "back", d: [...TRAPS, ...LATS] },
+    { muscle: "triceps", d: shapesOf("biceps") },
+    { muscle: "glutes", d: GLUTES },
+    { muscle: "hamstrings", d: shapesOf("quads") },
+  ],
+};
+
+/** Faint outlines behind each view. Never the other side's anatomy. */
+const DEFINITION: Record<BodyView, string[]> = {
+  front: Object.values(MUSCLE_SHAPES).flat(),
+  back: [...TRAPS, ...LATS, ...GLUTES,
+    ...shapesOf("biceps"), ...shapesOf("quads"), ...shapesOf("calves"), ...shapesOf("forearms")],
+};
 
 /**
  * Everything else — forearms, hands, calves, feet, head — is drawn and never
@@ -89,16 +144,38 @@ export function BodyStrengthFigure({
   parts,
   selected,
   onSelect,
+  view,
+  onViewChange,
 }: {
   parts: BodyPartStrength[];
   selected: MuscleGroup | null;
   onSelect: (m: MuscleGroup | null) => void;
+  view: BodyView;
+  onViewChange: (v: BodyView) => void;
 }) {
   const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
   const byMuscle = new Map(parts.map((p) => [p.muscle, p]));
+  const regions = VIEWS[view];
 
   return (
     <div>
+      {/* A segmented control, not a single button: "Back" on a button beside a
+          body reads as navigation rather than as the other side of a person. */}
+      <div className="mx-auto mb-2 flex w-fit rounded-full bg-white/[0.06] p-1" role="tablist" aria-label="Body view">
+        {(["front", "back"] as BodyView[]).map((v) => (
+          <button
+            key={v}
+            role="tab"
+            aria-selected={view === v}
+            onClick={() => { onViewChange(v); onSelect(null); }}
+            className={`tap-target min-h-[36px] rounded-full px-5 text-xs font-bold capitalize transition ${
+              view === v ? "bg-white/[0.12] text-slate-100" : "text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            {v}
+          </button>
+        ))}
+      </div>
       <svg
         viewBox={`0 0 ${BODY_VIEWBOX.width} ${BODY_VIEWBOX.height}`}
         // 220px, not 190. The bands are sized by anatomy, and at 190 the shoulder
@@ -122,10 +199,9 @@ export function BodyStrengthFigure({
             fill={NEUTRAL} fillOpacity="0.2"
           />
 
-          {REGIONS.map(({ muscle }) => {
+          {regions.map(({ muscle, d }) => {
             const tier = byMuscle.get(muscle)?.tier ?? null;
             const lit = selected === muscle;
-            const d = MUSCLE_SHAPES[muscle] ?? [];
             return (
               <g
                 key={muscle}
@@ -157,7 +233,7 @@ export function BodyStrengthFigure({
             fill="none" stroke={NEUTRAL} strokeOpacity="0.34"
             strokeWidth="3.5" strokeLinejoin="round" className="pointer-events-none"
           >
-            {Object.values(MUSCLE_SHAPES).flat().map((shape, i) => <path key={i} d={shape} />)}
+            {DEFINITION[view].map((shape, i) => <path key={i} d={shape} />)}
           </g>
         </g>
 
@@ -178,7 +254,7 @@ export function BodyStrengthFigure({
           BodyMap had before lib/body-map.ts, and the same fix: real buttons,
           off-screen, each stating its own value. */}
       <ul className="sr-only">
-        {REGIONS.map(({ muscle }) => {
+        {regions.map(({ muscle }) => {
           const part = byMuscle.get(muscle);
           return (
             <li key={muscle}>
@@ -193,8 +269,10 @@ export function BodyStrengthFigure({
   );
 }
 
-/** The muscles this drawing can show, so nothing is ranked invisibly. */
-export const FIGURE_ZONES = REGIONS.map((r) => ({ zone: r.muscle as string, muscle: r.muscle }));
+/** Every muscle the drawing can show, across both views. */
+export const FIGURE_ZONES = [...VIEWS.front, ...VIEWS.back]
+  .map((r) => ({ zone: r.muscle as string, muscle: r.muscle }));
 
 /** Exported for the tests that check each region sits on the right muscle. */
-export const FIGURE_REGIONS = REGIONS.map((r) => ({ ...r, d: MUSCLE_SHAPES[r.muscle] ?? [] }));
+export const FIGURE_REGIONS = [...VIEWS.front, ...VIEWS.back];
+export const FIGURE_VIEWS = VIEWS;
