@@ -9,8 +9,9 @@ import { todayLocal } from "@/lib/day";
  * Pull last night out of Apple Health, on the check-in, in one tap.
  *
  * WHY THIS IS THE POINT OF THE iOS BUILD. On the web, getting HRV and sleep in
- * means an Apple Shortcut posting JSON to a per-user ingest endpoint — a
- * five-step setup guide that most people never finish, and which silently stops
+ * means an Apple Shortcut sending to a per-user ingest endpoint — now three
+ * steps rather than five (the endpoint takes a plain GET, so there is no header
+ * and no JSON body to assemble), but still a setup, and one that silently stops
  * working if they change phones. Natively it is one permission prompt and then
  * it is simply true every morning.
  *

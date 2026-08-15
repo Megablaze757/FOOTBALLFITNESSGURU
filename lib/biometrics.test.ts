@@ -139,6 +139,29 @@ test("parseIngestPayload works out sleep units from the magnitude", () => {
   assert.equal(parseIngestPayload({ date: "2026-07-30", sleep: 450 })[0].sleep_hours, 7.5);
   assert.equal(parseIngestPayload({ date: "2026-07-30", sleep: 7.5 })[0].sleep_hours, 7.5);
   assert.equal(parseIngestPayload({ date: "2026-07-30", minutesAsleep: 450 })[0].sleep_hours, 7.5);
+
+  /**
+   * SECONDS, which the simplified setup guide now sends.
+   *
+   * The guide tells people to use a sleep sample's Duration — one tap, rather
+   * than converting anything — and that arrives in seconds. Read as minutes,
+   * 27000 becomes 450 HOURS of sleep, and readiness would carry that number for
+   * a month before it aged out.
+   */
+  assert.equal(parseIngestPayload({ date: "2026-07-30", sleep: 27000 })[0].sleep_hours, 7.5);
+  assert.equal(parseIngestPayload({ date: "2026-07-30", sleepHours: 28800 })[0].sleep_hours, 8);
+});
+
+test("the three sleep units cannot be confused for one another", () => {
+  // The ranges do not overlap, which is what makes reading the magnitude safe
+  // rather than clever: nobody sleeps over 24 hours, over 1440 minutes, or
+  // under 1440 seconds. These are the boundaries.
+  const at = (n: number) => parseIngestPayload({ date: "2026-07-30", sleep: n })[0].sleep_hours;
+  assert.equal(at(24), 24, "24 is hours");
+  assert.equal(at(25), 0.42, "just over is minutes");
+  assert.equal(at(1440), 24, "1440 is minutes — a full day");
+  assert.equal(at(1441), 0.4, "just over is seconds");
+  assert.equal(at(3600), 1, "an hour of seconds");
 });
 
 test("parseIngestPayload defaults an absent date to the athlete's local today", () => {
@@ -213,6 +236,34 @@ test("days since sync counts whole days", () => {
  * the Deno function could — but it does prove the parts most likely to be
  * dropped in a rewrite are still present on both sides.
  */
+/**
+ * wearable-ingest carries its own copy of `parseIngestPayload` — Deno cannot
+ * import from the Next app's lib — so the same drift risk applies, and the
+ * consequences are the ones an athlete sees on their check-in.
+ */
+test("the ingest function's copy of the payload parser keeps the rules that matter", () => {
+  const src = readFileSync(new URL("../supabase/functions/wearable-ingest/index.ts", import.meta.url), "utf8");
+
+  // The three-way sleep unit ladder. Without the seconds arm, the Duration the
+  // setup guide now tells people to send reads as 450 hours of sleep.
+  assert.match(src, /n <= 24/, "the hours arm of the sleep ladder is gone");
+  assert.match(src, /n <= 1440/, "the minutes arm of the sleep ladder is gone");
+  assert.match(src, /n \/ 3600/, "seconds are no longer converted — a Duration will read as hundreds of hours");
+
+  // A manual entry is never overwritten by a sync.
+  assert.match(src, /eq\("source", "manual"\)/,
+    "the manual-entry rule is gone — a correction will be overwritten by the next sync");
+
+  // 'apple_health', not 'healthkit': biometrics_source_check rejects the other,
+  // and this write is best-effort so the failure would be silent.
+  assert.match(src, /source: "apple_health"/, "the source value no longer matches biometrics_source_check");
+
+  // The GET path the simplified setup depends on. Without it every shortcut
+  // built from the current guide gets a 405 and nobody's sleep arrives.
+  assert.match(src, /req\.method !== "POST" && req\.method !== "GET"/, "the GET path is gone");
+  assert.match(src, /searchParams\.get\("t"\)/, "the token is no longer read from the URL");
+});
+
 test("the edge function's copy of the Oura parser keeps the rules that matter", () => {
   const src = readFileSync(new URL("../supabase/functions/sync-oura/index.ts", import.meta.url), "utf8");
 

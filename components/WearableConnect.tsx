@@ -105,8 +105,8 @@ export function WearableConnect({ userId }: { userId: string }) {
             state={data?.ingestToken ? "connected" : "available"}
             detail={
               data?.ingestToken
-                ? "Set up. Your Shortcut can post to the app whenever you like."
-                : "Via a Shortcut on your iPhone — it can send your sleep and HRV every morning."
+                ? "Set up. Your Shortcut sends to the app whenever you like."
+                : "One link and a two-minute Shortcut on your iPhone — then your sleep is there every morning."
             }
             onClick={() => setOpen(open === "apple" ? null : "apple")}
             action={data?.ingestToken ? "Show setup" : "Set up"}
@@ -236,6 +236,25 @@ function AppleSetup({ token, onDone }: { token: string | null; onDone: () => voi
   const shown = minted ?? (token && fnBase ? { token, url: ingestUrl } : null);
 
   /**
+   * ONE LINK, WITH THE CREDENTIAL ALREADY IN IT.
+   *
+   * The old setup handed over a URL and a header value, and step four was: tap
+   * Show More, change the method to POST, add an Authorization header, paste,
+   * switch the body to JSON, add three fields, map each to a Health result. On
+   * a phone. Every one of those sub-steps served the transport rather than the
+   * athlete, and most people stopped somewhere in the middle — a setup nobody
+   * finishes is a feature nobody has.
+   *
+   * The endpoint now takes a plain GET, so all of it collapses into a single
+   * link you paste and drop numbers into. `sleep` is the only one the check-in
+   * consumes; HRV and resting HR are shown as an optional extension, because
+   * getting somebody to a working sync in ninety seconds beats getting them
+   * halfway to a complete one.
+   */
+  const personalLink = shown ? `${shown.url}?t=${shown.token}` : "";
+  const sleepOnly = `${personalLink}&sleep=`;
+
+  /**
    * Minted on the device, written straight to the athlete's own profile row.
    *
    * No server call at all. This used to POST to the Worker purely to have it
@@ -286,6 +305,7 @@ function AppleSetup({ token, onDone }: { token: string | null; onDone: () => voi
       <p className="mb-2 text-xs text-slate-400">
         Apple doesn&apos;t let a website read Health directly — the data never leaves your phone unless you
         send it. A <span className="text-slate-200">Shortcut</span> can, and it can run itself every morning.
+        It is four taps and one paste.
       </p>
 
       {!shown ? (
@@ -297,18 +317,24 @@ function AppleSetup({ token, onDone }: { token: string | null; onDone: () => voi
         </>
       ) : (
         <>
-          {/* HONEST ABOUT THE COST UP FRONT.
-              This is a five-minute job and it is fiddly, and pretending
-              otherwise is how someone starts it on a bus and gives up halfway.
-              Saying "once" is the important half: they never do it again. */}
           <p className="mb-3 rounded-xl bg-white/[0.03] px-3 py-2 text-xs text-slate-300">
-            About 5 minutes, once. After that it sends by itself every morning and you never
-            think about it again. Do it on your <b>iPhone</b>, not a laptop.
+            Three steps, about two minutes, once. After that it sends by itself every morning and you
+            never think about it again. Do it on your <b>iPhone</b>, not a laptop.
           </p>
 
-          <div className="mb-3 space-y-2">
-            <Copyable label="URL" value={shown.url} copied={copied === "URL"} onCopy={() => copy("URL", shown.url)} />
-            <Copyable label="Header" value={`Bearer ${shown.token}`} copied={copied === "Header"} onCopy={() => copy("Header", `Bearer ${shown.token}`)} secret />
+          {/* ONE LINK, NOT A URL AND A HEADER.
+              Copying two values into two different places in the Shortcuts UI
+              was where people lost their place. Copy gives you the link with
+              `&sleep=` already on the end, so the next thing to do is obvious
+              from what is on the clipboard. */}
+          <div className="mb-3">
+            <Copyable
+              label="Your link"
+              value={sleepOnly}
+              copied={copied === "link"}
+              onCopy={() => copy("link", sleepOnly)}
+              secret
+            />
           </div>
 
           <ol className="space-y-3 text-xs text-slate-400">
@@ -316,38 +342,88 @@ function AppleSetup({ token, onDone }: { token: string | null; onDone: () => voi
               It&apos;s the app with the two coloured squares — already on your phone. Tap
               <b className="text-slate-200"> + </b> in the top right.
             </Step>
-            <Step n={2} title="Add your sleep">
+            <Step n={2} title="Find last night's sleep">
               Search <b className="text-slate-200">Find Health Samples</b> and tap it. Set
               <b className="text-slate-200"> Sleep Analysis</b>, sort by
-              <b className="text-slate-200"> Start Date</b>, limit <b className="text-slate-200">1</b>.
+              <b className="text-slate-200"> Start Date</b>, limit <b className="text-slate-200">1</b>. Then add
+              <b className="text-slate-200"> Get Details of Health Sample</b> and choose
+              <b className="text-slate-200"> Duration</b>.
             </Step>
-            <Step n={3} title="Add HRV and resting heart rate">
-              Two more <b className="text-slate-200">Find Health Samples</b> actions, the same way — one for
-              <b className="text-slate-200"> Heart Rate Variability</b>, one for
-              <b className="text-slate-200"> Resting Heart Rate</b>.
-            </Step>
-            <Step n={4} title="Send it">
-              Add <b className="text-slate-200">Get Contents of URL</b> and paste the URL above. Tap
-              <b className="text-slate-200"> Show More</b>, set Method to <b className="text-slate-200">POST</b>.
-              Under <b className="text-slate-200">Headers</b> add a key called
-              <b className="text-slate-200"> Authorization</b> and paste the Header value above.
-              Set Request Body to <b className="text-slate-200">JSON</b> and add three fields —
-              <b className="text-slate-200"> sleepHours</b>, <b className="text-slate-200">hrv</b> and
-              <b className="text-slate-200"> restingHR</b> — each set to the matching Health result.
-            </Step>
-            <Step n={5} title="Make it run itself">
-              Name it, then go to the <b className="text-slate-200">Automation</b> tab →
-              <b className="text-slate-200"> +</b> → <b className="text-slate-200">Time of Day</b> → 8am, daily,
-              and pick your shortcut. Turn <b className="text-slate-200">Ask Before Running</b> off, or it
-              will just sit there waiting for you.
+            <Step n={3} title="Send it">
+              Add <b className="text-slate-200">Get Contents of URL</b> and paste your link — it already ends
+              with <code className="text-slate-300">&amp;sleep=</code>. Put the cursor at the very end and tap the
+              <b className="text-slate-200"> Duration</b> variable above the keyboard. That is the whole
+              shortcut: no headers, no JSON, nothing to switch on.
             </Step>
           </ol>
 
+          {/* TEST IT BEFORE AUTOMATING IT.
+              Somebody who schedules a shortcut they have never run finds out it
+              was broken a week later, if at all. The endpoint answers with the
+              numbers it saved for exactly this. */}
+          <p className="mt-3 rounded-xl border border-white/[0.08] bg-white/[0.02] px-3 py-2 text-xs text-slate-400">
+            <b className="text-slate-200">Now tap Play.</b> It should answer with the hours it read back.
+            If it does, today&apos;s sleep is already on your check-in.
+          </p>
+
           <p className="mt-3 text-xs text-slate-500">
-            Tap Play once to test it. If it worked, today&apos;s numbers appear on your check-in
-            straight away. Field names are flexible — <span className="text-slate-400">sleep</span>,
-            <span className="text-slate-400"> restingHeartRate</span> and similar all work, and minutes
-            or hours are both understood.
+            <b className="text-slate-400">Then make it run itself:</b> name it, go to the
+            <b className="text-slate-300"> Automation</b> tab → <b className="text-slate-300">+</b> →
+            <b className="text-slate-300"> Time of Day</b> → 8am, daily, and pick it. Turn
+            <b className="text-slate-300"> Ask Before Running</b> off, or it will sit there waiting for you.
+          </p>
+
+          {/* THE OPTIONAL HALF, KEPT OUT OF THE WAY.
+              HRV and resting heart rate sharpen readiness; sleep is what the
+              check-in actually consumes. Putting all three in the main guide is
+              what made this a five-step job, and a working sleep sync is worth
+              more than an abandoned complete one. */}
+          <details className="mt-3">
+            <summary className="tap-target cursor-pointer list-none text-xs font-semibold text-slate-400 hover:text-slate-200">
+              Add HRV and resting heart rate too <span className="text-slate-600">(optional, one more minute)</span>
+            </summary>
+            <div className="mt-2 space-y-2 text-xs text-slate-500">
+              <p>
+                Two more <b className="text-slate-300">Find Health Samples</b> actions before the last step —
+                one <b className="text-slate-300">Heart Rate Variability</b>, one
+                <b className="text-slate-300"> Resting Heart Rate</b> — each followed by
+                <b className="text-slate-300"> Get Details of Health Sample → Value</b>.
+              </p>
+              <p>
+                Then at the end of the URL type <code className="text-slate-300">&amp;hrv=</code> and tap the HRV
+                value, then <code className="text-slate-300">&amp;rhr=</code> and tap the resting HR value.
+              </p>
+              <p>
+                These are what let readiness compare today against your own normal rather than a
+                textbook. Sleep on its own still works.
+              </p>
+            </div>
+          </details>
+
+          <details className="mt-2">
+            <summary className="tap-target cursor-pointer list-none text-xs font-semibold text-slate-500 hover:text-slate-300">
+              Prefer a POST with a header?
+            </summary>
+            <div className="mt-2 space-y-2 text-xs text-slate-500">
+              <p>
+                Still supported, and it keeps the token out of the URL. POST to
+                <code className="ml-1 break-all text-slate-400">{shown.url}</code> with an
+                <code className="ml-1 text-slate-400">Authorization: Bearer …</code> header and a JSON body of
+                <code className="ml-1 text-slate-400">sleepHours</code>,
+                <code className="ml-1 text-slate-400">hrv</code>,
+                <code className="ml-1 text-slate-400">restingHR</code>.
+              </p>
+              <button onClick={() => copy("Header", `Bearer ${shown.token}`)} className="chip text-pitch-400">
+                {copied === "Header" ? "Copied" : "Copy the header value"}
+              </button>
+            </div>
+          </details>
+
+          <p className="mt-3 text-xs text-slate-500">
+            Field names are flexible — <span className="text-slate-400">sleep</span>,
+            <span className="text-slate-400"> sleepHours</span> and
+            <span className="text-slate-400"> restingHeartRate</span> all work, and minutes or hours are
+            both understood. Anything you type in yourself is never overwritten by a sync.
           </p>
 
           <button onClick={mint} disabled={busy} className="tap-target mt-3 text-xs font-semibold text-slate-400 hover:text-slate-200">
@@ -355,7 +431,8 @@ function AppleSetup({ token, onDone }: { token: string | null; onDone: () => voi
           </button>
           {err && <p className="mt-2 text-sm text-readiness-red">{err}</p>}
           <p className="mt-2 text-xs text-slate-500">
-            Anyone with this token can add health data to your account. Treat it like a password.
+            Anyone with this link can add health data to your account — it cannot read anything, but
+            treat it like a password. Making a new one stops the old link working.
           </p>
         </>
       )}
@@ -370,11 +447,25 @@ function Copyable({ label, value, copied, onCopy, secret }: {
     <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/30 p-2">
       <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider text-slate-500">{label}</span>
       <code className="min-w-0 flex-1 truncate text-xs text-slate-300">
-        {secret ? `${value.slice(0, 8)}····${value.slice(-4)}` : value}
+        {secret ? maskSecret(value) : value}
       </code>
       <button onClick={onCopy} className="chip shrink-0 text-pitch-400">{copied ? "Copied" : "Copy"}</button>
     </div>
   );
+}
+
+/**
+ * Hide the credential, keep the shape.
+ *
+ * The old masking took the first eight characters and the last four, which for
+ * a bare token was fine and for a URL rendered "https://····eep=" — no help in
+ * telling whether you copied the right thing. A link's secret is one query
+ * parameter, so mask that and leave the rest legible.
+ */
+function maskSecret(value: string): string {
+  const uuid = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+  if (uuid.test(value)) return value.replace(uuid, "••••••••");
+  return `${value.slice(0, 8)}····${value.slice(-4)}`;
 }
 
 /**

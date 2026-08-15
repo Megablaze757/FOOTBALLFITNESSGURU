@@ -227,12 +227,9 @@ export function parseIngestPayload(body: unknown): Biometric[] {
     const hrv = numOrNull(pick(["hrv", "hrvms", "heartratevariability", "sdnn"]));
     const rhr = numOrNull(pick(["restinghr", "restingheartrate", "rhr", "lowestheartrate"]));
     let sleep = numOrNull(pick(["sleep", "sleephours", "hoursofsleep", "asleep"]));
-    // Apple reports sleep in minutes as often as hours. Nobody sleeps 400
-    // hours, and nobody sleeps 7 minutes — the units are unambiguous from the
-    // magnitude, which is safer than trusting a key name we didn't choose.
     const sleepMinutes = numOrNull(pick(["sleepminutes", "sleepmins", "minutesasleep"]));
     if (sleep == null && sleepMinutes != null) sleep = +(sleepMinutes / 60).toFixed(2);
-    else if (sleep != null && sleep > 24) sleep = +(sleep / 60).toFixed(2);
+    else if (sleep != null) sleep = sleepToHours(sleep);
 
     const b: Biometric = {
       metric_date: date,
@@ -252,6 +249,28 @@ export function parseIngestPayload(body: unknown): Biometric[] {
 function numOrNull(v: unknown): number | null {
   const n = Number(v);
   return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/**
+ * A sleep figure in hours, whatever unit it arrived in.
+ *
+ * WHY THE MAGNITUDE DECIDES AND NOT THE KEY NAME. The thing on the other end is
+ * a Shortcut somebody assembled by dragging boxes around, and the field it hands
+ * over depends on which Health detail they picked. All three units turn up:
+ * hours from a hand-typed value, minutes from `Minutes Asleep`, and SECONDS from
+ * a sleep sample's Duration — which is what the setup guide now tells people to
+ * use, because it is one tap instead of a conversion.
+ *
+ * The ranges cannot overlap, which is what makes this safe rather than clever:
+ * nobody sleeps more than 24 hours, more than 1440 minutes, or fewer than 1440
+ * seconds and calls it a night. Getting it wrong is not cosmetic — 27000
+ * seconds read as minutes is 450 hours of sleep, and readiness would carry that
+ * for a month.
+ */
+export function sleepToHours(n: number): number {
+  if (n <= 24) return +n.toFixed(2);          // already hours
+  if (n <= 1440) return +(n / 60).toFixed(2); // minutes
+  return +(n / 3600).toFixed(2);              // seconds
 }
 
 // --- is the ring still actually syncing? -------------------------------------
