@@ -27,7 +27,7 @@
 // IT SAYS THE SAME THING AS THE FRONT DOOR. Under the fold it leads with the
 // landing page's line — "Most plans know your sport. This one knows your
 // position." — and the numbers under it are the same numbers: 33 positions,
-// 6 sports, 136 challenges, 68 badges, each asserted against the app by a test.
+// 6 sports, 136 challenges, 75 badges, each asserted against the app by a test.
 //
 // WHAT IT WILL NOT CLAIM. It does NOT say the clip never leaves the phone — the
 // clip is uploaded to the account, and only the ANALYSIS is local. And it does
@@ -92,7 +92,7 @@ export function launchEmail({ appUrl, ref, unsubscribeUrl }: LaunchEmailInput): 
     "  It watches your training load and tells you to back off BEFORE the niggle.",
     "- Food that adds up. Calorie and macro targets, meal plans built round your",
     "  training, a shopping list with prices on it.",
-    "- Something to chase. 136 challenges, 68 badges, and a rank ladder from Iron",
+    "- Something to chase. 136 challenges, 75 badges, and a rank ladder from Iron",
     "  to Legend. It pays you for rest days too, not just for grinding.",
     "",
     `Start here: ${cta}`,
@@ -196,7 +196,7 @@ export function launchEmail({ appUrl, ref, unsubscribeUrl }: LaunchEmailInput): 
   ${row("🎥", "Film a rep, watch it get read", "Depth, tempo, bar path, the knee caving in on rep 8 — with the drills to fix what it finds. The analysis runs on your own phone.")}
   ${row("🩺", "A plan that reacts", "Slept badly? Three taps and today eases off by itself. It watches your training load and tells you to back off before the niggle, not after.")}
   ${row("🍽️", "Food that adds up", "Calorie and macro targets, meal plans built round your training, and a shopping list with prices on it.")}
-  ${row("🏆", "Something to chase", "136 challenges, 68 badges and a rank ladder from Iron to Legend. It pays you for rest days too, not just for grinding.")}
+  ${row("🏆", "Something to chase", "136 challenges, 75 badges and a rank ladder from Iron to Legend. It pays you for rest days too, not just for grinding.")}
 
   <tr><td style="padding-top:8px;"></td></tr>
   ${ctaButton(cta, "Build my first plan →")}
@@ -262,7 +262,7 @@ function statRow(): string {
     ["33", "positions"],
     ["6", "sports"],
     ["136", "challenges"],
-    ["68", "badges"],
+    ["75", "badges"],
   ];
   const cells = stats
     .map(

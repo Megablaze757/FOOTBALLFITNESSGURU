@@ -24,11 +24,11 @@ const FEATURES = [
   // is local. The distinction is the whole answer to "where does my video go?",
   // and a marketing page that blurs it is one a user is right to be annoyed by.
   { icon: "🎥", title: "Form analysis on your phone", body: "Film a lift or a sprint and pose tracking flags knee collapse and left–right asymmetry. The analysis runs on your phone, not on a server." },
-  // The whole progression layer was missing from this page — 136 challenges, 68
+  // The whole progression layer was missing from this page — 136 challenges, 75
   // badges and a nine-tier ladder, none of it mentioned anywhere a stranger
   // could see. It is the reason people open the app on a day they weren't
   // planning to.
-  { icon: "🏆", title: "A reason to come back", body: "Daily and weekly challenges picked for your position, 68 badges, and a rank ladder from Iron to Legend. It pays you for rest days too, not just for grinding." },
+  { icon: "🏆", title: "A reason to come back", body: "Daily and weekly challenges picked for your position, 75 badges, and a rank ladder from Iron to Legend. It pays you for rest days too, not just for grinding." },
   { icon: "🍽️", title: "Food that fits your week", body: "Say you eat out on Tuesdays and Tuesday is left alone. The shopping list thinks in packs, so one bag of rice covers three meals." },
   { icon: "👥", title: "Coach & squad", body: "Coaches build a program once and assign it across the roster, with every athlete's readiness on one screen." },
 ];
@@ -212,7 +212,7 @@ export default function Landing() {
             <HeroStat n="33" label="positions" />
             <HeroStat n="6" label="sports" />
             <HeroStat n="136" label="challenges" />
-            <HeroStat n="68" label="badges" />
+            <HeroStat n="75" label="badges" />
           </div>
           <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-slate-500 lg:justify-start">
             <span>✓ Form analysis on your phone</span>

@@ -73,6 +73,22 @@ export function ProgressPanel({ userId }: { userId: string }) {
 
   return (
     <div className="space-y-5">
+      {/**
+        * THE ONE OBVIOUS TOP, which docs/UI-AUDIT.md holds every page to and
+        * which this one did not have: it opened with a volume chart, and
+        * "reps this month" is not what anybody comes here to find out.
+        *
+        * "Am I strong" is a different question from "am I improving", and it is
+        * the one a rank answers. The volume bars and the per-lift chart below
+        * are the evidence for it, in that order — headline first, then the
+        * trend, then the detail.
+        */}
+      <StrengthRanks
+        logs={data?.trainingLong ?? []}
+        weightKg={data?.weightKg ?? null}
+        sex={data?.sex ?? "male"}
+      />
+
       <section className="card p-5">
         <div className="mb-3 flex items-center justify-between">
           <div>
@@ -83,16 +99,6 @@ export function ProgressPanel({ userId }: { userId: string }) {
         </div>
         {hasTraining ? <MiniBars data={t.volume} color="#e3b53f" unit=" reps" /> : <Empty label="Log training in your daily check-in." />}
       </section>
-
-      {/* AM I STRONG — which is a different question from am I improving, and
-          the one the volume bars and the per-lift chart both leave unanswered.
-          Sits above the chart because a rank is the headline and a trend line
-          is the evidence for it. */}
-      <StrengthRanks
-        logs={data?.trainingLong ?? []}
-        weightKg={data?.weightKg ?? null}
-        sex={data?.sex ?? "male"}
-      />
 
       {/* The one chart that answers "am I getting stronger", which is why it's
           the thing worth paying for. */}

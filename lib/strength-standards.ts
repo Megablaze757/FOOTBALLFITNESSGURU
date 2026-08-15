@@ -393,3 +393,32 @@ export const MUSCLE_WORD: Record<MuscleGroup, string> = {
   triceps: "triceps", core: "core", quads: "quads", hamstrings: "hamstrings",
   glutes: "glutes", calves: "calves", adductors: "adductors",
 };
+
+/**
+ * The three numbers the reward system needs, from one pass over the log.
+ *
+ * Built here rather than in the page because they have to agree: a badge that
+ * reads `bestStrengthTier` and XP that reads `strengthTiers` must be describing
+ * the same athlete, and the surest way to make two numbers disagree is to
+ * compute them in two places.
+ *
+ * ALL THREE ARE MONOTONIC, because all three come from best-ever efforts. XP in
+ * this app never goes down and a badge is never taken back — see `computeXp`.
+ */
+export function strengthStats(
+  logs: TrainingLog[] | null | undefined,
+  bodyweightKg: number,
+  sex: Sex,
+): { strengthTiers: number; bestStrengthTier: number; musclesRanked: number } {
+  // No bodyweight, no ratio. Zero is the honest answer rather than a rank
+  // computed against an average body nobody has.
+  if (!(bodyweightKg > 0)) return { strengthTiers: 0, bestStrengthTier: 0, musclesRanked: 0 };
+
+  const ranks = rankedLifts(logs, bodyweightKg, sex);
+  const parts = bodyPartStrength(ranks);
+  return {
+    strengthTiers: strengthTierTotal(parts),
+    bestStrengthTier: ranks.reduce((n, r) => Math.max(n, r.tier.index), 0),
+    musclesRanked: parts.filter((p) => p.tier != null).length,
+  };
+}

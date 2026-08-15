@@ -276,6 +276,10 @@ test("no badge asks for something the app cannot measure", () => {
     // itself rather than by the window, so it is a real ceiling: no strength
     // badge may ask for more tiers than a body has parts to earn them in.
     strengthTiers: RANKABLE_MUSCLES.length * TOP_TIER,
+    // The real ceilings: the top rung on a single lift, and every rankable
+    // muscle ranked. No strength badge may ask for more than a body can give.
+    bestStrengthTier: TOP_TIER,
+    musclesRanked: RANKABLE_MUSCLES.length,
   };
   const { locked } = evaluateAchievements(maxed, 999);
   assert.deepEqual(

@@ -92,6 +92,19 @@ export interface ActivityStats {
    * where this app already had the argument about ranks going backwards.
    */
   strengthTiers: number;
+  /**
+   * The highest tier reached on any single lift, and how many body parts have a
+   * rank at all.
+   *
+   * `strengthTiers` alone cannot carry a badge worth having: it is a sum, so
+   * "twelve" is one very strong lift or six mediocre ones and a badge on it
+   * cannot tell an athlete which they did. These two split the question the way
+   * a person asks it — how strong is my best lift, and have I skipped anything.
+   *
+   * Both monotonic, because both are computed from best-ever efforts.
+   */
+  bestStrengthTier: number;
+  musclesRanked: number;
 }
 
 export const EMPTY_STATS: ActivityStats = {
@@ -100,7 +113,7 @@ export const EMPTY_STATS: ActivityStats = {
   restDaysLogged: 0, longestStreak: 0, weeksActive: 0, perfectDaysLast7: 0,
   perfectDays: 0, comebacks: 0,
   apexDays: 0, apexBestRun: 0, eliteDays: 0, eliteBestRun: 0,
-  strengthTiers: 0,
+  strengthTiers: 0, bestStrengthTier: 0, musclesRanked: 0,
 };
 
 /**
@@ -547,8 +560,36 @@ const STANDING_ACHIEVEMENTS: Achievement[] = [
   { id: "apex_100", name: "Era", desc: "100 days at no. 1, however they fell", icon: "crown", test: (s) => s.apexDays >= 100 },
 ];
 
+/**
+ * BADGES FOR GETTING STRONGER, which the board had none of.
+ *
+ * Seventy-one badges and every one of them counted an ACTION — sessions logged,
+ * days checked in, videos analysed. Nothing marked an outcome. An app whose
+ * whole subject is getting stronger was paying exclusively for turning up,
+ * which is the same argument the rest-day XP settled: reward what you actually
+ * want, not only what is easy to count.
+ *
+ * Tiers rather than kilos, so they mean the same thing at 60kg as at 100kg —
+ * "a double-bodyweight deadlift" is a real achievement and "a 200kg deadlift"
+ * is a fact about how big somebody is. See lib/strength-standards.ts.
+ *
+ * None of these can go backwards: ranks are best-ever, so a bad session cannot
+ * take a badge off you.
+ */
+const STRENGTH_ACHIEVEMENTS: Achievement[] = [
+  { id: "first_rank", name: "On the board", desc: "Get any lift ranked", icon: "barbell", test: (s) => s.strengthTiers >= 1 },
+  { id: "tier_intermediate", name: "Intermediate", desc: "Reach Intermediate on any lift", icon: "dumbbell", test: (s) => s.bestStrengthTier >= 2 },
+  { id: "tier_advanced", name: "Advanced", desc: "Reach Advanced — stronger than most people in any gym", icon: "medal", test: (s) => s.bestStrengthTier >= 3 },
+  { id: "tier_exceptional", name: "Exceptional", desc: "Reach Exceptional on any lift", icon: "trophy", test: (s) => s.bestStrengthTier >= 4 },
+  { id: "tier_master", name: "Master of one", desc: "Reach Master — very few people lift this", icon: "crown", test: (s) => s.bestStrengthTier >= 5 },
+  // The anti-cherry-pick badge: you cannot earn this off one favourite lift.
+  { id: "whole_body", name: "Nothing skipped", desc: "Get every muscle group ranked", icon: "shield", test: (s) => s.musclesRanked >= 9 },
+  { id: "strong_all_over", name: "Strong all over", desc: "20 strength tiers across your whole body", icon: "star", test: (s) => s.strengthTiers >= 20 },
+];
+
 export const ACHIEVEMENTS: Achievement[] = [
   ...STANDING_ACHIEVEMENTS,
+  ...STRENGTH_ACHIEVEMENTS,
   { id: "first_checkin", name: "First step", desc: "Log your first check-in", icon: "foot", test: (s) => s.checkIns >= 1 },
   { id: "streak_7", name: "Week warrior", desc: "7-day check-in streak", icon: "flame", test: (s) => s.streak >= 7 },
   { id: "streak_30", name: "Unstoppable", desc: "30-day check-in streak", icon: "bolt", test: (s) => s.streak >= 30 },

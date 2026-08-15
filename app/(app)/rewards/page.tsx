@@ -10,7 +10,8 @@ import {
   computeXp, levelFor, rankFor, evaluateAchievements, dailyQuests, activitySpans,
   type ActivityStats, type DailyState, EMPTY_STATS } from "@/lib/gamification";
 import type { WeekActivity } from "@/lib/challenges";
-import { bodyPartStrength, rankedLifts, strengthTierTotal } from "@/lib/strength-standards";
+import { strengthStats } from "@/lib/strength-standards";
+import { StrengthSummary } from "@/components/StrengthSummary";
 import type { TrainingLog } from "@/lib/types";
 import { Confetti } from "@/components/Confetti";
 import { LevelUpModal } from "@/components/LevelUpModal";
@@ -132,11 +133,11 @@ export default function RewardsPage() {
        * there is no ratio to compute and this is honestly zero rather than
        * guessed from an average body.
        */
-      strengthTiers: strengthTierTotal(bodyPartStrength(rankedLifts(
+      ...strengthStats(
         (allDrills.data ?? []) as TrainingLog[],
         (profile.data as { weight_kg?: number | null } | null)?.weight_kg ?? 0,
         (profile.data as { sex?: string | null } | null)?.sex === "female" ? "female" : "male",
-      ))),
+      ),
     };
     const state: DailyState = {
       checkedInToday: checkDates.includes(today),
@@ -342,6 +343,12 @@ export default function RewardsPage() {
       </div>
 
       <RankLadder level={level} />
+
+      {/* HOW STRONG, not just how consistent.
+          Every other card here counts turning up — days, sessions, quests. This
+          is the one that says whether any of it worked, and the page about
+          progression was the last place in the app not to mention it. */}
+      <StrengthSummary stats={data.stats} />
 
       <WeeklyChallenges boards={data.boards} />
 

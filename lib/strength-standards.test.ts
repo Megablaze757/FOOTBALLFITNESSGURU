@@ -362,8 +362,10 @@ test("the figure never claims a rank it cannot justify", () => {
  */
 test("the page that computes XP actually feeds it strength", () => {
   const page = readFileSync(new URL("../app/(app)/rewards/page.tsx", import.meta.url), "utf8");
-  assert.match(page, /strengthTiers:/, "the rewards page builds ActivityStats without strengthTiers");
-  assert.match(page, /rankedLifts\(/, "nothing on the rewards page ranks a lift");
+  // Spread from one helper so XP and the badges cannot describe different
+  // athletes — see `strengthStats`.
+  assert.match(page, /\.\.\.strengthStats\(/, "the rewards page builds ActivityStats without strength");
+  assert.match(page, /strengthStats\(/, "nothing on the rewards page ranks a lift");
 
   // Ranks are best-ever, so the query behind them must not be windowed: a PR
   // ageing out would DELETE the XP it earned and could drop somebody a level.
@@ -374,4 +376,44 @@ test("the page that computes XP actually feeds it strength", () => {
 
   // And bodyweight has to be on the row it reads, or every rank is zero.
   assert.match(page, /weight_kg/, "the profile query does not fetch bodyweight");
+});
+
+/**
+ * ONE OBVIOUS TOP — the rule docs/UI-AUDIT.md holds every page to.
+ *
+ * The Progress tab opened with a volume chart, and "reps this month" is not
+ * what anybody opens a training app to find out. A rank is the headline and a
+ * trend line is the evidence for it, so the ranks go first.
+ */
+test("the progress page leads with the rank, not the volume chart", () => {
+  const panel = readFileSync(new URL("../components/ProgressPanel.tsx", import.meta.url), "utf8");
+  // From the main body, not the last `return (` in the file — that one belongs
+  // to a helper further down and contains none of these sections.
+  const body = panel.slice(panel.indexOf('<div className="space-y-5">'));
+  const ranks = body.indexOf("<StrengthRanks");
+  const volume = body.indexOf("Training volume");
+  const chart = body.indexOf("<ExerciseProgress");
+  assert.ok(ranks > 0 && volume > 0 && chart > 0, "the progress page lost one of its three sections");
+  assert.ok(ranks < volume, "the volume chart is above the ranks");
+  assert.ok(volume < chart, "the per-lift detail is above the monthly summary");
+});
+
+/**
+ * And the page about progression has to mention whether you got stronger. Every
+ * other card on Rewards counts turning up; this is the one that says if it
+ * worked.
+ */
+test("the rewards page shows strength as well as attendance", () => {
+  const page = readFileSync(new URL("../app/(app)/rewards/page.tsx", import.meta.url), "utf8");
+  assert.match(page, /<StrengthSummary/, "the rewards page never mentions strength");
+
+  const summary = readFileSync(new URL("../components/StrengthSummary.tsx", import.meta.url), "utf8");
+  // Comments stripped first. This codebase has tripped a guard on its own
+  // explanatory comment twice before — including one that quoted the very
+  // expression it was banning.
+  const code = summary.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+  // Nothing ranked must read as "not tested", never as a verdict.
+  assert.match(code, /stats\.strengthTiers === 0/, "an athlete with no ranked lift is not handled");
+  assert.ok(!/Untrained/.test(code),
+    "the summary calls an unranked athlete Untrained, which is a verdict from an absence");
 });
