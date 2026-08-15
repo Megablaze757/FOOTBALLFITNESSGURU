@@ -18,7 +18,8 @@ import { Confetti } from "@/components/Confetti";
 import { LevelUpModal } from "@/components/LevelUpModal";
 import { WeeklyChallenges } from "@/components/WeeklyChallenges";
 import { boardsFor } from "@/lib/challenge-pool";
-import { completionsFrom, recordCompletions, fetchChallengeXp } from "@/lib/challenge-xp";
+import { completionsFrom, recordCompletions } from "@/lib/challenge-xp";
+import { fetchXpExtras } from "@/lib/athlete-xp";
 import { Leaderboards } from "@/components/Leaderboards";
 import { RankLadder } from "@/components/RankLadder";
 import { RankBadge } from "@/components/RankBadge";
@@ -297,7 +298,12 @@ export default function RewardsPage() {
      * without 0075.
      */
     await recordCompletions(supabase, user.id, completionsFrom([boards.daily, boards.weekly]));
-    const earnedFromChallenges = await fetchChallengeXp(supabase, user.id);
+    /**
+     * The same helper Home uses. The two pages disagreed about this athlete's
+     * level because each assembled the non-count XP sources itself and Home
+     * missed two of them — sharing the assembly is what stops that recurring.
+     */
+    const earnedFromChallenges = (await fetchXpExtras(supabase, user.id)).challengeXp;
 
     return {
       stats, state, boards, ctx,

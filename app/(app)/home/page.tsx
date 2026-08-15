@@ -11,6 +11,7 @@ import { assessReadiness } from "@/lib/readiness";
 import { actionLabel } from "@/lib/insights";
 import { checkInStreak, computeACWR } from "@/lib/load";
 import { dailyQuests, computeXp, levelFor, activitySpans, type ActivityStats, type LevelInfo, type Standing, EMPTY_STATS } from "@/lib/gamification";
+import { fetchXpExtras } from "@/lib/athlete-xp";
 import { biometricSignal, type Biometric } from "@/lib/biometrics";
 import { sportProfile } from "@/lib/sport-profile";
 import { ReadinessGauge } from "@/components/ReadinessGauge";
@@ -240,9 +241,18 @@ export default function HomePage() {
       // showing anybody.
     }
 
+    /**
+     * The XP sources that are not row counts — strength tiers and recorded
+     * challenge completions. Home used to omit BOTH, so it showed a lower level
+     * than Rewards for the same athlete on the same day: Silver 1 against Gold
+     * 3. See lib/athlete-xp.ts.
+     */
+    const xpExtras = await fetchXpExtras(supabase, user.id);
+
     return {
       profile, checkIn, insight, streak, quests, bioSignal, setup,
-      stats: { ...stats, ...tierDays },
+      stats: { ...stats, ...tierDays, ...xpExtras },
+      challengeXp: xpExtras.challengeXp,
       week, acwr, standing,
       nextSession, hasProgram: programCount > 0, trainedToday: !!trainToday,
       nutriToday: (nutriToday ?? null) as { calories_eaten: number | null; daily_calorie_target: number | null } | null,
@@ -262,7 +272,7 @@ export default function HomePage() {
 
   if (loading || needsOnboarding) return <Skeleton />;
 
-  const level = levelFor(computeXp(data!.stats), data!.standing);
+  const level = levelFor(computeXp(data!.stats) + data!.challengeXp, data!.standing);
   // From the saved target — not recomputed. Three places already worked out
   // calories and two of them disagreed; a fourth here would be the same bug.
   const kcalLeft = data!.nutriToday?.daily_calorie_target

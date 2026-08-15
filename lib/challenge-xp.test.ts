@@ -119,12 +119,14 @@ test("the rewards page actually adds challenge XP to the total", () => {
   const src = readFileSync(new URL("../app/(app)/rewards/page.tsx", import.meta.url), "utf8")
     .replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
   assert.match(src, /recordCompletions\(/, "completions are never written");
-  assert.match(src, /fetchChallengeXp\(/, "the earned total is never read");
+  // Read through fetchXpExtras, which Home shares — the two pages disagreed
+  // about somebody's level because each assembled these sources itself.
+  assert.match(src, /fetchXpExtras\(/, "the earned total is never read");
   assert.match(src, /computeXp\(stats\)\s*\+\s*earnedFromChallenges/,
     "challenge XP is fetched and then not added to anything");
   // Recorded BEFORE it is read, or today's completions do not count until the
   // next visit and the cards look unpaid on the render that finished them.
-  assert.ok(src.indexOf("recordCompletions(") < src.indexOf("fetchChallengeXp("),
+  assert.ok(src.indexOf("recordCompletions(") < src.indexOf("fetchXpExtras("),
     "the total is read before today's completions are written");
 });
 
