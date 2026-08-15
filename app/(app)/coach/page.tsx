@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Icon, type IconName } from "@/components/Icon";
 import { ConfirmButton } from "@/components/ConfirmButton";
@@ -968,7 +969,25 @@ function ActiveProgram({
           the calendar and the chat below, which left the athlete deciding which
           of two "today" blocks to actually do. Grouped into tabs instead. */}
       {/* Shared strip, not a fourth copy of the same markup — see components/Tabs. */}
-      <Tabs tabs={COACH_TABS} active={tab} onChange={setTab} label="Plan sections" />
+      <div className="flex items-center gap-2">
+        <div className="min-w-0 flex-1">
+          <Tabs tabs={COACH_TABS} active={tab} onChange={setTab} label="Plan sections" />
+        </div>
+        {/* WHERE THE THIRD TAB USED TO BE.
+            Ask coach is its own page now, and anybody who learned to find it
+            here would otherwise just find it gone. It is not a seventh entry in
+            the mobile tab bar because that would put every slot at 42.9px on a
+            320px phone — measured — against this codebase's 44px floor. Six
+            slots give 50.3px. So: the sidebar, the top of the More sheet, and
+            here, next to the plan it will be asked about. */}
+        <Link
+          href="/ask"
+          className="tap-target inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3.5 text-xs font-semibold text-slate-200 transition hover:bg-white/[0.08]"
+        >
+          <Icon name="chat" className="h-4 w-4" aria-hidden />
+          Ask coach
+        </Link>
+      </div>
 
       {/* ONE panel wrapping every tab-conditional block below, keyed to the
           active tab. Per-block panels would mean three elements sharing
