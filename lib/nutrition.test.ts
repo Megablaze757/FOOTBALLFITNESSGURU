@@ -302,3 +302,46 @@ test("today's water cannot go below empty, or past what a person could drink", (
   // NaN reaches here the moment an empty field is arithmetic'd against.
   assert.equal(clampWaterMl(Number.NaN), 0);
 });
+
+/**
+ * PROTEIN GOES UP WHILE YOU HEAL, whatever your programme is called.
+ *
+ * `injury_recovery` already carried the top rate, but most injured athletes are
+ * not on a rehab block — they tore something on Saturday and their programme
+ * still says "strength". The app already knows about the injury, because they
+ * reported it on the body map, and was not using it.
+ */
+test("an injury raises protein even on a non-rehab block", () => {
+  const base = { weightKg: 80, goal: "strength" as const, avgTrainingMinutes: 45 };
+  const well = nutritionTargets(base)!;
+  const hurt = nutritionTargets({ ...base, injured: true })!;
+  assert.ok(hurt.protein > well.protein,
+    `protein did not rise while injured: ${well.protein} vs ${hurt.protein}`);
+  assert.match(hurt.rationale, /healing/i, "the change is not explained");
+  assert.doesNotMatch(well.rationale, /healing/i);
+});
+
+test("being injured never LOWERS protein", () => {
+  // A cut already asks for 2.2 g/kg. Getting hurt must not drag anybody down to
+  // a floor — it is a floor, not an override.
+  for (const dietGoal of ["cut", "maintain", "build"] as const) {
+    for (const goal of ["strength", "endurance", "speed", "injury_recovery"] as const) {
+      const base = { weightKg: 80, goal, avgTrainingMinutes: 45, dietGoal };
+      const well = nutritionTargets(base)!;
+      const hurt = nutritionTargets({ ...base, injured: true })!;
+      assert.ok(hurt.protein >= well.protein,
+        `${goal}/${dietGoal}: injury cut protein from ${well.protein} to ${hurt.protein}`);
+    }
+  }
+});
+
+test("an injured athlete's macros still add up and stay finite", () => {
+  const t = nutritionTargets({
+    weightKg: 62, goal: "endurance", avgTrainingMinutes: 90, injured: true,
+    heightCm: 170, age: 24, sex: "female", dietGoal: "cut",
+  })!;
+  for (const [k, v] of Object.entries(t)) {
+    if (typeof v === "number") assert.ok(Number.isFinite(v), `${k} is ${v}`);
+  }
+  assert.ok(t.protein > 0 && t.carbs > 0 && t.fats > 0);
+});

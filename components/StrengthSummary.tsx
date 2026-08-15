@@ -83,6 +83,21 @@ export function StrengthSummary({ stats }: { stats: ActivityStats }) {
           ? `${total - ranked} muscle group${total - ranked === 1 ? "" : "s"} still unranked — one logged lift each is all it takes.`
           : "Every muscle group ranked."}
       </p>
+
+      {/* TWO LADDERS ON ONE SCREEN, AND NOW A SENTENCE SAYING WHY.
+          This page shows a level (Iron → Apex) at the top and a strength tier
+          (Untrained → World Class) here, and they are deliberately different
+          vocabularies so that "Gold" cannot mean two unrelated things at once
+          — see the note at the top of lib/strength-standards.ts. Keeping them
+          apart was right; never explaining it was not. An athlete looking at
+          two ladders with no relationship stated assumes one of them is
+          broken, or that they are behind on both. */}
+      <p className="mt-2 border-t border-white/[0.06] pt-2 text-[11px] leading-relaxed text-slate-500">
+        Two different things, on purpose: your <strong className="text-slate-400">level</strong> above
+        rewards showing up — every check-in, session and meal logged pushes it up, and it never
+        falls. Your <strong className="text-slate-400">strength tier</strong> here is a comparison
+        against everyone else at your bodyweight, and only lifting more moves it.
+      </p>
     </section>
   );
 }

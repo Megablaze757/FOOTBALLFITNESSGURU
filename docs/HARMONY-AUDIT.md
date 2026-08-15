@@ -99,9 +99,30 @@ row; `injury` and `train/view` took the latest whatever its date.
 
 ---
 
-## Found, not yet fixed
+### 7. Nutrition ignored the injury an athlete had already reported
+*Shape 3. Commit "Feed the injury".*
 
-Ordered by how much they cost the athlete.
+Calorie and protein targets read training load and programme goal.
+`injury_recovery` already carried the top protein rate — but most injured
+athletes are not on a rehab block; they tore something on Saturday and their
+programme still says "strength". Healing tissue raises protein need whatever
+the block is called, and the app already knew about the injury because they had
+reported it on the body map. A 2.2 g/kg floor applies when the aged pain map
+shows anything at 4/10 or above, and the card says why.
+
+### 8. Two ladders with no stated relationship
+*Shape 4. Same commit.*
+
+Iron→Apex and Untrained→World Class are deliberately different vocabularies so
+"Gold" cannot mean two things at once. Keeping them apart was right; never
+explaining it was not — two ladders side by side with no relationship stated
+reads as one of them being broken. One sentence now says which is which: the
+level rewards showing up and never falls, the tier is a comparison against
+everyone at your bodyweight and only lifting more moves it.
+
+---
+
+## Found, not yet fixed
 
 ### A. The check-in and the program do not close the loop
 The check-in captures RPE and the engine prescribed one. Nothing compares them.
@@ -110,12 +131,7 @@ running, the block is too hard and the app has every number it needs to say so.
 `docs/UI-AUDIT.md` already argues the prescribed RPE should not be asked back;
 the more useful move is to use the answer.
 
-### B. Nutrition targets ignore the injury state
-Calorie and protein targets read training load. An athlete in a rehab block is
-eating for a training volume they are not doing, and protein needs go *up*
-during tissue repair, not down. Both facts are already in the database.
-
-### C. The challenge board no longer aims at your weakest habit
+### B. The challenge board no longer aims at your weakest habit
 Selection used to score challenges by how far you were from each target. That
 made the board unwinnable — see the commit "Stop the challenge board deleting
 the work you just did" — so selection is now activity-independent. Aiming at a
@@ -124,17 +140,9 @@ cannot move (last month's activity, or a board persisted at period start).
 
 ---
 
-### D. Achievements do not know about the strength ladder's own vocabulary
-`lib/gamification.ts` owns Iron→Apex and `lib/strength-standards.ts` owns
-Untrained→World Class, deliberately kept apart so "Gold" cannot mean two things.
-That separation is right, but nothing explains it on screen, so an athlete sees
-two ladders and no statement of how they relate.
-
----
-
 ## The pattern worth remembering
 
-Four of the six fixed findings were the **same bug**: a missing value that
+Four of the eight fixed findings were the **same bug**: a missing value that
 read as a real one. `profiles.weight_kg` was null and became `?? 0`. An
 unmodelled body area became `?? 0`. This codebase has hit it before — the funnel
 counted absent as zero, and the strength figure nearly labelled untested muscles

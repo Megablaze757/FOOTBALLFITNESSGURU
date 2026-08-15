@@ -155,6 +155,16 @@ export interface TargetInput {
   dietGoal?: DietGoal | null;
   /** Days in the window that actually carry a training log. */
   trainingDaysLogged?: number;
+  /**
+   * Currently carrying an injury, from the check-in body map.
+   *
+   * Independent of `goal`. An athlete on a rehab block already gets the top
+   * protein rate through `injury_recovery`, but most injured athletes are not
+   * on one — they tore a hamstring on Saturday and their programme still says
+   * "strength". Healing soft tissue raises protein need whatever the block is
+   * called, and the app already knows the injury because they reported it.
+   */
+  injured?: boolean;
 }
 
 // Protein g/kg by sport goal (sports-nutrition ranges).
@@ -181,6 +191,21 @@ const FAT_PER_KG: Record<GoalType, number> = {
 // Protein g/kg by diet goal. Highest in a deficit, where it's the thing keeping
 // muscle on. The two ladders are reconciled by taking whichever asks for more.
 const DIET_PROTEIN_PER_KG: Record<DietGoal, number> = { cut: 2.2, maintain: 1.8, build: 2.0 };
+
+/**
+ * Protein while healing.
+ *
+ * Injured tissue is rebuilt from amino acids, and an immobilised or unloaded
+ * limb loses muscle fast — the sports-nutrition range for injury and recovery
+ * sits around 2.0-2.5 g/kg, higher than almost any training goal. 2.2 is inside
+ * that range and matches what a cut already asks for, so nobody gets a number
+ * this app does not use elsewhere.
+ *
+ * A FLOOR, NOT AN OVERRIDE: it goes through the same Math.max as everything
+ * else, so an athlete already eating more for a cut or a strength block keeps
+ * the higher figure. Being hurt should never LOWER anybody's protein.
+ */
+const INJURY_PROTEIN_PER_KG = 2.2;
 
 const FAT_FLOOR_PER_KG = 0.8; // hormone production
 const CARB_FLOOR_PER_KG = 2.0; // below this an athlete stops recovering between sessions
@@ -346,7 +371,8 @@ export function nutritionTargets(input: TargetInput): NutritionTargets | null {
   // which is exactly what happens when no diet goal is set at all.
   const proteinPerKg = Math.max(
     PROTEIN_PER_KG[g],
-    (input.dietGoal ? DIET_PROTEIN_PER_KG[input.dietGoal] : 0) ?? 0
+    (input.dietGoal ? DIET_PROTEIN_PER_KG[input.dietGoal] : 0) ?? 0,
+    input.injured ? INJURY_PROTEIN_PER_KG : 0,
   );
   const protein = Math.round(weightKg * proteinPerKg);
 
@@ -404,16 +430,19 @@ export function nutritionTargets(input: TargetInput): NutritionTargets | null {
     calories, protein, carbs, fats, water_ml,
     basis: hasBody ? "measured" : "estimated",
     bmr, tdee, missing, guard,
-    rationale: rationaleFor({ hasBody, bmr, tdee, calories, protein, proteinPerKg, g, measured, avgTrainingMinutes, dietGoal: input.dietGoal ?? null }),
+    rationale: rationaleFor({ hasBody, bmr, tdee, calories, protein, proteinPerKg, g, measured, avgTrainingMinutes, dietGoal: input.dietGoal ?? null, injured: !!input.injured }),
   };
 }
 
 function rationaleFor(a: {
   hasBody: boolean; bmr: number | null; tdee: number | null; calories: number;
-  protein: number; proteinPerKg: number; g: GoalType; measured: boolean;
+  protein: number; proteinPerKg: number; g: GoalType; measured: boolean; injured?: boolean;
   avgTrainingMinutes: number; dietGoal: DietGoal | null;
 }): string {
   const sport = a.g.replace("_", " ");
+  // Said out loud, because an athlete who sees their protein jump 40g without
+  // explanation assumes the app is broken rather than that it noticed.
+  const healing = a.injured ? " Protein is up while you are healing." : "";
   const load = a.measured
     ? `your logged ${Math.round(a.avgTrainingMinutes)} min a day`
     : "the training week you described";
@@ -422,9 +451,9 @@ function rationaleFor(a: {
     const aim = DIET_GOALS.find((d) => d.id === a.dietGoal)?.label.toLowerCase();
     return `You burn about ${a.bmr} kcal at rest, and roughly ${a.tdee} with ${load}. ` +
       `${aim ? `To ${aim}, that's` : "That gives"} ${a.calories.toLocaleString()} kcal, ` +
-      `with ${a.protein}g protein (${a.proteinPerKg}g/kg) and carbs weighted for ${sport}.`;
+      `with ${a.protein}g protein (${a.proteinPerKg}g/kg) and carbs weighted for ${sport}.${healing}`;
   }
   return `Estimated from your weight and ${load}: ${a.calories.toLocaleString()} kcal, ` +
     `${a.protein}g protein (${a.proteinPerKg}g/kg), carbs weighted for ${sport}. ` +
-    `Add your height, age and sex to swap this rough guess for a proper metabolic estimate.`;
+    `Add your height, age and sex to swap this rough guess for a proper metabolic estimate.${healing}`;
 }

@@ -26,6 +26,7 @@ import type { Subscription, Tier, TrainingLog } from "@/lib/types";
 import { daysAgoLocal, todayLocal } from "@/lib/day";
 import { selectProfile } from "@/lib/profile-columns";
 import { latestBodyweight } from "@/lib/bodyweight";
+import { currentPain } from "@/lib/pain";
 
 /** Exactly the shape written to `nutrition_logs`, so what we save and what we
  *  hand back to the page cannot describe the row differently. */
@@ -46,13 +47,17 @@ export default function NutritionPage() {
   const { data, loading, mutate } = useAsync(async () => {
     const supabase = createClient();
     const since = daysAgoLocal(14);
-    const [{ data: sub }, { data: log }, { data: weightRow }, { data: program }, { data: training }, { data: profile }, { data: weighBody }] = await Promise.all([
+    const [{ data: sub }, { data: log }, { data: weightRow }, { data: latestCheck }, { data: program }, { data: training }, { data: profile }, { data: weighBody }] = await Promise.all([
       supabase.from("subscriptions").select("*").eq("user_id", user.id).maybeSingle(),
       supabase.from("nutrition_logs").select("*").eq("user_id", user.id).eq("log_date", today).maybeSingle(),
       // Both weight tables, not just the check-in. Weighing in on /body and
       // then finding your calorie target unchanged is the same one-fact-two-
       // homes problem that made the Progress ranks invisible — lib/bodyweight.ts.
       supabase.from("daily_check_ins").select("check_in_date, weight_kg").eq("user_id", user.id).not("weight_kg", "is", null).order("check_in_date", { ascending: false }).limit(1),
+      // The latest check-in whatever it holds, for the pain map. Separate from
+      // the weight query above, which filters to rows that HAVE a weight — an
+      // athlete who reported a sore knee without weighing in still counts.
+      supabase.from("daily_check_ins").select("check_in_date, pain_map").eq("user_id", user.id).order("check_in_date", { ascending: false }).limit(1).maybeSingle(),
       supabase.from("programs").select("goal_type").eq("user_id", user.id).eq("status", "active").maybeSingle(),
       supabase.from("training_logs").select("log_date, total_minutes").eq("user_id", user.id).gte("log_date", since),
       // Split into stable and recently-added columns. Naming a column the
@@ -65,6 +70,19 @@ export default function NutritionPage() {
       supabase.from("body_logs").select("log_date, weight_kg").eq("user_id", user.id)
         .not("weight_kg", "is", null).order("log_date", { ascending: false }).limit(1),
     ]);
+    /**
+     * INJURED, from the same aged pain map the training engine uses.
+     *
+     * Healing soft tissue raises protein need whatever the programme is called.
+     * `injury_recovery` already carried the top rate, but most injured athletes
+     * are not on a rehab block — they tore something on Saturday and the block
+     * still says "strength". Aged via lib/pain.ts so a knee reported in March
+     * does not keep somebody on recovery macros for the rest of the year.
+     */
+    const lc = latestCheck as { check_in_date?: string; pain_map?: Record<string, number> } | null;
+    const sore = currentPain(lc?.pain_map, lc?.check_in_date, today);
+    const injured = Object.values(sore).some((v) => (Number(v) || 0) >= 4);
+
     const bodyweight = latestBodyweight({
       checkIns: (weightRow ?? []).map((r) => ({ date: r.check_in_date as string, kg: r.weight_kg as number })),
       weighIns: (weighBody ?? []).map((r) => ({ date: r.log_date as string, kg: r.weight_kg as number })),
@@ -86,6 +104,7 @@ export default function NutritionPage() {
       // days we trust what they told us about their week over what we measured,
       // so a quiet fortnight doesn't quietly cut their calories.
       trainingDays: (training ?? []).length,
+      injured,
       // Seed the planner from the profile so stats survive between visits.
       stats: {
         heightCm: pr?.height_cm ?? undefined,
@@ -191,6 +210,7 @@ export default function NutritionPage() {
     activity: data?.stats.activity ?? null,
     dietGoal: data?.stats.goal ?? null, // diet goal — cut / maintain / build
     trainingDaysLogged: data?.trainingDays ?? 0,
+    injured: data?.injured ?? false,
   });
   return (
     <NutritionTabs
