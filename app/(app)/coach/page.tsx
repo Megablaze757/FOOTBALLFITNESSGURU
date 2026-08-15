@@ -16,6 +16,7 @@ import { repairPlan } from "@/lib/program-repair";
 import { useJobs } from "@/lib/jobs";
 import { positionList } from "@/lib/positions";
 import { currentPain, painAgeNote } from "@/lib/pain";
+import { effortCheck, prescribedEffort } from "@/lib/effort";
 import { PositionPicker } from "@/components/PositionPicker";
 import { FeatureLock, tierOfSub } from "@/components/FeatureLock";
 import { can } from "@/lib/subscription";
@@ -675,6 +676,14 @@ function ActiveProgram({
   const painMap = currentPain(checkIn?.pain_map, checkIn?.check_in_date, today);
   const readiness = readinessOf(checkIn, training);
   const insights = analyzeProgress(training, checkHist);
+  /**
+   * IS THIS BLOCK THE RIGHT DIFFICULTY? The engine prescribes an effort for
+   * every working drill and the check-in records how hard it actually felt, on
+   * the same 1-10 scale. Nothing compared them — so an athlete could report 9s
+   * against a block written at 7, all month, and be handed the same block every
+   * week. Both numbers were already in the database. See lib/effort.ts.
+   */
+  const effort = effortCheck(training.map((t) => t.intensity), plan);
   const totalSessions = plan.weeks.reduce((n, w) => n + w.sessions.length, 0);
   const doneCount = program.completed_sessions.length;
   const adherence = totalSessions ? Math.round((doneCount / totalSessions) * 100) : 0;
@@ -792,9 +801,26 @@ function ActiveProgram({
           load_kg: null,
         }));
         const { data: existing } = await supabase
-          .from("training_logs").select("drills, total_minutes").eq("user_id", userId).eq("log_date", today).maybeSingle();
+          .from("training_logs").select("drills, total_minutes, intensity").eq("user_id", userId).eq("log_date", today).maybeSingle();
         const merged = dedupeDrills([...(existing?.drills ?? []), ...newDrills]);
-        const intensity = sess.s.title.includes("Rehab") ? 4 : 7;
+        /**
+         * WHAT THE ATHLETE SAID BEATS WHAT WE GUESSED.
+         *
+         * This wrote a flat 7 (or 4 for rehab) unconditionally and did not even
+         * read the existing row's intensity — so somebody who reported a 9 in
+         * their check-in and then ticked the session off had their 9 replaced
+         * by the app's own invention. Then lib/effort.ts compares reported
+         * effort against prescribed effort to decide whether a block is too
+         * hard, which against a hardcoded 7 would have been the app marking its
+         * own homework.
+         *
+         * The estimate is now the session's OWN prescribed effort rather than a
+         * constant, so an untouched rehab day reads as light and a heavy
+         * strength day reads as heavy — but only ever as a fallback, when the
+         * athlete has not said.
+         */
+        const prescribed = prescribedEffort({ weeks: [{ sessions: [sess.s] }] } as never);
+        const intensity = existing?.intensity ?? prescribed ?? (sess.s.title.includes("Rehab") ? 4 : 7);
         await supabase.from("training_logs").upsert(
           {
             user_id: userId,
@@ -1070,6 +1096,25 @@ function ActiveProgram({
 
       {/* Ask the coach */}
       {tab === "ask" && <CoachChat context={chatContext} />}
+
+      {/* HOW THE BLOCK IS LANDING, above "what's working" — a block that is
+          too hard is a more urgent thing to know than which lift went up, and
+          it is the one that ends in an injury if nobody says it. Silent when
+          the block is landing where it was aimed: advice that appears every
+          week is advice people stop reading. */}
+      {tab === "program" && effort.note && (
+        <section className={`card p-5 ${effort.verdict === "too_hard" ? "border-readiness-red/40" : ""}`}>
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="field-label !mb-0">
+              {effort.verdict === "too_hard" ? "This block is running hard" : "There is room in this block"}
+            </h2>
+            <span className="shrink-0 text-xs tabular-nums text-slate-500">
+              {effort.avgReported}/10 vs {effort.prescribed} asked
+            </span>
+          </div>
+          <p className="mt-2 text-sm leading-relaxed text-slate-300">{effort.note}</p>
+        </section>
+      )}
 
       {/* What's working */}
       {tab === "program" && (insights.insights.length > 0 || insights.progressions.length > 0) && (

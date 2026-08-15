@@ -429,8 +429,17 @@ export interface ChallengeContext {
   position?: string | string[] | null;
   focus?: TrainingFocus | null;
   window: ChallengeWindow;
-  /** What they have done in the window, for aiming at the weakest habit. */
+  /** What they have done in the window, for evaluating progress. */
   week: WeekActivity;
+  /**
+   * The habit BEFORE this period started, as a rate per period.
+   *
+   * This is what "aim at the gap" is scored against, and the "before" is the
+   * whole point — see scoreTemplate. Optional: without it the board is picked
+   * on fit and rotation alone, which is what shipped while this was being
+   * worked out.
+   */
+  habit?: WeekActivity;
   /** Stable per week/day so the set does not reshuffle on every page load. */
   seed: number;
   count?: number;
@@ -446,6 +455,7 @@ const FIT_FOCUS = 4;
  * backbone and has to stay reachable. It simply scores lower than one written
  * for this exact athlete, which is all the ordering needs.
  */
+const NEED_WEIGHT = 5;
 
 export function scoreTemplate(t: ChallengeTemplate, ctx: ChallengeContext): number | null {
   if (t.window !== ctx.window) return null;
@@ -467,39 +477,51 @@ export function scoreTemplate(t: ChallengeTemplate, ctx: ChallengeContext): numb
   if (t.focus) score += FIT_FOCUS;
 
   /**
-   * WHAT USED TO BE HERE, AND WHY IT HAD TO GO.
+   * AIM AT THE GAP — SCORED ON LAST MONTH, NEVER ON THIS WEEK.
    *
-   * This scored a template by how far the athlete was from its target — "aim at
-   * the gap, not the habit they already have" — and docked 12 points from
-   * anything already finished. Both read as obviously right, and together they
-   * made the feature unwinnable.
-   *
-   * The board is rebuilt from CURRENT activity on every page load. So the
-   * moment you did any of the work, the challenge for it scored lower than the
-   * things you had not touched and fell off the board — taking its XP with it,
-   * because completions can only be recorded for challenges still on the board.
-   * Measured, on a board that opened the week with "train twice":
+   * The original version of this scored how far the athlete was from each
+   * target using their CURRENT activity, and docked 12 points from anything
+   * already finished. Both read as obviously right, and together they made the
+   * feature unwinnable: the board is rebuilt on every page load, so the moment
+   * you did any of the work, that challenge scored below the things you had not
+   * touched and fell off the board — taking its XP with it, because completions
+   * can only be recorded for challenges still on it. Measured, on a board that
+   * opened the week with "train twice":
    *
    *   0 sessions   w_train_2, w_video_1, w_bench_1
    *   1 session    w_perfect_1, w_rest_1, w_streak_14   <- the card is gone
    *
-   * One session, and the entire board is different. The athlete trains three
-   * times, is never shown a training challenge again, and is paid nothing:
-   * exactly what was reported. A challenge you cannot make progress on without
-   * destroying it is not a challenge, and every partial step reshuffled all
-   * three cards, so the board was never a board — it was a live re-ranking of
-   * whatever you had not got round to yet.
+   * One session and all three cards changed. Doing the work erased the
+   * challenge for the work.
    *
-   * SELECTION IS NOW INDEPENDENT OF IN-PERIOD ACTIVITY. What you are asked to
-   * do this week depends on who you are and which week it is, and nothing else.
-   * Progress is still measured against activity — that is what the board is
-   * FOR — it just cannot change the question halfway through answering it.
+   * `habit` is the fix: activity over the four periods BEFORE this one, as a
+   * rate per period. Nothing done during the current period can move it, so the
+   * board is fixed from the moment it is dealt — and it still aims at what the
+   * athlete has actually been skipping, which is the part worth keeping.
    *
-   * Aiming at a neglected habit is a real idea and worth having back, but it
-   * needs a window the current period cannot move: last month's activity, or a
-   * board persisted at period start. Both are more than a scoring tweak, and
-   * neither is a reason to keep shipping a board that deletes your work.
+   * Absent `habit`, this term is skipped entirely rather than falling back to
+   * `week`. Falling back would quietly restore the exact bug in any call site
+   * that forgot to pass it.
    */
+  if (ctx.habit) {
+    const usual = Math.max(0, Number(ctx.habit[t.metric]) || 0);
+    /**
+     * REFUSED, not docked. Something an athlete already does more of than this
+     * asks for is not a challenge at any level of fit, and a penalty can be
+     * outweighed: this was -12, and a goalkeeper-specific template carries +10
+     * for position and +6 for sport, so a keeper who trains five times a week
+     * was handed "train four times" — complete before it was dealt — because
+     * 16 beats 12. Fit decides between real options; it cannot make a
+     * non-option into one.
+     *
+     * Safe for board stability because `habit` is the period BEFORE this one
+     * and cannot move while the board is live.
+     */
+    if (usual >= t.target) return null;
+    const gap = (t.target - usual) / Math.max(1, t.target);
+    score += gap * NEED_WEIGHT;
+  }
+
   return score;
 }
 
@@ -631,7 +653,10 @@ export interface Board {
 }
 
 export interface BoardRequest {
-  who: Omit<ChallengeContext, "window" | "week" | "seed" | "count">;
+  who: Omit<ChallengeContext, "window" | "week" | "seed" | "count" | "habit">;
+  /** Habit before this period — see scoreTemplate. Per week and per day. */
+  habitWeek?: WeekActivity;
+  habitDay?: WeekActivity;
   /** The last 7 days. */
   week: WeekActivity;
   /** The same counters for today alone. */
@@ -646,7 +671,7 @@ export interface BoardRequest {
  * every daily card back to arriving pre-ticked. Naming them makes the
  * transposition something you have to write on purpose.
  */
-export function boardsFor({ who, week, today, todayIso }: BoardRequest): { daily: Board; weekly: Board } {
+export function boardsFor({ who, week, today, todayIso, habitWeek, habitDay }: BoardRequest): { daily: Board; weekly: Board } {
   const ctx = who;
   /**
    * Seeds, not randomness. The daily set turns over at midnight and the weekly
@@ -655,15 +680,21 @@ export function boardsFor({ who, week, today, todayIso }: BoardRequest): { daily
    */
   const dayNumber = Math.floor(Date.parse(`${todayIso}T00:00:00Z`) / 86_400_000);
   const weekNumber = Math.floor(dayNumber / 7);
-  const build = (window: ChallengeWindow, activity: WeekActivity, seed: number, count: number): Board => ({
+  const build = (
+    window: ChallengeWindow, activity: WeekActivity, seed: number, count: number,
+    habit: WeekActivity | undefined,
+  ): Board => ({
     window,
     period: window === "daily" ? todayIso : `w${weekNumber}`,
     activity,
-    list: pickChallenges({ ...ctx, window, week: activity, seed, count }),
+    // `activity` is what progress is MEASURED against; `habit` is what the set
+    // is CHOSEN from. Keeping them separate is the whole fix — see
+    // scoreTemplate. Passing `activity` as both is the bug.
+    list: pickChallenges({ ...ctx, window, week: activity, habit, seed, count }),
   });
   return {
-    daily: build("daily", today, dayNumber, 2),
-    weekly: build("weekly", week, weekNumber, 3),
+    daily: build("daily", today, dayNumber, 2, habitDay),
+    weekly: build("weekly", week, weekNumber, 3, habitWeek),
   };
 }
 

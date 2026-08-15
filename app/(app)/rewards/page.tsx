@@ -250,6 +250,25 @@ export default function RewardsPage() {
       // both windows, so it is not narrowed for the daily board.
       streak: stats.streak,
     });
+    /**
+     * WHAT THEY USUALLY DO, from BEFORE this period started.
+     *
+     * The board aims at the habit an athlete has been skipping — but scoring
+     * that against the current period made the feature unwinnable, because
+     * doing the work dropped its own challenge off the board. Scored against
+     * the four periods BEFORE this one, nothing done today or this week can
+     * move the selection, and the aim survives. See scoreTemplate.
+     *
+     * Expressed as a RATE per period so it is comparable with a target: four
+     * weeks of check-ins over four is check-ins per week.
+     */
+    const between = (dates: string[], from: string, to: string) =>
+      dates.filter((d) => d >= from && d < to).length;
+    const priorWeeks = daysAgoLocal(34);   // the 28 days ending where this week began
+    const priorDays = daysAgoLocal(28);    // the 28 days ending yesterday
+    const habitWeek = activity((dates) => Math.round(between(dates, priorWeeks, since7) / 4));
+    const habitDay = activity((dates) => Math.round(between(dates, priorDays, today) / 28));
+
     const week = activity((dates) => inWindow(dates, since7));
     const todayActivity = activity((dates) => onDay(dates, today));
     const pr = profile.data as {
@@ -261,7 +280,7 @@ export default function RewardsPage() {
       focus: (pr?.training_focus ?? null) as never,
       goal: ((activeProgram.data as { goal_type?: string } | null)?.goal_type ?? null) as never,
     };
-    const boards = boardsFor({ who: ctx, week, today: todayActivity, todayIso: today });
+    const boards = boardsFor({ who: ctx, week, today: todayActivity, todayIso: today, habitWeek, habitDay });
 
     /**
      * PAY FOR WHAT THE CARDS PROMISE.

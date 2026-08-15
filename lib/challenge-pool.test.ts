@@ -494,3 +494,68 @@ test("the training target moves week to week", () => {
   assert.ok(targets.size >= 3,
     `the pinned training slot always asks for the same thing: ${[...targets].join(", ")}`);
 });
+
+/**
+ * AIMING AT THE GAP, WITHOUT THE BUG THAT CAME WITH IT.
+ *
+ * The original scoring aimed at what the athlete was skipping, measured on the
+ * CURRENT period — which meant doing any of the work dropped that challenge off
+ * the board and took its XP with it. `habit` is the same idea measured on the
+ * four periods BEFORE this one, so nothing done while the board is live can
+ * move it.
+ */
+test("the board aims at what you have been skipping", () => {
+  // Trains plenty, never logs food.
+  const habit = { ...EMPTY_WEEK, training_sessions: 5, check_ins: 6, nutrition_logs: 0, calorie_goal_days: 0 };
+  const metrics = new Set<string>();
+  for (let seed = 0; seed < 12; seed++) {
+    for (const c of pickChallenges(ctxFor({ week: { ...EMPTY_WEEK }, habit, seed, count: 3 }))) {
+      metrics.add(c.metric);
+    }
+  }
+  assert.ok(metrics.has("nutrition_logs") || metrics.has("calorie_goal_days"),
+    `nothing aimed at the neglected habit: ${[...metrics].join(", ")}`);
+});
+
+test("a habit that already beats a target means that challenge is never dealt", () => {
+  // REFUSED, not docked. A penalty can be outweighed: this was -12, and a
+  // position-specific template carries +10 for position and +6 for sport, so a
+  // keeper training five times a week was handed "train four times" — complete
+  // before it was dealt, because 16 beats 12.
+  const habit = { ...EMPTY_WEEK, training_sessions: 5 };
+  for (let seed = 0; seed < 20; seed++) {
+    const picked = pickChallenges(ctxFor({
+      sport: "football", position: "Goalkeeper", week: { ...EMPTY_WEEK }, habit, seed, count: 3,
+    }));
+    for (const c of picked) {
+      const usual = (habit as Record<string, number>)[c.metric] ?? 0;
+      assert.ok(usual < c.target,
+        `seed ${seed}: "${c.id}" asks for ${c.target} ${c.metric} and they already average ${usual}`);
+    }
+  }
+});
+
+test("nothing done during the period can change that period's board", () => {
+  // The property the whole redesign exists for, asserted against every metric
+  // on the board at several levels of progress including past the target.
+  const habit = { ...EMPTY_WEEK, training_sessions: 2, check_ins: 3 };
+  const base = { sport: "football" as const, position: "Goalkeeper", habit, count: 3 };
+  const dealt = pickChallenges(ctxFor({ ...base, week: { ...EMPTY_WEEK } }));
+  for (const metric of dealt.map((c) => c.metric)) {
+    for (const n of [1, 2, 3, 5, 7, 12]) {
+      const later = pickChallenges(ctxFor({ ...base, week: { ...EMPTY_WEEK, [metric]: n } }));
+      assert.deepEqual(later.map((c) => c.id), dealt.map((c) => c.id),
+        `doing ${n} of "${metric}" changed the board`);
+    }
+  }
+});
+
+test("without a habit the board is still dealt, on fit and rotation alone", () => {
+  // Absent `habit` the gap term is skipped rather than falling back to `week` —
+  // falling back would quietly restore the unwinnable board in any call site
+  // that forgot to pass it.
+  const picked = pickChallenges(ctxFor({ week: { ...EMPTY_WEEK, training_sessions: 9 }, count: 3 }));
+  assert.equal(picked.length, 3);
+  assert.ok(picked.some((c) => c.metric === "training_sessions"),
+    "in-period activity suppressed a challenge with no habit to justify it");
+});
