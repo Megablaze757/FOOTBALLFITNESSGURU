@@ -11,6 +11,7 @@ import {
   type ActivityStats, type DailyState, EMPTY_STATS } from "@/lib/gamification";
 import type { WeekActivity } from "@/lib/challenges";
 import { strengthStats } from "@/lib/strength-standards";
+import { latestBodyweight } from "@/lib/bodyweight";
 import { StrengthSummary } from "@/components/StrengthSummary";
 import type { TrainingLog } from "@/lib/types";
 import { Confetti } from "@/components/Confetti";
@@ -52,7 +53,8 @@ export default function RewardsPage() {
      */
     const since60 = daysAgoLocal(59);
     const [checks, training, programs, benchC, videoC, nutrition, checkC, trainC, nutriC,
-           benchRows, videoRows, profile, activeProgram, allDrills] = await Promise.all([
+           benchRows, videoRows, profile, activeProgram, allDrills,
+           weighCheck, weighBody] = await Promise.all([
       supabase.from("daily_check_ins").select("check_in_date").eq("user_id", user.id).gte("check_in_date", since60),
       // rpe comes along for the ride — same rows, one more column — so an
       // "easy session" challenge can be counted rather than guessed at.
@@ -100,7 +102,31 @@ export default function RewardsPage() {
        * best lift per athlete server-side rather than to narrow the window.
        */
       supabase.from("training_logs").select("log_date, drills").eq("user_id", user.id).not("drills", "is", null),
+      /**
+       * BODYWEIGHT, FROM WHEREVER THE ATHLETE ACTUALLY PUT IT.
+       *
+       * This page used to read profiles.weight_kg, which no screen in the app
+       * writes, and then default it to 0 — so every lift was a multiple of zero
+       * bodyweight and no strength badge could ever be earned. See
+       * lib/bodyweight.ts for the three-tables-one-number problem.
+       *
+       * Deliberately NOT windowed to since60 like the rest of this page. The
+       * ranks these feed are best-ever, and a weight ageing out of a window
+       * would silently un-earn badges — the same monotonicity rule that governs
+       * streaks and strength XP here.
+       */
+      supabase.from("daily_check_ins").select("check_in_date, weight_kg").eq("user_id", user.id)
+        .not("weight_kg", "is", null).order("check_in_date", { ascending: false }).limit(1),
+      supabase.from("body_logs").select("log_date, weight_kg").eq("user_id", user.id)
+        .not("weight_kg", "is", null).order("log_date", { ascending: false }).limit(1),
     ]);
+
+    // One number, one definition, every reader — see lib/bodyweight.ts.
+    const bodyweight = latestBodyweight({
+      checkIns: (weighCheck.data ?? []).map((r) => ({ date: r.check_in_date as string, kg: r.weight_kg as number })),
+      weighIns: (weighBody.data ?? []).map((r) => ({ date: r.log_date as string, kg: r.weight_kg as number })),
+      profileKg: (profile.data as { weight_kg?: number | null } | null)?.weight_kg ?? null,
+    });
 
     const checkDates = (checks.data ?? []).map((r) => r.check_in_date as string);
     const trainDates = (training.data ?? []).map((r) => r.log_date as string);
@@ -129,13 +155,14 @@ export default function RewardsPage() {
       /**
        * Strength tiers earned across the body — see lib/strength-standards.ts.
        *
-       * Ranks are multiples of bodyweight, so without a weight on the profile
+       * Ranks are multiples of bodyweight, so with no weight recorded anywhere
        * there is no ratio to compute and this is honestly zero rather than
-       * guessed from an average body.
+       * guessed from an average body. `?? 0` used to sit here on a column
+       * nothing writes, which made that the answer for EVERY athlete.
        */
       ...strengthStats(
         (allDrills.data ?? []) as TrainingLog[],
-        (profile.data as { weight_kg?: number | null } | null)?.weight_kg ?? 0,
+        bodyweight?.kg ?? 0,
         (profile.data as { sex?: string | null } | null)?.sex === "female" ? "female" : "male",
       ),
     };

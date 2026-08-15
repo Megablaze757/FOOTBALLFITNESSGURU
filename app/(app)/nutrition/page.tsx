@@ -25,6 +25,7 @@ import type { GoalType } from "@/lib/coach";
 import type { Subscription, Tier, TrainingLog } from "@/lib/types";
 import { daysAgoLocal, todayLocal } from "@/lib/day";
 import { selectProfile } from "@/lib/profile-columns";
+import { latestBodyweight } from "@/lib/bodyweight";
 
 /** Exactly the shape written to `nutrition_logs`, so what we save and what we
  *  hand back to the page cannot describe the row differently. */
@@ -45,10 +46,13 @@ export default function NutritionPage() {
   const { data, loading, mutate } = useAsync(async () => {
     const supabase = createClient();
     const since = daysAgoLocal(14);
-    const [{ data: sub }, { data: log }, { data: weightRow }, { data: program }, { data: training }, { data: profile }] = await Promise.all([
+    const [{ data: sub }, { data: log }, { data: weightRow }, { data: program }, { data: training }, { data: profile }, { data: weighBody }] = await Promise.all([
       supabase.from("subscriptions").select("*").eq("user_id", user.id).maybeSingle(),
       supabase.from("nutrition_logs").select("*").eq("user_id", user.id).eq("log_date", today).maybeSingle(),
-      supabase.from("daily_check_ins").select("weight_kg").eq("user_id", user.id).not("weight_kg", "is", null).order("check_in_date", { ascending: false }).limit(1).maybeSingle(),
+      // Both weight tables, not just the check-in. Weighing in on /body and
+      // then finding your calorie target unchanged is the same one-fact-two-
+      // homes problem that made the Progress ranks invisible — lib/bodyweight.ts.
+      supabase.from("daily_check_ins").select("check_in_date, weight_kg").eq("user_id", user.id).not("weight_kg", "is", null).order("check_in_date", { ascending: false }).limit(1),
       supabase.from("programs").select("goal_type").eq("user_id", user.id).eq("status", "active").maybeSingle(),
       supabase.from("training_logs").select("log_date, total_minutes").eq("user_id", user.id).gte("log_date", since),
       // Split into stable and recently-added columns. Naming a column the
@@ -58,7 +62,13 @@ export default function NutritionPage() {
       selectProfile(supabase, user.id,
         "height_cm, birth_year, sex, activity_level, diet_goal, diet_pattern, diet_avoid, meals_per_day, diet_notes, meal_plan_seed, sport",
         ["meal_plan_swaps", "meal_plan_recent", "meal_plan_starred"]),
+      supabase.from("body_logs").select("log_date, weight_kg").eq("user_id", user.id)
+        .not("weight_kg", "is", null).order("log_date", { ascending: false }).limit(1),
     ]);
+    const bodyweight = latestBodyweight({
+      checkIns: (weightRow ?? []).map((r) => ({ date: r.check_in_date as string, kg: r.weight_kg as number })),
+      weighIns: (weighBody ?? []).map((r) => ({ date: r.log_date as string, kg: r.weight_kg as number })),
+    });
     const pr = profile as {
       height_cm?: number; birth_year?: number; sex?: string;
       activity_level?: string; diet_goal?: string;
@@ -69,7 +79,7 @@ export default function NutritionPage() {
     return {
       sub: (sub ?? null) as Subscription | null,
       log,
-      weightKg: (weightRow?.weight_kg ?? null) as number | null,
+      weightKg: bodyweight?.kg ?? null,
       goal: (program?.goal_type ?? null) as GoalType | null,
       avgMinutes: avgDailyMinutes((training ?? []) as Pick<TrainingLog, "total_minutes">[]),
       // How much of the window is actually backed by a log. Below a handful of
@@ -83,7 +93,7 @@ export default function NutritionPage() {
         sex: (pr?.sex as "male" | "female" | undefined) ?? undefined,
         activity: (pr?.activity_level as never) ?? undefined,
         goal: (pr?.diet_goal as never) ?? undefined,
-        weightKg: (weightRow?.weight_kg ?? undefined) as number | undefined,
+        weightKg: bodyweight?.kg ?? undefined,
       },
       prefs: {
         pattern: (pr?.diet_pattern as never) ?? undefined,

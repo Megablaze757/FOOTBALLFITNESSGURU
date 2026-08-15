@@ -9,6 +9,7 @@ import { MiniBars } from "@/components/MiniBars";
 import { ShareButton } from "@/components/ShareButton";
 import { ExerciseProgress } from "@/components/ExerciseProgress";
 import { StrengthRanks } from "@/components/StrengthRanks";
+import { latestBodyweight } from "@/lib/bodyweight";
 import { FeatureLock, tierOfSub } from "@/components/FeatureLock";
 import { can } from "@/lib/subscription";
 import type { NutritionLog, Subscription, TrainingLog } from "@/lib/types";
@@ -37,11 +38,28 @@ export function ProgressPanel({ userId }: { userId: string }) {
   const { data, loading } = useAsync(async () => {
     const supabase = createClient();
     // One query for the wider window, sliced below — cheaper than asking twice.
-    const [{ data: training }, { data: nutrition }, { data: profile }, { data: sub }] = await Promise.all([
+    const [{ data: training }, { data: nutrition }, { data: profile }, { data: sub },
+           { data: weighCheck }, { data: weighBody }] = await Promise.all([
       supabase.from("training_logs").select("*").eq("user_id", userId).gte("log_date", sinceLong).order("log_date", { ascending: true }),
       supabase.from("nutrition_logs").select("*").eq("user_id", userId).gte("log_date", since).order("log_date", { ascending: true }),
       supabase.from("profiles").select("full_name, weight_kg, sex").eq("id", userId).maybeSingle(),
       supabase.from("subscriptions").select("*").eq("user_id", userId).maybeSingle(),
+      /**
+       * BODYWEIGHT, FROM WHEREVER IT WAS ACTUALLY ENTERED.
+       *
+       * This panel used to read profiles.weight_kg and nothing else. No screen
+       * in this app writes that column — there is no weight field in onboarding
+       * or on the profile page — so it is null for everybody, and the strength
+       * ranks below have never once rendered. They showed "add your bodyweight
+       * in your profile", naming a field that does not exist, to athletes who
+       * had already entered their weight in the check-in. See lib/bodyweight.ts.
+       *
+       * Not windowed: ranks are best-ever, so an old weight still beats none.
+       */
+      supabase.from("daily_check_ins").select("check_in_date, weight_kg").eq("user_id", userId)
+        .not("weight_kg", "is", null).order("check_in_date", { ascending: false }).limit(1),
+      supabase.from("body_logs").select("log_date, weight_kg").eq("user_id", userId)
+        .not("weight_kg", "is", null).order("log_date", { ascending: false }).limit(1),
     ]);
     const all = (training ?? []) as TrainingLog[];
     return {
@@ -49,9 +67,12 @@ export function ProgressPanel({ userId }: { userId: string }) {
       trainingLong: all,
       nutrition: (nutrition ?? []) as NutritionLog[],
       name: profile?.full_name ?? "Athlete",
-      // Ranks are multiples of bodyweight, so both of these are load-bearing.
-      // Already on the row that was being fetched for the name — no extra query.
-      weightKg: (profile as { weight_kg?: number | null } | null)?.weight_kg ?? null,
+      // One number, one definition, every reader.
+      bodyweight: latestBodyweight({
+        checkIns: (weighCheck ?? []).map((r) => ({ date: r.check_in_date as string, kg: r.weight_kg as number })),
+        weighIns: (weighBody ?? []).map((r) => ({ date: r.log_date as string, kg: r.weight_kg as number })),
+        profileKg: (profile as { weight_kg?: number | null } | null)?.weight_kg ?? null,
+      }),
       sex: ((profile as { sex?: string | null } | null)?.sex === "female" ? "female" : "male") as "male" | "female",
       sub: (sub ?? null) as Subscription | null,
     };
@@ -85,7 +106,7 @@ export function ProgressPanel({ userId }: { userId: string }) {
         */}
       <StrengthRanks
         logs={data?.trainingLong ?? []}
-        weightKg={data?.weightKg ?? null}
+        bodyweight={data?.bodyweight ?? null}
         sex={data?.sex ?? "male"}
       />
 

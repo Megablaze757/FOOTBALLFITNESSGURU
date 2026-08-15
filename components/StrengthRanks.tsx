@@ -1,8 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import type { MuscleGroup } from "@/lib/hypertrophy";
 import type { TrainingLog } from "@/lib/types";
+import { todayLocal } from "@/lib/day";
+import { weightIsStale, weightProvenance, type Bodyweight } from "@/lib/bodyweight";
 import { loggedWeeklySets, verdictFor, volumeAdvice } from "@/lib/muscle-volume";
 import { BodyStrengthFigure, FIGURE_VIEWS, type BodyView } from "@/components/BodyStrengthFigure";
 import {
@@ -24,15 +27,16 @@ const VOLUME_WINDOW_DAYS = 28;
 
 export function StrengthRanks({
   logs,
-  weightKg,
+  bodyweight,
   sex,
 }: {
   logs: TrainingLog[] | null | undefined;
-  weightKg: number | null;
+  bodyweight: Bodyweight | null;
   sex: Sex;
 }) {
   const [selected, setSelected] = useState<MuscleGroup | null>(null);
   const [view, setView] = useState<BodyView>("front");
+  const weightKg = bodyweight?.kg ?? null;
 
   const { ranks, parts, headline, weak } = useMemo(() => {
     const r = weightKg ? rankedLifts(logs, weightKg, sex) : [];
@@ -56,20 +60,32 @@ export function StrengthRanks({
    * A ratio needs a denominator. Without bodyweight the only honest thing is to
    * ask for it — inventing one would rank somebody against a stranger, and
    * showing a rank built on a guess is worse than showing none.
+   *
+   * IT MUST ASK FOR IT SOMEWHERE THAT EXISTS. This used to say "add your
+   * bodyweight in your profile", and there is no weight field on the profile
+   * page — it named the one place you cannot do it, to people who had already
+   * entered their weight in the check-in. Both real routes are now links.
    */
   if (!weightKg) {
     return (
       <section className="card">
         <h3 className="text-lg font-extrabold">Strength ranks</h3>
         <p className="mt-1 text-sm text-slate-400">
-          Add your bodyweight in your profile and every lift you log gets ranked. Standards are
-          multiples of bodyweight, so they mean the same thing at 60kg as at 100kg.
+          Add your weight and every lift you log gets ranked. Standards are multiples of
+          bodyweight, so they mean the same thing at 60kg as at 100kg.
         </p>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <Link href="/journal" className="btn-ghost">Daily check-in</Link>
+          <Link href="/body" className="btn-ghost">Weigh in</Link>
+        </div>
       </section>
     );
   }
 
   const detail = selected ? parts.find((p) => p.muscle === selected) ?? null : null;
+  const today = todayLocal();
+  const provenance = weightProvenance(bodyweight, today);
+  const stale = weightIsStale(bodyweight, today);
 
   return (
     <section className="card">
@@ -178,11 +194,24 @@ export function StrengthRanks({
 
       {ranks.length > 0 && <LiftTable ranks={ranks} />}
 
+      {/* SHOW THE DENOMINATOR. Every rank on this card is a multiple of one
+          number, so an athlete who disagrees with a rank needs to be able to
+          see which weight produced it and how old it is — otherwise the only
+          available reaction to a wrong rank is to distrust the whole feature. */}
       <p className="mt-3 text-[11px] leading-relaxed text-slate-500">
-        Ranks use your best estimated 1RM as a multiple of bodyweight, adjusted for sex — so they
-        mean the same thing at 60kg as at 100kg. They are approximate population standards, not a
-        measurement of you, and they only ever go up: a bad session cannot cost you a rank.
+        Ranked against <strong className="tabular-nums text-slate-400">{weightKg}kg</strong>
+        {provenance ? `, ${provenance}` : ""}. Ranks use your best estimated 1RM as a multiple of
+        bodyweight, adjusted for sex, and they only ever go up: a bad session cannot cost you a rank.
       </p>
+
+      {/* A stale weight still ranks you — refusing to would put this card back
+          in the invisible state it spent its whole life in. It just says so,
+          and the fix is one tap rather than a hunt for the right screen. */}
+      {stale && (
+        <Link href="/body" className="tap-target mt-1 inline-flex min-h-[44px] items-center text-[11px] font-semibold text-pitch-400">
+          That weight is a while old — update it →
+        </Link>
+      )}
     </section>
   );
 }
