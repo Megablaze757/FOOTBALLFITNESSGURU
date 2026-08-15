@@ -43,17 +43,22 @@ export function ProgressPanel({ userId }: { userId: string }) {
            { data: weighCheck }, { data: weighBody }, { data: benchmarks }] = await Promise.all([
       supabase.from("training_logs").select("*").eq("user_id", userId).gte("log_date", sinceLong).order("log_date", { ascending: true }),
       supabase.from("nutrition_logs").select("*").eq("user_id", userId).gte("log_date", since).order("log_date", { ascending: true }),
-      supabase.from("profiles").select("full_name, weight_kg, sex").eq("id", userId).maybeSingle(),
+      // NOT weight_kg. That column does not exist on profiles — it lives on
+      // daily_check_ins and body_logs — and naming it made PostgREST reject this
+      // whole query, so this panel also had no name and no sex. See
+      // lib/schema-columns.test.ts.
+      supabase.from("profiles").select("full_name, sex").eq("id", userId).maybeSingle(),
       supabase.from("subscriptions").select("*").eq("user_id", userId).maybeSingle(),
       /**
        * BODYWEIGHT, FROM WHEREVER IT WAS ACTUALLY ENTERED.
        *
-       * This panel used to read profiles.weight_kg and nothing else. No screen
-       * in this app writes that column — there is no weight field in onboarding
-       * or on the profile page — so it is null for everybody, and the strength
-       * ranks below have never once rendered. They showed "add your bodyweight
-       * in your profile", naming a field that does not exist, to athletes who
-       * had already entered their weight in the check-in. See lib/bodyweight.ts.
+       * This panel used to read profiles.weight_kg and nothing else — a column
+       * that DOES NOT EXIST. weight_kg lives on daily_check_ins and body_logs;
+       * profiles has never had it. So the profile query above was rejected
+       * outright, this panel had no name and no sex either, and the strength
+       * ranks below have never once rendered. They told athletes to "add your
+       * bodyweight in your profile", naming a field that does not exist, while
+       * their weight sat in the check-in table. See lib/bodyweight.ts.
        *
        * Not windowed: ranks are best-ever, so an old weight still beats none.
        */
@@ -83,7 +88,6 @@ export function ProgressPanel({ userId }: { userId: string }) {
       bodyweight: latestBodyweight({
         checkIns: (weighCheck ?? []).map((r) => ({ date: r.check_in_date as string, kg: r.weight_kg as number })),
         weighIns: (weighBody ?? []).map((r) => ({ date: r.log_date as string, kg: r.weight_kg as number })),
-        profileKg: (profile as { weight_kg?: number | null } | null)?.weight_kg ?? null,
       }),
       sex: ((profile as { sex?: string | null } | null)?.sex === "female" ? "female" : "male") as "male" | "female",
       sub: (sub ?? null) as Subscription | null,

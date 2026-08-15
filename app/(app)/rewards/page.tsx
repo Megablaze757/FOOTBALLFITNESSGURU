@@ -56,9 +56,25 @@ export default function RewardsPage() {
            benchRows, videoRows, profile, activeProgram, allDrills,
            weighCheck, weighBody, testedRows] = await Promise.all([
       supabase.from("daily_check_ins").select("check_in_date").eq("user_id", user.id).gte("check_in_date", since60),
-      // rpe comes along for the ride — same rows, one more column — so an
-      // "easy session" challenge can be counted rather than guessed at.
-      supabase.from("training_logs").select("log_date, rpe").eq("user_id", user.id).gte("log_date", since60),
+      /**
+       * `intensity`, NOT `rpe`. There is no rpe column on training_logs and
+       * never has been — see 0006, which defines `intensity integer check
+       * (intensity between 1 and 10)`. The same idea under the name this
+       * database actually uses.
+       *
+       * This was not a cosmetic mistake. PostgREST rejects the WHOLE request
+       * when a select names a column that does not exist, so this query
+       * returned an error and `training.data` was null — which made trainDates
+       * empty, and with it EVERY training-derived number on this page:
+       * sessions this week, rest days, perfect days, easy sessions. An athlete
+       * who trained three times was told they had trained zero times, and the
+       * weekly challenge for it could never complete.
+       *
+       * The nutrition page carries the same warning in its own words, from the
+       * time 0066-0069 had not been applied: naming a column the database has
+       * not got makes PostgREST reject the whole row.
+       */
+      supabase.from("training_logs").select("log_date, intensity").eq("user_id", user.id).gte("log_date", since60),
       supabase.from("programs").select("completed_sessions, status").eq("user_id", user.id),
       supabase.from("strength_benchmarks").select("id", head).eq("user_id", user.id),
       supabase.from("ai_plans").select("id", head).eq("user_id", user.id),
@@ -85,7 +101,10 @@ export default function RewardsPage() {
       supabase.from("ai_plans").select("created_at").eq("user_id", user.id).gte("created_at", since60),
       // Who they are, so challenges can be picked for a prop rather than for
       // "a rugby player". Two small rows against nine existing queries.
-      supabase.from("profiles").select("sport, position, positions, training_focus, weight_kg, sex").eq("id", user.id).maybeSingle(),
+      // NOT weight_kg: no such column on profiles. Naming it rejected this
+      // whole query, so sport, position and training focus were all null too —
+      // every challenge on this page was picked for a generic athlete.
+      supabase.from("profiles").select("sport, position, positions, training_focus, sex").eq("id", user.id).maybeSingle(),
       supabase.from("programs").select("goal_type").eq("user_id", user.id).eq("status", "active").maybeSingle(),
       /**
        * Every logged drill, NOT the 60-day window everything else here uses.
@@ -128,7 +147,6 @@ export default function RewardsPage() {
     const bodyweight = latestBodyweight({
       checkIns: (weighCheck.data ?? []).map((r) => ({ date: r.check_in_date as string, kg: r.weight_kg as number })),
       weighIns: (weighBody.data ?? []).map((r) => ({ date: r.log_date as string, kg: r.weight_kg as number })),
-      profileKg: (profile.data as { weight_kg?: number | null } | null)?.weight_kg ?? null,
     });
 
     const checkDates = (checks.data ?? []).map((r) => r.check_in_date as string);
@@ -183,7 +201,7 @@ export default function RewardsPage() {
      * collapse to "do the thing once", which is exactly the three fixed quests.
      * All four are derived from rows this page already loads.
      */
-    const trainRowsRecent = (training.data ?? []) as { log_date: string; rpe: number | null }[];
+    const trainRowsRecent = (training.data ?? []) as { log_date: string; intensity: number | null }[];
     const nutriRows = (nutrition.data ?? []) as {
       log_date: string; calories_eaten: number | null; daily_calorie_target: number | null;
     }[];
@@ -198,7 +216,9 @@ export default function RewardsPage() {
     }).map((r) => r.log_date);
     const benchDates = (benchRows.data ?? []).map((r) => String(r.test_date).slice(0, 10));
     const videoDates = (videoRows.data ?? []).map((r) => String(r.created_at).slice(0, 10));
-    const easyDates = trainRowsRecent.filter((r) => (r.rpe ?? 99) <= 6).map((r) => r.log_date);
+    // An unrecorded intensity is not an easy session — absent is not zero, and
+    // 99 says so. Same scale as RPE: 1-10, and 6 or under is deliberately easy.
+    const easyDates = trainRowsRecent.filter((r) => (r.intensity ?? 99) <= 6).map((r) => r.log_date);
     const restDates = checkDates.filter((d) => !trainDates.includes(d));
     const perfectDates = checkDates.filter((d) => trainDates.includes(d) && nutriDates.includes(d));
 

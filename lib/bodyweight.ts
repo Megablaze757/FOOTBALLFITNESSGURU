@@ -10,12 +10,14 @@
 //                                                          coach, report, home
 //   body_logs.weight_kg         written by /body           read by the /body
 //                                                          chart, nothing else
-//   profiles.weight_kg          WRITTEN BY NOTHING AT ALL  read by Progress
+//   profiles.weight_kg          DOES NOT EXIST             read by Progress
 //                                                          ranks and Rewards
 //
-// The third row is the bug. No screen in the app ever sets profiles.weight_kg —
-// there is no weight field in onboarding or on the profile page — so it is null
-// for every athlete who has ever used this. Strength ranks are multiples of
+// The third row is the bug, and it is worse than it first looked. profiles has
+// never had a weight_kg column in any migration — it is on daily_check_ins and
+// body_logs only. PostgREST rejects a request that names a column it does not
+// know, so those two screens were not reading a null: their whole profile query
+// was failing, which took the athlete's name, sex, sport and position with it. Strength ranks are multiples of
 // bodyweight, so the Progress tab has spent its whole life showing "add your
 // bodyweight in your profile", pointing at a field that does not exist, to
 // people who had already entered their weight twice somewhere else. The Rewards
