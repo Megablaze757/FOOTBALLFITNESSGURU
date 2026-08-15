@@ -5,6 +5,7 @@ import type { PainMap } from "@/lib/types";
 import {
   BODY_REGIONS as REGIONS, BODY_VIEWBOX, nearestRegion, type BodyRegion,
 } from "@/lib/body-map";
+import { BODY_OUTLINE } from "@/lib/body-outline";
 
 // Untouched regions used to be slate-300 — a bright, solid dot. Fifteen of
 // them, all shouting, so the one area you'd actually marked was the quietest
@@ -89,16 +90,26 @@ export function BodyMap({
         role="group"
         aria-label="Body pain map — tap where it hurts"
       >
-        {/* Silhouette. Lifted from 0.06/0.12 — at that weight the figure was
-            invisible next to the region dots, and "tap where it hurts" needs a
-            body to point at. */}
-        <g fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5">
-          <circle cx="80" cy="36" r="18" /> {/* head */}
-          <rect x="60" y="56" width="40" height="70" rx="14" /> {/* torso */}
-          <rect x="46" y="60" width="12" height="60" rx="6" /> {/* L arm */}
-          <rect x="102" y="60" width="12" height="60" rx="6" /> {/* R arm */}
-          <rect x="62" y="150" width="14" height="140" rx="7" /> {/* L leg */}
-          <rect x="84" y="150" width="14" height="140" rx="7" /> {/* R leg */}
+        {/* THE SAME BODY THE STRENGTH MAP USES.
+            This was a circle and five rounded rectangles — a stick figure,
+            which is what "tap where it hurts" gets away with because the dots
+            carry the meaning. It still looked like a stick figure, on the one
+            screen an injured athlete opens.
+
+            The outline is traced from a CC0 anatomical figure (lib/body-outline
+            .ts) and scaled into this map's own 160x320 space, so every region
+            coordinate and the whole nearest-region hit test below are untouched
+            — see the transform. Two things did move: the shoulder dots, which
+            sat on a collarbone once the torso stopped being 40 units wide, and
+            the arms, which now exist and therefore needed regions of their own. */}
+        <g
+          transform="translate(80 14) scale(0.1801) translate(-430.3 -36.8)"
+          fill="rgba(255,255,255,0.05)"
+          stroke="rgba(255,255,255,0.22)"
+          strokeWidth="9"
+          strokeLinejoin="round"
+        >
+          <path d={BODY_OUTLINE} />
         </g>
 
         {/* The dots are the READOUT now, not the target — they say where you

@@ -1,8 +1,37 @@
 import { test } from "node:test";
+import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 import {
   BODY_REGIONS, BODY_VIEWBOX, MAX_TAP_DISTANCE, nearestRegion, regionLabel,
 } from "./body-map";
+import { BODY_OUTLINE } from "./body-outline";
+
+/**
+ * The silhouette, in this map's coordinates.
+ *
+ * The figure is the traced body scaled into the 160x320 space — see the
+ * transform in components/BodyMap.tsx, which these numbers mirror. Kept in step
+ * by the test at the bottom of this file rather than by memory.
+ */
+const FIT = { scale: 0.1801, cx: 430.3, top: 36.8, ox: 80, oy: 14 };
+const SILHOUETTE: [number, number][] = BODY_OUTLINE
+  .slice(1, -1)
+  .split("L")
+  .map((pair) => {
+    const [x, y] = pair.split(",").map(Number);
+    return [(x - FIT.cx) * FIT.scale + FIT.ox, (y - FIT.top) * FIT.scale + FIT.oy];
+  });
+
+/** Ray casting. Whether a point is actually ON the body, not merely in its box. */
+function onBody(x: number, y: number): boolean {
+  let inside = false;
+  for (let i = 0, j = SILHOUETTE.length - 1; i < SILHOUETTE.length; j = i++) {
+    const [xi, yi] = SILHOUETTE[i];
+    const [xj, yj] = SILHOUETTE[j];
+    if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
 
 /**
  * THE MEASUREMENT THAT MADE THIS NECESSARY.
@@ -68,7 +97,7 @@ test("a tap that lands on no dot still finds what it was aimed at", () => {
   const cases: [x: number, y: number, expect: string][] = [
     [80, 196, "hamstring_left"], // between the hamstrings, ties left
     [60, 240, "knee_left"],      // below and outside the left knee
-    [48, 66, "shoulder_left"],   // off the shoulder, out on the arm
+    [44, 96, "shoulder_left"],   // below the shoulder, on the upper arm
     [80, 300, "ankle_left"],     // below the feet, between them
     [80, 20, "head"],            // above the head
     [104, 210, "hamstring_right"], // outside the right leg entirely
@@ -102,15 +131,40 @@ test("most of the figure used to do nothing at all", () => {
  * silhouette, so a dead patch cannot hide between the assertions above.
  */
 test("no dead zones anywhere on the figure", () => {
-  // The silhouette's own extents (see the <g> in BodyMap): head circle through
-  // to the bottom of the legs.
+  /**
+   * THE BODY, NOT ITS BOUNDING BOX.
+   *
+   * This used to sweep a rectangle around the old stick figure, which worked
+   * because a stick figure nearly fills its box. An anatomical outline does
+   * not — there is empty space beside the head, between the legs and under
+   * each arm — so a box sweep would now demand that thin air resolve to a body
+   * part. Point-in-polygon asks the question that was always meant: is every
+   * point somebody could tap ON the figure answered?
+   */
   const misses: string[] = [];
-  for (let x = 46; x <= 114; x += 2) {
-    for (let y = 18; y <= 290; y += 2) {
+  let onBodyPoints = 0;
+  for (let x = 8; x <= 152; x += 2) {
+    for (let y = 12; y <= 306; y += 2) {
+      if (!onBody(x, y)) continue;
+      onBodyPoints++;
       if (!nearestRegion(x, y)) misses.push(`${x},${y}`);
     }
   }
+  assert.ok(onBodyPoints > 2000, `only ${onBodyPoints} points landed on the body — the fit is wrong`);
   assert.deepEqual(misses.slice(0, 8), [], `${misses.length} points on the body select nothing`);
+});
+
+/**
+ * And the figure the component draws has to be the figure this file sweeps. Two
+ * hand-maintained copies of a transform is how a hit test silently stops
+ * matching the drawing it is testing.
+ */
+test("the tested fit matches the one the component draws", () => {
+  const src = readFileSync(new URL("../components/BodyMap.tsx", import.meta.url), "utf8");
+  assert.ok(
+    src.includes(`translate(${FIT.ox} ${FIT.oy}) scale(${FIT.scale}) translate(-${FIT.cx} -${FIT.top})`),
+    "components/BodyMap.tsx draws the body at a different scale or offset than this file assumes",
+  );
 });
 
 /**
@@ -121,7 +175,9 @@ test("no dead zones anywhere on the figure", () => {
 test("a tap in the empty margin selects nothing", () => {
   assert.equal(nearestRegion(4, 4), null, "top-left corner");
   assert.equal(nearestRegion(156, 316), null, "bottom-right corner");
-  assert.equal(nearestRegion(0, 160), null, "far left of the torso");
+  // Beside the head, which is empty on an anatomical figure where it was solid
+  // on a stick one. The old "far left of the torso" case is now an arm.
+  assert.equal(nearestRegion(30, 20), null, "beside the head");
 });
 
 test("ties resolve the same way every time", () => {

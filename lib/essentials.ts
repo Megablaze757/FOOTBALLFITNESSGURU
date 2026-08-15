@@ -418,6 +418,50 @@ export const RECOVERY_INJURY: RecoveryProtocol[] = [
     exerciseIds: ["bird_dog", "mcgill_curl_up", "dead_bug", "glute_bridge", "hip_thrust"],
   },
   {
+    /**
+     * ELBOW AND WRIST, ADDED WITH THE ARM REGIONS ON THE BODY MAP.
+     *
+     * A region an athlete can point at and get nothing back for is a worse
+     * answer than one that resolves to a neighbour, so these arrived together —
+     * see lib/body-map.ts. They are also the two the app had least excuse for
+     * missing: it now ranks a bench press and an overhead press, and gripping,
+     * pressing and front-racking are exactly what irritate an elbow and a wrist.
+     */
+    id: "elbow", title: "Elbow / forearm pain", when: "Ongoing", icon: "muscle", areas: ["elbow", "forearm"],
+    steps: [
+      "Usually a tendon complaining about load, not damage — it responds to loading, not to rest",
+      "Cut the aggravating grip work rather than stopping training: pull-ups and heavy rows are the usual culprits",
+      "Slow, heavy isometrics are the fastest way to settle tendon pain",
+      "A thicker bar or straps take the strain off the tendon while you rebuild",
+      "It settles in weeks to months, and going quiet then loading hard again is what restarts it",
+    ],
+    stages: [
+      { phase: "Phase 1 — Settle", window: "Week 1–2", focus: "Isometric holds, 30–45s, at a load you can hold without pain climbing.", criteria: "Pain settles within 24 hours of loading it." },
+      { phase: "Phase 2 — Load", window: "Week 2–6", focus: "Slow, heavy wrist curls and extensions, plus grip work at controlled tempo.", criteria: "Full grip strength with no morning stiffness." },
+      { phase: "Phase 3 — Rebuild", window: "Week 4–10", focus: "Return pulling volume gradually — straps first, then bare bar.", criteria: "Full pulling sessions with no next-day flare." },
+      { phase: "Phase 4 — Return", window: "Week 8+", focus: "Full grip and pulling load, including the movement that first irritated it.", criteria: "Hardest session of the week with no morning stiffness." },
+    ],
+    redFlags: ["Pain after a fall on an outstretched arm", "Pins and needles or numbness into the hand", "You cannot straighten or bend the elbow fully", "Obvious swelling or deformity"],
+    exerciseIds: ["shoulder_external_rotation", "farmers_carry"],
+  },
+  {
+    id: "wrist", title: "Wrist pain", when: "Ongoing", icon: "muscle", areas: ["wrist", "hand"],
+    steps: [
+      "Front squats, overhead pressing and press-ups are the usual triggers — the joint is being asked for range it does not have",
+      "Change the position before you change the exercise: straps for the front rack, neutral-grip pressing, handles for press-ups",
+      "Build wrist range and strength deliberately rather than waiting for it to settle",
+      "Do not tape it up and press through sharp pain — wrists are small joints with little margin",
+    ],
+    stages: [
+      { phase: "Phase 1 — Unload", window: "Week 1–2", focus: "Swap to neutral grip and fists or handles; daily pain-free mobility.", criteria: "Pain-free through everyday range." },
+      { phase: "Phase 2 — Strengthen", window: "Week 2–6", focus: "Wrist curls, extensions and controlled loaded stretching.", criteria: "Comfortable bodyweight load through an extended wrist." },
+      { phase: "Phase 3 — Rebuild", window: "Week 4–8", focus: "Rebuild front rack and overhead positions under load.", criteria: "Full-range positions at working weight with no ache after." },
+      { phase: "Phase 4 — Return", window: "Week 6+", focus: "Full pressing and front-rack load with no strapping or props.", criteria: "Working sets in the position that hurt, with no ache the next day." },
+    ],
+    redFlags: ["Pain after a fall onto the hand — a scaphoid fracture is easy to miss", "Numbness or pins and needles in the fingers", "Swelling that does not settle overnight", "You cannot bear any weight through the hand"],
+    exerciseIds: ["farmers_carry"],
+  },
+  {
     id: "shoulder", title: "Niggly shoulder", when: "Ongoing", icon: "muscle", areas: ["shoulder"],
     steps: [
       "Reduce overhead and heavy pressing volume while it's irritated — don't stop training entirely",
@@ -506,6 +550,8 @@ export const INJURY_AREAS: { id: string; label: string; icon: IconName }[] = [
   { id: "hip", label: "Hip / quad", icon: "hip" },
   { id: "lower_back", label: "Lower back", icon: "spine" },
   { id: "shoulder", label: "Shoulder", icon: "muscle" },
+  { id: "elbow", label: "Elbow / forearm", icon: "muscle" },
+  { id: "wrist", label: "Wrist / hand", icon: "muscle" },
   { id: "head", label: "Head / neck", icon: "brain" },
 ];
 
@@ -526,6 +572,8 @@ const TEXT_HINTS: { id: string; words: string[] }[] = [
   { id: "hip", words: ["hip", "quad", "thigh", "flexor", "hip flexor"] },
   { id: "lower_back", words: ["back", "lower back", "spine", "lumbar", "disc"] },
   { id: "shoulder", words: ["shoulder", "rotator", "cuff", "collarbone", "arm"] },
+  { id: "elbow", words: ["elbow", "tennis elbow", "golfer", "tendon", "forearm", "gripping"] },
+  { id: "wrist", words: ["wrist", "hand", "thumb", "front rack", "pressing overhead", "bench"] },
   { id: "head", words: ["head", "concussion", "neck", "dizzy", "headache", "knocked"] },
 ];
 

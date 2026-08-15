@@ -33,8 +33,27 @@ export interface BodyRegion {
 
 export const BODY_REGIONS: BodyRegion[] = [
   { key: "head", label: "Head / neck", cx: 80, cy: 36, r: 10 },
-  { key: "shoulder_left", label: "L shoulder", cx: 58, cy: 70, r: 9 },
-  { key: "shoulder_right", label: "R shoulder", cx: 102, cy: 70, r: 9 },
+  // MOVED OUT ONTO THE DELTOIDS when the figure became a real body. On the old
+  // stick figure the torso was 40 units wide and 58/102 was its edge, which read
+  // as a shoulder; on an anatomical outline the same point is a collarbone.
+  { key: "shoulder_left", label: "L shoulder", cx: 50, cy: 74, r: 9 },
+  { key: "shoulder_right", label: "R shoulder", cx: 110, cy: 74, r: 9 },
+  /**
+   * ARMS, WHICH THE MAP HAD NONE OF.
+   *
+   * The old figure drew each arm as a 12-unit rectangle and the region list
+   * stopped at the shoulder, so there was nowhere to report a sore elbow. That
+   * was survivable while the arms were sticks. On a figure with visible arms and
+   * hands it is not: an athlete taps their elbow, the nearest region is 50 units
+   * away, and nothing happens at all.
+   *
+   * Both come with a rehab protocol in lib/essentials.ts — a region you can mark
+   * and get no help for is a worse answer than one that resolves to a neighbour.
+   */
+  { key: "elbow_left", label: "L elbow", cx: 34, cy: 132, r: 8 },
+  { key: "elbow_right", label: "R elbow", cx: 126, cy: 132, r: 8 },
+  { key: "wrist_left", label: "L wrist", cx: 26, cy: 186, r: 8 },
+  { key: "wrist_right", label: "R wrist", cx: 134, cy: 186, r: 8 },
   { key: "lower_back", label: "Lower back", cx: 80, cy: 120, r: 10 },
   { key: "hip_left", label: "L hip", cx: 66, cy: 148, r: 9 },
   { key: "hip_right", label: "R hip", cx: 94, cy: 148, r: 9 },
@@ -60,10 +79,17 @@ export const BODY_VIEWBOX = { width: 160, height: 320 };
  * neck pain, and an unexplained selection is worse than a missed one: the
  * athlete has to notice it happened before they can undo it.
  *
- * 42 is a little over twice the closest region spacing, so every point on the
- * body itself resolves while the corners of the box stay dead.
+ * TIGHTENED FROM 42 WHEN THE ARMS ARRIVED. At 42 a tap in the empty margin
+ * beside the torso resolved, because the nearest region was now a wrist — an
+ * unexplained selection, which is the failure this cap exists to prevent.
+ *
+ * 33 rather than 30, and the three units are load-bearing: the widest gap
+ * anywhere on the silhouette is 32 units, in the upper chest between the
+ * shoulders and the lower back. Measured by sweeping the outline itself rather
+ * than its bounding box — an anatomical figure has real empty space beside the
+ * head and between the legs, so a box sweep asks thin air to resolve.
  */
-export const MAX_TAP_DISTANCE = 42;
+export const MAX_TAP_DISTANCE = 33;
 
 export function regionLabel(key: string): string {
   return BODY_REGIONS.find((r) => r.key === key)?.label ?? key;
