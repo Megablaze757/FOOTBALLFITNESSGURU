@@ -351,3 +351,27 @@ test("the figure never claims a rank it cannot justify", () => {
   assert.match(panel, /RANKABLE_MUSCLES\.map/,
     "the list no longer walks every rankable muscle, so the rear ones vanish");
 });
+
+/**
+ * A STAT IN THE XP FORMULA THAT NOTHING COMPUTES IS DEAD CODE, and it fails
+ * silently: `strengthTiers` was added to ActivityStats and to `computeXp`,
+ * every test passed, and the feature paid nobody a single point because no page
+ * ever populated it. The formula multiplied zero by 60 forever.
+ *
+ * This asserts the wiring, not the arithmetic — the arithmetic is covered above.
+ */
+test("the page that computes XP actually feeds it strength", () => {
+  const page = readFileSync(new URL("../app/(app)/rewards/page.tsx", import.meta.url), "utf8");
+  assert.match(page, /strengthTiers:/, "the rewards page builds ActivityStats without strengthTiers");
+  assert.match(page, /rankedLifts\(/, "nothing on the rewards page ranks a lift");
+
+  // Ranks are best-ever, so the query behind them must not be windowed: a PR
+  // ageing out would DELETE the XP it earned and could drop somebody a level.
+  const call = page.slice(page.indexOf('select("log_date, drills")'));
+  const stmt = call.slice(0, call.indexOf("\n"));
+  assert.ok(!/gte\(/.test(stmt),
+    `the drills query is date-windowed, so strength XP can go down: ${stmt.trim()}`);
+
+  // And bodyweight has to be on the row it reads, or every rank is zero.
+  assert.match(page, /weight_kg/, "the profile query does not fetch bodyweight");
+});

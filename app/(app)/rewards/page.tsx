@@ -10,6 +10,8 @@ import {
   computeXp, levelFor, rankFor, evaluateAchievements, dailyQuests, activitySpans,
   type ActivityStats, type DailyState, EMPTY_STATS } from "@/lib/gamification";
 import type { WeekActivity } from "@/lib/challenges";
+import { bodyPartStrength, rankedLifts, strengthTierTotal } from "@/lib/strength-standards";
+import type { TrainingLog } from "@/lib/types";
 import { Confetti } from "@/components/Confetti";
 import { LevelUpModal } from "@/components/LevelUpModal";
 import { WeeklyChallenges } from "@/components/WeeklyChallenges";
@@ -49,7 +51,7 @@ export default function RewardsPage() {
      */
     const since60 = daysAgoLocal(59);
     const [checks, training, programs, benchC, videoC, nutrition, checkC, trainC, nutriC,
-           benchRows, videoRows, profile, activeProgram] = await Promise.all([
+           benchRows, videoRows, profile, activeProgram, allDrills] = await Promise.all([
       supabase.from("daily_check_ins").select("check_in_date").eq("user_id", user.id).gte("check_in_date", since60),
       // rpe comes along for the ride — same rows, one more column — so an
       // "easy session" challenge can be counted rather than guessed at.
@@ -80,8 +82,23 @@ export default function RewardsPage() {
       supabase.from("ai_plans").select("created_at").eq("user_id", user.id).gte("created_at", since60),
       // Who they are, so challenges can be picked for a prop rather than for
       // "a rugby player". Two small rows against nine existing queries.
-      supabase.from("profiles").select("sport, position, positions, training_focus").eq("id", user.id).maybeSingle(),
+      supabase.from("profiles").select("sport, position, positions, training_focus, weight_kg, sex").eq("id", user.id).maybeSingle(),
       supabase.from("programs").select("goal_type").eq("user_id", user.id).eq("status", "active").maybeSingle(),
+      /**
+       * Every logged drill, NOT the 60-day window everything else here uses.
+       *
+       * Strength ranks are best-ever by design — a bad Tuesday must not cost
+       * you one — and XP in this app is monotonic, which is a rule it already
+       * learned the hard way with streaks. Window this and a personal best
+       * ageing out of the window would DELETE the XP it earned and could drop
+       * somebody a level, which is the single most demotivating thing a
+       * progression system can do.
+       *
+       * Only two columns, and only rows that have drills on them, so a rest day
+       * costs nothing. If this ever gets heavy the answer is to persist the
+       * best lift per athlete server-side rather than to narrow the window.
+       */
+      supabase.from("training_logs").select("log_date, drills").eq("user_id", user.id).not("drills", "is", null),
     ]);
 
     const checkDates = (checks.data ?? []).map((r) => r.check_in_date as string);
@@ -108,6 +125,18 @@ export default function RewardsPage() {
       // Read across the same three date lists rather than counting rows. No
       // extra query — all three are already loaded above.
       ...activitySpans(checkDates, trainDates, nutriDates),
+      /**
+       * Strength tiers earned across the body — see lib/strength-standards.ts.
+       *
+       * Ranks are multiples of bodyweight, so without a weight on the profile
+       * there is no ratio to compute and this is honestly zero rather than
+       * guessed from an average body.
+       */
+      strengthTiers: strengthTierTotal(bodyPartStrength(rankedLifts(
+        (allDrills.data ?? []) as TrainingLog[],
+        (profile.data as { weight_kg?: number | null } | null)?.weight_kg ?? 0,
+        (profile.data as { sex?: string | null } | null)?.sex === "female" ? "female" : "male",
+      ))),
     };
     const state: DailyState = {
       checkedInToday: checkDates.includes(today),
