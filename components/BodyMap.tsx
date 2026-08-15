@@ -3,7 +3,8 @@
 import { useRef, useState } from "react";
 import type { PainMap } from "@/lib/types";
 import {
-  BODY_REGIONS as REGIONS, BODY_VIEWBOX, nearestRegion, type BodyRegion,
+  BODY_REGIONS as ALL_REGIONS, BODY_VIEWBOX, nearestRegion, regionsInView, viewOfRegion,
+  type BodyRegion, type BodyView,
 } from "@/lib/body-map";
 import { BODY_OUTLINE } from "@/lib/body-outline";
 
@@ -14,6 +15,12 @@ import { BODY_OUTLINE } from "@/lib/body-outline";
 // answer.
 const UNSET_FILL = "rgba(255,255,255,0.10)";
 const UNSET_STROKE = "rgba(255,255,255,0.32)";
+
+/** Knees, ankles, arms and the head show on both sides, so they are never
+ *  "hiding" on the other one. */
+function isOnBothSides(key: string): boolean {
+  return (ALL_REGIONS.find((r) => r.key === key)?.views.length ?? 0) > 1;
+}
 
 function painColor(level: number): string {
   if (level <= 0) return UNSET_FILL;
@@ -34,8 +41,10 @@ export function BodyMap({
   mode?: "pain" | "select";
 }) {
   const [selected, setSelected] = useState<string | null>(null);
-  const selectedLabel = REGIONS.find((r) => r.key === selected)?.label;
+  const [view, setView] = useState<BodyView>("front");
+  const selectedLabel = ALL_REGIONS.find((r) => r.key === selected)?.label;
   const svgRef = useRef<SVGSVGElement>(null);
+  const REGIONS = regionsInView(view);
 
   /** Tap or keyboard, one path. `select` toggles; `pain` opens the slider. */
   function choose(region: BodyRegion) {
@@ -69,7 +78,7 @@ export function BodyMap({
     const ctm = svg.getScreenCTM();
     if (!ctm) return;
     const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(ctm.inverse());
-    const region = nearestRegion(p.x, p.y);
+    const region = nearestRegion(p.x, p.y, view);
     if (region) choose(region);
   }
 
@@ -81,8 +90,42 @@ export function BodyMap({
     onChange(next);
   }
 
+  /** How many marked areas are hiding on the side you cannot currently see. */
+  const markedOtherSide = Object.keys(value).filter(
+    (k) => (value[k] ?? 0) > 0 && viewOfRegion(k) !== view && !isOnBothSides(k),
+  ).length;
+
   return (
     <div>
+      {/* THE SAME CONTROL THE STRENGTH FIGURE USES, deliberately. An athlete
+          who has already turned the body round on the Progress tab should not
+          have to discover a second way of doing it on the screen they open
+          when they are hurt. */}
+      <div className="mx-auto mb-2 flex w-fit rounded-full bg-white/[0.06] p-1" role="tablist" aria-label="Body view">
+        {(["front", "back"] as BodyView[]).map((v) => (
+          <button
+            key={v}
+            type="button"
+            role="tab"
+            aria-selected={view === v}
+            onClick={() => { setView(v); setSelected(null); }}
+            className={`tap-target relative min-h-[36px] rounded-full px-5 text-xs font-bold capitalize transition ${
+              view === v ? "bg-white/[0.12] text-slate-100" : "text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            {v}
+            {/* A mark you cannot see is a mark you will forget you made — and
+                on this screen forgetting means an injury silently missing from
+                your programme. The dot says "there is something over here". */}
+            {view !== v && markedOtherSide > 0 && (
+              <span
+                className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-amber-400"
+                aria-label={`${markedOtherSide} marked on the ${v}`}
+              />
+            )}
+          </button>
+        ))}
+      </div>
       <svg
         ref={svgRef}
         viewBox={`0 0 ${BODY_VIEWBOX.width} ${BODY_VIEWBOX.height}`}
@@ -161,19 +204,25 @@ export function BodyMap({
           they are reachable by tab and by a screen reader's element list while
           the figure stays the visual. Each one says its own state, so moving
           through them reads as a body rather than as fifteen anonymous dots. */}
+      {/* EVERY region, not just the visible side. A keyboard user must be able
+          to reach the hamstrings without first finding and operating a tab
+          control — so focusing one turns the body round for them. */}
       <ul className="sr-only">
-        {REGIONS.map((region) => {
+        {ALL_REGIONS.map((region) => {
           const level = value[region.key] ?? 0;
           return (
             <li key={region.key}>
               <button
                 type="button"
-                onClick={() => choose(region)}
+                onClick={() => { if (!region.views.includes(view)) setView(region.views[0]); choose(region); }}
                 // Focus lights up the dot on the figure. These buttons are
                 // off-screen, so without this a keyboard user is tabbing
                 // through fifteen controls with no visible focus anywhere on
                 // the page — the ring IS the focus indicator.
-                onFocus={() => setSelected(region.key)}
+                onFocus={() => {
+                  if (!region.views.includes(view)) setView(region.views[0]);
+                  setSelected(region.key);
+                }}
                 aria-pressed={mode === "select" ? level > 0 : undefined}
               >
                 {region.label}
@@ -202,7 +251,10 @@ export function BodyMap({
                 }}
                 className="flex items-center gap-1.5 rounded-full border border-pitch-400/40 bg-pitch-400/10 px-3 py-1.5 text-xs font-semibold text-pitch-400 transition hover:bg-pitch-400/20"
               >
-                {REGIONS.find((r) => r.key === k)?.label ?? k}
+                {/* ALL_REGIONS, not the visible side: a chip for a hamstring
+                    must still say "L hamstring" while you are looking at the
+                    front, or your own selections turn into raw database keys. */}
+                {ALL_REGIONS.find((r) => r.key === k)?.label ?? k}
                 <span className="text-pitch-400/60" aria-hidden>×</span>
                 <span className="sr-only">Remove</span>
               </button>

@@ -3,8 +3,10 @@ import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 import {
   BODY_REGIONS, BODY_VIEWBOX, MAX_TAP_DISTANCE, nearestRegion, regionLabel,
+  regionsInView, viewOfRegion, type BodyView,
 } from "./body-map";
 import { BODY_OUTLINE } from "./body-outline";
+import { INJURY_AREAS, baseAreaOf, protocolsForAreas } from "./essentials";
 
 /**
  * The silhouette, in this map's coordinates.
@@ -74,7 +76,43 @@ test("the regions are too close together for per-region hit circles", () => {
 
 test("a tap on a region picks that region", () => {
   for (const r of BODY_REGIONS) {
-    assert.equal(nearestRegion(r.cx, r.cy)?.key, r.key);
+    // In its own view. Quads and hamstrings share the thigh, so "the nearest
+    // region to a quad's centre" is only the quad while the front is showing.
+    for (const view of r.views) {
+      assert.equal(nearestRegion(r.cx, r.cy, view)?.key, r.key, `${r.key} on the ${view}`);
+    }
+  }
+});
+
+/**
+ * THE BUG THAT ADDED A SECOND VIEW.
+ *
+ * The figure faces forwards and the front of a thigh is a quadriceps, but the
+ * only thigh region was a hamstring — so a quad strain, one of the commonest
+ * injuries in any running sport, could not be reported at all. It is not enough
+ * that a quad region now exists: the same tap has to mean the quad from the
+ * front and the hamstring from behind, or one of the two is still unreachable.
+ */
+test("the front of the thigh is a quad and the back of it is a hamstring", () => {
+  const thigh: [number, number] = [68, 198];
+  assert.equal(nearestRegion(...thigh, "front")?.key, "quad_left");
+  assert.equal(nearestRegion(...thigh, "back")?.key, "hamstring_left");
+
+  // And neither can be reached from the wrong side, which is the whole reason
+  // the view has to be an argument to the hit test rather than a filter on it.
+  assert.equal(BODY_REGIONS.find((r) => r.key === "quad_left")?.views.includes("back"), false);
+  assert.equal(BODY_REGIONS.find((r) => r.key === "hamstring_left")?.views.includes("front"), false);
+});
+
+test("every region an athlete can mark has somewhere to send them", () => {
+  // A region you can tap and get no help for is worse than one that resolves to
+  // a neighbour — the rule the arms were added under. Quads and glutes were the
+  // two new ones, so this now covers every leg region rather than trusting it.
+  const areas = new Set(INJURY_AREAS.map((a) => a.id));
+  for (const r of BODY_REGIONS) {
+    const base = baseAreaOf(r.key);
+    assert.ok(areas.has(base), `${r.key} maps to "${base}", which is not an injury area`);
+    assert.ok(protocolsForAreas([base]).length > 0, `"${base}" has no rehab protocol`);
   }
 });
 
@@ -94,17 +132,19 @@ function oldSchemeHit(x: number, y: number): string | null {
  * picked as "obvious misses" were comfortably inside a dot.
  */
 test("a tap that lands on no dot still finds what it was aimed at", () => {
-  const cases: [x: number, y: number, expect: string][] = [
-    [80, 196, "hamstring_left"], // between the hamstrings, ties left
-    [60, 240, "knee_left"],      // below and outside the left knee
-    [44, 96, "shoulder_left"],   // below the shoulder, on the upper arm
-    [80, 300, "ankle_left"],     // below the feet, between them
-    [80, 20, "head"],            // above the head
-    [104, 210, "hamstring_right"], // outside the right leg entirely
+  const cases: [x: number, y: number, view: BodyView, expect: string][] = [
+    [80, 196, "front", "quad_left"],   // between the thighs, ties left
+    [80, 206, "back", "hamstring_left"], // the same gap, seen from behind
+    [60, 240, "front", "knee_left"],   // below and outside the left knee
+    [44, 96, "front", "shoulder_left"], // below the shoulder, on the upper arm
+    [80, 300, "front", "ankle_left"],  // below the feet, between them
+    [80, 20, "front", "head"],         // above the head
+    [104, 210, "back", "hamstring_right"], // outside the right leg entirely
+    [104, 168, "back", "glute_right"], // outside the right glute
   ];
-  for (const [x, y, expect] of cases) {
+  for (const [x, y, view, expect] of cases) {
     assert.equal(oldSchemeHit(x, y), null, `(${x},${y}) was never a miss — pick a better case`);
-    assert.equal(nearestRegion(x, y)?.key, expect, `(${x},${y})`);
+    assert.equal(nearestRegion(x, y, view)?.key, expect, `(${x},${y}) on the ${view}`);
   }
 });
 
@@ -141,17 +181,22 @@ test("no dead zones anywhere on the figure", () => {
    * part. Point-in-polygon asks the question that was always meant: is every
    * point somebody could tap ON the figure answered?
    */
-  const misses: string[] = [];
-  let onBodyPoints = 0;
-  for (let x = 8; x <= 152; x += 2) {
-    for (let y = 12; y <= 306; y += 2) {
-      if (!onBody(x, y)) continue;
-      onBodyPoints++;
-      if (!nearestRegion(x, y)) misses.push(`${x},${y}`);
+  // BOTH VIEWS. The back has a different, smaller set of regions, so a hole
+  // there would hide completely behind a front-only sweep — and the back is
+  // where the hamstrings and glutes now live.
+  for (const view of ["front", "back"] as BodyView[]) {
+    const misses: string[] = [];
+    let onBodyPoints = 0;
+    for (let x = 8; x <= 152; x += 2) {
+      for (let y = 12; y <= 306; y += 2) {
+        if (!onBody(x, y)) continue;
+        onBodyPoints++;
+        if (!nearestRegion(x, y, view)) misses.push(`${x},${y}`);
+      }
     }
+    assert.ok(onBodyPoints > 2000, `only ${onBodyPoints} points landed on the body — the fit is wrong`);
+    assert.deepEqual(misses.slice(0, 8), [], `${misses.length} points on the ${view} select nothing`);
   }
-  assert.ok(onBodyPoints > 2000, `only ${onBodyPoints} points landed on the body — the fit is wrong`);
-  assert.deepEqual(misses.slice(0, 8), [], `${misses.length} points on the body select nothing`);
 });
 
 /**

@@ -480,7 +480,7 @@ export const RECOVERY_INJURY: RecoveryProtocol[] = [
     exerciseIds: ["shoulder_external_rotation", "scap_pull_up", "thoracic_openers", "barbell_row"],
   },
   {
-    id: "hip", title: "Tight hips / hip flexor", when: "Ongoing", icon: "hip", areas: ["hip", "hip_flexor", "quad"],
+    id: "hip", title: "Tight hips / hip flexor", when: "Ongoing", icon: "hip", areas: ["hip", "hip_flexor"],
     steps: [
       "Usually an overload issue from sprinting and kicking volume, or from long hours sitting",
       "Stretching alone rarely fixes it — the muscle usually needs strengthening too",
@@ -496,6 +496,61 @@ export const RECOVERY_INJURY: RecoveryProtocol[] = [
     ],
     redFlags: ["Deep groin pain with clicking or catching", "Pain that refers into the knee", "Marked loss of hip rotation", "Night pain"],
     exerciseIds: ["couch_stretch", "hip_90_90", "world_greatest_stretch", "glute_bridge", "bulgarian_split"],
+  },
+  /**
+   * THE QUAD USED TO BE A FOOTNOTE ON THE HIP PROTOCOL — `areas: [..., "quad"]`
+   * — and the body map had no quad region to send anybody there with. So one of
+   * the most common injuries in any running sport had no way in and no page of
+   * its own, and an athlete who tapped the front of their thigh marked a
+   * hamstring. A quad strain is a different injury from a tight hip flexor: it
+   * is a contractile tear that fails under eccentric load and stretch, not an
+   * overload of a shortened muscle, and treating it with a couch stretch in the
+   * first week is actively wrong.
+   */
+  {
+    id: "quad", title: "Quad strain / dead leg", when: "Early stage", icon: "hip", areas: ["quad", "thigh", "quadriceps"],
+    steps: [
+      "A strain tears with sprinting or kicking; a dead leg is a direct blow — both are managed similarly at first",
+      "Do NOT stretch hard in the first 48 hours: a fresh tear pulls further apart under load",
+      "For a dead leg, rest the knee in a bent position early to keep range",
+      "Isometrics from day two or three keep the muscle switched on while it heals",
+      "Build back through range before you build back through speed",
+    ],
+    stages: [
+      { phase: "Phase 1 — Protect", window: "Day 1–3", focus: "Relative rest, ice, gentle pain-free knee bend. No stretching into pain.", criteria: "Walking without a limp." },
+      { phase: "Phase 2 — Load", window: "Day 3–10", focus: "Isometric holds, then slow bodyweight squats and step-downs through pain-free range.", criteria: "Full knee flexion and a pain-free bodyweight squat." },
+      { phase: "Phase 3 — Strengthen", window: "Week 2–4", focus: "Eccentric-biased loading — tempo squats, split squats, controlled step-downs.", criteria: "Within 10% of the other leg on a single-leg test." },
+      { phase: "Phase 4 — Return", window: "Week 3–6", focus: "Graded sprinting and striking, volume before intensity.", criteria: "Full-speed running and kicking with no grab or tightness." },
+    ],
+    redFlags: [
+      "A visible dent, gap or bulge in the muscle — suspect a full tear",
+      "A rapidly swelling, hard, very painful thigh (possible compartment syndrome — urgent)",
+      "Unable to bear weight at all",
+      "A lump that hardens over weeks rather than settling (possible myositis ossificans)",
+    ],
+    exerciseIds: ["isometric_wall_sit", "spanish_squat", "goblet_squat", "bulgarian_split", "couch_stretch"],
+  },
+  {
+    id: "glute", title: "Glute / deep hip pain", when: "Ongoing", icon: "hip", areas: ["glute", "glutes", "piriformis", "buttock"],
+    steps: [
+      "Usually an overload of the glute tendon where it attaches, or deep hip irritation from sprinting volume",
+      "Sitting on hard surfaces and deep stretching both tend to make tendon pain worse",
+      "Isometric holds settle tendon pain faster than stretching does",
+      "Strength through range beats mobility work here",
+    ],
+    stages: [
+      { phase: "Phase 1 — Settle", window: "Week 1", focus: "Cut sprint volume and hill work. Isometric glute bridges, long holds.", criteria: "Sitting and walking without a deep ache." },
+      { phase: "Phase 2 — Load", window: "Week 1–3", focus: "Hip thrusts, bridges and monster walks, slow and controlled.", criteria: "Pain-free single-leg bridge." },
+      { phase: "Phase 3 — Strengthen", window: "Week 3–5", focus: "Heavier hinge and thrust work, split squats.", criteria: "Symmetric strength side to side." },
+      { phase: "Phase 4 — Return", window: "Week 4–6", focus: "Rebuild sprinting and change of direction gradually.", criteria: "Full training with no next-day flare." },
+    ],
+    redFlags: [
+      "Pain shooting down the back of the leg past the knee, or pins and needles",
+      "Numbness in the groin or changes to bladder or bowel control — urgent",
+      "Night pain that wakes you",
+      "Pain after a fall onto the hip, with difficulty weight-bearing",
+    ],
+    exerciseIds: ["hip_thrust", "glute_bridge", "monster_walk", "copenhagen", "single_leg_rdl"],
   },
   {
     id: "concussion", title: "Head knock / suspected concussion", when: "Immediately", icon: "brain", areas: ["head", "neck"],
@@ -546,8 +601,10 @@ export const INJURY_AREAS: { id: string; label: string; icon: IconName }[] = [
   { id: "calf", label: "Calf / Achilles", icon: "leg" },
   { id: "knee", label: "Knee", icon: "knee" },
   { id: "hamstring", label: "Hamstring", icon: "hamstring" },
+  { id: "quad", label: "Quad / thigh", icon: "hip" },
   { id: "groin", label: "Groin / adductor", icon: "plaster" },
-  { id: "hip", label: "Hip / quad", icon: "hip" },
+  { id: "glute", label: "Glute", icon: "hip" },
+  { id: "hip", label: "Hip flexor", icon: "hip" },
   { id: "lower_back", label: "Lower back", icon: "spine" },
   { id: "shoulder", label: "Shoulder", icon: "muscle" },
   { id: "elbow", label: "Elbow / forearm", icon: "muscle" },
@@ -568,8 +625,12 @@ const TEXT_HINTS: { id: string; words: string[] }[] = [
   { id: "calf", words: ["calf", "achilles", "heel", "shin", "toe off", "pushing off"] },
   { id: "knee", words: ["knee", "patella", "kneecap", "acl", "meniscus", "jumper"] },
   { id: "hamstring", words: ["hamstring", "back of my leg", "back of the leg", "pulled", "sprinting"] },
+  // "inner thigh" stays with the groin and is listed there first, so a plain
+  // "thigh" reaches the quad without stealing the adductor's own words.
+  { id: "quad", words: ["quad", "quadriceps", "thigh", "front of my leg", "dead leg", "charley horse"] },
   { id: "groin", words: ["groin", "adductor", "inner thigh", "kicking"] },
-  { id: "hip", words: ["hip", "quad", "thigh", "flexor", "hip flexor"] },
+  { id: "glute", words: ["glute", "buttock", "bum", "piriformis", "deep hip"] },
+  { id: "hip", words: ["hip", "flexor", "hip flexor"] },
   { id: "lower_back", words: ["back", "lower back", "spine", "lumbar", "disc"] },
   { id: "shoulder", words: ["shoulder", "rotator", "cuff", "collarbone", "arm"] },
   { id: "elbow", words: ["elbow", "tennis elbow", "golfer", "tendon", "forearm", "gripping"] },
