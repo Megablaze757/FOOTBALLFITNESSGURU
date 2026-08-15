@@ -4,6 +4,7 @@ import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { invokeAI } from "@/lib/api";
 import { useAsync } from "@/lib/use-async";
+import { syncHealth, daysSinceSync } from "@/lib/biometrics";
 
 /**
  * Connect a wearable so it uploads on its own.
@@ -52,6 +53,14 @@ export function WearableConnect({ userId }: { userId: string }) {
   }, [userId], `wearables:${userId}`);
 
   const oura = data?.status.find((s) => s.provider === "oura");
+  /**
+   * "Connected" is not the same as "working". A sync that stops running writes
+   * no error — the cron is simply not firing — so last_error stays null and the
+   * row went on saying "Syncing" over a date that never moved, while readiness
+   * kept reporting last week's sleep as though it were last night's.
+   */
+  const ouraSync = syncHealth(oura?.last_sync_at);
+  const ouraDays = daysSinceSync(oura?.last_sync_at);
 
   return (
     <div className="card p-5">
@@ -69,14 +78,20 @@ export function WearableConnect({ userId }: { userId: string }) {
           <Row
             name="Oura Ring"
             icon="💍"
-            state={oura?.connected ? (oura.last_error ? "error" : "connected") : "available"}
+            state={
+              !oura?.connected ? "available"
+                : oura.last_error || ouraSync === "stale" ? "error"
+                : "connected"
+            }
             detail={
               oura?.connected
                 ? oura.last_error
                   ? `Last sync failed — ${oura.last_error}`
-                  : oura.last_sync_at
-                    ? `Syncing. Last update ${new Date(oura.last_sync_at).toLocaleDateString()}.`
-                    : "Connected."
+                  : ouraSync === "stale"
+                    ? `No data for ${ouraDays} days. Your readiness is being worked out from the last night that arrived — reconnect to fix it.`
+                    : ouraSync === "fresh"
+                      ? `Syncing. Last update ${new Date(oura.last_sync_at!).toLocaleDateString()}.`
+                      : "Connected, but nothing has arrived yet. Give it until tomorrow morning."
                 : "Paste a personal access token and it syncs every night."
             }
             onClick={() => setOpen(open === "oura" ? null : "oura")}

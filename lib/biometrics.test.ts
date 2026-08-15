@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { biometricSignal, parseBiometricCsv, parseOuraSleep, parseIngestPayload } from "./biometrics";
+import { biometricSignal, parseBiometricCsv, parseOuraSleep, parseIngestPayload, syncHealth, daysSinceSync } from "./biometrics";
 import { todayLocal } from "./day";
 
 const hist = (hrv: number, days = 20) =>
@@ -167,4 +167,33 @@ test("parseIngestPayload returns nothing rather than an empty row", () => {
   assert.deepEqual(parseIngestPayload({}), []);
   assert.deepEqual(parseIngestPayload("nonsense"), []);
   assert.deepEqual(parseIngestPayload({ date: "2026-07-30", hrv: 0, restingHR: 0 }), []);
+});
+
+// --- sync freshness ----------------------------------------------------------
+
+test("a sync that quietly stopped is reported as stale, not as syncing", () => {
+  const now = new Date("2026-08-15T09:00:00Z");
+  const at = (iso: string) => syncHealth(iso, now);
+  assert.equal(at("2026-08-15T04:00:00Z"), "fresh", "this morning");
+  assert.equal(at("2026-08-14T04:00:00Z"), "fresh", "yesterday morning");
+  // Two nights is still fine — a ring charging on a bedside table has not synced
+  // and has not broken either.
+  assert.equal(at("2026-08-13T10:00:00Z"), "fresh", "47 hours");
+  assert.equal(at("2026-08-13T08:00:00Z"), "stale", "49 hours");
+  assert.equal(at("2026-07-01T04:00:00Z"), "stale", "six weeks");
+  assert.equal(syncHealth(null, now), "never");
+  assert.equal(syncHealth("not a date", now), "never");
+});
+
+test("a clock skew does not read as a sync from the future", () => {
+  const now = new Date("2026-08-15T09:00:00Z");
+  assert.equal(syncHealth("2026-08-16T09:00:00Z", now), "fresh");
+  assert.equal(daysSinceSync("2026-08-16T09:00:00Z", now), 0);
+});
+
+test("days since sync counts whole days", () => {
+  const now = new Date("2026-08-15T09:00:00Z");
+  assert.equal(daysSinceSync("2026-08-15T04:00:00Z", now), 0);
+  assert.equal(daysSinceSync("2026-08-11T04:00:00Z", now), 4);
+  assert.equal(daysSinceSync(null, now), null);
 });

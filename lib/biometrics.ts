@@ -253,3 +253,43 @@ function numOrNull(v: unknown): number | null {
   const n = Number(v);
   return Number.isFinite(n) && n > 0 ? n : null;
 }
+
+// --- is the ring still actually syncing? -------------------------------------
+
+/**
+ * A nightly sync that quietly stops is the worst state a connection can be in.
+ *
+ * The row records `last_error` when a sync FAILS, and the UI shows it. But the
+ * common failure is not a failure — it is a sync that never runs at all: the
+ * cron is not deployed, the trigger was removed, the Worker was rebuilt from
+ * different source. Nothing errors, so `last_error` stays null and the card
+ * goes on saying "Syncing" over a date that never moves.
+ *
+ * That matters more here than almost anywhere else in the app, because
+ * readiness keeps reporting on the last night it received as though it were
+ * last night. Stale data presented as current is worse than no data: no data
+ * shows an empty state, stale data shows a confident wrong answer.
+ *
+ * Two nights, not one. Oura uploads when the ring next reaches a phone, so a
+ * night charging on a bedside table is a normal missed day rather than a fault.
+ */
+export const SYNC_STALE_HOURS = 48;
+
+export type SyncHealth = "never" | "fresh" | "stale";
+
+export function syncHealth(lastSyncAt: string | null | undefined, now: Date = new Date()): SyncHealth {
+  if (!lastSyncAt) return "never";
+  const then = Date.parse(lastSyncAt);
+  if (Number.isNaN(then)) return "never";
+  const hours = (now.getTime() - then) / 3_600_000;
+  // A future timestamp is a clock difference, not a sync from tomorrow.
+  return hours <= SYNC_STALE_HOURS ? "fresh" : "stale";
+}
+
+/** Whole days since the last sync, for saying so plainly. */
+export function daysSinceSync(lastSyncAt: string | null | undefined, now: Date = new Date()): number | null {
+  if (!lastSyncAt) return null;
+  const then = Date.parse(lastSyncAt);
+  if (Number.isNaN(then)) return null;
+  return Math.max(0, Math.floor((now.getTime() - then) / 86_400_000));
+}
