@@ -782,6 +782,26 @@ function ActiveProgram({
     if (marking) {
       const sess = allSessions.find(({ w, s }) => `w${w}d${s.day}` === sid);
       if (sess) {
+        /**
+         * LOG WHAT WAS PRESCRIBED TODAY, NOT WHAT WAS WRITTEN FOUR WEEKS AGO.
+         *
+         * On a low-readiness morning the session is eased — a set trimmed off
+         * every working drill, RPE down a notch, or on Red replaced outright by
+         * a recovery spin — and the card, the drill list and the guided player
+         * all use that eased version. This logged `sess.s`, the original.
+         *
+         * So the app told you to do less, walked you through less, and then
+         * wrote down the full prescription. Everything downstream believed it:
+         * ACWR treated a deliberately easy day as a full one, the volume chart
+         * over-counted, and the effort check compared how hard you said it felt
+         * against a prescription you were never actually given.
+         *
+         * Only for the session shown as today's. Ticking off a different day
+         * from the calendar is not a claim about this morning's readiness, so
+         * it keeps the plan's own numbers.
+         */
+        const isToday = nextSession && sid === `w${nextSession.w}d${nextSession.s.day}`;
+        const logged = isToday && todaySession ? todaySession : sess.s;
         // What actually happened, when the player measured it.
         //
         // This used to log a flat 45 minutes and the PRESCRIBED reps for every
@@ -790,7 +810,7 @@ function ActiveProgram({
         // computed off that fiction. The player already had the real numbers and
         // dropped them on the floor. `result` is absent when a session is ticked
         // off by hand rather than played, and 45 is still the estimate then.
-        const newDrills = sess.s.drills.map((d) => ({
+        const newDrills = logged.drills.map((d) => ({
           name: d.name,
           sets: d.sets,
           reps: result?.repsByDrill[d.name] != null
@@ -818,8 +838,8 @@ function ActiveProgram({
          * strength day reads as heavy — but only ever as a fallback, when the
          * athlete has not said.
          */
-        const prescribed = prescribedEffort({ weeks: [{ sessions: [sess.s] }] } as never);
-        const intensity = existing?.intensity ?? prescribed ?? (sess.s.title.includes("Rehab") ? 4 : 7);
+        const prescribed = prescribedEffort({ weeks: [{ sessions: [logged] }] } as never);
+        const intensity = existing?.intensity ?? prescribed ?? (logged.title.includes("Rehab") ? 4 : 7);
         await supabase.from("training_logs").upsert(
           {
             user_id: userId,
@@ -1056,6 +1076,18 @@ function ActiveProgram({
                 Readiness is <b className="text-readiness-red">Red</b>, so today&apos;s{" "}
                 <b>{nextSession.s.title.split("· ")[1] ?? "session"}</b> has been swapped for active
                 recovery. {readiness.advice} It still counts toward your block.
+              </div>
+            ) : readiness?.status === "Yellow" ? (
+              /* YELLOW WAS SILENT. Red got a paragraph explaining the swap;
+                 Yellow trimmed a set off every working drill and dropped the
+                 RPE a notch, and said so only by appending "· eased back" to a
+                 title. An athlete who does not know a set was removed will
+                 either add it back or think the app has miscounted — and one
+                 who does not know why will not trust it the next time. */
+              <div className="mb-3 rounded-2xl bg-amber-500/10 p-3 text-sm text-slate-200">
+                Readiness is <b className="text-amber-400">Yellow</b>, so today&apos;s session has
+                been eased — a set off each working drill and the target effort down a notch.{" "}
+                {readiness.advice} What you actually do is what gets logged.
               </div>
             ) : (
               <div className="text-sm font-semibold text-slate-100">Week {nextSession.w} · {todaySession.title}</div>
