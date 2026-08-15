@@ -10,6 +10,7 @@ import { ShareButton } from "@/components/ShareButton";
 import { ExerciseProgress } from "@/components/ExerciseProgress";
 import { StrengthRanks } from "@/components/StrengthRanks";
 import { latestBodyweight } from "@/lib/bodyweight";
+import { testedMaxesFrom } from "@/lib/strength-standards";
 import { FeatureLock, tierOfSub } from "@/components/FeatureLock";
 import { can } from "@/lib/subscription";
 import type { NutritionLog, Subscription, TrainingLog } from "@/lib/types";
@@ -39,7 +40,7 @@ export function ProgressPanel({ userId }: { userId: string }) {
     const supabase = createClient();
     // One query for the wider window, sliced below — cheaper than asking twice.
     const [{ data: training }, { data: nutrition }, { data: profile }, { data: sub },
-           { data: weighCheck }, { data: weighBody }] = await Promise.all([
+           { data: weighCheck }, { data: weighBody }, { data: benchmarks }] = await Promise.all([
       supabase.from("training_logs").select("*").eq("user_id", userId).gte("log_date", sinceLong).order("log_date", { ascending: true }),
       supabase.from("nutrition_logs").select("*").eq("user_id", userId).gte("log_date", since).order("log_date", { ascending: true }),
       supabase.from("profiles").select("full_name, weight_kg, sex").eq("id", userId).maybeSingle(),
@@ -60,6 +61,17 @@ export function ProgressPanel({ userId }: { userId: string }) {
         .not("weight_kg", "is", null).order("check_in_date", { ascending: false }).limit(1),
       supabase.from("body_logs").select("log_date, weight_kg").eq("user_id", userId)
         .not("weight_kg", "is", null).order("log_date", { ascending: false }).limit(1),
+      /**
+       * TESTED MAXES. The Benchmarks page has been storing real, measured 1RMs
+       * this whole time and the ranks below ignored every one of them — so an
+       * athlete could test a 140kg squat and still be ranked on whatever their
+       * five-rep sets estimated. Two answers to one question, on two tabs.
+       *
+       * Not windowed, for the same reason as the weight above: ranks are
+       * best-ever, and a test ageing out would take its tier with it.
+       */
+      supabase.from("strength_benchmarks").select("test_date, metrics").eq("user_id", userId)
+        .order("test_date", { ascending: false }),
     ]);
     const all = (training ?? []) as TrainingLog[];
     return {
@@ -75,6 +87,7 @@ export function ProgressPanel({ userId }: { userId: string }) {
       }),
       sex: ((profile as { sex?: string | null } | null)?.sex === "female" ? "female" : "male") as "male" | "female",
       sub: (sub ?? null) as Subscription | null,
+      tested: testedMaxesFrom(benchmarks ?? []),
     };
   }, [userId], `history:v2:${userId}`);
 
@@ -108,6 +121,7 @@ export function ProgressPanel({ userId }: { userId: string }) {
         logs={data?.trainingLong ?? []}
         bodyweight={data?.bodyweight ?? null}
         sex={data?.sex ?? "male"}
+        tested={data?.tested ?? []}
       />
 
       <section className="card p-5">

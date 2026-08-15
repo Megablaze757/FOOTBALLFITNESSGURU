@@ -10,7 +10,7 @@ import {
   computeXp, levelFor, rankFor, evaluateAchievements, dailyQuests, activitySpans,
   type ActivityStats, type DailyState, EMPTY_STATS } from "@/lib/gamification";
 import type { WeekActivity } from "@/lib/challenges";
-import { strengthStats } from "@/lib/strength-standards";
+import { strengthStats, testedMaxesFrom } from "@/lib/strength-standards";
 import { latestBodyweight } from "@/lib/bodyweight";
 import { StrengthSummary } from "@/components/StrengthSummary";
 import type { TrainingLog } from "@/lib/types";
@@ -54,7 +54,7 @@ export default function RewardsPage() {
     const since60 = daysAgoLocal(59);
     const [checks, training, programs, benchC, videoC, nutrition, checkC, trainC, nutriC,
            benchRows, videoRows, profile, activeProgram, allDrills,
-           weighCheck, weighBody] = await Promise.all([
+           weighCheck, weighBody, testedRows] = await Promise.all([
       supabase.from("daily_check_ins").select("check_in_date").eq("user_id", user.id).gte("check_in_date", since60),
       // rpe comes along for the ride — same rows, one more column — so an
       // "easy session" challenge can be counted rather than guessed at.
@@ -119,6 +119,9 @@ export default function RewardsPage() {
         .not("weight_kg", "is", null).order("check_in_date", { ascending: false }).limit(1),
       supabase.from("body_logs").select("log_date, weight_kg").eq("user_id", user.id)
         .not("weight_kg", "is", null).order("log_date", { ascending: false }).limit(1),
+      // Tested maxes, so a badge and the Progress card cannot rank the same
+      // squat differently. Same query, same resolver, same answer.
+      supabase.from("strength_benchmarks").select("test_date, metrics").eq("user_id", user.id),
     ]);
 
     // One number, one definition, every reader — see lib/bodyweight.ts.
@@ -164,6 +167,7 @@ export default function RewardsPage() {
         (allDrills.data ?? []) as TrainingLog[],
         bodyweight?.kg ?? 0,
         (profile.data as { sex?: string | null } | null)?.sex === "female" ? "female" : "male",
+        testedMaxesFrom(testedRows.data ?? []),
       ),
     };
     const state: DailyState = {

@@ -1,11 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { METRIC_CATALOG } from "./benchmarks";
 import { FIGURE_REGIONS } from "../components/BodyStrengthFigure";
 import { BODY_OUTLINE, BODY_VIEWBOX } from "./body-outline";
 import {
   LIFT_STANDARDS, RANKABLE_MUSCLES, STRENGTH_TIERS, TOP_TIER, bodyPartStrength,
   rankLift, rankedLifts, standardFor, strengthHeadline, strengthTierTotal, tierAt, weakestLink,
+  testedMaxesFrom,
 } from "./strength-standards";
 import { computeXp, EMPTY_STATS } from "./gamification";
 import type { TrainingLog } from "./types";
@@ -546,4 +548,67 @@ test("choosing a rear muscle turns the figure round", () => {
     "the list selects rear muscles without switching the view");
   assert.match(panel, /BACK_MUSCLES\.has\(weak\.muscle\)/,
     "the weak-link shortcut does not turn the body round");
+});
+
+/**
+ * TWO FEATURES THAT BOTH ANSWERED "HOW STRONG IS MY SQUAT".
+ *
+ * The Benchmarks page has stored tested 1RMs since it shipped and the ranks
+ * ignored every one of them — so an athlete could test 140kg and still be
+ * ranked on what their five-rep sets estimated. Same question, two tabs, two
+ * numbers, neither aware of the other.
+ */
+test("a tested max outranks an estimate from rep work", () => {
+  const logs = [log("2026-08-01", [{ name: "Back squat", sets: 1, reps: 5, load_kg: 100 }])];
+  const estimated = rankedLifts(logs, 80, "male");
+  const withTest = rankedLifts(logs, 80, "male", [
+    { metricKey: "squat_1rm", kg: 160, date: "2026-08-10" },
+  ]);
+  const squat = (rs: ReturnType<typeof rankedLifts>) => rs.find((r) => r.lift.key === "squat");
+  assert.ok(squat(estimated)!.best < 130, "a 5x100kg squat should estimate well under 130kg");
+  assert.equal(Math.round(squat(withTest)!.best), 160, "the tested max did not win");
+  assert.equal(squat(withTest)!.source, "tested");
+  assert.equal(squat(estimated)!.source, "logged");
+  assert.ok(squat(withTest)!.tier.index > squat(estimated)!.tier.index, "the tier did not move");
+});
+
+/**
+ * MONOTONICITY, which this codebase settled for streaks and again for strength
+ * XP: a rank must never go backwards. Testing a max on a bad day is exactly the
+ * situation where a naive "latest wins" would delete a tier you had earned.
+ */
+test("a disappointing test day cannot cost you a rank", () => {
+  const logs = [log("2026-08-01", [{ name: "Back squat", sets: 1, reps: 5, load_kg: 150 }])];
+  const before = rankedLifts(logs, 80, "male");
+  const after = rankedLifts(logs, 80, "male", [
+    { metricKey: "squat_1rm", kg: 100, date: "2026-08-10" },
+  ]);
+  const squat = (rs: ReturnType<typeof rankedLifts>) => rs.find((r) => r.lift.key === "squat")!;
+  assert.equal(squat(after).best, squat(before).best, "a low tested max lowered the number");
+  assert.equal(squat(after).tier.index, squat(before).tier.index, "a low tested max lowered the tier");
+  assert.equal(squat(after).source, "logged", "the row was relabelled by a max that did not win");
+});
+
+test("benchmark metric keys point at metrics the benchmarks page offers", () => {
+  // Two files, one vocabulary. A typo here would silently mean a tested lift
+  // never matches anything, which looks exactly like the bug being fixed.
+  const known = new Set(METRIC_CATALOG.map((m) => m.key));
+  for (const lift of LIFT_STANDARDS) {
+    if (!lift.benchmarkKey) continue;
+    assert.ok(known.has(lift.benchmarkKey),
+      `${lift.key} claims benchmark metric "${lift.benchmarkKey}", which lib/benchmarks.ts does not offer`);
+  }
+});
+
+test("tested maxes survive the shape the benchmarks table actually returns", () => {
+  const rows = [
+    { test_date: "2026-08-10", metrics: { squat_1rm: 150, sprint_10m: 1.8 } },
+    { test_date: "2026-07-01", metrics: { bench_1rm: "90" } },   // numeric strings
+    { test_date: "2026-06-01", metrics: null },
+    { test_date: null, metrics: { deadlift_1rm: 0 } },            // 0 is absent
+  ];
+  const out = testedMaxesFrom(rows);
+  assert.deepEqual(out.map((t) => t.metricKey).sort(), ["bench_1rm", "smoke", "sprint_10m", "squat_1rm"].filter((k) => k !== "smoke").sort());
+  assert.equal(out.find((t) => t.metricKey === "bench_1rm")?.kg, 90);
+  assert.equal(testedMaxesFrom(null).length, 0);
 });

@@ -11,6 +11,7 @@ import { BodyStrengthFigure, FIGURE_VIEWS, type BodyView } from "@/components/Bo
 import {
   MUSCLE_WORD, RANKABLE_MUSCLES, STRENGTH_TIERS, bodyPartStrength, rankedLifts,
   strengthHeadline, weakestLink, type BodyPartStrength, type LiftRank, type Sex,
+  type TestedMax,
 } from "@/lib/strength-standards";
 
 /**
@@ -29,20 +30,23 @@ export function StrengthRanks({
   logs,
   bodyweight,
   sex,
+  tested,
 }: {
   logs: TrainingLog[] | null | undefined;
   bodyweight: Bodyweight | null;
   sex: Sex;
+  /** Tested maxes from the Benchmarks page — better evidence than an estimate. */
+  tested?: TestedMax[] | null;
 }) {
   const [selected, setSelected] = useState<MuscleGroup | null>(null);
   const [view, setView] = useState<BodyView>("front");
   const weightKg = bodyweight?.kg ?? null;
 
   const { ranks, parts, headline, weak } = useMemo(() => {
-    const r = weightKg ? rankedLifts(logs, weightKg, sex) : [];
+    const r = weightKg ? rankedLifts(logs, weightKg, sex, tested) : [];
     const p = bodyPartStrength(r);
     return { ranks: r, parts: p, headline: strengthHeadline(r, p), weak: weakestLink(p) };
-  }, [logs, weightKg, sex]);
+  }, [logs, weightKg, sex, tested]);
 
   /**
    * WHAT THEY ARE ACTUALLY DOING, beside what they have achieved.
@@ -223,7 +227,18 @@ function LiftTable({ ranks }: { ranks: LiftRank[] }) {
       {ranks.map((r) => (
         <li key={r.lift.key}>
           <div className="flex items-baseline justify-between gap-2">
-            <span className="text-sm font-semibold text-slate-200">{r.lift.label}</span>
+            <span className="flex items-baseline gap-1.5 text-sm font-semibold text-slate-200">
+              {r.lift.label}
+              {/* A max you actually lifted outranks one worked out from a set of
+                  five, and the athlete should be able to see which they are
+                  looking at — otherwise a tested 140kg squat and an estimated
+                  one are the same row and the Benchmarks page looks ignored. */}
+              {r.source === "tested" && (
+                <span className="rounded bg-pitch-400/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-pitch-400">
+                  tested
+                </span>
+              )}
+            </span>
             <span className="text-xs font-bold" style={{ color: r.tier.color }}>{r.tier.name}</span>
           </div>
           <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-white/[0.07]">

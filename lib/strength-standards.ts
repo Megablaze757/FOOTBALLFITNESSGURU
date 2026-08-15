@@ -93,6 +93,19 @@ export interface LiftStandard {
   label: string;
   /** Names in the training log that count as this lift, lower-cased. */
   aliases: string[];
+  /**
+   * The metric key the Benchmarks page stores a TESTED 1RM under, where one
+   * exists — see lib/benchmarks.ts.
+   *
+   * This app had two separate answers to "how strong is my squat" and neither
+   * knew the other existed. An athlete could test a 140kg squat on the
+   * Benchmarks page and the Progress ranks would carry on estimating from
+   * whatever five-rep sets were in the training log. Same question, two
+   * screens, two numbers. A tested max is better evidence than an estimate
+   * from a rep set, so it belongs to the same lift rather than to a separate
+   * feature that happens to be about strength too.
+   */
+  benchmarkKey?: string;
   /** What it trains. Drives the body figure. */
   muscles: MuscleGroup[];
   /** Bodyweight multiples for tiers 1..6. */
@@ -104,6 +117,7 @@ export const LIFT_STANDARDS: LiftStandard[] = [
   {
     key: "squat",
     label: "Back squat",
+    benchmarkKey: "squat_1rm",
     aliases: ["back squat", "squat", "barbell squat", "barbell back squat", "high bar squat", "low bar squat"],
     muscles: ["quads", "glutes"],
     male: [0.75, 1.25, 1.75, 2.25, 2.75, 3.25],
@@ -112,6 +126,7 @@ export const LIFT_STANDARDS: LiftStandard[] = [
   {
     key: "front_squat",
     label: "Front squat",
+    benchmarkKey: "front_squat_1rm",
     aliases: ["front squat", "barbell front squat"],
     muscles: ["quads", "glutes", "core"],
     male: [0.6, 1.0, 1.4, 1.8, 2.2, 2.6],
@@ -120,6 +135,7 @@ export const LIFT_STANDARDS: LiftStandard[] = [
   {
     key: "deadlift",
     label: "Deadlift",
+    benchmarkKey: "deadlift_1rm",
     aliases: ["deadlift", "barbell deadlift", "conventional deadlift", "sumo deadlift"],
     muscles: ["hamstrings", "glutes", "back"],
     male: [1.0, 1.5, 2.1, 2.6, 3.1, 3.6],
@@ -136,6 +152,7 @@ export const LIFT_STANDARDS: LiftStandard[] = [
   {
     key: "bench",
     label: "Bench press",
+    benchmarkKey: "bench_1rm",
     aliases: ["bench press", "bench", "barbell bench press", "flat bench press", "flat barbell bench press"],
     muscles: ["chest", "triceps", "shoulders"],
     male: [0.5, 0.85, 1.25, 1.65, 2.0, 2.4],
@@ -144,6 +161,7 @@ export const LIFT_STANDARDS: LiftStandard[] = [
   {
     key: "ohp",
     label: "Overhead press",
+    benchmarkKey: "ohp_1rm",
     aliases: ["overhead press", "ohp", "military press", "strict press", "barbell overhead press", "standing press", "shoulder press"],
     muscles: ["shoulders", "triceps"],
     male: [0.35, 0.55, 0.8, 1.0, 1.2, 1.45],
@@ -179,8 +197,13 @@ export function standardFor(name: string): LiftStandard | null {
 
 // --- ranking a lift -----------------------------------------------------------
 
+/** Whether the number behind a rank was estimated from reps or actually tested. */
+export type LiftSource = "logged" | "tested";
+
 export interface LiftRank {
   lift: LiftStandard;
+  /** Where the best number came from, so the card can show its working. */
+  source: LiftSource;
   /** Best estimated 1RM seen, in kg. */
   best: number;
   /** Bodyweight multiple that represents. */
@@ -206,7 +229,9 @@ export function rankLift(
   best1RM: number,
   bodyweightKg: number,
   sex: Sex,
-): Omit<LiftRank, "lift" | "lastDate"> | null {
+// Not "source": ranking a number is the same arithmetic however the number was
+// arrived at, and this function is given a kg rather than a provenance.
+): Omit<LiftRank, "lift" | "lastDate" | "source"> | null {
   if (!(bodyweightKg > 0) || !(best1RM > 0)) return null;
   const thresholds = sex === "female" ? lift.female : lift.male;
   const ratio = best1RM / bodyweightKg;
@@ -243,12 +268,45 @@ export function rankLift(
  * argument once when XP was made monotonic — see `computeXp`. You lifted it;
  * nothing that happens afterwards makes that un-happen.
  */
+/** A max actually tested on the Benchmarks page, rather than estimated. */
+export interface TestedMax {
+  /** The benchmark metric key, e.g. "squat_1rm". */
+  metricKey: string;
+  kg: number;
+  date: string;
+}
+
+/** Pull tested maxes out of whatever the benchmarks table handed back. */
+export function testedMaxesFrom(
+  rows: { test_date?: string | null; metrics?: Record<string, unknown> | null }[] | null | undefined,
+): TestedMax[] {
+  const out: TestedMax[] = [];
+  for (const row of rows ?? []) {
+    for (const [metricKey, raw] of Object.entries(row.metrics ?? {})) {
+      const kg = Number(raw);
+      if (!Number.isFinite(kg) || kg <= 0) continue;
+      out.push({ metricKey, kg, date: String(row.test_date ?? "") });
+    }
+  }
+  return out;
+}
+
 export function rankedLifts(
   logs: TrainingLog[] | null | undefined,
   bodyweightKg: number,
   sex: Sex,
+  tested?: TestedMax[] | null,
 ): LiftRank[] {
-  const best = new Map<string, { value: number; date: string; lift: LiftStandard }>();
+  const best = new Map<string, { value: number; date: string; lift: LiftStandard; source: LiftSource }>();
+
+  const offer = (lift: LiftStandard, value: number, date: string, source: LiftSource) => {
+    const seen = best.get(lift.key);
+    // Strictly greater, so a tested max that merely ties an estimate does not
+    // relabel the row — and, more importantly, so nothing here can ever lower a
+    // rank. Ranks are best-ever and XP is monotonic: a max you tested on a bad
+    // day must not delete the tier your training log already earned.
+    if (!seen || value > seen.value) best.set(lift.key, { value, date, lift, source });
+  };
 
   for (const log of logs ?? []) {
     for (const drill of log.drills ?? []) {
@@ -260,18 +318,23 @@ export function rankedLifts(
         if (set.load_kg == null || set.load_kg <= 0) continue;
         const e1rm = estimate1RM(set.load_kg, set.reps);
         if (e1rm == null) continue;
-        const seen = best.get(lift.key);
-        if (!seen || e1rm > seen.value) {
-          best.set(lift.key, { value: e1rm, date: String(log.log_date ?? ""), lift });
-        }
+        offer(lift, e1rm, String(log.log_date ?? ""), "logged");
       }
     }
   }
 
+  // TESTED MAXES, WHICH THE RANKS USED TO IGNORE COMPLETELY. No estimate is
+  // involved — the athlete lifted it — so it enters the same competition on
+  // equal terms and wins whenever it is the biggest number seen.
+  for (const t of tested ?? []) {
+    const lift = LIFT_STANDARDS.find((l) => l.benchmarkKey && l.benchmarkKey === t.metricKey);
+    if (lift) offer(lift, t.kg, t.date, "tested");
+  }
+
   const out: LiftRank[] = [];
-  for (const { value, date, lift } of best.values()) {
+  for (const { value, date, lift, source } of best.values()) {
     const rank = rankLift(lift, value, bodyweightKg, sex);
-    if (rank) out.push({ ...rank, lift, lastDate: date });
+    if (rank) out.push({ ...rank, lift, lastDate: date, source });
   }
   return out.sort((a, b) => b.tier.index - a.tier.index || b.ratio - a.ratio);
 }
@@ -462,12 +525,13 @@ export function strengthStats(
   logs: TrainingLog[] | null | undefined,
   bodyweightKg: number,
   sex: Sex,
+  tested?: TestedMax[] | null,
 ): { strengthTiers: number; bestStrengthTier: number; musclesRanked: number } {
   // No bodyweight, no ratio. Zero is the honest answer rather than a rank
   // computed against an average body nobody has.
   if (!(bodyweightKg > 0)) return { strengthTiers: 0, bestStrengthTier: 0, musclesRanked: 0 };
 
-  const ranks = rankedLifts(logs, bodyweightKg, sex);
+  const ranks = rankedLifts(logs, bodyweightKg, sex, tested);
   const parts = bodyPartStrength(ranks);
   return {
     strengthTiers: strengthTierTotal(parts),
