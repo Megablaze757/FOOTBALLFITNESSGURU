@@ -21,6 +21,11 @@
 export const NAV_ITEMS = [
   { href: "/home", label: "Home", icon: "home" },
   { href: "/coach", label: "My plan", icon: "coach" },
+  // Its own destination, not the third tab of My plan. It was given four facts
+  // there and could not see the rehab plan somebody was asking about; it now
+  // carries a full briefing, and a page you arrive at with a question already
+  // formed should not be reached by browsing into a training block first.
+  { href: "/ask", label: "Ask coach", icon: "chat" },
   { href: "/journal", label: "Check in", icon: "journal" },
   { href: "/dashboard", label: "Progress", icon: "stats" },
   { href: "/train", label: "Video analysis", icon: "train" },
@@ -94,6 +99,7 @@ export const COACH_NAV = [
 
 // Everything else. Reached from the mobile "More" sheet.
 export const MOBILE_MORE = [
+  { href: "/ask", label: "Ask coach", icon: "chat" },
   { href: "/dashboard", label: "Progress", icon: "stats" },
   { href: "/train", label: "Video analysis", icon: "train" },
   { href: "/library", label: "Exercises", icon: "library" },
@@ -138,6 +144,10 @@ export function NavIcon({ name, active, size = 22 }: { name: string; active: boo
     case "injury":
       // A plaster. Reads as "something's hurt" faster than a cross or a heart.
       return <svg {...common}><rect x="2.6" y="8.5" width="18.8" height="7" rx="3.5" transform="rotate(-35 12 12)" /><path d="M10.4 10.4l3.2 3.2M13.6 10.4l-3.2 3.2" /></svg>;
+    case "chat":
+      // A speech bubble. Reads as "ask something" faster than a question mark,
+      // which reads as help or FAQ.
+      return <svg {...common}><path d="M21 12a8 8 0 0 1-8 8H7l-4 3 1.2-4.2A8 8 0 1 1 21 12z" /><path d="M9 11h6M9 14h4" /></svg>;
     case "squad":
       // Two people — a roster, not a single profile.
       return <svg {...common}><circle cx="9" cy="8" r="3.2" /><path d="M3 20v-1.5A4.5 4.5 0 0 1 7.5 14h3A4.5 4.5 0 0 1 15 18.5V20" /><path d="M16 5.5a3.2 3.2 0 0 1 0 6M18 14h.5A4.5 4.5 0 0 1 23 18.5V20" /></svg>;

@@ -8,7 +8,16 @@ interface Msg { role: "you" | "coach"; text: string }
 
 const SUGGESTIONS = ["Why is this drill in my plan?", "My knee hurts — what should I do?", "Am I ready to train hard today?"];
 
-export function CoachChat({ context }: { context: ChatContext }) {
+export function CoachChat({ context, briefing, suggestions }: {
+  context: ChatContext;
+  /**
+   * The full athlete briefing — see lib/coach-briefing.ts. Optional because the
+   * local fallback below can only work from `context`, and because a caller
+   * that has not loaded everything should send what it has rather than nothing.
+   */
+  briefing?: string;
+  suggestions?: string[];
+}) {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [thinking, setThinking] = useState(false);
@@ -22,11 +31,14 @@ export function CoachChat({ context }: { context: ChatContext }) {
 
     let answer: string;
     try {
-      const data = await invokeAI<{ answer?: string }>("coach-chat", { question, context });
+      const data = await invokeAI<{ answer?: string }>("coach-chat", { question, context, briefing });
       if (!data?.answer) throw new Error("fallback");
       answer = data.answer;
     } catch {
-      // Works on GitHub Pages without any AI backend configured.
+      // Works on GitHub Pages without any AI backend configured. It answers
+      // from `context` only — the briefing is prose written for a model, not
+      // something the local rule engine can read — so it is deliberately more
+      // limited than the real coach rather than pretending otherwise.
       answer = localCoachAnswer(question, context);
     }
 
@@ -55,7 +67,7 @@ export function CoachChat({ context }: { context: ChatContext }) {
 
       {messages.length === 0 && (
         <div className="mb-3 flex flex-wrap gap-2">
-          {SUGGESTIONS.map((s) => (
+          {(suggestions ?? SUGGESTIONS).map((s) => (
             <button key={s} onClick={() => ask(s)} className="chip text-slate-300 hover:border-pitch-400/50 hover:text-pitch-400">{s}</button>
           ))}
         </div>

@@ -13,11 +13,19 @@ import { complete, chain, ChainError } from "../_shared/llm.ts";
 import { requireTier, CORS, json } from "../_shared/gate.ts";
 
 const SYSTEM =
-  "You are the athlete's personal football strength & conditioning coach and physio. " +
-  "Answer their question directly and practically in 2–4 sentences, grounded in the context " +
-  "provided (their goal, sore areas, today's readiness, and the drills in their current plan). " +
-  "Explain the 'why' behind drills, respect any pain by favouring lower-impact options, and never " +
-  "give medical diagnosis — advise seeing a physio for sharp or persistent pain. Be encouraging and concrete.";
+  "You are this athlete's personal strength & conditioning coach and physio. " +
+  "You are given a full briefing on them: who they are, their current training block and next " +
+  "session, today's readiness, any injuries WITH the rehab protocol and its stages, their " +
+  "nutrition targets and intake, and their ranked lifts. " +
+  "Answer the question directly and practically, grounded in that briefing and quoting the " +
+  "athlete's own numbers back to them where it helps. " +
+  "USE THE BRIEFING BEFORE ANYTHING ELSE: if it contains the answer — a rehab stage, a calorie " +
+  "target, a lift, a prescribed effort — cite it rather than speaking generally. " +
+  "If the briefing says something is not recorded, SAY SO and ask for it, rather than assuming a " +
+  "value; a confident answer built on a number you were not given is worse than no answer. " +
+  "Explain the 'why' behind drills, respect pain by favouring lower-impact options, and never give " +
+  "a medical diagnosis — advise seeing a physio for sharp or persistent pain. " +
+  "Be concrete and encouraging. Four to eight sentences unless asked for more.";
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
@@ -28,21 +36,36 @@ Deno.serve(async (req: Request) => {
   const gate = await requireTier(req, "silver", "Ask the coach");
   if (gate.denied) return gate.denied;
 
-  const { question, context } = await req.json().catch(() => ({}));
+  const { question, context, briefing } = await req.json().catch(() => ({}));
   if (!question) return json({ error: "question required" }, 400);
 
-  const ctx = [
-    `Goal: ${context?.goal ?? "general"}`,
-    `Sore areas: ${(context?.soreAreas ?? []).join(", ") || "none"}`,
-    `Today's readiness: ${context?.readinessStatus ?? "unknown"}`,
-    `Current plan drills: ${(context?.programDrills ?? []).join(", ") || "none"}`,
-  ].join("\n");
+  /**
+   * THE BRIEFING, or the four facts the old client sent.
+   *
+   * `briefing` is built by lib/coach-briefing.ts on the page, because every
+   * number in it — the calorie target, the rehab stage, the strength rank — is
+   * already derived there and a second implementation here would be a second
+   * answer. See the note at the top of that file.
+   *
+   * The fallback is not dead code: this function is deployed independently of
+   * the site, and a browser holding a cached bundle will keep posting the old
+   * shape for as long as that bundle lives. Answering those requests from four
+   * facts is worse than answering from a briefing, and much better than a 400.
+   */
+  const ctx = typeof briefing === "string" && briefing.trim().length > 0
+    ? briefing
+    : [
+        `Goal: ${context?.goal ?? "general"}`,
+        `Sore areas: ${(context?.soreAreas ?? []).join(", ") || "none"}`,
+        `Today's readiness: ${context?.readinessStatus ?? "unknown"}`,
+        `Current plan drills: ${(context?.programDrills ?? []).join(", ") || "none"}`,
+      ].join("\n");
 
   try {
     const { text } = await complete({
       system: SYSTEM,
-      user: `Context:\n${ctx}\n\nQuestion: ${question}`,
-      maxTokens: 600,
+      user: `Here is everything known about this athlete.\n\n${ctx}\n\n---\n\nTheir question: ${question}`,
+      maxTokens: 900,
       // A one-word reply is a failed rung, not an answer. The /coach chat falls
       // back to the local engine on any error, so a blank-ish response here is
       // strictly worse than admitting the model didn't answer.

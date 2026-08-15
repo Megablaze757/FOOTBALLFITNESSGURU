@@ -87,11 +87,10 @@ function readinessOf(checkIn: DailyCheckIn | null, training: TrainingLog[] = [])
   return assessReadiness(input, { acwr: computeACWR(training).ratio });
 }
 
-type CoachTab = "today" | "program" | "ask";
+type CoachTab = "today" | "program";
 const COACH_TABS: { id: CoachTab; label: string; icon: IconName }[] = [
   { id: "today", label: "Today", icon: "bolt" },
   { id: "program", label: "Program", icon: "calendar" },
-  { id: "ask", label: "Ask coach", icon: "chat" },
 ];
 
 export default function CoachPage() {
@@ -1095,8 +1094,6 @@ function ActiveProgram({
           adherence. Skill work now lives inside the session itself. */}
 
       {/* Ask the coach */}
-      {tab === "ask" && <CoachChat context={chatContext} />}
-
       {/* HOW THE BLOCK IS LANDING, above "what's working" — a block that is
           too hard is a more urgent thing to know than which lift went up, and
           it is the one that ends in an injury if nobody says it. Silent when
