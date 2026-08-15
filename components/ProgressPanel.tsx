@@ -124,15 +124,62 @@ export function ProgressPanel({ userId }: { userId: string }) {
         tested={data?.tested ?? []}
       />
 
-      <section className="card p-5">
-        <div className="mb-3 flex items-center justify-between">
-          <div>
+      {/**
+        * THE NUMBERS, AS NUMBERS.
+        *
+        * Four facts that were each wrapped in their own card with its own
+        * heading, its own padding and its own chart — a whole screen of
+        * furniture to say "22 sessions". Read at a glance instead, in the
+        * strip that bridges the rank above to the evidence below.
+        */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Stat label="Sessions" value={t.totalSessions} sub={`last ${WINDOW_DAYS} days`} />
+        <Stat label="Reps" value={t.totalReps.toLocaleString()} sub="total volume" />
+        <Stat
+          label="Bodyweight"
+          value={data?.bodyweight ? `${data.bodyweight.kg}kg` : "—"}
+          sub={data?.bodyweight ? data.bodyweight.source : "not logged"}
+        />
+        <Stat
+          label="Protein"
+          value={n.avgProtein != null ? `${n.avgProtein}g` : "—"}
+          sub={n.avgProtein != null ? "daily average" : "not logged"}
+        />
+      </div>
+
+      {/**
+        * ONE SECTION FOR TRAINING, not three cards that happen to be adjacent.
+        *
+        * Volume, the per-lift chart and the drills you actually do are one
+        * question — "what has my training been?" — and splitting them across
+        * three identical panels made the page read as a list of widgets rather
+        * than an answer. The rule docs/UI-AUDIT.md sets is one obvious top per
+        * page; the corollary is that everything under it has to be visibly
+        * subordinate, and five equal cards are five tops.
+        */}
+      <section className="card divide-y divide-white/[0.06]">
+        <div className="p-5">
+          <div className="mb-3 flex items-baseline justify-between gap-3">
             <h2 className="field-label !mb-0">Training volume</h2>
-            <p className="text-[11px] text-slate-500">Last {WINDOW_DAYS} days</p>
+            <span className="text-[11px] text-slate-500">Last {WINDOW_DAYS} days</span>
           </div>
-          <span className="text-xs text-slate-400">{t.totalSessions} sessions · {t.totalReps.toLocaleString()} reps</span>
+          {hasTraining ? <MiniBars data={t.volume} color="#e3b53f" unit=" reps" /> : <Empty label="Log training in your daily check-in." />}
         </div>
-        {hasTraining ? <MiniBars data={t.volume} color="#e3b53f" unit=" reps" /> : <Empty label="Log training in your daily check-in." />}
+
+        {t.drillFrequency.length > 0 && (
+          <div className="p-5">
+            <h2 className="field-label">Most-trained drills</h2>
+            <ul className="space-y-2">
+              {t.drillFrequency.slice(0, 6).map((d, i) => (
+                <li key={d.name} className="flex items-center gap-3">
+                  <span className="w-5 text-center text-sm font-bold text-pitch-400">{i + 1}</span>
+                  <span className="flex-1 truncate text-sm text-slate-200">{d.name}</span>
+                  <span className="shrink-0 text-xs text-slate-400">{d.sessions}× · {d.totalSets} sets{d.bestLoad ? ` · ${d.bestLoad}kg PR` : ""}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </section>
 
       {/* The one chart that answers "am I getting stronger", which is why it's
@@ -147,35 +194,35 @@ export function ProgressPanel({ userId }: { userId: string }) {
         />
       )}
 
-      {t.drillFrequency.length > 0 && (
-        <section className="card p-5">
-          <h2 className="field-label">Most-trained drills</h2>
-          <ul className="space-y-2">
-            {t.drillFrequency.slice(0, 6).map((d, i) => (
-              <li key={d.name} className="flex items-center gap-3">
-                <span className="w-5 text-center text-sm font-bold text-pitch-400">{i + 1}</span>
-                <span className="flex-1 text-sm text-slate-200">{d.name}</span>
-                <span className="text-xs text-slate-400">{d.sessions}× · {d.totalSets} sets{d.bestLoad ? ` · ${d.bestLoad}kg PR` : ""}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
+      {/**
+        * FUEL, AND A DOOR TO THE PAGE THAT OWNS IT.
+        *
+        * Three full-height charts here were a second nutrition page inside the
+        * training page, and the athlete who wants to act on any of it has to go
+        * to /nutrition anyway. Trend, then the door — the heading is the link,
+        * so the label you tap matches the heading you land on.
+        */}
       <section className="card p-5">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="field-label !mb-0">Nutrition</h2>
-          {n.avgCalories != null && <span className="text-xs text-slate-400">avg {n.avgCalories.toLocaleString()} kcal · {n.avgProtein}g protein</span>}
+        <div className="mb-3 flex items-baseline justify-between gap-3">
+          <h2 className="field-label !mb-0">Fuel</h2>
+          {n.avgCalories != null && (
+            <span className="text-[11px] text-slate-500">avg {n.avgCalories.toLocaleString()} kcal · {n.avgProtein}g protein</span>
+          )}
         </div>
         {hasNutrition ? (
-          <div className="space-y-4">
-            <Labeled title="Calories"><MiniBars data={n.calories} color="#e3b53f" unit=" kcal" height={72} emptyLabel="Log what you eat on the Nutrition page." /></Labeled>
-            <Labeled title="Protein"><MiniBars data={n.protein} color="#fb7185" unit="g" height={64} emptyLabel="Comes from your nutrition log." /></Labeled>
-            <Labeled title="Water"><MiniBars data={n.water} color="#38bdf8" unit="L" height={64} emptyLabel="Comes from your nutrition log." /></Labeled>
+          <div className="space-y-3">
+            <Labeled title="Calories"><MiniBars data={n.calories} color="#e3b53f" unit=" kcal" height={56} emptyLabel="Log what you eat on the Nutrition page." /></Labeled>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Labeled title="Protein"><MiniBars data={n.protein} color="#fb7185" unit="g" height={44} emptyLabel="Comes from your nutrition log." /></Labeled>
+              <Labeled title="Water"><MiniBars data={n.water} color="#38bdf8" unit="L" height={44} emptyLabel="Comes from your nutrition log." /></Labeled>
+            </div>
           </div>
         ) : (
           <Empty label="Track nutrition to see trends." />
         )}
+        <Link href="/nutrition" className="tap-target mt-3 inline-flex min-h-[44px] items-center text-sm font-semibold text-pitch-400">
+          Open Nutrition <span aria-hidden className="ml-1">→</span>
+        </Link>
       </section>
 
       <ShareButton
@@ -192,10 +239,30 @@ export function ProgressPanel({ userId }: { userId: string }) {
         }}
       />
 
-      <div className="grid grid-cols-3 gap-3">
-        <Link href="/benchmarks" className="btn-ghost">💪 Benchmarks</Link>
-        <Link href="/nutrition" className="btn-ghost">🥗 Nutrition</Link>
-        <Link href="/body" className="btn-ghost">📸 Weight</Link>
+      {/**
+        * TWO DOORS, AND EACH ONE SAYS WHAT IT IS FOR.
+        *
+        * There were three, one of them to Nutrition — which is now the link on
+        * the Fuel card itself, where the reason to go there is. A row of
+        * equal-weight emoji buttons at the bottom of a page is a site map, not
+        * a next step; these two say what the page cannot tell you and where
+        * that answer lives.
+        */}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Link href="/benchmarks" className="btn-ghost !justify-start gap-3 text-left">
+          <span aria-hidden className="text-lg">💪</span>
+          <span>
+            <span className="block text-sm font-semibold text-slate-100">Test a max</span>
+            <span className="block text-[11px] text-slate-400">A tested lift outranks an estimate</span>
+          </span>
+        </Link>
+        <Link href="/body" className="btn-ghost !justify-start gap-3 text-left">
+          <span aria-hidden className="text-lg">⚖️</span>
+          <span>
+            <span className="block text-sm font-semibold text-slate-100">Weigh in</span>
+            <span className="block text-[11px] text-slate-400">Every rank is a multiple of it</span>
+          </span>
+        </Link>
       </div>
     </div>
   );
@@ -206,6 +273,17 @@ function Labeled({ title, children }: { title: string; children: React.ReactNode
     <div>
       <div className="mb-1 text-xs font-semibold text-slate-400">{title}</div>
       {children}
+    </div>
+  );
+}
+
+/** One fact, read at a glance. Tabular figures so the row does not jitter. */
+function Stat({ label, value, sub }: { label: string; value: React.ReactNode; sub?: string }) {
+  return (
+    <div className="card p-3">
+      <div className="stat-label">{label}</div>
+      <div className="mt-0.5 text-xl font-extrabold tabular-nums text-slate-100">{value}</div>
+      {sub && <div className="text-[10px] capitalize text-slate-500">{sub}</div>}
     </div>
   );
 }
