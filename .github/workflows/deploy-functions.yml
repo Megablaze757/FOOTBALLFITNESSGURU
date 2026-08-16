@@ -12,12 +12,18 @@ name: Deploy Edge Functions
 #   key rather than failing, so Groq alone works — OpenRouter just adds a
 #   fallback for when Groq is rate-limited or down.
 #
-# Why this exists at all: the meal photo estimator is the one feature with no
-# working backend. The Cloudflare Worker's chain is eight text-only models and
-# its /health reports no `vision`, so photos have nowhere to go until
-# `estimate-food` is deployed here. Once it is, lib/api.ts routes photos to it
-# automatically — and hands them back to the Worker on its own the day the
-# Worker can see again. Nothing to switch over afterwards.
+# Why this exists at all: for a while the meal photo estimator had no working
+# backend — the Worker's chain was eight text-only models and its /health
+# reported no `vision`, so photos had nowhere to go.
+#
+# THAT IS NO LONGER TRUE, and this comment said otherwise for long enough to
+# mislead someone reading it as current. Worker 2026-08-09.2 carries two vision
+# models, and lib/api.ts routed photos back to it on its own, exactly as the
+# design intended — meal photos work today with no Supabase function deployed.
+#
+# Check `/health` before believing any claim about what the Worker can do. Its
+# source is not in this repository, so it changes without a commit here to
+# record it, and a comment is not evidence.
 
 on:
   workflow_dispatch:

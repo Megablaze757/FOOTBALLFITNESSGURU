@@ -202,6 +202,10 @@ export function MealCheckIn({ stats, prefs, dietNotes, seed, swaps, recent, star
        * When the backend has no vision model, no photo works — and telling
        * someone to retake it sends them round a loop that cannot end. The probe
        * knows which situation this is, so the message can too.
+       *
+       * Whether it has one CHANGES: production ran text-only for a while and
+       * later gained two vision models, with no deploy on this side. That is
+       * why this is a live probe and not a constant.
        */
       setPhotoError(
         visionOk === false
@@ -316,8 +320,10 @@ export function MealCheckIn({ stats, prefs, dietNotes, seed, swaps, recent, star
      * says when it lands. Same mechanism the program builder uses.
      */
     startJob("meal-estimate", "Working out your meal", async () => {
-      // estimateFood, not invokeAI: the Worker in production runs a text-only
-      // model chain, so this picks whichever backend can actually see.
+      // estimateFood, not invokeAI: it picks whichever backend can actually
+      // see, which is not a fixed answer. The Worker went from a text-only
+      // chain to carrying two vision models without this app changing, so the
+      // routing asks rather than assumes.
       const res = await estimateFood<{ items?: Parameters<typeof fromAiItems>[0] }>({
         image: dataUrl,
         // Anything already typed is context, not a separate meal — "with olive
@@ -526,12 +532,17 @@ export function MealCheckIn({ stats, prefs, dietNotes, seed, swaps, recent, star
           camera, and the typing is the fallback rather than the other way round. */}
       <div className="mb-4">
         {/* WHEN THE BACKEND CANNOT SEE, SAY SO — do not offer the camera.
-            Production has run a text-only model chain, so every photo was sent
+            For a period production ran a text-only chain, so every photo went
             to something that could not look at it and the app answered "I
-            couldn't identify any food in that photo". That blames the photo for
-            a server with no vision model, and invites the athlete to take
-            another one that also cannot work. Typing a meal in still works
-            perfectly, so it says that and points at the box below. */}
+            couldn't identify any food in that photo" — blaming the photo for a
+            server with no vision model, and inviting another one that also
+            could not work.
+
+            IT IS NOT A PERMANENT STATE. The Worker later gained two vision
+            models and photos began working with no change on this side, which
+            is exactly what this branch is built for: it reads the backend's
+            actual capability every time rather than encoding a belief about
+            it. Do not replace this with a constant. */}
         {visionOk === false ? (
           <div className="rounded-xl border border-amber-400/25 bg-amber-400/[0.06] p-3">
             <p className="text-xs font-bold text-amber-300">Photos are off right now</p>
