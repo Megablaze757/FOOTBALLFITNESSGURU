@@ -8,6 +8,7 @@ import { can } from "@/lib/subscription";
 import { FeatureLock } from "@/components/FeatureLock";
 import { CoachChat } from "@/components/CoachChat";
 import { buildBriefing } from "@/lib/coach-briefing";
+import { describeRehab, type RehabPlanRow } from "@/lib/rehab-plan";
 import { currentPain } from "@/lib/pain";
 import { effortCheck } from "@/lib/effort";
 import { latestBodyweight } from "@/lib/bodyweight";
@@ -58,7 +59,7 @@ export default function AskCoachPage() {
 
     const [
       program, checkIn, training, profile, weighCheck, weighBody,
-      benches, allDrills, nutriToday, nutriRecent,
+      benches, allDrills, nutriToday, nutriRecent, rehab,
     ] = await Promise.all([
       supabase.from("programs").select("*").eq("user_id", user.id).eq("status", "active")
         .order("created_at", { ascending: false }).limit(1).maybeSingle(),
@@ -79,6 +80,17 @@ export default function AskCoachPage() {
       supabase.from("training_logs").select("log_date, drills").eq("user_id", user.id).not("drills", "is", null),
       supabase.from("nutrition_logs").select("calories_eaten, macros").eq("user_id", user.id).eq("log_date", today).maybeSingle(),
       supabase.from("nutrition_logs").select("calories_eaten, macros").eq("user_id", user.id).gte("log_date", since14),
+      /**
+       * THEIR OWN REHAB PLAN, which the briefing never had.
+       *
+       * `relevantInjuryProtocols` is the app's static guidance for a body area
+       * — identical for everybody with a sore hamstring. This is the graded
+       * plan written for THIS injury, with the stage they are on. Its absence
+       * is the whole of "it's not reading my injury plan in ask coach": the
+       * coach had the textbook and not the athlete's notes.
+       */
+      supabase.from("rehab_plans").select("*").eq("user_id", user.id).eq("active", true)
+        .order("created_at", { ascending: false }).limit(1).maybeSingle(),
     ]);
 
     const pr = profile as {
@@ -137,6 +149,26 @@ export default function AskCoachPage() {
     const next = allSessions.find(({ w, s }) => !done.includes(`w${w}d${s.day}`));
     const totalSessions = allSessions.length;
 
+    /**
+     * THE CLOSED LIST OF WHAT IS ACTUALLY PRESCRIBED.
+     *
+     * The briefing used to carry the next session's drills and nothing else, so
+     * a question about the block as a whole had almost nothing behind it — and
+     * the coach filled the gap, telling an athlete their preacher curls were
+     * going well when no preacher curl had ever been prescribed. Every drill in
+     * the plan, deduplicated, keeping the order it appears in so the first
+     * names are the ones they see most.
+     */
+    const programExercises = Array.from(new Set(
+      (plan?.weeks ?? []).flatMap((w) => w.sessions.flatMap((sn) => sn.drills.map((d) => d.name))),
+    ));
+
+    // "Going well" is a claim about performance, so it needs what was actually
+    // done rather than what was planned.
+    const loggedExercises = Array.from(new Set(
+      logs.flatMap((t) => (t.drills ?? []).map((d) => String(d.name ?? "").trim()).filter(Boolean)),
+    )).slice(0, 60);
+
     const recent = (nutriRecent.data ?? []) as { calories_eaten: number | null; macros: { protein?: number } | null }[];
     const avgOf = (pick: (r: (typeof recent)[0]) => number | null | undefined) => {
       const ns = recent.map(pick).filter((n): n is number => typeof n === "number" && n > 0);
@@ -155,6 +187,8 @@ export default function AskCoachPage() {
       nextSessionDrills: (next?.s.drills ?? []).map((d) => ({
         name: d.name, prescription: d.prescription, intensity: d.intensity,
       })),
+      programExercises,
+      loggedExercises,
       effort: effortCheck(logs.map((t) => t.intensity), plan),
       readinessStatus: (readiness?.status as "Green" | "Yellow" | "Red") ?? null,
       readinessReason: readiness?.advice ?? null,
@@ -163,6 +197,8 @@ export default function AskCoachPage() {
       pain,
       painReportedOn: ci?.check_in_date ?? null,
       protocols: relevantInjuryProtocols(pain),
+      // Their own generated plan and the stage they are on — see lib/rehab-plan.ts.
+      rehab: describeRehab(rehab.data as RehabPlanRow | null),
       targets,
       eatenToday: todayRow ? { calories: todayRow.calories_eaten, protein: todayRow.macros?.protein ?? null } : null,
       avgCalories: avgOf((r) => r.calories_eaten),

@@ -39,8 +39,13 @@ test("a body-part split trains one group a day", () => {
 });
 
 test("auto still picks by day count", () => {
-  assert.deepEqual(names(3, "auto"), ["Push", "Pull", "Legs"]);
+  // Three days is full body under auto now: PPL there trains every muscle once
+  // a week, which is where an aesthetics block was losing most of its volume.
+  // Somebody who wants PPL at three days can still choose it explicitly — that
+  // is what the style picker is for, and the tests above cover it.
+  assert.ok(names(3, "auto").every((n) => n.startsWith("Full body")), names(3, "auto").join("/"));
   assert.equal(names(4, "auto")[0], "Upper A");
+  assert.deepEqual(names(6, "auto").slice(0, 3), ["Push", "Pull", "Legs"]);
   assert.ok(names(2, "auto").every((n) => n.startsWith("Full body")));
 });
 

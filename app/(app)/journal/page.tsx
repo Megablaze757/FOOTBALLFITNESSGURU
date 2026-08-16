@@ -8,12 +8,13 @@ import { JournalForm } from "@/components/JournalForm";
 import { CheckInDone } from "@/components/CheckInDone";
 import { checkInStreak, computeACWR } from "@/lib/load";
 import { nextSession } from "@/lib/next-session";
+import { applyRehabToSession, parseDose, type RehabPlanRow } from "@/lib/rehab-plan";
 import type { ProgramPlan } from "@/lib/coach";
 import { WearableImport } from "@/components/WearableImport";
 import { WearableConnect } from "@/components/WearableConnect";
 import type { TrainingState } from "@/components/TrainingLogInput";
 import type { Biometric } from "@/lib/biometrics";
-import type { CheckInInput, TrainingLog } from "@/lib/types";
+import type { CheckInInput, TrainingDrill, TrainingLog } from "@/lib/types";
 import { todayLocal, daysAgoLocal } from "@/lib/day";
 
 export default function JournalPage() {
@@ -30,7 +31,7 @@ export default function JournalPage() {
     // parallel query returning dates only, not a scan of the whole table.
     const since60 = daysAgoLocal(59);
     const since28 = daysAgoLocal(27);
-    const [{ data: existing }, { data: training }, { data: bio }, { data: profile }, { data: program }, { data: recent }, { data: recentTraining }] = await Promise.all([
+    const [{ data: existing }, { data: training }, { data: bio }, { data: profile }, { data: program }, { data: recent }, { data: recentTraining }, { data: rehab }] = await Promise.all([
       supabase.from("daily_check_ins").select("*").eq("user_id", user.id).eq("check_in_date", today).maybeSingle(),
       supabase.from("training_logs").select("*").eq("user_id", user.id).eq("log_date", today).maybeSingle(),
       supabase.from("biometrics").select("*").eq("user_id", user.id).eq("metric_date", today).maybeSingle(),
@@ -49,7 +50,28 @@ export default function JournalPage() {
        */
       supabase.from("training_logs").select("log_date, total_minutes, intensity, drills, contact_minutes, distance_km")
         .eq("user_id", user.id).gte("log_date", since28),
+      /**
+       * THE REHAB PLAN THEY ARE ON.
+       *
+       * A generated plan used to live only on the injury page, so an athlete
+       * three weeks into a hamstring protocol was still handed sprint work to
+       * log and had to remember their rehab exercises separately. See
+       * lib/rehab-plan.ts — it both adds the stage's work and removes what the
+       * stage says to avoid.
+       */
+      supabase.from("rehab_plans").select("*").eq("user_id", user.id).eq("active", true)
+        .order("created_at", { ascending: false }).limit(1).maybeSingle(),
     ]);
+
+    const planned = nextSession(
+      (program as { plan?: ProgramPlan } | null)?.plan ?? null,
+      (program as { completed_sessions?: string[] } | null)?.completed_sessions ?? []
+    )?.drills ?? [];
+    const rehabbed = applyRehabToSession<TrainingDrill>(
+      planned,
+      rehab as RehabPlanRow | null,
+      (e) => ({ name: e.name, ...parseDose(e.dose), load_kg: null }),
+    );
     return {
       existing,
       streak: checkInStreak(((recent ?? []) as { check_in_date: string }[]).map((r) => r.check_in_date)),
@@ -62,11 +84,9 @@ export default function JournalPage() {
       bio: (bio ?? null) as Biometric | null,
       sport: (profile as { sport?: string } | null)?.sport ?? "football",
       // Today's scheduled drills, so logging is a tap rather than retyping
-      // names the program already knows.
-      planned: nextSession(
-        (program as { plan?: ProgramPlan } | null)?.plan ?? null,
-        (program as { completed_sessions?: string[] } | null)?.completed_sessions ?? []
-      )?.drills ?? [],
+      // names the program already knows — with the rehab plan already applied.
+      planned: rehabbed.drills,
+      rehabNote: rehabbed.note,
     };
   }, [user.id], `journal:${user.id}`);
 
@@ -138,6 +158,16 @@ export default function JournalPage() {
           and overwrite what was just saved. */}
       {(!done || editing) && (
         <div className={done ? "mt-5" : undefined}>
+          {/* WHY TODAY'S SESSION LOOKS DIFFERENT.
+              A session that quietly gains three band exercises and loses its
+              sprints is indistinguishable from a bug. Naming what changed and
+              what changed it is the difference between the app looking broken
+              and the app looking like it was paying attention. */}
+          {data?.rehabNote && (
+            <p className="mb-3 rounded-2xl border border-pitch-400/25 bg-pitch-400/[0.06] px-4 py-3 text-sm text-slate-200">
+              🩹 {data.rehabNote}
+            </p>
+          )}
           <JournalForm initial={initial} initialTraining={initialTraining} sport={data?.sport} planned={data?.planned ?? []} history={data?.recentTraining ?? []} />
         </div>
       )}

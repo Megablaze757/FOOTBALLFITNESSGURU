@@ -188,11 +188,32 @@ export const SPLIT_STYLES: { id: SplitStyle; label: string; blurb: string; days:
   { id: "full_body", label: "Full body", blurb: "Everything each session — best return on three days a week", days: 3 },
 ];
 
+/**
+ * FREQUENCY IS THE HALF OF VOLUME NOBODY ASKS FOR.
+ *
+ * Weekly sets per muscle is the number that drives growth, and it is
+ * frequency x sets-per-session. This function only controls the first term, and
+ * it was quietly capping it: three days routed to push/pull/legs, which trains
+ * every muscle ONCE a week, so a measured aesthetics block came out at 7 sets
+ * for chest, 4 for glutes and 3 for calves against a productive band that
+ * starts at 10. Somebody who asked to build muscle was handed a maintenance
+ * dose and told it was a hypertrophy programme.
+ *
+ * Push/pull/legs is a fine split — at SIX days, where it hits everything twice,
+ * which is what its own blurb says. At three it is the wrong shape, and full
+ * body three times a week is the textbook answer for that day count.
+ */
 export function splitFor(daysPerWeek: number, style: SplitStyle = "auto"): SplitDay[] {
-  const days = Math.max(2, Math.min(5, Math.round(daysPerWeek) || 3));
+  // Six, not five. The cap meant a 6-day athlete got a 5-day week and the sixth
+  // day of training they told us about simply vanished — measurably: 5 days and
+  // 6 days produced byte-identical volume.
+  const days = Math.max(2, Math.min(6, Math.round(daysPerWeek) || 3));
   const PUSH: MuscleGroup[] = ["chest", "shoulders", "triceps"];
   const PULL: MuscleGroup[] = ["back", "biceps"];
-  const LEGS: MuscleGroup[] = ["quads", "hamstrings", "glutes", "calves"];
+  // Core rides with legs. Push/pull/legs has no home for it otherwise, and a
+  // 6-day PPL week measured ZERO core sets — the one group a bodybuilding split
+  // drops entirely by accident rather than by choice.
+  const LEGS: MuscleGroup[] = ["quads", "hamstrings", "glutes", "calves", "core"];
   const UPPER: MuscleGroup[] = ["chest", "back", "shoulders", "biceps", "triceps"];
   const LOWER: MuscleGroup[] = ["quads", "hamstrings", "glutes", "core"];
 
@@ -229,17 +250,24 @@ export function splitFor(daysPerWeek: number, style: SplitStyle = "auto"): Split
     });
   }
 
+  const FULL_A: MuscleGroup[] = ["quads", "chest", "back", "shoulders", "core"];
+  const FULL_B: MuscleGroup[] = ["hamstrings", "glutes", "back", "chest", "biceps", "triceps"];
+  const FULL_C: MuscleGroup[] = ["quads", "glutes", "chest", "back", "shoulders", "calves"];
+
   switch (days) {
     case 2:
       return [
-        { name: "Full body A", groups: ["quads", "chest", "back", "shoulders"] },
-        { name: "Full body B", groups: ["hamstrings", "back", "chest", "biceps", "triceps"] },
+        { name: "Full body A", groups: FULL_A },
+        { name: "Full body B", groups: FULL_B },
       ];
     case 3:
+      // FULL BODY, NOT PUSH/PULL/LEGS. Three days of PPL is one session per
+      // muscle per week; three full-body days is three, and the same total
+      // work spread over three exposures grows more muscle than one.
       return [
-        { name: "Push", groups: PUSH },
-        { name: "Pull", groups: PULL },
-        { name: "Legs", groups: LEGS },
+        { name: "Full body A", groups: FULL_A },
+        { name: "Full body B", groups: FULL_B },
+        { name: "Full body C", groups: FULL_C },
       ];
     case 4:
       return [
@@ -248,13 +276,24 @@ export function splitFor(daysPerWeek: number, style: SplitStyle = "auto"): Split
         { name: "Upper B", groups: ["back", "chest", "shoulders", "triceps", "biceps"] },
         { name: "Lower B", groups: ["hamstrings", "quads", "glutes", "calves"] },
       ];
-    default:
+    case 5:
       return [
         { name: "Push", groups: PUSH },
         { name: "Pull", groups: PULL },
         { name: "Legs", groups: LEGS },
         { name: "Upper", groups: UPPER },
         { name: "Lower", groups: LOWER },
+      ];
+    default:
+      // Six days is where push/pull/legs finally does what it promises — every
+      // muscle twice a week.
+      return [
+        { name: "Push", groups: PUSH },
+        { name: "Pull", groups: PULL },
+        { name: "Legs", groups: LEGS },
+        { name: "Push B", groups: PUSH },
+        { name: "Pull B", groups: PULL },
+        { name: "Legs B", groups: LEGS },
       ];
   }
 }
@@ -303,9 +342,20 @@ export interface HypertrophyInput {
   style?: SplitStyle;
 }
 
-/** How many exercises a session should contain, given how many groups it covers. */
+/**
+ * How many exercises a session should contain.
+ *
+ * Was a flat 5 or 6, which is where the rest of the missing volume went: five
+ * exercises across three muscle groups is 1.7 exercises each, and at three or
+ * four sets apiece that is 6-7 weekly sets for a muscle trained once a week.
+ *
+ * Roughly two exercises per group, floored at 5 so a narrow day is still a
+ * session and capped at 8 so a full-body day is still finishable — past about
+ * eight movements the last ones are done tired and badly, and the volume stops
+ * being worth what it costs.
+ */
 function sessionSize(groupCount: number): number {
-  return groupCount <= 3 ? 5 : 6;
+  return Math.max(5, Math.min(8, groupCount * 2));
 }
 
 /**

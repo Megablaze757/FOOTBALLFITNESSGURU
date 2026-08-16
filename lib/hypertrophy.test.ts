@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { splitFor, buildHypertrophyProgram, groupOf, isCompound } from "./hypertrophy";
 import { parseConstraints, EMPTY_CONSTRAINTS } from "./constraints";
 import { buildProgram } from "./coach";
+import { weeklyMuscleVolume, LANDMARKS } from "./muscle-volume";
 
 const gymPlan = (over: Partial<Parameters<typeof buildProgram>[0]> = {}) =>
   buildProgram({ goal: "strength", painMap: {}, sport: "gym", focus: "aesthetics", daysPerWeek: 3, ...over });
@@ -15,16 +16,79 @@ const allNames = (p: ReturnType<typeof buildProgram>) => allDrills(p).map((d) =>
 
 test("the split matches the training frequency", () => {
   assert.equal(splitFor(2).length, 2);
-  assert.deepEqual(splitFor(3).map((d) => d.name), ["Push", "Pull", "Legs"]);
   assert.equal(splitFor(4).length, 4);
   assert.equal(splitFor(5).length, 5);
+  assert.equal(splitFor(6).length, 6);
   // Two days a week can't support a body-part split.
   assert.ok(splitFor(2).every((d) => d.name.startsWith("Full body")));
 });
 
+/**
+ * THREE DAYS IS FULL BODY, NOT PUSH/PULL/LEGS.
+ *
+ * PPL over three days trains every muscle ONCE a week, and that is where a
+ * measured aesthetics block lost most of its volume — 7 weekly sets for chest,
+ * 4 for glutes, against a productive band starting at 10. The same total work
+ * spread over three exposures grows more muscle than one, and full body is the
+ * textbook answer at this day count. PPL earns its place at six.
+ */
+test("three days is full body, because PPL there is once a week per muscle", () => {
+  assert.ok(splitFor(3).every((d) => d.name.startsWith("Full body")),
+    `three days gave ${splitFor(3).map((d) => d.name).join("/")}`);
+  assert.deepEqual(splitFor(6).map((d) => d.name), ["Push", "Pull", "Legs", "Push B", "Pull B", "Legs B"]);
+});
+
 test("out-of-range frequencies are clamped, not crashed", () => {
   assert.ok(splitFor(0).length >= 2);
-  assert.ok(splitFor(99).length <= 5);
+  assert.ok(splitFor(99).length <= 6);
+  // Six, not five. The old cap silently threw away the sixth day somebody told
+  // us they trained — 5 and 6 produced byte-identical weeks.
+  assert.equal(splitFor(6).length, 6);
+  assert.notDeepEqual(splitFor(6).map((d) => d.name), splitFor(5).map((d) => d.name));
+});
+
+/**
+ * THE COMPLAINT, AS A NUMBER.
+ *
+ * "I said improve muscle aesthetics but it's only giving me a maintenance level
+ * of sets" — and it was: every major muscle sat under the 10-set productive
+ * threshold at the default three days. This asserts the big movers now land in
+ * the band the evidence supports, at every day count somebody can pick.
+ */
+test("an aesthetics block actually prescribes a growth dose", () => {
+  const BIG = ["quads", "glutes", "chest", "back"] as const;
+  for (const daysPerWeek of [3, 4, 5, 6]) {
+    const plan = buildProgram({ goal: "strength", painMap: {}, sport: "gym", focus: "aesthetics", daysPerWeek });
+    const volume = weeklyMuscleVolume(plan.weeks[1]);
+    for (const muscle of BIG) {
+      assert.ok(volume[muscle] >= LANDMARKS.productiveLow,
+        `${daysPerWeek} days: ${muscle} got ${volume[muscle]} weekly sets, under the productive ${LANDMARKS.productiveLow}`);
+      assert.ok(volume[muscle] <= LANDMARKS.excessive + 2,
+        `${daysPerWeek} days: ${muscle} got ${volume[muscle]} weekly sets, past what recovery supports`);
+    }
+  }
+});
+
+test("more training days buy more volume", () => {
+  // The 5-vs-6 case was the giveaway: identical volume from a different amount
+  // of training means a day was being dropped on the floor.
+  const total = (daysPerWeek: number) => {
+    const v = weeklyMuscleVolume(
+      buildProgram({ goal: "strength", painMap: {}, sport: "gym", focus: "aesthetics", daysPerWeek }).weeks[1]);
+    return Object.values(v).reduce((a, b) => a + b, 0);
+  };
+  assert.ok(total(4) > total(3), "a fourth day added nothing");
+  assert.ok(total(6) > total(5), "a sixth day added nothing");
+});
+
+test("no split silently drops a muscle group it lists", () => {
+  // Core was the one this caught: push/pull/legs has no home for it, so a
+  // 6-day week measured ZERO core sets — dropped by accident, not by choice.
+  for (const daysPerWeek of [3, 4, 5, 6]) {
+    const plan = buildProgram({ goal: "strength", painMap: {}, sport: "gym", focus: "aesthetics", daysPerWeek });
+    const volume = weeklyMuscleVolume(plan.weeks[1]);
+    assert.ok(volume.core > 0, `${daysPerWeek} days: no core work at all`);
+  }
 });
 
 // --- classification ----------------------------------------------------------
@@ -102,7 +166,9 @@ test("sessions in a week are not carbon copies of each other", () => {
 });
 
 test("push day trains pushing muscles, not legs", () => {
-  const plan = gymPlan({ daysPerWeek: 3 });
+  // Six days, because that is where push/pull/legs now lives — three days is
+  // full body, where mixing legs and pressing is the point rather than a bug.
+  const plan = gymPlan({ daysPerWeek: 6 });
   const push = plan.weeks[0].sessions.find((s) => s.title.includes("Push"));
   assert.ok(push, "expected a Push day");
   for (const d of push!.drills) {

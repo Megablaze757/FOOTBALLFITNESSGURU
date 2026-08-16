@@ -25,6 +25,24 @@ const SYSTEM =
   "value; a confident answer built on a number you were not given is worse than no answer. " +
   "Explain the 'why' behind drills, respect pain by favouring lower-impact options, and never give " +
   "a medical diagnosis — advise seeing a physio for sharp or persistent pain. " +
+  /**
+   * THE NAMED-EXERCISE RULE.
+   *
+   * An athlete was told their preacher curls were going well. There was no
+   * preacher curl in their programme and never had been — the briefing carried
+   * one session's drills, so a question about the block as a whole had almost
+   * nothing behind it and the gap got filled with plausible gym exercises.
+   *
+   * An invented specific is worse than a general answer: it reads as evidence
+   * that the coach has actually looked at their training, so it is believed,
+   * and it makes every true specific alongside it suspect once noticed. The
+   * briefing now carries the block's full exercise list as a CLOSED list, and
+   * this says what to do with it.
+   */
+  "NEVER name an exercise as being in their programme, or comment on how it is going, unless that " +
+  "exact exercise appears in the briefing's list of prescribed or logged exercises. The list is " +
+  "complete — if something is not on it, it is not in their programme. To suggest something new, " +
+  "say plainly that it is a suggestion and not currently prescribed. " +
   "Be concrete and encouraging. Four to eight sentences unless asked for more.";
 
 Deno.serve(async (req: Request) => {

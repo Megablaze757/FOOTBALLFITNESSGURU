@@ -53,6 +53,19 @@ export interface BriefingInput {
   inSeason?: boolean;
   nextSessionTitle?: string | null;
   nextSessionDrills?: { name: string; prescription?: string; intensity?: string }[];
+  /**
+   * EVERY exercise the block actually prescribes, deduplicated.
+   *
+   * Without this the briefing carried ONE session, and a question about the
+   * programme as a whole had almost nothing behind it — so the coach filled the
+   * gap with plausible gym exercises and told an athlete their preacher curls
+   * were going well. They had never been prescribed a preacher curl. An
+   * invented specific is worse than a general answer, because it reads as
+   * evidence the coach has actually looked.
+   */
+  programExercises?: string[];
+  /** What they have actually logged recently, which is what "going well" is about. */
+  loggedExercises?: string[];
   effort?: EffortCheck | null;
 
   /** Today. */
@@ -65,6 +78,18 @@ export interface BriefingInput {
   pain?: Record<string, number>;
   painReportedOn?: string | null;
   protocols?: RecoveryProtocol[];
+  /**
+   * THE ATHLETE'S OWN GENERATED PLAN, which is not the same thing as `protocols`.
+   *
+   * `protocols` are the app's static guidance for a body area — good, generic,
+   * and identical for everybody with a sore hamstring. This is the graded
+   * loading plan written for THIS injury, with the stage they are actually on.
+   *
+   * Its absence was the whole of "it's not reading my injury plan in ask
+   * coach": the coach had the textbook and not the athlete's notes, so it
+   * answered about hamstrings in general when it had been asked about theirs.
+   */
+  rehab?: string | null;
 
   /** Fuel. */
   targets?: NutritionTargets | null;
@@ -122,6 +147,24 @@ function block(a: BriefingInput): Section {
   for (const d of a.nextSessionDrills ?? []) {
     lines.push(`  - ${d.name}${d.prescription ? ` — ${d.prescription}` : ""}${d.intensity ? ` @ ${d.intensity}` : ""}`);
   }
+  /**
+   * THE CLOSED LIST. Named as one, on purpose: the model has to be able to tell
+   * "these are the only exercises in the programme" from "here are some
+   * examples", and a bare list reads as the second.
+   */
+  if (a.programExercises?.length) {
+    lines.push(`The block prescribes exactly these ${a.programExercises.length} exercises and no others:`);
+    lines.push(`  ${a.programExercises.join(", ")}`);
+  } else {
+    lines.push("The block's exercise list is not available, so do not describe what it contains.");
+  }
+
+  if (a.loggedExercises?.length) {
+    lines.push(`Actually logged recently: ${a.loggedExercises.join(", ")}.`);
+  } else {
+    lines.push("Nothing logged recently, so there is no evidence about how any exercise is going.");
+  }
+
   // The verdict, not the raw numbers — it is already the conclusion.
   if (a.effort?.note) lines.push(`Effort check: ${a.effort.note}`);
   return { heading: "Training block", lines };
@@ -150,8 +193,19 @@ function injuries(a: BriefingInput): Section {
   const lines: string[] = [];
   const entries = Object.entries(a.pain ?? {}).filter(([, v]) => (Number(v) || 0) > 0);
 
+  /**
+   * THE ATHLETE'S OWN PLAN GOES FIRST, and it goes in even when nothing is
+   * sore today. Somebody three weeks into a hamstring rehab who has a good
+   * morning still has a hamstring rehab, and the old order returned early on
+   * "nothing sore reported" — so the plan they asked about was omitted exactly
+   * on the days they felt well enough to ask what to do next.
+   */
+  if (a.rehab) lines.push(a.rehab);
+
   if (entries.length === 0) {
-    lines.push("Nothing sore reported.");
+    lines.push(a.rehab
+      ? "Nothing sore reported today, which does not end the plan above."
+      : "Nothing sore reported.");
     return { heading: "Injuries and pain", lines };
   }
 
@@ -161,8 +215,10 @@ function injuries(a: BriefingInput): Section {
     lines.push(`  - ${area.replace(/_/g, " ")}: ${level}/10`);
   }
 
+  // The app's generic guidance for the area, AFTER their own plan — it is the
+  // textbook, and the plan above is their notes.
   for (const p of a.protocols ?? []) {
-    lines.push(`Rehab protocol in play — "${p.title}" (${p.when}):`);
+    lines.push(`General protocol for this area — "${p.title}" (${p.when}):`);
     for (const stage of p.stages ?? []) {
       lines.push(`  ${stage.phase} [${stage.window}] — ${stage.focus} Move on when: ${stage.criteria}`);
     }
