@@ -34,7 +34,7 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Kept in step with the test workflow and package.json engines. Next 14
       # supports 22; a version split between building and testing is how you
