@@ -65,6 +65,8 @@ export default function LibraryPage() {
   }, []);
   const [open, setOpen] = useState<Exercise | null>(null);
   const [custom, setCustom] = useState<Exercise[]>([]);
+  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+  const [savedOnly, setSavedOnly] = useState(false);
   const [shown, setShown] = useState(PAGE);
   // Feeds the zone guide so it shows THIS athlete's paces and heart rates
   // rather than a generic table. All optional — the guide degrades to the
@@ -89,12 +91,13 @@ export default function LibraryPage() {
   useEffect(() => {
     let active = true;
     const supabase = createClient();
-    supabase.from("profiles").select("sport, level, birth_year").eq("id", user.id).maybeSingle().then(({ data }) => {
-      const p = data as { sport?: string; level?: string; birth_year?: number | null } | null;
+    supabase.from("profiles").select("sport, level, birth_year, saved_exercises").eq("id", user.id).maybeSingle().then(({ data }) => {
+      const p = data as { sport?: string; level?: string; birth_year?: number | null; saved_exercises?: string[] } | null;
       if (!active) return;
       if (p?.sport && SPORTS.some((sp) => sp.id === p.sport)) setSport(p.sport as SportId);
       if (p?.level === "easy" || p?.level === "medium" || p?.level === "advanced") setLevel(p.level);
       if (p?.birth_year) setAthlete((a) => ({ ...a, age: new Date().getFullYear() - p.birth_year! }));
+      setSavedIds(new Set(p?.saved_exercises ?? []));
     });
     void reloadCustom();
     // Latest test only — zones should follow current fitness, not a personal
@@ -122,9 +125,10 @@ export default function LibraryPage() {
       (cat === "All" || e.category === cat) &&
       withinLevel(e, level) &&
       (equip === "all" || exerciseEquip(e) === equip) &&
+      (!savedOnly || savedIds.has(e.id)) &&
       (!query || e.name.toLowerCase().includes(query) || e.muscles.some((m) => m.toLowerCase().includes(query)))
     );
-  }, [sport, cat, level, equip, q, custom]);
+  }, [sport, cat, level, equip, q, custom, savedOnly, savedIds]);
 
   /**
    * Drills tagged for this sport, pulled to the front.
@@ -222,6 +226,14 @@ export default function LibraryPage() {
           can't find a movement actually is. */}
       <div className="flex flex-wrap items-center gap-3">
         <CustomExerciseForm coachId={user.id} onAdded={reloadCustom} scope="mine" />
+        <button
+          type="button"
+          onClick={() => setSavedOnly((v) => !v)}
+          aria-pressed={savedOnly}
+          className={`chip-option chip-option-sm ${savedOnly ? "text-pitch-400" : ""}`}
+        >
+          Saved{savedIds.size ? ` (${savedIds.size})` : ""}
+        </button>
         {custom.length > 0 && (
           <span className="text-xs text-slate-500">
             {custom.length} custom exercise{custom.length === 1 ? "" : "s"} in your library
@@ -408,7 +420,11 @@ export default function LibraryPage() {
         </button>
       )}
 
-      {open && <ExerciseModal ex={open} onClose={() => setOpen(null)} />}
+      {open && <ExerciseModal ex={open} onClose={() => {
+        setOpen(null);
+        void createClient().from("profiles").select("saved_exercises").eq("id", user.id).maybeSingle()
+          .then(({ data }) => setSavedIds(new Set(((data?.saved_exercises ?? []) as string[]))));
+      }} />}
       </div>
       )}
       </TabPanel>

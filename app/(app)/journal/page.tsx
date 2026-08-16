@@ -143,7 +143,13 @@ export default function JournalPage() {
     : undefined;
 
   const initialTraining: TrainingState | undefined = data?.training
-    ? { drills: data.training.drills ?? [], total_minutes: data.training.total_minutes, intensity: data.training.intensity }
+    ? {
+        drills: data.training.drills ?? [], total_minutes: data.training.total_minutes, intensity: data.training.intensity,
+        distance_km: data.training.distance_km, contact_minutes: data.training.contact_minutes,
+        run_type: data.training.run_type, zone: data.training.zone, avg_hr: data.training.avg_hr,
+        intervals: data.training.intervals, interval_seconds: data.training.interval_seconds,
+        recovery_seconds: data.training.recovery_seconds,
+      }
     : undefined;
 
   const done = !!checkIn;

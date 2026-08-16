@@ -27,7 +27,7 @@
 // =============================================================================
 
 import { estimate1RM } from "./exercise-stats";
-import { setsOf } from "./training-sets";
+import { workingSetsOf } from "./training-sets";
 import { resolveLift, type LiftStandard } from "./strength-standards";
 import type { MuscleGroup } from "./hypertrophy";
 import type { TrainingLog } from "./types";
@@ -96,7 +96,7 @@ function dailyBests(logs: TrainingLog[] | null | undefined): Map<string, DayBest
     for (const drill of log.drills ?? []) {
       const r = resolveLift(String(drill.name ?? ""));
       if (!r) continue;
-      for (const set of setsOf(drill)) {
+      for (const set of workingSetsOf(drill)) {
         if (set.load_kg == null || set.load_kg <= 0) continue;
         const e1rm = estimate1RM(set.load_kg, set.reps);
         if (e1rm == null) continue;

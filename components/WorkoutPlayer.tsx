@@ -18,6 +18,8 @@ interface Drill {
   tempo?: string;
   /** "4 × 20m", "3 × 30s each side" — when reps alone can't say it. */
   prescription?: string;
+  /** Warm-up template item: complete it with one tap; no load/reps entry. */
+  completionOnly?: boolean;
 }
 
 interface Step { drill: Drill; setNum: number; totalSets: number; drillIndex: number }
@@ -57,19 +59,23 @@ export interface SessionResult {
   minutes: number;
   /** Reps actually completed per drill, keyed by drill name. */
   repsByDrill: Record<string, number>;
+  intensity?: number | null;
+  notes?: string | null;
+  sessionType?: "workout" | "active_rest";
 }
 
 // Full-screen guided session: steps through every set with rest timers, then
 // calls onComplete with what was actually done (which logs it + marks it done).
-export function WorkoutPlayer({ title, drills, onComplete, onClose }: {
+export function WorkoutPlayer({ title, drills, activeRest, onComplete, onClose }: {
   title: string;
   drills: Drill[];
+  activeRest?: { durationMinutes?: number | null; rpe?: number | null; notes?: string | null } | null;
   onComplete: (result: SessionResult) => void;
   onClose: () => void;
 }) {
   const steps = useMemo<Step[]>(
-    () => drills.flatMap((d, di) => Array.from({ length: Math.max(1, d.sets) }, (_, si) => ({
-      drill: d, setNum: si + 1, totalSets: Math.max(1, d.sets), drillIndex: di,
+    () => drills.flatMap((d, di) => Array.from({ length: d.completionOnly ? 1 : Math.max(1, d.sets) }, (_, si) => ({
+      drill: d, setNum: si + 1, totalSets: d.completionOnly ? 1 : Math.max(1, d.sets), drillIndex: di,
     }))),
     [drills]
   );
@@ -83,6 +89,9 @@ export function WorkoutPlayer({ title, drills, onComplete, onClose }: {
   const [mounted, setMounted] = useState(false);
   const [actual, setActual] = useState(0);   // reps actually completed this set
   const [guidance, setGuidance] = useState<string | null>(null);
+  const [activeMinutes, setActiveMinutes] = useState(activeRest?.durationMinutes ?? 30);
+  const [activeRpe, setActiveRpe] = useState(activeRest?.rpe ?? 3);
+  const [activeNotes, setActiveNotes] = useState(activeRest?.notes ?? "");
 
   /**
    * Real elapsed time and real reps, accumulated as they go.
@@ -130,7 +139,9 @@ export function WorkoutPlayer({ title, drills, onComplete, onClose }: {
   const progress = steps.length ? Math.round((i / steps.length) * 100) : 0;
 
   // Reset the rep counter to the target whenever a new set starts.
-  useEffect(() => { if (step) setActual(step.drill.reps); }, [i]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (step) setActual(step.drill.completionOnly ? step.drill.reps * Math.max(1, step.drill.sets) : step.drill.reps);
+  }, [i]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function guidanceFor(reps: number, target: number): string {
     if (reps <= 0) return "😴 Skipped — rest and come back to it fresh.";
@@ -141,7 +152,7 @@ export function WorkoutPlayer({ title, drills, onComplete, onClose }: {
 
   function completeSet() {
     if (step) {
-      setGuidance(guidanceFor(actual, step.drill.reps));
+      setGuidance(step.drill.completionOnly ? "✓ Warm-up complete — you are ready for the working block." : guidanceFor(actual, step.drill.reps));
       // Sum across sets, so three sets of 8 records 24 rather than the last 8.
       const name = step.drill.name;
       repsDone.current[name] = (repsDone.current[name] ?? 0) + actual;
@@ -158,6 +169,18 @@ export function WorkoutPlayer({ title, drills, onComplete, onClose }: {
     setRestTarget(secs);
     setRest(secs);
     setResting(true);
+  }
+
+  function completeActiveRest() {
+    const result: SessionResult = {
+      minutes: Math.max(1, Math.round(activeMinutes || 1)),
+      repsByDrill: {},
+      intensity: Math.max(1, Math.min(10, Math.round(activeRpe || 1))),
+      notes: activeNotes.trim() || null,
+      sessionType: "active_rest",
+    };
+    setDone(true);
+    onComplete(result);
   }
 
   /**
@@ -207,6 +230,32 @@ export function WorkoutPlayer({ title, drills, onComplete, onClose }: {
             <p className="mt-2 text-slate-400">Logged to your training. Nice work.</p>
             <button onClick={onClose} className="btn-primary mx-auto mt-8 max-w-[14rem]">Done</button>
           </div>
+        ) : activeRest ? (
+          <div className="animate-fade-up w-full max-w-sm text-left">
+            <div className="mx-auto grid h-20 w-20 place-items-center rounded-3xl bg-pitch-400/10 text-pitch-400">
+              <span className="text-3xl" aria-hidden>↻</span>
+            </div>
+            <div className="mt-5 text-center">
+              <div className="stat-label">Active rest</div>
+              <h2 className="mt-1 text-2xl font-extrabold">Move easy. Finish fresher.</h2>
+              <p className="mt-1 text-sm text-slate-400">This counts toward consistency, never strength volume.</p>
+            </div>
+            <div className="mt-6 grid grid-cols-2 gap-3">
+              <label>
+                <span className="field-label">Duration (min)</span>
+                <input type="number" inputMode="numeric" min={1} max={300} value={activeMinutes} onChange={(e) => setActiveMinutes(Number(e.target.value) || 0)} className="field" />
+              </label>
+              <label>
+                <span className="field-label">RPE {activeRpe}</span>
+                <input type="range" min={1} max={10} value={activeRpe} onChange={(e) => setActiveRpe(Number(e.target.value))} className="mt-3 w-full" />
+              </label>
+            </div>
+            <label className="mt-4 block">
+              <span className="field-label">What did you do?</span>
+              <textarea value={activeNotes} onChange={(e) => setActiveNotes(e.target.value)} rows={3} className="field resize-none" placeholder="Light jog, mobility, rehab…" />
+            </label>
+            <button onClick={completeActiveRest} className="btn-primary mt-6">Save active rest ✓</button>
+          </div>
         ) : resting ? (
           <div className="animate-fade-up">
             {guidance && (
@@ -238,13 +287,15 @@ export function WorkoutPlayer({ title, drills, onComplete, onClose }: {
                 <ExerciseSteps pattern={how.demo} implement={how.implement} className="h-full w-full" />
               </div>
             )}
-            <div className="chip mx-auto text-pitch-400">Set {step.setNum} of {step.totalSets}</div>
+            <div className="chip mx-auto text-pitch-400">
+              {step.drill.completionOnly ? "Warm-up" : `Set ${step.setNum} of ${step.totalSets}`}
+            </div>
             <h2 className="mt-3 break-words text-2xl font-extrabold sm:text-3xl">{step.drill.name}</h2>
             {/* "Target 20 reps" is wrong for a 20-metre sprint or a 30-second
                 hold. Where the engine wrote a real prescription, show that. */}
             <p className="mt-1 text-sm text-slate-400">
-              {step.drill.prescription ? `${step.drill.prescription} · ` : `Target ${step.drill.reps} reps · `}
-              log what you actually got
+              {step.drill.prescription ?? `${step.drill.sets} × ${step.drill.reps}`}
+              {step.drill.completionOnly ? " · tap when complete" : " · log what you actually got"}
             </p>
             {/* Effort and tempo belong here, while the bar is in your hands —
                 not only on the plan you read this morning. */}
@@ -255,14 +306,16 @@ export function WorkoutPlayer({ title, drills, onComplete, onClose }: {
             )}
 
             {/* Reps stepper — record the reps you completed (fewer is fine) */}
-            <div className="mt-4 flex items-center justify-center gap-4">
-              <button onClick={() => setActual((r) => Math.max(0, r - 1))} className="grid h-11 w-11 place-items-center rounded-full border border-white/15 text-xl text-slate-200 hover:bg-white/5" aria-label="one fewer rep">−</button>
-              <div className="w-20">
-                <div className="text-5xl font-extrabold tabular-nums">{actual}</div>
-                <div className="stat-label">reps</div>
+            {!step.drill.completionOnly && (
+              <div className="mt-4 flex items-center justify-center gap-4">
+                <button onClick={() => setActual((r) => Math.max(0, r - 1))} className="grid h-11 w-11 place-items-center rounded-full border border-white/15 text-xl text-slate-200 hover:bg-white/5" aria-label="one fewer rep">−</button>
+                <div className="w-20">
+                  <div className="text-5xl font-extrabold tabular-nums">{actual}</div>
+                  <div className="stat-label">reps</div>
+                </div>
+                <button onClick={() => setActual((r) => r + 1)} className="grid h-11 w-11 place-items-center rounded-full border border-white/15 text-xl text-slate-200 hover:bg-white/5" aria-label="one more rep">+</button>
               </div>
-              <button onClick={() => setActual((r) => r + 1)} className="grid h-11 w-11 place-items-center rounded-full border border-white/15 text-xl text-slate-200 hover:bg-white/5" aria-label="one more rep">+</button>
-            </div>
+            )}
 
             {how && how.cues.length > 0 && (
               <p className="mx-auto mt-4 max-w-xs text-xs text-slate-500">{how.cues[0]}</p>
@@ -329,7 +382,7 @@ export function WorkoutPlayer({ title, drills, onComplete, onClose }: {
               </details>
             )}
             <button onClick={completeSet} className="btn-primary mx-auto mt-6 max-w-[16rem]">
-              {i >= steps.length - 1 ? "Finish session ✓" : "Log set ✓"}
+              {i >= steps.length - 1 ? "Finish session ✓" : step.drill.completionOnly ? "Mark complete ✓" : "Log set ✓"}
             </button>
             <div className="mt-3 text-xs text-slate-500">Exercise {step.drillIndex + 1} of {drills.length}</div>
           </div>

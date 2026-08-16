@@ -5,6 +5,7 @@ import { SLOT_LABEL, restText, type ProgramDrill, type Slot } from "@/lib/engine
 import { howToFor } from "@/lib/how-to";
 import { ExerciseDemo } from "@/components/ExerciseDemo";
 import { SwapSheet } from "@/components/SwapSheet";
+import { Icon, type IconName } from "@/components/Icon";
 
 /**
  * A session, rendered as a session: warm-up, main work, accessories, cool-down.
@@ -43,14 +44,14 @@ export function SessionDrills({ drills, onPick, onSwap, compact = false }: {
   return (
     <ul className={compact ? "space-y-1" : "space-y-2"}>
       {grouped.map((group, gi) => (
-        <li key={gi}>
+        <li key={gi} className={`${compact ? "mt-2 pl-2" : "mt-6 rounded-2xl border-l-4 p-3"} ${sectionStyle(group).wrap}`}>
           {group.rehab ? (
-            <div className="mb-1 mt-2 text-[10px] font-bold uppercase tracking-wider text-amber-400/80 first:mt-0">
-              Rehab · do this first
+            <div className={`mb-2 flex items-center gap-2 font-bold ${compact ? "text-[10px] uppercase tracking-wider" : "text-[17px]"} text-amber-400/80`}>
+              <Icon name="plaster" size={compact ? 13 : 18} /> Rehab <span className="text-[10px] font-medium text-amber-300/60">do this first</span>
             </div>
           ) : group.slot ? (
-            <div className="mb-1 mt-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 first:mt-0">
-              {SLOT_LABEL[group.slot]}
+            <div className={`mb-2 flex items-center gap-2 font-bold ${compact ? "text-[10px] uppercase tracking-wider" : "text-[17px]"} ${sectionStyle(group).text}`}>
+              <Icon name={sectionStyle(group).icon} size={compact ? 13 : 18} /> {sectionStyle(group).label}
             </div>
           ) : null}
           <ul className={compact ? "space-y-1" : "space-y-2"}>
@@ -64,7 +65,7 @@ export function SessionDrills({ drills, onPick, onSwap, compact = false }: {
                 <div className="flex items-start gap-1">
                   {compact
                     ? <CompactRow drill={d} onPick={onPick} />
-                    : <DrillCard drill={d} onPick={onPick} rehab={group.rehab} />}
+                    : <DrillCard drill={d} onPick={onPick} rehab={group.rehab} slot={group.slot} />}
                   {/* No swap on rehab work. Offering a "similar exercise" for a
                       stage-two isometric is offering to leave the protocol —
                       the substitution the athlete wants there is a
@@ -110,7 +111,7 @@ export function SessionDrills({ drills, onPick, onSwap, compact = false }: {
  * ball figure and runs the running figure, so a session no longer has a few
  * illustrated rows and a few blank ones.
  */
-function DrillCard({ drill, onPick, rehab }: { drill: Drill; onPick?: (name: string) => void; rehab: boolean }) {
+function DrillCard({ drill, onPick, rehab, slot }: { drill: Drill; onPick?: (name: string) => void; rehab: boolean; slot: Slot | null }) {
   const how = howToFor(drill.name);
   // No coaching behind it means nothing to open. A card that looks tappable and
   // isn't is worse than one that never claimed to be.
@@ -124,7 +125,10 @@ function DrillCard({ drill, onPick, rehab }: { drill: Drill; onPick?: (name: str
       className={`flex min-w-0 flex-1 items-center gap-3 rounded-2xl border p-2.5 text-left transition disabled:cursor-default ${
         rehab
           ? "border-amber-400/25 bg-amber-400/[0.05]"
-          : "border-white/[0.08] bg-white/[0.03]"
+          : slot === "warmup" ? "border-sky-400/15 bg-sky-400/[0.035]"
+          : slot === "conditioning" ? "border-emerald-400/15 bg-emerald-400/[0.035]"
+          : slot === "cooldown" ? "border-violet-400/15 bg-violet-400/[0.035]"
+          : "border-pitch-400/10 bg-pitch-400/[0.025]"
       } ${pickable ? "hover:border-white/20 hover:bg-white/[0.06]" : ""}`}
     >
       <span className={`grid h-14 w-12 shrink-0 place-items-center overflow-hidden rounded-xl border bg-black/40 ${
@@ -141,7 +145,7 @@ function DrillCard({ drill, onPick, rehab }: { drill: Drill; onPick?: (name: str
         </span>
         <span className="mt-0.5 block break-words text-sm font-bold text-slate-100">
           {drill.skill && <span className="mr-1.5 text-pitch-400">⚽</span>}
-          {drill.name}
+          {displayName(drill)}
         </span>
         {/* WHAT IT REPLACED. A programme that silently shows a different
             exercise from the one it prescribed has lost the thread of its own
@@ -177,7 +181,7 @@ function CompactRow({ drill, onPick }: { drill: Drill; onPick?: (name: string) =
       <div className="flex items-baseline justify-between gap-2">
         <span className="min-w-0 break-words text-xs text-slate-300">
           {drill.skill && <span className="mr-1.5 text-pitch-400">⚽</span>}
-          {drill.name}
+          {displayName(drill)}
         </span>
         <span className="shrink-0 text-xs text-slate-500">
           {drill.prescription ?? `${drill.sets}×${drill.reps}`}
@@ -203,6 +207,23 @@ function detailLine(d: ProgramDrill): string {
 type Drill = ProgramDrill & { swappedFrom?: string };
 
 type Group = { slot: Slot | null; rehab: boolean; drills: Drill[] };
+
+function displayName(drill: Drill): string {
+  return /^cardio\s*(?:\.\.\.|…)?$/i.test(drill.name.trim()) || !drill.name.trim()
+    ? "Conditioning"
+    : drill.name;
+}
+
+function sectionStyle(group: Group): { label: string; icon: IconName; wrap: string; text: string } {
+  if (group.rehab) return { label: "Rehab", icon: "plaster", wrap: "border-l-amber-400/70 bg-amber-400/[0.025]", text: "text-amber-400/80" };
+  const slot = group.slot;
+  if (slot === "warmup") return { label: "Warm-up", icon: "bolt", wrap: "border-l-sky-400/70 bg-sky-400/[0.02]", text: "text-sky-300/80" };
+  if (slot === "conditioning") return { label: "Conditioning", icon: "run", wrap: "border-l-emerald-400/70 bg-emerald-400/[0.02]", text: "text-emerald-300/80" };
+  if (slot === "cooldown") return { label: "Cool-down", icon: "stretch", wrap: "border-l-violet-400/70 bg-violet-400/[0.02]", text: "text-violet-300/80" };
+  if (slot === "skill") return { label: "Skill", icon: "ball", wrap: "border-l-pitch-400/60 bg-pitch-400/[0.02]", text: "text-pitch-300/80" };
+  if (slot) return { label: slot === "primary" ? "Main / Strength" : SLOT_LABEL[slot], icon: "dumbbell", wrap: "border-l-pitch-400/70 bg-pitch-400/[0.02]", text: "text-pitch-300/80" };
+  return { label: "Workout", icon: "dumbbell", wrap: "border-l-white/15", text: "text-slate-400" };
+}
 
 /**
  * Group runs of drills that share a heading.

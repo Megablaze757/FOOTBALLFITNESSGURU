@@ -153,7 +153,7 @@ export interface TrainingDrill {
    * the whole record for them. Ask lib/training-sets.ts rather than reading
    * either shape directly.
    */
-  sets_detail?: { reps: number; load_kg?: number | null }[];
+  sets_detail?: { reps: number; load_kg?: number | null; isWarmup?: boolean }[];
   notes?: string | null;
 }
 
@@ -183,6 +183,10 @@ export interface TrainingLog {
   intervals?: number | null;
   interval_seconds?: number | null;
   recovery_seconds?: number | null;
+  /** A deliberately light day still counts as attendance, but not strength volume. */
+  session_type?: "workout" | "active_rest" | null;
+  /** Free-text detail for an active-rest day or the session as a whole. */
+  notes?: string | null;
   created_at: string;
 }
 
@@ -216,6 +220,10 @@ export interface Program {
    * deleting a key. See migration 0086 and lib/exercise-match.ts.
    */
   swaps?: Record<string, string> | null;
+  /** Ordered objectives. Additive: goal_type remains the backwards-compatible anchor. */
+  goals?: import("./program-preferences").GoalPreference[] | null;
+  /** Custom rotation and advanced generation controls used to build this block. */
+  settings?: import("./program-preferences").ProgramSettings | null;
   created_at: string;
 }
 
@@ -248,4 +256,6 @@ export interface Profile {
   onboarded?: boolean | null;
   level?: string | null;
   leaderboard_opt_out?: boolean | null;
+  goals?: import("./program-preferences").GoalPreference[] | null;
+  saved_exercises?: string[] | null;
 }

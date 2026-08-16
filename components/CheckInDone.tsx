@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { CheckInInput, TrainingLog, ReadinessStatus } from "@/lib/types";
 import { assessReadiness } from "@/lib/readiness";
 import { hasTrainingContent } from "@/lib/load";
+import { describeSets, warmupSetsOf } from "@/lib/training-sets";
 
 const STATUS_COLOR: Record<ReadinessStatus, string> = {
   Green: "#34d399",
@@ -92,13 +93,33 @@ export function CheckInDone({
 
       <div className="space-y-3 border-t border-white/10 p-5">
         {trained ? (
-          <div className="flex items-center gap-2 text-sm text-slate-300">
-            <span className="text-pitch-400">✓</span>
-            <span>
-              Training logged
-              {training?.total_minutes ? ` — ${training.total_minutes} min` : ""}
-              {training?.distance_km ? `, ${training.distance_km} km` : ""}
-            </span>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-sm text-slate-300">
+              <span className="text-pitch-400">✓</span>
+              <span>
+                {training?.session_type === "active_rest" ? "Active rest logged" : "Training logged"}
+                {training?.total_minutes ? ` — ${training.total_minutes} min` : ""}
+                {training?.distance_km ? `, ${training.distance_km} km` : ""}
+              </span>
+            </div>
+            {training?.notes && <p className="pl-5 text-xs text-slate-500">{training.notes}</p>}
+            {(training?.drills ?? []).length > 0 && (
+              <ul className="space-y-1 pl-5 text-xs text-slate-400">
+                {training!.drills.map((d, i) => {
+                  const warmups = warmupSetsOf(d);
+                  return (
+                    <li key={`${d.name}-${i}`}>
+                      <span className="text-slate-300">{d.name}</span> · {describeSets(d)}
+                      {warmups.length > 0 && (
+                        <span className="ml-1 rounded-full bg-white/[0.06] px-1.5 py-0.5 text-[10px] text-slate-500">
+                          + {warmups.length} warm-up
+                        </span>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </div>
         ) : (
           <>

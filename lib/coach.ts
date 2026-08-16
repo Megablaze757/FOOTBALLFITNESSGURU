@@ -18,6 +18,12 @@ import { MOVEMENTS, regionOfMovement, type Movement, type GoalType, type BodyAre
 import { buildBlock, painByArea, type ProgramPlan, type TrainingFocus } from "./engine";
 import { balancePlanVolume, spacePlanSessions, volumeShortfall, LANDMARKS } from "./muscle-volume";
 import { buildRunProgram, type RunnerLevel } from "./running";
+import {
+  applyProgramPreferences,
+  strictSlots,
+  type GoalPreference,
+  type ProgramSettings,
+} from "./program-preferences";
 
 // The catalogue lives in ./movements and the block builder in ./engine. This
 // module keeps the athlete-facing API — the goal lists, the recommendations and
@@ -164,13 +170,30 @@ export function finishPlan(plan: ProgramPlan, input: BuildProgramInput): Program
    * band it tells them about.
    */
   const floor = input.isInSeason ? LANDMARKS.maintenance : LANDMARKS.productiveLow;
-  const done = spacePlanSessions(balancePlanVolume(plan, floor));
+  const classified: ProgramPlan = {
+    ...plan,
+    weeks: plan.weeks.map((week) => ({
+      ...week,
+      sessions: week.sessions.map((session) => ({ ...session, drills: strictSlots(session.drills) })),
+    })),
+  };
+  const done = spacePlanSessions(balancePlanVolume(classified, floor));
   // And then say what it delivers. A week that cannot reach the productive band
   // for every muscle is a fact about the day count, not a fault — but the
   // athlete should hear it from the plan rather than from the progress page
   // three days later, which is what read as the app contradicting itself.
   const note = volumeShortfall(done);
-  return note ? { ...done, constraints: [...done.constraints, note] } : done;
+  const explained = note ? { ...done, constraints: [...done.constraints, note] } : done;
+  // Old callers deliberately receive the engine's established prescription.
+  // The richer preference pass changes exercise counts, rep ranges and weekly
+  // shape, so only run it for programmes built with the new goal/settings UI.
+  if (!input.settings && !input.goals?.length) return explained;
+  const goals = input.goals?.length ? input.goals : [{ type: input.goal, priority: 1 as const }];
+  return applyProgramPreferences(
+    explained,
+    input.settings ?? { goals },
+    { painMap: input.painMap, constraints: parseConstraints(input.notes) },
+  );
 }
 
 /** The training region a drill belongs to, if we've classified it. */
@@ -366,6 +389,10 @@ export interface BuildProgramInput {
    * accumulation before anything came down.
    */
   blockWeeks?: number;
+  /** Up to three ordered objectives. goal remains the backwards-compatible anchor. */
+  goals?: GoalPreference[];
+  /** Custom rotation and advanced controls from the programme builder. */
+  settings?: ProgramSettings;
 
   // --- Running. Ignored unless the athlete's sport is running. --------------
   /** Current weekly mileage. The block is built from where they ARE. */
@@ -439,7 +466,7 @@ export function buildProgram(input: BuildProgramInput): ProgramPlan {
   // the shape of the training is different, not just its contents.
   if (wantsRunPlan(input)) {
     const days = input.daysPerWeek ?? 4;
-    return buildRunProgram({
+    const runPlan = buildRunProgram({
       weeklyKm: input.weeklyKm ?? days * DEFAULT_KM_PER_DAY,
       daysPerWeek: days,
       level: input.runnerLevel ?? "intermediate",
@@ -451,6 +478,9 @@ export function buildProgram(input: BuildProgramInput): ProgramPlan {
       // pace. The engine can't take the impact away, so it takes the intensity.
       recoveryBias: sore.some((a) => ["knee", "ankle", "hamstring", "hip"].includes(a)),
     });
+    if (!input.settings && !input.goals?.length) return runPlan;
+    const goals = input.goals?.length ? input.goals : [{ type: input.goal, priority: 1 as const }];
+    return applyProgramPreferences(runPlan, input.settings ?? { goals }, { painMap: input.painMap, constraints });
   }
 
   if (wantsHypertrophy(input)) {
@@ -490,14 +520,19 @@ export function buildProgram(input: BuildProgramInput): ProgramPlan {
    * exercises the engine already chose, so selection stays the engine's job and
    * this stays a correction to the dose.
    */
-  return {
-    ...finishPlan(plan, input),
+  const described = {
+    ...plan,
     summary: programSummary(input.goal, sore, input.isInSeason ?? false, block, input.sport, input.position, input.focus, input.daysPerWeek),
     constraints: [
       ...(sore.length ? [`Protecting your ${sore.map(prettyArea).join(", ")} — high-impact loading on these is dialled back.`] : []),
       ...constraints.summary,
     ],
   };
+  if (input.settings || input.goals?.length) return finishPlan(described, input);
+  // Preserve the established public output for legacy callers: the balancing
+  // pass still runs, while the engine's athlete-specific description remains
+  // the final copy shown on performance programmes.
+  return { ...finishPlan(plan, input), summary: described.summary, constraints: described.constraints };
 }
 
 const FOCUS_LABEL: Record<TrainingFocus, string> = {

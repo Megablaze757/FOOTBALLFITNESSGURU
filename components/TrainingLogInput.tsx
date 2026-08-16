@@ -4,12 +4,18 @@ import type { TrainingDrill } from "@/lib/types";
 import { NumberInput } from "@/components/NumberInput";
 import type { SportId } from "@/lib/exercises";
 import { DrillPicker } from "@/components/DrillPicker";
+import { Icon } from "@/components/Icon";
+import { DrillModal } from "@/components/DrillDetail";
+import { WhatIfLiftSheet } from "@/components/WhatIfLiftSheet";
 import {
   RUN_TYPES, ZONE_LIST, ZONES, runType, describeShape, shapeMidpoint, intervalEffort,
   type RunTypeId, type ZoneId,
 } from "@/lib/running";
-import { useRef } from "react";
-import { describeSets, drillTonnage, hasSetDetail, lastSetsFor, setsOf, totalReps, withSets } from "@/lib/training-sets";
+import { useRef, useState, type ReactNode } from "react";
+import {
+  describeSets, drillTonnage, hasSetDetail, lastSetsFor, setsOf, totalReps,
+  warmupSetsOf, workingSetsOf, withSets, type DrillSet,
+} from "@/lib/training-sets";
 
 export interface TrainingState {
   drills: TrainingDrill[];
@@ -46,6 +52,9 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
    */
   history?: { log_date?: string; drills?: TrainingDrill[] | null }[];
 }) {
+  const [warmupsOpen, setWarmupsOpen] = useState<Set<number>>(new Set());
+  const [whatIf, setWhatIf] = useState<string | null>(null);
+  const [detail, setDetail] = useState<string | null>(null);
   /**
    * INTENSITY IS DERIVED UNTIL THE ATHLETE OVERRIDES IT.
    *
@@ -119,6 +128,14 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
             // hint, the seed when switching to per-set rows, and the greyed
             // placeholder in each load box.
             const prev = lastSetsFor(history, d.name);
+            const warmups = warmupSetsOf(d);
+            const working = workingSetsOf(d);
+            const warmupOpen = warmupsOpen.has(i);
+            const replaceSets = (nextWorking: DrillSet[], nextWarmups = warmups) =>
+              setDrill(i, withSets(d, [
+                ...nextWarmups.map((s) => ({ ...s, isWarmup: true })),
+                ...nextWorking.map((s) => ({ ...s, isWarmup: false })),
+              ]));
             return (
             <li key={i} className="rounded-2xl bg-white/[0.03] p-3">
               <div className="flex items-center gap-2">
@@ -128,6 +145,11 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
                   placeholder="Drill name"
                   className="field min-h-[44px] flex-1 py-2"
                 />
+                {d.name.trim() && (
+                  <button type="button" onClick={() => setDetail(d.name)} className="tap-target grid h-9 w-9 place-items-center text-slate-500 hover:text-pitch-400" aria-label={`View ${d.name} technique`}>
+                    <Icon name="book" size={17} />
+                  </button>
+                )}
                 <button type="button" onClick={() => removeDrill(i)} className="tap-target px-2 text-slate-500 hover:text-readiness-red" aria-label="Remove">✕</button>
               </div>
               {/* WHERE THE NUMBERS CAME FROM.
@@ -154,7 +176,13 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
                   <div className="mt-2 grid grid-cols-3 gap-2">
                     <NumField label="Sets" value={d.sets} onChange={(v) => setDrill(i, { sets: v || 0 })} />
                     <NumField label="Reps" value={d.reps} onChange={(v) => setDrill(i, { reps: v || 0 })} />
-                    <NumField label="kg" value={d.load_kg ?? ""} onChange={(v) => setDrill(i, { load_kg: v === "" ? null : v })} optional />
+                    <NumField
+                      label="kg"
+                      value={d.load_kg ?? ""}
+                      onChange={(v) => setDrill(i, { load_kg: v === "" ? null : v })}
+                      optional
+                      action={<button type="button" onClick={() => setWhatIf(d.name)} className="grid h-6 w-6 place-items-center text-pitch-400" aria-label={`What-if lift check for ${d.name || "this exercise"}`}><Icon name="calculator" size={14} /></button>}
+                    />
                   </div>
                   <button
                     type="button"
@@ -190,12 +218,15 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
                     <span className="w-11 shrink-0" aria-hidden="true" />
                     <div className="grid flex-1 grid-cols-2 gap-2 text-center text-[10px] uppercase tracking-wider text-slate-500">
                       <span>Reps</span>
-                      <span>kg</span>
+                      <span className="flex items-center justify-center gap-1">
+                        kg
+                        <button type="button" onClick={() => setWhatIf(d.name)} className="grid h-6 w-6 place-items-center text-pitch-400" aria-label={`What-if lift check for ${d.name || "this exercise"}`}><Icon name="calculator" size={14} /></button>
+                      </span>
                     </div>
                     <span className="w-9 shrink-0" aria-hidden="true" />
                   </div>
 
-                  {(d.sets_detail ?? []).map((st, si) => (
+                  {working.map((st, si) => (
                     <div key={si} className="flex items-center gap-2">
                       <span className="w-11 shrink-0 text-[11px] font-bold uppercase tracking-wider text-slate-500">
                         Set {si + 1}
@@ -205,8 +236,8 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
                           aria-label={`Set ${si + 1} reps`}
                           value={st.reps || null}
                           min={0}
-                          onChange={(v) => setDrill(i, withSets(d, (d.sets_detail ?? []).map((x, xi) =>
-                            xi === si ? { ...x, reps: v ?? 0 } : x)))}
+                          onChange={(v) => replaceSets(working.map((x, xi) =>
+                            xi === si ? { ...x, reps: v ?? 0 } : x))}
                           className="field min-h-[44px] py-1.5 text-center"
                         />
                         <NumberInput
@@ -215,14 +246,14 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
                           min={0}
                           decimal
                           placeholder={prev?.[si]?.load_kg != null ? String(prev[si].load_kg) : "–"}
-                          onChange={(v) => setDrill(i, withSets(d, (d.sets_detail ?? []).map((x, xi) =>
-                            xi === si ? { ...x, load_kg: v } : x)))}
+                          onChange={(v) => replaceSets(working.map((x, xi) =>
+                            xi === si ? { ...x, load_kg: v } : x))}
                           className="field min-h-[44px] py-1.5 text-center"
                         />
                       </div>
                       <button
                         type="button"
-                        onClick={() => setDrill(i, withSets(d, (d.sets_detail ?? []).filter((_, xi) => xi !== si)))}
+                        onClick={() => replaceSets(working.filter((_, xi) => xi !== si))}
                         className="tap-target w-9 shrink-0 text-slate-600 hover:text-readiness-red"
                         aria-label={`Remove set ${si + 1}`}
                       >
@@ -238,9 +269,9 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
                          same weight and near the same reps. Starting blank makes
                          every set a fresh two-field typing job on a phone. */
                       onClick={() => {
-                        const cur = d.sets_detail ?? [];
+                        const cur = working;
                         const last = cur[cur.length - 1] ?? { reps: 10, load_kg: d.load_kg ?? null };
-                        setDrill(i, withSets(d, [...cur, { ...last }]));
+                        replaceSets([...cur, { ...last }]);
                       }}
                       className="tap-target text-xs font-semibold text-pitch-400"
                     >
@@ -251,24 +282,24 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
                         is a confirmation rather than a surprise. Hidden once
                         every box has a weight, when it would do nothing. */}
                     {prev?.some((st) => st.load_kg != null) &&
-                      (d.sets_detail ?? []).some((st) => st.load_kg == null) && (
+                      working.some((st) => st.load_kg == null) && (
                       <button
                         type="button"
-                        onClick={() => setDrill(i, withSets(d, (d.sets_detail ?? []).map((st, xi) => ({
+                        onClick={() => replaceSets(working.map((st, xi) => ({
                           ...st, load_kg: st.load_kg ?? prev[xi]?.load_kg ?? null,
-                        }))))}
+                        })))}
                         className="tap-target text-xs font-semibold text-pitch-400"
                       >
                         Same weight as last time
                       </button>
                     )}
-                    <button
+                    {warmups.length === 0 && <button
                       type="button"
                       onClick={() => setDrill(i, { ...d, sets_detail: undefined })}
                       className="tap-target text-xs text-slate-500 hover:text-slate-300"
                     >
                       Back to sets × reps
-                    </button>
+                    </button>}
                     {/* WHAT IT ADDS UP TO. Both halves are already recorded, so
                         this asks nothing — and total reps and tonnage are the
                         numbers that make a session feel like it counted. Reading
@@ -283,6 +314,70 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
                   </div>
                 </div>
               )}
+
+              {/* Optional prep sets live beside the lift they prepare. They are
+                  persisted in sets_detail, but every performance reader filters
+                  them through workingSetsOf before doing arithmetic. */}
+              <div className="mt-3 border-t border-white/[0.06] pt-2">
+                <button
+                  type="button"
+                  onClick={() => setWarmupsOpen((current) => {
+                    const next = new Set(current);
+                    next.has(i) ? next.delete(i) : next.add(i);
+                    return next;
+                  })}
+                  aria-expanded={warmupOpen}
+                  className="tap-target flex w-full items-center justify-between text-left text-xs font-semibold text-slate-400"
+                >
+                  <span>+ Warm-up sets{warmups.length ? ` (${warmups.length})` : ""}</span>
+                  <span className={`transition-transform duration-200 ${warmupOpen ? "rotate-180" : ""}`} aria-hidden>▾</span>
+                </button>
+                {warmupOpen && (
+                  <div className="mt-2 space-y-2 rounded-xl border border-white/[0.06] bg-white/[0.025] p-2.5">
+                    {warmups.map((set, wi) => (
+                      <div key={wi} className="flex items-center gap-2">
+                        <span className="w-14 shrink-0 text-[10px] font-bold uppercase tracking-wider text-slate-500">Warm {wi + 1}</span>
+                        <div className="grid flex-1 grid-cols-2 gap-2">
+                          <NumberInput
+                            aria-label={`Warm-up set ${wi + 1} reps`}
+                            value={set.reps || null}
+                            min={0}
+                            onChange={(v) => replaceSets(working, warmups.map((x, xi) => xi === wi ? { ...x, reps: v ?? 0 } : x))}
+                            placeholder="reps"
+                            className="field min-h-[44px] py-1.5 text-center"
+                          />
+                          <NumberInput
+                            aria-label={`Warm-up set ${wi + 1} weight in kilograms`}
+                            value={set.load_kg ?? null}
+                            min={0}
+                            decimal
+                            onChange={(v) => replaceSets(working, warmups.map((x, xi) => xi === wi ? { ...x, load_kg: v } : x))}
+                            placeholder="kg"
+                            className="field min-h-[44px] py-1.5 text-center"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => replaceSets(working, warmups.filter((_, xi) => xi !== wi))}
+                          className="tap-target w-8 shrink-0 text-slate-600 hover:text-readiness-red"
+                          aria-label={`Remove warm-up set ${wi + 1}`}
+                        >✕</button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const baseWorking = hasSetDetail(d) ? working : setsOf(d);
+                        replaceSets(baseWorking, [...warmups, { reps: 8, load_kg: null, isWarmup: true }]);
+                      }}
+                      className="tap-target text-xs font-semibold text-pitch-400"
+                    >
+                      + Add warm-up set
+                    </button>
+                    <p className="text-[10px] leading-relaxed text-slate-500">Warm-up sets stay in history but do not count toward PRs, 1RM, strength ratings or working volume.</p>
+                  </div>
+                )}
+              </div>
             </li>
             );
           })}
@@ -299,6 +394,9 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
       <button type="button" onClick={() => addDrill()} className="chip text-pitch-400">
         + Add something not in the library
       </button>
+
+      {whatIf !== null && <WhatIfLiftSheet initialExercise={whatIf} onClose={() => setWhatIf(null)} />}
+      {detail && <DrillModal name={detail} onClose={() => setDetail(null)} />}
 
       <div className="grid grid-cols-2 gap-3">
         <label className="block">
@@ -529,22 +627,23 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
   );
 }
 
-function NumField({ label, value, onChange, optional }: { label: string; value: number | string; onChange: (v: number | "") => void; optional?: boolean }) {
+function NumField({ label, value, onChange, optional, action }: { label: string; value: number | string; onChange: (v: number | "") => void; optional?: boolean; action?: ReactNode }) {
   return (
-    <label className="block">
-      <span className="mb-1 block text-center text-[10px] uppercase tracking-wider text-slate-500">{label}</span>
+    <div className="block">
+      <span className="mb-1 flex min-h-6 items-center justify-center gap-1 text-center text-[10px] uppercase tracking-wider text-slate-500">{label}{action}</span>
       {/* Sets, Reps and kg. This was bound straight to the number, so clearing
           the box emitted "" and the Sets/Reps callers turned that into 0 with
           `v || 0` — the field snapped back to "0" the instant you pressed
           backspace and could not be emptied. Typing 12 meant overtyping a
           selected 0, which on a phone is a long-press. See NumberInput. */}
       <NumberInput
+        aria-label={label === "kg" ? "Weight in kilograms" : label}
         value={value === "" || value == null ? null : Number(value)}
         onChange={(n) => onChange(n == null ? "" : n)}
         min={0}
         placeholder={optional ? "–" : ""}
         className="field min-h-[44px] py-1.5 text-center"
       />
-    </label>
+    </div>
   );
 }

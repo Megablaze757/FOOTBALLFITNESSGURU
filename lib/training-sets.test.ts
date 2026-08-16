@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { describeSets, drillTonnage, hasSetDetail, lastSetsFor, setCount, setsOf, topLoad, totalReps, withSets } from "./training-sets";
+import { describeSets, drillTonnage, hasSetDetail, lastSetsFor, setCount, setsOf, topLoad, totalReps, warmupSetsOf, workingSetsOf, withSets } from "./training-sets";
 import { sessionLoad } from "./load";
 import type { TrainingDrill } from "./types";
 
@@ -199,4 +199,36 @@ test("tonnage counts weight moved, and bodyweight moves none", () => {
   assert.equal(drillTonnage(detailed), 12 * 40 + 10 * 50 + 8 * 60, "12@40 + 10@50 + 8@60");
   assert.equal(drillTonnage(summary), 3 * 10 * 40);
   assert.equal(drillTonnage({ sets: 3, reps: 10, load_kg: null }), 0, "press-ups are not tonnage");
+});
+
+test("warm-up sets remain in history but are excluded from every performance total", () => {
+  const logged = withSets(summary, [
+    { reps: 10, load_kg: 20, isWarmup: true },
+    { reps: 6, load_kg: 40, isWarmup: true },
+    { reps: 5, load_kg: 80 },
+    { reps: 5, load_kg: 80 },
+    { reps: 4, load_kg: 85 },
+  ]);
+
+  assert.equal(warmupSetsOf(logged).length, 2, "prep sets should still be readable in history");
+  assert.equal(workingSetsOf(logged).length, 3);
+  assert.equal(logged.sets, 3, "the backwards-compatible summary describes working sets only");
+  assert.equal(logged.reps, 5);
+  assert.equal(logged.load_kg, 85);
+  assert.equal(setCount(logged), 3);
+  assert.equal(totalReps(logged), 14);
+  assert.equal(topLoad(logged), 85);
+  assert.equal(drillTonnage(logged), 5 * 80 + 5 * 80 + 4 * 85);
+  assert.equal(describeSets(logged), "5@80, 5@80, 4@85");
+  assert.equal(sessionLoad({ drills: [logged] } as never), 14, "ACWR fallback volume must exclude prep work");
+});
+
+test("a warm-up-only drill contributes no strength volume", () => {
+  const logged = withSets(summary, [{ reps: 10, load_kg: 20, isWarmup: true }]);
+  assert.equal(logged.sets, 0);
+  assert.equal(logged.reps, 0);
+  assert.equal(logged.load_kg, null);
+  assert.equal(totalReps(logged), 0);
+  assert.equal(drillTonnage(logged), 0);
+  assert.equal(warmupSetsOf(logged).length, 1);
 });

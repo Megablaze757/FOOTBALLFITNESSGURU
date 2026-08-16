@@ -1,15 +1,54 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { exerciseMuscles } from "@/lib/muscle-volume";
 import { demoImplement, exerciseProgression, PROGRESSION_NOTE, type Exercise } from "@/lib/exercises";
 import { ExerciseSteps } from "@/components/ExerciseDemo";
 import { Portal } from "@/components/Portal";
+import { Icon } from "@/components/Icon";
+import { createClient } from "@/lib/supabase/client";
 
 const PROGRESSION_LABEL = { load: "Add weight", reps: "Add reps", time: "Add time", skill: "Add difficulty" } as const;
 
 // The coached content for one exercise: demo + how-to + cues + tempo + muscles.
 export function ExerciseDetailCard({ ex, sets, reps }: { ex: Exercise; sets?: number; reps?: number }) {
+  const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [shared, setShared] = useState(false);
+  const guideUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(`${ex.name} exercise proper form`)}`;
+
+  useEffect(() => {
+    let active = true;
+    const supabase = createClient();
+    supabase.auth.getUser().then(async ({ data }) => {
+      if (!data.user) return;
+      const { data: profile } = await supabase.from("profiles").select("saved_exercises").eq("id", data.user.id).maybeSingle();
+      if (active) setSaved(((profile?.saved_exercises ?? []) as string[]).includes(ex.id));
+    });
+    return () => { active = false; };
+  }, [ex.id]);
+
+  async function toggleSaved() {
+    setSaving(true);
+    const supabase = createClient();
+    const { data: auth } = await supabase.auth.getUser();
+    if (!auth.user) { setSaving(false); return; }
+    const { data: profile } = await supabase.from("profiles").select("saved_exercises").eq("id", auth.user.id).maybeSingle();
+    const current = (profile?.saved_exercises ?? []) as string[];
+    const next = saved ? current.filter((id) => id !== ex.id) : [...new Set([...current, ex.id])];
+    const { error } = await supabase.from("profiles").update({ saved_exercises: next }).eq("id", auth.user.id);
+    if (!error) setSaved(!saved);
+    setSaving(false);
+  }
+
+  async function shareExercise() {
+    const payload = { title: ex.name, text: `${ex.name} — ${ex.why}`, url: guideUrl };
+    if (navigator.share) await navigator.share(payload).catch(() => undefined);
+    else await navigator.clipboard?.writeText(`${payload.text}\n${payload.url}`);
+    setShared(true);
+    window.setTimeout(() => setShared(false), 1600);
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-4 sm:flex-row">
@@ -32,6 +71,18 @@ export function ExerciseDetailCard({ ex, sets, reps }: { ex: Exercise; sets?: nu
             <Tag label={ex.equipment} />
           </div>
         </div>
+      </div>
+
+      <div className="flex items-center gap-2 border-y border-white/[0.08] py-3">
+        <a href={guideUrl} target="_blank" rel="noreferrer" className="tap-target inline-flex min-h-[44px] flex-1 items-center gap-1.5 text-sm font-semibold text-pitch-400 hover:underline">
+          Visit <span aria-hidden>›</span>
+        </a>
+        <button type="button" onClick={shareExercise} className="btn-ghost w-auto gap-2 px-3 py-2 text-xs">
+          <Icon name="share" size={17} /> {shared ? "Copied" : "Share"}
+        </button>
+        <button type="button" onClick={toggleSaved} disabled={saving} aria-pressed={saved} className={`btn-ghost w-auto gap-2 px-3 py-2 text-xs ${saved ? "text-pitch-400" : ""}`}>
+          <Icon name="bookmark" size={17} /> {saved ? "Saved" : "Save"}
+        </button>
       </div>
 
       {/* Only claim to be teaching the movement when we actually are. The bulk
@@ -129,6 +180,7 @@ function Tag({ label }: { label: string }) {
  * clearance, which is exactly the drift that makes one of them wrong.
  */
 export function Sheet({ label, children, onClose }: { label: string; children: React.ReactNode; onClose: () => void }) {
+  const touchStart = useRef<number | null>(null);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     document.addEventListener("keydown", onKey);
@@ -149,7 +201,15 @@ export function Sheet({ label, children, onClose }: { label: string; children: R
           role="dialog"
           aria-modal="true"
           aria-label={label}
+          onTouchStart={(e) => { touchStart.current = e.touches[0]?.clientY ?? null; }}
+          onTouchEnd={(e) => {
+            const start = touchStart.current;
+            const end = e.changedTouches[0]?.clientY;
+            touchStart.current = null;
+            if (start != null && end != null && end - start > 80) onClose();
+          }}
         >
+          <div className="mx-auto -mt-2 mb-3 h-1.5 w-12 rounded-full bg-white/15 sm:hidden" aria-hidden />
           <div className="mb-4 flex justify-end">
             <button onClick={onClose} className="tap-target grid h-9 w-9 place-items-center rounded-full bg-white/[0.06] text-slate-300 transition hover:bg-white/10" aria-label="Close">✕</button>
           </div>

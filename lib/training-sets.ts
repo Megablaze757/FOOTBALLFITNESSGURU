@@ -29,6 +29,8 @@ export interface DrillSet {
   reps: number;
   /** Null is a bodyweight set, which is different from an unrecorded one. */
   load_kg?: number | null;
+  /** Prep work: stored and displayed, but never counted as a working set. */
+  isWarmup?: boolean;
 }
 
 /**
@@ -43,26 +45,40 @@ export interface DrillSet {
 export function setsOf(drill: Pick<TrainingDrill, "sets" | "reps" | "load_kg" | "sets_detail">): DrillSet[] {
   const detail = drill.sets_detail;
   if (Array.isArray(detail) && detail.length > 0) {
-    return detail.map((s) => ({ reps: Math.max(0, Number(s.reps) || 0), load_kg: s.load_kg ?? null }));
+    return detail.map((s) => ({
+      reps: Math.max(0, Number(s.reps) || 0),
+      load_kg: s.load_kg ?? null,
+      isWarmup: s.isWarmup === true,
+    }));
   }
   const count = Math.max(0, Math.floor(Number(drill.sets) || 0));
   const reps = Math.max(0, Number(drill.reps) || 0);
   return Array.from({ length: count }, () => ({ reps, load_kg: drill.load_kg ?? null }));
 }
 
+/** Sets that affect PRs, strength, and volume. */
+export function workingSetsOf(drill: Pick<TrainingDrill, "sets" | "reps" | "load_kg" | "sets_detail">): DrillSet[] {
+  return setsOf(drill).filter((s) => !s.isWarmup);
+}
+
+/** Prep sets, retained for the session history but excluded from performance. */
+export function warmupSetsOf(drill: Pick<TrainingDrill, "sets" | "reps" | "load_kg" | "sets_detail">): DrillSet[] {
+  return setsOf(drill).filter((s) => s.isWarmup);
+}
+
 /** Total reps actually performed. The number session load is built from. */
 export function totalReps(drill: Pick<TrainingDrill, "sets" | "reps" | "load_kg" | "sets_detail">): number {
-  return setsOf(drill).reduce((n, s) => n + s.reps, 0);
+  return workingSetsOf(drill).reduce((n, s) => n + s.reps, 0);
 }
 
 /** How many sets were done. */
 export function setCount(drill: Pick<TrainingDrill, "sets" | "reps" | "load_kg" | "sets_detail">): number {
-  return setsOf(drill).length;
+  return workingSetsOf(drill).length;
 }
 
 /** The heaviest set. What progression in lib/coach.ts compares week to week. */
 export function topLoad(drill: Pick<TrainingDrill, "sets" | "reps" | "load_kg" | "sets_detail">): number | null {
-  const loads = setsOf(drill).map((s) => s.load_kg).filter((l): l is number => l != null && l > 0);
+  const loads = workingSetsOf(drill).map((s) => s.load_kg).filter((l): l is number => l != null && l > 0);
   return loads.length ? Math.max(...loads) : null;
 }
 
@@ -76,18 +92,23 @@ export function topLoad(drill: Pick<TrainingDrill, "sets" | "reps" | "load_kg" |
  * this codebase, all of them now do.
  */
 export function withSets(drill: TrainingDrill, sets: DrillSet[]): TrainingDrill {
-  const clean = sets.map((s) => ({ reps: Math.max(0, Math.floor(Number(s.reps) || 0)), load_kg: s.load_kg ?? null }));
+  const clean = sets.map((s) => ({
+    reps: Math.max(0, Math.floor(Number(s.reps) || 0)),
+    load_kg: s.load_kg ?? null,
+    ...(s.isWarmup ? { isWarmup: true } : {}),
+  }));
   if (clean.length === 0) {
     // Deleting the last set means "I did not do this", not "I did it zero
     // times with the old numbers still attached".
     return { ...drill, sets: 0, reps: 0, load_kg: null, sets_detail: [] };
   }
-  const total = clean.reduce((n, s) => n + s.reps, 0);
-  const loads = clean.map((s) => s.load_kg).filter((l): l is number => l != null && l > 0);
+  const working = clean.filter((s) => !s.isWarmup);
+  const total = working.reduce((n, s) => n + s.reps, 0);
+  const loads = working.map((s) => s.load_kg).filter((l): l is number => l != null && l > 0);
   return {
     ...drill,
-    sets: clean.length,
-    reps: Math.round(total / clean.length),
+    sets: working.length,
+    reps: working.length ? Math.round(total / working.length) : 0,
     load_kg: loads.length ? Math.max(...loads) : null,
     sets_detail: clean,
   };
@@ -106,7 +127,7 @@ export function hasSetDetail(drill: Pick<TrainingDrill, "sets_detail">): boolean
  * appended once when every set shared it and per-set when it climbed.
  */
 export function describeSets(drill: Pick<TrainingDrill, "sets" | "reps" | "load_kg" | "sets_detail">): string {
-  const sets = setsOf(drill);
+  const sets = workingSetsOf(drill);
   if (sets.length === 0) return "—";
 
   const sameReps = sets.every((s) => s.reps === sets[0].reps);
@@ -154,7 +175,7 @@ export function lastSetsFor(
   for (const log of sorted) {
     for (const d of log.drills ?? []) {
       if (String(d.name ?? "").trim().toLowerCase() !== wanted) continue;
-      const sets = setsOf(d);
+      const sets = workingSetsOf(d);
       // A drill recorded with zero sets is not a previous performance.
       if (sets.length > 0 && sets.some((s) => s.reps > 0)) return sets;
     }
@@ -170,5 +191,5 @@ export function lastSetsFor(
  * tonnage lifted, and a set with no bar on it did not lift any.
  */
 export function drillTonnage(drill: Pick<TrainingDrill, "sets" | "reps" | "load_kg" | "sets_detail">): number {
-  return setsOf(drill).reduce((n, s) => n + s.reps * (s.load_kg ?? 0), 0);
+  return workingSetsOf(drill).reduce((n, s) => n + s.reps * (s.load_kg ?? 0), 0);
 }

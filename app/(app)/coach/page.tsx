@@ -8,7 +8,7 @@ import { ConfirmButton } from "@/components/ConfirmButton";
 import { useCurrentUser } from "@/lib/auth";
 import { useAsync, invalidate } from "@/lib/use-async";
 import {
-  GOALS, goalsForSport, buildProgram, finishPlan, analyzeProgress, painByArea,
+  goalsForSport, buildProgram, finishPlan, analyzeProgress, painByArea,
   FOCI,
   type GoalType, type ProgramPlan, type TrainingFocus,
 } from "@/lib/coach";
@@ -42,11 +42,20 @@ import { Tabs, TabPanel } from "@/components/Tabs";
 import { CoachChat } from "@/components/CoachChat";
 import { ProgramCalendar } from "@/components/ProgramCalendar";
 import { SessionDrills } from "@/components/SessionDrills";
+import { ExercisePicker } from "@/components/ExercisePicker";
 import { DrillModal } from "@/components/DrillDetail";
 import { sessionLength } from "@/lib/session-time";
 import { WorkoutPlayer, type SessionResult } from "@/components/WorkoutPlayer";
 import type { CheckInInput, DailyCheckIn, Program, StrengthBenchmark, Tier, TrainingLog, TrainingDrill } from "@/lib/types";
+import { withSets } from "@/lib/training-sets";
 import { daysAgoLocal, todayLocal } from "@/lib/day";
+import {
+  ADAPTIVE_GOALS, MUSCLE_PRIORITIES, PROGRAM_DAY_TYPES,
+  UPPER_WARMUP_DEFAULTS,
+  defaultSchedule, engineAnchor, goalBlendCopy, goalLabel, goalPreviewCopy, sanitiseGoals,
+  warmupClassificationWarnings,
+  type AdaptiveGoalType, type GoalPreference, type MusclePriority, type ProgramSettings, type ScheduleDay,
+} from "@/lib/program-preferences";
 
 /** Latest recorded value per benchmark metric, newest test first. */
 function latestBenchmarks(rows: StrengthBenchmark[]): Record<string, number> {
@@ -108,7 +117,7 @@ export default function CoachPage() {
       supabase.from("training_logs").select("*").eq("user_id", user.id).gte("log_date", since).order("log_date", { ascending: true }),
       supabase.from("daily_check_ins").select("check_in_date, pain_map").eq("user_id", user.id).gte("check_in_date", since).order("check_in_date", { ascending: true }),
       supabase.from("strength_benchmarks").select("*").eq("user_id", user.id).order("test_date", { ascending: false }).limit(20),
-      supabase.from("profiles").select("sport, position, positions, training_focus").eq("id", user.id).maybeSingle(),
+      supabase.from("profiles").select("sport, position, positions, training_focus, goals").eq("id", user.id).maybeSingle(),
       supabase.from("subscriptions").select("tier, status").eq("user_id", user.id).maybeSingle(),
       /**
        * THE REHAB PLAN, ON THE PAGE WHERE TRAINING ACTUALLY HAPPENS.
@@ -123,7 +132,7 @@ export default function CoachPage() {
       supabase.from("rehab_plans").select("*").eq("user_id", user.id).eq("active", true)
         .order("created_at", { ascending: false }).limit(1).maybeSingle(),
     ]);
-    const p = profile as { sport?: string; position?: string; positions?: string[]; training_focus?: string } | null;
+    const p = profile as { sport?: string; position?: string; positions?: string[]; training_focus?: string; goals?: GoalPreference[] } | null;
     return {
       program: (program ?? null) as Program | null,
       checkIn: (checkIn ?? null) as DailyCheckIn | null,
@@ -134,6 +143,7 @@ export default function CoachPage() {
       // Profiles written before 0042 only have the single column.
       positions: positionList(p?.positions?.length ? p.positions : p?.position),
       focus: (p?.training_focus ?? "performance") as TrainingFocus,
+      goals: sanitiseGoals(p?.goals),
       tier: tierOfSub(sub as { tier?: Tier; status?: string } | null),
       rehab: (rehab ?? null) as RehabPlanRow | null,
     };
@@ -187,6 +197,7 @@ export default function CoachPage() {
         sport={data?.sport ?? "football"}
         initialPositions={data?.positions ?? []}
         initialFocus={data?.focus ?? "performance"}
+        initialGoals={data?.goals ?? []}
         userId={user.id}
         onCreated={reload}
       />
@@ -213,13 +224,22 @@ export default function CoachPage() {
 
 // --- Goal builder -----------------------------------------------------------
 
-function GoalBuilder({ painMap, painNote, latestBench, sport, initialPositions, initialFocus, userId, onCreated }: { painMap: Record<string, number>; painNote: string | null; latestBench: Record<string, number>; sport: SportId; initialPositions: string[]; initialFocus: TrainingFocus; userId: string; onCreated: () => void }) {
+function GoalBuilder({ painMap, painNote, latestBench, sport, initialPositions, initialFocus, initialGoals, userId, onCreated }: { painMap: Record<string, number>; painNote: string | null; latestBench: Record<string, number>; sport: SportId; initialPositions: string[]; initialFocus: TrainingFocus; initialGoals: GoalPreference[]; userId: string; onCreated: () => void }) {
   const goals = goalsForSport(sport);
-  const [goal, setGoal] = useState<GoalType | null>(null);
+  const goalOptions = [...goals, ...ADAPTIVE_GOALS].filter((g, i, all) => all.findIndex((x) => x.id === g.id) === i);
+  const initialAnchor = engineAnchor(initialGoals);
+  const [goal, setGoal] = useState<GoalType | null>(initialGoals.length ? initialAnchor.goal : null);
+  const [selectedGoals, setSelectedGoals] = useState<GoalPreference[]>(sanitiseGoals(initialGoals));
   const [positions, setPositions] = useState<string[]>(initialPositions);
-  const [focus, setFocus] = useState<TrainingFocus>(initialFocus);
+  const [focus, setFocus] = useState<TrainingFocus>(initialAnchor.focus ?? initialFocus);
   const [inSeason, setInSeason] = useState(false);
   const [daysPerWeek, setDaysPerWeek] = useState(3);
+  const [customSchedule, setCustomSchedule] = useState(false);
+  const [schedule, setSchedule] = useState<ScheduleDay[]>(defaultSchedule(3, initialGoals));
+  const [exerciseTarget, setExerciseTarget] = useState<number | null>(null);
+  const [musclePriorities, setMusclePriorities] = useState<Partial<Record<MusclePriority, number>>>({});
+  const [mustInclude, setMustInclude] = useState<string[]>([]);
+  const [upperWarmup, setUpperWarmup] = useState<string[]>(UPPER_WARMUP_DEFAULTS);
   const [targetDate, setTargetDate] = useState("");
   const [metric, setMetric] = useState("");
   const [targetValue, setTargetValue] = useState("");
@@ -236,6 +256,43 @@ function GoalBuilder({ painMap, painNote, latestBench, sport, initialPositions, 
 
   const sore = Object.entries(painByArea(painMap)).filter(([, v]) => (v ?? 0) >= 4).map(([a]) => a.replace("_", " "));
 
+  function toggleGoal(type: AdaptiveGoalType) {
+    setSelectedGoals((current) => {
+      const exists = current.some((g) => g.type === type);
+      const next = sanitiseGoals(exists
+        ? current.filter((g) => g.type !== type)
+        : current.length < 3 ? [...current, { type, priority: 1 }] : current);
+      const anchor = engineAnchor(next, goal ?? "strength");
+      setGoal(next.length ? anchor.goal : null);
+      if (anchor.focus) setFocus(anchor.focus);
+      setSchedule((days) => days.map((d) => d.type === "active_rest" ? {
+        ...d,
+        notes: d.notes || defaultSchedule(days.length, next).find((x) => x.type === "active_rest")?.notes,
+      } : d));
+      return next;
+    });
+  }
+
+  function moveGoal(index: number, direction: -1 | 1) {
+    setSelectedGoals((current) => {
+      const to = index + direction;
+      if (to < 0 || to >= current.length) return current;
+      const next = [...current];
+      [next[index], next[to]] = [next[to], next[index]];
+      const clean = sanitiseGoals(next);
+      const anchor = engineAnchor(clean);
+      setGoal(anchor.goal);
+      if (anchor.focus) setFocus(anchor.focus);
+      return clean;
+    });
+  }
+
+  function changeDays(n: number) {
+    setDaysPerWeek(n);
+    const defaults = defaultSchedule(n, selectedGoals);
+    setSchedule((current) => defaults.map((d, i) => current[i] ? { ...d, ...current[i], day: i + 1 } : d));
+  }
+
   /**
    * Build and save a program.
    *
@@ -245,15 +302,34 @@ function GoalBuilder({ painMap, painNote, latestBench, sport, initialPositions, 
    * already read. The job survives navigating away; the tray tells you when
    * it's done.
    */
-  function createProgram(g: GoalType, f: TrainingFocus, pos: string[], tileId?: string, style?: SplitStyle, days?: number) {
+  function settingsFor(g: GoalType, days?: number, quick = false): ProgramSettings {
+    const count = days ?? daysPerWeek;
+    const goals = quick || selectedGoals.length === 0
+      ? [{ type: g, priority: 1 as const }]
+      : sanitiseGoals(selectedGoals);
+    return {
+      goals,
+      schedule: !quick && (customSchedule || count >= 6 || goals.length > 1)
+        ? (customSchedule ? schedule.slice(0, count).map((d, i) => ({ ...d, day: i + 1 })) : defaultSchedule(count, goals))
+        : undefined,
+      exerciseTarget: quick ? null : exerciseTarget,
+      musclePriorities: quick ? {} : musclePriorities,
+      mustInclude: quick ? [] : mustInclude,
+      upperWarmup: quick ? undefined : upperWarmup,
+    };
+  }
+
+  function createProgram(g: GoalType, f: TrainingFocus, pos: string[], tileId?: string, style?: SplitStyle, days?: number, quick = false) {
     setGoal(g); setFocus(f); setPositions(pos);
+    const settings = settingsFor(g, days, quick);
+    if (quick) setSelectedGoals(settings.goals);
     setCreating(true);
     setBuildingId(tileId ?? null);
     setError(null);
-    startJob("program", "Building your program", () => buildAndSave(g, f, pos, style, days));
+    startJob("program", "Building your program", () => buildAndSave(g, f, pos, style, days, settings));
   }
 
-  async function buildAndSave(g: GoalType, f: TrainingFocus, pos: string[], style?: SplitStyle, days?: number) {
+  async function buildAndSave(g: GoalType, f: TrainingFocus, pos: string[], style: SplitStyle | undefined, days: number | undefined, settings: ProgramSettings) {
     const supabase = createClient();
 
     // Paces come from whatever race they've actually logged, so the plan is
@@ -278,16 +354,20 @@ function GoalBuilder({ painMap, painNote, latestBench, sport, initialPositions, 
     if (sport === "running" && (g === "endurance" || g === "speed")) {
       const plan = buildProgram({
         goal: g, painMap, isInSeason: inSeason, sport, position: pos, focus: f,
-        daysPerWeek: days ?? daysPerWeek, notes, ...runInput,
+        daysPerWeek: days ?? daysPerWeek, notes, goals: settings.goals, settings,
+        mustInclude: settings.mustInclude, ...runInput,
       });
-      return await savePlan(plan, g, f, pos);
+      return await savePlan(plan, g, f, pos, settings);
     }
 
     // Prefer the AI backend (Cloudflare Worker / Edge Function); fall back to the
     // local engine (works offline / on Pages).
     let plan: ProgramPlan;
     try {
-      const data = await invokeAI<{ plan?: ProgramPlan }>("generate-program", { goal: g, pain_map: painMap, notes, in_season: inSeason, sport, position: pos, focus: f, days_per_week: days ?? daysPerWeek, split: style });
+      const data = await invokeAI<{ plan?: ProgramPlan }>("generate-program", {
+        goal: g, goals: settings.goals, settings, pain_map: painMap, notes, in_season: inSeason,
+        sport, position: pos, focus: f, days_per_week: days ?? daysPerWeek, split: style,
+      });
       if (!data?.plan) throw new Error("fallback");
       /**
        * TRUST THE MODEL WITH THE TRAINING, NOT WITH THE SAFETY SCAFFOLDING.
@@ -304,7 +384,8 @@ function GoalBuilder({ painMap, painNote, latestBench, sport, initialPositions, 
        */
       const repaired = repairPlan(data.plan, {
         goal: g, painMap, isInSeason: inSeason, sport, position: pos, focus: f,
-        daysPerWeek: days ?? daysPerWeek,
+        daysPerWeek: days ?? daysPerWeek, goals: settings.goals, settings,
+        mustInclude: settings.mustInclude,
       });
       // Logged rather than surfaced: the athlete gets a correct program either
       // way, and "your backend is misbehaving" is not their problem to read.
@@ -341,6 +422,7 @@ function GoalBuilder({ painMap, painNote, latestBench, sport, initialPositions, 
       plan = finishPlan(repaired.plan, {
         goal: g, painMap, isInSeason: inSeason, sport, position: pos, focus: f,
         daysPerWeek: days ?? daysPerWeek, notes, style, oneRepMax: latestBench,
+        goals: settings.goals, settings, mustInclude: settings.mustInclude,
       });
     } catch (e) {
       // 402 is the server saying this needs Pro, and 403 that the account is
@@ -356,18 +438,24 @@ function GoalBuilder({ painMap, painNote, latestBench, sport, initialPositions, 
       }
       // `notes` matters as much here as on the AI path — without it the local
       // engine ignored "I don't train legs" and prescribed squats anyway.
-      plan = buildProgram({ goal: g, painMap, isInSeason: inSeason, sport, position: pos, focus: f, daysPerWeek: days ?? daysPerWeek, notes, style, oneRepMax: latestBench, ...runInput });
+      plan = buildProgram({
+        goal: g, painMap, isInSeason: inSeason, sport, position: pos, focus: f,
+        daysPerWeek: days ?? daysPerWeek, notes, style, oneRepMax: latestBench,
+        goals: settings.goals, settings, mustInclude: settings.mustInclude, ...runInput,
+      });
     }
 
-    return await savePlan(plan, g, f, pos);
+    return await savePlan(plan, g, f, pos, settings);
   }
 
   /** Persist a built block. Split out so the run path and the gym path share it. */
-  async function savePlan(plan: ProgramPlan, g: GoalType, f: TrainingFocus, pos: string[]) {
+  async function savePlan(plan: ProgramPlan, g: GoalType, f: TrainingFocus, pos: string[], settings: ProgramSettings) {
     const supabase = createClient();
 
     // Remember the athlete's positions + focus for next time.
-    await supabase.from("profiles").update({ positions: pos, position: pos[0] ?? null, training_focus: f }).eq("id", userId);
+    await supabase.from("profiles").update({
+      positions: pos, position: pos[0] ?? null, training_focus: f, goals: settings.goals,
+    }).eq("id", userId);
 
     // Insert the new block BEFORE archiving the old one. The other order
     // archives what they're following and then, if the insert is refused,
@@ -379,6 +467,7 @@ function GoalBuilder({ painMap, painNote, latestBench, sport, initialPositions, 
       user_id: userId, goal_type: g, goal_notes: notes || null, plan, status: "active",
       in_season: inSeason, target_date: targetDate || null, block: 1,
       target_metric: metric || null, target_value: targetValue ? Number(targetValue) : null, baseline_value: baseline,
+      goals: settings.goals, settings,
     });
     if (insErr) {
       setCreating(false);
@@ -428,7 +517,7 @@ function GoalBuilder({ painMap, painNote, latestBench, sport, initialPositions, 
             return (
               <button
                 key={t.id}
-                onClick={() => createProgram(t.goal, t.focus, t.position ? [t.position] : positions, t.id, t.style, t.daysPerWeek)}
+                onClick={() => createProgram(t.goal, t.focus, t.position ? [t.position] : positions, t.id, t.style, t.daysPerWeek, true)}
                 disabled={creating}
                 className={`card flex items-center gap-3 p-4 text-left transition disabled:opacity-50 ${isBuilding ? "ring-2 ring-pitch-400/70" : "card-hover"}`}
               >
@@ -495,19 +584,46 @@ function GoalBuilder({ painMap, painNote, latestBench, sport, initialPositions, 
         </div>
 
         <div>
-          <span className="field-label">Your main goal</span>
-          <div className="grid grid-cols-2 gap-3">
-            {goals.map((g) => (
-            <button
-              key={g.id}
-              onClick={() => setGoal(goal === g.id ? null : g.id)}
-              className={`card p-4 text-left transition ${goal === g.id ? "ring-2 ring-pitch-400/70 shadow-glow" : "card-hover"}`}
-            >
-              <div className="font-bold text-slate-100">{g.label}</div>
-              <div className="mt-0.5 text-xs text-slate-400">{g.blurb}</div>
-            </button>
-          ))}
+          <span className="field-label">Your goals · choose up to three</span>
+          <div className="flex flex-wrap gap-2">
+            {goalOptions.map((g) => {
+              const index = selectedGoals.findIndex((x) => x.type === g.id);
+              const selected = index >= 0;
+              const unavailable = !selected && selectedGoals.length >= 3;
+              return (
+                <button
+                  key={g.id}
+                  type="button"
+                  onClick={() => toggleGoal(g.id)}
+                  disabled={unavailable}
+                  aria-pressed={selected}
+                  title={g.blurb}
+                  className={`chip-option relative pr-4 ${selected ? "border-pitch-400/50 bg-pitch-400/10 text-pitch-400" : ""} disabled:opacity-35`}
+                >
+                  {selected && <span className="mr-1.5 inline-grid h-5 w-5 place-items-center rounded-full bg-pitch-400 text-[10px] font-black text-ink-900">{index + 1}</span>}
+                  {g.label}
+                </button>
+              );
+            })}
           </div>
+          {selectedGoals.length > 0 && (
+            <div className="mt-3 rounded-2xl border border-white/[0.08] bg-white/[0.025] p-3">
+              <p className="text-xs leading-relaxed text-slate-300">{goalBlendCopy(selectedGoals)}</p>
+              <p className="mt-1.5 text-xs leading-relaxed text-slate-500">{goalPreviewCopy(selectedGoals)}</p>
+              {selectedGoals.length > 1 && (
+                <ol className="mt-2 space-y-1">
+                  {selectedGoals.map((g, i) => (
+                    <li key={g.type} className="flex min-h-[36px] items-center gap-2 text-xs text-slate-400">
+                      <span className="grid h-5 w-5 place-items-center rounded-full bg-pitch-400/15 font-bold text-pitch-400">{i + 1}</span>
+                      <span className="flex-1">{goalLabel(g.type)}</span>
+                      <button type="button" onClick={() => moveGoal(i, -1)} disabled={i === 0} className="tap-target px-2 disabled:opacity-25" aria-label={`Move ${goalLabel(g.type)} up`}>↑</button>
+                      <button type="button" onClick={() => moveGoal(i, 1)} disabled={i === selectedGoals.length - 1} className="tap-target px-2 disabled:opacity-25" aria-label={`Move ${goalLabel(g.type)} down`}>↓</button>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </div>
+          )}
         </div>
 
         {/* RUNNER INPUTS.
@@ -584,10 +700,10 @@ function GoalBuilder({ painMap, painNote, latestBench, sport, initialPositions, 
         <div>
           <span className="field-label">Days per week</span>
           <div className="flex gap-2">
-            {[2, 3, 4, 5].map((n) => (
+            {[2, 3, 4, 5, 6, 7].map((n) => (
               <button
                 key={n}
-                onClick={() => setDaysPerWeek(n)}
+                onClick={() => changeDays(n)}
                 className={`flex-1 rounded-xl border py-2.5 text-sm font-bold transition ${
                   daysPerWeek === n
                     ? "border-pitch-400/50 bg-pitch-400/10 text-pitch-400"
@@ -600,6 +716,132 @@ function GoalBuilder({ painMap, painNote, latestBench, sport, initialPositions, 
           </div>
           <p className="mt-1 text-xs text-slate-500">How many sessions we&apos;ll schedule each week.</p>
         </div>
+
+        <details className="group rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-3">
+          <summary className="tap-target flex cursor-pointer list-none items-center justify-between text-sm font-medium text-slate-300">
+            <span>Custom weekly rotation <span className="text-xs text-slate-500">— optional</span></span>
+            <span className="text-xs transition group-open:rotate-180" aria-hidden>▾</span>
+          </summary>
+          <div className="mt-3 space-y-3 border-t border-white/[0.06] pt-3">
+            <label className="flex min-h-[44px] items-center justify-between gap-3">
+              <span>
+                <span className="block text-sm font-semibold text-slate-200">Choose every day</span>
+                <span className="block text-xs text-slate-500">Active rest is a complete day, not a gap.</span>
+              </span>
+              <input type="checkbox" checked={customSchedule} onChange={(e) => setCustomSchedule(e.target.checked)} className="h-5 w-5 accent-pitch-400" />
+            </label>
+            {customSchedule && schedule.slice(0, daysPerWeek).map((day, i) => (
+              <div key={day.day} className={`rounded-xl border p-3 ${day.type === "active_rest" ? "border-pitch-400/20 bg-pitch-400/[0.04]" : "border-white/[0.06] bg-white/[0.02]"}`}>
+                <div className="flex items-center gap-3">
+                  <span className="w-12 shrink-0 text-xs font-bold text-slate-500">Day {i + 1}</span>
+                  <select
+                    value={day.type}
+                    onChange={(e) => {
+                      const type = e.target.value as ScheduleDay["type"];
+                      setSchedule((current) => current.map((d, di) => di === i ? {
+                        ...d, type,
+                        ...(type === "active_rest" ? {
+                          durationMinutes: d.durationMinutes ?? 30,
+                          rpe: d.rpe ?? 3,
+                          notes: d.notes || defaultSchedule(6, selectedGoals).find((x) => x.type === "active_rest")?.notes,
+                        } : {}),
+                      } : d));
+                    }}
+                    className="field min-h-[44px] flex-1 py-2"
+                  >
+                    {PROGRAM_DAY_TYPES.map((type) => <option key={type.id} value={type.id}>{type.label}</option>)}
+                  </select>
+                </div>
+                {day.type === "active_rest" && (
+                  <div className="mt-3 grid grid-cols-2 gap-2 pl-0 sm:pl-16">
+                    <label>
+                      <span className="field-label">Minutes</span>
+                      <input type="number" min={1} max={300} value={day.durationMinutes ?? 30} onChange={(e) => setSchedule((current) => current.map((d, di) => di === i ? { ...d, durationMinutes: Number(e.target.value) || null } : d))} className="field py-2" />
+                    </label>
+                    <label>
+                      <span className="field-label">RPE {day.rpe ?? 3}</span>
+                      <input type="range" min={1} max={10} value={day.rpe ?? 3} onChange={(e) => setSchedule((current) => current.map((d, di) => di === i ? { ...d, rpe: Number(e.target.value) } : d))} className="mt-3 w-full" />
+                    </label>
+                    <label className="col-span-2">
+                      <span className="field-label">Suggestion / notes</span>
+                      <input value={day.notes ?? ""} onChange={(e) => setSchedule((current) => current.map((d, di) => di === i ? { ...d, notes: e.target.value } : d))} className="field py-2" placeholder="Light jog, mobility, rehab…" />
+                    </label>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </details>
+
+        <details className="group rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-3">
+          <summary className="tap-target flex cursor-pointer list-none items-center justify-between text-sm font-medium text-slate-300">
+            <span>Advanced settings <span className="text-xs text-slate-500">— volume and muscle priority</span></span>
+            <span className="text-xs transition group-open:rotate-180" aria-hidden>▾</span>
+          </summary>
+          <div className="mt-3 space-y-4 border-t border-white/[0.06] pt-3">
+            <div>
+              <span className="field-label">Preferred exercises</span>
+              <ExercisePicker sport={sport} value={mustInclude} onChange={setMustInclude} />
+            </div>
+            <label className="block">
+              <span className="field-label">Working exercises per session · {exerciseTarget ?? "goal default"}</span>
+              <input
+                type="range" min={5} max={10} value={exerciseTarget ?? 7}
+                onChange={(e) => setExerciseTarget(Number(e.target.value))}
+                className="w-full"
+              />
+              <button type="button" onClick={() => setExerciseTarget(null)} className="mt-1 text-xs font-semibold text-pitch-400">Use goal default</button>
+            </label>
+            <div>
+              <span className="field-label">Muscle priority</span>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {MUSCLE_PRIORITIES.map((muscle) => (
+                  <label key={muscle} className="flex items-center gap-3 rounded-xl bg-white/[0.025] px-3 py-2">
+                    <span className="w-20 text-xs font-semibold capitalize text-slate-300">{muscle}</span>
+                    <input
+                      type="range" min={0} max={2} step={1}
+                      value={musclePriorities[muscle] ?? 0}
+                      onChange={(e) => setMusclePriorities((current) => ({ ...current, [muscle]: Number(e.target.value) }))}
+                      className="flex-1"
+                    />
+                    <span className="w-12 text-right text-[10px] text-slate-500">{["Normal", "More", "Most"][musclePriorities[muscle] ?? 0]}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="field-label !mb-0">Upper-day warm-up</span>
+                <button
+                  type="button"
+                  onClick={() => setUpperWarmup((current) => [...current, "New warm-up"])}
+                  className="tap-target text-xs font-semibold text-pitch-400"
+                >
+                  + Add item
+                </button>
+              </div>
+              <p className="mt-1 text-xs text-slate-500">Suggested only. Edit, reorder or remove items; your choices carry into the next block.</p>
+              <div className="mt-2 space-y-2">
+                {upperWarmup.map((name, i) => (
+                  <div key={i} className="flex min-h-[44px] items-center gap-1 rounded-xl bg-white/[0.025] p-1.5">
+                    <input
+                      value={name}
+                      onChange={(e) => setUpperWarmup((current) => current.map((item, index) => index === i ? e.target.value : item))}
+                      className="field min-w-0 flex-1 py-2 text-xs"
+                      aria-label={`Warm-up item ${i + 1}`}
+                    />
+                    <button type="button" onClick={() => setUpperWarmup((current) => i > 0 ? current.map((item, index) => index === i - 1 ? current[i] : index === i ? current[i - 1] : item) : current)} disabled={i === 0} className="tap-target w-9 text-xs text-slate-400 disabled:opacity-25" aria-label={`Move ${name} up`}>↑</button>
+                    <button type="button" onClick={() => setUpperWarmup((current) => i < current.length - 1 ? current.map((item, index) => index === i + 1 ? current[i] : index === i ? current[i + 1] : item) : current)} disabled={i === upperWarmup.length - 1} className="tap-target w-9 text-xs text-slate-400 disabled:opacity-25" aria-label={`Move ${name} down`}>↓</button>
+                    <button type="button" onClick={() => setUpperWarmup((current) => current.filter((_, index) => index !== i))} className="tap-target w-9 text-xs text-slate-400 hover:text-readiness-red" aria-label={`Remove ${name}`}>✕</button>
+                  </div>
+                ))}
+                {upperWarmup.length === 0 && (
+                  <p className="rounded-xl border border-dashed border-white/10 p-3 text-xs text-slate-500">No automatic upper-day warm-up. Add only what you want.</p>
+                )}
+              </div>
+            </div>
+          </div>
+        </details>
 
         <SeasonToggle inSeason={inSeason} onChange={setInSeason} />
 
@@ -653,15 +895,15 @@ function GoalBuilder({ painMap, painNote, latestBench, sport, initialPositions, 
         </details>
 
         {error && <p className="text-sm text-readiness-red">{error}</p>}
-        <button onClick={() => goal && createProgram(goal, focus, positions)} disabled={!goal || creating} className="btn-primary">
+        <button onClick={() => goal && createProgram(goal, focus, positions)} disabled={!goal || selectedGoals.length === 0 || creating} className="btn-primary">
           {creating ? "Building your program…" : "Generate my program"}
         </button>
         {/* A dead button with no reason is the most common way a form traps
             someone: they tap, nothing happens, and there's nothing on screen
             saying why. The goal select starts empty, so this is the default state
             of the page, not an edge case. */}
-        {!goal && !creating && (
-          <p className="text-xs text-slate-500">Pick your main goal above and this turns on.</p>
+        {selectedGoals.length === 0 && !creating && (
+          <p className="text-xs text-slate-500">Pick at least one goal above and this turns on.</p>
         )}
         </div>
       </details>
@@ -705,6 +947,9 @@ function ActiveProgram({
 }) {
   const plan = program.plan;
   const goal = program.goal_type as GoalType;
+  const adaptiveGoals = sanitiseGoals(program.goals?.length ? program.goals : plan.goals?.length ? plan.goals : [{ type: goal, priority: 1 }]);
+  const programSettings: ProgramSettings = program.settings ?? plan.settings ?? { goals: adaptiveGoals };
+  const warmupWarnings = warmupClassificationWarnings(plan);
   /**
    * AGED, not raw. A knee marked 7/10 in March used to keep shaping every
    * programme built afterwards, because a stale report and a current one were
@@ -763,7 +1008,9 @@ function ActiveProgram({
   // into account. Everything downstream — the list, the guided player, what
   // gets logged — uses this rather than the version written four weeks ago.
   const todaySession = nextSession
-    ? adjustForReadiness(nextSession.s, (readiness?.status as ReadinessStatus) ?? "Green")
+    ? nextSession.s.kind === "active_rest"
+      ? nextSession.s
+      : adjustForReadiness(nextSession.s, (readiness?.status as ReadinessStatus) ?? "Green")
     : null;
 
   /**
@@ -870,7 +1117,8 @@ function ActiveProgram({
     const newPlan = buildProgram({
       goal, painMap, isInSeason: nextSeason, sport, focus, position: positions,
       daysPerWeek: plan.weeks[0]?.sessions.length, notes: program.goal_notes,
-      oneRepMax: latestBench,
+      oneRepMax: latestBench, goals: adaptiveGoals, settings: programSettings,
+      mustInclude: programSettings.mustInclude,
     });
     const { error: seasonErr } = await supabase
       .from("programs").update({ plan: newPlan, in_season: nextSeason }).eq("id", program.id);
@@ -950,17 +1198,20 @@ function ActiveProgram({
         // computed off that fiction. The player already had the real numbers and
         // dropped them on the floor. `result` is absent when a session is ticked
         // off by hand rather than played, and 45 is still the estimate then.
-        const newDrills = logged.drills.map((d) => ({
-          name: d.name,
-          sets: d.sets,
-          reps: result?.repsByDrill[d.name] != null
+        const newDrills = logged.drills.map((d) => {
+          const reps = result?.repsByDrill[d.name] != null
             // repsByDrill is the TOTAL across sets; drills store per-set reps.
             ? Math.max(0, Math.round(result.repsByDrill[d.name] / Math.max(1, d.sets)))
-            : d.reps,
-          load_kg: null,
-        }));
+            : d.reps;
+          const base: TrainingDrill = { name: d.name, sets: d.sets, reps, load_kg: null };
+          // Programme warm-ups are retained in history but deliberately carry
+          // no working volume, PRs or tonnage.
+          return d.slot === "warmup"
+            ? withSets(base, Array.from({ length: Math.max(1, d.sets) }, () => ({ reps, load_kg: null, isWarmup: true })))
+            : base;
+        });
         const { data: existing } = await supabase
-          .from("training_logs").select("drills, total_minutes, intensity").eq("user_id", userId).eq("log_date", today).maybeSingle();
+          .from("training_logs").select("drills, total_minutes, intensity, session_type, notes").eq("user_id", userId).eq("log_date", today).maybeSingle();
         const merged = dedupeDrills([...(existing?.drills ?? []), ...newDrills]);
         /**
          * WHAT THE ATHLETE SAID BEATS WHAT WE GUESSED.
@@ -979,17 +1230,33 @@ function ActiveProgram({
          * athlete has not said.
          */
         const prescribed = prescribedEffort({ weeks: [{ sessions: [logged] }] } as never);
-        const intensity = existing?.intensity ?? prescribed ?? (logged.title.includes("Rehab") ? 4 : 7);
-        await supabase.from("training_logs").upsert(
+        const intensity = result?.intensity ?? existing?.intensity ?? prescribed ?? (logged.title.includes("Rehab") ? 4 : 7);
+        const { error: logErr } = await supabase.from("training_logs").upsert(
           {
             user_id: userId,
             log_date: today,
             drills: merged,
             total_minutes: (existing?.total_minutes ?? 0) + (result?.minutes ?? 45),
             intensity,
+            session_type: result?.sessionType ?? logged.kind ?? existing?.session_type ?? "workout",
+            notes: result?.notes ?? logged.notes ?? existing?.notes ?? null,
           },
           { onConflict: "user_id,log_date" }
         );
+        if (logErr) {
+          setActionError(`The session was completed, but its training log could not be saved: ${logErr.message}`);
+          return;
+        }
+        // Finishing the guided flow is itself today's training check-in. Insert
+        // the default wellness row only when one does not exist; an existing
+        // check-in keeps every answer the athlete already gave.
+        if (result) {
+          const { error: checkErr } = await supabase.from("daily_check_ins").upsert(
+            { user_id: userId, check_in_date: today },
+            { onConflict: "user_id,check_in_date" },
+          );
+          if (checkErr) setActionError(`Training was logged, but today's check-in could not be marked complete: ${checkErr.message}`);
+        }
       }
     }
     onChange();
@@ -1002,6 +1269,7 @@ function ActiveProgram({
     const newPlan = buildProgram({
       goal, painMap, isInSeason: program.in_season, block: nextBlock, sport, focus, position: positions,
       daysPerWeek: plan.weeks[0]?.sessions.length, notes: program.goal_notes,
+      goals: adaptiveGoals, settings: programSettings, mustInclude: programSettings.mustInclude,
       // Their tested maxes, so the next block is written in kilos rather than
       // in "pick something that feels about right".
       oneRepMax: latestBench,
@@ -1021,6 +1289,7 @@ function ActiveProgram({
     const { error: insErr } = await supabase.from("programs").insert({
       user_id: userId, goal_type: program.goal_type, goal_notes: program.goal_notes, plan: newPlan,
       status: "active", in_season: program.in_season, target_date: program.target_date, block: nextBlock,
+      goals: adaptiveGoals, settings: programSettings,
     });
     if (insErr) {
       setAdvancing(false);
@@ -1068,7 +1337,7 @@ function ActiveProgram({
         <div>
           <h1 className="text-3xl font-extrabold tracking-tight">My plan</h1>
           <p className="mt-1 text-sm capitalize text-pitch-400">
-            {GOALS.find((g) => g.id === goal)?.label} program · Block {program.block}
+            {adaptiveGoals.map((g) => goalLabel(g.type)).join(" + ")} · Block {program.block}
           </p>
         </div>
         {/* BOTH ESCAPE ROUTES EXISTED AND NEITHER READ AS ONE.
@@ -1195,6 +1464,11 @@ function ActiveProgram({
           <RingProgress pct={adherence} label={`${doneCount}/${totalSessions}`} sub="sessions" />
           <div className="flex-1">
             <p className="text-sm leading-relaxed text-slate-200">{plan.summary}</p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {adaptiveGoals.map((g) => (
+                <span key={g.type} className="chip text-pitch-400">{g.priority}. {goalLabel(g.type)}</span>
+              ))}
+            </div>
             {/* HOW THE BLOCK WAS BUILT, NOT A LIST OF ALARMS.
                 Every one of these rendered as a red ⚠️ chip. Two things were
                 wrong with that. A `chip` is a pill sized for two words, so a
@@ -1223,6 +1497,11 @@ function ActiveProgram({
                   );
                 })}
               </ul>
+            )}
+            {warmupWarnings.length > 0 && (
+              <p className="mt-3 rounded-xl border border-amber-400/20 bg-amber-400/[0.05] px-3 py-2 text-xs text-amber-200/90">
+                {warmupWarnings.length} saved weighted exercise{warmupWarnings.length === 1 ? " is" : "s are"} still labelled as warm-up. Rebuild or edit this block to move {warmupWarnings.length === 1 ? "it" : "them"} into main work; nothing was changed automatically.
+              </p>
             )}
           </div>
         </div>
@@ -1273,7 +1552,12 @@ function ActiveProgram({
               and left you to do it, Red told you to rest and gave you nothing
               to open. Now the plan itself changes. */}
           <div>
-            {readiness?.status === "Red" ? (
+            {todaySession.kind === "active_rest" ? (
+              <div className="mb-3 rounded-2xl border border-pitch-400/15 bg-pitch-400/[0.04] p-3 text-sm text-slate-200">
+                <b className="text-pitch-400">Active rest</b> · {todaySession.durationMinutes ?? 30} min · RPE {todaySession.rpe ?? 3}
+                {todaySession.notes && <span className="mt-1 block text-xs text-slate-400">{todaySession.notes}</span>}
+              </div>
+            ) : readiness?.status === "Red" ? (
               <div className="mb-3 rounded-2xl bg-readiness-red/10 p-3 text-sm text-slate-200">
                 Readiness is <b className="text-readiness-red">Red</b>, so today&apos;s{" "}
                 <b>{nextSession.s.title.split("· ")[1] ?? "session"}</b> has been swapped for active
@@ -1323,14 +1607,16 @@ function ActiveProgram({
                 </Link>
               </div>
             )}
-            <div className="mt-2">
+            {sessionDrills.length > 0 && <div className="mt-2">
               <SessionDrills
                 drills={sessionDrills}
                 onPick={(name) => setShowing(name)}
                 onSwap={saveSwap}
               />
-            </div>
-            <button onClick={() => setPlaying(true)} className="btn-primary mt-4">▶ Start guided session</button>
+            </div>}
+            <button onClick={() => setPlaying(true)} className="btn-primary mt-4">
+              ▶ {todaySession.kind === "active_rest" ? "Start active rest" : "Start guided session"}
+            </button>
           </div>
         </section>
       )}
@@ -1341,6 +1627,11 @@ function ActiveProgram({
         <WorkoutPlayer
           title={`Week ${nextSession.w} · ${todaySession.title}`}
           drills={sessionDrills}
+          activeRest={todaySession.kind === "active_rest" ? {
+            durationMinutes: todaySession.durationMinutes,
+            rpe: todaySession.rpe,
+            notes: todaySession.notes,
+          } : null}
           onComplete={(result) => { if (!program.completed_sessions.includes(`w${nextSession.w}d${nextSession.s.day}`)) void toggleSession(`w${nextSession.w}d${nextSession.s.day}`, result); }}
           onClose={() => setPlaying(false)}
         />

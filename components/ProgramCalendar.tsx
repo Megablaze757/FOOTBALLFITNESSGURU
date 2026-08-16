@@ -6,6 +6,7 @@ import { DrillModal } from "@/components/DrillDetail";
 import { SessionDrills } from "@/components/SessionDrills";
 import { sessionLength } from "@/lib/session-time";
 import { WeeklyVolume } from "@/components/WeeklyVolume";
+import { sessionExerciseCount } from "@/lib/program-preferences";
 
 // Week-by-week program calendar you tick through. Each session is a tile;
 // completing one calls onToggle (which also logs it to training).
@@ -71,7 +72,9 @@ export function ProgramCalendar({
                   <div
                     key={sid}
                     className={`rounded-2xl border p-3 transition ${
-                      done ? "border-pitch-400/30 bg-pitch-400/[0.06]" : "border-white/10 bg-white/[0.03]"
+                      s.kind === "active_rest"
+                        ? "border-sky-400/15 bg-sky-400/[0.035]"
+                        : done ? "border-pitch-400/30 bg-pitch-400/[0.06]" : "border-white/10 bg-white/[0.03]"
                     }`}
                   >
                     <div className="flex items-start justify-between gap-2">
@@ -79,7 +82,11 @@ export function ProgramCalendar({
                         <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Day {s.day}</div>
                         <div className="truncate text-sm font-semibold text-slate-100">{s.title.replace(/^.*· /, "")}</div>
                         {/* Whether it fits today, on the card you plan from. */}
-                        <div className="text-[11px] text-slate-500">{sessionLength(s)}</div>
+                        <div className="text-[11px] text-slate-500">
+                          {s.kind === "active_rest"
+                            ? `${s.durationMinutes ?? 30} min · RPE ${s.rpe ?? 3}`
+                            : `${sessionLength(s)} · ${sessionExerciseCount(s)} exercises`}
+                        </div>
                       </div>
                       <button
                         onClick={() => onToggle(sid)}
@@ -91,13 +98,14 @@ export function ProgramCalendar({
                         ✓
                       </button>
                     </div>
-                    <div className="mt-2">
+                    {s.notes && <p className="mt-2 text-xs text-slate-500">{s.notes}</p>}
+                    {s.drills.length > 0 && <div className="mt-2">
                       <SessionDrills
                         drills={s.drills}
                         compact
                         onPick={setOpen}
                       />
-                    </div>
+                    </div>}
                   </div>
                 );
               })}

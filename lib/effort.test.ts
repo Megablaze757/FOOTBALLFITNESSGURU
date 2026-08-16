@@ -137,7 +137,7 @@ test("completing a session never overwrites a reported effort", () => {
   const noComments = page.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
   assert.ok(!/const intensity = sess\.s\.title\.includes\("Rehab"\) \? 4 : 7;/.test(noComments),
     "the hardcoded 7 is back, and it clobbers whatever the athlete reported");
-  assert.match(noComments, /select\("drills, total_minutes, intensity"\)/,
+  assert.match(noComments, /select\("drills, total_minutes, intensity(?:, session_type, notes)?"\)/,
     "the existing row's intensity is not read, so it cannot be preserved");
   assert.match(noComments, /existing\?\.intensity \?\?/,
     "a reported intensity is no longer preferred over the estimate");

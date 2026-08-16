@@ -11,6 +11,7 @@
 // =============================================================================
 
 import type { TrainingDrill, TrainingLog } from "./types";
+import { workingSetsOf } from "./training-sets";
 
 export type Metric = "e1rm" | "tonnage" | "reps";
 
@@ -144,20 +145,21 @@ export function exerciseSeries(logs: TrainingLog[], name: string): ExercisePoint
     for (const d of drillsOf(log)) {
       if (exerciseKey(d?.name ?? "") !== key) continue;
 
-      const sets = num(d.sets);
-      const reps = num(d.reps);
-      const load = num(d.load_kg);
-      const totalReps = sets * reps;
+      const detail = workingSetsOf(d);
+      const sets = detail.length;
+      const totalReps = detail.reduce((n, s) => n + s.reps, 0);
 
       const p = byDate.get(log.log_date) ?? {
         date: log.log_date, reps: 0, sets: 0, tonnage: null, topLoad: null, e1rm: null,
       };
       p.sets += sets;
       p.reps += totalReps;
-      if (load > 0) {
-        p.tonnage = (p.tonnage ?? 0) + totalReps * load;
+      for (const set of detail) {
+        const load = num(set.load_kg);
+        if (load <= 0) continue;
+        p.tonnage = (p.tonnage ?? 0) + set.reps * load;
         p.topLoad = Math.max(p.topLoad ?? 0, load);
-        const est = estimate1RM(load, reps);
+        const est = estimate1RM(load, set.reps);
         // Best set of the day wins — a heavy triple beats a light ten.
         if (est != null) p.e1rm = Math.max(p.e1rm ?? 0, est);
       }

@@ -74,6 +74,25 @@ test("the best set of the day sets the day's estimate", () => {
   assert.equal(p.topLoad, 120);
 });
 
+test("warm-up sets never create a PR or inflate working volume", () => {
+  const logs = [log("2026-01-01", [{
+    name: "Squat",
+    sets: 1,
+    reps: 5,
+    load_kg: 60,
+    sets_detail: [
+      { reps: 1, load_kg: 100, isWarmup: true },
+      { reps: 5, load_kg: 60 },
+    ],
+  }])];
+  const [p] = exerciseSeries(logs, "Squat");
+  assert.equal(p.sets, 1);
+  assert.equal(p.reps, 5);
+  assert.equal(p.tonnage, 300);
+  assert.equal(p.topLoad, 60);
+  assert.equal(p.e1rm, estimate1RM(60, 5));
+});
+
 // --- series ------------------------------------------------------------------
 
 test("a day's sets are summed and the days come back in order", () => {

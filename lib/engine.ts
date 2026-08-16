@@ -75,9 +75,21 @@ export interface ProgramDrill {
   /** "RPE 8" — how hard this should feel. */
   intensity?: string;
   tempo?: string;
+  /** Preparation template item: one completion tap, never load tracking. */
+  completionOnly?: boolean;
 }
 
-export interface ProgramSession { day: number; title: string; focus: GoalType; drills: ProgramDrill[] }
+export interface ProgramSession {
+  day: number;
+  title: string;
+  focus: GoalType;
+  drills: ProgramDrill[];
+  /** Active rest is a real scheduled day, not an empty workout. */
+  kind?: "workout" | "active_rest";
+  durationMinutes?: number | null;
+  rpe?: number | null;
+  notes?: string | null;
+}
 export interface ProgramWeek { week: number; theme: string; intensity: string; focusNote: string; sessions: ProgramSession[] }
 export interface ProgramPlan {
   goal: GoalType;
@@ -85,6 +97,10 @@ export interface ProgramPlan {
   constraints: string[];
   weeks: ProgramWeek[];
   block?: number;
+  /** Ordered goal badges that explain what drove this programme. */
+  goals?: import("./program-preferences").GoalPreference[];
+  /** The generation controls used for this block, retained for rebuilds. */
+  settings?: import("./program-preferences").ProgramSettings;
 }
 
 export interface EngineInput {
@@ -113,6 +129,8 @@ export interface EngineInput {
    * Three when the athlete is arriving tired — see lib/deload.ts.
    */
   blockWeeks?: number;
+  goals?: import("./program-preferences").GoalPreference[];
+  settings?: import("./program-preferences").ProgramSettings;
 }
 
 // --- Pain ---------------------------------------------------------------------
