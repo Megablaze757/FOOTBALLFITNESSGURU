@@ -294,7 +294,14 @@ test("a deload eases the same session rather than replacing it", () => {
   const plan = buildProgram({ goal: "strength", painMap: {}, sport: "gym", focus: "aesthetics", daysPerWeek: 4 });
   const peak = plan.weeks[2].sessions[0];
   const deload = plan.weeks[3].sessions[0];
-  assert.deepEqual(deload.drills.map((d) => d.name), peak.drills.map((d) => d.name));
+  /**
+   * The LIFTING is what must be identical. The conditioning finisher is
+   * deliberately easier on a down week — cardioFinisher drops its effort
+   * ceiling from 7 to 4 — so comparing it here would fail the block for doing
+   * exactly what a deload is supposed to do.
+   */
+  const lifts = (s: typeof peak) => s.drills.filter((d) => d.slot !== "conditioning").map((d) => d.name);
+  assert.deepEqual(lifts(deload), lifts(peak));
   const sets = (s: typeof peak) => s.drills.reduce((n, d) => n + d.sets, 0);
   assert.ok(sets(deload) < sets(peak), `deload carries ${sets(deload)} sets against a peak of ${sets(peak)}`);
 });

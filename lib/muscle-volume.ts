@@ -598,21 +598,37 @@ export function volumeShortfall(plan: ProgramPlan): string | null {
   const list = named.length === 1 ? named[0]
     : `${named.slice(0, -1).join(", ")} and ${named[named.length - 1]}`;
   /**
-   * The advice has to fit the week it is given about.
+   * SAY WHAT THE BLOCK PRIORITISED, NOT WHAT IT COULD NOT AFFORD.
    *
-   * "Add a training day" is the right answer at three and the wrong one at six,
-   * where there is no seventh day to add and the shortfall is a deliberate
-   * trade: the block is spending its budget on the big compound groups, which
-   * is what a coach does and what the athlete should be told it did.
+   * The first version of this opened "there isn't room to push everything" and
+   * closed by telling a three-day athlete to add a training day. Both true, and
+   * together they are a sales pitch for convenience followed by a note saying
+   * the thing you were sold is not enough. Nobody chooses three days because
+   * they had not thought about four; they choose it because that is the week
+   * they have. Telling them their programme is second best is not coaching —
+   * it is the app apologising for a decision the athlete already made well.
+   *
+   * A coach with three sessions says which lifts get the volume and why, and
+   * mentions the fourth day as an option rather than a correction. Same facts,
+   * and the athlete finishes reading it knowing their block is deliberate.
    */
-  const advice = days >= 6
-    ? `That is the trade this block makes on purpose — the compound work gets the volume, and ${named.length === 1 ? "this" : "these"} hold${named.length === 1 ? "s" : ""}. Add sets to them yourself if you want them pushed.`
-    : `Everything else is in that band. Adding a training day is the one change that moves this.`;
+  const priority = days >= 6
+    ? "The compound work is taking the volume, which is where the size and strength come from."
+    : `Your ${days} sessions are spent on the big lifts first, which is where most of the growth comes from.`;
+
+  const option = days >= 5
+    ? ""
+    : ` If you ever add a ${days + 1}${days + 1 === 4 ? "th" : days + 1 === 3 ? "rd" : "th"} day, ${list} ${named.length === 1 ? "is" : "are"} what it would go on.`;
 
   return (
-    `On ${days} day${days === 1 ? "" : "s"} a week there isn't room to push everything: ` +
-    `${list} sit at a holding dose rather than the 10-20 sets a week that builds fastest. ${advice}`
+    `${priority} ${cap(list)} ${named.length === 1 ? "is" : "are"} held at a maintenance dose rather than ` +
+    `pushed — enough to keep what you have while the rest moves forward.${option}`
   );
+}
+
+/** Capitalise the first letter of a muscle list used at the start of a clause. */
+function cap(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 /**

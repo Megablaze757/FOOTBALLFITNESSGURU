@@ -493,21 +493,26 @@ test("a loaded calf raise is not discounted like a banded walk", () => {
 
 test("a block says up front what it cannot deliver", () => {
   /**
-   * The floor is guaranteed now, but maintenance is not what somebody asking to
-   * build muscle wants — and on three days across ten muscle groups the
-   * arithmetic does not reach the productive band for all of them: three
-   * sessions is about 84 working sets where the band would want 110.
+   * The floor is guaranteed now, but on three days across ten muscle groups the
+   * arithmetic does not reach the productive band for all of them. That is a
+   * fact about the week, not a fault in the engine, and it has to be said where
+   * the athlete sees it — the progress page used to report the same shortfall
+   * days later, which reads as the app contradicting itself.
    *
-   * That is a fact about the week, not a fault in the engine. What was
-   * unacceptable was WHERE the athlete found out: the progress page measured the
-   * same block and reported the shortfall days later, which reads as the app
-   * contradicting itself.
+   * SAID AS A PRIORITY, NOT AN APOLOGY. The first version opened "there isn't
+   * room to push everything" and closed by telling a three-day athlete to add a
+   * day — selling somebody convenience and then informing them it is not
+   * enough. Nobody picks three days because they had not considered four.
    */
   const three = buildProgram({ painMap: {}, goal: "strength", sport: "gym", focus: "aesthetics", daysPerWeek: 3 } as never);
-  const note = three.constraints.find((c) => /sets a week that builds fastest/.test(c));
+  const note = three.constraints.find((c) => /maintenance dose/.test(c));
   assert.ok(note, `a 3-day block promises the productive band silently: ${three.constraints.join(" | ")}`);
-  assert.match(note!, /3 days a week/);
-  assert.match(note!, /Adding a training day/, "the one change that actually moves it is not offered");
+
+  // It leads with what the block prioritised.
+  assert.match(note!, /big lifts first/, "the note does not say what the sessions were spent on");
+  // The extra day is an option, not a correction.
+  assert.match(note!, /If you ever add a 4th day/, "the fourth day is not offered as an option");
+  assert.ok(!/isn't room|not enough|inadequate/i.test(note!), `the note apologises for the athlete's week: ${note}`);
 
   // And the muscles it names are the ones actually short, not a guess from the
   // day count — a sentence naming the wrong muscles is worse than no sentence.
@@ -521,15 +526,15 @@ test("it does not tell a six-day athlete to add a seventh day", () => {
   // Advice has to fit the week it is given about. At six days there is no day
   // to add, and the shortfall is a deliberate trade rather than a gap.
   const six = buildProgram({ painMap: {}, goal: "strength", sport: "gym", focus: "aesthetics", daysPerWeek: 6 } as never);
-  const note = six.constraints.find((c) => /sets a week that builds fastest/.test(c));
-  if (note) assert.ok(!/Adding a training day/.test(note), `told a 6-day athlete to add a day: ${note}`);
+  const note = six.constraints.find((c) => /maintenance dose/.test(c));
+  if (note) assert.ok(!/add a 7th day/i.test(note), `told a 6-day athlete to add a day: ${note}`);
 });
 
 test("a block that reaches the band everywhere says nothing", () => {
   // Advice that appears on every plan is advice people stop reading.
   const perf = buildProgram({ painMap: {}, goal: "speed", sport: "football", focus: "performance", daysPerWeek: 4 } as never);
   assert.ok(
-    !perf.constraints.some((c) => /sets a week that builds fastest/.test(c)),
+    !perf.constraints.some((c) => /maintenance dose/.test(c)),
     "a performance block is being lectured about hypertrophy volume it never promised",
   );
 });

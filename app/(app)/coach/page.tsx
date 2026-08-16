@@ -40,6 +40,9 @@ import { Tabs, TabPanel } from "@/components/Tabs";
 import { CoachChat } from "@/components/CoachChat";
 import { ProgramCalendar } from "@/components/ProgramCalendar";
 import { SessionDrills } from "@/components/SessionDrills";
+import { ExerciseModal } from "@/components/ExerciseDetail";
+import { getExerciseByName } from "@/lib/exercises";
+import { sessionLength } from "@/lib/session-time";
 import { WorkoutPlayer, type SessionResult } from "@/components/WorkoutPlayer";
 import type { CheckInInput, DailyCheckIn, Program, StrengthBenchmark, Tier, TrainingLog, TrainingDrill } from "@/lib/types";
 import { daysAgoLocal, todayLocal } from "@/lib/day";
@@ -811,6 +814,15 @@ function ActiveProgram({
   const [switching, setSwitching] = useState(false);
   const [advancing, setAdvancing] = useState(false);
   const [playing, setPlaying] = useState(false);
+  /**
+   * The exercise whose detail sheet is open.
+   *
+   * Tapping a drill in today's session did nothing — SessionDrills has taken an
+   * `onPick` since it was written and this page never passed one, so the
+   * library's demo, how-to and cues were one tap away everywhere in the app
+   * EXCEPT the screen where you are about to do the movement.
+   */
+  const [showing, setShowing] = useState<string | null>(null);
   const [tab, setTab] = useState<CoachTab>("today");
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -1211,7 +1223,13 @@ function ActiveProgram({
                 {readiness.advice} What you actually do is what gets logged.
               </div>
             ) : (
-              <div className="text-sm font-semibold text-slate-100">Week {nextSession.w} · {todaySession.title}</div>
+              <div className="flex flex-wrap items-baseline gap-x-2 text-sm font-semibold text-slate-100">
+                <span>Week {nextSession.w} · {todaySession.title}</span>
+                {/* HOW LONG IT TAKES, next to what it is. The one fact that
+                    decides whether somebody trains today was the one the card
+                    did not carry — see lib/session-time.ts. */}
+                <span className="text-xs font-medium text-slate-400">{sessionLength({ drills: sessionDrills })}</span>
+              </div>
             )}
             {loggedToday && (
               <p className="mb-2 mt-1 text-xs text-slate-400">
@@ -1239,12 +1257,17 @@ function ActiveProgram({
             <div className="mt-2">
               <SessionDrills
                 drills={sessionDrills}
+                onPick={(name) => setShowing(name)}
                 onSwap={saveSwap}
               />
             </div>
             <button onClick={() => setPlaying(true)} className="btn-primary mt-4">▶ Start guided session</button>
           </div>
         </section>
+      )}
+
+      {showing && getExerciseByName(showing) && (
+        <ExerciseModal ex={getExerciseByName(showing)!} onClose={() => setShowing(null)} />
       )}
 
       {playing && nextSession && todaySession && (

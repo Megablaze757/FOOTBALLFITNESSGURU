@@ -242,7 +242,42 @@ export function WorkoutPlayer({ title, drills, onComplete, onClose }: {
               <button onClick={() => setActual((r) => r + 1)} className="grid h-11 w-11 place-items-center rounded-full border border-white/15 text-xl text-slate-200 hover:bg-white/5" aria-label="one more rep">+</button>
             </div>
 
-            {ex && <p className="mx-auto mt-4 max-w-xs text-xs text-slate-500">{ex.cues[0]}</p>}
+            {ex && ex.cues.length > 0 && (
+              <p className="mx-auto mt-4 max-w-xs text-xs text-slate-500">{ex.cues[0]}</p>
+            )}
+
+            {/* HOW TO DO IT, WHERE YOU ARE ABOUT TO DO IT.
+                The player showed the demo animation and a single cue. Everything
+                else the library knows — the full step-by-step, the rest of the
+                cues, the common error — was on a screen you had to leave the
+                session to reach. The one moment an athlete most needs to be told
+                how to perform a lift is while standing in front of it, and that
+                was the one place the app would not tell them.
+
+                Collapsed by default: somebody on set four of five does not need
+                a paragraph in the way, and somebody meeting the movement for the
+                first time is one tap from all of it. */}
+            {ex && (ex.hasHowTo || ex.cues.length > 1) && (
+              <details className="mx-auto mt-4 max-w-sm text-left">
+                <summary className="tap-target cursor-pointer list-none text-center text-xs font-semibold text-pitch-400">
+                  How to do it
+                </summary>
+                <div className="mt-2 rounded-2xl bg-white/[0.04] p-3">
+                  {ex.hasHowTo && ex.description && (
+                    <p className="text-xs leading-relaxed text-slate-300">{ex.description}</p>
+                  )}
+                  {ex.cues.length > 1 && (
+                    <ul className={`space-y-1.5 ${ex.hasHowTo && ex.description ? "mt-3" : ""}`}>
+                      {ex.cues.map((c) => (
+                        <li key={c} className="flex gap-2 text-xs text-slate-300">
+                          <span className="text-pitch-400">›</span>{c}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </details>
+            )}
             <button onClick={completeSet} className="btn-primary mx-auto mt-6 max-w-[16rem]">
               {i >= steps.length - 1 ? "Finish session ✓" : "Log set ✓"}
             </button>

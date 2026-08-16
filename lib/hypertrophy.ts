@@ -720,8 +720,9 @@ function pickForSession(
  * a rushed third set of squats is a worse set of squats. Isolation gets ninety
  * seconds because a cable fly recovers locally and quickly.
  */
-const REST_COMPOUND = 180;
-const REST_ISOLATION = 90;
+const REST_ANCHOR = 180;
+const REST_COMPOUND = 120;
+const REST_ISOLATION = 60;
 
 /**
  * A WORKING WEIGHT, WHERE THE APP ALREADY KNOWS ENOUGH TO GIVE ONE.
@@ -765,7 +766,7 @@ function loadFor(
   return `${rounded}kg · leave ${rir} in the tank`;
 }
 
-function drillFrom(m: Movement, weekIndex: number, blockScale: number, load: string | null): ProgramDrill {
+function drillFrom(m: Movement, weekIndex: number, blockScale: number, load: string | null, anchor: boolean): ProgramDrill {
   const { sets, reps } = prescribe(m.compound, weekIndex);
   const cue = m.ex.cues?.[0] ?? "Control the lowering, full range, no swinging.";
   const role = m.compound ? "Main lift" : "Isolation";
@@ -790,7 +791,11 @@ function drillFrom(m: Movement, weekIndex: number, blockScale: number, load: str
     cue,
     reason: `${role} for ${GROUP_LABEL[m.group]}. ${why}`,
     progression: WEEK_PROGRESSION[weekIndex],
-    rest: m.compound ? REST_COMPOUND : REST_ISOLATION,
+    // Three minutes is for the lift the session is BUILT on — the heaviest
+    // thing you do, limited by systemic fatigue. Giving every compound the same
+    // rest priced a hypertrophy day at 145 minutes, which is not a session
+    // anybody finishes; the second and third compounds recover in two.
+    rest: !m.compound ? REST_ISOLATION : anchor ? REST_ANCHOR : REST_COMPOUND,
     // Reps in reserve, not RPE, and spelled out — "RPE 8" is jargon to most
     // people using this, and "leave 2 in the tank" is the same instruction.
     intensity: load ?? (rir === 0 ? "to failure" : `leave ${rir} in the tank`),
@@ -872,7 +877,9 @@ export function buildHypertrophyProgram(input: HypertrophyInput): ProgramPlan {
     // satisfies GoalType.
     const sessions: ProgramSession[] = split.map((day, di): ProgramSession => {
       const movements = blockMovements[di];
-      const drills = movements.map((m) => drillFrom(m, wi, blockScale * seasonScale, loadFor(m, wi, input.oneRepMax)));
+      // The anchor is the first movement of the session — see pickForSession.
+      const drills = movements.map((m, mi) =>
+        drillFrom(m, wi, blockScale * seasonScale, loadFor(m, wi, input.oneRepMax), mi === 0));
       const covered = [...new Set(movements.map((m) => GROUP_LABEL[m.group]))];
       // A finisher, and the only aerobic work a bodybuilding split had. Without
       // it "gym + build muscle" — the most common pair in the app — was the one
@@ -923,11 +930,55 @@ export function buildHypertrophyProgram(input: HypertrophyInput): ProgramPlan {
  * VO2 session on top of a leg day is not a finisher, it is a second workout,
  * and it would eat the recovery the hypertrophy block is spending.
  */
+/**
+ * The longest a finisher may be. Past this it is a second session.
+ *
+ * Thirty, not twenty. Twenty was the first guess and it cut too deep — an easy
+ * thirty-minute spin after lifting is an ordinary thing to prescribe, and
+ * removing it left a gym strength block with no aerobic work of any kind. What
+ * had to go is the seventy-five-minute long run, and everything at forty and
+ * fifty that is a training session in its own right.
+ */
+const MAX_FINISHER_MINUTES = 30;
+
+/**
+ * Roughly how long a conditioning movement takes, from its own dose.
+ *
+ * Minutes where the unit is minutes; otherwise sets times reps of whatever it
+ * is, plus the rests, which is close enough to sort a twelve-minute interval
+ * set from a seventy-five-minute run.
+ */
+function finisherMinutes(m: (typeof MOVEMENTS)[number]): number {
+  const sets = Math.max(1, m.dose.sets);
+  if (/min/i.test(m.dose.unit)) return sets * m.dose.reps;
+  if (/\bs\b|sec/i.test(m.dose.unit)) {
+    return (sets * m.dose.reps + Math.max(0, sets - 1) * (m.dose.rest ?? 60)) / 60;
+  }
+  // Distance work: price the rests, which dominate a short-interval set, and
+  // allow a generous half-minute per effort.
+  return (sets * 30 + Math.max(0, sets - 1) * (m.dose.rest ?? 60)) / 60;
+}
+
 function cardioFinisher(offset: number, deload: boolean, constraints: Constraints): ProgramDrill | null {
   const ceiling = deload ? 4 : 7;
+  /**
+   * A FINISHER HAS TO BE FINISHER-LENGTH.
+   *
+   * The effort ceiling was the only filter, so a "Long run" — one by seventy-five
+   * minutes, easy enough to pass an RPE test — was landing at the end of a
+   * hypertrophy day. That is not a finisher; it is a second session bolted onto
+   * a first, and it put a real generated day at 135 minutes with an hour of it
+   * after the last set. Nobody noticed because nothing on the screen added the
+   * session up. See lib/session-time.ts, which is how this surfaced.
+   *
+   * Thirty minutes is the bar. It keeps intervals, tempo work and an easy
+   * recovery run, and drops the forty-, fifty- and seventy-five-minute runs
+   * that are sessions in their own right.
+   */
   const pool = MOVEMENTS.filter(
     (m) => m.slot === "conditioning" &&
       (m.dose.rpe ?? 10) <= ceiling &&
+      finisherMinutes(m) <= MAX_FINISHER_MINUTES &&
       !isExcluded(constraints, m.region, m.name),
   );
   if (!pool.length) return null;

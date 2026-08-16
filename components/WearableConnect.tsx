@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { copyText } from "@/lib/clipboard";
 import { createClient } from "@/lib/supabase/client";
 import { invokeAI } from "@/lib/api";
 import { useAsync } from "@/lib/use-async";
@@ -215,6 +216,17 @@ function AppleSetup({ token, onDone }: { token: string | null; onDone: () => voi
   const [minted, setMinted] = useState<{ token: string; url: string } | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  /**
+   * Show the link in full, unmasked and selectable.
+   *
+   * Masking is right by default — this URL carries a token that writes
+   * biometrics for the account, and it renders on a screen people hand around.
+   * But it must always be possible to SEE it: the whole point of this panel is
+   * to get that string into another app, and a value nobody can read or select
+   * has no manual fallback when the clipboard refuses.
+   */
+  const [reveal, setReveal] = useState(false);
+  const [copyFailed, setCopyFailed] = useState(false);
 
   /**
    * The endpoint a Shortcut posts to — the Supabase Edge Function.
@@ -325,10 +337,29 @@ function AppleSetup({ token, onDone }: { token: string | null; onDone: () => voi
     }
   }
 
+  /**
+   * COPY CAN FAIL, AND WHEN IT DOES THE ATHLETE MUST STILL GET THE URL.
+   *
+   * This was a bare `await navigator.clipboard.writeText(value)` with no catch.
+   * On iOS that rejects often enough to matter — an unfocused document, an
+   * in-app browser, a home-screen PWA — and when it did, the promise died
+   * silently: nothing on the clipboard, the button never said "Copied", and the
+   * link was rendered masked so it could not be read or selected by hand
+   * either. The reported symptom was "in the Shortcuts app it won't let me
+   * paste the url", and it was right: there was nothing to paste, and no way to
+   * get at it.
+   */
   async function copy(what: string, value: string) {
-    await navigator.clipboard.writeText(value);
-    setCopied(what);
-    setTimeout(() => setCopied(null), 2000);
+    const result = await copyText(value);
+    if (result === "copied") {
+      setCopied(what);
+      setTimeout(() => setCopied(null), 2000);
+      return;
+    }
+    // Reveal it instead. A URL you can long-press and copy by hand is a working
+    // route; a Copy button that quietly does nothing is not.
+    setReveal(true);
+    setCopyFailed(true);
   }
 
   return (
@@ -376,8 +407,20 @@ function AppleSetup({ token, onDone }: { token: string | null; onDone: () => voi
               value={sleepOnly}
               copied={copied === "link"}
               onCopy={() => copy("link", sleepOnly)}
-              secret
+              secret={!reveal}
+              onReveal={() => setReveal((v) => !v)}
+              revealed={reveal}
             />
+            {copyFailed && (
+              /* Said plainly, with the way out. Safari refuses the clipboard
+                 often enough on a phone that this is a normal path, not an
+                 error state — so it reads as an instruction rather than a
+                 failure. */
+              <p className="mt-1.5 rounded-lg bg-amber-500/10 px-2.5 py-2 text-[11px] leading-relaxed text-amber-300">
+                Your browser blocked the copy. The full link is shown above — press and hold it,
+                choose <b>Select&nbsp;All</b>, then <b>Copy</b>.
+              </p>
+            )}
           </div>
 
           <ol className="space-y-3 text-xs text-slate-400">
@@ -392,11 +435,34 @@ function AppleSetup({ token, onDone }: { token: string | null; onDone: () => voi
               <b className="text-slate-200"> Get Details of Health Sample</b> and choose
               <b className="text-slate-200"> Duration</b>.
             </Step>
-            <Step n={3} title="Send it">
-              Add <b className="text-slate-200">Get Contents of URL</b> and paste your link — it already ends
-              with <code className="text-slate-300">&amp;sleep=</code>. Put the cursor at the very end and tap the
-              <b className="text-slate-200"> Duration</b> variable above the keyboard. That is the whole
-              shortcut: no headers, no JSON, nothing to switch on.
+            {/* PASTE INTO A TEXT ACTION, NOT INTO THE URL FIELD.
+                This used to say "add Get Contents of URL and paste your link".
+                That field is a URL field, and on iOS tapping it often opens it
+                for editing without placing a cursor — so the long-press Paste
+                menu never appears and the athlete is left holding a link the
+                app will not accept. Reported as "it won't let me paste the
+                url", and the guide had no other route to offer.
+
+                A Text action is a plain multi-line box: paste always works
+                there, the variable is easier to drop on the end because you can
+                see the whole string, and Get Contents of URL takes the Text as
+                its input. One extra action, and it removes the only step in
+                this guide that can refuse you. */}
+            <Step n={3} title="Paste your link into a Text box">
+              Search <b className="text-slate-200">Text</b> and tap it — a plain empty box. Tap inside it and
+              paste. Your link already ends with <code className="text-slate-300">&amp;sleep=</code>, so put the
+              cursor right at the end and tap the <b className="text-slate-200">Duration</b> variable above the
+              keyboard.
+              <span className="mt-1 block text-slate-500">
+                Use a Text box rather than pasting into the URL field directly — the URL field often will not
+                offer you a Paste option, and this one always does.
+              </span>
+            </Step>
+            <Step n={4} title="Send it">
+              Add <b className="text-slate-200">Get Contents of URL</b>. It will pick up the
+              <b className="text-slate-200"> Text</b> above it automatically — if it does not, tap the URL field
+              once and choose the <b className="text-slate-200">Text</b> variable. That is the whole shortcut:
+              no headers, no JSON, nothing to switch on.
             </Step>
           </ol>
 
@@ -483,16 +549,32 @@ function AppleSetup({ token, onDone }: { token: string | null; onDone: () => voi
   );
 }
 
-function Copyable({ label, value, copied, onCopy, secret }: {
+function Copyable({ label, value, copied, onCopy, secret, onReveal, revealed }: {
   label: string; value: string; copied: boolean; onCopy: () => void; secret?: boolean;
+  /** Optional: let the athlete unmask the value and select it by hand. */
+  onReveal?: () => void;
+  revealed?: boolean;
 }) {
   return (
-    <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/30 p-2">
-      <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider text-slate-500">{label}</span>
-      <code className="min-w-0 flex-1 truncate text-xs text-slate-300">
-        {secret ? maskSecret(value) : value}
-      </code>
-      <button onClick={onCopy} className="chip shrink-0 text-pitch-400">{copied ? "Copied" : "Copy"}</button>
+    <div className="rounded-xl border border-white/10 bg-black/30 p-2">
+      <div className="flex items-center gap-2">
+        <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider text-slate-500">{label}</span>
+        {/* WRAPPED, NOT TRUNCATED, once revealed. A URL cut off with an ellipsis
+            cannot be selected in full by hand, which defeats the only fallback
+            there is when the clipboard refuses. */}
+        <code className={`min-w-0 flex-1 text-xs text-slate-300 ${revealed ? "select-all break-all" : "truncate"}`}>
+          {secret ? maskSecret(value) : value}
+        </code>
+        <button onClick={onCopy} className="chip shrink-0 text-pitch-400">{copied ? "Copied" : "Copy"}</button>
+      </div>
+      {onReveal && (
+        <button
+          onClick={onReveal}
+          className="tap-target mt-1 text-[11px] font-semibold text-slate-400 hover:text-slate-200"
+        >
+          {revealed ? "Hide" : "Show the full link"}
+        </button>
+      )}
     </div>
   );
 }

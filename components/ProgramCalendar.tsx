@@ -5,6 +5,7 @@ import type { ProgramWeek } from "@/lib/coach";
 import { getExerciseByName, type Exercise } from "@/lib/exercises";
 import { ExerciseModal } from "@/components/ExerciseDetail";
 import { SessionDrills } from "@/components/SessionDrills";
+import { sessionLength } from "@/lib/session-time";
 import { WeeklyVolume } from "@/components/WeeklyVolume";
 
 // Week-by-week program calendar you tick through. Each session is a tile;
@@ -33,15 +34,23 @@ export function ProgramCalendar({
         // phone. Open the week you're actually working through; fold the rest.
         const isCurrent = w.week === currentWeek;
         return (
-          <details key={w.week} open={isCurrent} className="card p-4">
-            <summary className="mb-3 flex cursor-pointer list-none items-center justify-between">
-              <span>
+          <details key={w.week} open={isCurrent} className="group card p-4">
+            {/* THE WHOLE ROW OPENS THE WEEK, and it says so.
+                This was a summary with no padding and no marker: the hit area
+                was the height of the text, "Open" appeared only on folded weeks
+                and looked like a label rather than a control, and there was no
+                chevron to say the row did anything at all. On a phone that is a
+                row you have to aim at to read your own programme. */}
+            <summary className="tap-target -mx-2 mb-3 flex cursor-pointer list-none items-center justify-between gap-2 rounded-xl px-2 py-2 transition hover:bg-white/[0.04]">
+              <span className="min-w-0">
                 <span className="block font-bold text-slate-100">Week {w.week} · {w.theme}</span>
-                <span className="block text-xs text-slate-400">{w.intensity} intensity</span>
+                <span className="block text-xs text-slate-400">
+                  {w.intensity} intensity · {w.sessions.length} session{w.sessions.length === 1 ? "" : "s"}
+                </span>
               </span>
-              <span className="flex items-center gap-2 text-xs text-slate-400">
-                {wDone}/{w.sessions.length}
-                {!isCurrent && <span className="text-pitch-400">Open</span>}
+              <span className="flex shrink-0 items-center gap-2 text-xs text-slate-400">
+                <span className="tabular-nums">{wDone}/{w.sessions.length}</span>
+                <span className="text-sm transition group-open:rotate-180" aria-hidden>▾</span>
               </span>
             </summary>
 
@@ -70,6 +79,8 @@ export function ProgramCalendar({
                       <div className="min-w-0">
                         <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Day {s.day}</div>
                         <div className="truncate text-sm font-semibold text-slate-100">{s.title.replace(/^.*· /, "")}</div>
+                        {/* Whether it fits today, on the card you plan from. */}
+                        <div className="text-[11px] text-slate-500">{sessionLength(s)}</div>
                       </div>
                       <button
                         onClick={() => onToggle(sid)}
