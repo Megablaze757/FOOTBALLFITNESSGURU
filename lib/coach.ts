@@ -16,7 +16,7 @@ import { positionProfile } from "./position-profile";
 import { sportTerms } from "./sport-terms";
 import { MOVEMENTS, regionOfMovement, type Movement, type GoalType, type BodyArea } from "./movements";
 import { buildBlock, painByArea, type ProgramPlan, type TrainingFocus } from "./engine";
-import { balancePlanVolume, spacePlanSessions, volumeShortfall } from "./muscle-volume";
+import { balancePlanVolume, spacePlanSessions, volumeShortfall, LANDMARKS } from "./muscle-volume";
 import { buildRunProgram, type RunnerLevel } from "./running";
 
 // The catalogue lives in ./movements and the block builder in ./engine. This
@@ -139,8 +139,24 @@ const LIBRARY: Movement[] = MOVEMENTS;
  * them the other way round would leave the spacing correct and the sets wrong
  * on a session the balance pass then re-read.
  */
-function finish(plan: ProgramPlan): ProgramPlan {
-  const done = spacePlanSessions(balancePlanVolume(plan));
+function finish(plan: ProgramPlan, input: BuildProgramInput): ProgramPlan {
+  /**
+   * WHAT COUNTS AS ENOUGH DEPENDS ON WHAT THEY ASKED FOR.
+   *
+   * The floor was maintenance — six weekly sets — for every block the app
+   * builds. That is the dose that HOLDS what you already have, and it was the
+   * engine's guaranteed minimum for people who had asked it to build them
+   * something. Measured: 53% of the trained muscles in generated blocks sat
+   * below the productive band, while the app labelled them productive.
+   *
+   * In-season is the one case where maintenance is the right answer and not a
+   * shortfall: the sport is the training load, and the gym's job is to keep
+   * tissue robust without adding fatigue to a competition week. Everywhere else
+   * — which is most athletes, most of the time — the block should aim at the
+   * band it tells them about.
+   */
+  const floor = input.isInSeason ? LANDMARKS.maintenance : LANDMARKS.productiveLow;
+  const done = spacePlanSessions(balancePlanVolume(plan, floor));
   // And then say what it delivers. A week that cannot reach the productive band
   // for every muscle is a fact about the day count, not a fault — but the
   // athlete should hear it from the plan rather than from the progress page
@@ -422,7 +438,7 @@ export function buildProgram(input: BuildProgramInput): ProgramPlan {
       isInSeason: input.isInSeason,
       style: input.style,
       oneRepMax: input.oneRepMax,
-    }));
+    }), input);
   }
 
   const plan = buildBlock({
@@ -448,7 +464,7 @@ export function buildProgram(input: BuildProgramInput): ProgramPlan {
    * this stays a correction to the dose.
    */
   return {
-    ...finish(plan),
+    ...finish(plan, input),
     summary: programSummary(input.goal, sore, input.isInSeason ?? false, block, input.sport, input.position, input.focus, input.daysPerWeek),
     constraints: [
       ...(sore.length ? [`Protecting your ${sore.map(prettyArea).join(", ")} — high-impact loading on these is dialled back.`] : []),

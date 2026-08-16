@@ -26,7 +26,7 @@ import { can } from "@/lib/subscription";
 import type { SportId } from "@/lib/exercises";
 import type { SplitStyle } from "@/lib/hypertrophy";
 import { templatesForSport } from "@/lib/programs";
-import { assessReadiness } from "@/lib/readiness";
+import { readinessFor } from "@/lib/readiness";
 import { computeACWR } from "@/lib/load";
 import { invokeAI } from "@/lib/api";
 import {
@@ -73,21 +73,16 @@ function deadlineInfo(startDate: string, targetDate: string, adherencePct: numbe
   return { daysLeft, elapsedPct: Math.round(elapsedPct), onTrack };
 }
 
+// Training load is part of the verdict, not a separate panel — see
+// lib/readiness.ts. Without it the plan page can tell you you're good to go
+// while Progress shows a red load spike.
+//
+// The body of this used to live here, which is why the check-in — offering the
+// SAME session to log — had no readiness at all and handed over the unadjusted
+// prescription. One implementation now, in lib/readiness.ts, so the two pages
+// cannot reach different verdicts from the same rows.
 function readinessOf(checkIn: DailyCheckIn | null, training: TrainingLog[] = []) {
-  if (!checkIn) return null;
-  const input: CheckInInput = {
-    pain_map: checkIn.pain_map ?? {},
-    fatigue_score: checkIn.fatigue_score,
-    sleep_quality: checkIn.sleep_quality,
-    nutrition_quality: checkIn.nutrition_quality,
-    weight_kg: checkIn.weight_kg,
-    is_match_day: checkIn.is_match_day,
-    match_minutes_played: checkIn.match_minutes_played,
-  };
-  // Training load is part of the verdict, not a separate panel — see
-  // lib/readiness.ts. Without this the plan page can tell you you're good to go
-  // while Progress shows a red load spike.
-  return assessReadiness(input, { acwr: computeACWR(training).ratio });
+  return readinessFor(checkIn, computeACWR(training).ratio);
 }
 
 type CoachTab = "today" | "program";

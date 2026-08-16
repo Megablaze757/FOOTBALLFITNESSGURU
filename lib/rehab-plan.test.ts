@@ -293,3 +293,32 @@ test("rehab work is marked as rehab, so it is not passed off as training", () =>
   assert.match(drills, /!d\.rehab/,
     "swapping is still offered on rehab work — that is offering to leave the protocol");
 });
+
+test("the check-in offers the same session the plan page prescribed", () => {
+  /**
+   * The check-in read the RAW plan while /coach read it with three corrections
+   * applied — readiness easing, the athlete's swaps, and the rehab stage. So on
+   * a Yellow morning the plan page showed a session eased to three sets and the
+   * check-in offered the original four to tick off. Whichever number you
+   * believed, the app was contradicting itself, and the set count you were
+   * handed to log was one you had been told not to do.
+   */
+  const src = readFileSync(new URL("../app/(app)/journal/page.tsx", import.meta.url), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  assert.match(src, /adjustForReadiness\(/, "the check-in ignores this morning's readiness");
+  assert.match(src, /applySwaps\(/, "the check-in offers exercises the athlete swapped away from");
+  assert.match(src, /applyRehabToSession/, "the check-in ignores the rehab plan");
+  // And it must load the swaps to apply them — the column was not selected.
+  assert.match(src, /select\("plan, completed_sessions, swaps"\)/, "swaps are applied but never fetched");
+});
+
+test("readiness is computed in one place, not two", () => {
+  // It lived inline on /coach and nowhere else, which is exactly why the
+  // check-in had none. Two implementations of the same verdict drift.
+  const coach = readFileSync(new URL("../app/(app)/coach/page.tsx", import.meta.url), "utf8");
+  const journal = readFileSync(new URL("../app/(app)/journal/page.tsx", import.meta.url), "utf8");
+  for (const [name, src] of [["coach", coach], ["journal", journal]] as const) {
+    assert.match(src, /readinessFor\(/, `${name} does not use the shared readiness helper`);
+    assert.ok(!/assessReadiness\(\s*\{/.test(src), `${name} rebuilds the readiness input itself`);
+  }
+});

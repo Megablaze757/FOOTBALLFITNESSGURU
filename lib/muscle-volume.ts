@@ -321,9 +321,19 @@ export const LANDMARKS = {
 
 export type VolumeVerdict = "untrained" | "maintenance" | "productive" | "excessive";
 
+/**
+ * THE WORD HAS TO MEAN THE BAND.
+ *
+ * This called anything at or above SIX "productive", while every caption in the
+ * app says the productive range starts at TEN. So a muscle sitting at seven —
+ * genuinely a holding dose — was labelled productive, and 53% of the trained
+ * muscles in generated blocks sat below the band while the app told the athlete
+ * they were in it. That is the app marking its own homework, and it is why
+ * blocks that really were maintenance did not read as maintenance.
+ */
 export function verdictFor(sets: number): VolumeVerdict {
   if (sets < 1) return "untrained";
-  if (sets < LANDMARKS.maintenance) return "maintenance";
+  if (sets < LANDMARKS.productiveLow) return "maintenance";
   if (sets > LANDMARKS.excessive) return "excessive";
   return "productive";
 }
@@ -420,7 +430,7 @@ const MIN_SETS_PER_DRILL = 2;
 
 type WeekDrill = ProgramWeek["sessions"][number]["drills"][number];
 
-export function balanceWeeklyVolume<W extends ProgramWeek>(week: W): W {
+export function balanceWeeklyVolume<W extends ProgramWeek>(week: W, floor: number = LANDMARKS.maintenance): W {
   // Work on a copy: a built plan is handed to React and to the database, and
   // mutating a week in place would change a program object somebody else is
   // already holding.
@@ -456,17 +466,17 @@ export function balanceWeeklyVolume<W extends ProgramWeek>(week: W): W {
   const groups = Object.keys(running) as MuscleGroup[];
 
   // --- floor: a muscle the plan trains, trained enough to matter -------------
-  for (const group of groups.filter((g) => direct[g] > 0 && total[g] < LANDMARKS.maintenance)) {
+  for (const group of groups.filter((g) => direct[g] > 0 && total[g] < floor)) {
     const targets = counted.filter((c) => c.primary === group);
     if (!targets.length) continue;
     // Round-robin, so a muscle short by four sets gains one on each of its
     // movements rather than four on the first — which would turn a balanced
     // three-exercise day into one exercise done to death.
     let guard = 0;
-    while (running[group] < LANDMARKS.maintenance && guard++ < 40) {
+    while (running[group] < floor && guard++ < 40) {
       let moved = false;
       for (const t of targets) {
-        if (running[group] >= LANDMARKS.maintenance) break;
+        if (running[group] >= floor) break;
         if (t.drill.sets >= MAX_SETS_PER_DRILL) continue;
         apply(t, +1);
         moved = true;
@@ -525,8 +535,8 @@ function perSetContribution(name: string): Partial<Record<MuscleGroup, number>> 
 }
 
 /** Every week of a plan, balanced. */
-export function balancePlanVolume(plan: ProgramPlan): ProgramPlan {
-  return { ...plan, weeks: plan.weeks.map(balanceWeeklyVolume) };
+export function balancePlanVolume(plan: ProgramPlan, floor: number = LANDMARKS.maintenance): ProgramPlan {
+  return { ...plan, weeks: plan.weeks.map((w) => balanceWeeklyVolume(w, floor)) };
 }
 
 /**
@@ -697,4 +707,54 @@ export function volumeAdvice(sets: number): string {
   if (v === "maintenance") return "enough to hold what you have, not to build";
   if (v === "excessive") return "more than the evidence supports — recovery is the limit here";
   return "in the productive range";
+}
+
+// --- what the library says an exercise trains --------------------------------
+
+export interface ExerciseMuscles {
+  /** The muscle that leads the movement. */
+  primary: string | null;
+  /** The muscles that assist it, in descending order of contribution. */
+  secondary: string[];
+}
+
+/**
+ * PRIMARY AND SECONDARY, FOR EVERY EXERCISE IN THE LIBRARY.
+ *
+ * The library listed muscles as a flat row of chips under "Targets", which is
+ * two different failures at once. The imported gym catalogue carries exactly
+ * ONE coarse label per exercise — a bench press is "Chest", full stop — so the
+ * detail page for the most-used lift in the app said nothing about the triceps
+ * or the front delts it also trains. And the hand-written drills carry several
+ * labels with no order, so a Copenhagen plank showed "Adductors" and "Core" as
+ * though they were the same claim.
+ *
+ * The engine has known the answer to both since assisting movers were added to
+ * the volume accounting; the library was simply never told. This is that same
+ * answer, in the same order, so an exercise's page and its contribution to the
+ * volume bars cannot disagree about what it trains.
+ *
+ * Three sources, most specific first: the S&C movement library (pattern plus
+ * per-movement overrides), then the gym catalogue via `musclesForName`, then
+ * whatever labels the exercise itself carries — so a custom exercise somebody
+ * typed in still gets a primary rather than nothing.
+ */
+export function exerciseMuscles(name: string, fallback?: readonly string[] | null): ExerciseMuscles {
+  const movement = BY_NAME.get(name);
+  if (movement) {
+    const ms = musclesOf(movement);
+    if (ms.length) {
+      return { primary: MUSCLE_LABEL[ms[0]], secondary: ms.slice(1).map((m) => MUSCLE_LABEL[m]) };
+    }
+    // A movement that trains no muscle group for counting purposes — a sprint,
+    // a mobility drill — still has honest labels of its own on the exercise.
+  }
+
+  const gym = musclesForName(name);
+  if (gym.length) {
+    return { primary: MUSCLE_LABEL[gym[0]], secondary: gym.slice(1).map((m) => MUSCLE_LABEL[m]) };
+  }
+
+  const own = (fallback ?? []).map((m) => String(m).trim()).filter(Boolean);
+  return { primary: own[0] ?? null, secondary: own.slice(1) };
 }

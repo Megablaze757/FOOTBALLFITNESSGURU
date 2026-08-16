@@ -5,7 +5,7 @@
 // one-tap logging. Worth folding Coach onto this the next time that file is
 // open — two implementations of "which session is today" will drift eventually.
 
-import type { ProgramPlan } from "./coach";
+import type { ProgramPlan, ProgramSession } from "./coach";
 import type { TrainingDrill } from "./types";
 
 export interface NextSession {
@@ -15,6 +15,17 @@ export interface NextSession {
   id: string;
   title: string;
   drills: TrainingDrill[];
+  /**
+   * The session as the engine wrote it, slots and all.
+   *
+   * `drills` above is flattened to what a training log stores — name, sets,
+   * reps — which drops `slot` and `skill`. Everything that CORRECTS a session
+   * needs those: adjustForReadiness eases the working drills and deliberately
+   * leaves warm-ups and ball work alone, and could not tell them apart from the
+   * flattened list. So the caller gets both — the log shape to write, and the
+   * programme shape to reason about.
+   */
+  session: ProgramSession;
 }
 
 /**
@@ -40,6 +51,7 @@ export function nextSession(plan: ProgramPlan | null | undefined, completed: str
           reps: d.reps,
           load_kg: null,
         })),
+        session: s,
       };
     }
   }

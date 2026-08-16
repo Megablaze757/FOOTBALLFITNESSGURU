@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { exerciseMuscles } from "@/lib/muscle-volume";
 import { demoImplement, exerciseProgression, PROGRESSION_NOTE, type Exercise } from "@/lib/exercises";
 import { ExerciseSteps } from "@/components/ExerciseDemo";
 import { Portal } from "@/components/Portal";
@@ -67,14 +68,36 @@ export function ExerciseDetailCard({ ex, sets, reps }: { ex: Exercise; sets?: nu
         </div>
       )}
 
-      <div>
-        <div className="stat-label mb-1.5">Targets</div>
-        <div className="flex flex-wrap gap-2">
-          {ex.muscles.map((m) => (
-            <span key={m} className="rounded-full bg-white/[0.05] px-3 py-1 text-xs text-slate-300">{m}</span>
-          ))}
-        </div>
-      </div>
+      {/* PRIMARY MOVER, THEN WHAT ASSISTS IT.
+          This was a flat row of chips, which said two different things in one
+          voice: a bench press listed "Chest" and nothing else, because the
+          imported catalogue carries one coarse label per exercise, while a
+          Copenhagen plank listed "Adductors" and "Core" as though they were
+          equal claims. The engine has known the difference since assisting
+          movers were added to the volume accounting — see exerciseMuscles —
+          so the page and the volume bars now agree about what a lift trains. */}
+      {(() => {
+        const { primary, secondary } = exerciseMuscles(ex.name, ex.muscles);
+        if (!primary) return null;
+        return (
+          <div>
+            <div className="stat-label mb-1.5">Targets</div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-full bg-pitch-400/15 px-3 py-1 text-xs font-semibold text-pitch-400">
+                {primary}
+              </span>
+              {secondary.length > 0 && (
+                <>
+                  <span className="text-[11px] text-slate-500">also works</span>
+                  {secondary.map((m) => (
+                    <span key={m} className="rounded-full bg-white/[0.05] px-3 py-1 text-xs text-slate-400">{m}</span>
+                  ))}
+                </>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {(() => {
         const method = exerciseProgression(ex);

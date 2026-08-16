@@ -4,7 +4,7 @@ import { buildProgram } from "./coach";
 import { buildBlock } from "./engine";
 import { MOVEMENT_BY_ID } from "./movements";
 import {
-  weeklyMuscleVolume, musclesOf, auditWeek, verdictFor, LANDMARKS,
+  weeklyMuscleVolume, musclesOf, auditWeek, verdictFor, LANDMARKS, MUSCLE_LABEL,
   type MuscleGroup,
 } from "./muscle-volume";
 import { loggedWeeklySets, volumeAdvice } from "./muscle-volume";
@@ -98,7 +98,10 @@ test("movements whose pattern lies are corrected", () => {
 
 test("the landmarks classify the way the evidence reads", () => {
   assert.equal(verdictFor(0), "untrained");
-  assert.equal(verdictFor(LANDMARKS.maintenance - 1), "maintenance");
+  // Below the PRODUCTIVE floor, not below maintenance: the captions have always
+  // said the productive band starts at 10, and this used to call anything from
+  // 6 upwards productive — so a holding dose was reported as a building one.
+  assert.equal(verdictFor(LANDMARKS.productiveLow - 1), "maintenance");
   assert.equal(verdictFor(14), "productive");
   assert.equal(verdictFor(LANDMARKS.excessive + 1), "excessive");
 });
@@ -328,6 +331,8 @@ import { goalsForSport } from "./coach";
 import { SPORTS } from "./exercises";
 import { balanceWeeklyVolume, volumeBreakdown } from "./muscle-volume";
 import { musclesForName } from "./hypertrophy";
+import { exerciseMuscles } from "./muscle-volume";
+import { EXERCISES } from "./exercises";
 
 const FOCI = ["performance", "aesthetics", "injury_recovery"] as const;
 
@@ -526,4 +531,141 @@ test("a block that reaches the band everywhere says nothing", () => {
     !perf.constraints.some((c) => /sets a week that builds fastest/.test(c)),
     "a performance block is being lectured about hypertrophy volume it never promised",
   );
+});
+
+// =============================================================================
+// "ALL THE PROGRAMS I'VE TRIED BUILD ARE JUST MAINTENANCE."
+//
+// Two causes, both measured. The floor the engine guaranteed was MAINTENANCE —
+// six weekly sets, the dose that holds what you already have — for every block
+// the app builds, including ones somebody asked to build them something. And
+// verdictFor called anything at or above six "productive" while every caption
+// says the productive band starts at ten, so 53% of trained muscles sat below
+// the band with the app telling the athlete they were in it.
+// =============================================================================
+
+test("the word on the bar means the band the caption describes", () => {
+  // Seven sets is a holding dose. Calling it productive was the app marking
+  // its own homework.
+  assert.equal(verdictFor(LANDMARKS.productiveLow - 1), "maintenance");
+  assert.equal(verdictFor(LANDMARKS.productiveLow), "productive");
+  assert.equal(verdictFor(LANDMARKS.excessive), "productive");
+  assert.equal(verdictFor(LANDMARKS.excessive + 1), "excessive");
+  assert.equal(verdictFor(0), "untrained");
+});
+
+test("an out-of-season block trains its muscles to build, not to hold", () => {
+  /**
+   * THE COMPLAINT: "all the programs I've tried build are just maintenance,
+   * which is not what a customer wants." They were right. The floor the engine
+   * guaranteed was six weekly sets — the dose that HOLDS what you have — for
+   * every block it builds, and 53% of trained muscles sat below the band the
+   * app's own captions describe.
+   *
+   * Judged only on muscles the block prescribes work FOR. What a muscle picks
+   * up assisting is not a promise the block made.
+   */
+  let inBand = 0, trained = 0;
+  const short: string[] = [];
+  for (const sport of ["football", "rugby", "gym", "basketball"] as const) {
+    for (const daysPerWeek of [3, 4, 5]) {
+      const week = buildProgram({ painMap: {}, goal: "strength", sport, focus: "performance", daysPerWeek } as never).weeks[1];
+      const { direct } = volumeBreakdown(week);
+      const v = weeklyMuscleVolume(week);
+      for (const g of Object.keys(v) as MuscleGroup[]) {
+        if (direct[g] <= 0) continue;
+        trained++;
+        if (v[g] >= LANDMARKS.productiveLow) inBand++;
+        else short.push(`${sport}/${daysPerWeek}d ${g}: ${v[g]}`);
+        // The hard floor, separately: nothing the block trains may sit below
+        // even a holding dose.
+        assert.ok(v[g] >= LANDMARKS.maintenance, `${sport}/${daysPerWeek}d ${g} is at ${v[g]}, below maintenance`);
+      }
+    }
+  }
+  // Measured at 47% before the floor became intent-aware. The rest are muscles
+  // whose single movement is already capped at six sets — real, and reported by
+  // volumeShortfall rather than hidden.
+  const pct = (inBand / trained) * 100;
+  assert.ok(pct >= 80, `only ${pct.toFixed(0)}% of trained muscles reach the building band: ${short.join(", ")}`);
+});
+
+test("the athlete's own case: a footballer out of season builds everywhere", () => {
+  // Four days, the most common configuration in the app. Before: quads 7.3,
+  // shoulders 8, calves 8.7 — all below the band, all labelled productive.
+  const week = buildProgram({ painMap: {}, goal: "strength", sport: "football", focus: "performance", daysPerWeek: 4 } as never).weeks[1];
+  const { direct } = volumeBreakdown(week);
+  const v = weeklyMuscleVolume(week);
+  const short = (Object.keys(v) as MuscleGroup[])
+    .filter((g) => direct[g] > 0 && v[g] < LANDMARKS.productiveLow)
+    .map((g) => `${g}: ${v[g]}`);
+  assert.deepEqual(short, [], "a muscle this block trains is stuck at a holding dose");
+});
+
+test("in-season is the one place maintenance is the right answer", () => {
+  // The sport is the training load; the gym's job is to keep tissue robust
+  // without adding fatigue to a competition week. A block that pushed every
+  // muscle into the building band in-season would be the engine overriding a
+  // decision the athlete made.
+  const inSeason = buildProgram({ painMap: {}, goal: "strength", sport: "football", focus: "performance", daysPerWeek: 4, isInSeason: true } as never);
+  const off = buildProgram({ painMap: {}, goal: "strength", sport: "football", focus: "performance", daysPerWeek: 4 } as never);
+  const total = (p: typeof off) => {
+    const v = weeklyMuscleVolume(p.weeks[1]);
+    return (Object.values(v) as number[]).reduce((a, b) => a + b, 0);
+  };
+  assert.ok(total(inSeason) < total(off),
+    `in-season carries ${total(inSeason)} sets against ${total(off)} out of season`);
+});
+
+test("the volume bars can be reconciled with the sessions they describe", () => {
+  /**
+   * The complaint was "the sets aren't calculating correctly", and the number
+   * was right — it just could not be checked. Assisting muscles count half a
+   * set, so a week with two triceps movements reported sixteen triceps sets.
+   * An athlete counting the page gets eight. `direct` is that number, and the
+   * bar now shows it as the solid portion.
+   */
+  const week = buildProgram({ painMap: {}, goal: "strength", sport: "gym", focus: "aesthetics", daysPerWeek: 4 } as never).weeks[1];
+  const { total, direct } = volumeBreakdown(week);
+  // Counting only drills whose PRIMARY is that muscle is what an athlete does
+  // by eye, and it must equal `direct` exactly or the split is decorative.
+  const byEye: Partial<Record<MuscleGroup, number>> = {};
+  for (const s of week.sessions) {
+    for (const d of s.drills) {
+      const primary = musclesForName(d.name)[0];
+      if (primary) byEye[primary] = (byEye[primary] ?? 0) + d.sets;
+    }
+  }
+  for (const g of Object.keys(direct) as MuscleGroup[]) {
+    if (direct[g] === 0) continue;
+    assert.equal(direct[g], byEye[g] ?? 0, `${g}: the solid bar says ${direct[g]}, counting the sessions gives ${byEye[g] ?? 0}`);
+    assert.ok(total[g] >= direct[g], `${g}: total ${total[g]} is less than the direct work ${direct[g]}`);
+  }
+});
+
+test("every exercise in the library names a primary mover", () => {
+  // The imported catalogue carries one coarse label per exercise, so the detail
+  // page for a bench press said "Chest" and nothing about the triceps or front
+  // delts it also trains — while the volume accounting knew both.
+  const withoutPrimary = EXERCISES.filter((e) => !exerciseMuscles(e.name, e.muscles).primary);
+  assert.deepEqual(withoutPrimary.map((e) => e.id), [], "library exercises with no primary muscle");
+});
+
+test("a compound names what assists it, and an isolation names nothing", () => {
+  assert.deepEqual(exerciseMuscles("Bench Press", ["Chest"]),
+    { primary: "Chest", secondary: ["Triceps", "Shoulders"] });
+  // A cable fly assists nothing. Inventing a secondary here would be the same
+  // lie in the other direction.
+  assert.deepEqual(exerciseMuscles("Cable Fly", ["Chest"]).secondary, []);
+  // And the library and the volume accounting must agree, or an exercise's page
+  // contradicts the bar it contributes to.
+  const [primary] = musclesForName("Barbell Deadlift");
+  assert.equal(exerciseMuscles("Barbell Deadlift", []).primary, MUSCLE_LABEL[primary]);
+});
+
+test("an exercise the catalogues don't know keeps its own labels", () => {
+  // Custom exercises somebody typed in still get a primary rather than nothing.
+  assert.deepEqual(exerciseMuscles("Some Made Up Lift", ["Forearms", "Grip"]),
+    { primary: "Forearms", secondary: ["Grip"] });
+  assert.deepEqual(exerciseMuscles("Some Made Up Lift", []), { primary: null, secondary: [] });
 });

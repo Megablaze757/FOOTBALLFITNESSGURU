@@ -2,7 +2,7 @@
 
 import type { ProgramWeek } from "@/lib/coach";
 import {
-  auditWeek, verdictFor, MUSCLE_LABEL, LANDMARKS,
+  auditWeek, volumeBreakdown, verdictFor, MUSCLE_LABEL, LANDMARKS,
   type MuscleGroup, type VolumeVerdict,
 } from "@/lib/muscle-volume";
 
@@ -22,6 +22,23 @@ import {
 export function WeeklyVolume({ week }: { week: ProgramWeek }) {
   const audit = auditWeek(week);
   /**
+   * SHOW THE WORKING, OR THE NUMBER LOOKS WRONG.
+   *
+   * The totals here count assisting muscles at half a set, which is the
+   * convention the volume landmarks are measured in and the right way to read
+   * the stimulus a muscle receives. It is also completely invisible from the
+   * session in front of you: a week with two triceps movements in it reported
+   * SIXTEEN triceps sets, because six pressing movements were quietly adding
+   * eight more. An athlete counting the page gets 8, the bar says 16, and
+   * nothing on screen accounts for the difference.
+   *
+   * A number you cannot reconcile with the thing it describes is
+   * indistinguishable from a broken one — which is exactly how it was reported.
+   * So the bar now separates the two: the solid part is work prescribed FOR
+   * that muscle, the lighter part is what it picks up assisting the compounds.
+   */
+  const { direct } = volumeBreakdown(week);
+  /**
    * A DELOAD IS SUPPOSED TO BE LOW.
    *
    * Rendered, the deload week came out as ten rows of amber "maintenance",
@@ -31,7 +48,7 @@ export function WeeklyVolume({ week }: { week: ProgramWeek }) {
    */
   const deload = week.intensity === "Deload";
   const rows = (Object.keys(audit.volume) as MuscleGroup[])
-    .map((m) => ({ muscle: m, sets: audit.volume[m] }))
+    .map((m) => ({ muscle: m, sets: audit.volume[m], direct: direct[m] }))
     .filter((r) => r.sets > 0)
     .sort((a, b) => b.sets - a.sets);
 
@@ -58,7 +75,7 @@ export function WeeklyVolume({ week }: { week: ProgramWeek }) {
 
       <div className="space-y-1.5 px-3 pb-3">
         {rows.map((r) => (
-          <VolumeRow key={r.muscle} muscle={r.muscle} sets={r.sets} scale={scale} deload={deload} />
+          <VolumeRow key={r.muscle} muscle={r.muscle} sets={r.sets} direct={r.direct} scale={scale} deload={deload} />
         ))}
 
         {/* Says what the shaded band on every bar means. Without it the bars are
@@ -72,11 +89,16 @@ export function WeeklyVolume({ week }: { week: ProgramWeek }) {
             </>
           ) : (
             <>
-              The lighter section of each bar is {LANDMARKS.productiveLow}–{LANDMARKS.productiveHigh} sets
+              The marked section of each bar is {LANDMARKS.productiveLow}–{LANDMARKS.productiveHigh} sets
               a week, where most of the benefit sits. Below {LANDMARKS.maintenance} is
-              maintenance — enough to hold what you have, not to build. These are
-              averages; in-season, most groups sitting at maintenance is the point,
-              not a gap.
+              maintenance — enough to hold what you have, not to build.{" "}
+              {/* WHY THE NUMBER IS BIGGER THAN THE ONE YOU COUNTED. Without
+                  this the totals look invented: a week with two triceps
+                  movements in it reports sixteen triceps sets, because six
+                  pressing movements are each adding half a set. */}
+              <b className="text-slate-400">Solid</b> is work prescribed for that muscle;
+              the faded part is what it picks up assisting your compounds, counted at
+              half a set — a bench press is chest work and half a set for the triceps.
             </>
           )}
         </p>
@@ -115,12 +137,30 @@ const show = (n: number) => {
   return Number.isInteger(half) ? String(half) : half.toFixed(1);
 };
 
-function VolumeRow({ muscle, sets, scale, deload }: {
-  muscle: MuscleGroup; sets: number; scale: number; deload: boolean;
+function VolumeRow({ muscle, sets, direct, scale, deload }: {
+  muscle: MuscleGroup; sets: number; direct: number; scale: number; deload: boolean;
 }) {
+  /**
+   * A MUSCLE THE BLOCK NEVER SET OUT TO TRAIN IS NOT UNDER-TRAINED.
+   *
+   * A footballer's block prescribes rows and chin-ups and no curls, so the
+   * biceps pick up four sets a week assisting. This row used to be scored
+   * against the landmarks like any other and came back amber "maintenance" —
+   * so a block that had every muscle it actually trains in the productive band
+   * still showed rows of amber, and read as a maintenance programme. It is
+   * neither a plan to build them nor an oversight; it is what happens to your
+   * arms when you pull heavy things.
+   */
+  const assistOnly = direct <= 0;
   const verdict = verdictFor(sets);
-  const style = deload && verdict === "maintenance" ? VERDICT.productive : VERDICT[verdict];
+  const style = assistOnly
+    ? { ...VERDICT.productive, word: "assisting" }
+    : deload && verdict === "maintenance" ? VERDICT.productive : VERDICT[verdict];
   const pct = Math.min(100, (sets / scale) * 100);
+  // How much of the bar is work prescribed FOR this muscle, as a share of the
+  // bar itself — so the split lands in the right place whatever the scale.
+  const directShare = sets > 0 ? Math.min(100, (direct / sets) * 100) : 100;
+  const assisted = Math.max(0, Math.round((sets - direct) * 2) / 2);
   const bandLeft = (LANDMARKS.productiveLow / scale) * 100;
   const bandWidth = ((LANDMARKS.productiveHigh - LANDMARKS.productiveLow) / scale) * 100;
 
@@ -141,9 +181,19 @@ function VolumeRow({ muscle, sets, scale, deload }: {
           style={{ left: `${bandLeft}%`, width: `${bandWidth}%` }}
           aria-hidden
         />
+        {/* The whole bar, at reduced opacity: total stimulus including what this
+            muscle picks up assisting the compounds. */}
+        <span
+          className={`absolute inset-y-0 left-0 rounded-full opacity-40 ${style.bar}`}
+          style={{ width: `${Math.max(pct, 2)}%` }}
+          aria-hidden
+        />
+        {/* …and the part of it that is work prescribed FOR this muscle, solid.
+            This is the number an athlete gets by counting the sessions, so it
+            has to be visible or the total looks invented. */}
         <span
           className={`absolute inset-y-0 left-0 rounded-full ${style.bar}`}
-          style={{ width: `${Math.max(pct, 2)}%` }}
+          style={{ width: `${Math.max(pct * (directShare / 100), direct > 0 ? 2 : 0)}%` }}
           aria-hidden
         />
       </span>
@@ -157,7 +207,13 @@ function VolumeRow({ muscle, sets, scale, deload }: {
         {style.word ?? ""}
       </span>
       <span className="sr-only">
-        {MUSCLE_LABEL[muscle]}: {show(sets)} sets this week, {style.word ?? "in the productive range"}.
+        {MUSCLE_LABEL[muscle]}: {show(sets)} sets this week
+        {assistOnly
+          ? ", all of it from assisting other lifts — this block has no exercise aimed at it"
+          : assisted > 0
+            ? `, of which ${show(direct)} are direct work and ${show(assisted)} come from assisting other lifts`
+            : ""},
+        {" "}{assistOnly ? "not directly trained" : style.word ?? "in the productive range"}.
       </span>
     </div>
   );

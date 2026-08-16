@@ -171,3 +171,45 @@ function clamp1to10(v: number | null): number {
 function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
+
+/**
+ * Today's readiness from the rows the app already has on the page.
+ *
+ * ONE ANSWER, NOT TWO. This was written inline on /coach and nowhere else, so
+ * the check-in — which offers the same session to log — had no readiness at all
+ * and handed over the unadjusted prescription. The plan page showed a Yellow
+ * day eased to three sets while the check-in offered four to tick off, and the
+ * athlete had to guess which screen to believe.
+ *
+ * Training load is part of the verdict rather than a separate panel: a score
+ * built from sleep and soreness alone calls you Green on the back of a load
+ * spike you cannot feel. Both callers therefore pass the same 28 days they
+ * already loaded for the ACWR — no extra query, and no way for the two pages to
+ * reach different numbers from the same data.
+ */
+export function readinessFor(
+  checkIn: {
+    pain_map?: Record<string, number> | null;
+    fatigue_score?: number | null;
+    sleep_quality?: number | null;
+    nutrition_quality?: number | null;
+    weight_kg?: number | null;
+    is_match_day?: boolean | null;
+    match_minutes_played?: number | null;
+  } | null | undefined,
+  acwr: number | null,
+): ReadinessResult | null {
+  if (!checkIn) return null;
+  return assessReadiness(
+    {
+      pain_map: checkIn.pain_map ?? {},
+      fatigue_score: checkIn.fatigue_score,
+      sleep_quality: checkIn.sleep_quality,
+      nutrition_quality: checkIn.nutrition_quality,
+      weight_kg: checkIn.weight_kg,
+      is_match_day: checkIn.is_match_day,
+      match_minutes_played: checkIn.match_minutes_played,
+    } as CheckInInput,
+    { acwr },
+  );
+}

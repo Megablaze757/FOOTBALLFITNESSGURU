@@ -7,6 +7,9 @@ import { useAsync } from "@/lib/use-async";
 import { JournalForm } from "@/components/JournalForm";
 import { CheckInDone } from "@/components/CheckInDone";
 import { checkInStreak, computeACWR } from "@/lib/load";
+import { readinessFor } from "@/lib/readiness";
+import { adjustForReadiness, type ReadinessStatus } from "@/lib/engine";
+import { applySwaps, type SwapMap } from "@/lib/exercise-match";
 import { nextSession } from "@/lib/next-session";
 import { applyRehabToSession, parseDose, type RehabPlanRow } from "@/lib/rehab-plan";
 import type { ProgramPlan } from "@/lib/coach";
@@ -36,7 +39,7 @@ export default function JournalPage() {
       supabase.from("training_logs").select("*").eq("user_id", user.id).eq("log_date", today).maybeSingle(),
       supabase.from("biometrics").select("*").eq("user_id", user.id).eq("metric_date", today).maybeSingle(),
       supabase.from("profiles").select("sport").eq("id", user.id).maybeSingle(),
-      supabase.from("programs").select("plan, completed_sessions").eq("user_id", user.id).eq("status", "active").maybeSingle(),
+      supabase.from("programs").select("plan, completed_sessions, swaps").eq("user_id", user.id).eq("status", "active").maybeSingle(),
       supabase.from("daily_check_ins").select("check_in_date").eq("user_id", user.id).gte("check_in_date", since60),
       /**
        * The SAME query Home runs for ACWR, on purpose.
@@ -63,10 +66,37 @@ export default function JournalPage() {
         .order("created_at", { ascending: false }).limit(1).maybeSingle(),
     ]);
 
-    const planned = nextSession(
+    /**
+     * TODAY'S SESSION AS /COACH ACTUALLY PRESCRIBED IT.
+     *
+     * This read the raw plan, and /coach reads the plan with three corrections
+     * applied — readiness easing, the athlete's swaps, and the rehab stage. So
+     * the two pages disagreed about the same session on the same morning: the
+     * plan page showed a Yellow day eased to 3 sets and the check-in offered
+     * the original 4 to log. Whichever number you trusted, the app was
+     * contradicting itself, and the set count you were handed to log was one
+     * you had been told not to do.
+     *
+     * Same order as /coach — swaps first, rehab last — because the reasoning
+     * is the same reasoning. See the note there.
+     */
+    const session = nextSession(
       (program as { plan?: ProgramPlan } | null)?.plan ?? null,
       (program as { completed_sessions?: string[] } | null)?.completed_sessions ?? []
-    )?.drills ?? [];
+    );
+    const readiness = readinessFor(
+      existing as { pain_map?: Record<string, number> | null } | null,
+      computeACWR((recentTraining ?? []) as unknown as TrainingLog[]).ratio,
+    );
+    const eased = session
+      ? adjustForReadiness(session.session, (readiness?.status as ReadinessStatus) ?? "Green")
+      : null;
+    // Flattened back to the log shape AFTER the corrections, so the sets on
+    // offer are the sets that were actually prescribed today.
+    const planned = applySwaps(
+      (eased?.drills ?? []).map((d) => ({ name: d.name, sets: d.sets, reps: d.reps, load_kg: null })) as TrainingDrill[],
+      ((program as { swaps?: SwapMap } | null)?.swaps ?? {}) as SwapMap,
+    );
     const rehabbed = applyRehabToSession<TrainingDrill>(
       planned,
       rehab as RehabPlanRow | null,
