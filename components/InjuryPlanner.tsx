@@ -9,6 +9,8 @@ import { baseAreaOf } from "@/lib/essentials";
 import { BodyMap } from "@/components/BodyMap";
 import type { PainMap } from "@/lib/types";
 import type { SportId } from "@/lib/exercises";
+import { findExercise } from "@/lib/exercise-match";
+import { ExerciseDetailCard } from "@/components/ExerciseDetail";
 
 interface Stage {
   name: string;
@@ -101,6 +103,40 @@ export function InjuryPlanner({ sport, hurt, onHurtChange, description, onDescri
   // stages stacked open is most of why this page scrolled forever.
   const [openStage, setOpenStage] = useState(0);
 
+  /**
+   * WHICH STAGE THEY ARE ACTUALLY ON, as opposed to which is expanded.
+   *
+   * These were the same thing, and that is why nothing outside this page could
+   * use the plan: "expanded" is a UI state that resets on every visit, so there
+   * was nothing to tell the check-in which exercises to add or the coach which
+   * stage to talk about. This one is stored — see migration 0085.
+   *
+   * It only ever changes because the athlete says so. Every stage carries a
+   * criterion, and advancing on the calendar instead would put somebody whose
+   * hamstring still hurts into sprint work because three weeks had passed.
+   */
+  const [stage, setStage] = useState(1);
+  const [planId, setPlanId] = useState<string | null>(null);
+  const [savingStage, setSavingStage] = useState(false);
+
+  /** The exercise whose how-to is open, if any. */
+  const [showing, setShowing] = useState<string | null>(null);
+
+  async function moveToStage(next: number) {
+    if (!planId || savingStage) return;
+    const total = plan?.stages.length ?? 1;
+    const clamped = Math.max(1, Math.min(total, next));
+    setSavingStage(true);
+    setStage(clamped);          // optimistic: the tap should feel instant
+    setOpenStage(clamped - 1);  // and the stage you moved to is the one to read
+    const { error: e } = await createClient()
+      .from("rehab_plans").update({ current_stage: clamped }).eq("id", planId);
+    // A failed write must not leave the UI claiming a stage the rest of the app
+    // will not see — the check-in and the coach read the row, not this state.
+    if (e) { setStage(stage); setError(`Could not save that stage — ${e.message}`); }
+    setSavingStage(false);
+  }
+
   const area = Object.keys(hurt).map(baseAreaOf)[0];
 
   // Bring back the last plan. Without this the plan lived in component state
@@ -112,14 +148,23 @@ export function InjuryPlanner({ sport, hurt, onHurtChange, description, onDescri
     void (async () => {
       const { data, error: e } = await createClient()
         .from("rehab_plans")
-        .select("plan, chronic, description, created_at")
+        .select("id, plan, chronic, description, created_at, current_stage")
+        .eq("active", true)
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
       if (cancelled || e || !data) return;
-      const row = data as { plan: Plan; chronic: boolean; description: string; created_at: string };
+      const row = data as {
+        id: string; plan: Plan; chronic: boolean; description: string;
+        created_at: string; current_stage: number | null;
+      };
       setPlan(row.plan);
       setChronic(row.chronic);
+      setPlanId(row.id);
+      // Clamped: a plan can be regenerated with fewer stages than the one it
+      // replaced, and an out-of-range index would blank the page.
+      const stages = row.plan?.stages?.length ?? 1;
+      setStage(Math.max(1, Math.min(stages, Number(row.current_stage) || 1)));
       onDescriptionChange(row.description);
       setSavedAt(new Date(row.created_at).toLocaleDateString(undefined, { day: "numeric", month: "short" }));
     })();
@@ -233,7 +278,20 @@ export function InjuryPlanner({ sport, hurt, onHurtChange, description, onDescri
                     {i + 1}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block font-bold text-slate-100">{s.name}</span>
+                    <span className="flex items-center gap-2">
+                      <span className="truncate font-bold text-slate-100">{s.name}</span>
+                      {/* WHICH ONE YOU ARE ON, not which one is expanded. The
+                          rest of the app reads this — the check-in adds this
+                          stage's exercises and drops what it says to avoid. */}
+                      {stage === i + 1 && (
+                        <span className="shrink-0 rounded-full bg-pitch-400/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-pitch-400">
+                          you are here
+                        </span>
+                      )}
+                      {stage > i + 1 && (
+                        <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-slate-600">done</span>
+                      )}
+                    </span>
                     <span className="block text-xs text-slate-500">{s.timeframe}</span>
                   </span>
                   <span className={`shrink-0 text-xs text-slate-500 transition ${isOpen ? "rotate-180" : ""}`}>▾</span>
@@ -243,16 +301,52 @@ export function InjuryPlanner({ sport, hurt, onHurtChange, description, onDescri
                   <div className="border-t border-white/[0.08] p-4">
                     <p className="text-sm text-slate-300">{s.goal}</p>
 
+                    {/* TAP AN EXERCISE TO SEE HOW TO DO IT.
+                        A rehab exercise you have never heard of, with a dose
+                        and no demonstration, is an instruction you cannot
+                        follow — and the library already teaches 339 movements.
+                        `findExercise` returns null rather than a near-miss, so
+                        a name it cannot place shows the plan's own note instead
+                        of a confident how-to for the wrong exercise. */}
                     <ul className="mt-3 space-y-2">
-                      {s.exercises.map((ex) => (
-                        <li key={ex.name} className="rounded-xl bg-white/[0.03] p-3">
-                          <div className="flex items-baseline justify-between gap-2">
-                            <span className="text-sm font-semibold text-slate-100">{ex.name}</span>
-                            <span className="shrink-0 text-xs text-slate-400">{ex.dose}</span>
-                          </div>
-                          {ex.note && <p className="mt-1 text-xs text-slate-400">{ex.note}</p>}
-                        </li>
-                      ))}
+                      {s.exercises.map((ex) => {
+                        const lib = findExercise(ex.name);
+                        const open = showing === ex.name;
+                        return (
+                          <li key={ex.name} className="overflow-hidden rounded-xl bg-white/[0.03]">
+                            <button
+                              type="button"
+                              onClick={() => setShowing(open ? null : ex.name)}
+                              aria-expanded={open}
+                              disabled={!lib}
+                              className="flex w-full items-baseline justify-between gap-2 p-3 text-left disabled:cursor-default"
+                            >
+                              <span className="min-w-0">
+                                <span className="block text-sm font-semibold text-slate-100">{ex.name}</span>
+                                {ex.note && <span className="mt-1 block text-xs text-slate-400">{ex.note}</span>}
+                              </span>
+                              <span className="flex shrink-0 items-baseline gap-2">
+                                <span className="text-xs text-slate-400">{ex.dose}</span>
+                                {lib && (
+                                  <span className={`text-xs text-pitch-400 transition ${open ? "rotate-180" : ""}`}>▾</span>
+                                )}
+                              </span>
+                            </button>
+                            {lib && open && (
+                              <div className="border-t border-white/[0.08] p-3">
+                                <ExerciseDetailCard ex={lib} />
+                              </div>
+                            )}
+                            {!lib && (
+                              // Said out loud rather than rendering a dead
+                              // chevron somebody taps three times.
+                              <p className="px-3 pb-3 text-[11px] text-slate-600">
+                                No demo for this one — follow the note above, and stop if it hurts.
+                              </p>
+                            )}
+                          </li>
+                        );
+                      })}
                     </ul>
 
                     {s.avoid.length > 0 && (
@@ -267,6 +361,49 @@ export function InjuryPlanner({ sport, hurt, onHurtChange, description, onDescri
                     <p className="mt-3 border-t border-white/[0.06] pt-3 text-xs text-slate-400">
                       <span className="font-semibold text-slate-300">Move on when:</span> {plan.progressWhen}
                     </p>
+
+                    {/* MOVING STAGE IS A DECISION, SO IT IS A BUTTON.
+                        Rehab advances on criteria, not on the calendar — the
+                        line directly above says which criteria — so this can
+                        never be automatic. Going back is offered too: flaring
+                        something up is the normal case, not an edge case, and
+                        a one-way ladder makes people lie to it. */}
+                    {planId && (
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        {stage !== i + 1 && (
+                          <button
+                            type="button" disabled={savingStage}
+                            onClick={() => moveToStage(i + 1)}
+                            className="chip text-pitch-400 hover:bg-white/[0.08] disabled:opacity-50"
+                          >
+                            I&apos;m on this stage
+                          </button>
+                        )}
+                        {stage === i + 1 && i + 1 < plan.stages.length && (
+                          <button
+                            type="button" disabled={savingStage}
+                            onClick={() => moveToStage(i + 2)}
+                            className="chip text-pitch-400 hover:bg-white/[0.08] disabled:opacity-50"
+                          >
+                            I can do this — next stage →
+                          </button>
+                        )}
+                        {stage === i + 1 && i > 0 && (
+                          <button
+                            type="button" disabled={savingStage}
+                            onClick={() => moveToStage(i)}
+                            className="tap-target text-xs font-semibold text-slate-500 hover:text-slate-300"
+                          >
+                            ← Flared up, go back
+                          </button>
+                        )}
+                        {stage === i + 1 && (
+                          <span className="text-[11px] text-slate-600">
+                            These exercises are in your check-in, and the coach knows you are here.
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </li>

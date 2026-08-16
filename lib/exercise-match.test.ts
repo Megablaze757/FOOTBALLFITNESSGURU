@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { findExercise, hasHowTo, similarExercises } from "./exercise-match";
+import { findExercise, hasHowTo, similarExercises, applySwaps } from "./exercise-match";
 import { EXERCISES } from "./exercises";
 
 // --- finding ------------------------------------------------------------------
@@ -130,4 +130,45 @@ test("the whole library can be looked up without throwing", () => {
     assert.doesNotThrow(() => findExercise(ex.name), ex.name);
     assert.doesNotThrow(() => similarExercises(ex.name, 3), ex.name);
   }
+});
+
+// --- applying swaps -----------------------------------------------------------
+
+test("a swap renames the drill and remembers what it replaced", () => {
+  const [d] = applySwaps([{ name: "Barbell back squat", sets: 4 }], { "Barbell back squat": "Goblet squat" });
+  assert.equal(d.name, "Goblet squat");
+  assert.equal(d.swappedFrom, "Barbell back squat");
+  assert.equal(d.sets, 4, "the prescription was lost along with the name");
+});
+
+test("a swap survives the block being regenerated under a different spelling", () => {
+  // The map is keyed by whatever the plan called it when they tapped. A raw
+  // string comparison would drop every swap on the next rebuild — their
+  // shoulder still hates overhead pressing and the programme has forgotten.
+  const swaps = { "Back squat": "Goblet squat" };
+  assert.equal(applySwaps([{ name: "Barbell back squat" }], swaps)[0].name, "Goblet squat");
+  assert.equal(applySwaps([{ name: "BACK  SQUAT" }], swaps)[0].name, "Goblet squat");
+});
+
+test("drills nobody swapped are untouched", () => {
+  const drills = [{ name: "Bench press" }, { name: "Pull-up" }];
+  const out = applySwaps(drills, { "Back squat": "Goblet squat" });
+  assert.deepEqual(out.map((d) => d.name), ["Bench press", "Pull-up"]);
+  assert.ok(out.every((d) => d.swappedFrom === undefined));
+});
+
+test("an empty or broken swap map changes nothing", () => {
+  const drills = [{ name: "Back squat" }];
+  for (const swaps of [null, undefined, {}, { "Back squat": "" }, { "Back squat": "   " }]) {
+    assert.equal(applySwaps(drills, swaps as never)[0].name, "Back squat");
+  }
+});
+
+test("a swap cannot leak onto a different exercise", () => {
+  // Keying by movement rather than spelling must not become keying by "looks a
+  // bit like it": a front squat is not a back squat, and hijacking it would
+  // silently replace a lift the athlete never asked to change.
+  const swaps = { "Back squat": "Goblet squat" };
+  assert.equal(applySwaps([{ name: "Front squat" }], swaps)[0].name, "Front squat");
+  assert.equal(applySwaps([{ name: "Bulgarian split squat" }], swaps)[0].name, "Bulgarian split squat");
 });

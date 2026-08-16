@@ -210,6 +210,12 @@ export interface Program {
   target_metric: string | null;
   target_value: number | null;
   baseline_value: number | null;
+  /**
+   * Prescribed exercise name → the substitute the athlete is doing instead.
+   * An overlay, so the plan is never rewritten and a swap can be undone by
+   * deleting a key. See migration 0086 and lib/exercise-match.ts.
+   */
+  swaps?: Record<string, string> | null;
   created_at: string;
 }
 

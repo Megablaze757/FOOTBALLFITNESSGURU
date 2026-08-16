@@ -1,6 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { SLOT_LABEL, restText, type ProgramDrill, type Slot } from "@/lib/engine";
+import { SwapSheet } from "@/components/SwapSheet";
 
 /**
  * A session, rendered as a session: warm-up, main work, accessories, cool-down.
@@ -9,11 +11,18 @@ import { SLOT_LABEL, restText, type ProgramDrill, type Slot } from "@/lib/engine
  * Those just render as one flat list — the same as they always did — rather than
  * being relabelled into a structure they weren't built with.
  */
-export function SessionDrills({ drills, onPick }: {
-  drills: ProgramDrill[];
+export function SessionDrills({ drills, onPick, onSwap }: {
+  drills: Drill[];
   /** Optional: open the exercise detail. Drills with no library entry stay inert. */
   onPick?: (name: string) => void;
+  /**
+   * Optional: offer to swap. Called with the PRESCRIBED name and the
+   * substitute, or null to go back to what was prescribed. Absent on read-only
+   * views like the calendar, where there is nothing to save to.
+   */
+  onSwap?: (prescribed: string, to: string | null) => void | Promise<void>;
 }) {
+  const [swapping, setSwapping] = useState<string | null>(null);
   const grouped = groupBySlot(drills);
 
   return (
@@ -26,30 +35,68 @@ export function SessionDrills({ drills, onPick }: {
             </div>
           )}
           <ul className="space-y-1">
-            {group.drills.map((d, k) => (
+            {group.drills.map((d, k) => {
+              // The name a swap is stored against is the PRESCRIBED one, which
+              // for an already-swapped row is not the name on screen.
+              const prescribed = d.swappedFrom ?? d.name;
+              const open = swapping === prescribed;
+              return (
               <li key={k}>
-                <button
-                  onClick={() => onPick?.(d.name)}
-                  disabled={!onPick}
-                  className="w-full text-left disabled:cursor-default"
-                >
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span className="min-w-0 break-words text-xs text-slate-300">
-                      {d.skill && <span className="mr-1.5 text-pitch-400">⚽</span>}
-                      {d.name}
-                    </span>
-                    {/* Skill work carries its own prescription — "5 × 60 seconds
-                        each foot" doesn't survive being squashed into sets×reps. */}
-                    <span className="shrink-0 text-xs text-slate-500">
-                      {d.prescription ?? `${d.sets}×${d.reps}`}
-                    </span>
-                  </div>
-                  {detailLine(d) && (
-                    <div className="text-[10px] text-slate-500">{detailLine(d)}</div>
+                <div className="flex items-start gap-1">
+                  <button
+                    onClick={() => onPick?.(d.name)}
+                    disabled={!onPick}
+                    className="min-w-0 flex-1 text-left disabled:cursor-default"
+                  >
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="min-w-0 break-words text-xs text-slate-300">
+                        {d.skill && <span className="mr-1.5 text-pitch-400">⚽</span>}
+                        {d.name}
+                      </span>
+                      {/* Skill work carries its own prescription — "5 × 60 seconds
+                          each foot" doesn't survive being squashed into sets×reps. */}
+                      <span className="shrink-0 text-xs text-slate-500">
+                        {d.prescription ?? `${d.sets}×${d.reps}`}
+                      </span>
+                    </div>
+                    {/* WHAT IT REPLACED. A programme that silently shows a
+                        different exercise from the one it prescribed has lost
+                        the thread of its own plan; saying so keeps the
+                        substitution the athlete's decision rather than the
+                        app's. */}
+                    {d.swappedFrom && (
+                      <div className="text-[10px] text-slate-600">swapped from {d.swappedFrom}</div>
+                    )}
+                    {detailLine(d) && (
+                      <div className="text-[10px] text-slate-500">{detailLine(d)}</div>
+                    )}
+                  </button>
+                  {onSwap && !d.skill && (
+                    <button
+                      onClick={() => setSwapping(open ? null : prescribed)}
+                      aria-label={`Swap ${d.name}`}
+                      aria-expanded={open}
+                      className={`tap-target shrink-0 px-1.5 text-xs transition ${
+                        open || d.swappedFrom ? "text-pitch-400" : "text-slate-600 hover:text-pitch-400"
+                      }`}
+                    >
+                      ⇄
+                    </button>
                   )}
-                </button>
+                </div>
+                {onSwap && open && (
+                  <div className="mt-1.5">
+                    <SwapSheet
+                      name={prescribed}
+                      current={d.swappedFrom ? d.name : null}
+                      onSwap={(to) => onSwap(prescribed, to)}
+                      onClose={() => setSwapping(null)}
+                    />
+                  </div>
+                )}
               </li>
-            ))}
+            );
+            })}
           </ul>
         </li>
       ))}
@@ -66,8 +113,10 @@ function detailLine(d: ProgramDrill): string {
   ].filter(Boolean).join(" · ");
 }
 
-function groupBySlot(drills: ProgramDrill[]): { slot: Slot | null; drills: ProgramDrill[] }[] {
-  const out: { slot: Slot | null; drills: ProgramDrill[] }[] = [];
+type Drill = ProgramDrill & { swappedFrom?: string };
+
+function groupBySlot(drills: Drill[]): { slot: Slot | null; drills: Drill[] }[] {
+  const out: { slot: Slot | null; drills: Drill[] }[] = [];
   for (const d of drills) {
     const slot = d.slot ?? null;
     const last = out[out.length - 1];

@@ -176,3 +176,58 @@ export function similarExercises(name: string, limit = 6): SwapOption[] {
 function titleCase(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
+
+// --- applying an athlete's swaps ---------------------------------------------
+
+/** Prescribed exercise name → what they are doing instead. See migration 0086. */
+export type SwapMap = Record<string, string>;
+
+export interface SwappedDrill {
+  name: string;
+  /** The prescribed name, when this drill was swapped. */
+  swappedFrom?: string;
+}
+
+/**
+ * Rename the drills an athlete has swapped.
+ *
+ * MATCHED ON THE NORMALISED NAME, not the raw string. The map is keyed by
+ * whatever the plan called the exercise when they tapped it, and a regenerated
+ * block can spell the same movement differently ("Barbell back squat" vs "Back
+ * squat"). Comparing raw strings would silently drop every swap the next time
+ * the block was rebuilt — the athlete's shoulder would still hate overhead
+ * pressing and the programme would have quietly forgotten.
+ *
+ * Carries `swappedFrom` rather than erasing the original, so the UI can say
+ * what was prescribed and offer to put it back.
+ */
+export function applySwaps<T extends { name: string }>(drills: T[], swaps: SwapMap | null | undefined): (T & SwappedDrill)[] {
+  const map = new Map<string, string>();
+  for (const [from, to] of Object.entries(swaps ?? {})) {
+    if (typeof to === "string" && to.trim()) map.set(swapKey(from), to);
+  }
+  if (map.size === 0) return (drills ?? []) as (T & SwappedDrill)[];
+
+  return (drills ?? []).map((d) => {
+    const to = map.get(swapKey(d.name));
+    return to ? { ...d, name: to, swappedFrom: d.name } : (d as T & SwappedDrill);
+  });
+}
+
+/**
+ * The identity a swap is remembered against: the MOVEMENT, not the spelling.
+ *
+ * Resolving through the library first means "Back squat" and "Barbell back
+ * squat" land on the same key, so a swap survives the block being regenerated
+ * with the catalogue's fuller name. Matching on the raw string would drop it
+ * silently — the athlete's shoulder still hates overhead pressing and the
+ * programme has quietly forgotten.
+ *
+ * It cannot over-match, because it borrows `findExercise`'s judgement: a front
+ * squat resolves to a different exercise and keeps its own key, and a name the
+ * library does not know falls back to the normalised string rather than being
+ * guessed into somebody else's swap.
+ */
+function swapKey(name: string): string {
+  return findExercise(name)?.id ?? exerciseKey(name);
+}

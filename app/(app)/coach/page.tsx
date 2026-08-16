@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Icon, type IconName } from "@/components/Icon";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { useCurrentUser } from "@/lib/auth";
-import { useAsync } from "@/lib/use-async";
+import { useAsync, invalidate } from "@/lib/use-async";
 import {
   GOALS, goalsForSport, buildProgram, analyzeProgress, painByArea,
   FOCI,
@@ -18,6 +18,7 @@ import { useJobs } from "@/lib/jobs";
 import { positionList } from "@/lib/positions";
 import { currentPain, painAgeNote } from "@/lib/pain";
 import { effortCheck, prescribedEffort } from "@/lib/effort";
+import { applySwaps, type SwapMap } from "@/lib/exercise-match";
 import { PositionPicker } from "@/components/PositionPicker";
 import { FeatureLock, tierOfSub } from "@/components/FeatureLock";
 import { can } from "@/lib/subscription";
@@ -707,6 +708,30 @@ function ActiveProgram({
     ? adjustForReadiness(nextSession.s, (readiness?.status as ReadinessStatus) ?? "Green")
     : null;
 
+  /**
+   * The session as the athlete will actually do it: their swaps applied.
+   *
+   * An overlay on top of the plan rather than a rewrite of it — see migration
+   * 0086. The prescription (sets, reps, cue) is untouched; only the movement
+   * changes, and `swappedFrom` keeps what was asked for so the row can say so
+   * and offer to put it back.
+   */
+  const swaps = (program.swaps ?? {}) as SwapMap;
+  const sessionDrills = todaySession ? applySwaps(todaySession.drills, swaps) : [];
+
+  async function saveSwap(prescribed: string, to: string | null) {
+    const next = { ...swaps };
+    if (to) next[prescribed] = to;
+    else delete next[prescribed];
+    const { error: e } = await createClient()
+      .from("programs").update({ swaps: next }).eq("id", program.id);
+    if (e) return;
+    // The plan is cached by useAsync, and a swap has to show on every screen
+    // that reads it rather than only where it was made.
+    invalidate("coach:");
+    location.reload();
+  }
+
   const bench = (program.target_metric && program.target_value != null && program.baseline_value != null)
     ? benchmarkProgress(program.target_metric, program.baseline_value, program.target_value, latestBench[program.target_metric] ?? program.baseline_value)
     : null;
@@ -1122,7 +1147,10 @@ function ActiveProgram({
               </p>
             )}
             <div className="mt-2">
-              <SessionDrills drills={todaySession.drills} />
+              <SessionDrills
+                drills={sessionDrills}
+                onSwap={saveSwap}
+              />
             </div>
             <button onClick={() => setPlaying(true)} className="btn-primary mt-4">▶ Start guided session</button>
           </div>
@@ -1132,7 +1160,7 @@ function ActiveProgram({
       {playing && nextSession && todaySession && (
         <WorkoutPlayer
           title={`Week ${nextSession.w} · ${todaySession.title}`}
-          drills={todaySession.drills}
+          drills={sessionDrills}
           onComplete={(result) => { if (!program.completed_sessions.includes(`w${nextSession.w}d${nextSession.s.day}`)) void toggleSession(`w${nextSession.w}d${nextSession.s.day}`, result); }}
           onClose={() => setPlaying(false)}
         />
