@@ -20,6 +20,20 @@ export function equipmentOf(name: string): string {
   if (n.includes("kettlebell")) return "Kettlebell";
   if (n.includes("ez bar")) return "EZ bar";
   if (n.includes("hex bar") || n.includes("trap bar")) return "Trap bar";
+  /**
+   * A NAMED IMPLEMENT BEATS A MOVEMENT KEYWORD.
+   *
+   * "Barbell Glute Bridge" and "Barbell Good Morning" were both classified as
+   * BODYWEIGHT, because the bodyweight pattern below lists "glute bridge" and
+   * "good morning" and was tested first. Harmless while nothing read the field
+   * — and the moment the engine started building blocks around the kit an
+   * athlete has, it put a barbell lift into a dumbbells-only programme and
+   * called it bodyweight.
+   *
+   * If the name says barbell, it is a barbell. Dumbbell, cable, machine and the
+   * rest are already checked above for the same reason.
+   */
+  if (n.includes("barbell")) return "Barbell";
   if (n.includes("landmine")) return "Landmine";
   if (/push ups?|pull ups?|chin ups?|dips?|sit ups?|crunch|burpee|muscle ups?|plank|pistol|handstand|jumping jack|mountain climber|flutter|scissor|superman|russian twist|glute bridge|bodyweight|inverted row|toes to bar|hanging|leg raise|nordic|sissy|ab wheel|good morning|archer|clap|ring/.test(n)) return "Bodyweight";
   if (/bench press|squat|deadlift|barbell|clean|snatch|jerk|row|press|curl|shrug|lunge|hip thrust|rack pull|thruster|pull through|calf raise/.test(n)) return "Barbell";

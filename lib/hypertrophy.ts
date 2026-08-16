@@ -22,7 +22,7 @@
 import type { PainMap } from "./types";
 import type { Exercise } from "./exercises";
 import { IMPORTED_EXERCISES, STAPLES } from "./exercise-catalog";
-import { isExcluded, type Constraints, type Region } from "./constraints";
+import { isExcluded, hasEquipmentFor, type Constraints, type Region } from "./constraints";
 import { MOVEMENTS } from "./movements";
 import { standardFor } from "./strength-standards";
 import { runZoneLabel, runZoneFeel } from "./running";
@@ -673,10 +673,28 @@ function pickForSession(
   const count = new Map<MuscleGroup, number>();
 
   const take = (g: MuscleGroup, wantCompound: boolean): boolean => {
-    const candidates = POOL.filter(
+    /**
+     * WITH THE KIT THEY ACTUALLY HAVE.
+     *
+     * The block anchors on a barbell back squat, a barbell row and a bench
+     * press. Those are the right lifts and they are useless to somebody
+     * training in a bedroom with two dumbbells, who had no way to say so and no
+     * way to be heard if they did — see Constraints.equipment.
+     *
+     * Falls back to the unfiltered pool rather than emptying a slot: a muscle
+     * group with nothing left after the equipment filter should still get its
+     * best available movement, and a session that quietly loses an exercise is
+     * worse than one carrying a lift the athlete has to swap.
+     */
+    const eligible = POOL.filter(
       (m) => m.group === g && m.compound === wantCompound &&
         !taken.has(m.ex.id) && !isExcluded(constraints, GROUP_REGION[g], m.ex.name)
     );
+    const withKit = eligible.filter((m) => hasEquipmentFor(constraints, m.ex.equipment));
+    // The fallback the comment above promises: a muscle group left with nothing
+    // after the equipment filter still gets its best available movement. An
+    // exercise the athlete has to swap beats a session that quietly lost one.
+    const candidates = withKit.length ? withKit : eligible;
     if (candidates.length === 0) return false;
     const nth = count.get(g) ?? 0;
     // The FIRST movement for a group is its anchor and is chosen by rank, not

@@ -15,6 +15,8 @@
 // =============================================================================
 
 /** Coarse training regions a drill can belong to. */
+import { equipBucket } from "./exercise-catalog";
+
 export type Region =
   | "legs" | "chest" | "back" | "shoulders" | "arms" | "core"
   | "conditioning" | "impact" | "skill"
@@ -33,9 +35,55 @@ export interface Constraints {
   excludeMovements: string[];
   /** Human-readable lines describing what was understood, for the UI. */
   summary: string[];
+  /**
+   * EQUIPMENT BUCKETS THE ATHLETE ACTUALLY HAS, or empty for "no restriction".
+   *
+   * The engine anchors sessions on a barbell back squat, a barbell row and a
+   * bench press — the right lifts, and useless to somebody training in a
+   * bedroom with two dumbbells. Nothing in the app asked, and nothing in the
+   * plan could express the answer, so "I only have dumbbells at home" in the
+   * notes was read for regions and movements and then thrown away.
+   *
+   * Buckets rather than exact equipment strings, matching `equipBucket` in
+   * lib/exercise-catalog.ts, because "EZ bar" and "trap bar" are a barbell for
+   * this purpose and an athlete does not enumerate their gym.
+   *
+   * Bodyweight is never excluded by this. Push-ups need nothing and there is no
+   * gym so poorly stocked that they are unavailable, so a bodyweight movement
+   * is always eligible whatever the list says.
+   */
+  equipment: string[];
 }
 
-export const EMPTY_CONSTRAINTS: Constraints = { excludeRegions: [], excludeMovements: [], summary: [] };
+export const EMPTY_CONSTRAINTS: Constraints = { excludeRegions: [], excludeMovements: [], summary: [], equipment: [] };
+
+/**
+ * What somebody has to train with, from how they'd actually say it.
+ *
+ * Two shapes, because people describe this both ways: "I've only got
+ * dumbbells" names what they HAVE, and "no barbell" names what they lack.
+ * Reading only one of them would silently ignore half the athletes who told
+ * us — and an instruction the parser does not see is one the athlete believes
+ * was followed.
+ *
+ * EVERY WORD HERE TAKES A PLURAL, and it is not optional: nobody writes "I only
+ * have dumbbell". The first version of this closed each alternation with \b,
+ * so "dumbbells" failed to match "dumbbell" — the single most likely sentence
+ * an athlete types parsed to nothing at all.
+ */
+const EQUIPMENT_WORDS: { bucket: string; words: RegExp }[] = [
+  { bucket: "Barbell", words: /\b(barbells?|bar bells?|olympic bars?|squat racks?|power racks?|ez bars?|trap bars?|hex bars?)\b/i },
+  { bucket: "Dumbbell", words: /\b(dumbbells?|dumb bells?|dbs?|free weights?)\b/i },
+  { bucket: "Kettlebell", words: /\b(kettlebells?|kettle bells?|kbs?)\b/i },
+  { bucket: "Cable", words: /\b(cables?|pulleys?|crossovers?)\b/i },
+  { bucket: "Machine", words: /\b(machines?|smith|leg press|selectorised)\b/i },
+  { bucket: "Bodyweight", words: /\b(bodyweight|body weight|calisthenics|no equipment|no kit|nothing)\b/i },
+];
+
+/** "only", "just", "all I have" — the athlete is naming what they HAVE. */
+const ONLY = /\b(only|just|all i (have|ve got|got)|nothing but|limited to|access to|i have|i've got|ive got|we have)\b/i;
+
+const ALL_BUCKETS = ["Barbell", "Dumbbell", "Kettlebell", "Cable", "Machine", "Bodyweight"];
 
 // A clause is treated as an exclusion when it contains one of these.
 const NEGATIONS = /\b(no|not|don'?t|do not|doesn'?t|avoid|skip|skipping|without|exclude|excluding|never|can'?t|cannot|unable to|hate|dislike|off limits|stay away from)\b/i;
@@ -91,14 +139,31 @@ function clauses(text: string): string[] {
 /** Parse athlete notes into structured exclusions. Safe on null/empty input. */
 export function parseConstraints(notes: string | null | undefined): Constraints {
   const text = (notes ?? "").trim();
-  if (!text) return { excludeRegions: [], excludeMovements: [], summary: [] };
+  if (!text) return { excludeRegions: [], excludeMovements: [], summary: [], equipment: [] };
 
   const regions = new Set<Region>();
   const movements = new Set<string>();
   const labels = new Map<Region, string>();
+  /** Named as available; null until a clause says so. */
+  let have: Set<string> | null = null;
+  const lack = new Set<string>();
 
   for (const clause of clauses(text)) {
-    if (!NEGATIONS.test(clause)) continue;
+    /**
+     * EQUIPMENT IS READ BEFORE THE NEGATION GATE, because "I only have
+     * dumbbells" is a restriction with no negation word in it at all. Every
+     * other rule here is a thing to leave out; this one is often a thing to
+     * keep, and gating it behind NEGATIONS would drop exactly the phrasing
+     * most people use.
+     */
+    const negated = NEGATIONS.test(clause);
+    for (const { bucket, words } of EQUIPMENT_WORDS) {
+      if (!words.test(clause)) continue;
+      if (negated) lack.add(bucket);
+      else if (ONLY.test(clause)) (have ??= new Set()).add(bucket);
+    }
+
+    if (!negated) continue;
     for (const { region, label, words } of REGION_WORDS) {
       if (words.test(clause)) {
         regions.add(region);
@@ -119,7 +184,47 @@ export function parseConstraints(notes: string | null | undefined): Constraints 
   const excludeRegions = [...regions];
   const summary = excludeRegions.map((r) => `Leaving out ${labels.get(r) ?? r} — you asked not to train it.`);
 
-  return { excludeRegions, excludeMovements: [...movements], summary };
+  /**
+   * "Only dumbbells" wins over "no barbell" when both appear, because naming
+   * what you have is the more complete statement. Bodyweight is added to any
+   * explicit list: it costs nothing and is always available.
+   */
+  let equipment: string[] = [];
+  if (have && have.size) {
+    equipment = [...new Set([...have, "Bodyweight"])];
+  } else if (lack.size) {
+    equipment = ALL_BUCKETS.filter((b) => !lack.has(b) || b === "Bodyweight");
+  }
+  if (equipment.length) {
+    const named = equipment.filter((b) => b !== "Bodyweight");
+    summary.push(
+      named.length
+        ? `Built around ${listOf(named.map((b) => `${b.toLowerCase()}s`))} — that is the kit you said you have.`
+        : "Built from bodyweight movements — no kit needed.",
+    );
+  }
+
+  return { excludeRegions, excludeMovements: [...movements], summary, equipment };
+}
+
+/** "dumbbells", "dumbbells and cables", "dumbbells, cables and machines". */
+function listOf(items: string[]): string {
+  if (items.length <= 1) return items[0] ?? "";
+  return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
+}
+
+/**
+ * True when an exercise cannot be done with the kit the athlete has.
+ *
+ * Bodyweight is always allowed — see the note on `Constraints.equipment`. An
+ * empty list means no restriction was expressed, which is most athletes, and
+ * must not be read as "they have nothing".
+ */
+export function hasEquipmentFor(c: Constraints, equipment: string | null | undefined): boolean {
+  if (!c.equipment?.length) return true;
+  const bucket = equipBucket(String(equipment ?? ""));
+  if (bucket === "Bodyweight" || bucket === "Other") return true;
+  return c.equipment.includes(bucket);
 }
 
 /** True when a drill in `region` (named `name`) is ruled out by `c`. */

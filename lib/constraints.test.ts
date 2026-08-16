@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseConstraints, isExcluded, isEmpty } from "./constraints";
+import { parseConstraints, isExcluded, isEmpty , hasEquipmentFor } from "./constraints";
 import { buildProgram } from "./coach";
 
 test("picks up a plain refusal", () => {
@@ -127,4 +127,59 @@ test("no notes behaves exactly as before", () => {
   const withNull = buildProgram({ goal: "strength", painMap: {}, sport: "gym", notes: null });
   const without = buildProgram({ goal: "strength", painMap: {}, sport: "gym" });
   assert.deepEqual(withNull, without);
+});
+
+// =============================================================================
+// WHAT THEY HAVE TO TRAIN WITH.
+//
+// The engine anchors sessions on a barbell back squat, a barbell row and a
+// bench press. Those are the right lifts, and useless to somebody training in a
+// bedroom with two dumbbells — who had no way to say so, and would not have
+// been heard if they did: "I only have dumbbells at home" was read for regions
+// and movements and the rest thrown away.
+// =============================================================================
+
+test("naming what you have is read as a restriction, with no negation in it", () => {
+  /**
+   * Every other rule in this parser is gated behind a negation word, because
+   * every other rule is a thing to leave out. This one is usually a thing to
+   * KEEP — "I've only got dumbbells" contains no negation at all — so gating it
+   * the same way would drop the phrasing most people use.
+   */
+  assert.deepEqual(parseConstraints("I only have dumbbells at home").equipment, ["Dumbbell", "Bodyweight"]);
+  assert.deepEqual(parseConstraints("home gym, just dumbbells and a kettlebell").equipment,
+    ["Dumbbell", "Kettlebell", "Bodyweight"]);
+  assert.deepEqual(parseConstraints("bodyweight only").equipment, ["Bodyweight"]);
+});
+
+test("and naming what you lack works too", () => {
+  const c = parseConstraints("no barbell, no machines");
+  assert.ok(!c.equipment.includes("Barbell"));
+  assert.ok(!c.equipment.includes("Machine"));
+  assert.ok(c.equipment.includes("Dumbbell"));
+});
+
+test("plurals, because nobody writes \"I only have dumbbell\"", () => {
+  // The first version closed each alternation with \b, so "dumbbells" failed to
+  // match "dumbbell" — the single most likely sentence an athlete types parsed
+  // to nothing at all.
+  for (const s of ["only dumbbells", "only kettlebells", "no barbells", "no machines", "only cables"]) {
+    assert.ok(parseConstraints(s).equipment.length > 0, `"${s}" parsed to no equipment`);
+  }
+});
+
+test("saying nothing means no restriction, not no equipment", () => {
+  assert.deepEqual(parseConstraints("").equipment, []);
+  assert.deepEqual(parseConstraints("I don't train legs").equipment, []);
+  // …and an empty list must not be read as "they have nothing".
+  assert.equal(hasEquipmentFor(parseConstraints(""), "Barbell"), true);
+});
+
+test("bodyweight is always available", () => {
+  // Push-ups need nothing, and there is no gym so poorly stocked that they are
+  // unavailable.
+  const c = parseConstraints("only dumbbells");
+  assert.equal(hasEquipmentFor(c, "Bodyweight"), true);
+  assert.equal(hasEquipmentFor(c, "Barbell"), false);
+  assert.equal(hasEquipmentFor(c, "Dumbbell"), true);
 });

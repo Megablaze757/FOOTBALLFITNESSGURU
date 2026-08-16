@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { splitFor, buildHypertrophyProgram, groupOf, isCompound } from "./hypertrophy";
 import { parseConstraints, EMPTY_CONSTRAINTS } from "./constraints";
 import { buildProgram } from "./coach";
-import { weeklyMuscleVolume, LANDMARKS } from "./muscle-volume";
+import { weeklyMuscleVolume, auditWeek, LANDMARKS } from "./muscle-volume";
 
 const gymPlan = (over: Partial<Parameters<typeof buildProgram>[0]> = {}) =>
   buildProgram({ goal: "strength", painMap: {}, sport: "gym", focus: "aesthetics", daysPerWeek: 3, ...over });
@@ -405,4 +405,42 @@ test("the reason for a lift does not contradict itself", () => {
       .filter((g) => g !== m[1] && new RegExp(`overloads the ${g}`, "i").test(d.reason ?? ""));
     assert.deepEqual(other, [], `${d.name}: "${d.reason}"`);
   }
+});
+
+test("a block is built from the kit the athlete actually has", () => {
+  /**
+   * "The block can anchor on a barbell squat you have no barbell for." The
+   * catalogue has carried an `equipment` field on every exercise since it was
+   * imported, and nothing in the engine had ever looked at it.
+   */
+  const barbellish = /barbell|bench press|^dips$/i;
+  const dumbbellOnly = buildProgram({
+    painMap: {}, goal: "strength", sport: "gym", focus: "aesthetics", daysPerWeek: 4,
+    notes: "I only have dumbbells at home",
+  });
+  const names = [...new Set(dumbbellOnly.weeks[1].sessions.flatMap((s) => s.drills.map((d) => d.name)))];
+  const impossible = names.filter((n) => /^barbell |^bench press$|smith machine|leg press|cable/i.test(n));
+  assert.deepEqual(impossible, [], `prescribed kit they said they do not have: ${impossible.join(", ")}`);
+  assert.ok(names.some((n) => /dumbbell/i.test(n)), `no dumbbell work at all: ${names.join(", ")}`);
+
+  // And with no notes the barbell lifts are still the backbone — the filter
+  // must not quietly apply to everybody.
+  const normal = buildProgram({ painMap: {}, goal: "strength", sport: "gym", focus: "aesthetics", daysPerWeek: 4 });
+  const normalNames = normal.weeks[1].sessions.flatMap((s) => s.drills.map((d) => d.name));
+  assert.ok(normalNames.some((n) => barbellish.test(n)), "the barbell lifts vanished for everybody");
+});
+
+test("a bodyweight-only block is still a block", () => {
+  const plan = buildProgram({
+    painMap: {}, goal: "strength", sport: "gym", focus: "aesthetics", daysPerWeek: 3,
+    notes: "bodyweight only, no equipment",
+  });
+  for (const w of plan.weeks) {
+    for (const s of w.sessions) {
+      assert.ok(s.drills.length >= 4, `${s.title} came out with ${s.drills.length} exercises`);
+    }
+  }
+  // Every muscle the block trains still reaches a dose that does something —
+  // the equipment filter must not be allowed to hollow the week out.
+  assert.deepEqual(auditWeek(plan.weeks[1]).neglected, []);
 });
