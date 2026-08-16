@@ -32,6 +32,7 @@
 // =============================================================================
 
 import { estimate1RM, exerciseKey } from "./exercise-stats";
+import { variantFor } from "./lift-variants";
 import { setsOf } from "./training-sets";
 import type { MuscleGroup } from "./hypertrophy";
 import type { TrainingLog } from "./types";
@@ -153,7 +154,10 @@ export const LIFT_STANDARDS: LiftStandard[] = [
     key: "bench",
     label: "Bench press",
     benchmarkKey: "bench_1rm",
-    aliases: ["bench press", "bench", "barbell bench press", "flat bench press", "flat barbell bench press"],
+    aliases: ["bench press", "bench", "barbell bench press", "flat bench press", "flat barbell bench press",
+      // Grip width is a minor variation, not a different lift — aliased at 1.0
+      // rather than given a factor that would be false precision.
+      "wide grip bench press", "chest press"],
     muscles: ["chest", "triceps", "shoulders"],
     male: [0.5, 0.85, 1.25, 1.65, 2.0, 2.4],
     female: [0.3, 0.5, 0.75, 1.0, 1.25, 1.5],
@@ -162,7 +166,8 @@ export const LIFT_STANDARDS: LiftStandard[] = [
     key: "ohp",
     label: "Overhead press",
     benchmarkKey: "ohp_1rm",
-    aliases: ["overhead press", "ohp", "military press", "strict press", "barbell overhead press", "standing press", "shoulder press"],
+    aliases: ["overhead press", "ohp", "military press", "strict press", "barbell overhead press", "standing press",
+      "shoulder press", "seated shoulder press", "seated barbell shoulder press"],
     muscles: ["shoulders", "triceps"],
     male: [0.35, 0.55, 0.8, 1.0, 1.2, 1.45],
     female: [0.2, 0.35, 0.5, 0.65, 0.8, 0.95],
@@ -170,7 +175,10 @@ export const LIFT_STANDARDS: LiftStandard[] = [
   {
     key: "row",
     label: "Barbell row",
-    aliases: ["barbell row", "bent over row", "bent-over row", "pendlay row", "barbell bent over row"],
+    aliases: ["barbell row", "bent over row", "bent-over row", "pendlay row", "barbell bent over row",
+      // "Bent-over barbell row" is the library's own name for this and never
+      // matched — a rank nobody could earn by using the app's own catalogue.
+      "bent-over barbell row", "bent over barbell row"],
     muscles: ["back", "biceps"],
     male: [0.5, 0.8, 1.15, 1.5, 1.8, 2.1],
     female: [0.3, 0.5, 0.75, 1.0, 1.2, 1.4],
@@ -178,7 +186,7 @@ export const LIFT_STANDARDS: LiftStandard[] = [
   {
     key: "hip_thrust",
     label: "Hip thrust",
-    aliases: ["hip thrust", "barbell hip thrust", "glute bridge"],
+    aliases: ["hip thrust", "barbell hip thrust", "glute bridge", "barbell glute bridge"],
     muscles: ["glutes"],
     male: [1.0, 1.6, 2.3, 3.0, 3.6, 4.2],
     female: [0.8, 1.3, 1.9, 2.5, 3.0, 3.5],
@@ -195,13 +203,71 @@ export function standardFor(name: string): LiftStandard | null {
   return STANDARD_BY_ALIAS.get(exerciseKey(name)) ?? null;
 }
 
+const STANDARD_BY_KEY = new Map<string, LiftStandard>(LIFT_STANDARDS.map((l) => [l.key, l]));
+
+export interface ResolvedLift {
+  /** The standard that judges it. */
+  lift: LiftStandard;
+  /** Its own identity, so a chart keeps a dumbbell press separate from a barbell one. */
+  key: string;
+  label: string;
+  /** Applied to a logged one-rep max to get the base lift's equivalent. */
+  convert: (e1rm: number) => number;
+  /** True when this came through a conversion rather than being the lift itself. */
+  derived: boolean;
+}
+
+/**
+ * The ranked lift a logged drill name speaks for, directly or by conversion.
+ *
+ * DIRECT MATCHES WIN. "Bench press" is a bench press, not a variant of one, so
+ * the variant table is consulted only for names the standards themselves do not
+ * know — widening it can never change how an already-ranked lift is read.
+ *
+ * Lives here rather than in lib/lift-variants.ts only because it needs
+ * LIFT_STANDARDS, and importing that there would close a runtime cycle.
+ */
+export function resolveLift(name: string): ResolvedLift | null {
+  const direct = standardFor(name);
+  if (direct) return { lift: direct, key: direct.key, label: direct.label, convert: (n) => n, derived: false };
+
+  const v = variantFor(name);
+  if (!v) return null;
+  const base = STANDARD_BY_KEY.get(v.base);
+  if (!base) return null; // a variant pointing at a lift that no longer exists
+
+  return {
+    lift: base,
+    key: v.key,
+    label: v.label,
+    convert: (e1rm) => e1rm * (v.perHand ? 2 : 1) * v.factor,
+    derived: true,
+  };
+}
+
 // --- ranking a lift -----------------------------------------------------------
 
-/** Whether the number behind a rank was estimated from reps or actually tested. */
-export type LiftSource = "logged" | "tested";
+/**
+ * Where a rank's number came from.
+ *
+ * "derived" is an estimate of an estimate — a dumbbell press converted into
+ * barbell terms — and it is kept distinct so the UI can say so. Somebody
+ * comparing themselves against a population deserves to know which half of the
+ * comparison is a rule of thumb.
+ */
+export type LiftSource = "logged" | "tested" | "derived";
 
 export interface LiftRank {
   lift: LiftStandard;
+  /**
+   * The movement that actually earned it.
+   *
+   * Equal to `lift.label` for a direct match. For a converted variant it is the
+   * variant's own name — somebody who has never touched a flat barbell bench
+   * should not be told their "Bench press" is Intermediate, because the obvious
+   * next thought is "no it isn't, I've never done one".
+   */
+  via: string;
   /** Where the best number came from, so the card can show its working. */
   source: LiftSource;
   /** Best estimated 1RM seen, in kg. */
@@ -229,9 +295,10 @@ export function rankLift(
   best1RM: number,
   bodyweightKg: number,
   sex: Sex,
-// Not "source": ranking a number is the same arithmetic however the number was
-// arrived at, and this function is given a kg rather than a provenance.
-): Omit<LiftRank, "lift" | "lastDate" | "source"> | null {
+// Not "source" or "via": ranking a number is the same arithmetic however the
+// number was arrived at, and this function is given a kg rather than a
+// provenance. Both are attached by the caller, which knows.
+): Omit<LiftRank, "lift" | "lastDate" | "source" | "via"> | null {
   if (!(bodyweightKg > 0) || !(best1RM > 0)) return null;
   const thresholds = sex === "female" ? lift.female : lift.male;
   const ratio = best1RM / bodyweightKg;
@@ -297,28 +364,42 @@ export function rankedLifts(
   sex: Sex,
   tested?: TestedMax[] | null,
 ): LiftRank[] {
-  const best = new Map<string, { value: number; date: string; lift: LiftStandard; source: LiftSource }>();
+  const best = new Map<string, { value: number; date: string; lift: LiftStandard; via: string; source: LiftSource }>();
 
-  const offer = (lift: LiftStandard, value: number, date: string, source: LiftSource) => {
+  const offer = (lift: LiftStandard, value: number, date: string, source: LiftSource, via = lift.label) => {
     const seen = best.get(lift.key);
     // Strictly greater, so a tested max that merely ties an estimate does not
     // relabel the row — and, more importantly, so nothing here can ever lower a
     // rank. Ranks are best-ever and XP is monotonic: a max you tested on a bad
     // day must not delete the tier your training log already earned.
-    if (!seen || value > seen.value) best.set(lift.key, { value, date, lift, source });
+    if (!seen || value > seen.value) best.set(lift.key, { value, date, lift, via, source });
   };
 
   for (const log of logs ?? []) {
     for (const drill of log.drills ?? []) {
-      const lift = standardFor(String(drill.name ?? ""));
-      if (!lift) continue;
+      /**
+       * VARIANTS COUNT NOW, AND THEY ARE MOST OF SOMEBODY'S TRAINING.
+       *
+       * This used to be `standardFor` alone — eight barbell lifts. The library
+       * carries 269 loaded exercises and fourteen of them matched, so an athlete
+       * who benches with dumbbells and presses on an incline had no chest rank
+       * at all: a grey patch on the figure over a muscle they train twice a
+       * week, and a strength total computed as though none of it happened.
+       *
+       * `resolveLift` converts a known variant to its base lift's terms — a
+       * close-grip bench is about 90% of a flat one — and refuses the ones that
+       * cannot honestly be converted rather than guessing. See lib/lift-variants.ts,
+       * where the refusals are written down alongside the conversions.
+       */
+      const r = resolveLift(String(drill.name ?? ""));
+      if (!r) continue;
       // Every set is a candidate, because the top set is not always the best
       // effort — 5 at 100kg estimates higher than 1 at 105kg.
       for (const set of setsOf(drill)) {
         if (set.load_kg == null || set.load_kg <= 0) continue;
         const e1rm = estimate1RM(set.load_kg, set.reps);
         if (e1rm == null) continue;
-        offer(lift, e1rm, String(log.log_date ?? ""), "logged");
+        offer(r.lift, r.convert(e1rm), String(log.log_date ?? ""), r.derived ? "derived" : "logged", r.label);
       }
     }
   }
@@ -332,9 +413,9 @@ export function rankedLifts(
   }
 
   const out: LiftRank[] = [];
-  for (const { value, date, lift, source } of best.values()) {
+  for (const { value, date, lift, via, source } of best.values()) {
     const rank = rankLift(lift, value, bodyweightKg, sex);
-    if (rank) out.push({ ...rank, lift, lastDate: date, source });
+    if (rank) out.push({ ...rank, lift, via, lastDate: date, source });
   }
   return out.sort((a, b) => b.tier.index - a.tier.index || b.ratio - a.ratio);
 }
@@ -373,7 +454,8 @@ export function bodyPartStrength(ranks: LiftRank[]): BodyPartStrength[] {
       const seen = byMuscle.get(muscle);
       if (!seen || rank.tier.index > seen.tier.index
         || (rank.tier.index === seen.tier.index && rank.progress > seen.progress)) {
-        byMuscle.set(muscle, { tier: rank.tier, from: rank.lift.label, progress: rank.progress });
+        // `via`, not `lift.label`: the athlete gets told which movement earned it.
+        byMuscle.set(muscle, { tier: rank.tier, from: rank.via, progress: rank.progress });
       }
     }
   }

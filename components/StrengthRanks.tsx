@@ -242,8 +242,12 @@ function LiftTable({ ranks }: { ranks: LiftRank[] }) {
       {ranks.map((r) => (
         <li key={r.lift.key}>
           <div className="flex items-baseline justify-between gap-2">
+            {/* `via`, not `lift.label`. A rank earned on dumbbells is shown as
+                a dumbbell press — telling somebody who has never touched a flat
+                barbell bench that their "Bench press" is Intermediate invites
+                the obvious reply, and loses their trust in the whole panel. */}
             <span className="flex items-baseline gap-1.5 text-sm font-semibold text-slate-200">
-              {r.lift.label}
+              {r.via}
               {/* A max you actually lifted outranks one worked out from a set of
                   five, and the athlete should be able to see which they are
                   looking at — otherwise a tested 140kg squat and an estimated
@@ -251,6 +255,15 @@ function LiftTable({ ranks }: { ranks: LiftRank[] }) {
               {r.source === "tested" && (
                 <span className="rounded bg-pitch-400/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-pitch-400">
                   tested
+                </span>
+              )}
+              {/* An estimate of an estimate: a dumbbell load converted into
+                  barbell terms before being compared against a population
+                  standard. Both halves are approximations and the athlete is
+                  entitled to know which rows carry the extra one. */}
+              {r.source === "derived" && (
+                <span className="rounded bg-white/[0.07] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-slate-400">
+                  estimated
                 </span>
               )}
             </span>
@@ -263,7 +276,7 @@ function LiftTable({ ranks }: { ranks: LiftRank[] }) {
             />
           </div>
           <p className="mt-1 text-[11px] text-slate-500">
-            {Math.round(r.best)}kg · {r.ratio.toFixed(2)}× bodyweight
+            {Math.round(r.best)}kg{r.source === "derived" && " equivalent"} · {r.ratio.toFixed(2)}× bodyweight
             {/* The specific next thing to do, in kilos, which is the whole
                 difference between a scoreboard and a coach. */}
             {r.toNextKg != null && r.nextTier
@@ -272,6 +285,18 @@ function LiftTable({ ranks }: { ranks: LiftRank[] }) {
           </p>
         </li>
       ))}
+
+      {/* SAY WHAT "ESTIMATED" MEANS, ONCE, WHERE IT APPLIES.
+          A badge with no explanation is a puzzle. This only appears for
+          athletes who actually have a converted row, so the note is never
+          answering a question nobody asked. */}
+      {ranks.some((r) => r.source === "derived") && (
+        <li className="pt-1 text-[11px] leading-relaxed text-slate-600">
+          Rows marked <span className="text-slate-500">estimated</span> were worked out from a variant —
+          a dumbbell or incline press, a trap-bar pull — converted to the barbell lift the standards are
+          written for. Dumbbell loads are read as the weight of one, the way they are labelled.
+        </li>
+      )}
     </ul>
   );
 }

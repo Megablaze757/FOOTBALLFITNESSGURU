@@ -28,7 +28,7 @@
 
 import { estimate1RM } from "./exercise-stats";
 import { setsOf } from "./training-sets";
-import { standardFor, type LiftStandard } from "./strength-standards";
+import { resolveLift, type LiftStandard } from "./strength-standards";
 import type { MuscleGroup } from "./hypertrophy";
 import type { TrainingLog } from "./types";
 
@@ -54,6 +54,8 @@ export const MIN_HISTORY_DAYS = 42;
 
 export interface LiftProgress {
   lift: LiftStandard;
+  /** The movement as the athlete logged it — "Incline dumbbell press", not "Bench press". */
+  label: string;
   baselineKg: number;
   bestKg: number;
   /** Percentage added since the opening window. Never negative. */
@@ -69,21 +71,38 @@ export interface MuscleProgress {
 }
 
 /** Best estimated 1RM per lift per day, from the raw logs. */
-function dailyBests(logs: TrainingLog[] | null | undefined): Map<string, { date: string; e1rm: number; lift: LiftStandard }[]> {
-  const byLift = new Map<string, { date: string; e1rm: number; lift: LiftStandard }[]>();
+interface DayBest { date: string; e1rm: number; lift: LiftStandard; label: string }
+
+/**
+ * Best estimated 1RM per lift per day, from the raw logs.
+ *
+ * KEYED BY THE VARIANT, NOT THE BASE LIFT. `resolveLift` maps a dumbbell bench
+ * onto the barbell bench's STANDARD, which is right for ranking — the question
+ * there is "how strong is your chest" and any honest evidence answers it. It is
+ * wrong here. A percentage gain is a series over time, and folding a dumbbell
+ * press into the same series as a barbell one would show a step change on the
+ * day somebody switched equipment and call it progress.
+ *
+ * The conversion factor is deliberately NOT applied: a ratio of two numbers is
+ * unchanged by scaling both, so the percentage is the same either way, and
+ * leaving the kilos as they were logged means the evidence line underneath
+ * shows the weights the athlete actually put on the bar.
+ */
+function dailyBests(logs: TrainingLog[] | null | undefined): Map<string, DayBest[]> {
+  const byLift = new Map<string, DayBest[]>();
   for (const log of logs ?? []) {
     const date = String(log.log_date ?? "");
     if (!date) continue;
     for (const drill of log.drills ?? []) {
-      const lift = standardFor(String(drill.name ?? ""));
-      if (!lift) continue;
+      const r = resolveLift(String(drill.name ?? ""));
+      if (!r) continue;
       for (const set of setsOf(drill)) {
         if (set.load_kg == null || set.load_kg <= 0) continue;
         const e1rm = estimate1RM(set.load_kg, set.reps);
         if (e1rm == null) continue;
-        const rows = byLift.get(lift.key) ?? [];
-        rows.push({ date, e1rm, lift });
-        byLift.set(lift.key, rows);
+        const rows = byLift.get(r.key) ?? [];
+        rows.push({ date, e1rm, lift: r.lift, label: r.label });
+        byLift.set(r.key, rows);
       }
     }
   }
@@ -115,6 +134,7 @@ export function liftProgress(logs: TrainingLog[] | null | undefined, today: stri
 
     out.push({
       lift: first.lift,
+      label: first.label,
       baselineKg: round1(baselineKg),
       bestKg: round1(best.e1rm),
       pct: Math.round(((best.e1rm - baselineKg) / baselineKg) * 100),
@@ -155,7 +175,7 @@ export function progressHeadline(rows: MuscleProgress[]): string | null {
   const withGain = rows.filter((r): r is MuscleProgress & { gain: LiftProgress } => !!r.gain);
   if (withGain.length === 0) return null;
   const best = withGain.reduce((a, b) => (b.gain.pct > a.gain.pct ? b : a));
-  return `Your ${best.muscle} have gained the most — up ${best.gain.pct}% on your ${best.gain.lift.label.toLowerCase()} since you started.`;
+  return `Your ${best.muscle} have gained the most — up ${best.gain.pct}% on your ${best.gain.label.toLowerCase()} since you started.`;
 }
 
 function daysBetween(from: string, to: string): number {

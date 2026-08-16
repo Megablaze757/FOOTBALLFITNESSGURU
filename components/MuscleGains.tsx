@@ -95,7 +95,7 @@ export function MuscleGains({ logs }: { logs: TrainingLog[] | null | undefined }
           .map(({ muscle, gain }) => (
             <li key={muscle} className="text-[11px] text-slate-500">
               <span className="capitalize text-slate-400">{MUSCLE_WORD[muscle]}</span>
-              {" — "}{gain!.lift.label} {gain!.baselineKg}kg → {gain!.bestKg}kg
+              {" — "}{gain!.label} {gain!.baselineKg}kg → {gain!.bestKg}kg
             </li>
           ))}
       </ul>
