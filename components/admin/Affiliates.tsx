@@ -14,6 +14,9 @@ export function Affiliates() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  /** Which affiliate's email is being edited, and the value so far. */
+  const [editing, setEditing] = useState<string | null>(null);
+  const [editEmail, setEditEmail] = useState("");
 
   const { data, loading, reload } = useAsync(async () => {
     const { data, error } = await createClient().rpc("affiliate_stats");
@@ -33,6 +36,32 @@ export function Affiliates() {
     setBusy(false);
     if (error) { setError(error.message.includes("duplicate") ? "That code is already taken." : error.message); return; }
     setName(""); setEmail(""); setCode("");
+    reload();
+  }
+
+  /**
+   * ATTACH OR CHANGE AN EMAIL AFTER THE FACT.
+   *
+   * The email is how an affiliate reaches their own dashboard — it is matched
+   * against the address on their account and then claimed permanently — so a
+   * row created without one is a partner who can never see what they have
+   * earned. Several were, before the dashboard existed, and there was no way to
+   * fix it short of a SQL console.
+   *
+   * Editing rather than delete-and-recreate, because the code is what every
+   * referral and every commission row points at: recreating it would orphan
+   * their entire history to fix a missing email address.
+   */
+  async function saveEmail(affCode: string, next: string) {
+    setBusy(true); setError(null);
+    const value = next.trim();
+    const { error } = await createClient()
+      .from("affiliates")
+      .update({ email: value || null })
+      .eq("code", affCode);
+    setBusy(false);
+    if (error) { setError(error.message); return; }
+    setEditing(null);
     reload();
   }
 
@@ -85,7 +114,41 @@ export function Affiliates() {
                 <tr key={r.code}>
                   <td className="py-2">
                     <div className="font-semibold text-slate-100">{r.name}</div>
-                    {r.email && <div className="text-xs text-slate-500">{r.email}</div>}
+                    {editing === r.code ? (
+                      <div className="mt-1 flex items-center gap-1">
+                        <input
+                          className="field min-h-0 w-44 py-1 text-xs"
+                          value={editEmail}
+                          onChange={(e) => setEditEmail(e.target.value)}
+                          placeholder="their@email.com"
+                          type="email"
+                          autoFocus
+                        />
+                        <button
+                          disabled={busy}
+                          onClick={() => saveEmail(r.code, editEmail)}
+                          className="chip shrink-0 text-pitch-400 disabled:opacity-50"
+                        >
+                          Save
+                        </button>
+                        <button
+                          onClick={() => setEditing(null)}
+                          className="tap-target shrink-0 px-1 text-xs text-slate-500 hover:text-slate-300"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => { setEditing(r.code); setEditEmail(r.email ?? ""); }}
+                        className="mt-0.5 text-left text-xs text-slate-500 hover:text-pitch-400"
+                      >
+                        {/* AN AFFILIATE WITH NO EMAIL CANNOT SEE THEIR OWN
+                            DASHBOARD, so the gap is called out rather than
+                            rendered as an empty space nobody notices. */}
+                        {r.email ?? <span className="text-amber-400">no email — can&apos;t use the dashboard</span>}
+                      </button>
+                    )}
                   </td>
                   <td className="py-2 font-mono text-xs text-slate-300">{r.code}</td>
                   <td className="py-2 text-right text-slate-300">{r.waitlist}</td>

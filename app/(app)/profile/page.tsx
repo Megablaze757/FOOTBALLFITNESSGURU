@@ -19,11 +19,19 @@ export default function ProfilePage() {
 
   const { data, loading, reload } = useAsync(async () => {
     const supabase = createClient();
-    const [{ data: profile }, { data: sub }] = await Promise.all([
+    const [{ data: profile }, { data: sub }, { data: affiliate }] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", user.id).maybeSingle(),
       supabase.from("subscriptions").select("*").eq("user_id", user.id).maybeSingle(),
+      // Their own affiliate row, if they have one. RLS returns nothing for
+      // everybody else rather than erroring, so this is one cheap query that
+      // decides whether the partner link is worth showing at all.
+      supabase.from("affiliates").select("code").limit(1).maybeSingle(),
     ]);
-    return { profile: profile as Profile | null, sub: (sub ?? null) as Subscription | null };
+    return {
+      profile: profile as Profile | null,
+      sub: (sub ?? null) as Subscription | null,
+      isAffiliate: !!affiliate,
+    };
   }, [user.id], `profile:${user.id}`);
 
   // Coming back from Stripe's portal, the change was made THERE and only
@@ -114,6 +122,14 @@ export default function ProfilePage() {
       )}
       {safeProfile.role === "admin" && (
         <Link href="/admin" className="btn-ghost mb-4">🛠️ Admin dashboard</Link>
+      )}
+      {/* SHOWN ONLY TO ACTUAL AFFILIATES.
+          `affiliates` is readable by an affiliate for their own row and nobody
+          else's (0087), so an empty result here is the answer rather than a
+          permission error — which means this link cannot appear for someone who
+          would only find a "you are not a partner" page behind it. */}
+      {data?.isAffiliate && (
+        <Link href="/partner" className="btn-ghost mb-4">🤝 Partner dashboard</Link>
       )}
 
       <ProfileForm profile={safeProfile} email={user.email ?? ""} />
