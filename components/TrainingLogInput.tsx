@@ -9,6 +9,7 @@ import { DrillModal } from "@/components/DrillDetail";
 import { WhatIfLiftSheet } from "@/components/WhatIfLiftSheet";
 import {
   RUN_TYPES, ZONE_LIST, ZONES, runType, describeShape, shapeMidpoint, intervalEffort,
+  formatPace,
   type RunTypeId, type ZoneId,
 } from "@/lib/running";
 import { useRef, useState, type ReactNode } from "react";
@@ -111,6 +112,27 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
     type: value.run_type,
   });
 
+  const chooseRunType = (id: RunTypeId | null) => {
+    // Changing the run type clears structure that no longer belongs to it.
+    // Otherwise switching from hill repeats to an easy run can silently leave
+    // "8 × 90s" attached to a session whose interval fields are now hidden.
+    if (!id || !runType(id)?.interval) {
+      update({
+        run_type: id,
+        zone: id ? runType(id)?.primaryZone ?? null : null,
+        intervals: null,
+        interval_seconds: null,
+        recovery_seconds: null,
+      });
+      return;
+    }
+    update({ run_type: id, zone: runType(id)?.primaryZone ?? null });
+  };
+
+  const livePace = Number(value.distance_km) > 0 && Number(value.total_minutes) > 0
+    ? Math.round((Number(value.total_minutes) * 60) / Number(value.distance_km))
+    : null;
+
   const setDrill = (i: number, patch: Partial<TrainingDrill>) =>
     update({ drills: value.drills.map((d, idx) => (idx === i ? { ...d, ...patch } : d)) });
 
@@ -121,6 +143,144 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
 
   return (
     <div className="space-y-4">
+      {/* RUNNER FAST PATH.
+          Performance can only be useful if the check-in makes its inputs
+          obvious. These five fields directly power mileage, pace, Zone 2
+          progress, intensity distribution and heart-rate trends. They used to
+          be split above and below the strength drill picker, with "Did you
+          run?" appearing after sets/reps/kg on a runner's own form. */}
+      {sport === "running" && (
+        <section className="rounded-2xl border border-sky-400/20 bg-sky-400/[0.045] p-4">
+          <div className="mb-3">
+            <span className="eyebrow text-sky-400">Run summary</span>
+            <h3 className="mt-0.5 text-base font-extrabold text-slate-100">What did you run?</h3>
+            <p className="mt-1 text-xs text-slate-500">The essentials first. Watch data stays optional.</p>
+          </div>
+
+          <div className="space-y-3">
+            <label className="block">
+              <span className="field-label">Run type</span>
+              <select
+                value={value.run_type ?? ""}
+                onChange={(e) => chooseRunType((e.target.value || null) as RunTypeId | null)}
+                className="field"
+              >
+                <option value="">Choose the closest type</option>
+                {RUN_TYPES.map((run) => <option key={run.id} value={run.id}>{run.label}</option>)}
+              </select>
+              {value.run_type && <span className="mt-1 block text-xs text-slate-500">{runType(value.run_type)?.purpose}</span>}
+            </label>
+
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block">
+                <span className="field-label">Distance (km)</span>
+                <NumberInput
+                  decimal min={0} max={500} step="0.01"
+                  value={value.distance_km ?? null}
+                  onChange={(next) => update({ distance_km: next })}
+                  placeholder="e.g. 5.66" className="field"
+                />
+              </label>
+              <label className="block">
+                <span className="field-label">Duration (min)</span>
+                <NumberInput
+                  min={0}
+                  value={value.total_minutes ?? null}
+                  onChange={(next) => updateDerived({ total_minutes: next })}
+                  placeholder="e.g. 31" className="field"
+                />
+              </label>
+            </div>
+
+            <div className={`rounded-xl px-3 py-2 text-xs ${livePace ? "bg-sky-400/10 text-sky-300" : "bg-white/[0.03] text-slate-500"}`}>
+              {livePace
+                ? <>Average pace <strong className="tabular-nums text-slate-100">{formatPace(livePace)}/km</strong> · saved automatically from distance and time</>
+                : "Add distance and time and your average pace appears here automatically."}
+            </div>
+
+            <div>
+              <span className="field-label">Actual zone</span>
+              <div className="grid grid-cols-5 gap-1.5">
+                {ZONE_LIST.map((zone) => {
+                  const active = value.zone === zone.id;
+                  return (
+                    <button
+                      key={zone.id}
+                      type="button"
+                      onClick={() => updateDerived({ zone: zone.id })}
+                      className={`tap-target min-w-0 rounded-xl border px-1 text-xs font-bold transition ${active ? "text-ink-900" : "border-white/10 bg-white/[0.03] text-slate-400"}`}
+                      style={active ? { background: zone.colour, borderColor: zone.colour } : undefined}
+                      aria-label={`Zone ${zone.id}: ${zone.name}`}
+                    >
+                      Z{zone.id}
+                    </button>
+                  );
+                })}
+              </div>
+              <span className="mt-1.5 block text-xs text-slate-500">
+                {value.zone ? `${ZONES[value.zone].name} · ${ZONES[value.zone].feel}` : "Pick how it actually felt, not only what the plan called it."}
+              </span>
+            </div>
+
+            <label className="block">
+              <span className="field-label">Average heart rate <span className="normal-case tracking-normal text-slate-600">(optional)</span></span>
+              <NumberInput
+                min={30} max={250}
+                value={value.avg_hr ?? null}
+                onChange={(next) => update({ avg_hr: next })}
+                placeholder="From your watch, e.g. 146" className="field"
+              />
+            </label>
+
+            {shape && (
+              <div className="rounded-xl border border-white/[0.07] bg-white/[0.025] p-3">
+                <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+                  <span className="field-label !mb-0">Intervals</span>
+                  <button type="button" onClick={() => updateDerived(shapeFill)} className="chip shrink-0 text-sky-400">
+                    Use {describeShape(shape)}
+                  </button>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <label className="block">
+                    <span className="field-label">Efforts</span>
+                    <NumberInput min={1} max={100} value={value.intervals ?? null} onChange={(next) => updateDerived({ intervals: next })} placeholder={String(shapeFill.intervals)} className="field" />
+                  </label>
+                  <label className="block">
+                    <span className="field-label">Each (sec)</span>
+                    <NumberInput min={1} max={7200} value={value.interval_seconds ?? null} onChange={(next) => updateDerived({ interval_seconds: next })} placeholder={String(shapeFill.interval_seconds)} className="field" />
+                  </label>
+                  <label className="block">
+                    <span className="field-label">Jog (sec)</span>
+                    <NumberInput min={0} max={7200} value={value.recovery_seconds ?? null} onChange={(next) => updateDerived({ recovery_seconds: next })} placeholder={shapeFill.recovery_seconds == null ? "–" : String(shapeFill.recovery_seconds)} className="field" />
+                  </label>
+                </div>
+                {effort && <p className="mt-2 text-xs text-slate-400">{effort.note}</p>}
+              </div>
+            )}
+
+            <label className="block">
+              <span className="field-label">How hard overall? <span className="text-slate-400">{value.intensity ?? 5}/10</span></span>
+              <input
+                type="range" min={1} max={10}
+                value={value.intensity ?? 5}
+                onChange={(event) => {
+                  ratedItThemselves.current = true;
+                  update({ intensity: Number(event.target.value) });
+                }}
+                className="mt-2 w-full"
+              />
+            </label>
+
+            <div className="flex flex-wrap gap-1.5 pt-1 text-[10px] text-slate-400">
+              <span className="chip">Distance → mileage</span>
+              <span className="chip">Time → pace</span>
+              <span className="chip">Zone → aerobic progress</span>
+              <span className="chip">HR → effort trend</span>
+            </div>
+          </div>
+        </section>
+      )}
+
       {value.drills.length > 0 && (
         <ul className="space-y-2">
           {value.drills.map((d, i) => {
@@ -398,7 +558,7 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
       {whatIf !== null && <WhatIfLiftSheet initialExercise={whatIf} onClose={() => setWhatIf(null)} />}
       {detail && <DrillModal name={detail} onClose={() => setDetail(null)} />}
 
-      <div className="grid grid-cols-2 gap-3">
+      {sport !== "running" && <div className="grid grid-cols-2 gap-3">
         <label className="block">
           <span className="field-label">Duration (min)</span>
           <NumberInput
@@ -427,7 +587,7 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
             className="mt-3 w-full"
           />
         </label>
-      </div>
+      </div>}
 
       {/* DID YOU RUN?
           Offered to every sport, not just runners — the program now prescribes
@@ -437,27 +597,11 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
           Collapsed to one select until they say yes. The zone and heart-rate
           fields only matter once there IS a run, and three empty boxes on a
           lifter's check-in is the clutter this form keeps having to shed. */}
-      <label className="block">
+      {sport !== "running" && <label className="block">
         <span className="field-label">Did you run?</span>
         <select
           value={value.run_type ?? ""}
-          onChange={(e) => {
-            const id = (e.target.value || null) as RunTypeId | null;
-            // Changing the run type clears the structure with it. Switching
-            // from hill repeats to an easy run and leaving "8 × 90s" behind
-            // would save efforts against a session that has none, and the
-            // fields are hidden by then so nobody could see it happen.
-            if (!id || !runType(id)?.interval) {
-              update({ run_type: id, zone: id ? runType(id)?.primaryZone ?? null : null,
-                       intervals: null, interval_seconds: null, recovery_seconds: null });
-              return;
-            }
-            // Default the zone to the one the run type prescribes. It's the
-            // right answer most of the time and they can override it — which
-            // is the interesting case, because an easy run logged at Zone 3 is
-            // the most common training error there is.
-            update({ run_type: id, zone: id ? runType(id)?.primaryZone ?? null : null });
-          }}
+          onChange={(e) => chooseRunType((e.target.value || null) as RunTypeId | null)}
           className="field"
         >
           <option value="">No — this wasn&apos;t a run</option>
@@ -468,9 +612,9 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
         {value.run_type && (
           <span className="mt-1 block text-xs text-slate-500">{runType(value.run_type)?.purpose}</span>
         )}
-      </label>
+      </label>}
 
-      {value.run_type && (
+      {sport !== "running" && value.run_type && (
         <div className="space-y-3 rounded-2xl border border-white/[0.08] bg-white/[0.02] p-3">
           <div className="grid grid-cols-2 gap-3">
             <label className="block">
@@ -594,21 +738,6 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
 
       {/* Distance still stands alone for runners, so someone logging a plain
           10km without picking a type doesn't lose it. */}
-      {sport === "running" && !value.run_type && (
-        <label className="block">
-          <span className="field-label">Distance (km)</span>
-          <NumberInput
-            decimal min={0} max={500}
-            value={value.distance_km ?? null}
-            onChange={(v) => update({ distance_km: v })}
-            placeholder="e.g. 8.5" className="field"
-          />
-          <span className="mt-1 block text-xs text-slate-500">
-            Your weekly mileage is built from this — it&apos;s what Progress leads with.
-          </span>
-        </label>
-      )}
-
       {sport === "rugby" && (
         <label className="block">
           <span className="field-label">Of that, contact minutes</span>

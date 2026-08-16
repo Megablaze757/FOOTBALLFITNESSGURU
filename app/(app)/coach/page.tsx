@@ -1534,7 +1534,7 @@ function ActiveProgram({
 
       {/* Readiness-aware: what to do today */}
       {tab === "today" && nextSession && todaySession && (
-        <section className="card p-5">
+        <section className="card p-4 sm:p-5">
           <div className="mb-2 flex items-center justify-between">
             {/* "Today's session" was shown unconditionally, but nextSession is
                 simply the next UNTICKED one — so after you'd trained it kept

@@ -33,8 +33,9 @@
 
 import {
   getExerciseByName, SPORTS, demoImplement,
-  type DemoPattern, type Implement,
+  type DemoPattern, type Exercise, type Implement,
 } from "./exercises";
+import { findExercise } from "./exercise-match";
 import { SKILL_DRILLS, type SkillDrill } from "./skills";
 import { RUN_TYPES } from "./running";
 import { exerciseMuscles } from "./muscle-volume";
@@ -78,9 +79,11 @@ export interface HowTo {
   teaches: boolean;
   /** Who you need. Absent for anything you can always do alone. */
   needs?: SkillDrill["needs"];
-  /** Which stick-figure demo to draw, so every row has a picture. */
+  /** Which movement pose to draw, so every row has a picture. */
   demo: DemoPattern;
   implement: Implement;
+  /** Primary mover first, then assisting muscles, for the anatomy visual. */
+  muscles: string[];
 }
 
 const SKILL_BY_NAME = new Map(SKILL_DRILLS.map((d) => [d.name.trim().toLowerCase(), d]));
@@ -89,31 +92,15 @@ const SPORT_LABEL = new Map(SPORTS.map((s) => [s.id, s.label]));
 
 /**
  * The coaching for a drill named in a program, from whichever catalogue holds
- * it. Null only when the name is in none of them — a coach's custom drill
- * typed by hand, or a plan the AI wrote a name for that nothing backs.
+ * it. A non-empty custom name receives an honest fallback card; null is only
+ * for a blank name that cannot label a card.
  */
 export function howToFor(name: string): HowTo | null {
   const key = name.trim().toLowerCase();
   if (!key) return null;
 
   const ex = getExerciseByName(name);
-  if (ex) {
-    const { primary } = exerciseMuscles(ex.name, ex.muscles);
-    return {
-      name: ex.name,
-      source: "exercise",
-      tag: [primary ?? ex.category, equipBucket(ex.equipment)].filter(Boolean).join(" · "),
-      why: ex.why,
-      // `description` falls back to `why` when nothing was written for the
-      // movement, and repeating one line as both the summary and the method is
-      // worse than showing the summary once.
-      steps: ex.hasHowTo && ex.description ? [ex.description] : [],
-      cues: ex.cues,
-      teaches: !!ex.hasHowTo,
-      demo: ex.demo,
-      implement: demoImplement(ex),
-    };
-  }
+  if (ex) return exerciseHowTo(ex);
 
   const skill = SKILL_BY_NAME.get(key);
   if (skill) {
@@ -134,6 +121,7 @@ export function howToFor(name: string): HowTo | null {
       needs: skill.needs,
       demo: "ball",
       implement: "none",
+      muscles: ["Quads", "Glutes", "Calves", "Core"],
     };
   }
 
@@ -150,10 +138,96 @@ export function howToFor(name: string): HowTo | null {
       teaches: true,
       demo: "run",
       implement: "none",
+      muscles: ["Quads", "Hamstrings", "Glutes", "Calves", "Core"],
     };
   }
 
-  return null;
+  // PROGRAM NAMES ARE NOT ALWAYS CATALOGUE NAMES. An older saved programme, a
+  // coach-written session or an AI variation can say "DB incline chest press"
+  // while the library says "Incline dumbbell press". The exact-only lookup
+  // gave those rows a dot instead of a figure and made them impossible to tap.
+  // Reuse the cautious matcher already used by rehab and swaps before falling
+  // back to a clearly labelled custom card.
+  const close = findExercise(name);
+  if (close) return exerciseHowTo(close, name.trim());
+
+  return fallbackHowTo(name.trim());
+}
+
+function exerciseHowTo(ex: Exercise, displayName = ex.name): HowTo {
+  const { primary, secondary } = exerciseMuscles(ex.name, ex.muscles);
+  return {
+    name: displayName,
+    source: "exercise",
+    tag: [primary ?? ex.category, equipBucket(ex.equipment)].filter(Boolean).join(" · "),
+    why: ex.why,
+    // `description` falls back to `why` when nothing was written for the
+    // movement, and repeating one line as both the summary and the method is
+    // worse than showing the summary once.
+    steps: ex.hasHowTo && ex.description ? [ex.description] : [],
+    cues: ex.cues,
+    teaches: !!ex.hasHowTo,
+    demo: ex.demo,
+    implement: demoImplement(ex),
+    muscles: [primary, ...secondary].filter((m): m is string => !!m),
+  };
+}
+
+/** A useful, honest card for a coach-entered movement the catalogue has never seen. */
+function fallbackHowTo(name: string): HowTo {
+  const demo = fallbackPattern(name);
+  const fallback = musclesForPattern(demo);
+  const { primary, secondary } = exerciseMuscles(name, fallback);
+  const muscles = [primary, ...secondary].filter((muscle): muscle is string => !!muscle);
+
+  return {
+    name,
+    source: "exercise",
+    tag: [primary ?? "Full body", "Custom exercise"].join(" · "),
+    why: "This movement was added to your session outside the exercise library, so its exact coaching notes are not available yet.",
+    steps: ["Follow the setup and range your coach prescribed. Use a controlled tempo, stop before technique changes, and record a note if this name needs clarifying."],
+    cues: ["Controlled reps", "Use a pain-free range", "Stop when form changes"],
+    teaches: false,
+    demo,
+    implement: fallbackImplement(name, demo),
+    muscles: muscles.length ? muscles : fallback,
+  };
+}
+
+function fallbackPattern(name: string): DemoPattern {
+  const value = name.toLowerCase();
+  if (/run|sprint|jog|stride|shuttle/.test(value)) return "run";
+  if (/ball|dribbl|pass|shoot|kick|touch/.test(value)) return "ball";
+  if (/jump|hop|bound|pogo|calf/.test(value)) return "jump";
+  if (/lunge|split squat|step[ -]?up/.test(value)) return "lunge";
+  if (/deadlift|hinge|good morning|swing|hip thrust|bridge/.test(value)) return "hinge";
+  if (/row|pull|chin|curl|lat /.test(value)) return "pull";
+  if (/press|push|bench|fly|extension/.test(value)) return "press";
+  if (/plank|core|crunch|sit[ -]?up|carry|rotation/.test(value)) return "plank";
+  if (/lateral|side|agility|cut|change of direction/.test(value)) return "lateral";
+  return "squat";
+}
+
+function musclesForPattern(pattern: DemoPattern): string[] {
+  switch (pattern) {
+    case "press": return ["Chest", "Shoulders", "Triceps"];
+    case "pull": return ["Back", "Biceps"];
+    case "hinge": return ["Hamstrings", "Glutes", "Back"];
+    case "plank": return ["Core", "Shoulders"];
+    case "run":
+    case "jump":
+    case "lateral": return ["Quads", "Glutes", "Hamstrings", "Calves"];
+    case "ball": return ["Quads", "Glutes", "Calves", "Core"];
+    default: return ["Quads", "Glutes", "Core"];
+  }
+}
+
+function fallbackImplement(name: string, pattern: DemoPattern): Implement {
+  const value = name.toLowerCase();
+  if (/dumbbell|\bdb\b/.test(value)) return "dumbbells";
+  if (/barbell/.test(value)) return pattern === "squat" || pattern === "lunge" ? "barbell_back" : "barbell_hands";
+  if (/box|bench|step/.test(value)) return "box";
+  return "none";
 }
 
 /** True when there is something worth opening a detail sheet for. */

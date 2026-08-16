@@ -283,8 +283,8 @@ export function WorkoutPlayer({ title, drills, activeRest, onComplete, onClose }
         ) : step ? (
           <div className="animate-fade-up w-full max-w-sm">
             {how && (
-              <div className="mx-auto mb-5 grid h-40 w-full max-w-[15rem] place-items-center overflow-hidden rounded-3xl border border-white/10 bg-black/40 p-2">
-                <ExerciseSteps pattern={how.demo} implement={how.implement} className="h-full w-full" />
+              <div className="mx-auto mb-5 grid h-48 w-full max-w-sm place-items-center overflow-hidden rounded-3xl border border-white/10 bg-slate-100 shadow-card">
+                <ExerciseSteps pattern={how.demo} implement={how.implement} muscles={how.muscles} name={how.name} className="h-full w-full" />
               </div>
             )}
             <div className="chip mx-auto text-pitch-400">

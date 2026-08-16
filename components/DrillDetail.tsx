@@ -28,22 +28,20 @@ const NEEDS_LABEL = {
 export function HowToCard({ how }: { how: HowTo }) {
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-4 sm:flex-row">
-        <div className="grid h-44 w-full shrink-0 place-items-center overflow-hidden rounded-2xl border border-white/10 bg-black/40 p-2 sm:w-56">
-          <ExerciseSteps pattern={how.demo} implement={how.implement} className="h-full w-full" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <span className="chip text-pitch-400">{how.tag}</span>
-          <h3 className="mt-2 break-words text-xl font-extrabold text-slate-100">{how.name}</h3>
-          <p className="mt-1 text-sm text-slate-400">{how.why}</p>
-          {how.needs && (
-            <div className="mt-3 flex flex-wrap gap-2 text-xs">
-              <span className="rounded-lg bg-white/[0.05] px-2.5 py-1 font-medium text-slate-300">
-                {NEEDS_LABEL[how.needs]}
-              </span>
-            </div>
-          )}
-        </div>
+      <div className="grid aspect-[4/3] w-full place-items-center overflow-hidden rounded-2xl border border-white/10 bg-slate-100 shadow-card sm:aspect-[16/9]">
+        <ExerciseSteps pattern={how.demo} implement={how.implement} muscles={how.muscles} name={how.name} className="h-full w-full !rounded-none" />
+      </div>
+      <div className="min-w-0">
+        <span className="chip text-pitch-400">{how.tag}</span>
+        <h3 className="mt-2 break-words text-2xl font-extrabold leading-tight text-slate-100">{how.name}</h3>
+        <p className="mt-1 text-sm leading-relaxed text-slate-400">{how.why}</p>
+        {how.needs && (
+          <div className="mt-3 flex flex-wrap gap-2 text-xs">
+            <span className="rounded-lg bg-white/[0.05] px-2.5 py-1 font-medium text-slate-300">
+              {NEEDS_LABEL[how.needs]}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* WHAT YOU NEED, BEFORE HOW TO DO IT. Kit and space is the first reason
@@ -109,10 +107,9 @@ export function HowToCard({ how }: { how: HowTo }) {
 /**
  * Open the detail for a drill by name, whatever catalogue holds it.
  *
- * Renders nothing when the name is in none of them — a coach's hand-typed drill
- * has nothing behind it, and a sheet that opens to say nothing is worse than a
- * tap that does nothing. `hasHowTo` lets a list decide whether the row should
- * look tappable in the first place.
+ * Exact catalogue movements get the full library detail. Name variants and
+ * coach-entered movements receive the shared how-to card, so every named row
+ * that looks like an exercise can actually be opened.
  */
 export function DrillModal({ name, sets, reps, onClose }: {
   name: string;

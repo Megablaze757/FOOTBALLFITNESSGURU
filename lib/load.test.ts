@@ -124,13 +124,11 @@ test("tonnage ignores bodyweight work rather than counting it as zero-weight rep
   assert.equal(tonnage([t]), 0, "no load means no tonnage — it isn't 60kg of nothing");
 });
 
-test("distance sums and rounds to one place", () => {
-  // Deliberately off a .x5 boundary: 8.25 + 5.1 is 13.349999… in binary floating
-  // point, so toFixed(1) gives 13.3 and asserting 13.4 would be testing a
-  // rounding guarantee this function doesn't make.
+test("distance keeps the hundredths accepted by the running log", () => {
   const a: TrainingLog = { ...tlog("a", 40, 6), distance_km: 8.26 };
   const b: TrainingLog = { ...tlog("b", 30, 5), distance_km: 5.1 };
-  assert.equal(totalDistanceKm([a, b]), 13.4);
+  assert.equal(totalDistanceKm([a, b]), 13.36);
+  assert.equal(totalDistanceKm([{ ...tlog("precise", 30, 5), distance_km: 5.66 }]), 5.66);
   assert.equal(totalDistanceKm([tlog("c", 30, 5)]), 0, "no distance logged is 0, not NaN");
 });
 

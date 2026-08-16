@@ -27,7 +27,7 @@ import { Icon, type IconName } from "@/components/Icon";
  */
 export function SessionDrills({ drills, onPick, onSwap, compact = false }: {
   drills: Drill[];
-  /** Optional: open the exercise detail. Drills with no coaching stay inert. */
+  /** Optional: open the exercise detail. Every non-empty drill has a card. */
   onPick?: (name: string) => void;
   /**
    * Optional: offer to swap. Called with the PRESCRIBED name and the
@@ -44,7 +44,7 @@ export function SessionDrills({ drills, onPick, onSwap, compact = false }: {
   return (
     <ul className={compact ? "space-y-1" : "space-y-2"}>
       {grouped.map((group, gi) => (
-        <li key={gi} className={`${compact ? "mt-2 pl-2" : "mt-6 rounded-2xl border-l-4 p-3"} ${sectionStyle(group).wrap}`}>
+        <li key={gi} className={`min-w-0 overflow-hidden ${compact ? "mt-2 pl-2" : "mt-5 rounded-2xl border-l-4 px-2 py-4 sm:mt-6 sm:p-4"} ${sectionStyle(group).wrap}`}>
           {group.rehab ? (
             <div className={`mb-2 flex items-center gap-2 font-bold ${compact ? "text-[10px] uppercase tracking-wider" : "text-[17px]"} text-amber-400/80`}>
               <Icon name="plaster" size={compact ? 13 : 18} /> Rehab <span className="text-[10px] font-medium text-amber-300/60">do this first</span>
@@ -62,7 +62,7 @@ export function SessionDrills({ drills, onPick, onSwap, compact = false }: {
               const open = swapping === prescribed;
               return (
               <li key={k}>
-                <div className="flex items-start gap-1">
+                <div className="flex min-w-0 items-start gap-1 sm:gap-2">
                   {compact
                     ? <CompactRow drill={d} onPick={onPick} />
                     : <DrillCard drill={d} onPick={onPick} rehab={group.rehab} slot={group.slot} />}
@@ -113,16 +113,21 @@ export function SessionDrills({ drills, onPick, onSwap, compact = false }: {
  */
 function DrillCard({ drill, onPick, rehab, slot }: { drill: Drill; onPick?: (name: string) => void; rehab: boolean; slot: Slot | null }) {
   const how = howToFor(drill.name);
-  // No coaching behind it means nothing to open. A card that looks tappable and
-  // isn't is worse than one that never claimed to be.
+  // Every named drill resolves: exact coaching where possible, an honest
+  // custom card otherwise. Empty names remain inert.
   const pickable = !!onPick && !!how;
   const detail = detailLine(drill);
+  const prescription = drill.prescription ?? `${drill.sets}×${drill.reps}`;
+  // A short dose (3×6) belongs beside the title. A conditioning prescription
+  // (40 min · Zone 2) does not: in a phone-width card it consumed the entire
+  // right column and squeezed "Easy run" into one character per line.
+  const longPrescription = slot === "conditioning" || prescription.length > 14;
 
   return (
     <button
       onClick={() => pickable && onPick!(drill.name)}
       disabled={!pickable}
-      className={`flex min-w-0 flex-1 items-center gap-3 rounded-2xl border p-2.5 text-left transition disabled:cursor-default ${
+      className={`flex min-w-0 flex-1 items-center gap-3 overflow-hidden rounded-2xl border p-3 text-left transition disabled:cursor-default ${
         rehab
           ? "border-amber-400/25 bg-amber-400/[0.05]"
           : slot === "warmup" ? "border-sky-400/15 bg-sky-400/[0.035]"
@@ -135,7 +140,7 @@ function DrillCard({ drill, onPick, rehab, slot }: { drill: Drill; onPick?: (nam
         rehab ? "border-amber-400/20" : "border-white/10"
       }`}>
         {how
-          ? <ExerciseDemo pattern={how.demo} implement={how.implement} className="h-12 w-10" />
+          ? <ExerciseDemo pattern={how.demo} implement={how.implement} muscles={how.muscles} name={how.name} className="h-12 w-10" />
           : <span className="text-lg text-slate-600">·</span>}
       </span>
 
@@ -143,9 +148,14 @@ function DrillCard({ drill, onPick, rehab, slot }: { drill: Drill; onPick?: (nam
         <span className="block truncate text-[11px] text-slate-500">
           {how?.tag ?? (drill.skill ? "Skill work" : "Exercise")}
         </span>
-        <span className="mt-0.5 block break-words text-sm font-bold text-slate-100">
-          {drill.skill && <span className="mr-1.5 text-pitch-400">⚽</span>}
-          {displayName(drill)}
+        <span className="mt-0.5 flex min-w-0 items-start justify-between gap-2">
+          <span className="min-w-0 break-words text-sm font-bold leading-snug text-slate-100">
+            {drill.skill && <span className="mr-1.5 text-pitch-400">⚽</span>}
+            {displayName(drill)}
+          </span>
+          {!longPrescription && (
+            <span className="hidden shrink-0 pt-0.5 text-right text-xs font-bold text-slate-300 sm:block">{prescription}</span>
+          )}
         </span>
         {/* WHAT IT REPLACED. A programme that silently shows a different
             exercise from the one it prescribed has lost the thread of its own
@@ -154,17 +164,13 @@ function DrillCard({ drill, onPick, rehab, slot }: { drill: Drill; onPick?: (nam
         {drill.swappedFrom && (
           <span className="mt-0.5 block text-[10px] text-slate-600">swapped from {drill.swappedFrom}</span>
         )}
-        {detail && <span className="mt-0.5 block text-[10px] text-slate-500">{detail}</span>}
+        <span className={`mt-1.5 break-words text-xs font-semibold leading-relaxed text-slate-300 ${longPrescription ? "block" : "block sm:hidden"}`}>
+          {prescription}
+        </span>
+        {detail && <span className="mt-1 block text-[10px] leading-relaxed text-slate-500">{detail}</span>}
       </span>
 
-      <span className="flex shrink-0 items-center gap-1.5 self-stretch">
-        {/* Skill work carries its own prescription — "5 × 60 seconds each foot"
-            doesn't survive being squashed into sets×reps. */}
-        <span className="text-right text-xs font-semibold text-slate-300">
-          {drill.prescription ?? `${drill.sets}×${drill.reps}`}
-        </span>
-        {pickable && <span aria-hidden className="text-xs text-slate-600">›</span>}
-      </span>
+      {pickable && <span aria-hidden className="shrink-0 text-xs text-slate-600">›</span>}
     </button>
   );
 }
@@ -172,21 +178,22 @@ function DrillCard({ drill, onPick, rehab, slot }: { drill: Drill; onPick?: (nam
 /** The old dense row, kept for the calendar's week-at-a-glance. */
 function CompactRow({ drill, onPick }: { drill: Drill; onPick?: (name: string) => void }) {
   const pickable = !!onPick && !!howToFor(drill.name);
+  const prescription = drill.prescription ?? `${drill.sets}×${drill.reps}`;
+  const longPrescription = prescription.length > 14;
   return (
     <button
       onClick={() => pickable && onPick!(drill.name)}
       disabled={!pickable}
       className="min-w-0 flex-1 text-left disabled:cursor-default"
     >
-      <div className="flex items-baseline justify-between gap-2">
+      <div className="flex min-w-0 items-baseline justify-between gap-2">
         <span className="min-w-0 break-words text-xs text-slate-300">
           {drill.skill && <span className="mr-1.5 text-pitch-400">⚽</span>}
           {displayName(drill)}
         </span>
-        <span className="shrink-0 text-xs text-slate-500">
-          {drill.prescription ?? `${drill.sets}×${drill.reps}`}
-        </span>
+        {!longPrescription && <span className="shrink-0 text-xs text-slate-500">{prescription}</span>}
       </div>
+      {longPrescription && <div className="mt-0.5 break-words text-[11px] font-medium leading-relaxed text-slate-400">{prescription}</div>}
       {drill.swappedFrom && (
         <div className="text-[10px] text-slate-600">swapped from {drill.swappedFrom}</div>
       )}

@@ -16,6 +16,8 @@ export function ExerciseDetailCard({ ex, sets, reps }: { ex: Exercise; sets?: nu
   const [saving, setSaving] = useState(false);
   const [shared, setShared] = useState(false);
   const guideUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(`${ex.name} exercise proper form`)}`;
+  const targetMuscles = exerciseMuscles(ex.name, ex.muscles);
+  const activatedMuscles = [targetMuscles.primary, ...targetMuscles.secondary].filter((m): m is string => !!m);
 
   useEffect(() => {
     let active = true;
@@ -51,37 +53,37 @@ export function ExerciseDetailCard({ ex, sets, reps }: { ex: Exercise; sets?: nu
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-4 sm:flex-row">
-        {/* Wider than it is tall on mobile: two frames side by side need the
-            room, and a 40-unit square would squeeze each figure to nothing. */}
-        <div className="grid h-44 w-full shrink-0 place-items-center overflow-hidden rounded-2xl border border-white/10 bg-black/40 p-2 sm:w-56">
-          {ex.video_url ? (
-            <video src={ex.video_url} autoPlay muted loop playsInline className="h-full w-full rounded-2xl object-cover" />
-          ) : (
-            <ExerciseSteps pattern={ex.demo} implement={demoImplement(ex)} className="h-full w-full" />
-          )}
-        </div>
-        <div className="min-w-0 flex-1">
-          <span className="chip text-pitch-400">{ex.category}</span>
-          <h3 className="mt-2 break-words text-xl font-extrabold text-slate-100">{ex.name}</h3>
-          <p className="mt-1 text-sm text-slate-400">{ex.why}</p>
-          <div className="mt-3 flex flex-wrap gap-2 text-xs">
-            {(sets && reps) ? <Tag label={`${sets} × ${reps}`} /> : null}
-            <Tag label={ex.tempo} />
-            <Tag label={ex.equipment} />
-          </div>
-        </div>
+      <div className="grid aspect-[4/3] w-full place-items-center overflow-hidden rounded-2xl border border-white/10 bg-slate-100 shadow-card sm:aspect-[16/9]">
+        {ex.video_url ? (
+          <video src={ex.video_url} autoPlay muted loop playsInline className="h-full w-full object-cover" />
+        ) : (
+          <ExerciseSteps pattern={ex.demo} implement={demoImplement(ex)} muscles={activatedMuscles} name={ex.name} className="h-full w-full !rounded-none" />
+        )}
       </div>
 
-      <div className="flex items-center gap-2 border-y border-white/[0.08] py-3">
-        <a href={guideUrl} target="_blank" rel="noreferrer" className="tap-target inline-flex min-h-[44px] flex-1 items-center gap-1.5 text-sm font-semibold text-pitch-400 hover:underline">
+      <div className="flex min-w-0 items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <span className="chip text-pitch-400">{ex.category}</span>
+          <h3 className="mt-2 break-words text-2xl font-extrabold leading-tight text-slate-100">{ex.name}</h3>
+        </div>
+        <a href={guideUrl} target="_blank" rel="noreferrer" className="tap-target inline-flex min-h-[44px] shrink-0 items-center gap-2 rounded-full bg-pitch-400 px-5 text-sm font-bold text-ink-900 transition hover:bg-pitch-300">
           Visit <span aria-hidden>›</span>
         </a>
-        <button type="button" onClick={shareExercise} className="btn-ghost w-auto gap-2 px-3 py-2 text-xs">
-          <Icon name="share" size={17} /> {shared ? "Copied" : "Share"}
+      </div>
+
+      <p className="text-sm leading-relaxed text-slate-400">{ex.why}</p>
+      <div className="flex flex-wrap gap-2 text-xs">
+        {(sets && reps) ? <Tag label={`${sets} × ${reps}`} /> : null}
+        <Tag label={ex.tempo} />
+        <Tag label={ex.equipment} />
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 border-y border-white/[0.08] py-3">
+        <button type="button" onClick={shareExercise} className="btn-ghost min-h-[46px] gap-2 rounded-full px-4 py-2 text-sm">
+          <Icon name="share" size={18} /> {shared ? "Copied" : "Share"}
         </button>
-        <button type="button" onClick={toggleSaved} disabled={saving} aria-pressed={saved} className={`btn-ghost w-auto gap-2 px-3 py-2 text-xs ${saved ? "text-pitch-400" : ""}`}>
-          <Icon name="bookmark" size={17} /> {saved ? "Saved" : "Save"}
+        <button type="button" onClick={toggleSaved} disabled={saving} aria-pressed={saved} className={`btn-ghost min-h-[46px] gap-2 rounded-full px-4 py-2 text-sm ${saved ? "text-pitch-400" : ""}`}>
+          <Icon name="bookmark" size={18} /> {saved ? "Saved" : "Save"}
         </button>
       </div>
 
@@ -97,7 +99,7 @@ export function ExerciseDetailCard({ ex, sets, reps }: { ex: Exercise; sets?: nu
           {!ex.hasHowTo && (
             <p className="mt-2 rounded-xl bg-white/[0.04] px-3 py-2 text-xs text-slate-400">
               We haven&apos;t written a full step-by-step for this one yet. The cues below are the
-              points that matter most — and the animation shows the movement pattern.
+              points that matter most — and the A/B visual shows the movement pattern.
             </p>
           )}
         </div>
@@ -128,7 +130,7 @@ export function ExerciseDetailCard({ ex, sets, reps }: { ex: Exercise; sets?: nu
           movers were added to the volume accounting — see exerciseMuscles —
           so the page and the volume bars now agree about what a lift trains. */}
       {(() => {
-        const { primary, secondary } = exerciseMuscles(ex.name, ex.muscles);
+        const { primary, secondary } = targetMuscles;
         if (!primary) return null;
         return (
           <div>
@@ -194,7 +196,7 @@ export function Sheet({ label, children, onClose }: { label: string; children: R
         <div
           // pb-28 keeps the bottom of the sheet clear of the floating mobile
           // tab bar, which otherwise sits on top of the last section.
-          className="animate-scale-in max-h-[88vh] w-full max-w-lg overflow-y-auto rounded-t-3xl border border-white/10 bg-ink-800 p-6 pb-28 shadow-card sm:rounded-3xl sm:pb-6"
+          className="animate-scale-in max-h-[88vh] w-full max-w-lg overflow-y-auto rounded-t-3xl border border-white/10 bg-ink-800 p-4 pb-28 shadow-card sm:rounded-3xl sm:p-6 sm:pb-6"
           onClick={(e) => e.stopPropagation()}
           // Escape already worked here; the dialog semantics didn't exist, so a
           // screen reader was never told the page behind had become unavailable.

@@ -34,14 +34,14 @@ export function ProgramCalendar({
         // phone. Open the week you're actually working through; fold the rest.
         const isCurrent = w.week === currentWeek;
         return (
-          <details key={w.week} open={isCurrent} className="group card p-4">
+          <details key={w.week} open={isCurrent} className="group card p-3 sm:p-4">
             {/* THE WHOLE ROW OPENS THE WEEK, and it says so.
                 This was a summary with no padding and no marker: the hit area
                 was the height of the text, "Open" appeared only on folded weeks
                 and looked like a label rather than a control, and there was no
                 chevron to say the row did anything at all. On a phone that is a
                 row you have to aim at to read your own programme. */}
-            <summary className="tap-target -mx-2 mb-3 flex cursor-pointer list-none items-center justify-between gap-2 rounded-xl px-2 py-2 transition hover:bg-white/[0.04]">
+            <summary className="tap-target -mx-1 flex cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-2 py-2 transition hover:bg-white/[0.04] group-open:mb-4">
               <span className="min-w-0">
                 <span className="block font-bold text-slate-100">Week {w.week} · {w.theme}</span>
                 <span className="block text-xs text-slate-400">
@@ -64,14 +64,14 @@ export function ProgramCalendar({
                 and the sessions are what you came to this screen for. */}
             <WeeklyVolume week={w} />
 
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {w.sessions.map((s) => {
                 const sid = `w${w.week}d${s.day}`;
                 const done = completed.includes(sid);
                 return (
                   <div
                     key={sid}
-                    className={`rounded-2xl border p-3 transition ${
+                    className={`rounded-2xl border p-4 transition ${
                       s.kind === "active_rest"
                         ? "border-sky-400/15 bg-sky-400/[0.035]"
                         : done ? "border-pitch-400/30 bg-pitch-400/[0.06]" : "border-white/10 bg-white/[0.03]"
@@ -80,7 +80,7 @@ export function ProgramCalendar({
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Day {s.day}</div>
-                        <div className="truncate text-sm font-semibold text-slate-100">{s.title.replace(/^.*· /, "")}</div>
+                        <div className="break-words text-sm font-semibold text-slate-100">{s.title.replace(/^.*· /, "")}</div>
                         {/* Whether it fits today, on the card you plan from. */}
                         <div className="text-[11px] text-slate-500">
                           {s.kind === "active_rest"

@@ -96,7 +96,10 @@ export function tonnage(logs: TrainingLog[]): number {
 
 /** Total distance. The unit a runner actually plans and thinks in. */
 export function totalDistanceKm(logs: TrainingLog[]): number {
-  return +logs.reduce((s, t) => s + (Number(t.distance_km) || 0), 0).toFixed(1);
+  // The column stores hundredths and the log accepts hundredths. Rounding the
+  // total to tenths made a correctly saved 5.66km appear as 5.7km on Progress,
+  // which looked exactly like the input had been changed after saving.
+  return +logs.reduce((s, t) => s + (Number(t.distance_km) || 0), 0).toFixed(2);
 }
 
 export type LoadZone = "building" | "detraining" | "optimal" | "caution" | "danger";

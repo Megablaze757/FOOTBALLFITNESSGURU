@@ -114,11 +114,15 @@ test("an exercise is tagged with what it trains and what it needs", () => {
   assert.match(how!.tag, /Barbell/);
 });
 
-test("an unknown name is null, not an empty card", () => {
-  // A coach's hand-typed drill has nothing behind it, and opening a sheet that
-  // says nothing is worse than the tap doing nothing.
-  assert.equal(howToFor("Something nobody wrote"), null);
+test("a coach-entered exercise still gets an honest fallback card", () => {
+  const fallback = howToFor("Single-arm landmine rainbow press");
+  assert.ok(fallback);
+  assert.equal(fallback.name, "Single-arm landmine rainbow press");
+  assert.equal(fallback.source, "exercise");
+  assert.ok(fallback.muscles.length > 0);
+  assert.ok(fallback.steps.length > 0);
+  assert.equal(fallback.teaches, false, "generic safety guidance must not claim to be exact movement coaching");
   assert.equal(howToFor("   "), null);
   assert.equal(hasHowTo("Tight cone weave"), true);
-  assert.equal(hasHowTo("Something nobody wrote"), false);
+  assert.equal(hasHowTo("Single-arm landmine rainbow press"), true);
 });

@@ -10,11 +10,12 @@ import { ShareButton } from "@/components/ShareButton";
 import { ExerciseProgress } from "@/components/ExerciseProgress";
 import { StrengthRanks } from "@/components/StrengthRanks";
 import { MuscleGains } from "@/components/MuscleGains";
+import { RunningProgress } from "@/components/RunningProgress";
 import { latestBodyweight } from "@/lib/bodyweight";
 import { testedMaxesFrom } from "@/lib/strength-standards";
 import { FeatureLock, tierOfSub } from "@/components/FeatureLock";
 import { can } from "@/lib/subscription";
-import type { NutritionLog, Subscription, TrainingLog } from "@/lib/types";
+import type { NutritionLog, StrengthBenchmark, Subscription, TrainingLog } from "@/lib/types";
 
 // The bars and totals are a month. Strength moves slower than that — a squat
 // that added 10kg over the winter shows nothing across four weeks — so the
@@ -48,7 +49,7 @@ export function ProgressPanel({ userId }: { userId: string }) {
       // daily_check_ins and body_logs — and naming it made PostgREST reject this
       // whole query, so this panel also had no name and no sex. See
       // lib/schema-columns.test.ts.
-      supabase.from("profiles").select("full_name, sex").eq("id", userId).maybeSingle(),
+      supabase.from("profiles").select("full_name, sex, sport").eq("id", userId).maybeSingle(),
       supabase.from("subscriptions").select("*").eq("user_id", userId).maybeSingle(),
       /**
        * BODYWEIGHT, FROM WHEREVER IT WAS ACTUALLY ENTERED.
@@ -105,14 +106,16 @@ export function ProgressPanel({ userId }: { userId: string }) {
         weighIns: (weighBody ?? []).map((r) => ({ date: r.log_date as string, kg: r.weight_kg as number })),
       }),
       sex: ((profile as { sex?: string | null } | null)?.sex === "female" ? "female" : "male") as "male" | "female",
+      sport: (profile as { sport?: string | null } | null)?.sport ?? null,
       sub: (sub ?? null) as Subscription | null,
       tested: testedMaxesFrom(benchmarks ?? []),
+      benchmarks: (benchmarks ?? []) as StrengthBenchmark[],
       allDrills: (allDrills ?? []) as TrainingLog[],
     };
-    // v3: the payload gained allDrills. A cached v2 entry has no such key, so
-    // the gains card would read [] and claim "not enough history yet" to
-    // somebody with two years of it, until the background revalidation landed.
-  }, [userId], `history:v3:${userId}`);
+    // v4: the payload gained sport + benchmark history for the runner-specific
+    // Performance view. A cached v3 entry would briefly render strength ranks
+    // for a runner until background revalidation landed.
+  }, [userId], `history:v4:${userId}`);
 
   if (loading) {
     return (
@@ -127,6 +130,20 @@ export function ProgressPanel({ userId }: { userId: string }) {
   const n = summarizeNutrition(data?.nutrition ?? []);
   const hasTraining = (data?.training?.length ?? 0) > 0;
   const hasNutrition = (data?.nutrition?.length ?? 0) > 0;
+
+  // A runner opening Performance wants mileage, pace, zones and race results —
+  // not a strength rank followed by total reps. The same training rows already
+  // contain everything needed, so sport changes the analysis rather than just
+  // changing the accent colour.
+  if (data?.sport === "running") {
+    return (
+      <RunningProgress
+        logs={data.trainingLong ?? []}
+        benchmarks={data.benchmarks ?? []}
+        name={data.name ?? "Runner"}
+      />
+    );
+  }
 
   return (
     <div className="space-y-5">
