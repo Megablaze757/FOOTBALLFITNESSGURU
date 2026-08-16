@@ -119,3 +119,36 @@ test("sections with nothing to say are dropped, not left as empty headings", () 
   assert.ok(!/##[^\n]*\n\n/.test(b), "an empty section was rendered");
   assert.ok(!b.endsWith("\n"), "trailing whitespace in the briefing");
 });
+
+/**
+ * THE GROUNDING RULE HAS TO BE IN THE BRIEFING, NOT IN A PROMPT.
+ *
+ * It started life in the coach-chat Edge Function's system prompt, which never
+ * runs: `invokeAI` prefers the Cloudflare Worker whenever NEXT_PUBLIC_API_URL
+ * is set, the Worker answers /coach-chat, and none of the fourteen Supabase
+ * functions in this repo is deployed. A rule in a prompt nobody reads is not a
+ * rule. The briefing is built in the browser and travels with every question,
+ * so it reaches whichever backend is actually serving the call.
+ */
+test("the exercise list carries its own rule about not inventing exercises", () => {
+  const out = buildBriefing({
+    goal: "strength",
+    programExercises: ["Barbell back squat", "Bench press", "Barbell row"],
+    loggedExercises: ["Barbell back squat"],
+  });
+  assert.match(out, /exactly these 3 exercises and no others/);
+  assert.match(out, /Barbell back squat, Bench press, Barbell row/);
+  assert.match(out, /RULE:/, "the list arrives with no instruction about how to use it");
+  assert.match(out, /Do not name any exercise as being in their programme/);
+  // Preacher curls are not on the list, and nothing in the briefing should
+  // suggest they are.
+  assert.ok(!/preacher/i.test(out));
+});
+
+test("with no exercise list, the coach is told to say nothing about the programme", () => {
+  // Silence is the safe default. An absent list must not read as "no
+  // constraints", which is how the invented exercises got in.
+  const out = buildBriefing({ goal: "strength" });
+  assert.match(out, /exercise list is not available, so do not describe what it contains/);
+  assert.ok(!/RULE:/.test(out), "a rule was written about a list that does not exist");
+});

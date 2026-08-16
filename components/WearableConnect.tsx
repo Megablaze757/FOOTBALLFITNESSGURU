@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { invokeAI } from "@/lib/api";
 import { useAsync } from "@/lib/use-async";
@@ -236,6 +236,37 @@ function AppleSetup({ token, onDone }: { token: string | null; onDone: () => voi
   const shown = minted ?? (token && fnBase ? { token, url: ingestUrl } : null);
 
   /**
+   * IS THE ENDPOINT ACTUALLY THERE?
+   *
+   * It was not — and had not been for the entire life of this feature. The
+   * Supabase function this guide points at has never been deployed, so every
+   * Shortcut anyone built against it posted into a 404, silently, every morning.
+   * The guide was five careful steps to nowhere.
+   *
+   * A bare GET is the cheapest possible probe and it is safe: the function
+   * answers a link with no metrics on it with "your link works", writes
+   * nothing, and an undeployed function answers 404 with a body naming itself.
+   *
+   * "unknown" while it is in flight, so the guide is never hidden because the
+   * network was slow — only when we have actually been told it is missing.
+   */
+  const [endpoint, setEndpoint] = useState<"unknown" | "live" | "missing">("unknown");
+  useEffect(() => {
+    if (!fnBase) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(ingestUrl, { method: "GET" });
+        if (!cancelled) setEndpoint(res.status === 404 ? "missing" : "live");
+      } catch {
+        // Offline or blocked: not evidence of anything, so say nothing.
+        if (!cancelled) setEndpoint("unknown");
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [fnBase, ingestUrl]);
+
+  /**
    * ONE LINK, WITH THE CREDENTIAL ALREADY IN IT.
    *
    * The old setup handed over a URL and a header value, and step four was: tap
@@ -317,10 +348,22 @@ function AppleSetup({ token, onDone }: { token: string | null; onDone: () => voi
         </>
       ) : (
         <>
-          <p className="mb-3 rounded-xl bg-white/[0.03] px-3 py-2 text-xs text-slate-300">
-            Three steps, about two minutes, once. After that it sends by itself every morning and you
-            never think about it again. Do it on your <b>iPhone</b>, not a laptop.
-          </p>
+          {/* SAY IT BEFORE THEY SPEND THE TWO MINUTES, not after.
+              Somebody who builds the Shortcut and only then finds nothing
+              arrives has learned that the app wasted their time; somebody told
+              up front has learned that it is honest with them. */}
+          {endpoint === "missing" ? (
+            <p className="mb-3 rounded-xl border border-amber-400/30 bg-amber-400/[0.08] px-3 py-2 text-xs text-amber-200">
+              <b>Not switched on yet.</b> The endpoint this sends to has not been deployed, so a Shortcut
+              built now would post into nothing. The link below is still yours and will keep working once
+              it is live — but do not spend the two minutes until this notice has gone.
+            </p>
+          ) : (
+            <p className="mb-3 rounded-xl bg-white/[0.03] px-3 py-2 text-xs text-slate-300">
+              Three steps, about two minutes, once. After that it sends by itself every morning and you
+              never think about it again. Do it on your <b>iPhone</b>, not a laptop.
+            </p>
+          )}
 
           {/* ONE LINK, NOT A URL AND A HEADER.
               Copying two values into two different places in the Shortcuts UI

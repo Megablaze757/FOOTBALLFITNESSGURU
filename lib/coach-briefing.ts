@@ -155,6 +155,27 @@ function block(a: BriefingInput): Section {
   if (a.programExercises?.length) {
     lines.push(`The block prescribes exactly these ${a.programExercises.length} exercises and no others:`);
     lines.push(`  ${a.programExercises.join(", ")}`);
+    /**
+     * THE RULE TRAVELS WITH THE LIST, IN THE BRIEFING ITSELF.
+     *
+     * It was written into the coach-chat Edge Function's system prompt, which
+     * would have been the right home if that function served the request. It
+     * does not: `invokeAI` prefers the Cloudflare Worker whenever
+     * NEXT_PUBLIC_API_URL is set, the Worker answers /coach-chat, and its
+     * source is not in this repository — so a rule living in the Supabase
+     * function's prompt could never fire, and deploying that function would
+     * not have changed anything.
+     *
+     * The briefing is built here, in the browser, and sent with every question.
+     * Putting the instruction beside the data it governs means it reaches
+     * whatever backend is actually serving the call, today, with no deploy —
+     * and keeps working if the routing changes again.
+     */
+    lines.push(
+      "RULE: that list is complete. Do not name any exercise as being in their programme, " +
+      "or comment on how it is going, unless it appears above or in what they have logged. " +
+      "To suggest something new, say plainly that it is a suggestion and not currently prescribed.",
+    );
   } else {
     lines.push("The block's exercise list is not available, so do not describe what it contains.");
   }
