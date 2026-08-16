@@ -19,6 +19,7 @@ import { positionList } from "@/lib/positions";
 import { currentPain, painAgeNote } from "@/lib/pain";
 import { effortCheck, prescribedEffort } from "@/lib/effort";
 import { reviewBlock } from "@/lib/progression";
+import { blockShape, WINDOW as DELOAD_WINDOW } from "@/lib/deload";
 import { applySwaps, type SwapMap, type SwappedDrill } from "@/lib/exercise-match";
 import { applyRehabToSession, activeStage, parseDose, type RehabPlanRow } from "@/lib/rehab-plan";
 import { PositionPicker } from "@/components/PositionPicker";
@@ -728,6 +729,21 @@ function ActiveProgram({
    * is about to happen and why before the athlete presses it.
    */
   const review = reviewBlock(plan, program.completed_sessions, training);
+  /**
+   * AND HOW LONG THE NEXT BLOCK SHOULD RUN.
+   *
+   * The deload was always week four — a calendar entry rather than a decision.
+   * Somebody starting a block already carrying a load spike and a run of amber
+   * mornings got three more weeks of accumulation before anything came down,
+   * and that is precisely the athlete a deload exists for. Both numbers are
+   * already on this page. See lib/deload.ts.
+   */
+  const shape = blockShape({
+    acwr: computeACWR(training).ratio,
+    recentReadiness: checkHist
+      .slice(-DELOAD_WINDOW)
+      .map((c) => readinessFor(c as { pain_map?: Record<string, number> | null }, null)?.status ?? null),
+  });
   const totalSessions = plan.weeks.reduce((n, w) => n + w.sessions.length, 0);
   const doneCount = program.completed_sessions.length;
   const adherence = totalSessions ? Math.round((doneCount / totalSessions) * 100) : 0;
@@ -992,6 +1008,7 @@ function ActiveProgram({
        * whether they finished strong or wrecked. See lib/progression.ts.
        */
       volumeScale: review.volumeScale,
+      blockWeeks: shape.weeks,
     });
     // Insert first, archive second. The other order archives the block they're
     // on and then, if the insert fails, leaves them with no active program at
@@ -1155,6 +1172,9 @@ function ActiveProgram({
               read off a counter, printed whether or not any of it was earned.
               Now it says what happened and what follows from it. */}
           <p className="mt-1 text-sm text-slate-400">{review.headline}</p>
+          {shape.reason && (
+            <p className="mt-2 text-xs text-slate-500">{shape.reason}</p>
+          )}
           <button onClick={startNextBlock} disabled={advancing} className="btn-primary mx-auto mt-4 max-w-[16rem]">
             {advancing ? "Building block " + (program.block + 1) + "…" : `Start block ${program.block + 1}`}
           </button>

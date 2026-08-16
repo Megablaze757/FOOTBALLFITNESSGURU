@@ -108,6 +108,11 @@ export interface EngineInput {
    * engine already knows.
    */
   mustInclude?: string[];
+  /**
+   * How many weeks the block runs, including its deload. Defaults to four.
+   * Three when the athlete is arriving tired — see lib/deload.ts.
+   */
+  blockWeeks?: number;
 }
 
 // --- Pain ---------------------------------------------------------------------
@@ -947,7 +952,19 @@ export function buildBlock(input: EngineInput): ProgramPlan {
     if (!required.includes(id)) required.push(id);
   }
 
-  const weeks: ProgramWeek[] = THEMES.map((_, wi) => {
+  /**
+   * WHICH WEEKS THIS BLOCK RUNS.
+   *
+   * Four is the standard shape and the deload is always the last of them. A
+   * three-week block drops the PEAK week rather than the deload — [0, 1, 3] —
+   * so an athlete arriving tired gets Base, Build and then the week where the
+   * work is absorbed, instead of one more accumulation week they cannot pay
+   * for. Reusing the existing indices keeps every per-week shaping array below
+   * (themes, intensity, focus, set deltas) correct without a second set of
+   * numbers to maintain. See lib/deload.ts for who gets which.
+   */
+  const weekIndices = (input.blockWeeks ?? THEMES.length) <= 3 ? [0, 1, 3] : [0, 1, 2, 3];
+  const weeks: ProgramWeek[] = weekIndices.map((wi, weekNumber) => {
     // In-season, the matches are the training. Volume comes down so the sport
     // gets the athlete's legs, not the gym.
     const volumeScale = (input.isInSeason ? IN_SEASON_VOLUME : 1) * blockScale;
@@ -1172,7 +1189,7 @@ export function buildBlock(input: EngineInput): ProgramPlan {
       return { day: di + 1, title: sessionTitle(focusGoal, di), focus: focusGoal, drills };
     });
 
-    return { week: wi + 1, theme: themes[wi], intensity: WEEK_INTENSITY[wi], focusNote: WEEK_FOCUS[wi], sessions };
+    return { week: weekNumber + 1, theme: themes[wi], intensity: WEEK_INTENSITY[wi], focusNote: WEEK_FOCUS[wi], sessions };
   });
 
   return {

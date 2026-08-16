@@ -490,6 +490,8 @@ export interface HypertrophyInput {
    * when they were rating it harder than it was prescribed.
    */
   volumeScale?: number;
+  /** Weeks in the block including the deload; three when arriving tired. */
+  blockWeeks?: number;
 }
 
 /**
@@ -905,7 +907,11 @@ export function buildHypertrophyProgram(input: HypertrophyInput): ProgramPlan {
     return picked;
   });
 
-  const weeks: ProgramWeek[] = WEEK_THEMES.map((theme, wi) => {
+  // Three weeks drops the PEAK, never the deload — see lib/deload.ts and the
+  // matching note in lib/engine.ts.
+  const weekIndices = (input.blockWeeks ?? WEEK_THEMES.length) <= 3 ? [0, 1, 3] : [0, 1, 2, 3];
+  const weeks: ProgramWeek[] = weekIndices.map((wi, weekNumber) => {
+    const theme = WEEK_THEMES[wi];
     // Annotated on the callback, not just the variable: without it the returned
     // object literal widens `focus: "strength"` to `string`, which no longer
     // satisfies GoalType.
@@ -933,7 +939,7 @@ export function buildHypertrophyProgram(input: HypertrophyInput): ProgramPlan {
     // empty card; drop it and let the remaining days carry the week.
     }).filter((s) => s.drills.length > 0);
 
-    return { week: wi + 1, theme, intensity: WEEK_INTENSITY[wi], focusNote: WEEK_FOCUS[wi], sessions };
+    return { week: weekNumber + 1, theme, intensity: WEEK_INTENSITY[wi], focusNote: WEEK_FOCUS[wi], sessions };
   });
 
   const names = split.map((s) => s.name).join(" / ");

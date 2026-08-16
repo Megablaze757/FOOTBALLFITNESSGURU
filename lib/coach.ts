@@ -358,6 +358,14 @@ export interface BuildProgramInput {
    * happened rather than a number the calendar handed out.
    */
   volumeScale?: number;
+  /**
+   * Weeks in the block including the deload — four normally, three when the
+   * athlete is arriving tired. See lib/deload.ts: the deload used to be a
+   * calendar entry (always week four) rather than a decision, so somebody
+   * starting a block already carrying a load spike got three more weeks of
+   * accumulation before anything came down.
+   */
+  blockWeeks?: number;
 
   // --- Running. Ignored unless the athlete's sport is running. --------------
   /** Current weekly mileage. The block is built from where they ARE. */
@@ -455,6 +463,7 @@ export function buildProgram(input: BuildProgramInput): ProgramPlan {
       style: input.style,
       oneRepMax: input.oneRepMax,
       volumeScale: input.volumeScale,
+      blockWeeks: input.blockWeeks,
     }), input);
   }
 
@@ -469,6 +478,7 @@ export function buildProgram(input: BuildProgramInput): ProgramPlan {
     position: input.position,
     constraints,
     mustInclude: input.mustInclude,
+    blockWeeks: input.blockWeeks,
   });
 
   /**
