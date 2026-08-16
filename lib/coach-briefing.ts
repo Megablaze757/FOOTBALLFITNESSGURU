@@ -52,6 +52,16 @@ export interface BriefingInput {
   adherencePct?: number | null;
   inSeason?: boolean;
   nextSessionTitle?: string | null;
+  /**
+   * What they have ALREADY done today, if anything.
+   *
+   * The briefing described the next session and never whether the athlete had
+   * just finished one — so a question asked an hour after training got answered
+   * as though the day had not started, with the coach recommending the session
+   * they had already done. The training log for today is one row and every page
+   * that builds a briefing already has it.
+   */
+  trainedToday?: { title?: string | null; minutes?: number | null; intensity?: number | null } | null;
   nextSessionDrills?: { name: string; prescription?: string; intensity?: string }[];
   /**
    * EVERY exercise the block actually prescribes, deduplicated.
@@ -200,6 +210,26 @@ function today(a: BriefingInput): Section {
   }
   if (a.fatigue != null) lines.push(`Fatigue: ${a.fatigue}/10`);
   if (a.sleepQuality != null) lines.push(`Sleep quality: ${a.sleepQuality}/10`);
+
+  /**
+   * ALREADY TRAINED, said plainly and with an instruction attached.
+   *
+   * The model will otherwise keep recommending today's session to somebody who
+   * has done it — the briefing gave it every reason to and nothing to stop it.
+   */
+  if (a.trainedToday) {
+    const bits = [
+      a.trainedToday.title ? `"${a.trainedToday.title}"` : null,
+      a.trainedToday.minutes ? `${a.trainedToday.minutes} min` : null,
+      a.trainedToday.intensity != null ? `they rated it ${a.trainedToday.intensity}/10` : null,
+    ].filter(Boolean);
+    lines.push(
+      `ALREADY TRAINED TODAY${bits.length ? `: ${bits.join(", ")}` : "."} ` +
+      `Do not tell them to do today's session — it is done. Talk about recovery, tomorrow, or what they asked.`,
+    );
+  } else {
+    lines.push("Not trained yet today.");
+  }
   return { heading: "Today", lines };
 }
 

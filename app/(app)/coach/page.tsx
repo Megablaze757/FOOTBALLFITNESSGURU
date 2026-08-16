@@ -18,6 +18,7 @@ import { useJobs } from "@/lib/jobs";
 import { positionList } from "@/lib/positions";
 import { currentPain, painAgeNote } from "@/lib/pain";
 import { effortCheck, prescribedEffort } from "@/lib/effort";
+import { reviewBlock } from "@/lib/progression";
 import { applySwaps, type SwapMap, type SwappedDrill } from "@/lib/exercise-match";
 import { applyRehabToSession, activeStage, parseDose, type RehabPlanRow } from "@/lib/rehab-plan";
 import { PositionPicker } from "@/components/PositionPicker";
@@ -721,6 +722,12 @@ function ActiveProgram({
    * week. Both numbers were already in the database. See lib/effort.ts.
    */
   const effort = effortCheck(training.map((t) => t.intensity), plan);
+  /**
+   * How the block that is FINISHING went, which decides the size of the next
+   * one. Computed here rather than inside the button so the card can say what
+   * is about to happen and why before the athlete presses it.
+   */
+  const review = reviewBlock(plan, program.completed_sessions, training);
   const totalSessions = plan.weeks.reduce((n, w) => n + w.sessions.length, 0);
   const doneCount = program.completed_sessions.length;
   const adherence = totalSessions ? Math.round((doneCount / totalSessions) * 100) : 0;
@@ -977,6 +984,14 @@ function ActiveProgram({
       // Their tested maxes, so the next block is written in kilos rather than
       // in "pick something that feels about right".
       oneRepMax: latestBench,
+      /**
+       * WHAT THE LAST BLOCK EARNED, rather than what the counter says.
+       *
+       * The step up was `1 + (block - 1) * 0.08` — eight percent for every
+       * block ever started, whether they completed twelve sessions or four, and
+       * whether they finished strong or wrecked. See lib/progression.ts.
+       */
+      volumeScale: review.volumeScale,
     });
     // Insert first, archive second. The other order archives the block they're
     // on and then, if the insert fails, leaves them with no active program at
@@ -1136,7 +1151,10 @@ function ActiveProgram({
         <div className="card p-5 text-center shadow-glow ring-1 ring-pitch-400/40">
           <div className="text-3xl">🎉</div>
           <h2 className="mt-1 text-lg font-extrabold">Block {program.block} complete!</h2>
-          <p className="mt-1 text-sm text-slate-400">Every session ticked off. Your next block steps volume up {program.block * 8}% and re-checks your pain.</p>
+          {/* WAS: "Your next block steps volume up {block * 8}%" — a number
+              read off a counter, printed whether or not any of it was earned.
+              Now it says what happened and what follows from it. */}
+          <p className="mt-1 text-sm text-slate-400">{review.headline}</p>
           <button onClick={startNextBlock} disabled={advancing} className="btn-primary mx-auto mt-4 max-w-[16rem]">
             {advancing ? "Building block " + (program.block + 1) + "…" : `Start block ${program.block + 1}`}
           </button>
@@ -1152,9 +1170,35 @@ function ActiveProgram({
           <RingProgress pct={adherence} label={`${doneCount}/${totalSessions}`} sub="sessions" />
           <div className="flex-1">
             <p className="text-sm leading-relaxed text-slate-200">{plan.summary}</p>
-            {plan.constraints.map((c) => (
-              <div key={c} className="chip mt-2 text-readiness-red">⚠️ {c}</div>
-            ))}
+            {/* HOW THE BLOCK WAS BUILT, NOT A LIST OF ALARMS.
+                Every one of these rendered as a red ⚠️ chip. Two things were
+                wrong with that. A `chip` is a pill sized for two words, so a
+                sentence explaining which muscles are held at maintenance came
+                out as a red blob wrapped over six lines next to the progress
+                ring. And red is the app's alarm colour — used here it told the
+                athlete something had gone wrong with their programme when the
+                text underneath was describing a deliberate choice.
+
+                Only a genuine protection is coloured now, and even that is
+                amber rather than red: "your knee is sore so impact is dialled
+                back" is the plan working, not the plan failing. */}
+            {plan.constraints.length > 0 && (
+              <ul className="mt-3 space-y-1.5">
+                {plan.constraints.map((c) => {
+                  const protective = /^Protecting your/i.test(c);
+                  return (
+                    <li
+                      key={c}
+                      className={`border-l-2 pl-2.5 text-xs leading-relaxed ${
+                        protective ? "border-amber-400/50 text-amber-200/90" : "border-white/15 text-slate-400"
+                      }`}
+                    >
+                      {c}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </div>
         </div>
 

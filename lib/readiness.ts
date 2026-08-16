@@ -33,6 +33,22 @@ const ACWR_CLIMBING = 1.3; // "caution" — climbing fast
 export interface LoadContext {
   /** acute:chronic ratio; null until there are 28 days to average over. */
   acwr?: number | null;
+  /**
+   * Whether they have already trained today.
+   *
+   * WITHOUT THIS THE ADVICE IS WRITTEN FOR THE MORNING AND SHOWN ALL DAY. Every
+   * line below told the athlete what to do with a session that, by the time
+   * they read it, they had often already done — "train today, keep the
+   * intensity, hold the volume" to somebody who trained at seven and opened the
+   * app at nine. The training log for today is one row and the app already has
+   * it; not passing it made the coach sound like it was not paying attention,
+   * which is worse than saying nothing.
+   *
+   * It changes the ADVICE, never the score. Readiness is a statement about the
+   * body's state and having trained does not make you more or less recovered
+   * than the check-in said — it changes what there is left to decide.
+   */
+  trainedToday?: boolean;
 }
 
 function maxPain(painMap: PainMap): { part: string | null; value: number } {
@@ -107,7 +123,7 @@ export function assessReadiness(input: CheckInInput, load?: LoadContext): Readin
   return {
     status,
     score,
-    advice: buildAdvice(status, { sleep, fatigue, pain, focus, acwr }),
+    advice: buildAdvice(status, { sleep, fatigue, pain, focus, acwr, trainedToday: load?.trainedToday === true }),
     focus_body_part: focus,
   };
 }
@@ -115,6 +131,7 @@ export function assessReadiness(input: CheckInInput, load?: LoadContext): Readin
 function buildAdvice(
   status: ReadinessStatus,
   ctx: {
+    trainedToday: boolean;
     sleep: number;
     fatigue: number;
     pain: { part: string | null; value: number };
@@ -122,7 +139,7 @@ function buildAdvice(
     acwr?: number | null;
   }
 ): string {
-  const { sleep, fatigue, pain, focus, acwr } = ctx;
+  const { sleep, fatigue, pain, focus, acwr, trainedToday } = ctx;
 
   // Said first, because when it applies it's the reason for the verdict and the
   // athlete has no other way to know it. Percentages beat a bare ratio: "58%
@@ -130,6 +147,13 @@ function buildAdvice(
   // not.
   if (acwr != null && acwr > ACWR_SPIKE && status !== "Red") {
     const over = Math.round((acwr - 1) * 100);
+    if (trainedToday) {
+      return (
+        `You've trained today, and this week is already ${over}% up on your four-week average — that jump is ` +
+        `where injuries come from. Nothing else hard today. Eat, get the sleep, and let the next session be the ` +
+        `one that counts.`
+      );
+    }
     return (
       `You feel recovered, and that's real — but you've trained ${over}% more this week than your four-week ` +
       `average, and that jump is where injuries come from. Train today, keep the intensity, hold the volume ` +
@@ -149,14 +173,25 @@ function buildAdvice(
 
   if (status === "Yellow") {
     if (focus && pain.value > 0) {
-      return `Mostly recovered, but watch your ${focus} (${pain.value}/10). Keep intensity moderate and warm up thoroughly.`;
+      return trainedToday
+        ? `Session done. Keep an eye on your ${focus} (${pain.value}/10) — if it is still there tomorrow, that is worth acting on rather than training through.`
+        : `Mostly recovered, but watch your ${focus} (${pain.value}/10). Keep intensity moderate and warm up thoroughly.`;
     }
     if (fatigue >= 7) {
-      return "Fatigue is elevated. A moderate session is fine — avoid maximal efforts and keep volume in check.";
+      return trainedToday
+        ? "Session done on an already-tired day. Nothing else hard today — the recovery is the work now."
+        : "Fatigue is elevated. A moderate session is fine — avoid maximal efforts and keep volume in check.";
     }
-    return "You're moderately ready. Train as planned but listen to your body and ease off if anything flares up.";
+    return trainedToday
+      ? "Session logged. Nothing more needed today — how you eat and sleep tonight is what decides what it was worth."
+      : "You're moderately ready. Train as planned but listen to your body and ease off if anything flares up.";
   }
 
+  if (trainedToday) {
+    return acwr != null && acwr > ACWR_CLIMBING
+      ? "Good session logged, and you were well recovered for it. Your load is climbing though — keep the rest of today easy."
+      : "Good session logged today, and you had the recovery to back it. Eat well and get the sleep in; that is where it turns into progress.";
+  }
   if (acwr != null && acwr > ACWR_CLIMBING) {
     return "You're well recovered and ready to go. Your load is climbing fast though, so take the intensity, not the extra volume.";
   }
@@ -198,6 +233,8 @@ export function readinessFor(
     match_minutes_played?: number | null;
   } | null | undefined,
   acwr: number | null,
+  /** Whether a session is already logged for today — changes the advice, not the score. */
+  trainedToday = false,
 ): ReadinessResult | null {
   if (!checkIn) return null;
   return assessReadiness(
@@ -210,6 +247,6 @@ export function readinessFor(
       is_match_day: checkIn.is_match_day,
       match_minutes_played: checkIn.match_minutes_played,
     } as CheckInInput,
-    { acwr },
+    { acwr, trainedToday },
   );
 }

@@ -58,10 +58,43 @@ const EMPTY: EffortCheck = {
 
 /** Pull "RPE 8" out of a drill's intensity string. */
 export function rpeOf(intensity: string | null | undefined): number | null {
-  const m = String(intensity ?? "").match(/RPE\s*([\d.]+)/i);
-  if (!m) return null;
-  const n = Number(m[1]);
-  return Number.isFinite(n) && n > 0 && n <= 10 ? n : null;
+  const text = String(intensity ?? "");
+
+  const m = text.match(/RPE\s*([\d.]+)/i);
+  if (m) {
+    const n = Number(m[1]);
+    return Number.isFinite(n) && n > 0 && n <= 10 ? n : null;
+  }
+
+  /**
+   * REPS IN RESERVE IS THE SAME SCALE, WRITTEN THE WAY PEOPLE TALK.
+   *
+   * The hypertrophy engine prescribes effort as "leave 2 in the tank" rather
+   * than "RPE 8", because RPE is jargon to most of the people using this and
+   * the two say the same thing. This function only understood the jargon — so
+   * the moment that change shipped, every lift in a hypertrophy block became
+   * invisible here and `prescribedEffort` fell back to the only drills still
+   * carrying an RPE string: the cardio finishers.
+   *
+   * The block was then being judged by its warm-down. An athlete reporting a
+   * perfectly reasonable 7 against a block written at 7 was told they were
+   * training far too hard, because the number it compared against was the easy
+   * run at the end. Caught by lib/progression.test.ts, which reads this to
+   * decide what the NEXT block should be — so the error was about to start
+   * shrinking blocks that were landing exactly right.
+   *
+   * RIR and RPE are complements on the same ten-point scale: two left in the
+   * tank is an eight, none left is a ten.
+   */
+  const rir = text.match(/leave\s*([\d.]+)\s*in the tank/i);
+  if (rir) {
+    const left = Number(rir[1]);
+    if (!Number.isFinite(left) || left < 0 || left > 10) return null;
+    return 10 - left;
+  }
+  if (/to failure/i.test(text)) return 10;
+
+  return null;
 }
 
 /**

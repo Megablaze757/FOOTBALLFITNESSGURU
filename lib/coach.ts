@@ -350,6 +350,14 @@ export interface BuildProgramInput {
    * reserve, which is how most athletes will get it.
    */
   oneRepMax?: Record<string, number>;
+  /**
+   * How much the last block earned, from `reviewBlock` in lib/progression.ts.
+   *
+   * Optional, and absent for a first block — there is nothing to review yet.
+   * Supplied when starting the NEXT one, so the step up is a response to what
+   * happened rather than a number the calendar handed out.
+   */
+  volumeScale?: number;
 
   // --- Running. Ignored unless the athlete's sport is running. --------------
   /** Current weekly mileage. The block is built from where they ARE. */
@@ -446,6 +454,7 @@ export function buildProgram(input: BuildProgramInput): ProgramPlan {
       isInSeason: input.isInSeason,
       style: input.style,
       oneRepMax: input.oneRepMax,
+      volumeScale: input.volumeScale,
     }), input);
   }
 

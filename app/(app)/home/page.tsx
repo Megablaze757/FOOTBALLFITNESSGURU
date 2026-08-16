@@ -309,7 +309,10 @@ export default function HomePage() {
     is_match_day: data!.checkIn?.is_match_day ?? false,
     match_minutes_played: data!.checkIn?.match_minutes_played ?? 0,
   };
-  const readiness = assessReadiness(input, { acwr: data!.acwr.ratio });
+  // Home already knew whether you had trained today — it ticks a quest with it
+  // — and the coach line underneath was still written as if you had not, telling
+  // somebody who trained at seven to "train today, keep the intensity".
+  const readiness = assessReadiness(input, { acwr: data!.acwr.ratio, trainedToday: data!.trainedToday });
   const coachText = data!.insight?.ai_summary_text ?? readiness.advice;
   const watchZone = data!.insight?.focus_body_part ?? readiness.focus_body_part;
   const actionTag = actionLabel(data!.insight?.recommended_action ?? null);

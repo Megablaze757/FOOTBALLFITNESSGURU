@@ -184,6 +184,12 @@ export default function AskCoachPage() {
       adherencePct: totalSessions ? Math.round((done.length / totalSessions) * 100) : null,
       inSeason: !!prog?.in_season,
       nextSessionTitle: next?.s.title ?? null,
+      // Today's own log, out of the 30 days already loaded — no extra query.
+      // Without it the coach recommends the session they have just finished.
+      trainedToday: (() => {
+        const t = logs.find((l) => l.log_date === todayLocal());
+        return t ? { title: null, minutes: t.total_minutes, intensity: t.intensity } : null;
+      })(),
       nextSessionDrills: (next?.s.drills ?? []).map((d) => ({
         name: d.name, prescription: d.prescription, intensity: d.intensity,
       })),

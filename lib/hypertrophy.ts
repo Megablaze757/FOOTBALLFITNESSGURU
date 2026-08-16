@@ -484,6 +484,12 @@ export interface HypertrophyInput {
    * actual weight, which is the difference between a plan and a worksheet.
    */
   oneRepMax?: Record<string, number>;
+  /**
+   * What the LAST block earned, from lib/progression.ts — 1.08 for a block
+   * completed and rated as written, 1 for one they did not get through, 0.9
+   * when they were rating it harder than it was prescribed.
+   */
+  volumeScale?: number;
 }
 
 /**
@@ -817,7 +823,17 @@ function painAreas(painMap: PainMap): Partial<Record<BodyArea, number>> {
 /** A 4-week hypertrophy block on a split sized to the athlete's week. */
 export function buildHypertrophyProgram(input: HypertrophyInput): ProgramPlan {
   const block = Math.max(1, input.block ?? 1);
-  const blockScale = 1 + (block - 1) * 0.08;
+  /**
+   * THE BLOCK COUNTER WAS THE ONLY THING THAT MOVED.
+   *
+   * `1 + (block - 1) * 0.08` added eight percent for every block ever started,
+   * whether the athlete completed twelve sessions out of twelve or four, and
+   * whether they finished the last one strong or wrecked. `volumeScale` is that
+   * decision made from the training log instead — see lib/progression.ts. It
+   * falls back to the old arithmetic when nobody has supplied a review, so a
+   * caller that does not know about it still gets what it always got.
+   */
+  const blockScale = input.volumeScale ?? 1 + (block - 1) * 0.08;
   const seasonScale = input.isInSeason ? 0.75 : 1;
   const split = splitFor(input.daysPerWeek ?? 3, input.style ?? "auto");
   const pain = painAreas(input.painMap);
