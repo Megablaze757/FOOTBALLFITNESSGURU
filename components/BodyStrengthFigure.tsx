@@ -22,11 +22,30 @@ import { MUSCLE_WORD, type BodyPartStrength } from "@/lib/strength-standards";
  * pixel at every size; clipping means the body's own edge IS the region's edge,
  * so misalignment stops being a thing that can happen.
  *
- * ONE REGION WEARS COLOUR AT A TIME. Tinting all seven by tier was built and
- * reads as camouflage — and worse, two regions that reach the same tier take
- * the same colour and merge into one shape, so the thing colour was meant to
- * encode becomes unreadable. The body stays neutral, the region you asked about
- * lights up, and the list beside it carries every rank at once in words.
+ * EVERY RANKED REGION IS COLOURED, and the one you tap comes forward.
+ *
+ * It used to be one at a time, on the reasoning that tinting all seven reads as
+ * camouflage and that two neighbours at the same tier merge into one shape. Both
+ * of those are real and neither justified the result, which was a plain grey
+ * figure: "doesn't really show anything until you click it". A body-map readout
+ * whose resting state is blank is a readout you have to interrogate one muscle
+ * at a time to learn anything from, and nobody taps all seven.
+ *
+ * So both failure modes are answered instead of avoided:
+ *
+ *   camouflage    resting tint is 0.45, not the 0.9 a selection wears, and it
+ *                 sits under the same definition strokes the figure is drawn
+ *                 with. Selecting anything drops the rest to 0.22, so a
+ *                 selection is still unmistakable.
+ *   merging       every filled region carries its own edge in its tier colour.
+ *                 Two Advanced neighbours are two shapes with a seam, not one
+ *                 gold blob.
+ *
+ * Unranked stays uncoloured — see NEUTRAL. Absent is not zero, and painting a
+ * muscle the app has no lift for would be inventing a verdict.
+ *
+ * The list beside it still carries every rank in words, which is what makes the
+ * colours legible without a key.
  *
  * FRONT AND BACK, AND THE BACK NEEDED NO SECOND SOURCE.
  *
@@ -139,6 +158,27 @@ const DEFINITION: Record<BodyView, string[]> = {
  */
 const NEUTRAL = "#dbe3ec";
 
+/**
+ * How strongly a ranked region wears its tier colour.
+ *
+ * `resting` is what the figure looks like before anybody touches it, which is
+ * the state it spends nearly all of its life in and the one that was blank.
+ * `dimmed` is a resting region while something else is selected — still legible
+ * as a colour, clearly not the answer to the question just asked. `lit` is the
+ * selection.
+ */
+const FILL = { lit: 0.9, resting: 0.45, dimmed: 0.22 } as const;
+
+/**
+ * Each region's own edge, so same-tier neighbours stay two shapes.
+ *
+ * This is the entire reason tinting everything was rejected the first time: a
+ * chest and a pair of shoulders that both reach Advanced take the same gold and
+ * read as one mass across the top of the figure. A seam in the region's own
+ * colour costs nothing and separates them.
+ */
+const EDGE = { lit: 1, resting: 0.7, dimmed: 0.35 } as const;
+
 
 export function BodyStrengthFigure({
   parts,
@@ -202,6 +242,10 @@ export function BodyStrengthFigure({
           {regions.map(({ muscle, d }) => {
             const tier = byMuscle.get(muscle)?.tier ?? null;
             const lit = selected === muscle;
+            // Three states, not two: resting, resting-while-something-else-is-
+            // selected, and selected. The middle one is what lets every muscle
+            // carry its rank at rest without a selection getting lost among them.
+            const state = lit ? "lit" : selected ? "dimmed" : "resting";
             return (
               <g
                 key={muscle}
@@ -214,11 +258,17 @@ export function BodyStrengthFigure({
                   <path
                     key={i}
                     d={shape}
-                    // Transparent rather than absent when unlit: Safari does not
-                    // dispatch pointer events to a shape with `fill: none`, so
-                    // an unselected region would stop being tappable at all.
-                    fill={lit && tier ? tier.color : "transparent"}
-                    fillOpacity={lit && tier ? 0.9 : 0}
+                    // Transparent rather than absent when there is no colour to
+                    // wear: Safari does not dispatch pointer events to a shape
+                    // with `fill: none`, so an unranked region would stop being
+                    // tappable — and it is exactly the one an athlete taps to
+                    // find out why it is blank.
+                    fill={tier ? tier.color : "transparent"}
+                    fillOpacity={tier ? FILL[state] : 0}
+                    stroke={tier ? tier.color : "none"}
+                    strokeOpacity={tier ? EDGE[state] : 0}
+                    strokeWidth="3"
+                    strokeLinejoin="round"
                     className="transition-all duration-300"
                   />
                 ))}

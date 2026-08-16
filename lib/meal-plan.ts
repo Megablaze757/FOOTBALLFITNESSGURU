@@ -619,6 +619,110 @@ const INGREDIENT_FIT_TOLERANCE = 6; // £
 const INGREDIENT_WEEKLY_BUDGET = 10; // £
 
 /**
+ * AN OMNIVORE WAS BEING SERVED A VEGAN PLAN.
+ *
+ * Measured over four consecutive weeks for a bulking omnivore with no
+ * restrictions at all: 112 meals, of which 8 contained meat and 12 contained
+ * fish. Eighty-two per cent of what the app told them to cook was plant
+ * protein, and in budget mode it was a hundred per cent — not one meat or fish
+ * meal in a month. The book holds 24 meat dishes and 20 fish ones. They were
+ * simply never reached.
+ *
+ * WHY, EXACTLY. `proteinShortfall` is clamped at zero, so every meal that meets
+ * the athlete's protein density scores an identical 0 on the term that is
+ * supposed to represent nutrition. A chicken tikka traybake at 0.104 g/kcal and
+ * a tofu satay at 0.057 both clear a bulking athlete's 0.045 target, so both
+ * score zero, and from there the only thing separating them is money. Animal
+ * protein is dearer per serving in every single case — £16.99 against £13.87
+ * averaged across dinners — so it loses every time, on every day, forever.
+ *
+ * That is a cheapest-adequate-basket optimiser, and it produces a defensible
+ * shopping list and an indefensible plan. Somebody who told the app they eat
+ * everything and gets lentils for a month has been ignored, and they will say
+ * the recipes are bad rather than that the optimiser is working correctly.
+ *
+ * The pattern is a PREFERENCE, not only a filter. It has only ever been read as
+ * a list of exclusions — see `mealAllowed` — so nothing anywhere expressed the
+ * positive half of "I eat meat and fish".
+ *
+ * So the same shape as the ingredient rotation below it: a bounded weekly
+ * allowance, spent only to keep the athlete's stated protein sources on their
+ * menu, and unable to cost protein or to undo either rotation. Swept over five
+ * athletes on both patterns that have a source, four consecutive weeks each:
+ *
+ *    allowance   meat-or-fish mains   weekly shop   days under 90% protein
+ *          off                  27%       £106.05                     0.0%
+ *           £4                  42%       £112.55                     0.0%
+ *           £6                  39%       £110.12                     0.0%
+ *          £10                  41%       £109.52                     0.0%
+ *          £14                  44%       £111.37                     0.0%
+ *          £20                  49%       £114.75                     0.0%
+ *          £28                  51%       £115.66                     0.0%
+ *
+ * Ten. It buys the first and biggest half of the gap — 27% to 41% for £3.47 a
+ * week — and the rate turns after it: twenty costs £8.70 for another eight
+ * points. The £4 and £6 rows are out of order against each other, which is pack
+ * rounding rather than signal, and is the reason for choosing on the shape of
+ * the curve rather than on any single row.
+ *
+ * Per athlete it takes the worst omnivore case from 18% of mains to 36% and the
+ * average from 35% to 49%; the worst pescatarian from 9% to 29%. Not one day in
+ * the sweep landed under 90% of its protein target, before or after, which is
+ * the guarantee the pass is built around rather than a happy result.
+ *
+ * BUDGET MODE IS EXCLUDED, exactly as it is excluded from dish and ingredient
+ * variety — that tick means "I would rather have the money", and this is the
+ * one preference the money argument genuinely does answer. It is not a free
+ * inclusion either: run for budget shoppers it took their meat-or-fish mains
+ * from 0% to 18% and their shop from £88.28 to £96.03, a 9% rise. The cause is
+ * the lock-in this file documents twice already — marginal cost reads near zero
+ * for anything already bought, so a gate written in marginal pounds does not
+ * bind on the term (`mealCost * servingCostWeight`) that keeps dear food out of
+ * a budget week.
+ */
+const SOURCE_WEEKLY_BUDGET = 10; // £
+
+/**
+ * What share of an athlete's main meals should carry the protein they eat.
+ *
+ * Half. Not all of them, because plant-protein dinners are good food and the
+ * book's best dishes are among them; not a token one or two, because that is
+ * what the plan already did and it is what prompted this. Applied to lunches
+ * and dinners only — a meat breakfast is a minority taste and forcing one would
+ * be the same mistake in the other direction.
+ */
+const SOURCE_SHARE = 0.5;
+
+/** The protein sources each pattern positively includes, rather than excludes. */
+const PATTERN_SOURCES: Record<DietPattern, FoodTag[]> = {
+  omnivore: ["meat", "fish"],
+  pescatarian: ["fish"],
+  // Nothing to keep on the menu: for these two the pattern's exclusions already
+  // describe the whole preference, and the pass below correctly does nothing.
+  vegetarian: [],
+  vegan: [],
+};
+
+/**
+ * The sources this athlete's pattern positively includes.
+ *
+ * Not filtered against their avoidances or dislikes, and deliberately so: the
+ * pool this pass chooses from has already been through `mealAllowed`, which is
+ * the one place exclusions are applied. Re-deriving them here would be a second
+ * copy of that logic, free to drift from the first — and it would still not be
+ * the thing that keeps a disallowed dish off the plate, because the pool is.
+ */
+function statedSources(prefs: MealPrefs): FoodTag[] {
+  return PATTERN_SOURCES[prefs.pattern];
+}
+
+function carriesSource(meal: Meal, sources: FoodTag[]): boolean {
+  if (!sources.length) return false;
+  const tags = mealTags(meal);
+  return sources.some((s) => tags.includes(s));
+}
+
+/**
  * What a fresh dish is allowed to add to the shopping bill, per meal.
  *
  * The reason last week's meals keep winning is not that they're better — it's
@@ -1223,6 +1327,24 @@ export function buildWeek(
    */
   let ingredientSpend = 0;
 
+  /**
+   * Keeping the athlete's stated protein sources on their menu — see
+   * SOURCE_WEEKLY_BUDGET for the measurement that made this necessary.
+   *
+   * Counted over main meals only, and over the WEEK rather than the day: an
+   * athlete eating chicken at four of their fourteen lunches and dinners has a
+   * mixed week, and demanding one every day would be the same rigidity in the
+   * opposite direction.
+   */
+  const sources = statedSources(prefs);
+  // Zero in budget mode, which switches the pass off entirely rather than
+  // merely tightening it — see SOURCE_WEEKLY_BUDGET for why a gate written in
+  // marginal pounds does not hold a budget week down on its own.
+  const sourceBudget = prefs.budget ? 0 : SOURCE_WEEKLY_BUDGET;
+  let sourceSpend = 0;
+  let mainsServed = 0;
+  let sourcesServed = 0;
+
   /** Would serving this leave the day, so far, still at or above target? */
   const staysOnTarget = (meal: Meal, slot: Slot, dayIndex: number): boolean => {
     const kcal = slotKcal(slot, dayIndex);
@@ -1434,6 +1556,62 @@ export function buildWeek(
         pick = swapped;
       }
     }
+
+    /**
+     * THIRD PASS: THE PROTEIN THEY ACTUALLY EAT.
+     *
+     * Everything above rotates dishes and then ingredients, and both are
+     * satisfied by a month of tofu, lentils and beans for someone who told the
+     * app they eat everything — those ARE varied dishes with varied
+     * ingredients. See SOURCE_WEEKLY_BUDGET for the numbers.
+     *
+     * Deliberately last, so it is the rotations that get first call on the
+     * slot: this pass exists to make sure meat and fish appear at all, not to
+     * take over. And deliberately built to the same guarantees as the
+     * ingredient pass above, because they are the guarantees that stopped
+     * every previous attempt at variety from quietly eating the athlete's
+     * protein target:
+     *
+     *   - at least as protein-dense as what it displaces, or the day is still
+     *     on target with it in, counted on the running total;
+     *   - inside a bounded weekly allowance, in real pounds on the trolley;
+     *   - never yesterday's dinner, and never something last week's rotation
+     *     just moved away from.
+     */
+    if (sourceBudget > 0 && sources.length && (slot === "Lunch" || slot === "Dinner")) {
+      mainsServed++;
+      // Rounded rather than floored so a fourteen-main week aims at seven
+      // instead of drifting a slot behind all week.
+      const owed = Math.round(mainsServed * SOURCE_SHARE);
+      if (sourcesServed < owed && !carriesSource(pick.meal, sources)) {
+        const left = sourceBudget - sourceSpend;
+        const pickDensity = proteinDensity(pick.meal);
+        const pickSeen = seenLastWeek(pick.meal);
+        const extraCost = (m: Meal) => Math.max(0, marginalCost(m, basket) - marginalCost(pick.meal, basket));
+        const withSource = ranked.filter((r) =>
+          !r.capped
+          && carriesSource(r.meal, sources)
+          && extraCost(r.meal) <= left
+          // The guarantee. Everything else is a preference; this is why the
+          // protein audit does not move.
+          && (proteinDensity(r.meal) >= pickDensity - 1e-9 || staysOnTarget(r.meal, slot, dayIndex))
+          && r.fit <= best.fit + INGREDIENT_FIT_TOLERANCE
+          // Never undo the dish rotation, and never undo the week-on-week one.
+          && (served.mealDay.get(r.meal.id) ?? -99) < dayIndex - 1
+          && seenLastWeek(r.meal) <= pickSeen);
+        if (withSource.length) {
+          const taken = withSource.reduce((a, b) => {
+            const seenA = seenLastWeek(a.meal);
+            const seenB = seenLastWeek(b.meal);
+            return seenB < seenA || (seenB === seenA && b.score < a.score) ? b : a;
+          });
+          sourceSpend += extraCost(taken.meal);
+          pick = taken;
+        }
+      }
+      if (carriesSource(pick.meal, sources)) sourcesServed++;
+    }
+
     recordServing(served, pick.meal, dayIndex);
     addToBasket(pick.meal, basket);
     bank(pick.meal, slot, dayIndex);
