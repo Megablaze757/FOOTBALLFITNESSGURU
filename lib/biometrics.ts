@@ -224,12 +224,25 @@ export function parseIngestPayload(body: unknown): Biometric[] {
     const date = toISODate(String(pick(["date", "day", "metricdate", "startdate"]) ?? "")) ??
       todayLocal();
 
+    let sleepAlreadyHours = false;
     const hrv = numOrNull(pick(["hrv", "hrvms", "heartratevariability", "sdnn"]));
     const rhr = numOrNull(pick(["restinghr", "restingheartrate", "rhr", "lowestheartrate"]));
-    let sleep = numOrNull(pick(["sleep", "sleephours", "hoursofsleep", "asleep"]));
+    /**
+     * A FORMATTED DURATION IS TRIED FIRST, and it has to be.
+     *
+     * iOS renders a Health sample's Duration as "7 hr 32 min", and numOrNull
+     * strips every non-digit — so that arrives as 732, lands in the range read
+     * as minutes, and is stored as twelve and a quarter hours of sleep. It then
+     * feeds readiness, ACWR and the coach's advice, all of them confidently
+     * wrong. See durationTextToHours.
+     */
+    const sleepRaw = pick(["sleep", "sleephours", "hoursofsleep", "asleep"]);
+    let sleep = durationTextToHours(String(sleepRaw ?? ""));
+    if (sleep == null) sleep = numOrNull(sleepRaw);
+    else sleepAlreadyHours = true;
     const sleepMinutes = numOrNull(pick(["sleepminutes", "sleepmins", "minutesasleep"]));
     if (sleep == null && sleepMinutes != null) sleep = +(sleepMinutes / 60).toFixed(2);
-    else if (sleep != null) sleep = sleepToHours(sleep);
+    else if (sleep != null && !sleepAlreadyHours) sleep = sleepToHours(sleep);
 
     const b: Biometric = {
       metric_date: date,
@@ -267,6 +280,45 @@ function numOrNull(v: unknown): number | null {
  * seconds read as minutes is 450 hours of sleep, and readiness would carry that
  * for a month.
  */
+/**
+ * A DURATION AS SHORTCUTS ACTUALLY WRITES IT.
+ *
+ * The setup guide has people insert a Health sample's Duration into the sync
+ * URL. iOS does not render that as a bare number — it formats it, as
+ * "7 hr 32 min", and that is how the reported failure begins: a URL containing
+ * spaces, which Shortcuts refuses to accept at all.
+ *
+ * The quieter half is what happened when such a value DID arrive. The numeric
+ * parser strips every non-digit, so "7 hr 32 min" became 732, and 732 is inside
+ * the range read as minutes — twelve and a quarter hours of sleep, recorded
+ * without complaint and carried into readiness, ACWR and the coach's advice.
+ * Wrong data that looks plausible is worse than none.
+ *
+ * Handles "7 hr 32 min", "7h 32m", "7 hours 32 minutes" and "7:32", returning
+ * hours. Null when there is no duration in the text, so the caller can fall
+ * back to the plain-number path rather than being handed a guess.
+ */
+export function durationTextToHours(text: string): number | null {
+  const t = String(text ?? "").trim().toLowerCase();
+  if (!t) return null;
+
+  // "7:32" or "7:32:15" — hours:minutes[:seconds].
+  const clock = /^(\d{1,2}):([0-5]?\d)(?::([0-5]?\d))?$/.exec(t);
+  if (clock) {
+    const h = Number(clock[1]) + Number(clock[2]) / 60 + Number(clock[3] ?? 0) / 3600;
+    return +h.toFixed(2);
+  }
+
+  // "7 hr 32 min", "7h32m", "7 hours 32 minutes", "45 min", "27000 sec".
+  const hours = /(\d+(?:\.\d+)?)\s*(?:h\b|hr|hrs|hour|hours)/.exec(t);
+  const mins = /(\d+(?:\.\d+)?)\s*(?:m\b|min|mins|minute|minutes)/.exec(t);
+  const secs = /(\d+(?:\.\d+)?)\s*(?:s\b|sec|secs|second|seconds)/.exec(t);
+  if (!hours && !mins && !secs) return null;
+
+  const h = Number(hours?.[1] ?? 0) + Number(mins?.[1] ?? 0) / 60 + Number(secs?.[1] ?? 0) / 3600;
+  return Number.isFinite(h) && h > 0 ? +h.toFixed(2) : null;
+}
+
 export function sleepToHours(n: number): number {
   if (n <= 24) return +n.toFixed(2);          // already hours
   if (n <= 1440) return +(n / 60).toFixed(2); // minutes

@@ -83,12 +83,25 @@ function parseIngestPayload(body: unknown, todayLocalDate: string): BiometricRow
 
     const date = toISODate(String(pick(["date", "day", "metricdate", "startdate"]) ?? "")) ?? todayLocalDate;
 
+    let sleepAlreadyHours = false;
     const hrv = numOrNull(pick(["hrv", "hrvms", "heartratevariability", "sdnn"]));
     const rhr = numOrNull(pick(["restinghr", "restingheartrate", "rhr", "lowestheartrate"]));
-    let sleep = numOrNull(pick(["sleep", "sleephours", "hoursofsleep", "asleep"]));
+    /**
+     * A FORMATTED DURATION IS TRIED FIRST, and it has to be.
+     *
+     * iOS renders a Health sample's Duration as "7 hr 32 min", and numOrNull
+     * strips every non-digit — so that arrives as 732, lands in the range read
+     * as minutes, and is stored as twelve and a quarter hours of sleep. It then
+     * feeds readiness, ACWR and the coach's advice, all of them confidently
+     * wrong. See durationTextToHours.
+     */
+    const sleepRaw = pick(["sleep", "sleephours", "hoursofsleep", "asleep"]);
+    let sleep = durationTextToHours(String(sleepRaw ?? ""));
+    if (sleep == null) sleep = numOrNull(sleepRaw);
+    else sleepAlreadyHours = true;
     const sleepMinutes = numOrNull(pick(["sleepminutes", "sleepmins", "minutesasleep"]));
     if (sleep == null && sleepMinutes != null) sleep = +(sleepMinutes / 60).toFixed(2);
-    else if (sleep != null) sleep = sleepToHours(sleep);
+    else if (sleep != null && !sleepAlreadyHours) sleep = sleepToHours(sleep);
 
     const b: BiometricRow = {
       metric_date: date,
@@ -108,6 +121,38 @@ function numOrNull(v: unknown): number | null {
   if (v == null || v === "") return null;
   const n = typeof v === "number" ? v : Number(String(v).replace(/[^\d.-]/g, ""));
   return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * A DURATION AS SHORTCUTS ACTUALLY WRITES IT.
+ *
+ * iOS renders a Health sample's Duration as "7 hr 32 min", not as a bare
+ * number. That breaks twice: the space makes the URL invalid, so Shortcuts
+ * refuses to send it at all — and if one ever arrives another way, numOrNull
+ * strips the non-digits, yielding 732, which sleepToHours reads as minutes and
+ * stores as twelve and a quarter hours of sleep. Wrong data that looks
+ * plausible is worse than none: it feeds readiness, ACWR and the coach.
+ *
+ * Mirrors `durationTextToHours` in lib/biometrics.ts, which is the spec and has
+ * the tests — change both.
+ */
+function durationTextToHours(text: string): number | null {
+  const t = String(text ?? "").trim().toLowerCase();
+  if (!t) return null;
+
+  const clock = /^(\d{1,2}):([0-5]?\d)(?::([0-5]?\d))?$/.exec(t);
+  if (clock) {
+    const h = Number(clock[1]) + Number(clock[2]) / 60 + Number(clock[3] ?? 0) / 3600;
+    return +h.toFixed(2);
+  }
+
+  const hours = /(\d+(?:\.\d+)?)\s*(?:h\b|hr|hrs|hour|hours)/.exec(t);
+  const mins = /(\d+(?:\.\d+)?)\s*(?:m\b|min|mins|minute|minutes)/.exec(t);
+  const secs = /(\d+(?:\.\d+)?)\s*(?:s\b|sec|secs|second|seconds)/.exec(t);
+  if (!hours && !mins && !secs) return null;
+
+  const h = Number(hours?.[1] ?? 0) + Number(mins?.[1] ?? 0) / 60 + Number(secs?.[1] ?? 0) / 3600;
+  return Number.isFinite(h) && h > 0 ? +h.toFixed(2) : null;
 }
 
 /**

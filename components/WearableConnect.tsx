@@ -487,28 +487,32 @@ function AppleSetup({ token, onDone }: { token: string | null; onDone: () => voi
                 see the whole string, and Get Contents of URL takes the Text as
                 its input. One extra action, and it removes the only step in
                 this guide that can refuse you. */}
-            {/* WHERE THE PASTE ACTUALLY FAILS, AND THE WAY ROUND IT.
-                Reported three times: "it won't let me paste the url". The
-                screenshot showed why — the athlete was on Get Contents of URL
-                with an empty URL field, which is a URL-typed field, not a text
-                box. Tapping the greyed "URL" placeholder frequently does not
-                place a cursor, so the long-press menu never appears and there
-                is nothing to paste into.
+            {/* THE ACTUAL CAUSE, FOUND ON THE THIRD ATTEMPT.
+                Reported three times as "it won't let me paste the url", and it
+                was never the URL: the link the app copies is 115 characters
+                with no whitespace in it, verified against the exact template.
+                The space arrives from the DURATION. iOS renders a Health
+                sample's duration as "7 hr 32 min", so the moment that variable
+                is dropped after `&sleep=` the field contains spaces — and
+                Shortcuts will not accept a URL with a space in it.
 
-                An earlier version of this note told people to check Settings →
-                Shortcuts → Paste from Other Apps. That setting does not exist
-                on every iOS version and it sent somebody looking for something
-                that was not there, which is worse than saying nothing. The Text
-                action below always works, so the guide leads with that instead
-                of a device setting we cannot see. */}
+                Two earlier notes here blamed the clipboard and then an iOS
+                privacy setting. Both were guesses, one of them sent somebody
+                looking for a setting that does not exist on their phone, and
+                neither would have helped. This one is checkable: paste the
+                link on its own and it is accepted; add the variable and it is
+                not. */}
             <li className="rounded-xl border border-amber-400/25 bg-amber-500/[0.06] px-3 py-2.5 text-xs leading-relaxed text-amber-100/90">
-              <b className="text-amber-200">Do not paste into the URL box.</b> That field is fussy — tapping it
-              often will not give you a cursor, so no Paste option appears and it looks like the link is broken.
-              Add a <b className="text-amber-200">Text</b> action first and paste there. If you have already
-              added <b>Get Contents of URL</b>, leave it — just add the Text action above it.
+              <b className="text-amber-200">If Shortcuts refuses the URL, it is the space.</b> Health gives a
+              duration as <span className="font-mono">7 hr 32 min</span>, and a URL cannot contain spaces — so
+              the moment you drop that variable in, the field is rejected. The link itself is fine.
+              <span className="mt-1 block">
+                Fix it by tapping the <b className="text-amber-200">Duration</b> variable after you insert it and
+                setting it to <b className="text-amber-200">Hours</b> — that gives a plain number like 7.53.
+              </span>
               <span className="mt-1 block text-amber-100/60">
-                Still nothing? Use <b>Share the link</b> above, send it to Notes, and copy it from there — that
-                route does not use the clipboard at all.
+                Building the URL in a Text action, as below, is what makes this easy to see and to fix — the
+                whole string stays visible while you edit it.
               </span>
             </li>
 
@@ -516,7 +520,9 @@ function AppleSetup({ token, onDone }: { token: string | null; onDone: () => voi
               Search <b className="text-slate-200">Text</b> and tap it — a plain empty box. Tap inside it and
               paste. Your link already ends with <code className="text-slate-300">&amp;sleep=</code>, so put the
               cursor right at the end and tap the <b className="text-slate-200">Duration</b> variable above the
-              keyboard.
+              keyboard. Then tap that variable once more and set it to
+              <b className="text-slate-200"> Hours</b>, so it goes in as a number rather than
+              <span className="font-mono"> 7 hr 32 min</span>.
               <span className="mt-1 block text-slate-500">
                 Use a Text box rather than pasting into the URL field directly — the URL field often will not
                 offer you a Paste option, and this one always does.

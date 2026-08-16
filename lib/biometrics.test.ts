@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { biometricSignal, parseBiometricCsv, parseOuraSleep, parseIngestPayload, syncHealth, daysSinceSync } from "./biometrics";
+import { biometricSignal, parseBiometricCsv, parseOuraSleep, parseIngestPayload, syncHealth, daysSinceSync , durationTextToHours } from "./biometrics";
 import { todayLocal } from "./day";
 
 const hist = (hrv: number, days = 20) =>
@@ -289,4 +289,51 @@ test("the sync function refuses to run without a configured secret", () => {
   assert.match(src, /if \(!secret\) return json\(\{ error: "CRON_SECRET is not set" \}, 500\)/,
     "the function no longer fails closed when CRON_SECRET is missing");
   assert.match(src, /x-cron-secret/, "the shared-secret check is gone");
+});
+
+// =============================================================================
+// A DURATION AS SHORTCUTS ACTUALLY WRITES IT.
+//
+// The setup guide has people drop a Health sample's Duration into the sync URL.
+// iOS does not render that as a bare number — it formats it, "7 hr 32 min".
+// That is the reported "it won't let me paste the url": the space makes the URL
+// invalid and Shortcuts refuses it outright.
+//
+// The quieter half is what happened when such a value DID arrive. numOrNull
+// strips every non-digit, so "7 hr 32 min" became 732 — inside the range read
+// as MINUTES — and was stored as 12.2 hours of sleep, then fed to readiness,
+// ACWR and the coach. Wrong data that looks plausible is worse than none.
+// =============================================================================
+
+test("a formatted duration is read as the duration it is", () => {
+  assert.equal(durationTextToHours("7 hr 32 min"), 7.53);
+  assert.equal(durationTextToHours("7h 32m"), 7.53);
+  assert.equal(durationTextToHours("7 hours 32 minutes"), 7.53);
+  assert.equal(durationTextToHours("45 min"), 0.75);
+  assert.equal(durationTextToHours("27000 sec"), 7.5);
+  assert.equal(durationTextToHours("7:32"), 7.53);
+});
+
+test("and a plain number is left to the numeric path", () => {
+  // Null rather than a guess, so the caller falls back to sleepToHours and its
+  // magnitude heuristic instead of being handed an answer from the wrong parser.
+  assert.equal(durationTextToHours("7.5"), null);
+  assert.equal(durationTextToHours(""), null);
+  assert.equal(durationTextToHours("not a duration"), null);
+});
+
+test("a formatted duration never becomes twelve hours of sleep", () => {
+  // The whole point. End to end, through the real payload parser.
+  const rows = parseIngestPayload({ date: "2026-08-16", sleep: "7 hr 32 min" });
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].sleep_hours, 7.53, "a formatted duration was re-read through the magnitude heuristic");
+});
+
+test("the existing units still work exactly as they did", () => {
+  // 27000 seconds, 450 minutes and 7.5 hours are all the same night, and this
+  // change must not have moved any of them.
+  for (const [value, expected] of [["7.5", 7.5], ["450", 7.5], ["27000", 7.5]] as const) {
+    const rows = parseIngestPayload({ date: "2026-08-16", sleep: value });
+    assert.equal(rows[0].sleep_hours, expected, `sleep=${value}`);
+  }
 });
