@@ -29,11 +29,15 @@ export function SessionDrills({ drills, onPick, onSwap }: {
     <ul className="space-y-1">
       {grouped.map((group, gi) => (
         <li key={gi}>
-          {group.slot && (
+          {group.rehab ? (
+            <div className="mb-1 mt-2 text-[10px] font-bold uppercase tracking-wider text-amber-400/80 first:mt-0">
+              Rehab · do this first
+            </div>
+          ) : group.slot ? (
             <div className="mb-1 mt-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 first:mt-0">
               {SLOT_LABEL[group.slot]}
             </div>
-          )}
+          ) : null}
           <ul className="space-y-1">
             {group.drills.map((d, k) => {
               // The name a swap is stored against is the PRESCRIBED one, which
@@ -71,7 +75,11 @@ export function SessionDrills({ drills, onPick, onSwap }: {
                       <div className="text-[10px] text-slate-500">{detailLine(d)}</div>
                     )}
                   </button>
-                  {onSwap && !d.skill && (
+                  {/* No swap on rehab work. Offering a "similar exercise" for a
+                      stage-two isometric is offering to leave the protocol —
+                      the substitution the athlete wants there is a
+                      conversation with a physio, not a tap. */}
+                  {onSwap && !d.skill && !d.rehab && (
                     <button
                       onClick={() => setSwapping(open ? null : prescribed)}
                       aria-label={`Swap ${d.name}`}
@@ -115,13 +123,24 @@ function detailLine(d: ProgramDrill): string {
 
 type Drill = ProgramDrill & { swappedFrom?: string };
 
-function groupBySlot(drills: Drill[]): { slot: Slot | null; drills: Drill[] }[] {
-  const out: { slot: Slot | null; drills: Drill[] }[] = [];
+type Group = { slot: Slot | null; rehab: boolean; drills: Drill[] };
+
+/**
+ * Group runs of drills that share a heading.
+ *
+ * Rehab work breaks the run whatever slot it carries. It comes from a
+ * different document with a different reason, and folding it into "Warm-up"
+ * would present a hamstring protocol as a way to get warm — which is exactly
+ * the confusion that had people skipping it.
+ */
+function groupBySlot(drills: Drill[]): Group[] {
+  const out: Group[] = [];
   for (const d of drills) {
     const slot = d.slot ?? null;
+    const rehab = !!d.rehab;
     const last = out[out.length - 1];
-    if (last && last.slot === slot) last.drills.push(d);
-    else out.push({ slot, drills: [d] });
+    if (last && last.slot === slot && last.rehab === rehab) last.drills.push(d);
+    else out.push({ slot, rehab, drills: [d] });
   }
   return out;
 }

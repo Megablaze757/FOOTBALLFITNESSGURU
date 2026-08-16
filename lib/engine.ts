@@ -59,6 +59,14 @@ export interface ProgramDrill {
   prescription?: string;
   /** True for ball work, so it can be labelled apart from the physical block. */
   skill?: boolean;
+  /**
+   * True for work that came from an active rehab plan rather than the block.
+   *
+   * It is labelled apart because it is not optional in the way an accessory is,
+   * and because offering to "swap" it for a similar movement would be offering
+   * to leave the rehab protocol — see lib/rehab-plan.ts.
+   */
+  rehab?: boolean;
   // --- v2 additions. All optional: a program saved by v1 still renders. ---
   /** Where it sits in the session, so the UI can group and label the blocks. */
   slot?: Slot;

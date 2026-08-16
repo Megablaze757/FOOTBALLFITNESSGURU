@@ -12,13 +12,14 @@ import {
   FOCI,
   type GoalType, type ProgramPlan, type TrainingFocus,
 } from "@/lib/coach";
-import { adjustForReadiness, type ReadinessStatus } from "@/lib/engine";
+import { adjustForReadiness, type ReadinessStatus, type ProgramDrill } from "@/lib/engine";
 import { repairPlan } from "@/lib/program-repair";
 import { useJobs } from "@/lib/jobs";
 import { positionList } from "@/lib/positions";
 import { currentPain, painAgeNote } from "@/lib/pain";
 import { effortCheck, prescribedEffort } from "@/lib/effort";
-import { applySwaps, type SwapMap } from "@/lib/exercise-match";
+import { applySwaps, type SwapMap, type SwappedDrill } from "@/lib/exercise-match";
+import { applyRehabToSession, activeStage, parseDose, type RehabPlanRow } from "@/lib/rehab-plan";
 import { PositionPicker } from "@/components/PositionPicker";
 import { FeatureLock, tierOfSub } from "@/components/FeatureLock";
 import { can } from "@/lib/subscription";
@@ -102,7 +103,7 @@ export default function CoachPage() {
   const { data, loading, reload } = useAsync(async () => {
     const supabase = createClient();
     const since = daysAgoLocal(30);
-    const [{ data: program }, { data: checkIn }, { data: training }, { data: checkHist }, { data: benches }, { data: profile }, { data: sub }] = await Promise.all([
+    const [{ data: program }, { data: checkIn }, { data: training }, { data: checkHist }, { data: benches }, { data: profile }, { data: sub }, { data: rehab }] = await Promise.all([
       supabase.from("programs").select("*").eq("user_id", user.id).eq("status", "active").order("created_at", { ascending: false }).limit(1).maybeSingle(),
       supabase.from("daily_check_ins").select("*").eq("user_id", user.id).eq("check_in_date", today).maybeSingle(),
       supabase.from("training_logs").select("*").eq("user_id", user.id).gte("log_date", since).order("log_date", { ascending: true }),
@@ -110,6 +111,18 @@ export default function CoachPage() {
       supabase.from("strength_benchmarks").select("*").eq("user_id", user.id).order("test_date", { ascending: false }).limit(20),
       supabase.from("profiles").select("sport, position, positions, training_focus").eq("id", user.id).maybeSingle(),
       supabase.from("subscriptions").select("tier, status").eq("user_id", user.id).maybeSingle(),
+      /**
+       * THE REHAB PLAN, ON THE PAGE WHERE TRAINING ACTUALLY HAPPENS.
+       *
+       * The check-in already applied this (see journal/page.tsx) — but the
+       * check-in is where you log what you did, and THIS is where you find out
+       * what to do and press play on it. Applying it there and not here meant
+       * the guided session still walked somebody with a torn hamstring through
+       * the drills their plan told them to avoid, and left their rehab work on
+       * a different page to remember. Same function, same decision, both ends.
+       */
+      supabase.from("rehab_plans").select("*").eq("user_id", user.id).eq("active", true)
+        .order("created_at", { ascending: false }).limit(1).maybeSingle(),
     ]);
     const p = profile as { sport?: string; position?: string; positions?: string[]; training_focus?: string } | null;
     return {
@@ -123,6 +136,7 @@ export default function CoachPage() {
       positions: positionList(p?.positions?.length ? p.positions : p?.position),
       focus: (p?.training_focus ?? "performance") as TrainingFocus,
       tier: tierOfSub(sub as { tier?: Tier; status?: string } | null),
+      rehab: (rehab ?? null) as RehabPlanRow | null,
     };
   }, [user.id], `coach:${user.id}`);
 
@@ -192,6 +206,7 @@ export default function CoachPage() {
       sport={data.sport}
       focus={data.focus}
       positions={data.positions}
+      rehab={data.rehab}
       onChange={reload}
     />
   );
@@ -659,12 +674,13 @@ function SeasonToggle({ inSeason, onChange }: { inSeason: boolean; onChange: (v:
 // --- Active program ---------------------------------------------------------
 
 function ActiveProgram({
-  program, checkIn, training, checkHist, userId, today, latestBench, sport, focus, positions, onChange,
+  program, checkIn, training, checkHist, userId, today, latestBench, sport, focus, positions, rehab, onChange,
 }: {
   program: Program; checkIn: DailyCheckIn | null; training: TrainingLog[];
   checkHist: { check_in_date: string; pain_map: Record<string, number> | null }[];
   userId: string; today: string; latestBench: Record<string, number>;
-  sport: SportId; focus: TrainingFocus; positions: string[]; onChange: () => void;
+  sport: SportId; focus: TrainingFocus; positions: string[];
+  rehab: RehabPlanRow | null; onChange: () => void;
 }) {
   const plan = program.plan;
   const goal = program.goal_type as GoalType;
@@ -717,7 +733,36 @@ function ActiveProgram({
    * and offer to put it back.
    */
   const swaps = (program.swaps ?? {}) as SwapMap;
-  const sessionDrills = todaySession ? applySwaps(todaySession.drills, swaps) : [];
+  const swapped = todaySession ? applySwaps(todaySession.drills, swaps) : [];
+
+  /**
+   * …and then their rehab plan, which gets the LAST word.
+   *
+   * Order is deliberate. Swaps are the athlete's own substitutions, so they
+   * apply to the prescription; the rehab filter then runs over the result. Do
+   * it the other way round and a swap could quietly put back the exact
+   * movement the plan just removed — the plan would have been consulted and
+   * then overruled by a preference set weeks earlier.
+   *
+   * The rehab work is prescribed in prose ("3 × 30s hold"), so parseDose turns
+   * it into sets and reps the guided player can count, and the exercise's own
+   * note becomes the cue. `rehab: true` is what lets the list and the player
+   * label it as rehab rather than passing it off as training.
+   */
+  const rehabbed = applyRehabToSession<ProgramDrill & SwappedDrill>(
+    swapped,
+    rehab,
+    (e) => ({
+      name: e.name,
+      ...parseDose(e.dose),
+      cue: e.note ?? "",
+      reason: `Stage ${activeStage(rehab)?.number ?? 1} of your ${rehab?.area ?? "injury"} plan`,
+      prescription: e.dose || undefined,
+      rehab: true,
+    }),
+    today,
+  );
+  const sessionDrills = rehabbed.drills;
 
   async function saveSwap(prescribed: string, to: string | null) {
     const next = { ...swaps };
@@ -740,7 +785,10 @@ function ActiveProgram({
     goal,
     soreAreas: Object.entries(painByArea(painMap)).filter(([, v]) => (v ?? 0) >= 4).map(([a]) => a.replace("_", " ")),
     readinessStatus: readiness?.status ?? null,
-    programDrills: nextSession?.s.drills.map((d) => d.name) ?? [],
+    // The session as they will actually do it — swaps applied, rehab work in,
+    // forbidden movements out. Handing the coach the raw plan is how it ended
+    // up praising an exercise the athlete had swapped away weeks ago.
+    programDrills: sessionDrills.map((d) => d.name),
   };
 
   const [switching, setSwitching] = useState(false);
@@ -825,9 +873,17 @@ function ActiveProgram({
          * Only for the session shown as today's. Ticking off a different day
          * from the calendar is not a claim about this morning's readiness, so
          * it keeps the plan's own numbers.
+         *
+         * The same holds for the two other things that rewrite today's session:
+         * a swap changes WHICH movement was done, and the rehab plan adds work
+         * and removes what the stage forbids. Logging `todaySession.drills`
+         * alone recorded the prescribed movement for an exercise they swapped
+         * away from, and no trace at all of the rehab work they had just been
+         * walked through — so the rehab was the one part of the session that
+         * never counted toward anything.
          */
         const isToday = nextSession && sid === `w${nextSession.w}d${nextSession.s.day}`;
-        const logged = isToday && todaySession ? todaySession : sess.s;
+        const logged = isToday && todaySession ? { ...todaySession, drills: sessionDrills } : sess.s;
         // What actually happened, when the player measured it.
         //
         // This used to log a flat 45 minutes and the PRESCRIBED reps for every
@@ -1145,6 +1201,19 @@ function ActiveProgram({
               <p className="mb-2 mt-1 text-xs text-amber-300">
                 Readiness is moderate, so today is lighter — a set off, and easier targets.
               </p>
+            )}
+            {/* WHAT THE REHAB PLAN DID TO THIS SESSION, said out loud.
+                A session that quietly gains three band exercises and loses the
+                squats is indistinguishable from a bug — and "your plan says to
+                avoid deep knee flexion" is the most useful sentence the app
+                can put on the screen at that moment. */}
+            {rehabbed.note && (
+              <div className="mb-2 mt-2 rounded-2xl bg-amber-500/10 p-3 text-sm text-slate-200">
+                {rehabbed.note}{" "}
+                <Link href="/injury" className="font-semibold text-amber-300 underline-offset-2 hover:underline">
+                  See the plan
+                </Link>
+              </div>
             )}
             <div className="mt-2">
               <SessionDrills

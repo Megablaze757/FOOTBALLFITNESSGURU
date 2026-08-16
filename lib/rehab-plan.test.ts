@@ -225,3 +225,71 @@ test("a plan's prose dose becomes something loggable", () => {
   assert.deepEqual(parseDose(null), { sets: 3, reps: 10 });
   assert.deepEqual(parseDose(""), { sets: 3, reps: 10 });
 });
+
+// =============================================================================
+// THE SEAM. Every test above is about the function; the complaint was about the
+// page.
+//
+// "I still think the program isn't including the exercises in my rehab plan."
+// They were right, and the function was not the problem — `applyRehabToSession`
+// was correct and tested, and was called on the check-in page only. /coach is
+// where the programme is read and where the guided session is started, so an
+// athlete on a hamstring protocol was walked through the drills their own plan
+// told them to avoid, and had to remember the rehab work off a different page.
+//
+// A seam is only tested by a test that spans it, so these read the page.
+// =============================================================================
+
+import { readFileSync } from "node:fs";
+
+const coachPage = () =>
+  readFileSync(new URL("../app/(app)/coach/page.tsx", import.meta.url), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+
+test("the coach page loads the athlete's active rehab plan", () => {
+  const src = coachPage();
+  assert.match(src, /from\("rehab_plans"\)/, "the page never asks for the rehab plan");
+  assert.match(src, /\.eq\("active", true\)/, "an archived plan would drive the sessions");
+});
+
+test("and applies it to the session that is displayed, played and logged", () => {
+  const src = coachPage();
+  assert.match(src, /applyRehabToSession/, "the plan is loaded and then ignored");
+  // sessionDrills is the one list the page renders, plays and writes to the log
+  // — see lib/readiness-logging.test.ts. The rehab result must BE that list,
+  // not a second one shown beside it.
+  assert.match(src, /const sessionDrills = rehabbed\.drills;/,
+    "the rehabbed session is not what the page actually uses");
+});
+
+test("swaps are applied first, so the rehab plan gets the last word", () => {
+  /**
+   * Order matters and it is not arbitrary. A swap is a preference the athlete
+   * set, possibly weeks ago; the rehab stage is a live medical constraint. Run
+   * the other way round, a swap could quietly reintroduce the exact movement
+   * the plan had just removed — the plan consulted, then overruled.
+   */
+  const src = coachPage();
+  // Both anchored on the CALL, not the identifier: the import line names
+  // applyRehabToSession at the top of the file and would make any ordering
+  // check pass or fail for the wrong reason.
+  const swapAt = src.indexOf("applySwaps(todaySession.drills");
+  const rehabAt = src.search(/applyRehabToSession</);
+  assert.ok(swapAt > 0, "the swap overlay is no longer applied to today's session");
+  assert.ok(rehabAt > swapAt, "the rehab filter no longer runs after the swaps");
+  assert.match(src, /applyRehabToSession<[^>]*>\(\s*swapped,/, "the rehab pass is not reading the swapped session");
+});
+
+test("the athlete is told what their plan changed about today", () => {
+  // A session that silently gains three band exercises and loses the squats is
+  // indistinguishable from a bug.
+  assert.match(coachPage(), /rehabbed\.note/, "the note is computed and never shown");
+});
+
+test("rehab work is marked as rehab, so it is not passed off as training", () => {
+  assert.match(coachPage(), /rehab: true/, "rehab drills arrive unlabelled");
+  const drills = readFileSync(new URL("../components/SessionDrills.tsx", import.meta.url), "utf8");
+  assert.match(drills, /group\.rehab/, "the list has no way to show rehab work apart");
+  assert.match(drills, /!d\.rehab/,
+    "swapping is still offered on rehab work — that is offering to leave the protocol");
+});

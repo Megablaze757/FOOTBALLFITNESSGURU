@@ -303,3 +303,227 @@ test("the advice says what the number means, not what the literature calls it", 
   const said = new Set([0, 3, 14, 30].map(volumeAdvice));
   assert.equal(said.size, 4);
 });
+
+// =============================================================================
+// THE PLAN AND THE AUDIT HAVE TO AGREE.
+//
+// The app used to contain a straight contradiction. One half built a week; the
+// other half measured it and reported that it neglected muscles it was
+// training. Both halves shipped, both were shown to the athlete, and nothing
+// reconciled them — the athlete's own words were "it says it itself the engine
+// isn't doing its job."
+//
+// Measured before the fix, across every sport x goal x focus x day count the
+// product can produce: 887 of 1044 generated weeks flagged. The two causes were
+// separate and both real — the counting was wrong (assisting movers scored
+// zero for the bodybuilding catalogue, so a push day scored no triceps at all)
+// AND the dose was wrong (a muscle given one exercise at three sets a week).
+//
+// These sweep the whole surface rather than sampling it, because sampling is
+// how it stayed broken: the cases anybody thought to write down were the ones
+// that already worked.
+// =============================================================================
+
+import { goalsForSport } from "./coach";
+import { SPORTS } from "./exercises";
+import { balanceWeeklyVolume, volumeBreakdown } from "./muscle-volume";
+import { musclesForName } from "./hypertrophy";
+
+const FOCI = ["performance", "aesthetics", "injury_recovery"] as const;
+
+/** Every block the product can build, one entry per week. */
+function everyGeneratedWeek(): { label: string; week: ReturnType<typeof wk> }[] {
+  const out: { label: string; week: ReturnType<typeof wk> }[] = [];
+  for (const { id: sport } of SPORTS) {
+    for (const focus of FOCI) {
+      for (const g of goalsForSport(sport)) {
+        for (const daysPerWeek of [3, 4, 5]) {
+          const plan = buildProgram({ painMap: {}, goal: g.id, sport, focus, daysPerWeek } as never);
+          for (const week of plan.weeks) {
+            out.push({ label: `${sport}/${g.id}/${focus}/${daysPerWeek}d wk${week.week}`, week });
+          }
+        }
+      }
+    }
+  }
+  return out;
+}
+
+test("no generated week trains a muscle at a dose too small to do anything", () => {
+  const failures: string[] = [];
+  for (const { label, week } of everyGeneratedWeek()) {
+    const audit = auditWeek(week);
+    if (audit.neglected.length) {
+      failures.push(`${label}: ${audit.neglected.map((g) => `${g} ${audit.volume[g]}`).join(", ")}`);
+    }
+  }
+  assert.deepEqual(
+    failures.slice(0, 10), [],
+    `${failures.length} generated weeks train a muscle below maintenance — the plan contradicting the audit`,
+  );
+});
+
+test("and none goes past what the evidence says can be recovered from", () => {
+  // The opposite fault, and the one that correcting the floor introduced:
+  // once assisting movers were counted properly, an aesthetics peak week put
+  // shoulders and triceps at 28 weekly sets. A muscle can be over-trained by
+  // accident by exactly the mechanism that under-trained it — nobody counting.
+  const failures: string[] = [];
+  for (const { label, week } of everyGeneratedWeek()) {
+    const audit = auditWeek(week);
+    if (audit.excessive.length) {
+      failures.push(`${label}: ${audit.excessive.map((g) => `${g} ${audit.volume[g]}`).join(", ")}`);
+    }
+  }
+  assert.deepEqual(failures.slice(0, 10), [], `${failures.length} weeks exceed the excessive landmark`);
+});
+
+test("the sweep is real, not an empty loop", () => {
+  // Two assertions above pass trivially if everyGeneratedWeek() returns nothing,
+  // which is precisely how a green suite ends up meaning nothing.
+  const weeks = everyGeneratedWeek();
+  assert.ok(weeks.length > 500, `only ${weeks.length} weeks swept`);
+  assert.ok(
+    weeks.some(({ week }) => (Object.keys(volumeBreakdown(week).direct) as MuscleGroup[])
+      .some((g) => volumeBreakdown(week).direct[g] > 0)),
+    "no week trains anything at all — the counting has broken, not the plans",
+  );
+});
+
+test("a muscle that only ever assists is not called neglected", () => {
+  /**
+   * A footballer's speed block prescribes rows and chin-ups and no curls. The
+   * biceps pick up four sets of assistance a week: that is neither a plan to
+   * build them nor an oversight, it is what happens to your arms when you pull
+   * heavy things. Calling it neglect flagged 192 of 216 weeks — a warning
+   * nobody can act on, which is a warning everybody learns to ignore.
+   */
+  const week = wk({ goal: "speed", daysPerWeek: 4, sport: "football", focus: "performance" });
+  const { total, direct } = volumeBreakdown(week);
+  const audit = auditWeek(week);
+  for (const g of Object.keys(total) as MuscleGroup[]) {
+    if (direct[g] === 0 && total[g] > 0) {
+      assert.ok(!audit.neglected.includes(g), `${g} assists only (${total[g]} sets) and was called neglected`);
+    }
+  }
+});
+
+test("balancing only ever changes set counts, never the exercises", () => {
+  // The line this correction must not cross. Choosing movements is the engine's
+  // job: a pass that started adding or dropping exercises to hit a number would
+  // be a second, invisible engine disagreeing with the first.
+  const before = wk({ goal: "strength", daysPerWeek: 4, sport: "football", focus: "performance" }, 0);
+  const after = balanceWeeklyVolume(before);
+  assert.deepEqual(
+    after.sessions.map((s) => s.drills.map((d) => d.name)),
+    before.sessions.map((s) => s.drills.map((d) => d.name)),
+  );
+  assert.deepEqual(after.sessions.map((s) => s.title), before.sessions.map((s) => s.title));
+});
+
+test("balancing does not mutate the week it was given", () => {
+  // A built plan is handed to React and to the database. Mutating in place would
+  // change a program object somebody else is already holding.
+  const week = wk({ goal: "strength", daysPerWeek: 4, sport: "gym", focus: "aesthetics" }, 0);
+  const setsBefore = week.sessions.map((s) => s.drills.map((d) => d.sets));
+  balanceWeeklyVolume(week);
+  assert.deepEqual(week.sessions.map((s) => s.drills.map((d) => d.sets)), setsBefore);
+});
+
+test("a bodybuilding push day counts its triceps and front delts", () => {
+  /**
+   * THE COUNTING BUG UNDERNEATH HALF OF THIS.
+   *
+   * Every exercise in the imported gym catalogue carries exactly one muscle
+   * label — "Bench Press" is Chest, full stop. So a push day of bench, incline
+   * press and dips scored twelve chest sets and ZERO for triceps or shoulders,
+   * and the audit then reported "triceps: 3" (the pushdowns alone) to somebody
+   * who had just done three heavy pressing movements.
+   */
+  const week = {
+    week: 1, theme: "Base", intensity: "Moderate", focusNote: "",
+    sessions: [{
+      day: 1, title: "Push", focus: "strength" as const,
+      drills: [
+        { name: "Bench Press", sets: 4, reps: 8, cue: "", reason: "" },
+        { name: "Incline Bench Press", sets: 4, reps: 8, cue: "", reason: "" },
+      ],
+    }],
+  };
+  const v = weeklyMuscleVolume(week);
+  assert.equal(v.chest, 8, "the primary mover is counted in full");
+  assert.equal(v.triceps, 4, "eight pressing sets is four triceps sets at half credit");
+  assert.equal(v.shoulders, 4, "and four for the front delts");
+});
+
+test("where the catalogue and the pattern disagree, the catalogue wins", () => {
+  /**
+   * "Dips" is filed under Triceps in the curated catalogue, and the pressing
+   * pattern would call it a chest movement. The catalogue is data somebody
+   * chose; the pattern is a regex over a name. It still picks up chest and
+   * shoulders as assistance, so nothing is lost — only the lead changes.
+   */
+  assert.deepEqual(musclesForName("Dips"), ["triceps", "shoulders", "chest"]);
+  assert.deepEqual(musclesForName("Bench Press"), ["chest", "triceps", "shoulders"]);
+  // An exercise no rule matches keeps the catalogue's single group, so adding
+  // this table cannot have changed what was already counted.
+  assert.deepEqual(musclesForName("Cable Fly"), ["chest"]);
+});
+
+test("a loaded calf raise is not discounted like a banded walk", () => {
+  // `rehab` is a slot, not a description of the load. Three sets of twelve
+  // standing calf raises is exactly what a bodybuilder does for calves;
+  // halving it because of where it sits in the session was the accounting
+  // rather than the programme.
+  const drill = (name: string) => ({
+    week: 1, theme: "Base", intensity: "Moderate", focusNote: "",
+    sessions: [{ day: 1, title: "x", focus: "strength" as const,
+      drills: [{ name, sets: 4, reps: 12, cue: "", reason: "" }] }],
+  });
+  assert.equal(weeklyMuscleVolume(drill(MOVEMENT_BY_ID.calf_raise.name)).calves, 4);
+  // …and the genuinely low-load work keeps the discount it was given for.
+  assert.equal(weeklyMuscleVolume(drill(MOVEMENT_BY_ID.band_lateral_walk.name)).glutes, 2);
+});
+
+test("a block says up front what it cannot deliver", () => {
+  /**
+   * The floor is guaranteed now, but maintenance is not what somebody asking to
+   * build muscle wants — and on three days across ten muscle groups the
+   * arithmetic does not reach the productive band for all of them: three
+   * sessions is about 84 working sets where the band would want 110.
+   *
+   * That is a fact about the week, not a fault in the engine. What was
+   * unacceptable was WHERE the athlete found out: the progress page measured the
+   * same block and reported the shortfall days later, which reads as the app
+   * contradicting itself.
+   */
+  const three = buildProgram({ painMap: {}, goal: "strength", sport: "gym", focus: "aesthetics", daysPerWeek: 3 } as never);
+  const note = three.constraints.find((c) => /sets a week that builds fastest/.test(c));
+  assert.ok(note, `a 3-day block promises the productive band silently: ${three.constraints.join(" | ")}`);
+  assert.match(note!, /3 days a week/);
+  assert.match(note!, /Adding a training day/, "the one change that actually moves it is not offered");
+
+  // And the muscles it names are the ones actually short, not a guess from the
+  // day count — a sentence naming the wrong muscles is worse than no sentence.
+  const audit = auditWeek(three.weeks[1]);
+  const short = (Object.keys(audit.volume) as MuscleGroup[])
+    .filter((g) => volumeBreakdown(three.weeks[1]).direct[g] > 0 && audit.volume[g] < LANDMARKS.productiveLow);
+  for (const g of short) assert.match(note!, new RegExp(g, "i"), `${g} is short and unnamed`);
+});
+
+test("it does not tell a six-day athlete to add a seventh day", () => {
+  // Advice has to fit the week it is given about. At six days there is no day
+  // to add, and the shortfall is a deliberate trade rather than a gap.
+  const six = buildProgram({ painMap: {}, goal: "strength", sport: "gym", focus: "aesthetics", daysPerWeek: 6 } as never);
+  const note = six.constraints.find((c) => /sets a week that builds fastest/.test(c));
+  if (note) assert.ok(!/Adding a training day/.test(note), `told a 6-day athlete to add a day: ${note}`);
+});
+
+test("a block that reaches the band everywhere says nothing", () => {
+  // Advice that appears on every plan is advice people stop reading.
+  const perf = buildProgram({ painMap: {}, goal: "speed", sport: "football", focus: "performance", daysPerWeek: 4 } as never);
+  assert.ok(
+    !perf.constraints.some((c) => /sets a week that builds fastest/.test(c)),
+    "a performance block is being lectured about hypertrophy volume it never promised",
+  );
+});

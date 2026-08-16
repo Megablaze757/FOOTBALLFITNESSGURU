@@ -16,6 +16,7 @@ import { positionProfile } from "./position-profile";
 import { sportTerms } from "./sport-terms";
 import { MOVEMENTS, regionOfMovement, type Movement, type GoalType, type BodyArea } from "./movements";
 import { buildBlock, painByArea, type ProgramPlan, type TrainingFocus } from "./engine";
+import { balancePlanVolume, spacePlanSessions, volumeShortfall } from "./muscle-volume";
 import { buildRunProgram, type RunnerLevel } from "./running";
 
 // The catalogue lives in ./movements and the block builder in ./engine. This
@@ -119,6 +120,34 @@ export function goalsForSport(sport: string | null | undefined): { id: GoalType;
  * lib/exercises.ts, and this list could not see them. See lib/movements.ts.
  */
 const LIBRARY: Movement[] = MOVEMENTS;
+
+/**
+ * THE LAST TWO THINGS THAT HAPPEN TO EVERY BLOCK, whichever engine built it.
+ *
+ * Both engines had the same two faults, so both corrections belong here rather
+ * than duplicated inside each:
+ *
+ *   BALANCE — a muscle the plan trains gets a dose that does something, and not
+ *   more than can be recovered from. The app used to build a week and then
+ *   measure it as neglecting muscles it was training, in most weeks it
+ *   generated, and shipped both halves of that contradiction.
+ *
+ *   SPACE — consecutive exercises train different muscles, so the second one
+ *   for a group is not done on the fatigue of the first.
+ *
+ * Order matters: balancing changes set counts, spacing changes order, and doing
+ * them the other way round would leave the spacing correct and the sets wrong
+ * on a session the balance pass then re-read.
+ */
+function finish(plan: ProgramPlan): ProgramPlan {
+  const done = spacePlanSessions(balancePlanVolume(plan));
+  // And then say what it delivers. A week that cannot reach the productive band
+  // for every muscle is a fact about the day count, not a fault — but the
+  // athlete should hear it from the plan rather than from the progress page
+  // three days later, which is what read as the app contradicting itself.
+  const note = volumeShortfall(done);
+  return note ? { ...done, constraints: [...done.constraints, note] } : done;
+}
 
 /** The training region a drill belongs to, if we've classified it. */
 export function regionOfDrill(id: string): Region | undefined {
@@ -375,14 +404,14 @@ export function buildProgram(input: BuildProgramInput): ProgramPlan {
   }
 
   if (wantsHypertrophy(input)) {
-    return buildHypertrophyProgram({
+    return finish(buildHypertrophyProgram({
       painMap: input.painMap,
       daysPerWeek: input.daysPerWeek,
       block,
       constraints,
       isInSeason: input.isInSeason,
       style: input.style,
-    });
+    }));
   }
 
   const plan = buildBlock({
@@ -398,8 +427,17 @@ export function buildProgram(input: BuildProgramInput): ProgramPlan {
     mustInclude: input.mustInclude,
   });
 
+  /**
+   * The last thing that happens to a block: make it agree with the audit.
+   *
+   * Both engines pass through here, because both had the same fault — a muscle
+   * given a movement and then three sets, which is below the dose that holds
+   * what you already have. See balanceWeeklyVolume: it only ever adds sets to
+   * exercises the engine already chose, so selection stays the engine's job and
+   * this stays a correction to the dose.
+   */
   return {
-    ...plan,
+    ...finish(plan),
     summary: programSummary(input.goal, sore, input.isInSeason ?? false, block, input.sport, input.position, input.focus, input.daysPerWeek),
     constraints: [
       ...(sore.length ? [`Protecting your ${sore.map(prettyArea).join(", ")} — high-impact loading on these is dialled back.`] : []),

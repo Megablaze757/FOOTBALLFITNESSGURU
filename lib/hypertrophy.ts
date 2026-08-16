@@ -156,6 +156,72 @@ export function isCompoundName(name: string): boolean {
   return hit ? hit.compound : false;
 }
 
+/**
+ * WHAT ELSE A COMPOUND TRAINS — the half of the volume that was going missing.
+ *
+ * Every exercise in the imported catalogue carries exactly one muscle label:
+ * "Bench Press" is Chest, full stop. So a push day of bench, incline press,
+ * dips and a fly counted as sixteen chest sets and ZERO for triceps or front
+ * delts — and then the volume audit told an athlete doing four heavy pressing
+ * movements a week that they were neglecting their triceps.
+ *
+ * The general S&C engine has never had this problem: lib/muscle-volume.ts maps
+ * each movement PATTERN to its movers and credits the assisting ones at half.
+ * The bodybuilding catalogue had no pattern field, so it got a single group and
+ * the assistance simply vanished. Two engines, two answers, same athlete —
+ * except here it was the engine the question mattered most to.
+ *
+ * Derived from the name, because that is all a saved plan carries. Isolation is
+ * deliberately absent: a cable fly assists nothing, and a leg extension that
+ * quietly credited glutes would be the same lie in the other direction.
+ */
+const ASSIST: { re: RegExp; primary: MuscleGroup; assists: MuscleGroup[] }[] = [
+  // --- pressing ---
+  // Overhead first: "Incline Bench Press" must not be read as a shoulder press,
+  // and "Seated Dumbbell Press" must not be read as a bench press.
+  { re: /overhead press|shoulder press|military press|\bpush press\b|arnold press|\bz press\b/i, primary: "shoulders", assists: ["triceps"] },
+  { re: /incline (bench )?press|incline (dumbbell|barbell|smith)/i, primary: "chest", assists: ["shoulders", "triceps"] },
+  { re: /bench press|chest press|\bdips?\b|push ?ups?|floor press|decline press/i, primary: "chest", assists: ["triceps", "shoulders"] },
+  { re: /close grip bench/i, primary: "triceps", assists: ["chest", "shoulders"] },
+  // --- pulling ---
+  { re: /pull ?ups?|chin ?ups?|pulldown|pull down/i, primary: "back", assists: ["biceps"] },
+  { re: /\brows?\b|rowing|\bt.?bar\b|pendlay|seal row/i, primary: "back", assists: ["biceps"] },
+  // --- hinging ---
+  // Deadlift variants that are hamstring-led, and the back that holds the bar.
+  { re: /romanian deadlift|\brdl\b|stiff leg|good morning/i, primary: "hamstrings", assists: ["glutes", "back"] },
+  { re: /deadlift|rack pull/i, primary: "hamstrings", assists: ["glutes", "back", "quads"] },
+  { re: /hip thrust|glute bridge|pull through/i, primary: "glutes", assists: ["hamstrings"] },
+  // --- squatting ---
+  { re: /leg press|hack squat/i, primary: "quads", assists: ["glutes"] },
+  { re: /lunge|split squat|step ?ups?|bulgarian/i, primary: "quads", assists: ["glutes", "hamstrings"] },
+  { re: /squat/i, primary: "quads", assists: ["glutes"] },
+  // --- loaded carries and full-body pulls ---
+  { re: /farmer|suitcase carry|\bshrugs?\b/i, primary: "back", assists: ["core"] },
+];
+
+/**
+ * The muscles an exercise NAME trains, primary mover first.
+ *
+ * Returns the catalogue's own single group when nothing above matches, so an
+ * exercise this table has never heard of is counted exactly as it was before
+ * rather than dropped. The primary is taken from the catalogue rather than from
+ * the regex where the two are both available — the catalogue is curated data
+ * and the regex is a heuristic, and where a heuristic disagrees with data the
+ * data wins.
+ */
+export function musclesForName(name: string): MuscleGroup[] {
+  const primary = muscleGroupForName(name);
+  const hit = ASSIST.find((a) => a.re.test(name));
+  if (!hit) return primary ? [primary] : [];
+  // "Legs" is one bucket in the catalogue and legGroup() splits it by name, so
+  // for lower-body work the catalogue's answer and the table's can disagree
+  // legitimately (a Romanian deadlift is filed under Whole Body). Trust the
+  // catalogue when it has an opinion, and drop the primary out of the assists
+  // so nothing is credited twice.
+  const lead = primary ?? hit.primary;
+  return [lead, ...hit.assists.filter((a) => a !== lead), ...(hit.primary === lead ? [] : [hit.primary])];
+}
+
 // --- splits ------------------------------------------------------------------
 
 interface SplitDay {
@@ -215,7 +281,13 @@ export function splitFor(daysPerWeek: number, style: SplitStyle = "auto"): Split
   // drops entirely by accident rather than by choice.
   const LEGS: MuscleGroup[] = ["quads", "hamstrings", "glutes", "calves", "core"];
   const UPPER: MuscleGroup[] = ["chest", "back", "shoulders", "biceps", "triceps"];
-  const LOWER: MuscleGroup[] = ["quads", "hamstrings", "glutes", "core"];
+  // Calves belong on a lower day. Leaving them off meant the only place they
+  // were ever trained was the Legs day of a push/pull/legs week, so on
+  // upper/lower — the split the engine picks by default at four days — they
+  // were never trained at all, and the volume audit could not even report it
+  // because a muscle at zero reads as "not part of this block" rather than as
+  // an omission.
+  const LOWER: MuscleGroup[] = ["quads", "hamstrings", "glutes", "calves", "core"];
 
   // A chosen style wins over the day count, then repeats or truncates to fit
   // the week — someone who picked push/pull/legs and trains 5 days wants PPL
@@ -250,6 +322,21 @@ export function splitFor(daysPerWeek: number, style: SplitStyle = "auto"): Split
     });
   }
 
+  /**
+   * The three full-body days.
+   *
+   * FREQUENCY IS DELIBERATE, and so is its limit. A group appearing on one day
+   * of three has to take its whole week in that session, which the session
+   * budget will not carry — but widening every day to fix that makes it worse,
+   * not better: the same budget divided more ways gives everything less. Seven
+   * groups on a full-body day measured six weekly sets for calves where six
+   * groups measured nine.
+   *
+   * So each day stays at five or six groups, the ones that recover fastest and
+   * cost least per set (calves, core) double up, and the honest statement about
+   * what three days can deliver is made in the plan summary rather than papered
+   * over here. See `reachableTarget`.
+   */
   const FULL_A: MuscleGroup[] = ["quads", "chest", "back", "shoulders", "core"];
   const FULL_B: MuscleGroup[] = ["hamstrings", "glutes", "back", "chest", "biceps", "triceps"];
   const FULL_C: MuscleGroup[] = ["quads", "glutes", "chest", "back", "shoulders", "calves"];
@@ -343,31 +430,153 @@ export interface HypertrophyInput {
 }
 
 /**
- * How many exercises a session should contain.
+ * VOLUME IS THE TARGET, NOT AN ACCIDENT OF SESSION LENGTH.
  *
- * Was a flat 5 or 6, which is where the rest of the missing volume went: five
- * exercises across three muscle groups is 1.7 exercises each, and at three or
- * four sets apiece that is 6-7 weekly sets for a muscle trained once a week.
+ * The session used to be sized first — five to eight exercises, spread evenly
+ * over whichever groups the day trained — and the weekly set count per muscle
+ * was whatever fell out of that. What fell out was too little: a group trained
+ * once a week got one or two movements, which is six or seven sets against a
+ * productive band that starts at ten. The app then measured that itself and
+ * told the athlete their programme neglected the muscle it had just written a
+ * plan for. Somebody who asked to build muscle was handed maintenance.
  *
- * Roughly two exercises per group, floored at 5 so a narrow day is still a
- * session and capped at 8 so a full-body day is still finishable — past about
- * eight movements the last ones are done tired and badly, and the volume stops
- * being worth what it costs.
+ * So the arithmetic now runs the other way round. A muscle needs a weekly set
+ * total; the split says how many times a week it is trained; those two give the
+ * sets it needs TODAY, and the exercise count follows from that. Session length
+ * is the output.
  */
-function sessionSize(groupCount: number): number {
-  return Math.max(5, Math.min(8, groupCount * 2));
+
+/**
+ * Weekly sets per muscle a hypertrophy block aims at.
+ *
+ * Twelve, which is inside LANDMARKS.productiveLow..productiveHigh (10-20) and
+ * near the bottom of it deliberately: this is a target for every group the
+ * split trains, including the ones an athlete has never trained before, and
+ * aiming at the middle of the band would write a week most people cannot
+ * recover from. The block adds volume from there — see WEEK_SETS_DELTA and the
+ * per-block scale.
+ */
+const WEEKLY_SET_TARGET = 12;
+
+/** Average working sets one exercise contributes — compound 4, isolation 3. */
+const SETS_PER_EXERCISE = 3.5;
+
+/**
+ * The most working sets one session should carry.
+ *
+ * Twenty-eight, which is around an hour and a quarter of lifting. This is the
+ * constraint that makes the arithmetic honest: a full-body day covering six
+ * muscle groups cannot give all six their weekly dose in one go, and pretending
+ * otherwise would write a three-hour session nobody finishes. Where the budget
+ * binds, `allocate` decides who goes short — evenly, rather than always the
+ * same two groups at the end of the list.
+ */
+const MAX_SETS_PER_SESSION = 28;
+
+/** And the most exercises for any ONE muscle in a session. */
+const MAX_EXERCISES_PER_GROUP = 4;
+
+/**
+ * The weekly set target this athlete's week can actually deliver.
+ *
+ * THE CEILING IS ARITHMETIC, NOT PROGRAMMING. Days times the session budget is
+ * all the sets there are; divided by the number of muscle groups in the split
+ * it gives the most any one of them can average. Three days is 84 sets over ten
+ * groups — about eight each, against a productive band that starts at ten. No
+ * amount of cleverness in the picker changes that, and every previous attempt
+ * to hide it just moved the shortfall onto whichever groups sat last in the
+ * list, which is why calves and core were short in every single block.
+ *
+ * Aiming at a target the week can reach shares what is missing evenly instead,
+ * and lets the plan say the true thing out loud — see `volumeShortfall` in
+ * lib/muscle-volume.ts, which reports it from the finished block rather than
+ * from this formula.
+ */
+function reachableTarget(days: number, groups: MuscleGroup[]): (g: MuscleGroup) => number {
+  const weekly = Math.max(1, days) * MAX_SETS_PER_SESSION;
+  const totalWeight = groups.reduce((n, g) => n + PRIORITY[g], 0) || 1;
+  return (g) => Math.min(WEEKLY_SET_TARGET, (weekly * PRIORITY[g]) / totalWeight);
+}
+
+/**
+ * WHO GOES SHORT WHEN THE WEEK CANNOT PAY FOR EVERYTHING.
+ *
+ * Dividing the budget equally is the fair answer and the wrong one. Three days
+ * over ten muscle groups is eight sets each — which drags the movements the
+ * block is actually built on, the squat and the row and the press, down below
+ * the productive band so that the calf raises can sit at eight too. A coach with
+ * three sessions to spend does the opposite: the big compound groups get a real
+ * dose and the small ones get what is left, because that is where the growth
+ * and the strength come from and because calves and arms recover on a fraction
+ * of the work.
+ *
+ * The small groups do not fall through the floor — lib/muscle-volume.ts holds
+ * every trained muscle at maintenance regardless. These weights decide who gets
+ * the PRODUCTIVE dose when there is not enough to go round, not who gets
+ * trained.
+ */
+const PRIORITY: Record<MuscleGroup, number> = {
+  quads: 1.5, hamstrings: 1.5, glutes: 1.5, chest: 1.5, back: 1.5, shoulders: 1.2,
+  calves: 0.6, biceps: 0.7, triceps: 0.7, core: 0.6, adductors: 0.6,
+};
+
+/**
+ * How many exercises each group gets this session.
+ *
+ * `frequency` is how many days in the week train that group — the other half of
+ * weekly volume, and the half that decides whether a group needs four movements
+ * today or two. Everything gets at least one: a group named in the split and
+ * then given nothing is worse than a short dose, because the athlete has no way
+ * to tell it was meant to be there.
+ *
+ * When the session budget binds, the exercise removed comes from whichever
+ * group is currently BEST supplied relative to its target. That is what stops
+ * the shortfall always landing on calves and core, which is exactly where it
+ * used to land: they sat last in every list, so they were what the loop ran out
+ * of room for, every session, every week.
+ */
+function allocate(
+  active: MuscleGroup[],
+  frequency: (g: MuscleGroup) => number,
+  weeklyTarget: (g: MuscleGroup) => number,
+): Map<MuscleGroup, number> {
+  const out = new Map<MuscleGroup, number>();
+  for (const g of active) {
+    const perSession = weeklyTarget(g) / Math.max(1, frequency(g));
+    const want = Math.ceil(perSession / SETS_PER_EXERCISE);
+    out.set(g, Math.max(1, Math.min(MAX_EXERCISES_PER_GROUP, want)));
+  }
+
+  const totalSets = () => [...out.values()].reduce((n, x) => n + x, 0) * SETS_PER_EXERCISE;
+  let guard = 0;
+  while (totalSets() > MAX_SETS_PER_SESSION && guard++ < 50) {
+    // Best supplied = highest projected weekly sets as a share of target.
+    let worst: MuscleGroup | null = null;
+    let best = -Infinity;
+    for (const g of active) {
+      const n = out.get(g) ?? 0;
+      if (n <= 1) continue;
+      const share = (n * SETS_PER_EXERCISE * Math.max(1, frequency(g))) / weeklyTarget(g);
+      if (share > best) { best = share; worst = g; }
+    }
+    if (!worst) break; // everything is down to one; the budget cannot go lower
+    out.set(worst, (out.get(worst) ?? 1) - 1);
+  }
+  return out;
 }
 
 /**
  * Picks movements for one session: a compound to open each primary group, then
- * isolation to fill the volume. `offset` rotates the pool so the second Push
- * day of a week isn't a carbon copy of the first.
+ * isolation to fill each group's allocation. `offset` rotates the pool so the
+ * second Push day of a week isn't a carbon copy of the first.
  */
 function pickForSession(
   groups: MuscleGroup[],
   offset: number,
   sorePain: Partial<Record<BodyArea, number>>,
-  constraints: Constraints
+  constraints: Constraints,
+  frequency: (g: MuscleGroup) => number,
+  weeklyTarget: (g: MuscleGroup) => number,
 ): Movement[] {
   const usable = (g: MuscleGroup) => {
     const joint = GROUP_JOINT[g];
@@ -380,9 +589,10 @@ function pickForSession(
   const active = groups.filter(usable);
   if (active.length === 0) return [];
 
-  const target = sessionSize(active.length);
+  const quota = allocate(active, frequency, weeklyTarget);
   const chosen: Movement[] = [];
   const taken = new Set<string>();
+  const count = new Map<MuscleGroup, number>();
 
   const take = (g: MuscleGroup, wantCompound: boolean): boolean => {
     const candidates = POOL.filter(
@@ -390,25 +600,30 @@ function pickForSession(
         !taken.has(m.ex.id) && !isExcluded(constraints, GROUP_REGION[g], m.ex.name)
     );
     if (candidates.length === 0) return false;
-    const pick = candidates[offset % candidates.length];
+    // Stride through the pool rather than taking neighbours, so a group with
+    // four slots gets four different movements instead of four rows.
+    const pick = candidates[(offset + (count.get(g) ?? 0) * 3) % candidates.length];
     taken.add(pick.ex.id);
     chosen.push(pick);
+    count.set(g, (count.get(g) ?? 0) + 1);
     return true;
   };
 
   // One compound per group first — that's the session's backbone.
   for (const g of active) {
-    if (chosen.length >= target) break;
     if (!take(g, true)) take(g, false);
   }
-  // Then isolation, cycling the groups until the session is full.
+  // Then isolation, cycling the groups until every quota is filled. Cycling
+  // rather than finishing one group at a time so that a pool which runs dry
+  // late doesn't strand the groups after it.
   let guard = 0;
-  while (chosen.length < target && guard < 40) {
+  while (guard++ < 40) {
+    let added = false;
     for (const g of active) {
-      if (chosen.length >= target) break;
-      if (!take(g, false)) take(g, true);
+      if ((count.get(g) ?? 0) >= (quota.get(g) ?? 1)) continue;
+      if (take(g, false) || take(g, true)) added = true;
     }
-    guard++;
+    if (!added) break;
   }
   return chosen;
 }
@@ -446,6 +661,19 @@ export function buildHypertrophyProgram(input: HypertrophyInput): ProgramPlan {
   const split = splitFor(input.daysPerWeek ?? 3, input.style ?? "auto");
   const pain = painAreas(input.painMap);
 
+  /**
+   * How many days a week each muscle is trained — the other half of volume.
+   *
+   * Computed once from the split and handed to every session, because a group's
+   * dose today depends on whether it comes round again on Thursday. Without it
+   * the engine cannot tell a once-a-week chest day from one of three, and gave
+   * both the same two exercises.
+   */
+  const freq = new Map<MuscleGroup, number>();
+  for (const day of split) for (const g of day.groups) freq.set(g, (freq.get(g) ?? 0) + 1);
+  const frequency = (g: MuscleGroup) => freq.get(g) ?? 1;
+  const weeklyTarget = reachableTarget(split.length, [...freq.keys()]);
+
   const weeks: ProgramWeek[] = WEEK_THEMES.map((theme, wi) => {
     // Annotated on the callback, not just the variable: without it the returned
     // object literal widens `focus: "strength"` to `string`, which no longer
@@ -453,7 +681,7 @@ export function buildHypertrophyProgram(input: HypertrophyInput): ProgramPlan {
     const sessions: ProgramSession[] = split.map((day, di): ProgramSession => {
       // Offset shifts per day AND per week, so week 2's Push day varies the
       // accessories rather than repeating week 1 exactly.
-      const movements = pickForSession(day.groups, di + wi, pain, input.constraints);
+      const movements = pickForSession(day.groups, di + wi, pain, input.constraints, frequency, weeklyTarget);
       const drills = movements.map((m) => drillFrom(m, wi, blockScale * seasonScale));
       const covered = [...new Set(movements.map((m) => GROUP_LABEL[m.group]))];
       // A finisher, and the only aerobic work a bodybuilding split had. Without

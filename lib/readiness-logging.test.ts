@@ -62,10 +62,29 @@ test("the page logs the session it showed you, not the one written weeks ago", (
 
   assert.ok(!/const newDrills = sess\.s\.drills\.map/.test(noComments),
     "the original session's drills are being logged again, so easing is cosmetic");
-  assert.match(noComments, /const logged = isToday && todaySession \? todaySession : sess\.s;/,
+  assert.match(noComments, /const logged = isToday && todaySession \? \{ \.\.\.todaySession, drills: sessionDrills \} : sess\.s;/,
     "the adjusted session is no longer preferred when logging today");
   assert.match(noComments, /const newDrills = logged\.drills\.map/,
     "the drills written to the log do not come from the adjusted session");
+
+  /**
+   * ONE LIST, THREE USES — the seam this test exists to hold shut.
+   *
+   * Readiness was only the first of three things that rewrite today's session.
+   * A swap changes WHICH movement is done, and an active rehab plan adds the
+   * stage's work and removes what it forbids. `sessionDrills` is the result of
+   * all three, and it must be the single thing that is displayed, played and
+   * logged: anything else and the app walks you through one session and writes
+   * down another. The rehab work was the clearest casualty — walked through in
+   * the player, then absent from the log, so it counted toward nothing.
+   */
+  for (const use of [
+    /<SessionDrills\s+drills=\{sessionDrills\}/,   // what you read
+    /<WorkoutPlayer[\s\S]{0,200}drills=\{sessionDrills\}/, // what you are walked through
+    /drills: sessionDrills \}/,                    // what gets written down
+  ]) {
+    assert.match(noComments, use, `the displayed, played and logged sessions have come apart: ${use}`);
+  }
   // The intensity written must come from the same object, or the effort check
   // compares a reported effort against a prescription nobody was given.
   assert.match(noComments, /sessions: \[logged\]/,
