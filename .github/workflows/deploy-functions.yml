@@ -73,6 +73,22 @@ jobs:
       # blanket deploy would also ship the scheduled jobs and the Stripe
       # webhook, which are currently served by the Worker — two live handlers
       # for the same webhook is not a thing to switch on by accident.
+      # SOME FUNCTIONS MUST BE DEPLOYED WITH JWT VERIFICATION OFF, and getting
+      # that wrong is invisible until somebody's data silently stops arriving.
+      #
+      # wearable-ingest is called by an Apple Shortcut, sync-oura by a cron job
+      # and stripe-webhook by Stripe — none of which has a Supabase session or
+      # any way to get one. With verification left on, Supabase rejects the
+      # request BEFORE the function runs, so every morning sync 401s and the
+      # function's own logs show nothing at all.
+      #
+      # It is not a hole: each of these authenticates itself. wearable-ingest
+      # checks the athlete's ingest token, sync-oura a CRON_SECRET, and
+      # stripe-webhook the Stripe signature. Their headers say so.
+      #
+      # Read from the source rather than kept as a list here, so a new function
+      # that documents the requirement gets it automatically instead of waiting
+      # for somebody to remember this file exists.
       - name: Deploy
         run: |
           set -euo pipefail
@@ -81,8 +97,13 @@ jobs:
               echo "::error::supabase/functions/$fn does not exist"
               exit 1
             fi
-            echo "::group::deploying $fn"
-            supabase functions deploy "$fn" --project-ref "$PROJECT_REF"
+            flags=""
+            if grep -q -- "--no-verify-jwt" "supabase/functions/$fn/index.ts"; then
+              flags="--no-verify-jwt"
+              echo "$fn documents --no-verify-jwt, deploying with it"
+            fi
+            echo "::group::deploying $fn $flags"
+            supabase functions deploy "$fn" --project-ref "$PROJECT_REF" $flags
             echo "::endgroup::"
           done
 
