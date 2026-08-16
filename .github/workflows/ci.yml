@@ -13,11 +13,29 @@ on:
   # rather than a copy of them that can drift.
   workflow_call:
   push:
-    # Every branch, not just main — the point of the tests is to catch a broken
-    # engine before it reaches main, which means running them where the work is.
-    branches: ["**"]
+    # NOT main, and not the agent mirror branches.
+    #
+    # THIS WORKFLOW WAS RUNNING THREE TIMES PER COMMIT. deploy.yml calls it as
+    # its gate on every push to main (`uses: ./.github/workflows/ci.yml`), and
+    # `branches: ["**"]` then ran the identical checks again off the same push
+    # — two full runs, unit suite and Playwright, for one commit. Pushing the
+    # same commit to a mirror branch made it three.
+    #
+    # Excluding main loses nothing: the deploy gate runs exactly these checks
+    # and blocks the deploy if they fail, which is the stronger guarantee. The
+    # point of running on other branches — catching a broken engine before it
+    # reaches main — is untouched.
+    branches-ignore:
+      - main
+      - "claude/**"
   pull_request:
   workflow_dispatch:
+
+# Rapid pushes supersede each other. Without this, three commits in a minute
+# means three full runs and only the last one's result is ever looked at.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
@@ -78,6 +96,15 @@ jobs:
   # hide bugs.
   e2e:
     runs-on: ubuntu-latest
+    # THE EXPENSIVE JOB, RUN WHERE IT PAYS.
+    #
+    # It downloads Chromium with system dependencies and does a full production
+    # build — several minutes, against a unit suite that finishes in one. It
+    # gates the deploy (workflow_call) and guards pull requests, which is where
+    # a white screen would actually reach somebody. On a work-in-progress branch
+    # push it is a browser download to tell you what `npm run build` already
+    # would, and that is most of the runs.
+    if: github.event_name != 'push'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

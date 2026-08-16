@@ -269,6 +269,14 @@ export const REFUSED: { pattern: RegExp; why: string }[] = [
     pattern: /bodyweight squat|pistol squat|nordic|dead bug|bird dog|glute bridge$/i,
     why: "Bodyweight movements with no external load to rank.",
   },
+  {
+    // Deliberately last and deliberately broad: anything the library files as
+    // Rehab is graded by pain and tolerance, not by a percentage of bodyweight.
+    // A tier on a rehab exercise would invite somebody to chase it, which is
+    // the opposite of what a rehab exercise is for.
+    pattern: /^y raise$|pendulum|scapular|sleeper|quad set|straight leg raise|heel drop|soleus|wobble|ankle (circle|alphabet|dorsiflexion)|band ankle|pelvic tilt|cat cow|prone press|hip hinge pattern|side-?lying/i,
+    why: "Rehab work, graded by pain and tolerance rather than by load. Ranking it would invite chasing a number on an exercise whose whole point is staying below one.",
+  },
 ];
 
 const VARIANT_BY_ALIAS = new Map<string, LiftVariant>();

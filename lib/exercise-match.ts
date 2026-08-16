@@ -44,8 +44,24 @@ function words(name: string): string[] {
     .map(stem);
 }
 
+/**
+ * A crude singular form, so "calf raises" and "calf raise" are the same word.
+ *
+ * THE NAIVE VERSION WAS WORSE THAN NONE. Stripping `(ings|ing|es|s)$` turns
+ * "raises" into "rais" and leaves "raise" alone, so the two stopped matching —
+ * and the library's own "Eccentric calf raises" became unreachable from
+ * "eccentric calf raise", which is what a rehab plan actually writes. A stemmer
+ * that maps two spellings of one word to two different stems is doing the
+ * opposite of its job.
+ *
+ * The English plural rules, in the order they have to be applied.
+ */
 function stem(w: string): string {
-  return w.replace(/(ings|ing|es|s)$/, "");
+  if (w.endsWith("ies") && w.length > 4) return `${w.slice(0, -3)}y`;   // plies -> ply
+  if (/(ss|sh|ch|x|z)es$/.test(w)) return w.slice(0, -2);               // presses -> press
+  if (w.endsWith("s") && !w.endsWith("ss")) return w.slice(0, -1);      // raises -> raise
+  if (w.endsWith("ing") && w.length > 5) return w.slice(0, -3);         // hopping -> hopp
+  return w;
 }
 
 /**
@@ -60,6 +76,42 @@ function stem(w: string): string {
 const MIN_SCORE = 0.66;
 
 /**
+ * Different words for the same movement.
+ *
+ * Word overlap cannot connect "heel raise" to "standing calf raise" — they
+ * share nothing — and no amount of tuning the threshold would, because they
+ * genuinely have no words in common. These are the cases where two names mean
+ * one exercise, which is a fact about English rather than about scoring.
+ *
+ * Kept deliberately small and one-directional. Every entry here is a claim that
+ * two names are the SAME movement, and a wrong one sends somebody rehabbing a
+ * hamstring to the wrong exercise — so the bar is "a physio would use these
+ * interchangeably", not "these are related".
+ */
+const SYNONYMS: Record<string, string> = {
+  "heel raise": "standing calf raise",
+  "heel raises": "standing calf raise",
+  "toe raise": "standing calf raise",
+  "calf raise": "standing calf raise",
+  "ball squeeze": "adductor isometric squeeze",
+  "adductor squeeze": "adductor isometric squeeze",
+  "groin squeeze": "adductor isometric squeeze",
+  "hamstring catch": "nordic hamstring curl",
+  "nordic curl": "nordic hamstring curl",
+  "russian lean": "nordic hamstring curl",
+  "clamshell": "band lateral walks",
+  "glute med activation": "band lateral walks",
+  "sit to stand": "box step up",
+  "quad setting": "quad set",
+  "vmo activation": "terminal knee extensions",
+  "single leg stand": "single-leg balance progression",
+  "balance drill": "single-leg balance progression",
+  "trunk rotation": "thoracic spine openers",
+  "thoracic rotation": "thoracic spine openers",
+  "hip flexor stretch": "couch stretch",
+};
+
+/**
  * The library exercise a name refers to, or null.
  *
  * Null rather than a best guess is the point. A wrong how-to for a rehab
@@ -71,6 +123,13 @@ export function findExercise(name: string): Exercise | null {
 
   const exact = BY_KEY.get(key);
   if (exact) return exact;
+
+  // A different word for the same movement, before any scoring is attempted.
+  const synonym = SYNONYMS[String(name).toLowerCase().trim()];
+  if (synonym) {
+    const hit = BY_KEY.get(exerciseKey(synonym));
+    if (hit) return hit;
+  }
 
   const q = words(name);
   if (q.length === 0) return null;

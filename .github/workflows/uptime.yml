@@ -33,7 +33,21 @@ name: Site check
 
 on:
   schedule:
-    - cron: "17 * * * *" # hourly, off the hour (the top of the hour is congested)
+    # EVERY SIX HOURS, NOT HOURLY.
+    #
+    # Hourly is 720 runs a month, which on a private repo's metered minutes was
+    # the single largest consumer in this repository — spent almost entirely on
+    # confirming that a static site on GitHub Pages was still up.
+    #
+    # The valuable half of this workflow is the `workflow_run` trigger below,
+    # which checks the site straight after a deploy: that is when it breaks. The
+    # cron is there to catch a DNS or certificate expiry, and those do not need
+    # noticing within the hour.
+    #
+    # For real minute-by-minute uptime alerting, an external monitor (UptimeRobot
+    # and similar have free tiers) does it better and costs no build minutes at
+    # all. This is the backstop, not the monitor.
+    - cron: "17 */6 * * *" # off the hour — the top of the hour is congested
   workflow_dispatch:
   # Also straight after a deploy, so a bad publish is caught in minutes.
   workflow_run:

@@ -172,3 +172,80 @@ test("a swap cannot leak onto a different exercise", () => {
   assert.equal(applySwaps([{ name: "Front squat" }], swaps)[0].name, "Front squat");
   assert.equal(applySwaps([{ name: "Bulgarian split squat" }], swaps)[0].name, "Bulgarian split squat");
 });
+
+// --- rehab coverage -----------------------------------------------------------
+
+/**
+ * EVERY EXERCISE A REHAB PLAN PRESCRIBES CAN BE DEMONSTRATED.
+ *
+ * Tapping an exercise on the injury page shows you how to do it, and it could
+ * only do that for 27 of these 63 — the rest showed a name and a dose, which
+ * for somebody who has never done a Copenhagen plank is an instruction they
+ * cannot follow, on the one screen where following it correctly matters most.
+ *
+ * This is the standard clinical vocabulary for the seven areas the injury
+ * planner covers. It is a list rather than a sample on purpose: a spot check of
+ * five would have passed at 27/63.
+ */
+const REHAB_VOCABULARY: Record<string, string[]> = {
+  ankle: ["Ankle alphabet", "Ankle circles", "Single-leg balance", "Calf raise", "Heel raises",
+    "Band ankle eversion", "Band ankle inversion", "Ankle dorsiflexion stretch", "Lateral hops", "Wobble board balance"],
+  knee: ["Isometric wall sit", "Spanish squat", "Terminal knee extension", "Straight leg raise", "Step down",
+    "Split squat", "Quad set", "Leg extension", "Wall slide", "Box step up"],
+  hamstring: ["Isometric hamstring hold", "Hamstring slider", "Single leg bridge", "Romanian deadlift",
+    "Nordic hamstring curl", "Hamstring catch", "Prone hamstring curl", "Build-up runs",
+    "Supine hamstring stretch", "Glute bridge"],
+  groin: ["Adductor squeeze", "Copenhagen plank", "Side-lying adduction", "Ball squeeze",
+    "Adductor isometric", "Side lunge", "Cossack squat", "Lateral shuffle"],
+  calf: ["Isometric calf hold", "Eccentric calf raise", "Seated calf raise", "Standing calf raise",
+    "Pogo hops", "Skipping", "Soleus raise", "Heel drop"],
+  back: ["McGill curl-up", "Bird dog", "Side plank", "Cat cow", "Glute bridge", "Dead bug",
+    "Hip hinge pattern", "Pelvic tilt", "Prone press up"],
+  shoulder: ["Band external rotation", "Scapular retraction", "Wall slide", "Pendulum swing",
+    "Scapular push-up", "Face pull", "Y raise", "Sleeper stretch"],
+};
+
+test("every exercise a rehab plan prescribes has a demo", () => {
+  const missing: string[] = [];
+  let total = 0;
+  for (const [area, list] of Object.entries(REHAB_VOCABULARY)) {
+    for (const name of list) {
+      total++;
+      if (!findExercise(name)) missing.push(`${area}: ${name}`);
+    }
+  }
+  assert.ok(total >= 60, `the vocabulary shrank to ${total}; it is the point of this test`);
+  assert.deepEqual(missing, [], "these appear in rehab plans and cannot be demonstrated");
+});
+
+test("a rehab exercise's demo teaches it, rather than only naming it", () => {
+  // TEACHES IT BY EITHER ROUTE. The hand-written entries carry coaching cues;
+  // the 199 imported ones carry a written how-to instead and no cues at all.
+  // Asserting on cues alone failed on Split Squat, which has a perfectly good
+  // description — the test was measuring the wrong thing, not finding a gap.
+  // `hasHowTo` is the question the injury page actually asks.
+  for (const list of Object.values(REHAB_VOCABULARY)) {
+    for (const name of list) {
+      const ex = findExercise(name)!;
+      assert.ok(hasHowTo(name), `${name} -> ${ex.name} resolves but teaches nothing`);
+      assert.ok((ex.cues?.length ?? 0) >= 2 || (ex.description?.length ?? 0) > 80,
+        `${name} -> ${ex.name} has neither cues nor a written how-to`);
+    }
+  }
+});
+
+test("the synonyms map names to the movement they actually mean", () => {
+  // Each of these is a claim that two names are the SAME exercise. A wrong one
+  // sends somebody rehabbing a hamstring to the wrong movement, so they are
+  // asserted rather than trusted.
+  const expected: [string, RegExp][] = [
+    ["Heel raises", /calf raise/i],
+    ["Ball squeeze", /adductor/i],
+    ["Hamstring catch", /nordic/i],
+    ["Clamshell", /band lateral|glute/i],
+    ["Quad setting", /quad set/i],
+  ];
+  for (const [name, pattern] of expected) {
+    assert.match(findExercise(name)?.name ?? "", pattern, `"${name}" resolved wrongly`);
+  }
+});

@@ -517,11 +517,201 @@ export const EXERCISES: Exercise[] = [
     cues: ["Close the distance fast, then set", "Stay tall as long as possible", "Spread big and low — hands lead"],
     why: "1v1s are the highest-value save situation a keeper faces.",
     sports: ["football"] },
+
+  // ===========================================================================
+  // REHAB, IN FULL.
+  //
+  // Tapping an exercise in a rehab plan shows you how to do it — and it only
+  // could for 27 of the 63 movements a graded loading plan actually prescribes.
+  // The rest showed a dose and a name, which for somebody who has never done a
+  // Copenhagen plank is an instruction they cannot follow, on the one screen
+  // where following it correctly matters most.
+  //
+  // These are the standard clinical vocabulary for the seven areas the injury
+  // planner covers: ankle, knee, hamstring, groin, calf/Achilles, lower back
+  // and shoulder. Authored rather than imported, because a rehab cue that is
+  // vague is worse than no cue: "keep good form" on a Nordic curl is how people
+  // tear the thing they are rehabbing.
+  // ===========================================================================
+
+  // --- Ankle ---------------------------------------------------------------
+  { id: "ankle_circles", name: "Ankle circles", category: "Rehab", demo: "plank", equipment: "None",
+    muscles: ["Ankle stabilisers"], tempo: "10 each way · 3 rounds",
+    cues: ["Move the foot, not the leg", "Slow and deliberate — this is not a warm-up swing", "Go to the edge of stiffness, never into sharp pain"],
+    why: "The gentlest way to keep an injured ankle moving in the first few days." },
+  { id: "band_ankle_eversion", name: "Band ankle eversion", category: "Rehab", demo: "plank", equipment: "Band",
+    muscles: ["Ankle stabilisers", "Calves"], tempo: "15 reps · 3 sets",
+    cues: ["Turn the sole outward against the band", "Knee and shin stay completely still", "Return slowly — the lowering is the work"],
+    why: "The peroneals on the outside of the ankle are what stop it rolling again; they are also what an inversion sprain damages." },
+  { id: "band_ankle_inversion", name: "Band ankle inversion", category: "Rehab", demo: "plank", equipment: "Band",
+    muscles: ["Ankle stabilisers"], tempo: "15 reps · 3 sets",
+    cues: ["Turn the sole inward against the band", "Shin still, movement only at the ankle", "Control it back out"],
+    why: "Balances the eversion work so the ankle is strong in both directions rather than only the one that hurts." },
+  { id: "ankle_dorsiflexion_stretch", name: "Ankle dorsiflexion stretch", category: "Rehab", demo: "lunge", equipment: "Wall",
+    muscles: ["Calves", "Ankle stabilisers"], tempo: "10 × 5s · each side",
+    cues: ["Knee drives forward over the toes", "Heel stays welded to the floor", "Aim for the knee to pass the toes by a hand's width"],
+    why: "Lost dorsiflexion after a sprain changes how you squat, land and run — and it is the deficit people never regain by accident." },
+  { id: "lateral_hops", name: "Lateral hops", category: "Rehab", demo: "jump", equipment: "Line or low hurdle",
+    muscles: ["Calves", "Ankle stabilisers", "Glute med"], tempo: "3 × 20s · quick contacts",
+    cues: ["Land on the ball of the foot, knee soft", "Quiet landings — noise is uncontrolled force", "Stay over the middle of the foot, do not roll out"],
+    why: "The last thing an ankle has to prove before cutting: that it can take sideways load at speed." },
+  { id: "wobble_board_balance", name: "Wobble board balance", category: "Rehab", demo: "plank", equipment: "Wobble board or cushion",
+    muscles: ["Ankle stabilisers", "Glute med"], tempo: "30–45s/side · 3 rounds",
+    cues: ["Small constant corrections, not big saves", "Grip the floor with the toes", "Progress by closing your eyes, not by wobbling harder"],
+    why: "Unstable-surface balance rebuilds the position sense a sprain destroys, which is the single biggest predictor of doing it again." },
+
+  // --- Knee ----------------------------------------------------------------
+  { id: "quad_set", name: "Quad set", category: "Rehab", demo: "plank", equipment: "None",
+    muscles: ["Quads", "VMO"], tempo: "10 × 5s · several times a day",
+    cues: ["Leg straight, press the back of the knee down into the floor", "Squeeze the thigh hard, heel may lift slightly", "Nothing should hurt — this is the gentlest quad exercise there is"],
+    why: "The first quad exercise after any knee problem: it wakes the muscle up before the joint can tolerate movement." },
+  { id: "straight_leg_raise", name: "Straight leg raise", category: "Rehab", demo: "plank", equipment: "None",
+    muscles: ["Quads", "Hip flexors"], tempo: "12 reps · 3 sets",
+    cues: ["Lock the knee straight BEFORE you lift", "Lift to the height of the other thigh, no higher", "If the knee bends on the way up, the quad is not ready"],
+    why: "Loads the quad with no knee movement at all — the bridge between a quad set and squatting." },
+  { id: "wall_slide_knee", name: "Wall slide", category: "Rehab", demo: "squat", equipment: "Wall",
+    muscles: ["Quads", "Glutes"], tempo: "10 reps · 3 sets",
+    cues: ["Slide down only as far as it stays comfortable", "Knees track over the middle toes", "Push through the whole foot to come up"],
+    why: "Reintroduces bending under load with the wall taking the balance out of it." },
+  { id: "step_down", name: "Step down", category: "Rehab", demo: "lunge", equipment: "Step or box",
+    muscles: ["Quads", "Glutes", "VMO"], tempo: "8/side · 3s lower",
+    cues: ["Lower slowly until the other heel kisses the floor", "Knee stays over the toes, not falling inward", "Hips level — the standing side does the work"],
+    why: "The best single test and exercise for knee control: it exposes the inward collapse that causes most knee pain." },
+  { id: "box_step_up", name: "Box step up", category: "Rehab", demo: "lunge", equipment: "Box",
+    muscles: ["Quads", "Glutes"], tempo: "10/side · controlled",
+    cues: ["Drive through the top foot, do not push off the bottom one", "Stand up fully before stepping back down", "Lower under control rather than dropping"],
+    why: "Loads one leg through a full range with far less joint stress than a squat, so it fits earlier in a knee plan." },
+
+  // --- Hamstring -----------------------------------------------------------
+  { id: "hamstring_isometric_hold", name: "Isometric hamstring hold", category: "Rehab", demo: "hinge", equipment: "None",
+    muscles: ["Hamstrings"], tempo: "5 × 20–30s",
+    cues: ["Heel digs into the floor, knee slightly bent", "Push at an effort that keeps pain under 3/10", "Hold steady — no pulsing"],
+    why: "The first loading a strained hamstring tolerates, and it reduces pain while keeping the muscle switched on." },
+  { id: "single_leg_bridge", name: "Single-leg bridge", category: "Rehab", demo: "hinge", equipment: "None",
+    muscles: ["Hamstrings", "Glutes"], tempo: "10/side · 3 sets",
+    cues: ["Drive through the heel, not the whole foot", "Hips stay level — do not let one side drop", "Squeeze the glute at the top"],
+    why: "Loads hamstring and glute together on one leg, which is how they actually work when you run." },
+  { id: "prone_hamstring_curl", name: "Prone hamstring curl", category: "Rehab", demo: "hinge", equipment: "Band or ankle weight",
+    muscles: ["Hamstrings"], tempo: "12 reps · 3s lower",
+    cues: ["Lie face down, curl the heel toward the backside", "Hips stay pinned to the floor", "Lower slowly — that is the part that builds it"],
+    why: "Isolates the hamstring through range with no hip involvement, so you can load it before hinging is comfortable." },
+  { id: "supine_hamstring_stretch", name: "Supine hamstring stretch", category: "Rehab", demo: "hinge", equipment: "Strap or towel",
+    muscles: ["Hamstrings"], tempo: "3 × 30s/side",
+    cues: ["Strap round the foot, leg as straight as comfort allows", "Pull to a stretch, never to pain", "Keep the other leg flat on the floor"],
+    why: "Restores the length a healing hamstring loses, without the aggressive end-range that can re-tear it." },
+  { id: "build_up_runs", name: "Build-up runs", category: "Rehab", demo: "run", equipment: "None",
+    muscles: ["Hamstrings", "Glutes", "Calves"], tempo: "6 × 60m · walk back",
+    cues: ["Accelerate gradually to the target speed, hold briefly, decelerate", "Start at 60% and add 10% per session", "Stop at the first hint of grabbing — the session is over, not the plan"],
+    why: "The graded reintroduction of speed. Hamstrings re-tear when sprinting arrives all at once rather than in steps." },
+
+  // --- Groin ---------------------------------------------------------------
+  { id: "side_lying_adduction", name: "Side-lying adduction", category: "Rehab", demo: "plank", equipment: "None",
+    muscles: ["Adductors", "Groin"], tempo: "12/side · 3 sets",
+    cues: ["Bottom leg lifts toward the ceiling", "Top leg crossed in front, out of the way", "Small range, slow, no swinging"],
+    why: "Loads the adductor through range once the isometric squeeze is comfortable — the step before Copenhagen planks." },
+  { id: "cossack_squat", name: "Cossack squat", category: "Rehab", demo: "lunge", equipment: "None",
+    muscles: ["Adductors", "Quads", "Glutes"], tempo: "8/side · controlled",
+    cues: ["Shift onto one leg, the other stays straight with toes up", "Chest tall, heel down on the bent side", "Only go as deep as you can control"],
+    why: "Rebuilds strength at the long end of the adductor, which is exactly where groin strains happen." },
+
+  // --- Calf and Achilles ---------------------------------------------------
+  { id: "isometric_calf_hold", name: "Isometric calf hold", category: "Rehab", demo: "plank", equipment: "Wall for balance",
+    muscles: ["Calves", "Achilles"], tempo: "5 × 45s",
+    cues: ["Rise onto the toes and hold still", "Both legs first, one leg when that is easy", "Steady hold — do not bounce at the top"],
+    why: "Isometrics settle Achilles pain fast, which makes this the right session on a flare-up day instead of skipping it entirely." },
+  { id: "soleus_raise", name: "Soleus raise", category: "Rehab", demo: "squat", equipment: "Optional load",
+    muscles: ["Calves", "Achilles"], tempo: "15 reps · 3 sets",
+    cues: ["Knee BENT throughout — that is what makes it the soleus", "Rise onto the toes, lower slowly", "Add weight on the knee once bodyweight is easy"],
+    why: "The soleus takes most of the load in running and is routinely missed because every calf raise people do is done with a straight knee." },
+  { id: "heel_drop", name: "Heel drop", category: "Rehab", demo: "squat", equipment: "Step",
+    muscles: ["Calves", "Achilles"], tempo: "15 reps · 3s lower",
+    cues: ["Rise on both feet, lower on the injured one alone", "Drop the heel below the step slowly", "Some discomfort is fine — sharp pain is not"],
+    why: "The best-evidenced Achilles tendinopathy exercise there is: slow eccentric loading below neutral, done daily." },
+
+  // --- Lower back ----------------------------------------------------------
+  { id: "side_plank_rehab", name: "Side plank", category: "Rehab", demo: "plank", equipment: "None",
+    muscles: ["Obliques", "Lower back", "Glute med"], tempo: "3 × 20–30s/side",
+    cues: ["Elbow under the shoulder, body in one line", "Knees down to regress, feet stacked to progress", "Breathe normally throughout"],
+    why: "One of the McGill big three: trunk endurance with almost no compression through the spine." },
+  { id: "cat_cow", name: "Cat cow", category: "Rehab", demo: "plank", equipment: "None",
+    muscles: ["Lower back", "T-spine"], tempo: "10 slow rounds",
+    cues: ["Move one vertebra at a time, do not just tip the pelvis", "Breathe out as you round, in as you arch", "Stay inside the comfortable range"],
+    why: "Gentle spinal motion that eases a stiff back in the first few days, when doing nothing makes it worse." },
+  { id: "pelvic_tilt", name: "Pelvic tilt", category: "Rehab", demo: "plank", equipment: "None",
+    muscles: ["Deep core", "Lower back"], tempo: "12 reps · 3 sets",
+    cues: ["Flatten the lower back into the floor, then let it arch back", "Movement comes from the pelvis, not the legs", "Small and slow"],
+    why: "Teaches the pelvic control every other back exercise assumes you already have." },
+  { id: "prone_press_up", name: "Prone press up", category: "Rehab", demo: "press", equipment: "None",
+    muscles: ["Lower back"], tempo: "10 reps · hold 2s",
+    cues: ["Hands under the shoulders, press the chest up", "Hips stay down on the floor", "Stop if pain spreads DOWN the leg — that is the wrong direction"],
+    why: "Extension work that often eases disc-related back pain. The leg rule matters: pain moving toward the spine is progress, pain moving down it is not." },
+  { id: "hip_hinge_pattern", name: "Hip hinge pattern", category: "Rehab", demo: "hinge", equipment: "Dowel or broom",
+    muscles: ["Hamstrings", "Glutes", "Lower back"], tempo: "12 reps · slow",
+    cues: ["Dowel touches head, upper back and tailbone — keep all three", "Push the hips back, let the knees bend a little", "Feel it in the hamstrings, not the lower back"],
+    why: "Relearning to bend from the hips rather than the spine is what stops the back injury happening again." },
+
+  // --- Shoulder ------------------------------------------------------------
+  { id: "pendulum_swing", name: "Pendulum swing", category: "Rehab", demo: "pull", equipment: "None",
+    muscles: ["Shoulders", "Rotator cuff"], tempo: "30s each direction",
+    cues: ["Lean on a bench with the good arm, let the sore arm hang", "Let the body sway — the arm goes along for the ride", "No muscle effort in the hanging arm at all"],
+    why: "Moves an irritable shoulder without asking it to work, which is the only thing that helps in the first painful week." },
+  { id: "scapular_retraction", name: "Scapular retraction", category: "Rehab", demo: "pull", equipment: "Band",
+    muscles: ["Lower traps", "Upper back", "Rear delts"], tempo: "15 reps · 2s squeeze",
+    cues: ["Pull the shoulder blades together and slightly down", "Arms barely move — this is all shoulder blade", "Do not shrug up toward the ears"],
+    why: "A shoulder blade that does not sit right is behind a lot of shoulder pain, and this is where fixing it starts." },
+  { id: "scapular_push_up", name: "Scapular push-up", category: "Rehab", demo: "press", equipment: "None",
+    muscles: ["Upper back", "Shoulders"], tempo: "12 reps · slow",
+    cues: ["Arms stay straight the whole time", "Let the chest sink between the shoulder blades, then push it away", "Small movement — a few centimetres is the whole rep"],
+    why: "Trains serratus, the muscle that holds the shoulder blade flat, which almost nothing else in a gym does." },
+  { id: "y_raise", name: "Y raise", category: "Rehab", demo: "pull", equipment: "Light dumbbells or band",
+    muscles: ["Lower traps", "Shoulders"], tempo: "12 reps · light",
+    cues: ["Arms out at roughly 45° making a Y with thumbs up", "Lift with the shoulder blade, not the arm", "Very light — this is not a delt raise"],
+    why: "The lower trap is the hardest part of the shoulder to reach and the part that most often gives up." },
+  { id: "sleeper_stretch", name: "Sleeper stretch", category: "Rehab", demo: "plank", equipment: "None",
+    muscles: ["Rotator cuff", "Shoulders"], tempo: "3 × 30s",
+    cues: ["Lie on the sore side, elbow at 90° in front of you", "Use the other hand to rotate the forearm gently down", "A stretch at the back of the shoulder, never a pinch at the front"],
+    why: "Restores the internal rotation that overhead and throwing athletes lose, which is what starts the shoulder impinging." },
 ];
 
 // Fuller "how to perform it" write-ups — setup, execution, what to feel and the
 // most common mistake. Merged onto EXERCISES below so components can show depth.
 const DESCRIPTIONS: Record<string, string> = {
+  // --- Rehab how-tos -------------------------------------------------------
+  // Setup, execution, what to feel, and the mistake that matters. Rehab cues
+  // have to be more specific than training cues: "keep good form" on a Nordic
+  // curl is how somebody tears the thing they are rehabbing.
+  ankle_circles: "Sit or lie with the leg supported and the foot free. Draw slow circles with the foot, ten in each direction, moving only at the ankle — the shin should stay completely still. Go to the edge of stiffness and no further. This is the gentlest thing you can do for a swollen ankle in the first few days, and doing nothing at all is what leaves it stiff for months.",
+  band_ankle_eversion: "Anchor a band and loop it round the outside of the foot so it pulls inward. Turn the sole of the foot outward against the band, then let it return slowly. Keep the knee and shin still — if the whole leg rotates, you are using the hip instead. Fifteen reps, three sets. The peroneals on the outside of the ankle are what stop it rolling again, and they are exactly what an inversion sprain weakens.",
+  band_ankle_inversion: "Anchor the band on the other side so it pulls the foot outward, and turn the sole inward against it. Same rules: shin still, movement only at the ankle, slow on the way back. Fifteen reps, three sets. Done alongside the eversion work so the ankle ends up strong in both directions rather than only the one that got injured.",
+  ankle_dorsiflexion_stretch: "Stand facing a wall in a short lunge with the front foot about a hand's width from it. Drive the front knee forward over the toes toward the wall, keeping the heel welded to the floor, then return. Ten reps holding five seconds. Aim to get the knee past the toes. Losing dorsiflexion after a sprain quietly changes how you squat, land and run, and it is the deficit nobody regains by accident.",
+  lateral_hops: "Stand on one leg beside a line or low hurdle and hop sideways over it and back, landing on the ball of the foot with a soft knee. Twenty seconds, three rounds. Listen for the landings — noise means force you are not absorbing. Keep your weight over the middle of the foot rather than rolling to the outside. This is the last thing an ankle has to prove before you cut on it.",
+  wobble_board_balance: "Stand on a wobble board or a folded cushion on one leg and hold, making small constant corrections rather than big saves. Thirty to forty-five seconds a side, three rounds. Progress by closing your eyes, not by finding something wobblier. Unstable-surface balance rebuilds the position sense a sprain destroys, and losing that is the single biggest predictor of spraining it again.",
+  quad_set: "Lie or sit with the leg straight and press the back of the knee down into the floor, squeezing the thigh hard for five seconds — the heel may lift slightly. Ten reps, several times a day. Nothing should hurt. It is the first quad exercise after any knee problem, because the quad switches off within days of a swollen or painful knee and everything else waits on it waking back up.",
+  straight_leg_raise: "Lie on your back with one knee bent and the other leg straight. Lock the straight knee first, then lift the leg to the height of the other thigh and lower it slowly. Twelve reps, three sets. If the knee bends on the way up, the quad is not ready and you should go back to quad sets. It loads the quad with no knee movement at all, which is what makes it the bridge to squatting.",
+  wall_slide_knee: "Stand with your back against a wall, feet a step forward, and slide down only as far as stays comfortable — often a quarter of the way at first. Knees track over the middle toes rather than falling inward. Push through the whole foot to come back up. Ten reps, three sets. The wall takes balance out of it so you can reintroduce bending under load without the joint having to stabilise as well.",
+  step_down: "Stand on a step on one leg with the other foot hanging off the front. Lower slowly — three seconds — until the hanging heel just touches the floor, then come back up. Eight a side. Watch the knee: if it drifts inward over the big toe, lower the step. Keep the hips level. It is simultaneously the best test and the best exercise for knee control, because it exposes the inward collapse behind most knee pain.",
+  box_step_up: "Face a box around knee height, place one foot flat on top, and drive through that foot to stand all the way up — do not push off the trailing leg. Lower under control rather than dropping. Ten a side. It loads one leg through a full range with far less joint stress than a squat, which is why it fits earlier in a knee plan than most people expect.",
+  hamstring_isometric_hold: "Lie on your back with the injured leg's heel on the floor and the knee slightly bent, then dig the heel down as if trying to drag it toward you. Hold twenty to thirty seconds, five times, at an effort that keeps pain under 3/10. No pulsing — a steady push. This is the first loading a strained hamstring will tolerate, and it reduces pain while stopping the muscle switching off.",
+  single_leg_bridge: "Lie on your back with one knee bent and the other leg straight or held up. Drive through the heel of the bent leg to lift the hips, keeping them level — the untouched side must not drop. Squeeze the glute at the top. Ten a side, three sets. It loads hamstring and glute together on one leg, which is the way they actually work every stride you run.",
+  prone_hamstring_curl: "Lie face down with a band round the ankle or a light weight on it, and curl the heel toward your backside. Keep the hips pinned to the floor — if they lift, the weight is too heavy. Lower over three seconds; that slow part is what builds the muscle. Twelve reps. It isolates the hamstring with no hip involvement, so it can be loaded before hinging is comfortable.",
+  supine_hamstring_stretch: "Lie on your back with a strap or towel round the foot and the other leg flat on the floor. Straighten the strapped leg toward the ceiling until you feel a stretch, and hold thirty seconds. Three a side. Pull to a stretch and never into pain. A healing hamstring loses length, and getting it back matters — but aggressive end-range stretching on fresh scar tissue is a way to re-tear it.",
+  build_up_runs: "On grass or a track, accelerate gradually over about forty metres to your target speed, hold it briefly, then decelerate over the rest. Six runs of sixty metres with a walk back. Start at around 60% of full speed and add roughly 10% per session. Stop at the first hint of the hamstring grabbing — that ends the session, not the plan. Hamstrings re-tear when sprinting arrives all at once instead of in steps.",
+  side_lying_adduction: "Lie on your side with the top leg crossed in front and out of the way, and lift the bottom leg toward the ceiling. Small range, slow, no swinging. Twelve a side, three sets. It loads the adductor through range once the isometric squeeze is comfortable, and it is the step that belongs between that squeeze and the Copenhagen plank rather than jumping straight across.",
+  cossack_squat: "Stand wide, shift your weight onto one leg and sit down into it while the other stays straight with the toes turned up. Keep the chest tall and the heel down on the bent side. Come back to the middle under control. Eight a side, only as deep as you can control. It builds strength at the long end of the adductor, which is precisely where groin strains happen.",
+  isometric_calf_hold: "Rise onto your toes and hold still — both feet first, one foot once that is easy — with a wall for balance. Five holds of forty-five seconds. Do not bounce at the top. Isometric holds settle Achilles pain quickly, which makes this the right session on a flare-up day rather than skipping training entirely and losing the tendon's tolerance.",
+  soleus_raise: "Sit with the knees bent at ninety degrees and a weight resting on them, or stand in a half-squat against a wall, and rise onto the toes. The bent knee is the whole point: it takes the big calf muscle out and puts the load on the soleus underneath. Fifteen reps, three sets. The soleus carries most of the load in running and gets missed because every calf raise people do is done with a straight knee.",
+  heel_drop: "Stand on a step with the heels hanging off. Rise on both feet, shift onto the injured leg, and lower that heel below the level of the step over three seconds. Step back up with both. Fifteen reps, daily. Some discomfort during it is expected and fine; sharp pain is not. Slow eccentric loading below neutral is the best-evidenced Achilles tendinopathy exercise there is.",
+  side_plank_rehab: "Lie on your side with the elbow under the shoulder, and lift the hips so the body makes one straight line. Knees down to make it easier, feet stacked to make it harder. Twenty to thirty seconds a side, three rounds, breathing normally. One of the McGill big three: it builds the trunk endurance a back needs with almost no compression through the spine itself.",
+  cat_cow: "On all fours, round the spine toward the ceiling one vertebra at a time, then reverse into a gentle arch. Ten slow rounds, breathing out as you round and in as you arch. Stay inside the comfortable range. Do not just tip the pelvis back and forth — the point is motion spread through the whole spine, which is what eases a stiff back in the days when resting it makes it worse.",
+  pelvic_tilt: "Lie on your back with the knees bent. Flatten the lower back into the floor by tilting the pelvis, then let it arch gently back. Twelve reps, three sets, small and slow, with the movement coming from the pelvis rather than pushing with the legs. It teaches the pelvic control that every other back exercise quietly assumes you already have.",
+  prone_press_up: "Lie face down with the hands under the shoulders and press the chest up, keeping the hips down on the floor. Ten reps holding two seconds. Watch where the pain goes: pain moving up toward the spine is progress, pain spreading further DOWN the leg means stop. That rule matters more than the exercise — it is how you tell whether extension is the right direction for your back at all.",
+  hip_hinge_pattern: "Hold a dowel or broom against your back so it touches head, upper back and tailbone. Push the hips back, letting the knees bend a little, and keep all three contact points as you lower. Twelve slow reps. You should feel it in the hamstrings and not in the lower back. Relearning to bend from the hips rather than the spine is the thing that stops the back injury happening a second time.",
+  pendulum_swing: "Lean forward with the good arm on a bench and let the sore arm hang straight down, completely relaxed. Sway your body gently so the arm swings in small circles and back and forth — the arm itself does no work at all. Thirty seconds each direction. It moves an irritable shoulder without asking it to contract, which is the only thing that helps in the first genuinely painful week.",
+  scapular_retraction: "With a band anchored in front at chest height, pull the shoulder blades together and slightly down without bending the elbows much — the arms barely move. Hold the squeeze two seconds. Fifteen reps. Do not shrug up toward the ears, which is what happens when the upper traps take over. A shoulder blade that does not sit and move properly is behind a great deal of shoulder pain.",
+  scapular_push_up: "Get into a push-up or box position with the arms locked straight and keep them straight throughout. Let the chest sink between the shoulder blades, then push the floor away so the upper back rounds slightly. Twelve slow reps. The whole movement is a few centimetres. It trains serratus, the muscle that holds the shoulder blade flat against the ribs, which almost nothing else in a gym reaches.",
+  y_raise: "Lying face down on a bench or standing bent at the hips, raise the arms out at about forty-five degrees with the thumbs up, making a Y. Lift by moving the shoulder blade rather than the arm, and use very light weight or a band — this is not a delt raise and going heavy defeats it. Twelve reps. The lower trap is the hardest part of the shoulder to reach and usually the first to give up.",
+  sleeper_stretch: "Lie on the sore shoulder with the arm out in front and the elbow bent to ninety degrees. Use the other hand to rotate the forearm down toward the floor until you feel a stretch at the BACK of the shoulder. Three holds of thirty seconds. A pinch at the front means you have gone too far and should back off. It restores the internal rotation overhead and throwing athletes lose, which is what starts a shoulder impinging.",
+
   // --- Runs ---------------------------------------------------------------
   //
   // Each names its ZONE and then says what that zone feels like, because a
