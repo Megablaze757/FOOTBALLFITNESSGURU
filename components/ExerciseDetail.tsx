@@ -119,7 +119,16 @@ function Tag({ label }: { label: string }) {
   return <span className="rounded-lg bg-white/[0.05] px-2.5 py-1 font-medium text-slate-300">{label}</span>;
 }
 
-export function ExerciseModal({ ex, sets, reps, onClose }: { ex: Exercise; sets?: number; reps?: number; onClose: () => void }) {
+/**
+ * The bottom sheet itself, without opinions about what's inside it.
+ *
+ * Exported because the exercise library is no longer the only catalogue a
+ * session draws from — ball drills and runs open the same sheet with different
+ * contents (see components/DrillDetail.tsx). Two copies of this markup would
+ * mean two behaviours for Escape, for the scroll lock, and for the tab-bar
+ * clearance, which is exactly the drift that makes one of them wrong.
+ */
+export function Sheet({ label, children, onClose }: { label: string; children: React.ReactNode; onClose: () => void }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     document.addEventListener("keydown", onKey);
@@ -139,14 +148,22 @@ export function ExerciseModal({ ex, sets, reps, onClose }: { ex: Exercise; sets?
           // screen reader was never told the page behind had become unavailable.
           role="dialog"
           aria-modal="true"
-          aria-label={ex.name}
+          aria-label={label}
         >
           <div className="mb-4 flex justify-end">
             <button onClick={onClose} className="tap-target grid h-9 w-9 place-items-center rounded-full bg-white/[0.06] text-slate-300 transition hover:bg-white/10" aria-label="Close">✕</button>
           </div>
-          <ExerciseDetailCard ex={ex} sets={sets} reps={reps} />
+          {children}
         </div>
       </div>
     </Portal>
+  );
+}
+
+export function ExerciseModal({ ex, sets, reps, onClose }: { ex: Exercise; sets?: number; reps?: number; onClose: () => void }) {
+  return (
+    <Sheet label={ex.name} onClose={onClose}>
+      <ExerciseDetailCard ex={ex} sets={sets} reps={reps} />
+    </Sheet>
   );
 }

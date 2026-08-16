@@ -2,8 +2,7 @@
 
 import { useState } from "react";
 import type { ProgramWeek } from "@/lib/coach";
-import { getExerciseByName, type Exercise } from "@/lib/exercises";
-import { ExerciseModal } from "@/components/ExerciseDetail";
+import { DrillModal } from "@/components/DrillDetail";
 import { SessionDrills } from "@/components/SessionDrills";
 import { sessionLength } from "@/lib/session-time";
 import { WeeklyVolume } from "@/components/WeeklyVolume";
@@ -17,7 +16,7 @@ export function ProgramCalendar({
   completed: string[];
   onToggle: (sid: string) => void;
 }) {
-  const [open, setOpen] = useState<Exercise | null>(null);
+  const [open, setOpen] = useState<string | null>(null);
 
   // The first week with unfinished sessions is the one you're on.
   const currentWeek =
@@ -95,10 +94,8 @@ export function ProgramCalendar({
                     <div className="mt-2">
                       <SessionDrills
                         drills={s.drills}
-                        onPick={(name) => {
-                          const ex = getExerciseByName(name);
-                          if (ex) setOpen(ex);
-                        }}
+                        compact
+                        onPick={setOpen}
                       />
                     </div>
                   </div>
@@ -109,7 +106,7 @@ export function ProgramCalendar({
         );
       })}
 
-      {open && <ExerciseModal ex={open} onClose={() => setOpen(null)} />}
+      {open && <DrillModal name={open} onClose={() => setOpen(null)} />}
     </section>
   );
 }

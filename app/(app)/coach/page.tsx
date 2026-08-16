@@ -42,8 +42,7 @@ import { Tabs, TabPanel } from "@/components/Tabs";
 import { CoachChat } from "@/components/CoachChat";
 import { ProgramCalendar } from "@/components/ProgramCalendar";
 import { SessionDrills } from "@/components/SessionDrills";
-import { ExerciseModal } from "@/components/ExerciseDetail";
-import { getExerciseByName } from "@/lib/exercises";
+import { DrillModal } from "@/components/DrillDetail";
 import { sessionLength } from "@/lib/session-time";
 import { WorkoutPlayer, type SessionResult } from "@/components/WorkoutPlayer";
 import type { CheckInInput, DailyCheckIn, Program, StrengthBenchmark, Tier, TrainingLog, TrainingDrill } from "@/lib/types";
@@ -844,6 +843,12 @@ function ActiveProgram({
    * `onPick` since it was written and this page never passed one, so the
    * library's demo, how-to and cues were one tap away everywhere in the app
    * EXCEPT the screen where you are about to do the movement.
+   *
+   * A name rather than an Exercise, because a session is not made only of
+   * library exercises: the ball work and the runs come from their own
+   * catalogues, and gating this on getExerciseByName left a footballer's skill
+   * drills as the one part of their session that still could not be opened.
+   * See lib/how-to.ts.
    */
   const [showing, setShowing] = useState<string | null>(null);
   const [tab, setTab] = useState<CoachTab>("today");
@@ -1330,9 +1335,7 @@ function ActiveProgram({
         </section>
       )}
 
-      {showing && getExerciseByName(showing) && (
-        <ExerciseModal ex={getExerciseByName(showing)!} onClose={() => setShowing(null)} />
-      )}
+      {showing && <DrillModal name={showing} onClose={() => setShowing(null)} />}
 
       {playing && nextSession && todaySession && (
         <WorkoutPlayer

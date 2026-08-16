@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { getExerciseByName, demoImplement } from "@/lib/exercises";
+import { howToFor, type HowTo } from "@/lib/how-to";
 import { ExerciseSteps } from "@/components/ExerciseDemo";
 import { Confetti } from "@/components/Confetti";
 
@@ -21,6 +21,18 @@ interface Drill {
 }
 
 interface Step { drill: Drill; setNum: number; totalSets: number; drillIndex: number }
+
+/**
+ * Whether the how-to has anything the athlete hasn't already read.
+ *
+ * The first cue is printed above the panel, and the demo is already on screen —
+ * so an entry with one cue and no written method would open a box repeating the
+ * line directly above it. A disclosure that discloses nothing is worse than no
+ * disclosure.
+ */
+function showable(how: HowTo): boolean {
+  return how.steps.length > 0 || how.cues.length > 1 || !!how.setup || !!how.watch;
+}
 
 /**
  * Fallback rest, for programs built before the engine prescribed it per
@@ -148,7 +160,17 @@ export function WorkoutPlayer({ title, drills, onComplete, onClose }: {
     setResting(true);
   }
 
-  const ex = step ? getExerciseByName(step.drill.name) : null;
+  /**
+   * THE COACHING FOR WHATEVER THIS IS.
+   *
+   * Was `getExerciseByName`, which only knows the gym catalogue — so a
+   * footballer stepping through their session hit "Tight cone weave · 8 runs"
+   * with no figure, no cue and no how-to, because the setup and the three steps
+   * for that drill live in lib/skills.ts and nothing here had ever asked. Runs
+   * were the same. Across six generated programs that is 13% of all prescribed
+   * work, and a much larger share of the ball-heavy days. See lib/how-to.ts.
+   */
+  const how = step ? howToFor(step.drill.name) : null;
 
   if (!mounted) return null;
 
@@ -211,9 +233,9 @@ export function WorkoutPlayer({ title, drills, onComplete, onClose }: {
           </div>
         ) : step ? (
           <div className="animate-fade-up w-full max-w-sm">
-            {ex && (
+            {how && (
               <div className="mx-auto mb-5 grid h-40 w-full max-w-[15rem] place-items-center overflow-hidden rounded-3xl border border-white/10 bg-black/40 p-2">
-                <ExerciseSteps pattern={ex.demo} implement={demoImplement(ex)} className="h-full w-full" />
+                <ExerciseSteps pattern={how.demo} implement={how.implement} className="h-full w-full" />
               </div>
             )}
             <div className="chip mx-auto text-pitch-400">Set {step.setNum} of {step.totalSets}</div>
@@ -242,38 +264,66 @@ export function WorkoutPlayer({ title, drills, onComplete, onClose }: {
               <button onClick={() => setActual((r) => r + 1)} className="grid h-11 w-11 place-items-center rounded-full border border-white/15 text-xl text-slate-200 hover:bg-white/5" aria-label="one more rep">+</button>
             </div>
 
-            {ex && ex.cues.length > 0 && (
-              <p className="mx-auto mt-4 max-w-xs text-xs text-slate-500">{ex.cues[0]}</p>
+            {how && how.cues.length > 0 && (
+              <p className="mx-auto mt-4 max-w-xs text-xs text-slate-500">{how.cues[0]}</p>
             )}
 
             {/* HOW TO DO IT, WHERE YOU ARE ABOUT TO DO IT.
                 The player showed the demo animation and a single cue. Everything
-                else the library knows — the full step-by-step, the rest of the
-                cues, the common error — was on a screen you had to leave the
-                session to reach. The one moment an athlete most needs to be told
-                how to perform a lift is while standing in front of it, and that
-                was the one place the app would not tell them.
+                else the catalogues know — the full step-by-step, the rest of the
+                cues, what you need laid out, the common error — was on a screen
+                you had to leave the session to reach. The one moment an athlete
+                most needs to be told how to perform a movement is while standing
+                in front of it, and that was the one place the app would not tell
+                them.
 
-                Collapsed by default: somebody on set four of five does not need
-                a paragraph in the way, and somebody meeting the movement for the
-                first time is one tap from all of it. */}
-            {ex && (ex.hasHowTo || ex.cues.length > 1) && (
-              <details className="mx-auto mt-4 max-w-sm text-left">
+                OPEN ON THE FIRST SET, folded away after that. It was collapsed
+                on every set, so the answer to "how do I do this" was a small
+                link you had to know to look for — which is why it read as
+                missing entirely. Set one is exactly when you have not started
+                and want reading; by set four you want it out of the way. The
+                `key` matters: <details> keeps its own open state, so without it
+                the element is reused across steps and stays however the athlete
+                last left it. */}
+            {how && showable(how) && (
+              <details
+                key={`${step.drillIndex}-${step.setNum === 1}`}
+                open={step.setNum === 1}
+                className="mx-auto mt-4 max-w-sm text-left"
+              >
                 <summary className="tap-target cursor-pointer list-none text-center text-xs font-semibold text-pitch-400">
                   How to do it
                 </summary>
-                <div className="mt-2 rounded-2xl bg-white/[0.04] p-3">
-                  {ex.hasHowTo && ex.description && (
-                    <p className="text-xs leading-relaxed text-slate-300">{ex.description}</p>
+                <div className="mt-2 space-y-3 rounded-2xl bg-white/[0.04] p-3">
+                  {/* Kit and space first — finding out you needed six cones
+                      after reading the method is finding out too late. */}
+                  {how.setup && (
+                    <p className="text-xs leading-relaxed text-slate-400">
+                      <span className="font-semibold text-slate-300">You need: </span>{how.setup}
+                    </p>
                   )}
-                  {ex.cues.length > 1 && (
-                    <ul className={`space-y-1.5 ${ex.hasHowTo && ex.description ? "mt-3" : ""}`}>
-                      {ex.cues.map((c) => (
+                  {how.steps.length === 1 ? (
+                    <p className="text-xs leading-relaxed text-slate-300">{how.steps[0]}</p>
+                  ) : how.steps.length > 1 ? (
+                    <ol className="space-y-1.5">
+                      {how.steps.map((s, n) => (
+                        <li key={s} className="flex gap-2 text-xs text-slate-300">
+                          <span className="shrink-0 font-bold text-pitch-400">{n + 1}</span>{s}
+                        </li>
+                      ))}
+                    </ol>
+                  ) : null}
+                  {how.cues.length > 1 && (
+                    <ul className="space-y-1.5">
+                      {how.cues.map((c) => (
                         <li key={c} className="flex gap-2 text-xs text-slate-300">
                           <span className="text-pitch-400">›</span>{c}
                         </li>
                       ))}
                     </ul>
+                  )}
+                  {how.watch && (
+                    <p className="text-xs leading-relaxed text-amber-300/90">{how.watch}</p>
                   )}
                 </div>
               </details>
