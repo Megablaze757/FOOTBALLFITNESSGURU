@@ -362,6 +362,31 @@ function AppleSetup({ token, onDone }: { token: string | null; onDone: () => voi
     setCopyFailed(true);
   }
 
+  /**
+   * THE ROUTE THAT DOES NOT TOUCH THE CLIPBOARD AT ALL.
+   *
+   * Two attempts at fixing "it won't let me paste the url" both assumed the
+   * clipboard: first that the write was failing, then that the URL field was
+   * refusing it. Neither was the whole story, and there is a third possibility
+   * neither addressed — iOS 16 added a per-app permission for reading a
+   * clipboard written by another app, and with Shortcuts set to Deny it
+   * silently refuses every paste from Safari. Nothing this code does can
+   * change that setting.
+   *
+   * The share sheet sidesteps the question. It hands the string to iOS
+   * directly, so it can go to Notes, to Messages, or straight into another app
+   * without the clipboard being involved — and it is the mechanism people
+   * already use to move a link between apps on a phone.
+   */
+  const canShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
+  async function share(value: string) {
+    try {
+      await navigator.share({ text: value });
+    } catch {
+      // Cancelling the share sheet rejects, and a cancel is not an error.
+    }
+  }
+
   return (
     <li className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-3">
       <p className="mb-2 text-xs text-slate-400">
@@ -411,6 +436,14 @@ function AppleSetup({ token, onDone }: { token: string | null; onDone: () => voi
               onReveal={() => setReveal((v) => !v)}
               revealed={reveal}
             />
+            {canShare && (
+              <button
+                onClick={() => share(sleepOnly)}
+                className="tap-target mt-1.5 w-full rounded-xl border border-white/10 py-2 text-xs font-semibold text-slate-200 hover:bg-white/5"
+              >
+                Share the link instead ↗
+              </button>
+            )}
             {copyFailed && (
               /* Said plainly, with the way out. Safari refuses the clipboard
                  often enough on a phone that this is a normal path, not an
@@ -431,9 +464,15 @@ function AppleSetup({ token, onDone }: { token: string | null; onDone: () => voi
             <Step n={2} title="Find last night's sleep">
               Search <b className="text-slate-200">Find Health Samples</b> and tap it. Set
               <b className="text-slate-200"> Sleep Analysis</b>, sort by
-              <b className="text-slate-200"> Start Date</b>, limit <b className="text-slate-200">1</b>. Then add
+              <b className="text-slate-200"> Start Date</b>, and — this one matters —
+              order <b className="text-slate-200">Latest First</b> with the limit on and set to
+              <b className="text-slate-200"> 1</b>. Then add
               <b className="text-slate-200"> Get Details of Health Sample</b> and choose
               <b className="text-slate-200"> Duration</b>.
+              <span className="mt-1 block text-slate-500">
+                Latest First and a limit of 1 is what makes it last night. On Oldest First it sends the
+                oldest night in the window instead — it will run, and report the wrong night, every day.
+              </span>
             </Step>
             {/* PASTE INTO A TEXT ACTION, NOT INTO THE URL FIELD.
                 This used to say "add Get Contents of URL and paste your link".
@@ -448,6 +487,31 @@ function AppleSetup({ token, onDone }: { token: string | null; onDone: () => voi
                 see the whole string, and Get Contents of URL takes the Text as
                 its input. One extra action, and it removes the only step in
                 this guide that can refuse you. */}
+            {/* WHERE THE PASTE ACTUALLY FAILS, AND THE WAY ROUND IT.
+                Reported three times: "it won't let me paste the url". The
+                screenshot showed why — the athlete was on Get Contents of URL
+                with an empty URL field, which is a URL-typed field, not a text
+                box. Tapping the greyed "URL" placeholder frequently does not
+                place a cursor, so the long-press menu never appears and there
+                is nothing to paste into.
+
+                An earlier version of this note told people to check Settings →
+                Shortcuts → Paste from Other Apps. That setting does not exist
+                on every iOS version and it sent somebody looking for something
+                that was not there, which is worse than saying nothing. The Text
+                action below always works, so the guide leads with that instead
+                of a device setting we cannot see. */}
+            <li className="rounded-xl border border-amber-400/25 bg-amber-500/[0.06] px-3 py-2.5 text-xs leading-relaxed text-amber-100/90">
+              <b className="text-amber-200">Do not paste into the URL box.</b> That field is fussy — tapping it
+              often will not give you a cursor, so no Paste option appears and it looks like the link is broken.
+              Add a <b className="text-amber-200">Text</b> action first and paste there. If you have already
+              added <b>Get Contents of URL</b>, leave it — just add the Text action above it.
+              <span className="mt-1 block text-amber-100/60">
+                Still nothing? Use <b>Share the link</b> above, send it to Notes, and copy it from there — that
+                route does not use the clipboard at all.
+              </span>
+            </li>
+
             <Step n={3} title="Paste your link into a Text box">
               Search <b className="text-slate-200">Text</b> and tap it — a plain empty box. Tap inside it and
               paste. Your link already ends with <code className="text-slate-300">&amp;sleep=</code>, so put the
