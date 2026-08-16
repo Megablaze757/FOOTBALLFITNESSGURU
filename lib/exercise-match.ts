@@ -112,20 +112,88 @@ const SYNONYMS: Record<string, string> = {
 };
 
 /**
+ * ONE NAME, TWO EXERCISES — resolved by which joint you are rehabbing.
+ *
+ * THIS SHIPPED BROKEN AND IS WORTH RECORDING. "Wall slide" means a supported
+ * squat when the knee is the problem and a scapular slide up a wall when the
+ * shoulder is. There was only a knee entry, so an athlete on a shoulder plan
+ * tapped their wall slides and got a quad exercise — a real movement, the wrong
+ * one, offered with exactly as much confidence as a correct answer. That is the
+ * precise failure `findExercise` returning null was supposed to prevent, and it
+ * came in through the front door because the two exercises shared a name.
+ *
+ * The test missed it for a related reason: "Wall slide" was listed under both
+ * knee and shoulder in the rehab vocabulary, and asserting only that it
+ * RESOLVED passed while resolving wrongly. Asserting what it resolves TO is the
+ * fix, and that assertion now exists.
+ *
+ * With no area given, an ambiguous name resolves to nothing. A rehab plan
+ * always knows its own body area, and guessing between two joints is how the
+ * bug happened in the first place.
+ */
+const AMBIGUOUS: Record<string, Record<string, string>> = {
+  "wall slide": { shoulder: "Wall angel", knee: "Wall slide squat" },
+  "wall slides": { shoulder: "Wall angel", knee: "Wall slide squat" },
+  "external rotation": { shoulder: "Band external rotation", hip: "Band lateral walks" },
+  "isometric hold": { hamstring: "Isometric hamstring hold", calf: "Isometric calf hold", knee: "Isometric wall sit" },
+  "isometric holds": { hamstring: "Isometric hamstring hold", calf: "Isometric calf hold", knee: "Isometric wall sit" },
+};
+
+/** Which body area an exercise lookup is being made for, loosely matched. */
+function areaKey(area: string | null | undefined): string | null {
+  const a = String(area ?? "").toLowerCase().replace(/[^a-z]/g, "");
+  if (!a) return null;
+  if (/shoulder|rotatorcuff|scapula/.test(a)) return "shoulder";
+  if (/knee|patell|acl|quad/.test(a)) return "knee";
+  if (/hamstring/.test(a)) return "hamstring";
+  if (/calf|achilles|soleus/.test(a)) return "calf";
+  if (/groin|adductor/.test(a)) return "groin";
+  if (/lowerback|back|lumbar|spine/.test(a)) return "lower_back";
+  if (/hip|glute/.test(a)) return "hip";
+  if (/ankle|foot/.test(a)) return "ankle";
+  return null;
+}
+
+/**
  * The library exercise a name refers to, or null.
  *
  * Null rather than a best guess is the point. A wrong how-to for a rehab
  * exercise is worse than no how-to: the athlete follows it.
+ *
+ * `area` is the body part being rehabbed, where the caller knows it. It only
+ * ever decides between two exercises that genuinely share a name — it never
+ * widens or narrows an otherwise unambiguous lookup.
  */
-export function findExercise(name: string): Exercise | null {
+export function findExercise(name: string, area?: string | null): Exercise | null {
   const key = exerciseKey(name);
   if (!key) return null;
 
+  const lower = String(name).toLowerCase().trim();
+
+  /**
+   * EXACT MATCH FIRST, ALWAYS. An exercise has to be able to find itself —
+   * putting ambiguity ahead of this made "Wall angel" unfindable by its own
+   * name, which broke the library rather than fixing anything.
+   *
+   * The shared names below are safe underneath it precisely because none of
+   * them IS a library entry: the two wall slides are called "Wall angel" and
+   * "Wall slide squat", so a bare "wall slide" matches neither and falls
+   * through to the disambiguation on purpose.
+   */
   const exact = BY_KEY.get(key);
   if (exact) return exact;
 
+  const shared = AMBIGUOUS[lower];
+  if (shared) {
+    const ak = areaKey(area);
+    const pick = ak ? shared[ak] : undefined;
+    // No area, or an area this name has no entry for: refuse rather than pick.
+    if (!pick) return null;
+    return BY_KEY.get(exerciseKey(pick)) ?? null;
+  }
+
   // A different word for the same movement, before any scoring is attempted.
-  const synonym = SYNONYMS[String(name).toLowerCase().trim()];
+  const synonym = SYNONYMS[lower];
   if (synonym) {
     const hit = BY_KEY.get(exerciseKey(synonym));
     if (hit) return hit;
@@ -150,8 +218,8 @@ export function findExercise(name: string): Exercise | null {
 }
 
 /** Whether the library can teach this movement, as opposed to merely listing it. */
-export function hasHowTo(name: string): boolean {
-  const ex = findExercise(name);
+export function hasHowTo(name: string, area?: string | null): boolean {
+  const ex = findExercise(name, area);
   return !!ex && (ex.hasHowTo === true || (ex.cues?.length ?? 0) > 0);
 }
 

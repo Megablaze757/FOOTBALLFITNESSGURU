@@ -117,6 +117,9 @@ export function InjuryPlanner({ sport, hurt, onHurtChange, description, onDescri
    */
   const [stage, setStage] = useState(1);
   const [planId, setPlanId] = useState<string | null>(null);
+  /** The area the SAVED plan was built for — `area` above reads today's pain map,
+   *  which is empty on a good day even though the plan is still for a shoulder. */
+  const [planArea, setPlanArea] = useState<string | null>(null);
   const [savingStage, setSavingStage] = useState(false);
 
   /** The exercise whose how-to is open, if any. */
@@ -148,7 +151,7 @@ export function InjuryPlanner({ sport, hurt, onHurtChange, description, onDescri
     void (async () => {
       const { data, error: e } = await createClient()
         .from("rehab_plans")
-        .select("id, plan, chronic, description, created_at, current_stage")
+        .select("id, plan, chronic, description, created_at, current_stage, area")
         .eq("active", true)
         .order("created_at", { ascending: false })
         .limit(1)
@@ -156,11 +159,12 @@ export function InjuryPlanner({ sport, hurt, onHurtChange, description, onDescri
       if (cancelled || e || !data) return;
       const row = data as {
         id: string; plan: Plan; chronic: boolean; description: string;
-        created_at: string; current_stage: number | null;
+        created_at: string; current_stage: number | null; area: string | null;
       };
       setPlan(row.plan);
       setChronic(row.chronic);
       setPlanId(row.id);
+      setPlanArea(row.area ?? null);
       // Clamped: a plan can be regenerated with fewer stages than the one it
       // replaced, and an out-of-range index would blank the page.
       const stages = row.plan?.stages?.length ?? 1;
@@ -310,7 +314,11 @@ export function InjuryPlanner({ sport, hurt, onHurtChange, description, onDescri
                         of a confident how-to for the wrong exercise. */}
                     <ul className="mt-3 space-y-2">
                       {s.exercises.map((ex) => {
-                        const lib = findExercise(ex.name);
+                        // AREA PASSED IN, because "wall slide" means a
+                        // supported squat for a knee and a scapular slide for
+                        // a shoulder. Without it the lookup refuses rather
+                        // than picking one — see lib/exercise-match.ts.
+                        const lib = findExercise(ex.name, area ?? planArea);
                         const open = showing === ex.name;
                         return (
                           <li key={ex.name} className="overflow-hidden rounded-xl bg-white/[0.03]">

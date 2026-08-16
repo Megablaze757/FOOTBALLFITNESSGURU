@@ -211,11 +211,63 @@ test("every exercise a rehab plan prescribes has a demo", () => {
   for (const [area, list] of Object.entries(REHAB_VOCABULARY)) {
     for (const name of list) {
       total++;
-      if (!findExercise(name)) missing.push(`${area}: ${name}`);
+      // The area goes in, exactly as the injury page passes it.
+      if (!findExercise(name, area)) missing.push(`${area}: ${name}`);
     }
   }
   assert.ok(total >= 60, `the vocabulary shrank to ${total}; it is the point of this test`);
   assert.deepEqual(missing, [], "these appear in rehab plans and cannot be demonstrated");
+});
+
+/**
+ * RESOLVING IS NOT THE SAME AS RESOLVING CORRECTLY, and this is the assertion
+ * that was missing.
+ *
+ * "Wall slide" appears under both knee and shoulder in the vocabulary above.
+ * There was only ever a knee entry, so the shoulder lookup quietly returned a
+ * quad exercise — and the old test, which asked only whether SOMETHING came
+ * back, passed while an athlete rehabbing a shoulder was shown squats.
+ */
+test("an exercise resolves to something that trains the area it was asked for", () => {
+  const AREA_MUSCLES: Record<string, RegExp> = {
+    ankle: /ankle|calf|calv|achilles|glute med/i,
+    knee: /quad|vmo|glute|hamstring/i,
+    hamstring: /hamstring|glute|calf/i,
+    groin: /adductor|groin|quad|glute|oblique/i,
+    // "calv" as well as "calf": the library tag is "Calves".
+    calf: /calf|calv|achilles|ankle/i,
+    back: /back|core|oblique|glute|spine|hamstring|deep core/i,
+    shoulder: /shoulder|rotator|trap|back|delt/i,
+  };
+  const wrong: string[] = [];
+  for (const [area, list] of Object.entries(REHAB_VOCABULARY)) {
+    for (const name of list) {
+      const ex = findExercise(name, area);
+      if (!ex) continue; // covered by the test above
+      const muscles = (ex.muscles ?? []).join(" ");
+      // "Legs" and "Whole body" are uninformative rather than wrong — a split
+      // squat tagged "Legs" is a perfectly good knee exercise. Flagging those
+      // would be measuring the catalogue's tagging, not the lookup, and the
+      // shoulder-to-quads bug this test exists for is still caught: "Quads" is
+      // a specific tag and does not match the shoulder pattern.
+      if (/^(legs|whole body|full body|cardio)( |$)/i.test(muscles.trim()) && (ex.muscles?.length ?? 0) <= 2) continue;
+      if (!AREA_MUSCLES[area].test(muscles)) {
+        wrong.push(`${area}: "${name}" -> ${ex.name} (trains ${muscles})`);
+      }
+    }
+  }
+  assert.deepEqual(wrong, [], "a rehab exercise resolved to a demo for the wrong body part");
+});
+
+test("a name meaning two exercises refuses to guess without an area", () => {
+  // A wall slide is a supported squat for a knee and a scapular slide for a
+  // shoulder. With no area, picking either is a coin flip on somebody's rehab.
+  assert.equal(findExercise("Wall slide"), null);
+  assert.equal(findExercise("Wall slides"), null);
+  assert.match(findExercise("Wall slide", "knee")?.muscles.join() ?? "", /Quads/);
+  assert.match(findExercise("Wall slide", "shoulder")?.muscles.join() ?? "", /trap|Shoulder/i);
+  // And an area the name has no entry for is still a refusal, not a fallback.
+  assert.equal(findExercise("Wall slide", "hamstring"), null);
 });
 
 test("a rehab exercise's demo teaches it, rather than only naming it", () => {
@@ -224,10 +276,10 @@ test("a rehab exercise's demo teaches it, rather than only naming it", () => {
   // Asserting on cues alone failed on Split Squat, which has a perfectly good
   // description — the test was measuring the wrong thing, not finding a gap.
   // `hasHowTo` is the question the injury page actually asks.
-  for (const list of Object.values(REHAB_VOCABULARY)) {
+  for (const [area, list] of Object.entries(REHAB_VOCABULARY)) {
     for (const name of list) {
-      const ex = findExercise(name)!;
-      assert.ok(hasHowTo(name), `${name} -> ${ex.name} resolves but teaches nothing`);
+      const ex = findExercise(name, area)!;
+      assert.ok(hasHowTo(name, area), `${name} -> ${ex.name} resolves but teaches nothing`);
       assert.ok((ex.cues?.length ?? 0) >= 2 || (ex.description?.length ?? 0) > 80,
         `${name} -> ${ex.name} has neither cues nor a written how-to`);
     }

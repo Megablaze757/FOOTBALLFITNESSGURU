@@ -32,8 +32,8 @@ create unique index if not exists profiles_username_key on public.profiles(usern
 -- --- Backfill ----------------------------------------------------------------
 --
 -- Everyone gets one now, so the board stops saying "Athlete". Generated from
--- the user id rather than the email: turning demielegushi@gmail.com into the
--- public handle "demielegushi" would publish most of someone's address to
+-- the user id rather than the email: turning jordan.whitfield@example.com into the
+-- public handle "jordanwhitfield" would publish most of someone's address to
 -- strangers. Mirrors suggestUsername() in lib/username.ts.
 do $$
 declare

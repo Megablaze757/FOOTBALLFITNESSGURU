@@ -69,8 +69,8 @@ export function isReserved(name: string): boolean {
 
 // --- Suggestions -------------------------------------------------------------
 
-// Deliberately NOT derived from the email address. "demielegushi@gmail.com"
-// becoming the handle "demielegushi" on a public world leaderboard publishes
+// Deliberately NOT derived from the email address. "jordan.whitfield@example.com"
+// becoming the handle "jordanwhitfield" on a public world leaderboard publishes
 // most of someone's email to strangers, and they never asked for that.
 const ADJECTIVES = [
   "swift", "sharp", "steady", "bold", "quick", "solid", "clutch", "fierce",

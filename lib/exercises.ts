@@ -569,7 +569,12 @@ export const EXERCISES: Exercise[] = [
     muscles: ["Quads", "Hip flexors"], tempo: "12 reps · 3 sets",
     cues: ["Lock the knee straight BEFORE you lift", "Lift to the height of the other thigh, no higher", "If the knee bends on the way up, the quad is not ready"],
     why: "Loads the quad with no knee movement at all — the bridge between a quad set and squatting." },
-  { id: "wall_slide_knee", name: "Wall slide", category: "Rehab", demo: "squat", equipment: "Wall",
+  // NAMED "WALL SLIDE SQUAT", NOT "WALL SLIDE". "Wall slide" means two entirely
+  // different exercises depending on which joint you are rehabbing — this one
+  // for a knee, and a scapular wall slide for a shoulder. Sharing the name meant
+  // somebody with a sore shoulder tapped their wall slides and got a quad
+  // exercise, presented with exactly as much confidence as a correct answer.
+  { id: "wall_slide_knee", name: "Wall slide squat", category: "Rehab", demo: "squat", equipment: "Wall",
     muscles: ["Quads", "Glutes"], tempo: "10 reps · 3 sets",
     cues: ["Slide down only as far as it stays comfortable", "Knees track over the middle toes", "Push through the whole foot to come up"],
     why: "Reintroduces bending under load with the wall taking the balance out of it." },
@@ -667,6 +672,10 @@ export const EXERCISES: Exercise[] = [
     muscles: ["Lower traps", "Shoulders"], tempo: "12 reps · light",
     cues: ["Arms out at roughly 45° making a Y with thumbs up", "Lift with the shoulder blade, not the arm", "Very light — this is not a delt raise"],
     why: "The lower trap is the hardest part of the shoulder to reach and the part that most often gives up." },
+  { id: "wall_slide_shoulder", name: "Wall angel", category: "Rehab", demo: "press", equipment: "Wall",
+    muscles: ["Lower traps", "Shoulders", "Upper back"], tempo: "10 reps · slow",
+    cues: ["Back, head and arms against the wall, elbows at 90°", "Slide the arms up keeping every contact point touching", "Stop where contact breaks — that is your range, not where you want it"],
+    why: "The shoulder half of what people call a wall slide: it trains overhead reach with the shoulder blade moving properly instead of the back arching to fake it." },
   { id: "sleeper_stretch", name: "Sleeper stretch", category: "Rehab", demo: "plank", equipment: "None",
     muscles: ["Rotator cuff", "Shoulders"], tempo: "3 × 30s",
     cues: ["Lie on the sore side, elbow at 90° in front of you", "Use the other hand to rotate the forearm gently down", "A stretch at the back of the shoulder, never a pinch at the front"],
@@ -710,6 +719,7 @@ const DESCRIPTIONS: Record<string, string> = {
   scapular_retraction: "With a band anchored in front at chest height, pull the shoulder blades together and slightly down without bending the elbows much — the arms barely move. Hold the squeeze two seconds. Fifteen reps. Do not shrug up toward the ears, which is what happens when the upper traps take over. A shoulder blade that does not sit and move properly is behind a great deal of shoulder pain.",
   scapular_push_up: "Get into a push-up or box position with the arms locked straight and keep them straight throughout. Let the chest sink between the shoulder blades, then push the floor away so the upper back rounds slightly. Twelve slow reps. The whole movement is a few centimetres. It trains serratus, the muscle that holds the shoulder blade flat against the ribs, which almost nothing else in a gym reaches.",
   y_raise: "Lying face down on a bench or standing bent at the hips, raise the arms out at about forty-five degrees with the thumbs up, making a Y. Lift by moving the shoulder blade rather than the arm, and use very light weight or a band — this is not a delt raise and going heavy defeats it. Twelve reps. The lower trap is the hardest part of the shoulder to reach and usually the first to give up.",
+  wall_slide_shoulder: "Stand with your back, head and arms flat against a wall, elbows bent to ninety degrees and the backs of the hands touching. Slide the arms slowly up the wall, keeping the elbows, wrists, head and lower back in contact throughout. Ten slow reps. Stop the moment any contact point lifts — that is your honest range, and arching the lower back to get the arms higher trains exactly the compensation you are trying to remove. Often called a wall slide, which is why it is named separately here from the knee exercise of the same name.",
   sleeper_stretch: "Lie on the sore shoulder with the arm out in front and the elbow bent to ninety degrees. Use the other hand to rotate the forearm down toward the floor until you feel a stretch at the BACK of the shoulder. Three holds of thirty seconds. A pinch at the front means you have gone too far and should back off. It restores the internal rotation overhead and throwing athletes lose, which is what starts a shoulder impinging.",
 
   // --- Runs ---------------------------------------------------------------

@@ -83,7 +83,7 @@ test("suggestions are deterministic, and the salt breaks ties", () => {
 
 test("suggestions never leak the seed", () => {
   // The seed is a user id or email; the handle goes on a public board.
-  const seed = "demielegushi@gmail.com";
+  const seed = "jordan.whitfield@example.com";
   const s = suggestUsername(seed);
   assert.ok(!s.includes("demi"), `suggestion "${s}" leaks the email`);
   assert.ok(!s.includes("@"));
