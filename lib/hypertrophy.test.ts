@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { splitFor, buildHypertrophyProgram, groupOf, isCompound } from "./hypertrophy";
+import { splitFor, buildHypertrophyProgram, groupOf, isCompound, regionOfMovement, muscleGroupForName } from "./hypertrophy";
 import { parseConstraints, EMPTY_CONSTRAINTS } from "./constraints";
 import { buildProgram } from "./coach";
 import { weeklyMuscleVolume, auditWeek, LANDMARKS } from "./muscle-volume";
@@ -443,4 +443,86 @@ test("a bodyweight-only block is still a block", () => {
   // Every muscle the block trains still reaches a dose that does something —
   // the equipment filter must not be allowed to hollow the week out.
   assert.deepEqual(auditWeek(plan.weeks[1]).neglected, []);
+});
+
+// =============================================================================
+// A MUSCLE GROUP IS NOT ONE THING.
+//
+// The chest has an upper head an incline press loads and a flat bench barely
+// touches. The hamstrings cross two joints, so a block of three hinges trains
+// the hip end three times and the knee end not at all. Calves are the clearest
+// case in the body: standing is gastrocnemius, seated is soleus, and neither
+// substitutes for the other.
+//
+// The engine picked by muscle group and staple rank and could see none of it.
+// =============================================================================
+
+const regionsIn = (plan: ReturnType<typeof buildProgram>, group: Parameters<typeof regionOfMovement>[0]) => {
+  const out = new Set<string>();
+  for (const s of plan.weeks[1].sessions) {
+    for (const d of s.drills) {
+      if (muscleGroupForName(d.name) !== group) continue;
+      const r = regionOfMovement(group, d.name);
+      if (r) out.add(r);
+    }
+  }
+  return out;
+};
+
+test("a muscle trained twice is trained from two angles", () => {
+  const plan = buildProgram({ painMap: {}, goal: "strength", sport: "gym", focus: "aesthetics", daysPerWeek: 4 });
+  for (const group of ["chest", "back", "shoulders", "hamstrings", "quads", "calves", "biceps", "triceps"] as const) {
+    const count = plan.weeks[1].sessions
+      .flatMap((s) => s.drills)
+      .filter((d) => muscleGroupForName(d.name) === group).length;
+    if (count < 2) continue;
+    assert.ok(regionsIn(plan, group).size >= 2,
+      `${group}: ${count} movements, all hitting the same part of it`);
+  }
+});
+
+test("the coverage is shared across the block, not just within a day", () => {
+  /**
+   * Per-session memory got the chest right — flat, incline, decline, fly in one
+   * day — and still put a standing calf raise on Tuesday and another standing
+   * calf raise on Friday, never once loading the soleus. A muscle trained twice
+   * a week is trained twice by the BLOCK, and the second day is exactly where
+   * the other angle belongs.
+   */
+  const plan = buildProgram({ painMap: {}, goal: "strength", sport: "gym", focus: "aesthetics", daysPerWeek: 4 });
+  const calves = regionsIn(plan, "calves");
+  if (calves.size) {
+    assert.ok(calves.has("soleus") && calves.has("gastroc"),
+      `calves trained from: ${[...calves].join(", ")} — a seated raise is the only thing that loads the soleus`);
+  }
+});
+
+test("hamstrings get both joints", () => {
+  // The one with an injury attached: hamstring strain is the most common
+  // non-contact injury in football, and a block of nothing but hinges trains
+  // the hip end of the muscle three times over.
+  const plan = buildProgram({ painMap: {}, goal: "strength", sport: "gym", focus: "aesthetics", daysPerWeek: 4 });
+  const r = regionsIn(plan, "hamstrings");
+  assert.ok(r.has("hip") && r.has("knee"), `hamstrings trained from: ${[...r].join(", ")}`);
+});
+
+test("it is a preference, never a reason to leave a slot empty", () => {
+  // Where no fresh angle exists the original list must still stand.
+  const plan = buildProgram({
+    painMap: {}, goal: "strength", sport: "gym", focus: "aesthetics", daysPerWeek: 3,
+    notes: "bodyweight only",
+  });
+  for (const w of plan.weeks) {
+    for (const s of w.sessions) assert.ok(s.drills.length >= 4, `${s.title}: ${s.drills.length} exercises`);
+  }
+  assert.deepEqual(auditWeek(plan.weeks[1]).neglected, []);
+});
+
+test("an exercise the table does not know neither blocks nor is blocked", () => {
+  assert.equal(regionOfMovement("glutes", "Barbell Hip Thrust"), null, "no claim is made about glutes");
+  assert.equal(regionOfMovement("calves", "Seated Calf Raise"), "soleus");
+  assert.equal(regionOfMovement("calves", "Standing Calf Raise"), "gastroc");
+  assert.equal(regionOfMovement("chest", "Incline Bench Press"), "upper");
+  assert.equal(regionOfMovement("hamstrings", "Romanian Deadlift"), "hip");
+  assert.equal(regionOfMovement("hamstrings", "Lying Leg Curl"), "knee");
 });

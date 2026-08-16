@@ -154,6 +154,79 @@ interface Movement {
   compound: boolean;
 }
 
+/**
+ * WHICH PART OF THE MUSCLE, AND FROM WHAT ANGLE.
+ *
+ * A muscle group is not one thing. The chest has an upper head that an incline
+ * press loads and a flat bench barely touches. The hamstrings cross two joints,
+ * and a Romanian deadlift trains them at the hip while a leg curl trains them at
+ * the knee — a block with three hinges in it has not trained hamstrings
+ * completely, it has trained half of them three times. Calves are the clearest
+ * case in the body: the standing raise is the gastrocnemius and the seated raise
+ * is the soleus, and no amount of one substitutes for the other.
+ *
+ * The engine could not see any of this. It picked by muscle group and by staple
+ * rank, so a chest day could come out as flat bench, dumbbell bench and a flat
+ * fly — three movements, one angle, and an upper chest that never got loaded.
+ *
+ * Names, because that is all the catalogue gives us and all a saved plan
+ * carries. Unmatched movements get null, which means "no claim" rather than a
+ * region of their own — see how `take` uses this: a null never blocks anything
+ * and is never blocked, so an exercise this table has not heard of behaves
+ * exactly as it did before the table existed.
+ */
+const REGIONS: { group: MuscleGroup; region: string; re: RegExp }[] = [
+  // Chest: the head loaded is set by the angle of the bench.
+  { group: "chest", region: "upper", re: /incline/i },
+  { group: "chest", region: "lower", re: /decline|\bdips?\b/i },
+  { group: "chest", region: "stretch", re: /\bfly\b|flyes|flies|pec deck|pullover/i },
+  { group: "chest", region: "mid", re: /./ },
+
+  // Back: width comes from pulling down, thickness from pulling in.
+  { group: "back", region: "vertical", re: /pull ?ups?|chin ?ups?|pulldown|pull down|lat /i },
+  { group: "back", region: "shrug", re: /shrug/i },
+  { group: "back", region: "horizontal", re: /./ },
+
+  // Shoulders: three heads, and only one of them presses.
+  { group: "shoulders", region: "rear", re: /rear|reverse fly|face pull/i },
+  { group: "shoulders", region: "side", re: /lateral/i },
+  { group: "shoulders", region: "front", re: /./ },
+
+  // Triceps: the long head only gets loaded with the arm overhead.
+  { group: "triceps", region: "long", re: /overhead|skull|french|\bjm\b|lying (tricep|triceps)/i },
+  { group: "triceps", region: "lateral", re: /./ },
+
+  // Biceps: elbow in front of the body, behind it, or neutral grip.
+  { group: "biceps", region: "short", re: /preacher|concentration|spider/i },
+  { group: "biceps", region: "brachialis", re: /hammer|reverse curl/i },
+  { group: "biceps", region: "long", re: /./ },
+
+  // Hamstrings: two joints, and a block of nothing but hinges trains one.
+  { group: "hamstrings", region: "knee", re: /leg curl|hamstring curl|nordic|slider/i },
+  { group: "hamstrings", region: "hip", re: /./ },
+
+  // Quads: knee extension in isolation versus loaded under a squat pattern.
+  { group: "quads", region: "isolation", re: /leg extension|sissy/i },
+  { group: "quads", region: "squat", re: /./ },
+
+  // Calves: the textbook case. Standing is gastrocnemius, seated is soleus.
+  { group: "calves", region: "soleus", re: /seated/i },
+  { group: "calves", region: "gastroc", re: /./ },
+
+  // Core: bracing against movement is not the same as flexing the spine.
+  { group: "core", region: "anti", re: /plank|carry|pallof|dead ?bug|hollow/i },
+  { group: "core", region: "rotation", re: /twist|woodchop|oblique|side bend/i },
+  { group: "core", region: "flexion", re: /./ },
+];
+
+/** The part of the muscle a movement loads, or null when nothing claims it. */
+export function regionOfMovement(group: MuscleGroup, name: string): string | null {
+  for (const r of REGIONS) {
+    if (r.group === group && r.re.test(name)) return r.region;
+  }
+  return null;
+}
+
 // Only the imported gym database. The hand-written EXERCISES list is field-sport
 // coaching content and tags several muscles per drill — pulling it in here would
 // classify "Ladder quick-feet" (muscles: Calves, Hip flexors) as calf work and
@@ -643,6 +716,17 @@ function pickForSession(
   frequency: (g: MuscleGroup) => number,
   weeklyTarget: (g: MuscleGroup) => number,
   /**
+   * Which part of each muscle the BLOCK has already covered.
+   *
+   * Shared across days rather than reset per session, because a muscle trained
+   * twice a week is trained twice by the block and the second day is exactly
+   * where the other angle belongs. Per-session memory got the chest right —
+   * flat, incline, decline, fly in one day — and still put a standing calf
+   * raise on Tuesday and another standing calf raise on Friday, never once
+   * loading the soleus.
+   */
+  regions: Map<MuscleGroup, Set<string>>,
+  /**
    * How many earlier days this week have already opened on this muscle group.
    *
    * THE PRIMARY IS NOT ROTATED BY DAY. It used to be: the offset that varies
@@ -699,17 +783,74 @@ function pickForSession(
     const candidates = withKit.length ? withKit : eligible;
     if (candidates.length === 0) return false;
     const nth = count.get(g) ?? 0;
+    /**
+     * A SECOND MOVEMENT FOR A MUSCLE SHOULD TRAIN A DIFFERENT PART OF IT.
+     *
+     * Without this a chest day came out as flat bench, dumbbell bench and a
+     * flat fly — three movements, one angle, and an upper chest that never got
+     * loaded. Same story for a hamstring day of three hinges, which trains the
+     * hip end three times and the knee end not at all.
+     *
+     * Only ever a PREFERENCE. Where no fresh angle is available the original
+     * list stands, so this can add coverage and never empty a slot; and a
+     * movement the region table does not recognise returns null, which neither
+     * blocks nor is blocked.
+     */
+    /**
+     * THE ANCHOR IS CHOSEN BY RANK; VARIETY APPLIES AFTER IT.
+     *
+     * Filtering the first COMPOUND by region knocked sessions off the staple
+     * list — a second upper day opened on an incline dumbbell press because
+     * "mid" was already covered, which is a fine accessory and not a lift to
+     * build a session on. Anchors already vary across days by rank; see
+     * `anchored`.
+     *
+     * Isolation-only groups are the exception and take the filter from their
+     * FIRST movement: calves have no compound anchor, so every calf raise
+     * arrives through this branch, and without it the week gets a standing
+     * raise on Tuesday and another standing raise on Friday.
+     */
+    const applyRegion = nth > 0 || !wantCompound || anchored(g) > 0;
+    const seen = applyRegion ? regions.get(g) : undefined;
+    const varied = seen && seen.size
+      ? candidates.filter((m) => {
+          const r = regionOfMovement(g, m.ex.name);
+          return r === null || !seen.has(r);
+        })
+      : candidates;
+    let from = varied.length ? varied : candidates;
+    /**
+     * AN ANCHOR IS ALWAYS A STAPLE WHEN ONE IS ELIGIBLE.
+     *
+     * The region preference above applies to a repeat day's anchor too — a
+     * second upper day should not open on the same angle as the first. Left
+     * alone that pushed sessions onto novelty lifts, because the highest-ranked
+     * movement with a fresh region is not necessarily a movement worth building
+     * a session on. Narrowing to staples first keeps both properties: the
+     * session opens on a real lift, and it opens on a different part of the
+     * muscle from last time.
+     */
+    if (nth === 0) {
+      const staples = from.filter((m) => STAPLE_RANK.has(m.ex.name.toLowerCase()));
+      if (staples.length) from = staples;
+    }
     // The FIRST movement for a group is its anchor and is chosen by rank, not
     // by rotation — see `anchored`. Everything after it strides through the
     // pool, so a group with four slots gets four different movements rather
     // than four neighbours.
     const index = nth === 0
-      ? anchored(g) % candidates.length
-      : (offset + nth * 3) % candidates.length;
-    const pick = candidates[index];
+      ? anchored(g) % from.length
+      : (offset + nth * 3) % from.length;
+    const pick = from[index];
     taken.add(pick.ex.id);
     chosen.push(pick);
     count.set(g, (count.get(g) ?? 0) + 1);
+    const region = regionOfMovement(g, pick.ex.name);
+    if (region) {
+      const set = regions.get(g) ?? new Set<string>();
+      set.add(region);
+      regions.set(g, set);
+    }
     return true;
   };
 
@@ -894,12 +1035,14 @@ export function buildHypertrophyProgram(input: HypertrophyInput): ProgramPlan {
    * exercises trained the same way.
    */
   const anchoredSoFar = new Map<MuscleGroup, number>();
+  // One region map for the whole block — see `regions` in pickForSession.
+  const regionsSoFar = new Map<MuscleGroup, Set<string>>();
   const blockMovements = split.map((day, di) => {
     // Rank offset carried into the next block, so block two opens on different
     // lifts trained the same way — variety between blocks, never inside one.
     const anchored = (g: MuscleGroup) => (anchoredSoFar.get(g) ?? 0) + (block - 1);
     const picked = pickForSession(
-      day.groups, di + (block - 1) * 7, pain, input.constraints, frequency, weeklyTarget, anchored,
+      day.groups, di + (block - 1) * 7, pain, input.constraints, frequency, weeklyTarget, regionsSoFar, anchored,
     );
     for (const g of new Set(picked.map((m) => m.group))) {
       anchoredSoFar.set(g, (anchoredSoFar.get(g) ?? 0) + 1);
