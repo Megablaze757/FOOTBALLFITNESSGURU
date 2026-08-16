@@ -316,6 +316,16 @@ export interface BuildProgramInput {
   /** Movement ids a coach picked from the library. A strong preference that
    *  still passes through the pain filter and the athlete's exclusions. */
   mustInclude?: string[];
+  /**
+   * Tested one-rep maxes, keyed as lib/benchmarks.ts stores them.
+   *
+   * The app has recorded these on the Benchmarks page since it had one and has
+   * never used them to prescribe anything — an athlete with a tested 140kg
+   * squat was still handed "4 × 8, pick something you could do 2-3 more reps
+   * with". Optional: without it the block is written in reps and reps in
+   * reserve, which is how most athletes will get it.
+   */
+  oneRepMax?: Record<string, number>;
 
   // --- Running. Ignored unless the athlete's sport is running. --------------
   /** Current weekly mileage. The block is built from where they ARE. */
@@ -411,6 +421,7 @@ export function buildProgram(input: BuildProgramInput): ProgramPlan {
       constraints,
       isInSeason: input.isInSeason,
       style: input.style,
+      oneRepMax: input.oneRepMax,
     }));
   }
 

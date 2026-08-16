@@ -21,9 +21,10 @@
 
 import type { PainMap } from "./types";
 import type { Exercise } from "./exercises";
-import { IMPORTED_EXERCISES } from "./exercise-catalog";
+import { IMPORTED_EXERCISES, STAPLES } from "./exercise-catalog";
 import { isExcluded, type Constraints, type Region } from "./constraints";
 import { MOVEMENTS } from "./movements";
+import { standardFor } from "./strength-standards";
 import { runZoneLabel, runZoneFeel } from "./running";
 // From ./engine, not ./coach: coach.ts imports this module, so taking the
 // program shapes from there made the two files import each other.
@@ -109,10 +110,40 @@ export function isCompound(ex: Exercise): boolean {
   return !ISOLATION.test(ex.name);
 }
 
-// The hand-coached entries in exercise-catalog.ts are exactly the lifts a
-// bodybuilder expects to see, so having real cues is a good proxy for "staple".
+/**
+ * Staples, and their rank among themselves.
+ *
+ * A flat bonus was not enough. STAPLES is ordered — the barbell squat, deadlift
+ * and bench first, the accessories that merely happen to be staples last — and
+ * a flat bonus threw that ordering away, leaving ties broken by whether the
+ * catalogue happened to carry coaching cues. "Bench Press" had none and
+ * "Dumbbell Bench Press" did, so the dumbbell variant anchored every chest day
+ * in the app: the wrong lift, chosen for a reason that has nothing to do with
+ * training.
+ */
+const STAPLE_RANK = new Map(STAPLES.map((n, i) => [n.toLowerCase(), STAPLES.length - i]));
+
+/**
+ * How good a fit a movement is for the slot it is being considered for.
+ *
+ * "HAS COACHING CUES" WAS NOT A GOOD ENOUGH PROXY. It was the only signal here,
+ * and it produced main lifts like "Close Grip Bench Press" for chest — a
+ * triceps press whose own catalogue entry says so — plus "Cheat Curl", "JM
+ * Press" and "Tate Press" anchoring sessions. Those are all real exercises and
+ * none of them is what a coach opens a chest day with.
+ *
+ * An explicit staple list beats a proxy, because the question "which movements
+ * should a programme be built on" has a known answer that does not need to be
+ * inferred. Cues still count — they mean the athlete gets real coaching on the
+ * screen — and advanced lifts are still penalised, but neither can now outrank
+ * a squat for the slot that decides what the session is.
+ */
 function quality(ex: Exercise): number {
   let q = (ex.cues?.length ?? 0) > 0 ? 10 : 0;
+  // Scaled so the LAST staple still outranks the best non-staple, and the
+  // ordering within the list survives.
+  const staple = STAPLE_RANK.get(ex.name.toLowerCase());
+  if (staple != null) q += 40 + staple;
   if (ex.difficulty === "advanced") q -= 4; // Olympic/gymnastic work isn't the point here
   return q;
 }
@@ -394,6 +425,24 @@ const WEEK_SETS_DELTA = [0, 0, 1, -1]; // weeks 1-4; week 4 deloads
 const WEEK_REP_BUMP = [0, 2, 2, 0];    // extra reps within the range
 const WEEK_THEMES = ["Base", "Build", "Peak", "Deload"];
 const WEEK_INTENSITY = ["Moderate", "Higher", "Peak", "Deload"];
+
+/**
+ * HOW HARD EACH WEEK IS, IN REPS IN RESERVE.
+ *
+ * RIR is how many more reps you could have done when you racked it, and it is
+ * the unit hypertrophy programming is actually written in — because "how much
+ * weight" depends on the person and "how close to failure" does not. Three in
+ * reserve is technique work at a real load; one is genuinely hard; zero is
+ * failure, which belongs at the end of a block on isolation work and nowhere
+ * near a heavy compound.
+ *
+ * The block accumulates: same lifts, same or rising reps, less left in the tank
+ * each week, then a deload that takes the effort off rather than the exercises.
+ * That last point is what makes a deload a deload — a week of different, easier
+ * movements is not a deload, it is a different week.
+ */
+const WEEK_RIR = [3, 2, 1, 4];
+
 const WEEK_FOCUS = [
   "Find your working weights and leave 2-3 reps in the tank.",
   "Same weights, more reps — chase the top of every range.",
@@ -427,6 +476,14 @@ export interface HypertrophyInput {
   isInSeason?: boolean;
   /** Which recognised split to build; "auto" picks one from the day count. */
   style?: SplitStyle;
+  /**
+   * Tested one-rep maxes, keyed as lib/benchmarks.ts stores them.
+   *
+   * Optional, and absent for most athletes — the block is written in reps and
+   * reps-in-reserve without it. Where a max IS known, the anchor lifts get an
+   * actual weight, which is the difference between a plan and a worksheet.
+   */
+  oneRepMax?: Record<string, number>;
 }
 
 /**
@@ -577,6 +634,21 @@ function pickForSession(
   constraints: Constraints,
   frequency: (g: MuscleGroup) => number,
   weeklyTarget: (g: MuscleGroup) => number,
+  /**
+   * How many earlier days this week have already opened on this muscle group.
+   *
+   * THE PRIMARY IS NOT ROTATED BY DAY. It used to be: the offset that varies
+   * the accessories was also picking the anchor, so quads — trained on days two
+   * and four — got the pool's second and fourth choices and the back squat, the
+   * first, was never selected in any block the engine produced. The best lift
+   * for a muscle was unreachable for the same reason a wheel is: it kept
+   * turning.
+   *
+   * Counting the group's own appearances instead gives back squat on the first
+   * leg day and front squat on the second, which is variety with a reason
+   * rather than variety as a side effect.
+   */
+  anchored: (g: MuscleGroup) => number,
 ): Movement[] {
   const usable = (g: MuscleGroup) => {
     const joint = GROUP_JOINT[g];
@@ -600,9 +672,15 @@ function pickForSession(
         !taken.has(m.ex.id) && !isExcluded(constraints, GROUP_REGION[g], m.ex.name)
     );
     if (candidates.length === 0) return false;
-    // Stride through the pool rather than taking neighbours, so a group with
-    // four slots gets four different movements instead of four rows.
-    const pick = candidates[(offset + (count.get(g) ?? 0) * 3) % candidates.length];
+    const nth = count.get(g) ?? 0;
+    // The FIRST movement for a group is its anchor and is chosen by rank, not
+    // by rotation — see `anchored`. Everything after it strides through the
+    // pool, so a group with four slots gets four different movements rather
+    // than four neighbours.
+    const index = nth === 0
+      ? anchored(g) % candidates.length
+      : (offset + nth * 3) % candidates.length;
+    const pick = candidates[index];
     taken.add(pick.ex.id);
     chosen.push(pick);
     count.set(g, (count.get(g) ?? 0) + 1);
@@ -628,17 +706,95 @@ function pickForSession(
   return chosen;
 }
 
-function drillFrom(m: Movement, weekIndex: number, blockScale: number): ProgramDrill {
+/**
+ * REST IS A PROGRAMMING VARIABLE, NOT A DETAIL.
+ *
+ * Sixty seconds and three minutes between sets are two different training
+ * stimuli off the same sets and reps — the short rest costs load on the later
+ * sets, which is the thing the volume is there to accumulate. The S&C engine
+ * has prescribed rest since it was written (36 of 40 drills carry one). The
+ * hypertrophy engine prescribed it on 4 of 35, and those four were the cardio
+ * finishers: every actual lift went out with no rest guidance at all.
+ *
+ * Compounds get three minutes because they are limited by systemic fatigue and
+ * a rushed third set of squats is a worse set of squats. Isolation gets ninety
+ * seconds because a cable fly recovers locally and quickly.
+ */
+const REST_COMPOUND = 180;
+const REST_ISOLATION = 90;
+
+/**
+ * A WORKING WEIGHT, WHERE THE APP ALREADY KNOWS ENOUGH TO GIVE ONE.
+ *
+ * The Benchmarks page stores tested one-rep maxes and the programme has never
+ * once used them. Somebody could log a 140kg squat and still be handed "4 × 8,
+ * pick something you could do 2-3 more reps with" — being asked a question the
+ * app could answer.
+ *
+ * From the 1RM via the Epley relation, run backwards. The load for a set is
+ * decided by how many reps it will take to reach failure, which is the
+ * prescribed reps PLUS the reps left in reserve: 8 reps at 2 RIR is a weight
+ * you could have done 10 with. So the week's RIR moves the bar as much as the
+ * rep target does, and the block gets heavier as RIR falls even though the reps
+ * on the page have not changed. That is progressive overload written down.
+ *
+ * Rounded to 2.5kg because that is the smallest plate pair on most racks, and
+ * a prescription of 87.3kg is a prescription nobody can load.
+ *
+ * Returns null — and the drill falls back to reps-in-reserve — whenever the
+ * lift has no tested max. An estimate presented as a number is worse than an
+ * honest instruction: see `intensity` in drillFrom.
+ */
+function loadFor(
+  m: Movement,
+  weekIndex: number,
+  oneRepMax: Record<string, number> | undefined,
+): string | null {
+  if (!oneRepMax) return null;
+  const standard = standardFor(m.ex.name);
+  const key = standard?.benchmarkKey;
+  if (!key) return null;
+  const max = Number(oneRepMax[key]);
+  if (!Number.isFinite(max) || max <= 0) return null;
+
+  const { reps } = prescribe(m.compound, weekIndex);
+  const rir = WEEK_RIR[weekIndex] ?? 2;
+  const repsToFailure = reps + rir;
+  const working = max / (1 + repsToFailure / 30);
+  const rounded = Math.max(20, Math.round(working / 2.5) * 2.5);
+  return `${rounded}kg · leave ${rir} in the tank`;
+}
+
+function drillFrom(m: Movement, weekIndex: number, blockScale: number, load: string | null): ProgramDrill {
   const { sets, reps } = prescribe(m.compound, weekIndex);
   const cue = m.ex.cues?.[0] ?? "Control the lowering, full range, no swinging.";
   const role = m.compound ? "Main lift" : "Isolation";
+  const rir = WEEK_RIR[weekIndex] ?? 2;
+
+  /**
+   * SAY WHAT THE LIFT DOES, not what its slot is called.
+   *
+   * This read `Main lift for chest — a pressing movement that overloads the
+   * triceps` on a close-grip bench, which is the plan contradicting itself
+   * inside a single sentence: the slot label came from the muscle group the
+   * engine filled, and the description came from the exercise. When the
+   * catalogue's own words disagree with the group, the catalogue is describing
+   * the movement and the group is describing the job it was picked for — so
+   * name the job first and let the description stand on its own.
+   */
+  const why = m.ex.why ?? `builds the ${GROUP_LABEL[m.group]}`;
   return {
     name: m.ex.name,
     sets: Math.max(2, Math.round(sets * blockScale)),
     reps,
     cue,
-    reason: `${role} for ${GROUP_LABEL[m.group]} — ${m.ex.why ?? `builds the ${GROUP_LABEL[m.group]}`}`,
+    reason: `${role} for ${GROUP_LABEL[m.group]}. ${why}`,
     progression: WEEK_PROGRESSION[weekIndex],
+    rest: m.compound ? REST_COMPOUND : REST_ISOLATION,
+    // Reps in reserve, not RPE, and spelled out — "RPE 8" is jargon to most
+    // people using this, and "leave 2 in the tank" is the same instruction.
+    intensity: load ?? (rir === 0 ? "to failure" : `leave ${rir} in the tank`),
+    tempo: m.ex.tempo && m.ex.tempo !== "Controlled" ? m.ex.tempo : undefined,
   };
 }
 
@@ -674,15 +830,49 @@ export function buildHypertrophyProgram(input: HypertrophyInput): ProgramPlan {
   const frequency = (g: MuscleGroup) => freq.get(g) ?? 1;
   const weeklyTarget = reachableTarget(split.length, [...freq.keys()]);
 
+  /**
+   * THE BLOCK'S MOVEMENTS, CHOSEN ONCE.
+   *
+   * This is the change that turns four weeks of workouts into a training block.
+   *
+   * The offset used to include the week index, so every session re-picked its
+   * exercises: a measured four-week block had ONE movement out of thirty-five
+   * present in all four weeks, and the main lift of day one went Close Grip
+   * Bench → Decline Bench → Dumbbell Bench → Incline Bench. You cannot add
+   * weight to a lift you do once. Progressive overload — the mechanism the
+   * whole thing exists to drive — was impossible by construction, and the plan
+   * said so in its own progression line: "pick a weight you could do 2-3 more
+   * reps with" is advice you can only act on if the lift is still there next
+   * week.
+   *
+   * So the movements are fixed for the block and the LOAD is what progresses:
+   * same lifts, reps climbing inside the range, reps-in-reserve falling from
+   * three to one, then a deload that eases the same session rather than
+   * replacing it. Variety belongs between blocks, which is what the `block`
+   * counter is for — it shifts this offset, so block two is a different set of
+   * exercises trained the same way.
+   */
+  const anchoredSoFar = new Map<MuscleGroup, number>();
+  const blockMovements = split.map((day, di) => {
+    // Rank offset carried into the next block, so block two opens on different
+    // lifts trained the same way — variety between blocks, never inside one.
+    const anchored = (g: MuscleGroup) => (anchoredSoFar.get(g) ?? 0) + (block - 1);
+    const picked = pickForSession(
+      day.groups, di + (block - 1) * 7, pain, input.constraints, frequency, weeklyTarget, anchored,
+    );
+    for (const g of new Set(picked.map((m) => m.group))) {
+      anchoredSoFar.set(g, (anchoredSoFar.get(g) ?? 0) + 1);
+    }
+    return picked;
+  });
+
   const weeks: ProgramWeek[] = WEEK_THEMES.map((theme, wi) => {
     // Annotated on the callback, not just the variable: without it the returned
     // object literal widens `focus: "strength"` to `string`, which no longer
     // satisfies GoalType.
     const sessions: ProgramSession[] = split.map((day, di): ProgramSession => {
-      // Offset shifts per day AND per week, so week 2's Push day varies the
-      // accessories rather than repeating week 1 exactly.
-      const movements = pickForSession(day.groups, di + wi, pain, input.constraints, frequency, weeklyTarget);
-      const drills = movements.map((m) => drillFrom(m, wi, blockScale * seasonScale));
+      const movements = blockMovements[di];
+      const drills = movements.map((m) => drillFrom(m, wi, blockScale * seasonScale, loadFor(m, wi, input.oneRepMax)));
       const covered = [...new Set(movements.map((m) => GROUP_LABEL[m.group]))];
       // A finisher, and the only aerobic work a bodybuilding split had. Without
       // it "gym + build muscle" — the most common pair in the app — was the one

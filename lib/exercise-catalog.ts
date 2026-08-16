@@ -97,6 +97,34 @@ const COACHING: Record<string, { cues: string[]; why: string }> = {
   "upright row": { cues: ["Lead with the elbows", "Pull to mid-chest, not the chin", "Keep it slow"], why: "Builds side delts and traps (stop at chest height to spare the shoulder)." },
   "dumbbell curl": { cues: ["Elbows pinned to your sides", "Full squeeze at the top", "Slow the lower for 2-3s"], why: "The classic biceps builder." },
   "barbell curl": { cues: ["Elbows fixed, no swinging", "Curl to a full contraction", "Control the negative"], why: "Lets you load the biceps heavier than dumbbells." },
+
+  /**
+   * THE LIFTS THE PROGRAMME IS BUILT ON.
+   *
+   * Fourteen of the twenty-seven staples had no coaching at all, including
+   * every barbell lift a block is anchored on — so an athlete was handed a back
+   * squat, the most technical and most consequential movement in their week,
+   * with a generated one-liner and nothing else. A programme that names a lift
+   * and cannot tell you how to do it is a spreadsheet.
+   *
+   * Three cues each, in the order they matter: set-up, the rep, the thing that
+   * goes wrong. `why` says what the lift is for, so the reason line on the
+   * session is about the movement rather than about the slot it filled.
+   */
+  "barbell back squat": { cues: ["Bar on the traps, elbows under the bar", "Sit between the hips — knees track over the toes", "Brace hard before you unrack, not on the way down"], why: "The most complete lower-body builder there is — quads, glutes and the whole trunk under one bar." },
+  "barbell front squat": { cues: ["Elbows high, bar resting on the shoulders", "Stay upright — the bar falls if the chest drops", "Full depth before you drive"], why: "Loads the quads harder than a back squat and punishes a rounded upper back." },
+  "barbell deadlift": { cues: ["Bar over the mid-foot, shins almost touching", "Take the slack out of the bar before you pull", "Push the floor away — hips and chest rise together"], why: "Trains the whole posterior chain and teaches you to brace under real load." },
+  "bench press": { cues: ["Shoulder blades pinned back and down", "Bar to the lower chest, elbows ~45°", "Drive the feet into the floor as you press"], why: "The benchmark upper-body press for chest, front delts and triceps." },
+  "barbell overhead press": { cues: ["Squeeze the glutes so the ribs stay down", "Move the head back, then press past the face", "Finish with the biceps by the ears"], why: "Builds honest overhead strength and shoulders that can hold a position." },
+  "barbell row": { cues: ["Hinge to ~45°, back flat", "Row to the bottom of the ribs", "Stop the torso rising to help the bar"], why: "Heavy horizontal pulling — the balance to all your pressing." },
+  "pull ups": { cues: ["Full dead hang between reps", "Lead with the chest, elbows down and back", "Own the lower — no kipping"], why: "The best builder of back width there is, and it costs nothing." },
+  "leg press": { cues: ["Feet mid-platform, shoulder width", "Lower until the hips start to tuck, no further", "Never lock the knees out hard"], why: "Loads the quads heavily with the trunk taken out of it — useful when the back is tired." },
+  "barbell hip thrust": { cues: ["Shoulder blades on the bench, chin tucked", "Drive through the heels to full lockout", "Squeeze at the top, don't arch the lower back"], why: "The strongest position to load the glutes directly." },
+  "barbell lunge": { cues: ["Long step — the front shin stays near vertical", "Back knee to just above the floor", "Push through the front heel to stand"], why: "Single-leg strength and the balance a bilateral squat never asks for." },
+  "bulgarian split squat": { cues: ["Back foot on the bench, laces down", "Drop straight down, torso slightly forward", "All the weight through the front foot"], why: "Brutal single-leg quad and glute work at a fraction of the spinal load." },
+  "cable tricep pushdown": { cues: ["Elbows pinned to the ribs", "Extend to a full lockout", "Let the stack stretch the triceps at the top"], why: "Constant-tension triceps isolation that is easy on the elbows." },
+  "leg curl": { cues: ["Hips flat on the pad", "Curl all the way to the finish", "Lower slowly — that half is the point"], why: "Trains the hamstrings at the knee, which hinges alone never do." },
+  "standing calf raise": { cues: ["Rise onto the big toe, not the outside edge", "Pause at the top", "Full stretch at the bottom, no bouncing"], why: "The calves grow from the stretch and the pause — speed wastes the set." },
   "hammer curl": { cues: ["Neutral grip, thumbs up", "Elbows tight to the body", "Squeeze at the top"], why: "Hits the biceps and the brachialis/forearm for thicker arms." },
   "preacher curl": { cues: ["Armpits on the pad", "Don't fully lock out at the bottom", "Full squeeze at the top"], why: "Strict biceps isolation with no cheating." },
   "cable bicep curl": { cues: ["Elbows fixed", "Constant cable tension", "Squeeze hard at the top"], why: "Keeps tension on the biceps through the whole rep." },
@@ -123,7 +151,10 @@ const COACHING: Record<string, { cues: string[]; why: string }> = {
 };
 
 function build(raw: string): Exercise[] {
-  return raw.trim().split("\n").map((line) => {
+  // Blank lines are dropped rather than parsed into an entry with no name. The
+  // list is now built from two blocks joined together, and the seam between
+  // them is exactly where an empty line appears.
+  return raw.trim().split("\n").map((l) => l.trim()).filter(Boolean).map((line) => {
     const [name, muscle] = line.split("|").map((s) => s.trim());
     const equipment = equipmentOf(name);
     const coach = COACHING[name.toLowerCase()];
@@ -394,4 +425,65 @@ Superman|Core
 Scissor Kicks|Core
 `;
 
-export const IMPORTED_EXERCISES: Exercise[] = build(RAW);
+/**
+ * THE LIFTS THE CATALOGUE FORGOT.
+ *
+ * This list has 23 squat variants — Box, Pause, Pin, Zercher, Sissy, Safety
+ * Bar, Half — and no back squat. It has Decline, Incline, Close Grip and Floor
+ * presses, and Bench Press, but no overhead press, no barbell row, no pull-up,
+ * no lat pulldown, no conventional deadlift and no leg press that isn't a sled.
+ *
+ * Every one of those is a variation of a lift that is not in here, which is the
+ * signature of a list scraped from the long tail of a database. It shows up in
+ * the generated plans: a four-week block came out with "Dumbbell Deadlift" and
+ * "Sled Leg Press" as its main lower-body work, because the movements a coach
+ * would actually have chosen were not available to choose.
+ *
+ * These are the ones the programme is built on. They are listed separately from
+ * RAW so it stays a clean record of what was imported, and so `STAPLES` below
+ * can prefer them for the slot that anchors a session.
+ */
+const STAPLE_RAW = `
+Barbell Back Squat|Legs
+Barbell Front Squat|Legs
+Barbell Deadlift|Whole Body
+Barbell Overhead Press|Shoulders
+Barbell Row|Back
+Pull Ups|Back
+Lat Pulldown|Back
+Leg Press|Legs
+Barbell Hip Thrust|Legs
+Dumbbell Lateral Raise|Shoulders
+Cable Tricep Pushdown|Triceps
+Leg Curl|Legs
+Standing Calf Raise|Legs
+Hanging Leg Raise|Core
+Plank|Core
+Bulgarian Split Squat|Legs
+`;
+
+/**
+ * The movements a session should be BUILT on, by name.
+ *
+ * A hypertrophy block opens each muscle group with one compound, and which one
+ * it opens with is the most consequential choice in the session. Ranking the
+ * pool by "has coaching cues" got "Close Grip Bench Press" as a chest main lift
+ * — a triceps press, and the plan said so in its own reason line while calling
+ * it a chest lift — and "Cheat Curl" and "JM Press" as anchors.
+ *
+ * These are not the only movements that can fill a primary slot; they are the
+ * ones that win it when they are available and eligible. Novelty belongs in the
+ * accessory work, where getting it slightly wrong costs one exercise rather
+ * than the spine of the whole block.
+ */
+export const STAPLES: readonly string[] = [
+  "Barbell Back Squat", "Barbell Front Squat", "Barbell Deadlift", "Romanian Deadlift",
+  "Bench Press", "Incline Bench Press", "Barbell Overhead Press", "Barbell Row",
+  "Pull Ups", "Chin Ups", "Lat Pulldown", "Seated Cable Row", "Leg Press",
+  "Barbell Hip Thrust", "Dumbbell Bench Press", "Dumbbell Shoulder Press",
+  "Dumbbell Row", "Dips", "Barbell Lunge", "Bulgarian Split Squat",
+  "Barbell Curl", "Cable Tricep Pushdown", "Leg Curl", "Leg Extension",
+  "Standing Calf Raise", "Dumbbell Lateral Raise", "Hanging Leg Raise",
+];
+
+export const IMPORTED_EXERCISES: Exercise[] = build(`${RAW}${STAPLE_RAW}`);

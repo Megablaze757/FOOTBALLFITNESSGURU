@@ -335,7 +335,7 @@ function GoalBuilder({ painMap, painNote, latestBench, sport, initialPositions, 
       }
       // `notes` matters as much here as on the AI path — without it the local
       // engine ignored "I don't train legs" and prescribed squats anyway.
-      plan = buildProgram({ goal: g, painMap, isInSeason: inSeason, sport, position: pos, focus: f, daysPerWeek: days ?? daysPerWeek, notes, style, ...runInput });
+      plan = buildProgram({ goal: g, painMap, isInSeason: inSeason, sport, position: pos, focus: f, daysPerWeek: days ?? daysPerWeek, notes, style, oneRepMax: latestBench, ...runInput });
     }
 
     return await savePlan(plan, g, f, pos);
@@ -813,6 +813,7 @@ function ActiveProgram({
     const newPlan = buildProgram({
       goal, painMap, isInSeason: nextSeason, sport, focus, position: positions,
       daysPerWeek: plan.weeks[0]?.sessions.length, notes: program.goal_notes,
+      oneRepMax: latestBench,
     });
     const { error: seasonErr } = await supabase
       .from("programs").update({ plan: newPlan, in_season: nextSeason }).eq("id", program.id);
@@ -944,6 +945,9 @@ function ActiveProgram({
     const newPlan = buildProgram({
       goal, painMap, isInSeason: program.in_season, block: nextBlock, sport, focus, position: positions,
       daysPerWeek: plan.weeks[0]?.sessions.length, notes: program.goal_notes,
+      // Their tested maxes, so the next block is written in kilos rather than
+      // in "pick something that feels about right".
+      oneRepMax: latestBench,
     });
     // Insert first, archive second. The other order archives the block they're
     // on and then, if the insert fails, leaves them with no active program at

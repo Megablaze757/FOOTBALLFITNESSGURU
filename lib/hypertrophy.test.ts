@@ -250,3 +250,152 @@ test("field-sport athletes are untouched by this change", () => {
   const plan = buildProgram({ goal: "speed", painMap: {}, sport: "football", focus: "performance" });
   assert.ok(!/split/.test(plan.summary), plan.summary);
 });
+
+// =============================================================================
+// A BLOCK, NOT A WORKOUT GENERATOR.
+//
+// Measured before this: ONE movement out of thirty-five survived all four
+// weeks, and day one's main lift went Close Grip Bench → Decline Bench →
+// Dumbbell Bench → Incline Bench. You cannot add weight to a lift you do once,
+// so progressive overload — the mechanism the whole thing exists to drive —
+// was impossible by construction, while the plan's own progression line read
+// "pick a weight you could do 2-3 more reps with".
+// =============================================================================
+
+import { STAPLES } from "./exercise-catalog";
+
+const namesIn = (week: { sessions: { drills: { name: string }[] }[] }) =>
+  new Set(week.sessions.flatMap((s) => s.drills.map((d) => d.name)));
+
+test("the lifts stay put for the whole block, so load can progress", () => {
+  for (const daysPerWeek of [3, 4, 5, 6]) {
+    const plan = buildProgram({ goal: "strength", painMap: {}, sport: "gym", focus: "aesthetics", daysPerWeek });
+    const weeks = plan.weeks.map(namesIn);
+    const stable = [...weeks[0]].filter((n) => weeks.every((w) => w.has(n)));
+    // Not 100%: the cardio finisher rotates by design, and there is one per day.
+    const ratio = stable.length / weeks[0].size;
+    assert.ok(ratio > 0.8,
+      `${daysPerWeek}d: only ${stable.length} of ${weeks[0].size} movements survive the block — nothing can be progressively overloaded`);
+  }
+});
+
+test("the main lift of a session is the same lift in week 4 as in week 1", () => {
+  // The sharpest form of the same claim, and the one an athlete would notice.
+  const plan = buildProgram({ goal: "strength", painMap: {}, sport: "gym", focus: "aesthetics", daysPerWeek: 4 });
+  for (let d = 0; d < plan.weeks[0].sessions.length; d++) {
+    const opener = plan.weeks.map((w) => w.sessions[d]?.drills[0]?.name);
+    assert.equal(new Set(opener).size, 1, `day ${d + 1} opens on a different lift each week: ${opener.join(" → ")}`);
+  }
+});
+
+test("a deload eases the same session rather than replacing it", () => {
+  // A week of different, easier movements is not a deload — it is a different
+  // week, and it breaks the comparison the deload exists to set up.
+  const plan = buildProgram({ goal: "strength", painMap: {}, sport: "gym", focus: "aesthetics", daysPerWeek: 4 });
+  const peak = plan.weeks[2].sessions[0];
+  const deload = plan.weeks[3].sessions[0];
+  assert.deepEqual(deload.drills.map((d) => d.name), peak.drills.map((d) => d.name));
+  const sets = (s: typeof peak) => s.drills.reduce((n, d) => n + d.sets, 0);
+  assert.ok(sets(deload) < sets(peak), `deload carries ${sets(deload)} sets against a peak of ${sets(peak)}`);
+});
+
+test("effort climbs across the block and backs off for the deload", () => {
+  const plan = buildProgram({ goal: "strength", painMap: {}, sport: "gym", focus: "aesthetics", daysPerWeek: 4 });
+  const rir = plan.weeks.map((w) => {
+    const m = /leave (\d+) in the tank/.exec(w.sessions[0].drills[0].intensity ?? "");
+    return m ? Number(m[1]) : null;
+  });
+  assert.deepEqual(rir, [3, 2, 1, 4], `reps in reserve across the block: ${rir.join(", ")}`);
+});
+
+test("blocks two and three are a different set of lifts", () => {
+  // Variety belongs BETWEEN blocks. Without this the fix above would hand
+  // somebody the same eight exercises until they quit.
+  const first = namesIn(buildProgram({ goal: "strength", painMap: {}, sport: "gym", focus: "aesthetics", daysPerWeek: 4, block: 1 }).weeks[0]);
+  const second = namesIn(buildProgram({ goal: "strength", painMap: {}, sport: "gym", focus: "aesthetics", daysPerWeek: 4, block: 2 }).weeks[0]);
+  const shared = [...first].filter((n) => second.has(n));
+  assert.ok(shared.length < first.size * 0.7,
+    `block 2 repeats ${shared.length} of block 1's ${first.size} movements`);
+});
+
+test("sessions are anchored on staple lifts, not on novelty", () => {
+  /**
+   * The engine used to rank the pool by "has coaching cues", which is a proxy
+   * for staple and not a good one. It produced "Close Grip Bench Press" as a
+   * chest main lift — a triceps press whose own catalogue entry says so — and
+   * "Cheat Curl", "JM Press" and "Tate Press" opening sessions.
+   */
+  const staples = new Set(STAPLES.map((s) => s.toLowerCase()));
+  for (const daysPerWeek of [3, 4, 5]) {
+    const plan = buildProgram({ goal: "strength", painMap: {}, sport: "gym", focus: "aesthetics", daysPerWeek });
+    for (const s of plan.weeks[0].sessions) {
+      const opener = s.drills[0]?.name ?? "";
+      assert.ok(staples.has(opener.toLowerCase()),
+        `${daysPerWeek}d "${s.title}" opens on ${opener}, which is not a lift to build a session on`);
+    }
+  }
+});
+
+test("a four-day block contains the squat, the hinge and the press", () => {
+  // The catalogue held 23 squat variants and no back squat, so blocks came out
+  // anchored on "Dumbbell Deadlift" and "Sled Leg Press". A hypertrophy block
+  // missing the three lifts everything else is accessory to is not a block.
+  const names = [...namesIn(buildProgram({ goal: "strength", painMap: {}, sport: "gym", focus: "aesthetics", daysPerWeek: 4 }).weeks[0])];
+  const has = (re: RegExp) => names.some((n) => re.test(n));
+  assert.ok(has(/^barbell (back|front) squat$/i), `no barbell squat: ${names.join(", ")}`);
+  assert.ok(has(/deadlift/i), `no hinge: ${names.join(", ")}`);
+  assert.ok(has(/bench press|overhead press/i), `no barbell press: ${names.join(", ")}`);
+});
+
+test("every lift carries rest and an effort target", () => {
+  // 4 of 35 did, and those four were the cardio finishers: every actual lift
+  // went out with no rest guidance and no idea how hard to go.
+  const plan = buildProgram({ goal: "strength", painMap: {}, sport: "gym", focus: "aesthetics", daysPerWeek: 4 });
+  for (const s of plan.weeks[0].sessions) {
+    for (const d of s.drills) {
+      assert.ok((d.rest ?? 0) > 0, `${d.name} has no rest period`);
+      assert.ok(d.intensity, `${d.name} has no effort target`);
+    }
+  }
+});
+
+test("a tested max becomes a working weight", () => {
+  /**
+   * The Benchmarks page has stored these since it existed and the programme
+   * has never once used them — an athlete with a tested 140kg squat was still
+   * told to "pick something you could do 2-3 more reps with".
+   *
+   * 8 reps leaving 3 in reserve is a weight you could do 11 with, which by the
+   * Epley relation is 140 / (1 + 11/30) = 102.4kg, rounded to the nearest
+   * 2.5kg plate pair.
+   */
+  const plan = buildProgram({
+    goal: "strength", painMap: {}, sport: "gym", focus: "aesthetics", daysPerWeek: 4,
+    oneRepMax: { squat_1rm: 140 },
+  });
+  const squat = plan.weeks[0].sessions.flatMap((s) => s.drills).find((d) => /back squat/i.test(d.name));
+  assert.ok(squat, "no squat in the block to load");
+  assert.match(squat!.intensity ?? "", /^102\.5kg/, `squat prescribed at ${squat!.intensity}`);
+});
+
+test("without a tested max it says how hard, not how heavy", () => {
+  // An invented number is worse than an honest instruction.
+  const plan = buildProgram({ goal: "strength", painMap: {}, sport: "gym", focus: "aesthetics", daysPerWeek: 4 });
+  for (const d of plan.weeks[0].sessions.flatMap((s) => s.drills)) {
+    if (/kg/.test(d.intensity ?? "")) assert.fail(`${d.name} was given a weight with no max on file: ${d.intensity}`);
+  }
+});
+
+test("the reason for a lift does not contradict itself", () => {
+  // "Main lift for chest — a pressing movement that overloads the triceps" was
+  // shipping: the slot label came from the group the engine filled and the
+  // description from the exercise, and nothing checked they agreed.
+  const plan = buildProgram({ goal: "strength", painMap: {}, sport: "gym", focus: "aesthetics", daysPerWeek: 4 });
+  for (const d of plan.weeks[0].sessions.flatMap((s) => s.drills)) {
+    const m = /^Main lift for (\w+)\./.exec(d.reason ?? "");
+    if (!m) continue;
+    const other = ["chest", "back", "shoulders", "biceps", "triceps", "quads", "hamstrings", "glutes", "calves", "core"]
+      .filter((g) => g !== m[1] && new RegExp(`overloads the ${g}`, "i").test(d.reason ?? ""));
+    assert.deepEqual(other, [], `${d.name}: "${d.reason}"`);
+  }
+});
