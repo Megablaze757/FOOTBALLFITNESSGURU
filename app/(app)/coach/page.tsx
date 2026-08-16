@@ -8,7 +8,7 @@ import { ConfirmButton } from "@/components/ConfirmButton";
 import { useCurrentUser } from "@/lib/auth";
 import { useAsync, invalidate } from "@/lib/use-async";
 import {
-  GOALS, goalsForSport, buildProgram, analyzeProgress, painByArea,
+  GOALS, goalsForSport, buildProgram, finishPlan, analyzeProgress, painByArea,
   FOCI,
   type GoalType, type ProgramPlan, type TrainingFocus,
 } from "@/lib/coach";
@@ -315,7 +315,29 @@ function GoalBuilder({ painMap, painNote, latestBench, sport, initialPositions, 
           repaired.report,
         );
       }
-      plan = repaired.plan;
+      /**
+       * AND THE SAME VOLUME AND ORDERING CORRECTIONS THE LOCAL ENGINE GETS.
+       *
+       * `repairPlan` above checks the STRUCTURE of what the backend sent — that
+       * a session has a warm-up, that slots are labelled, that a week has the
+       * right number of days. It says nothing about how much of each muscle the
+       * week trains or what order the exercises come in, because those were
+       * fixed inside the local engines.
+       *
+       * Which meant they were fixed for the plan almost nobody receives. This
+       * page asks the backend first and only falls back to the local engine
+       * when that fails, so on the path a new programme actually takes, the
+       * volume floor, the recovery ceiling and the same-muscle spacing were all
+       * computed, tested and then never applied.
+       *
+       * A model writing a block from a prompt is at least as likely to give a
+       * muscle three sets a week, or to put two chest movements back to back,
+       * as an engine with a blueprint. Same corrections, same boundary.
+       */
+      plan = finishPlan(repaired.plan, {
+        goal: g, painMap, isInSeason: inSeason, sport, position: pos, focus: f,
+        daysPerWeek: days ?? daysPerWeek, notes, style, oneRepMax: latestBench,
+      });
     } catch (e) {
       // 402 is the server saying this needs Pro, and 403 that the account is
       // deactivated. Neither means "the backend is down", so neither may fall

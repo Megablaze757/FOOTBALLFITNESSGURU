@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildProgram } from "./coach";
+import { readFileSync } from "node:fs";
+import { buildProgram, type ProgramPlan } from "./coach";
 import { buildBlock } from "./engine";
 import { MOVEMENT_BY_ID } from "./movements";
 import {
@@ -668,4 +669,85 @@ test("an exercise the catalogues don't know keeps its own labels", () => {
   assert.deepEqual(exerciseMuscles("Some Made Up Lift", ["Forearms", "Grip"]),
     { primary: "Forearms", secondary: ["Grip"] });
   assert.deepEqual(exerciseMuscles("Some Made Up Lift", []), { primary: null, secondary: [] });
+});
+
+// =============================================================================
+// THE PATH THE ATHLETE ACTUALLY TAKES.
+//
+// /coach asks the backend to write the block and only falls back to the local
+// engine when that fails. The backend is deployed. So every correction in this
+// file — the volume floor, the recovery ceiling, the same-muscle spacing — was
+// computed, tested, and then applied to the plan almost nobody receives.
+//
+// `repairPlan` was already checking what the backend sent, but only its
+// STRUCTURE: warm-ups present, slots labelled, right number of days. It says
+// nothing about how much of each muscle a week trains.
+// =============================================================================
+
+import { finishPlan } from "./coach";
+import { primaryMuscleName } from "./muscle-volume";
+import { adjacentSameMuscle } from "./session-order";
+
+/** A block shaped the way a model writes one, faults and all. */
+function modelWrittenPlan(): ProgramPlan {
+  const d = (name: string, sets: number, reps: number) => ({ name, sets, reps, cue: "", reason: "" });
+  return {
+    goal: "strength", summary: "", constraints: [],
+    weeks: [1, 2, 3, 4].map((n) => ({
+      week: n, theme: "Base", intensity: n === 4 ? "Deload" : "Moderate", focusNote: "",
+      sessions: [
+        { day: 1, title: "Upper", focus: "strength" as const, drills: [
+          // Three chest movements back to back, then two pulls, then a single
+          // set of curls — all plausible, none of it checked by anything.
+          d("Bench Press", 4, 8), d("Incline Bench Press", 3, 10), d("Cable Fly", 3, 12),
+          d("Barbell Row", 4, 8), d("Lat Pulldown", 3, 10), d("Barbell Curl", 1, 12),
+        ]},
+        { day: 2, title: "Lower", focus: "strength" as const, drills: [
+          d("Barbell Back Squat", 4, 8), d("Leg Press", 3, 10), d("Leg Extension", 3, 12),
+          d("Romanian Deadlift", 3, 8), d("Standing Calf Raise", 1, 15),
+        ]},
+      ],
+    })),
+  } as ProgramPlan;
+}
+
+const finished = () => finishPlan(modelWrittenPlan(),
+  { goal: "strength", painMap: {}, sport: "gym", focus: "aesthetics", daysPerWeek: 2 } as never);
+
+test("a plan written by the backend gets the same volume floor as a local one", () => {
+  // Measured on the fixture before the fix: hamstrings 3, calves 1, biceps 4.5.
+  const before = auditWeek(modelWrittenPlan().weeks[1]);
+  const beforeShort = (Object.keys(before.volume) as MuscleGroup[])
+    .filter((g) => volumeBreakdown(modelWrittenPlan().weeks[1]).direct[g] > 0 && before.volume[g] < LANDMARKS.maintenance);
+  assert.ok(beforeShort.length > 0, "the fixture no longer reproduces the fault it exists to test");
+
+  const week = finished().weeks[1];
+  const { direct } = volumeBreakdown(week);
+  const v = weeklyMuscleVolume(week);
+  for (const g of Object.keys(v) as MuscleGroup[]) {
+    if (direct[g] <= 0) continue;
+    assert.ok(v[g] >= LANDMARKS.maintenance, `${g} left at ${v[g]} in a backend-written plan`);
+  }
+});
+
+test("and the same recovery ceiling and same-muscle spacing", () => {
+  const week = finished().weeks[1];
+  assert.deepEqual(auditWeek(week).excessive, []);
+  const clashes = week.sessions.reduce((n, s) => n + adjacentSameMuscle(s.drills, primaryMuscleName), 0);
+  assert.equal(clashes, 0, `${clashes} pairs of consecutive same-muscle exercises survived`);
+});
+
+test("the coach page applies it to the backend's plan, not just the fallback", () => {
+  /**
+   * THE SEAM, and the reason this went unnoticed: the corrections lived inside
+   * buildProgram, so every test of them passed while the deployed path skipped
+   * them entirely. A seam is only tested by a test that spans it.
+   */
+  const src = readFileSync(new URL("../app/(app)/coach/page.tsx", import.meta.url), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  const repairAt = src.indexOf("repairPlan(data.plan");
+  const finishAt = src.indexOf("finishPlan(repaired.plan");
+  assert.ok(repairAt > 0, "the backend's plan is no longer structurally repaired");
+  assert.ok(finishAt > repairAt,
+    "the backend's plan is repaired but never balanced or ordered — every correction in muscle-volume.ts is skipped on the path most athletes take");
 });

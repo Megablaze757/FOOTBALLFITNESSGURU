@@ -122,10 +122,18 @@ export function goalsForSport(sport: string | null | undefined): { id: GoalType;
 const LIBRARY: Movement[] = MOVEMENTS;
 
 /**
- * THE LAST TWO THINGS THAT HAPPEN TO EVERY BLOCK, whichever engine built it.
+ * THE LAST TWO THINGS THAT HAPPEN TO EVERY BLOCK, WHOEVER BUILT IT.
  *
- * Both engines had the same two faults, so both corrections belong here rather
- * than duplicated inside each:
+ * Exported, because the block an athlete actually receives usually does not
+ * come from either engine in this file. /coach asks the backend to write it
+ * and only falls back to the local engine when that fails — so for most new
+ * programmes these corrections were computed, tested, and then applied to a
+ * plan nobody was given. See the call in app/(app)/coach/page.tsx: the AI plan
+ * gets structural repair (lib/program-repair.ts) and now this too.
+ *
+ * Both local engines had the same two faults, and a model writing a block from
+ * a prompt has them just as easily, so the corrections belong at the boundary
+ * every plan passes rather than inside any one builder:
  *
  *   BALANCE — a muscle the plan trains gets a dose that does something, and not
  *   more than can be recovered from. The app used to build a week and then
@@ -139,7 +147,7 @@ const LIBRARY: Movement[] = MOVEMENTS;
  * them the other way round would leave the spacing correct and the sets wrong
  * on a session the balance pass then re-read.
  */
-function finish(plan: ProgramPlan, input: BuildProgramInput): ProgramPlan {
+export function finishPlan(plan: ProgramPlan, input: BuildProgramInput): ProgramPlan {
   /**
    * WHAT COUNTS AS ENOUGH DEPENDS ON WHAT THEY ASKED FOR.
    *
@@ -430,7 +438,7 @@ export function buildProgram(input: BuildProgramInput): ProgramPlan {
   }
 
   if (wantsHypertrophy(input)) {
-    return finish(buildHypertrophyProgram({
+    return finishPlan(buildHypertrophyProgram({
       painMap: input.painMap,
       daysPerWeek: input.daysPerWeek,
       block,
@@ -464,7 +472,7 @@ export function buildProgram(input: BuildProgramInput): ProgramPlan {
    * this stays a correction to the dose.
    */
   return {
-    ...finish(plan, input),
+    ...finishPlan(plan, input),
     summary: programSummary(input.goal, sore, input.isInSeason ?? false, block, input.sport, input.position, input.focus, input.daysPerWeek),
     constraints: [
       ...(sore.length ? [`Protecting your ${sore.map(prettyArea).join(", ")} — high-impact loading on these is dialled back.`] : []),
