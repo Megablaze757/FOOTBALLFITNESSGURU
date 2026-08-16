@@ -107,7 +107,8 @@ grant execute on function public.claim_affiliate() to authenticated;
 --
 -- Money is in pennies, as everywhere else in this schema.
 -- ---------------------------------------------------------------------------
-create or replace function public.my_affiliate_stats()
+drop function if exists public.my_affiliate_stats();
+create function public.my_affiliate_stats()
 returns table (
   code text,
   name text,
@@ -165,7 +166,12 @@ grant execute on function public.my_affiliate_stats() to authenticated;
 -- question, and answering it with names and email addresses would hand one
 -- customer's identity to another. Dates and amounts only.
 -- ---------------------------------------------------------------------------
-create or replace function public.my_affiliate_ledger(limit_n int default 50)
+-- Dropped first rather than replaced: `create or replace` cannot change a
+-- function's return type, and this one's shape is the thing most likely to
+-- change as the dashboard grows. 0024 records the same lesson the hard way —
+-- a replay of the migration set halted on exactly that error.
+drop function if exists public.my_affiliate_ledger(int);
+create function public.my_affiliate_ledger(limit_n int default 50)
 returns table (
   earned_on date,
   level smallint,
@@ -177,13 +183,17 @@ stable
 security definer
 set search_path = public, pg_temp
 as $$
-  select c.created_at::date, c.level, c.amount_pennies, c.status
+  -- `earned_at`, not created_at. This table has no created_at at all (0052):
+  -- it carries earned_at / payable_at / paid_at / reversed_at, because when
+  -- commission was earned and when it becomes payable are different dates and
+  -- the 30-day clawback window lives between them.
+  select c.earned_at::date, c.level, c.amount_pennies, c.status
     from public.affiliate_commissions c
     join public.affiliates a on a.id = c.affiliate_id
    where a.user_id = auth.uid()
       or (a.user_id is null and a.email is not null
           and lower(a.email) = lower(coalesce((auth.jwt() ->> 'email'), '')))
-   order by c.created_at desc
+   order by c.earned_at desc
    limit greatest(1, least(coalesce(limit_n, 50), 500));
 $$;
 
