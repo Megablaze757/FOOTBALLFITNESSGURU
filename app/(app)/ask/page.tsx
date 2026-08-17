@@ -117,6 +117,7 @@ export default function AskCoachPage() {
     // the coach as today's problem.
     const pain = currentPain(ci?.pain_map, ci?.check_in_date, today);
     const sex = (pr?.sex === "female" ? "female" : "male") as "male" | "female";
+    const age = pr?.birth_year ? new Date().getFullYear() - pr.birth_year : null;
 
     const ranks = bodyweight?.kg ? rankedLifts(
       (allDrills.data ?? []) as TrainingLog[], bodyweight.kg, sex,
@@ -134,7 +135,7 @@ export default function AskCoachPage() {
       goal: (prog?.goal_type ?? null) as GoalType | null,
       avgTrainingMinutes: avgMinutes,
       heightCm: pr?.height_cm ?? null,
-      age: pr?.birth_year ? new Date().getFullYear() - pr.birth_year : null,
+      age,
       sex,
       activity: (pr?.activity_level as never) ?? null,
       dietGoal: (pr?.diet_goal as never) ?? null,
@@ -207,7 +208,9 @@ export default function AskCoachPage() {
 
     const briefing = buildBriefing({
       sport: pr?.sport, positions: pr?.positions?.length ? pr.positions : (pr?.position ? [pr.position] : []),
-      focus: pr?.training_focus, sex, bodyweight, trainingExperienceYears: pr?.experience_years ?? null,
+      focus: pr?.training_focus, sex, heightCm: pr?.height_cm ?? null, age, bodyweight,
+      activityLevel: pr?.activity_level ?? null, dietGoal: pr?.diet_goal ?? null,
+      trainingExperienceYears: pr?.experience_years ?? null,
       goal: (prog?.goal_type ?? null) as GoalType | null,
       goalDetails: ((prog?.goals ?? pr?.goals ?? []) as { type?: string }[]).map((goal) => String(goal.type ?? "").replace(/_/g, " ")).filter(Boolean),
       blockWeek: next?.w ?? null,
@@ -253,6 +256,10 @@ export default function AskCoachPage() {
         soreAreas: Object.entries(painByArea(pain)).filter(([, v]) => (v ?? 0) >= 4).map(([a]) => a.replace("_", " ")),
         readinessStatus: (readiness?.status as "Green" | "Yellow" | "Red") ?? null,
         programDrills: (next?.s.drills ?? []).map((d) => d.name),
+        bodyweightKg: bodyweight?.kg ?? null,
+        heightCm: pr?.height_cm ?? null,
+        calorieTarget: targets?.calories ?? null,
+        proteinTarget: targets?.protein ?? null,
       },
       /** Prompts that only appear when the coach can actually answer them. */
       suggestions: [
@@ -298,6 +305,8 @@ export default function AskCoachPage() {
         context={data!.context}
         briefing={data!.briefing}
         suggestions={data!.suggestions.length ? data!.suggestions : undefined}
+        storageKey={`coach-chat:${user.id}`}
+        userId={user.id}
       />
       {/* WHAT IT CAN SEE, said plainly. An athlete who does not know the coach
           has their rehab plan will not ask about it, and one who assumes it can

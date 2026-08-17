@@ -286,6 +286,19 @@ test("the athlete is told what their plan changed about today", () => {
   assert.match(coachPage(), /rehabbed\.note/, "the note is computed and never shown");
 });
 
+test("the injury planner uses relevant athlete facts already recorded elsewhere", () => {
+  const page = readFileSync(new URL("../app/(app)/injury/page.tsx", import.meta.url), "utf8");
+  const planner = readFileSync(new URL("../components/InjuryPlanner.tsx", import.meta.url), "utf8");
+  const worker = readFileSync(new URL("../cloudflare/src/index.ts", import.meta.url), "utf8");
+
+  assert.match(page, /birth_year, training_focus, experience_years/, "the planner never loads the athlete profile");
+  assert.match(page, /goal_type, in_season, plan/, "the planner cannot see the current programme");
+  assert.match(page, /athleteContext=\{data\.athleteContext\}/, "loaded context is not passed to the planner");
+  assert.match(planner, /athlete: athleteContext/, "the planner drops the context before the request");
+  assert.match(worker, /ATHLETE CONTEXT ALREADY ON FILE/, "the production route ignores the context");
+  assert.match(worker, /Current programme exercises:/, "the rehab plan cannot work around current training");
+});
+
 test("rehab work is marked as rehab, so it is not passed off as training", () => {
   assert.match(coachPage(), /rehab: true/, "rehab drills arrive unlabelled");
   const drills = readFileSync(new URL("../components/SessionDrills.tsx", import.meta.url), "utf8");

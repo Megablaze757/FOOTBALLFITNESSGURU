@@ -77,6 +77,8 @@ export interface ProgramDrill {
   tempo?: string;
   /** Preparation template item: one completion tap, never load tracking. */
   completionOnly?: boolean;
+  /** Explicitly chosen in the programme builder, so the time fit values it first. */
+  preferred?: boolean;
 }
 
 export interface ProgramSession {
@@ -1129,15 +1131,16 @@ export function buildBlock(input: EngineInput): ProgramPlan {
          * the rest of the session exists to produce.
          *
          * Continuous efforts are `sets: 1` with the minutes in `reps`, so a long
-         * one is identifiable without new metadata. They stay on endurance days,
+         * one is identifiable without new metadata. They stay in endurance blocks,
          * where they are the session rather than an afterthought. Everything
          * short — hill repeats, sled pushes, kettlebell swings — is untouched:
          * those finish a strength day rather than fighting it.
          *
-         * Falls back to the full list rather than leaving the slot empty, for
+         * Keyed on the BLOCK goal: an "endurance" day inside a strength block
+         * still needs a finisher, not a second workout. Falls back to the full list rather than leaving the slot empty, for
          * an athlete whose exclusions rule out everything short.
          */
-        if (slot === "conditioning" && focusGoal !== "endurance") {
+        if (slot === "conditioning" && input.goal !== "endurance") {
           const compatible = ranked.filter(
             (r) => !(r.m.dose.sets === 1 && (r.m.dose.reps ?? 0) >= LONG_EFFORT_MINUTES)
           );

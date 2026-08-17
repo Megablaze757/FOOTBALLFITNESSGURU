@@ -1074,23 +1074,54 @@ async function coachChat(req: Request, env: Env): Promise<Response> {
   if (gate) return gate;
   const budget = await checkBudget(env, u.id);
   if (!budget.allowed) return overBudget(budget);
-  const body = (await req.json()) as { question: string; context: Record<string, unknown> };
-  const question = (body.question ?? "").slice(0, 600); // cap input for speed + abuse control
+  const body = (await req.json()) as {
+    question?: unknown;
+    context?: Record<string, unknown>;
+    briefing?: unknown;
+    history?: unknown;
+  };
+  const question = String(body.question ?? "").trim().slice(0, 600); // cap input for speed + abuse control
   const context = body.context;
   if (!question) return json({ error: "question required" }, 400);
   const sys =
-    "You are the athlete's personal football S&C coach and physio. Answer directly and practically " +
-    "in 2–4 sentences, grounded in their context. Explain the 'why' behind drills, respect any pain by " +
-    "favouring lower-impact options, and advise seeing a physio for sharp/persistent pain. No diagnosis.";
-  const ctx =
+    "You are this athlete's personal strength & conditioning, recovery and nutrition coach. " +
+    "Use their full briefing and the recent conversation before answering; a follow-up refers to that conversation unless they clearly change topic. " +
+    "Answer directly and practically in 2–6 sentences, quote their own measurements or targets where useful, and never ask again for a fact present in the briefing. " +
+    "If a value is explicitly missing, say so rather than inventing it. Explain the why behind drills, respect pain with lower-impact options, " +
+    "and advise seeing a physio for sharp or persistent pain. Do not diagnose.";
+  const fallback =
     `Goal: ${context?.goal ?? "general"}\nSore areas: ${(context?.soreAreas as string[])?.join(", ") || "none"}\n` +
-    `Readiness: ${context?.readinessStatus ?? "unknown"}\nPlan drills: ${(context?.programDrills as string[])?.join(", ") || "none"}`;
+    `Readiness: ${context?.readinessStatus ?? "unknown"}\nPlan drills: ${(context?.programDrills as string[])?.join(", ") || "none"}\n` +
+    `Bodyweight: ${context?.bodyweightKg ?? "not recorded"}kg\nHeight: ${context?.heightCm ?? "not recorded"}cm\n` +
+    `Nutrition targets: ${context?.calorieTarget ?? "not recorded"} kcal, ${context?.proteinTarget ?? "not recorded"}g protein`;
+  // The page already derives the authoritative numbers. The production route
+  // used to discard this field and rebuild a four-line context, which is why
+  // it asked athletes for height and weight the page had just sent it.
+  const ctx = typeof body.briefing === "string" && body.briefing.trim()
+    ? body.briefing.trim().slice(0, 8_000)
+    : fallback;
+  const history = coachHistory(body.history);
   const { text, model } = await meteredComplete(env, u.id, {
     system: sys,
-    user: `Context:\n${ctx}\n\nQuestion: ${question}`,
-    maxTokens: 320,
+    user:
+      `ATHLETE BRIEFING (current source of truth):\n${ctx}\n\n` +
+      `RECENT CONVERSATION:\n${history}\n\nCURRENT QUESTION:\n${question}`,
+    maxTokens: 650,
+    validate: (answer) => answer.trim().length > 20,
   });
   return json({ answer: text, model });
+}
+
+function coachHistory(raw: unknown): string {
+  if (!Array.isArray(raw)) return "No previous turns.";
+  const turns = raw.slice(-12).flatMap((turn) => {
+    if (!turn || typeof turn !== "object") return [];
+    const value = turn as { role?: unknown; content?: unknown };
+    if (value.role !== "user" && value.role !== "assistant") return [];
+    const content = String(value.content ?? "").trim().slice(0, 800);
+    return content ? [`${value.role === "user" ? "Athlete" : "Coach"}: ${content}`] : [];
+  });
+  return turns.length ? turns.join("\n").slice(-6_000) : "No previous turns.";
 }
 
 
@@ -1745,13 +1776,29 @@ async function injuryPlan(req: Request, env: Env): Promise<Response> {
   const budget = await checkBudget(env, u.id);
   if (!budget.allowed) return overBudget(budget);
 
-  const { description, area, weeks, sport } = (await req.json()) as {
+  const { description, area, weeks, sport, athlete } = (await req.json()) as {
     description?: string; area?: string; weeks?: number; sport?: string;
+    athlete?: {
+      age?: number | null; sex?: string | null; trainingFocus?: string | null;
+      trainingExperienceYears?: number | null; currentGoal?: string | null;
+      inSeason?: boolean | null; fatigue?: number | null; sleepQuality?: number | null;
+      currentPain?: Record<string, number>; programExercises?: string[];
+    };
   };
   const desc = (description ?? "").trim().slice(0, 600);
   if (desc.length < 10) return json({ error: "Tell me a bit more about it — what hurts, when, and for how long." }, 400);
   const duration = Math.max(0, Math.min(520, Number(weeks) || 0));
   const chronic = duration >= 6;
+  const athleteBrief = [
+    `Age: ${athlete?.age ?? "not recorded"}`,
+    `Sex: ${athlete?.sex ?? "not recorded"}`,
+    `Training experience: ${athlete?.trainingExperienceYears ?? "not recorded"} years`,
+    `Training focus: ${athlete?.trainingFocus ?? "not recorded"}`,
+    `Current programme goal: ${athlete?.currentGoal ?? "none"}${athlete?.inSeason == null ? "" : athlete.inSeason ? ", in season" : ", out of season"}`,
+    `Latest recovery: fatigue ${athlete?.fatigue ?? "not recorded"}/10, sleep ${athlete?.sleepQuality ?? "not recorded"}/10`,
+    `Current pain map: ${Object.entries(athlete?.currentPain ?? {}).map(([name, value]) => `${name} ${value}/10`).join(", ") || "none recorded"}`,
+    `Current programme exercises: ${(athlete?.programExercises ?? []).slice(0, 40).join(", ") || "none available"}`,
+  ].join("\n");
 
   const sys =
     "You are an experienced strength & conditioning coach writing a graded loading plan for an athlete with a niggle. " +
@@ -1774,7 +1821,8 @@ async function injuryPlan(req: Request, env: Env): Promise<Response> {
     system: sys,
     user:
       `Sport: ${sport || "general"}\nArea: ${area || "unspecified"}\n` +
-      `How long: ${duration ? `${duration} week(s)` : "not stated"}\nDescription: ${desc}`,
+      `How long: ${duration ? `${duration} week(s)` : "not stated"}\nDescription: ${desc}\n\n` +
+      `ATHLETE CONTEXT ALREADY ON FILE:\n${athleteBrief}`,
     // 4 stages x 3 exercises, each with a name, dose and cue, plus red flags —
     // that runs past 1400 tokens on a verbose model, and a truncated response
     // fails parseInjuryPlan, which reads as "the AI returned nothing usable"

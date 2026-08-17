@@ -44,7 +44,11 @@ export interface BriefingInput {
   positions?: string[];
   focus?: string | null;
   sex?: "male" | "female" | null;
+  heightCm?: number | null;
+  age?: number | null;
   bodyweight?: Bodyweight | null;
+  activityLevel?: string | null;
+  dietGoal?: string | null;
   trainingExperienceYears?: number | null;
 
   /** The block. */
@@ -141,6 +145,13 @@ function athlete(a: BriefingInput): Section {
   const who = [a.sport, a.positions?.length ? a.positions.join(" / ") : null].filter(Boolean).join(" — ");
   if (who) lines.push(`Plays: ${who}`);
   if (a.focus) lines.push(`Training focus: ${a.focus}`);
+  if (a.sex) lines.push(`Sex: ${a.sex}.`);
+  if (a.age != null) lines.push(`Age: ${a.age}.`);
+  else lines.push("Age: not recorded.");
+  if (a.heightCm != null) lines.push(`Height: ${a.heightCm}cm.`);
+  else lines.push("Height: not recorded.");
+  if (a.activityLevel) lines.push(`Activity level: ${a.activityLevel}.`);
+  if (a.dietGoal) lines.push(`Diet goal: ${a.dietGoal}.`);
   if (a.trainingExperienceYears != null) lines.push(`Training history: ${a.trainingExperienceYears} year${a.trainingExperienceYears === 1 ? "" : "s"}.`);
   else lines.push("Training history: not recorded; do not assume beginner or advanced experience.");
   if (a.bodyweight) {

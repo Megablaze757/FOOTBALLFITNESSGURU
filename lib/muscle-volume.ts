@@ -534,6 +534,11 @@ function perSetContribution(name: string): Partial<Record<MuscleGroup, number>> 
   return out;
 }
 
+/** Whether one working set contributes any counted volume to a muscle. */
+export function contributesToMuscle(name: string, muscle: MuscleGroup): boolean {
+  return (perSetContribution(name)[muscle] ?? 0) > 0;
+}
+
 /** Every week of a plan, balanced. */
 export function balancePlanVolume(plan: ProgramPlan, floor: number = LANDMARKS.maintenance): ProgramPlan {
   return { ...plan, weeks: plan.weeks.map((w) => balanceWeeklyVolume(w, floor)) };

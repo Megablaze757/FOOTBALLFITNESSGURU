@@ -52,6 +52,7 @@ test("every section states its own absence", () => {
 test("a full briefing carries every area the athlete can ask about", () => {
   const full: BriefingInput = {
     sport: "football", positions: ["Striker"], focus: "performance",
+    sex: "male", age: 24, heightCm: 181, activityLevel: "high", dietGoal: "build",
     bodyweight: { kg: 78, date: "2026-08-14", source: "weigh-in" },
     goal: "strength", blockWeek: 2, adherencePct: 75, inSeason: true,
     nextSessionTitle: "Day 2 · Lower",
@@ -75,6 +76,9 @@ test("a full briefing carries every area the athlete can ask about", () => {
   for (const [what, needle] of [
     ["sport and position", "football — Striker"],
     ["bodyweight", "78kg"],
+    ["height", "181cm"],
+    ["age", "Age: 24"],
+    ["diet goal", "Diet goal: build"],
     ["the block", "strength"],
     ["block progress", "Week 2"],
     ["adherence", "75%"],

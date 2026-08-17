@@ -1496,16 +1496,40 @@ function ActiveProgram({
           PROGRAM, but they rendered on every tab — so "Today", which should be
           one session and a few drills, opened with a wall of block metadata. */}
       {tab === "program" && (
-      <div className="card p-5">
-        <div className="flex items-center gap-4">
-          <RingProgress pct={adherence} label={`${doneCount}/${totalSessions}`} sub="sessions" />
-          <div className="flex-1">
-            <p className="text-sm leading-relaxed text-slate-200">{plan.summary}</p>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {adaptiveGoals.map((g) => (
-                <span key={g.type} className="chip text-pitch-400">{g.priority}. {goalLabel(g.type)}</span>
-              ))}
+      <div className="card p-4 sm:p-5">
+        {/* AT A GLANCE MEANS AT A GLANCE.
+            This row used to put the full programme summary, every goal chip,
+            every constraint and every warning beside an 84px progress ring.
+            On a phone that left a narrow newspaper column of wrapped text next
+            to the circle — the busiest part of a screen whose job is to tell a
+            busy athlete what is left. Keep the answer visible; keep the reasons
+            one tap away below it. */}
+        <div className="flex items-center gap-3 sm:gap-4">
+          <RingProgress
+            pct={adherence}
+            label={`${doneCount}/${totalSessions}`}
+            sub="done"
+            size={72}
+            stroke={7}
+          />
+          <div className="min-w-0 flex-1">
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Block {program.block}</div>
+            <div className="mt-0.5 text-base font-extrabold text-slate-100">
+              {complete ? "Block complete" : `${Math.max(0, totalSessions - doneCount)} sessions left`}
             </div>
+            <div className="mt-0.5 truncate text-xs text-pitch-400">
+              {adaptiveGoals.slice(0, 2).map((g) => goalLabel(g.type)).join(" + ")}
+            </div>
+          </div>
+        </div>
+
+        <details className="group mt-3 border-t border-white/[0.08] pt-1">
+          <summary className="tap-target -mx-2 flex cursor-pointer list-none items-center justify-between rounded-xl px-2 text-xs font-semibold text-slate-400 transition hover:bg-white/[0.04] hover:text-slate-200">
+            <span>How this plan was built</span>
+            <span className="transition group-open:rotate-180" aria-hidden>▾</span>
+          </summary>
+          <div className="pb-1 pt-2">
+            <p className="text-xs leading-relaxed text-slate-400">{plan.summary}</p>
             {/* HOW THE BLOCK WAS BUILT, NOT A LIST OF ALARMS.
                 Every one of these rendered as a red ⚠️ chip. Two things were
                 wrong with that. A `chip` is a pill sized for two words, so a
@@ -1541,7 +1565,7 @@ function ActiveProgram({
               </p>
             )}
           </div>
-        </div>
+        </details>
 
         {/* Goal deadline */}
         {deadline && (

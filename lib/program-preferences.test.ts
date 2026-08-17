@@ -140,3 +140,35 @@ test("advanced exercise top-ups respect the athlete's equipment note", () => {
   assert.ok(added.length > 0);
   assert.equal(added.some((d) => /barbell|cable|machine|kettlebell/i.test(d.name)), false);
 });
+
+test("explicit exercise picks survive an AI-shaped plan unless safety rules exclude them", () => {
+  // The production model does not understand movement ids; this preference
+  // pass is the shared boundary both the AI and local plan cross.
+  const picked = applyProgramPreferences(plan, {
+    goals: [{ type: "strength", priority: 1 }],
+    schedule: [{ day: 1, type: "upper" }],
+    mustInclude: ["lat_pulldown"],
+  });
+  const pulldown = picked.weeks[0].sessions[0].drills.find((drill) => drill.name === "Lat pulldown");
+  assert.ok(pulldown, "the athlete's explicit pick was discarded on the AI route");
+  assert.equal(pulldown.preferred, true, "the time fitter cannot distinguish the explicit pick from a generic accessory");
+
+  const excluded = applyProgramPreferences(plan, {
+    goals: [{ type: "strength", priority: 1 }],
+    schedule: [{ day: 1, type: "upper" }],
+    mustInclude: ["lat_pulldown"],
+  }, { constraints: parseConstraints("no machines") });
+  assert.equal(excluded.weeks[0].sessions[0].drills.some((drill) => drill.name === "Lat pulldown"), false,
+    "an explicit preference overruled the athlete's equipment constraint");
+});
+
+test("custom top-ups stay inside the athlete's sport", () => {
+  const result = applyProgramPreferences(plan, {
+    goals: [{ type: "strength", priority: 1 }],
+    schedule: [{ day: 1, type: "upper" }],
+    exerciseTarget: 10,
+  }, { sport: "gym" });
+  const names = result.weeks.flatMap((week) => week.sessions.flatMap((session) => session.drills.map((drill) => drill.name)));
+  assert.equal(names.some((name) => /scrum|tackle|ruck|lineout/i.test(name)), false,
+    "a gym plan was filled with another sport's exercises");
+});

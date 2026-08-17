@@ -1272,7 +1272,7 @@ function runDrill(s: RunSession, zonePaces: PaceZoneRange[] | null): RunProgramD
   // asks for back, so the plan and the record finally speak in one unit.
   const amount = t.interval
     ? `${describeShape(t.interval)} · ${s.minutes} min total`
-    : s.hard ? `${s.minutes} min` : s.km ? `${s.km}km` : `${s.minutes} min`;
+    : s.hard ? `${s.minutes} min` : s.km ? `${s.km}km · ${s.minutes} min` : `${s.minutes} min`;
 
   return {
     name: t.label,

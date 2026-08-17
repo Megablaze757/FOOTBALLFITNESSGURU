@@ -18,6 +18,7 @@ import { MOVEMENTS, regionOfMovement, type Movement, type GoalType, type BodyAre
 import { buildBlock, painByArea, type ProgramPlan, type TrainingFocus } from "./engine";
 import { balancePlanVolume, spacePlanSessions, volumeShortfall, LANDMARKS } from "./muscle-volume";
 import { buildRunProgram, type RunnerLevel } from "./running";
+import { enforceProgramSessionBudgets } from "./session-budget";
 import {
   applyProgramPreferences,
   strictSlots,
@@ -178,22 +179,22 @@ export function finishPlan(plan: ProgramPlan, input: BuildProgramInput): Program
     })),
   };
   const done = spacePlanSessions(balancePlanVolume(classified, floor));
-  // And then say what it delivers. A week that cannot reach the productive band
-  // for every muscle is a fact about the day count, not a fault — but the
-  // athlete should hear it from the plan rather than from the progress page
-  // three days later, which is what read as the app contradicting itself.
-  const note = volumeShortfall(done);
-  const explained = note ? { ...done, constraints: [...done.constraints, note] } : done;
   // Old callers deliberately receive the engine's established prescription.
   // The richer preference pass changes exercise counts, rep ranges and weekly
   // shape, so only run it for programmes built with the new goal/settings UI.
-  if (!input.settings && !input.goals?.length) return explained;
-  const goals = input.goals?.length ? input.goals : [{ type: input.goal, priority: 1 as const }];
-  return applyProgramPreferences(
-    explained,
-    input.settings ?? { goals },
-    { painMap: input.painMap, constraints: parseConstraints(input.notes) },
-  );
+  const shaped = !input.settings && !input.goals?.length
+    ? done
+    : applyProgramPreferences(
+        done,
+        input.settings ?? { goals: input.goals?.length ? input.goals : [{ type: input.goal, priority: 1 as const }] },
+        { painMap: input.painMap, constraints: parseConstraints(input.notes), sport: input.sport },
+      );
+  const fitted = enforceProgramSessionBudgets(shaped);
+
+  // Say what the FITTED plan delivers. Computing this before the time fit made
+  // the copy describe sets the athlete was never actually given.
+  const note = volumeShortfall(fitted);
+  return note ? { ...fitted, constraints: [...fitted.constraints, note] } : fitted;
 }
 
 /** The training region a drill belongs to, if we've classified it. */
@@ -478,9 +479,11 @@ export function buildProgram(input: BuildProgramInput): ProgramPlan {
       // pace. The engine can't take the impact away, so it takes the intensity.
       recoveryBias: sore.some((a) => ["knee", "ankle", "hamstring", "hip"].includes(a)),
     });
-    if (!input.settings && !input.goals?.length) return runPlan;
+    if (!input.settings && !input.goals?.length) return enforceProgramSessionBudgets(runPlan);
     const goals = input.goals?.length ? input.goals : [{ type: input.goal, priority: 1 as const }];
-    return applyProgramPreferences(runPlan, input.settings ?? { goals }, { painMap: input.painMap, constraints });
+    return enforceProgramSessionBudgets(
+      applyProgramPreferences(runPlan, input.settings ?? { goals }, { painMap: input.painMap, constraints, sport: input.sport }),
+    );
   }
 
   if (wantsHypertrophy(input)) {

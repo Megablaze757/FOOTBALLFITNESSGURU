@@ -1,6 +1,6 @@
 import type { PainMap } from "./types";
 import type { GoalType, ProgramDrill, ProgramPlan, ProgramSession, TrainingFocus } from "./engine";
-import { getExerciseByName } from "./exercises";
+import { getExerciseByName, type SportId } from "./exercises";
 import { MOVEMENTS, type Movement, type Slot } from "./movements";
 import { hasEquipmentFor, isExcluded, type Constraints } from "./constraints";
 
@@ -172,6 +172,7 @@ export function defaultSchedule(days: number, goals: GoalPreference[] = []): Sch
 export interface ApplyPreferencesOptions {
   painMap?: PainMap;
   constraints?: Constraints;
+  sport?: SportId;
 }
 
 /** Final, deterministic pass shared by AI and local programmes. */
@@ -193,11 +194,12 @@ export function applyProgramPreferences(
   const weeks = plan.weeks.map((week) => {
     const workouts = week.sessions.filter((s) => s.kind !== "active_rest");
     const source = workouts.length ? workouts : week.sessions;
-    const sessions = schedule
+    let sessions = schedule
       ? schedule.map((day, i) => day.type === "active_rest"
           ? activeRestSession(day, goals)
           : customiseSession(source[i % Math.max(1, source.length)], day, settings, options))
       : week.sessions.map((s) => customiseSession(s, undefined, settings, options));
+    sessions = ensurePreferredMovements(sessions, settings, options);
     return { ...week, sessions };
   });
 
@@ -385,7 +387,7 @@ function ensureExerciseCount(
   const current = drills.filter((d) => d.slot ? MAIN_SLOTS.has(d.slot) : isWeighted(d.name));
   if (current.length >= wanted) return drills;
   const names = new Set(drills.map((d) => normalise(d.name)));
-  const pool = candidatePool(type, settings.musclePriorities)
+  const pool = candidatePool(type, settings.musclePriorities, options.sport)
     .filter((m) => !names.has(normalise(m.name)))
     .filter((m) => safeForPain(m, options.painMap))
     .filter((m) => !options.constraints || (
@@ -397,23 +399,92 @@ function ensureExerciseCount(
   return at < 0 ? [...drills, ...additions] : [...drills.slice(0, at), ...additions, ...drills.slice(at)];
 }
 
-function candidatePool(type: ProgramDayType, priorities: ProgramSettings["musclePriorities"]): Movement[] {
-  const match = (m: Movement): boolean => {
-    if (!MAIN_SLOTS.has(m.slot)) return false;
-    const r = m.region ?? "";
-    const p = m.pattern;
-    if (type === "push") return ["chest", "shoulders", "arms"].includes(r) || p.startsWith("push");
-    if (type === "pull") return ["back", "arms"].includes(r) || p.startsWith("pull");
-    if (type === "legs" || type === "lower") return r === "legs" || ["squat", "hinge", "lunge"].includes(p);
-    if (type === "upper") return r !== "legs" && r !== "running" && r !== "conditioning";
-    if (type === "cardio") return m.slot === "conditioning" || m.targets.includes("endurance");
-    return true;
-  };
+function candidatePool(type: ProgramDayType, priorities: ProgramSettings["musclePriorities"], sport?: SportId): Movement[] {
   const score = (m: Movement): number => {
     const hay = `${m.name} ${m.region ?? ""}`.toLowerCase();
     return Object.entries(priorities ?? {}).reduce((n, [muscle, value]) => n + (hay.includes(muscle) ? Number(value) || 0 : 0), 0);
   };
-  return MOVEMENTS.filter(match).sort((a, b) => score(b) - score(a) || slotRank(a.slot) - slotRank(b.slot));
+  return MOVEMENTS
+    .filter((movement) => !sport || !movement.sports?.length || movement.sports.includes(sport))
+    .filter((movement) => movementMatchesDay(movement, type))
+    .sort((a, b) => score(b) - score(a) || slotRank(a.slot) - slotRank(b.slot));
+}
+
+function movementMatchesDay(m: Movement, type: ProgramDayType): boolean {
+  if (!MAIN_SLOTS.has(m.slot) && m.slot !== "conditioning") return false;
+  const r = m.region ?? "";
+  const p = m.pattern;
+  if (type === "push") return ["chest", "shoulders", "arms"].includes(r) || p.startsWith("push");
+  if (type === "pull") return ["back", "arms"].includes(r) || p.startsWith("pull");
+  if (type === "legs" || type === "lower") return r === "legs" || ["squat", "hinge", "lunge"].includes(p);
+  if (type === "upper") return r !== "legs" && r !== "running" && r !== "conditioning";
+  if (type === "cardio") return m.slot === "conditioning" || m.targets.includes("endurance");
+  return true;
+}
+
+/**
+ * Make explicit exercise picks survive the AI route too.
+ *
+ * The local engine scores `mustInclude`; the production model never receives
+ * those ids. This final pass sees both outputs, places each safe pick on the
+ * best matching day once per week, and marks it so the time-fit optimiser knows
+ * it came from the athlete rather than from a generic candidate pool.
+ */
+function ensurePreferredMovements(
+  input: ProgramSession[],
+  settings: ProgramSettings,
+  options: ApplyPreferencesOptions,
+): ProgramSession[] {
+  const requested = (settings.mustInclude ?? [])
+    .map((id) => MOVEMENTS.find((movement) => movement.id === id))
+    .filter((movement): movement is Movement => !!movement)
+    .filter((movement) => !options.sport || !movement.sports?.length || movement.sports.includes(options.sport))
+    .filter((movement) => safeForPain(movement, options.painMap))
+    .filter((movement) => !options.constraints || (
+      !isExcluded(options.constraints, movement.region, movement.name)
+      && hasEquipmentFor(options.constraints, movement.kit)
+    ));
+  if (!requested.length) return input;
+
+  let sessions = input.map((session) => ({ ...session, drills: session.drills.map((drill) => ({ ...drill })) }));
+  for (const movement of requested) {
+    const existing = sessions.findIndex((session) => session.drills.some((drill) => normalise(drill.name) === normalise(movement.name)));
+    if (existing >= 0) {
+      sessions[existing] = {
+        ...sessions[existing],
+        drills: sessions[existing].drills.map((drill) => normalise(drill.name) === normalise(movement.name)
+          ? { ...drill, preferred: true }
+          : drill),
+      };
+      continue;
+    }
+
+    const candidates = sessions
+      .map((session, index) => ({ session, index, type: inferDayType(session.title) }))
+      .filter(({ session, type }) => session.kind !== "active_rest" && movementMatchesDay(movement, type))
+      .sort((a, b) => {
+        const count = (entry: typeof a) => entry.session.drills.filter((drill) => drill.slot === movement.slot).length;
+        return count(a) - count(b) || a.session.day - b.session.day;
+      });
+    const target = candidates[0] ?? sessions.map((session, index) => ({ session, index, type: inferDayType(session.title) }))
+      .find(({ session }) => session.kind !== "active_rest");
+    if (!target) continue;
+
+    const added: ProgramDrill = {
+      name: movement.name, sets: movement.dose.sets, reps: movement.dose.reps,
+      prescription: movement.dose.unit === "reps" ? undefined : `${movement.dose.sets} × ${movement.dose.reps} ${movement.dose.unit}`,
+      slot: movement.slot, rest: movement.dose.rest,
+      intensity: movement.dose.rpe ? `RPE ${movement.dose.rpe}` : undefined,
+      tempo: movement.dose.tempo, cue: movement.cue,
+      reason: "Chosen in your programme builder and placed on the best-fitting day.",
+      preferred: true,
+    };
+    sessions[target.index] = {
+      ...target.session,
+      drills: orderBySlot([...target.session.drills, added]),
+    };
+  }
+  return sessions;
 }
 
 function safeForPain(m: Movement, pain: PainMap | undefined): boolean {
