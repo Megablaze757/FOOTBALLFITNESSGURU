@@ -99,14 +99,12 @@ add the webhook endpoint in the Stripe Dashboard pointing at the `stripe-webhook
 - **Schema** (`supabase/migrations/0005_phase5_admin.sql`): extra performance indexes,
   `is_admin()` + `admin_metrics()` helpers (SECURITY DEFINER, admin-gated), and admin
   read-all RLS policies.
-- **Scheduled emails** (`supabase/functions/`): `send-daily-reminders` (emails users who
-  haven't checked in today), `weekly-summary` (per-user 7-day recap), and
-  `milestone-notifications` (deduplicated streak and achieved-goal celebrations), plus
-  evening workout-log reminders — all via Resend with per-athlete preferences and
-  signed-webhook delivery/bounce logging.
-- **Cron** (`supabase/cron/schedule.sql`): `pg_cron` + `pg_net` jobs that POST to the
-  daily, weekly, deadline, milestone and evening workout reminder functions, reading the
-  service-role key from Vault. Run once after deploy; replace `<PROJECT_REF>`.
+- **Notifications** (`cloudflare/`): the production Worker creates one deduplicated row for
+  in-app and optional email delivery, sends consent/preference-aware web push, and sends the
+  exact price/date reminder before a free trial converts. Email uses Gmail/Apps Script or Resend.
+- **Scheduling**: Worker cron at 08:00 UTC handles check-in, deadline, weekly and trial notices;
+  19:00 UTC handles workout/rest-day logging. The older Supabase Edge reminder functions and
+  `supabase/cron/schedule.sql` remain only as a fallback and must not run alongside the Worker.
 - **Admin** (`app/admin`): standalone back-office (no athlete tab bar), gated to
   `profiles.role = 'admin'` — MRR, paid subs, DAU, total users, video queue health, and a
   failed-jobs table. Linked from Profile for admins.
@@ -120,23 +118,23 @@ add the webhook endpoint in the Stripe Dashboard pointing at the `stripe-webhook
 | Serverless glue | Supabase Edge Functions (Deno): readiness, process-daily-state, process-video, Stripe, email |
 | AI / ML | Python/FastAPI — `ai-worker/` (recovery LLM) + `cv-worker/` (MediaPipe biomechanics) |
 | Payments | Stripe (Checkout + webhook) |
-| Email | Resend (transactional) |
-| Scheduling | `pg_cron` + `pg_net` |
+| Email | Google Apps Script/Gmail or Resend (transactional) |
+| Scheduling | Cloudflare Worker cron (authoritative); Supabase cron fallback |
 
 ## Deploying everything (needs the real Supabase project)
 
 1. Apply every migration in `supabase/migrations` in filename order (CLI `supabase db push`,
    or paste the not-yet-applied files into the SQL Editor).
 2. Deploy edge functions: `assess-readiness`, `process-daily-state`, `process-video`,
-   `create-checkout`, `stripe-webhook --no-verify-jwt`, `send-daily-reminders`, `weekly-summary`,
-   `deadline-reminders`, `milestone-notifications`, `send-workout-reminders`, and
-   `resend-webhook --no-verify-jwt`.
+   `create-checkout`, `stripe-webhook --no-verify-jwt`, and `resend-webhook --no-verify-jwt`.
+   Deploy the reminder functions only if deliberately using the Supabase fallback.
 3. `supabase secrets set` the worker/Stripe/Resend keys + URLs (see `.env.example`). In Resend,
    subscribe the `resend-webhook` URL to sent/delivered/delayed/failed/bounced/complained events.
 4. Deploy `ai-worker/` and `cv-worker/` (Railway/Render — `Dockerfile`s provided).
 5. Add DB webhooks: `daily_check_ins` → `process-daily-state`; `videos` → `process-video`.
    Add the Stripe webhook endpoint → `stripe-webhook`.
-6. Run `supabase/cron/schedule.sql` (after storing the service-role key in Vault).
+6. Deploy the Cloudflare Worker with both cron triggers. Do not run
+   `supabase/cron/schedule.sql` at the same time; choose exactly one reminder scheduler.
 7. Set a user's `profiles.role = 'admin'` to access `/admin`.
 
 ## Premium intelligence layer

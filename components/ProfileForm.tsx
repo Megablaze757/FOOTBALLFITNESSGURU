@@ -11,6 +11,7 @@ import { validateUsername, USERNAME_MAX } from "@/lib/username";
 import { clearAllDrafts } from "@/lib/drafts";
 import { invalidate } from "@/lib/use-async";
 import type { Profile } from "@/lib/types";
+import { HEALTH_CONSENT_VERSION } from "@/lib/consent";
 
 export function ProfileForm({ profile, email }: { profile: Profile; email: string }) {
   const router = useRouter();
@@ -36,6 +37,9 @@ export function ProfileForm({ profile, email }: { profile: Profile; email: strin
   const [emailWorkouts, setEmailWorkouts] = useState(profile.email_workout_reminders ?? true);
   const [emailMilestones, setEmailMilestones] = useState(profile.email_milestones ?? true);
   const [emailPrograms, setEmailPrograms] = useState(profile.email_program_reminders ?? true);
+  const [inAppReminders, setInAppReminders] = useState(profile.in_app_training_reminders ?? true);
+  const [healthConsent, setHealthConsent] = useState(!!profile.health_data_consent_at);
+  const [healthConsentAt, setHealthConsentAt] = useState(profile.health_data_consent_at ?? null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -67,6 +71,7 @@ export function ProfileForm({ profile, email }: { profile: Profile; email: strin
       }
     }
 
+    const consentTimestamp = healthConsent ? (healthConsentAt ?? new Date().toISOString()) : null;
     const { error } = await supabase
       .from("profiles")
       .update({
@@ -80,6 +85,9 @@ export function ProfileForm({ profile, email }: { profile: Profile; email: strin
         email_workout_reminders: emailWorkouts,
         email_milestones: emailMilestones,
         email_program_reminders: emailPrograms,
+        in_app_training_reminders: inAppReminders,
+        health_data_consent_at: consentTimestamp,
+        health_data_consent_version: healthConsent ? HEALTH_CONSENT_VERSION : null,
       })
       .eq("id", profile.id);
 
@@ -87,6 +95,7 @@ export function ProfileForm({ profile, email }: { profile: Profile; email: strin
       // The unique index is the real guard; the check above just races it.
       setError(error.code === "23505" ? "That username was just taken — try another." : error.message);
     } else {
+      setHealthConsentAt(consentTimestamp);
       setUsername(check.value); // show the normalised form back
       setSaved(true);
       // The nav caches the role for the tab's lifetime. Without this, ticking
@@ -199,15 +208,38 @@ export function ProfileForm({ profile, email }: { profile: Profile; email: strin
       </div>
 
       <fieldset className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-4">
-        <legend className="field-label px-1">Email notifications</legend>
-        <p className="mb-3 text-xs text-slate-500">Choose what is useful. Account and security emails are unaffected.</p>
+        <legend className="field-label px-1">Notifications</legend>
+        <p className="mb-3 text-xs text-slate-500">Choose what is useful. Essential account, security and billing notices are unaffected.</p>
         <div className="space-y-3">
+          <EmailChoice label="Training reminders in the app" checked={inAppReminders} onChange={setInAppReminders} />
+          <div className="border-t border-white/[0.07] pt-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Email</div>
           <EmailChoice label="Daily check-in reminder" checked={emailCheckins} onChange={setEmailCheckins} />
           <EmailChoice label="Workout logging reminder" checked={emailWorkouts} onChange={setEmailWorkouts} />
           <EmailChoice label="Weekly training summary" checked={emailWeekly} onChange={setEmailWeekly} />
           <EmailChoice label="Streaks and goal milestones" checked={emailMilestones} onChange={setEmailMilestones} />
           <EmailChoice label="Program deadline reminders" checked={emailPrograms} onChange={setEmailPrograms} />
         </div>
+      </fieldset>
+
+      <fieldset className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-4">
+        <legend className="field-label px-1">Health-data consent</legend>
+        <label className="flex cursor-pointer items-start justify-between gap-3">
+          <span className="min-w-0 text-xs leading-relaxed text-slate-400">
+            I explicitly consent to PocketAthlete processing the health and fitness data I enter
+            to personalise readiness, recovery, nutrition and training. Turn this off to withdraw
+            consent; personalised processing stops until you opt in again. Delete your account below
+            to erase its data, or email support for a narrower request.
+          </span>
+          <input
+            type="checkbox"
+            checked={healthConsent}
+            onChange={(event) => {
+              setHealthConsent(event.target.checked);
+              if (!event.target.checked) setHealthConsentAt(null);
+            }}
+            className="mt-0.5 h-5 w-5 shrink-0 accent-pitch-500"
+          />
+        </label>
       </fieldset>
 
       {error && <p className="text-sm text-readiness-red">{error}</p>}

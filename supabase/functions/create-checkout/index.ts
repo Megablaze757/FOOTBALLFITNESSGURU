@@ -56,7 +56,7 @@ Deno.serve(async (req: Request) => {
   );
   const { data: existing } = await admin
     .from("subscriptions")
-    .select("stripe_customer_id")
+    .select("stripe_customer_id, stripe_subscription_id")
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -70,6 +70,11 @@ Deno.serve(async (req: Request) => {
   }
 
   const appUrl = Deno.env.get("APP_URL") ?? "http://localhost:3000";
+  // Match the Worker: the advertised trial belongs to the person's first
+  // Stripe subscription only. A historic subscription id is durable evidence
+  // that the trial has already been offered, even after cancellation.
+  const trialDays = Math.max(0, Math.min(90, Number(Deno.env.get("TRIAL_DAYS") ?? "14") || 0));
+  const eligibleForTrial = trialDays > 0 && !existing?.stripe_subscription_id;
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
     customer: customerId,
@@ -79,10 +84,13 @@ Deno.serve(async (req: Request) => {
     // Metadata on both the session and the resulting subscription so every
     // webhook event can resolve the user and tier.
     metadata: { user_id: user.id, tier },
-    subscription_data: { metadata: { user_id: user.id, tier } },
+    subscription_data: {
+      metadata: { user_id: user.id, tier },
+      ...(eligibleForTrial ? { trial_period_days: trialDays } : {}),
+    },
   });
 
-  return json({ url: session.url }, 200);
+  return json({ url: session.url, trialDays: eligibleForTrial ? trialDays : 0 }, 200);
 });
 
 function json(data: unknown, status: number): Response {

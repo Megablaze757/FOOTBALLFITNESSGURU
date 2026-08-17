@@ -115,6 +115,9 @@ export function AssignProgram({ athleteId, athleteName, sport, position, coachId
       title: "Your coach set you a new program",
       body: `${GOALS.find((g) => g.id === goal)?.label ?? goal}, ${days} days a week.${notes ? ` "${notes}"` : ""}`,
       href: "/coach",
+      // This uses the existing program-email choice while the row itself is
+      // also the in-app notification.
+      email_category: "program",
     });
     return null;
   }

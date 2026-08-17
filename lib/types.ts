@@ -43,6 +43,10 @@ export interface Subscription {
   stripe_customer_id: string | null;
   stripe_subscription_id: string | null;
   stripe_price_id: string | null;
+  /** Stripe's exact state; `status` above is the app access state. */
+  stripe_status?: string | null;
+  trial_end?: string | null;
+  trial_reminder_created_at?: string | null;
   current_period_end: string | null;
   cancel_at_period_end: boolean;
   /** When a paused subscription starts billing again. Null unless paused. */
@@ -275,4 +279,7 @@ export interface Profile {
   email_workout_reminders?: boolean | null;
   email_milestones?: boolean | null;
   email_program_reminders?: boolean | null;
+  in_app_training_reminders?: boolean | null;
+  health_data_consent_at?: string | null;
+  health_data_consent_version?: string | null;
 }

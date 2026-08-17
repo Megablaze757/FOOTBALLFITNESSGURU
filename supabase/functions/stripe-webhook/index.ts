@@ -92,6 +92,8 @@ async function upsertFromSubscription(sub: Stripe.Subscription) {
       stripe_customer_id: sub.customer as string,
       stripe_subscription_id: sub.id,
       stripe_price_id: item?.price.id ?? null,
+      stripe_status: sub.status,
+      trial_end: toIso(sub.trial_end),
       current_period_start: toIso(item?.current_period_start),
       current_period_end: toIso(item?.current_period_end),
       cancel_at_period_end: sub.cancel_at_period_end,

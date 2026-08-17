@@ -90,6 +90,9 @@ export default function ProfilePage() {
           {subscription?.cancel_at_period_end && subscription.current_period_end && (
             <div className="text-xs text-readiness-red">Cancels {subscription.current_period_end.slice(0, 10)}</div>
           )}
+          {subscription?.stripe_status === "trialing" && subscription.trial_end && (
+            <div className="text-xs text-pitch-400">Free trial ends {subscription.trial_end.slice(0, 10)}</div>
+          )}
         </div>
         {/* Keyed on whether they've paid, not on a tier id. It used to compare
             against the gold tier by name, so a Pro subscriber was invited to
