@@ -101,11 +101,12 @@ add the webhook endpoint in the Stripe Dashboard pointing at the `stripe-webhook
   read-all RLS policies.
 - **Scheduled emails** (`supabase/functions/`): `send-daily-reminders` (emails users who
   haven't checked in today), `weekly-summary` (per-user 7-day recap), and
-  `milestone-notifications` (deduplicated streak celebrations) — all via Resend with
-  per-athlete preferences and delivery-attempt logging.
-- **Cron** (`supabase/cron/schedule.sql`): `pg_cron` + `pg_net` jobs that POST to those
-  functions (08:00 daily / 04:00 Mondays), reading the service-role key from Vault. Run
-  once after deploy; replace `<PROJECT_REF>`.
+  `milestone-notifications` (deduplicated streak and achieved-goal celebrations), plus
+  evening workout-log reminders — all via Resend with per-athlete preferences and
+  signed-webhook delivery/bounce logging.
+- **Cron** (`supabase/cron/schedule.sql`): `pg_cron` + `pg_net` jobs that POST to the
+  daily, weekly, deadline, milestone and evening workout reminder functions, reading the
+  service-role key from Vault. Run once after deploy; replace `<PROJECT_REF>`.
 - **Admin** (`app/admin`): standalone back-office (no athlete tab bar), gated to
   `profiles.role = 'admin'` — MRR, paid subs, DAU, total users, video queue health, and a
   failed-jobs table. Linked from Profile for admins.
@@ -128,8 +129,10 @@ add the webhook endpoint in the Stripe Dashboard pointing at the `stripe-webhook
    or paste the not-yet-applied files into the SQL Editor).
 2. Deploy edge functions: `assess-readiness`, `process-daily-state`, `process-video`,
    `create-checkout`, `stripe-webhook --no-verify-jwt`, `send-daily-reminders`, `weekly-summary`,
-   `deadline-reminders`, and `milestone-notifications`.
-3. `supabase secrets set` the worker/Stripe/Resend keys + URLs (see `.env.example`).
+   `deadline-reminders`, `milestone-notifications`, `send-workout-reminders`, and
+   `resend-webhook --no-verify-jwt`.
+3. `supabase secrets set` the worker/Stripe/Resend keys + URLs (see `.env.example`). In Resend,
+   subscribe the `resend-webhook` URL to sent/delivered/delayed/failed/bounced/complained events.
 4. Deploy `ai-worker/` and `cv-worker/` (Railway/Render — `Dockerfile`s provided).
 5. Add DB webhooks: `daily_check_ins` → `process-daily-state`; `videos` → `process-video`.
    Add the Stripe webhook endpoint → `stripe-webhook`.
@@ -252,7 +255,7 @@ Helper scripts: `scripts/db-deploy.mjs` (apply migrations),
 `scripts/db-verify.mjs` (inspect schema), `scripts/seed-user.mjs` (demo users),
 `scripts/smoke-live.mjs` (live end-to-end check).
 
-Still pending (need third-party accounts): deploy the 7 edge functions + 2 Python workers,
+Still pending (need third-party accounts): deploy the required Edge Functions + 2 Python workers,
 Stripe + Resend keys, DB/Stripe webhooks, cron. See "Deploying everything" below — all turnkey.
 
 ## Local setup

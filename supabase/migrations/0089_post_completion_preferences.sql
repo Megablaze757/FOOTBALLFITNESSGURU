@@ -28,6 +28,7 @@ alter table public.profiles
   add column if not exists fats_target integer,
   add column if not exists email_weekly_summary boolean not null default true,
   add column if not exists email_checkin_reminders boolean not null default true,
+  add column if not exists email_workout_reminders boolean not null default true,
   add column if not exists email_milestones boolean not null default true,
   add column if not exists email_program_reminders boolean not null default true;
 
@@ -53,12 +54,17 @@ create table if not exists public.email_delivery_logs (
   user_id uuid references public.profiles(id) on delete set null,
   email_type text not null,
   provider_id text,
-  status text not null check (status in ('attempted', 'sent', 'failed', 'skipped')),
+  status text not null,
   error_message text,
   created_at timestamptz not null default now()
 );
+alter table public.email_delivery_logs drop constraint if exists email_delivery_logs_status_check;
+alter table public.email_delivery_logs add constraint email_delivery_logs_status_check
+  check (status in ('attempted', 'sent', 'delivered', 'delayed', 'failed', 'bounced', 'complained', 'skipped'));
 create index if not exists email_delivery_logs_user_created
   on public.email_delivery_logs (user_id, created_at desc);
+create unique index if not exists email_delivery_logs_provider_id_unique
+  on public.email_delivery_logs (provider_id) where provider_id is not null;
 alter table public.email_delivery_logs enable row level security;
 drop policy if exists "email delivery: read own" on public.email_delivery_logs;
 create policy "email delivery: read own" on public.email_delivery_logs

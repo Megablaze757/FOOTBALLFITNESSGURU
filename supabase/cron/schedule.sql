@@ -63,6 +63,13 @@ select cron.schedule(
   $$ select public.invoke_edge('milestone-notifications') $$
 );
 
+-- 6. Evening workout/rest-day logging reminder for active programs.
+select cron.schedule(
+  'workout-log-reminders',
+  '0 19 * * *',
+  $$ select public.invoke_edge('send-workout-reminders') $$
+);
+
 -- Inspect / remove:
 --   select * from cron.job;
 --   select cron.unschedule('daily-journal-reminder');

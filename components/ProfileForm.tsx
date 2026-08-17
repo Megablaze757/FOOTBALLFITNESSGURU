@@ -33,6 +33,7 @@ export function ProfileForm({ profile, email }: { profile: Profile; email: strin
   const [onBoards, setOnBoards] = useState(!profile.leaderboard_opt_out);
   const [emailWeekly, setEmailWeekly] = useState(profile.email_weekly_summary ?? true);
   const [emailCheckins, setEmailCheckins] = useState(profile.email_checkin_reminders ?? true);
+  const [emailWorkouts, setEmailWorkouts] = useState(profile.email_workout_reminders ?? true);
   const [emailMilestones, setEmailMilestones] = useState(profile.email_milestones ?? true);
   const [emailPrograms, setEmailPrograms] = useState(profile.email_program_reminders ?? true);
   const [saving, setSaving] = useState(false);
@@ -76,6 +77,7 @@ export function ProfileForm({ profile, email }: { profile: Profile; email: strin
         leaderboard_opt_out: !onBoards,
         email_weekly_summary: emailWeekly,
         email_checkin_reminders: emailCheckins,
+        email_workout_reminders: emailWorkouts,
         email_milestones: emailMilestones,
         email_program_reminders: emailPrograms,
       })
@@ -201,8 +203,9 @@ export function ProfileForm({ profile, email }: { profile: Profile; email: strin
         <p className="mb-3 text-xs text-slate-500">Choose what is useful. Account and security emails are unaffected.</p>
         <div className="space-y-3">
           <EmailChoice label="Daily check-in reminder" checked={emailCheckins} onChange={setEmailCheckins} />
+          <EmailChoice label="Workout logging reminder" checked={emailWorkouts} onChange={setEmailWorkouts} />
           <EmailChoice label="Weekly training summary" checked={emailWeekly} onChange={setEmailWeekly} />
-          <EmailChoice label="Streaks and milestones" checked={emailMilestones} onChange={setEmailMilestones} />
+          <EmailChoice label="Streaks and goal milestones" checked={emailMilestones} onChange={setEmailMilestones} />
           <EmailChoice label="Program deadline reminders" checked={emailPrograms} onChange={setEmailPrograms} />
         </div>
       </fieldset>

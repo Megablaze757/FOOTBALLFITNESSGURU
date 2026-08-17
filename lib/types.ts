@@ -272,6 +272,7 @@ export interface Profile {
   fats_target?: number | null;
   email_weekly_summary?: boolean | null;
   email_checkin_reminders?: boolean | null;
+  email_workout_reminders?: boolean | null;
   email_milestones?: boolean | null;
   email_program_reminders?: boolean | null;
 }
