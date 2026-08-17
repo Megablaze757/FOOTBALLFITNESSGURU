@@ -97,9 +97,11 @@ export function CheckInDone({
             <div className="flex items-center gap-2 text-sm text-slate-300">
               <span className="text-pitch-400">✓</span>
               <span>
-                {training?.session_type === "active_rest" ? "Active rest logged" : "Training logged"}
-                {training?.total_minutes ? ` — ${training.total_minutes} min` : ""}
-                {training?.distance_km ? `, ${training.distance_km} km` : ""}
+                {training?.session_type === "rest_day" ? "Rest day logged" : training?.session_type === "active_rest" ? "Active rest logged" : "Training logged"}
+                {training?.duration_seconds ? ` — ${Math.floor(training.duration_seconds / 60)}:${String(training.duration_seconds % 60).padStart(2, "0")}` : training?.total_minutes ? ` — ${training.total_minutes} min` : ""}
+                {training?.distance_value
+                  ? `, ${training.distance_value} ${training.distance_unit ?? "km"}`
+                  : training?.distance_km ? `, ${training.distance_km} km` : ""}
               </span>
             </div>
             {training?.notes && <p className="pl-5 text-xs text-slate-500">{training.notes}</p>}

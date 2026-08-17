@@ -163,9 +163,16 @@ export interface TrainingLog {
   log_date: string;
   drills: TrainingDrill[];
   total_minutes: number | null;
+  /** Exact duration. Added after total_minutes so mm:ss is never rounded away. */
+  duration_seconds?: number | null;
   intensity: number | null;
   /** Distance covered. What a runner actually plans in — see migration 0062. */
   distance_km?: number | null;
+  /** Original value and unit as entered, alongside canonical distance_km. */
+  distance_value?: number | null;
+  distance_unit?: "km" | "mi" | null;
+  pace_seconds_per_km?: number | null;
+  avg_speed_kmh?: number | null;
   /** Contact work, weighted above running minutes in sessionLoad. */
   contact_minutes?: number | null;
   /** Which of the fourteen run types this was — see lib/running.ts, migration 0064. */
@@ -184,7 +191,7 @@ export interface TrainingLog {
   interval_seconds?: number | null;
   recovery_seconds?: number | null;
   /** A deliberately light day still counts as attendance, but not strength volume. */
-  session_type?: "workout" | "active_rest" | null;
+  session_type?: "workout" | "active_rest" | "rest_day" | null;
   /** Free-text detail for an active-rest day or the session as a whole. */
   notes?: string | null;
   created_at: string;
@@ -258,4 +265,13 @@ export interface Profile {
   leaderboard_opt_out?: boolean | null;
   goals?: import("./program-preferences").GoalPreference[] | null;
   saved_exercises?: string[] | null;
+  distance_unit?: "km" | "mi" | null;
+  calorie_target?: number | null;
+  protein_target?: number | null;
+  carbs_target?: number | null;
+  fats_target?: number | null;
+  email_weekly_summary?: boolean | null;
+  email_checkin_reminders?: boolean | null;
+  email_milestones?: boolean | null;
+  email_program_reminders?: boolean | null;
 }

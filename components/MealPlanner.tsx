@@ -8,7 +8,7 @@ import {
   effectiveMealPrefs, planTargets, buildWeek, shoppingList, unmetSlots, dislikedFoodIds, favouriteFoodIds,
   swapKey, slotTargetKcal, type MealSwaps,
   ACTIVITY_LEVELS, DIET_GOALS, DIET_PATTERNS, AVOIDANCES, DEFAULT_PREFS,
-  type BodyStats, type Sex, type ActivityLevel, type DietGoal, type PlannedDay,
+  type BodyStats, type Sex, type ActivityLevel, type DietGoal, type PlannedDay, type PlanTargets,
   type MealPrefs, type DietPattern, type Avoidance,
 } from "@/lib/meal-plan";
 import { parseSchedule } from "@/lib/meal-schedule";
@@ -41,9 +41,11 @@ interface Props {
   initialRecent?: string[] | null;
   /** Dishes they've starred, which the planner favours heavily. */
   initialStarred?: string[] | null;
+  /** Athlete-set calorie/macros override the calculated plan targets. */
+  targetOverrides?: Partial<Pick<PlanTargets, "calories" | "protein" | "carbs" | "fats">> | null;
 }
 
-export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initialSeed, initialSwaps, initialRecent, initialStarred, context }: Props) {
+export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initialSeed, initialSwaps, initialRecent, initialStarred, context, targetOverrides }: Props) {
   const [sex, setSex] = useState<Sex>(initial?.sex ?? "male");
   const [age, setAge] = useState(String(initial?.age ?? 20));
   const [heightCm, setHeightCm] = useState(String(initial?.heightCm ?? 178));
@@ -127,7 +129,7 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
     weightKg: Number(weightKg) || 75,
   }), [sex, goal, activity, age, heightCm, weightKg]);
 
-  const targets = useMemo(() => planTargets(stats, context ?? {}), [stats, context]);
+  const targets = useMemo(() => ({ ...planTargets(stats, context ?? {}), ...(targetOverrides ?? {}) }), [stats, context, targetOverrides]);
   /**
    * Where they shop, and any prices they've corrected.
    *

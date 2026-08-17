@@ -1,5 +1,6 @@
 import { RACE_METRICS, easyShare, riegel, runType, type ZoneId } from "./running";
 import type { StrengthBenchmark, TrainingLog } from "./types";
+import { durationMinutes } from "./training-duration";
 
 const DAY_MS = 86_400_000;
 const WINDOW_DAYS = 28;
@@ -104,17 +105,17 @@ function effectiveZone(log: TrainingLog): ZoneId | null {
 function windowStats(logs: TrainingLog[]): RunWindowStats {
   const runs = logs.filter(isRun);
   const distanceKm = runs.reduce((sum, log) => sum + (Number(log.distance_km) || 0), 0);
-  const durationMinutes = runs.reduce((sum, log) => sum + (Number(log.total_minutes) || 0), 0);
-  const paced = runs.filter((log) => Number(log.distance_km) > 0 && Number(log.total_minutes) > 0);
+  const totalDurationMinutes = runs.reduce((sum, log) => sum + durationMinutes(log), 0);
+  const paced = runs.filter((log) => Number(log.distance_km) > 0 && durationMinutes(log) > 0);
   const pacedKm = paced.reduce((sum, log) => sum + Number(log.distance_km), 0);
-  const pacedMinutes = paced.reduce((sum, log) => sum + Number(log.total_minutes), 0);
+  const pacedMinutes = paced.reduce((sum, log) => sum + durationMinutes(log), 0);
   const withHr = runs.filter((log) => Number(log.avg_hr) > 0);
-  const hrWeight = (log: TrainingLog) => Number(log.total_minutes) > 0 ? Number(log.total_minutes) : 1;
+  const hrWeight = (log: TrainingLog) => durationMinutes(log) > 0 ? durationMinutes(log) : 1;
   const totalHrWeight = withHr.reduce((sum, log) => sum + hrWeight(log), 0);
 
   return {
     distanceKm: round2(distanceKm),
-    durationMinutes: Math.round(durationMinutes),
+    durationMinutes: +totalDurationMinutes.toFixed(2),
     runs: runs.length,
     avgPaceSecPerKm: pacedKm > 0 ? Math.round((pacedMinutes * 60) / pacedKm) : null,
     avgHr: totalHrWeight > 0
@@ -248,7 +249,7 @@ export function summarizeRunProgress(
     .map((log) => ({
       type: log.run_type,
       km: log.distance_km,
-      minutes: log.total_minutes,
+      minutes: durationMinutes(log),
       zone: log.zone,
       intervals: log.intervals,
       effortSeconds: log.interval_seconds,

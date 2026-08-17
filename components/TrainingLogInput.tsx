@@ -21,9 +21,15 @@ import {
 export interface TrainingState {
   drills: TrainingDrill[];
   total_minutes: number | null;
+  /** Exact elapsed time, so a 27:43 run is not rewritten as 28 minutes. */
+  duration_seconds?: number | null;
+  session_type?: "workout" | "active_rest" | "rest_day";
+  notes?: string | null;
   intensity: number | null;
   /** Distance covered — see migration 0062. */
   distance_km?: number | null;
+  distance_value?: number | null;
+  distance_unit?: "km" | "mi" | null;
   /** Rugby only. Weighted above ordinary minutes in sessionLoad. */
   contact_minutes?: number | null;
   // --- Runs. See migration 0064. -------------------------------------------
@@ -39,7 +45,7 @@ export interface TrainingState {
   recovery_seconds?: number | null;
 }
 
-export function TrainingLogInput({ value, onChange, planned = [], sport = "all", history = [] }: {
+export function TrainingLogInput({ value, onChange, planned = [], sport = "all", history = [], distanceUnit = "km", onDistanceUnitChange }: {
   value: TrainingState;
   onChange: (v: TrainingState) => void;
   /** Today's scheduled drills, so they can be logged with one tap. */
@@ -52,6 +58,8 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
    * and it is the difference between typing six numbers and checking three.
    */
   history?: { log_date?: string; drills?: TrainingDrill[] | null }[];
+  distanceUnit?: "km" | "mi";
+  onDistanceUnitChange?: (unit: "km" | "mi") => void;
 }) {
   const [warmupsOpen, setWarmupsOpen] = useState<Set<number>>(new Set());
   const [whatIf, setWhatIf] = useState<string | null>(null);
@@ -129,8 +137,41 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
     update({ run_type: id, zone: runType(id)?.primaryZone ?? null });
   };
 
-  const livePace = Number(value.distance_km) > 0 && Number(value.total_minutes) > 0
-    ? Math.round((Number(value.total_minutes) * 60) / Number(value.distance_km))
+  const unit = value.distance_unit ?? distanceUnit;
+  const shownDistance = value.distance_value != null && value.distance_unit === unit
+    ? value.distance_value
+    : value.distance_km == null
+      ? null
+      : unit === "mi" ? +(value.distance_km / 1.609344).toFixed(3) : value.distance_km;
+
+  const setDistance = (next: number | null) => {
+    const km = next == null ? null : unit === "mi" ? next * 1.609344 : next;
+    update({
+      distance_value: next,
+      distance_unit: unit,
+      distance_km: km == null ? null : +km.toFixed(3),
+    });
+  };
+
+  const setUnit = (next: "km" | "mi") => {
+    const converted = value.distance_km == null
+      ? null
+      : next === "mi" ? +(value.distance_km / 1.609344).toFixed(3) : +value.distance_km.toFixed(3);
+    update({ distance_unit: next, distance_value: converted });
+    onDistanceUnitChange?.(next);
+  };
+
+  const setDurationPart = (part: "minutes" | "seconds", next: number | null) => {
+    const current = value.duration_seconds ?? ((value.total_minutes ?? 0) * 60);
+    const minutes = part === "minutes" ? (next ?? 0) : Math.floor(current / 60);
+    const seconds = part === "seconds" ? (next ?? 0) : current % 60;
+    const duration = Math.max(0, minutes * 60 + seconds);
+    updateDerived({ duration_seconds: duration || null, total_minutes: duration ? Math.round(duration / 60) : null });
+  };
+
+  const exactSeconds = value.duration_seconds ?? ((value.total_minutes ?? 0) * 60);
+  const livePace = Number(value.distance_km) > 0 && exactSeconds > 0
+    ? Math.round(exactSeconds / Number(value.distance_km))
     : null;
 
   const setDrill = (i: number, patch: Partial<TrainingDrill>) =>
@@ -171,30 +212,44 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
               {value.run_type && <span className="mt-1 block text-xs text-slate-500">{runType(value.run_type)?.purpose}</span>}
             </label>
 
-            <div className="grid grid-cols-2 gap-3">
-              <label className="block">
-                <span className="field-label">Distance (km)</span>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="block">
+                <span className="field-label flex items-center justify-between gap-2">
+                  Distance
+                  <span className="inline-flex rounded-lg bg-white/[0.05] p-0.5">
+                    {(["km", "mi"] as const).map((u) => (
+                      <button key={u} type="button" onClick={() => setUnit(u)}
+                        className={`rounded-md px-2 py-1 text-[10px] font-bold uppercase ${unit === u ? "bg-sky-400 text-ink-900" : "text-slate-400"}`}
+                        aria-label={u === "km" ? "Use kilometres" : "Use miles"}
+                        aria-pressed={unit === u}>{u}</button>
+                    ))}
+                  </span>
+                </span>
                 <NumberInput
-                  decimal min={0} max={500} step="0.01"
-                  value={value.distance_km ?? null}
-                  onChange={(next) => update({ distance_km: next })}
+                  decimal min={0} max={unit === "mi" ? 310 : 500} step="0.001"
+                  value={shownDistance}
+                  onChange={setDistance}
                   placeholder="e.g. 5.66" className="field"
+                  aria-label={`Distance in ${unit === "mi" ? "miles" : "kilometres"}`}
                 />
-              </label>
-              <label className="block">
-                <span className="field-label">Duration (min)</span>
-                <NumberInput
-                  min={0}
-                  value={value.total_minutes ?? null}
-                  onChange={(next) => updateDerived({ total_minutes: next })}
-                  placeholder="e.g. 31" className="field"
-                />
-              </label>
+              </div>
+              <fieldset>
+                <legend className="field-label">Time (mm:ss)</legend>
+                <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                  <NumberInput min={0} max={2880}
+                    value={exactSeconds ? Math.floor(exactSeconds / 60) : null}
+                    onChange={(next) => setDurationPart("minutes", next)} placeholder="mm" className="field text-center" aria-label="Run minutes" />
+                  <span className="font-bold text-slate-500">:</span>
+                  <NumberInput min={0} max={59}
+                    value={exactSeconds ? exactSeconds % 60 : null}
+                    onChange={(next) => setDurationPart("seconds", next)} placeholder="ss" className="field text-center" aria-label="Run seconds" />
+                </div>
+              </fieldset>
             </div>
 
             <div className={`rounded-xl px-3 py-2 text-xs ${livePace ? "bg-sky-400/10 text-sky-300" : "bg-white/[0.03] text-slate-500"}`}>
               {livePace
-                ? <>Average pace <strong className="tabular-nums text-slate-100">{formatPace(livePace)}/km</strong> · saved automatically from distance and time</>
+                ? <>Average pace <strong className="tabular-nums text-slate-100">{unit === "mi" ? formatPace(Math.round(livePace * 1.609344)) : formatPace(livePace)}/{unit}</strong> · {((value.distance_km ?? 0) / (exactSeconds / 3600)).toFixed(2)} km/h</>
                 : "Add distance and time and your average pace appears here automatically."}
             </div>
 
@@ -563,7 +618,7 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
           <span className="field-label">Duration (min)</span>
           <NumberInput
             value={value.total_minutes ?? null}
-            onChange={(v) => updateDerived({ total_minutes: v })}
+            onChange={(v) => updateDerived({ total_minutes: v, duration_seconds: v == null ? null : v * 60 })}
             min={0} placeholder="e.g. 75" className="field"
           />
         </label>
@@ -618,11 +673,11 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
         <div className="space-y-3 rounded-2xl border border-white/[0.08] bg-white/[0.02] p-3">
           <div className="grid grid-cols-2 gap-3">
             <label className="block">
-              <span className="field-label">Distance (km)</span>
+              <span className="field-label">Distance ({unit})</span>
               <NumberInput
-                decimal min={0} max={500}
-                value={value.distance_km ?? null}
-                onChange={(v) => update({ distance_km: v })}
+                decimal min={0} max={unit === "mi" ? 310 : 500}
+                value={shownDistance}
+                onChange={setDistance}
                 placeholder="e.g. 8.5" className="field"
               />
             </label>

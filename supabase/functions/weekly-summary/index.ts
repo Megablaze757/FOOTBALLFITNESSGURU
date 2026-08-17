@@ -9,6 +9,7 @@
 // =============================================================================
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { sendAndLog } from "../_shared/email.ts";
 
 const FROM = Deno.env.get("REMINDER_FROM") ?? "AI Coach <noreply@example.com>";
 const APP_URL = Deno.env.get("APP_URL") ?? "http://localhost:3000";
@@ -41,12 +42,15 @@ Deno.serve(async () => {
   const resendKey = Deno.env.get("RESEND_API_KEY");
   const { data: list } = await supabase.auth.admin.listUsers({ perPage: 1000 });
   const emailById = new Map((list?.users ?? []).map((u) => [u.id, u.email]));
+  const { data: profiles } = await supabase.from("profiles").select("id, email_weekly_summary");
+  const enabled = new Set((profiles ?? []).filter((profile) => profile.email_weekly_summary !== false).map((profile) => profile.id));
 
   let sent = 0;
   for (const [userId, entries] of byUser) {
     const email = emailById.get(userId);
-    if (!email || !resendKey) continue;
-    if (await sendEmail(resendKey, email, summarize(entries))) sent++;
+    if (!email || !enabled.has(userId)) continue;
+    if (await sendAndLog({ supabase, userId, type: "weekly_summary", apiKey: resendKey,
+      from: FROM, to: email, subject: "Your weekly recovery summary 📊", html: summarize(entries) })) sent++;
   }
 
   return json({ summaries_sent: sent, active_users: byUser.size }, 200);
@@ -68,15 +72,6 @@ function summarize(entries: CheckIn[]): string {
       <li>Matches played: <b>${matches}</b></li>
     </ul>
     <p><a href="${APP_URL}/dashboard">See your full dashboard →</a></p>`;
-}
-
-async function sendEmail(apiKey: string, to: string, html: string): Promise<boolean> {
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ from: FROM, to, subject: "Your weekly recovery summary 📊", html }),
-  });
-  return res.ok;
 }
 
 function json(data: unknown, status: number): Response {

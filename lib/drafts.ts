@@ -131,6 +131,8 @@ export interface CheckInDraftState {
     total_minutes?: number | null;
     run_type?: string | null;
     distance_km?: number | null;
+    duration_seconds?: number | null;
+    session_type?: string | null;
   } | null;
 }
 
@@ -177,6 +179,9 @@ export function checkInIsDirty(s: CheckInDraftState, baseline?: CheckInDraftBase
     t?.total_minutes != null ||
     t?.run_type != null ||
     t?.distance_km != null ||
+    t?.duration_seconds != null ||
+    t?.session_type === "active_rest" ||
+    t?.session_type === "rest_day" ||
     s.sore != null
   );
 }

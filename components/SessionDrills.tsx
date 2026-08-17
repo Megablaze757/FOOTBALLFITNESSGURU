@@ -25,7 +25,7 @@ import { Icon, type IconName } from "@/components/Icon";
  * `compact` keeps the old dense rows for the four-week calendar, where the
  * question is "what does week 3 look like" and twelve cards a day would bury it.
  */
-export function SessionDrills({ drills, onPick, onSwap, compact = false }: {
+export function SessionDrills({ drills, onPick, onSwap, onReorder, editMode = false, compact = false }: {
   drills: Drill[];
   /** Optional: open the exercise detail. Every non-empty drill has a card. */
   onPick?: (name: string) => void;
@@ -35,10 +35,14 @@ export function SessionDrills({ drills, onPick, onSwap, compact = false }: {
    * views like the calendar, where there is nothing to save to.
    */
   onSwap?: (prescribed: string, to: string | null) => void | Promise<void>;
+  /** Persist a move in the parent. HTML drag is enhanced by tap-friendly arrows. */
+  onReorder?: (from: number, to: number) => void | Promise<void>;
+  editMode?: boolean;
   /** Dense text rows rather than cards. For the week-at-a-glance calendar. */
   compact?: boolean;
 }) {
   const [swapping, setSwapping] = useState<string | null>(null);
+  const [dragging, setDragging] = useState<number | null>(null);
   const grouped = groupBySlot(drills);
 
   return (
@@ -60,9 +64,34 @@ export function SessionDrills({ drills, onPick, onSwap, compact = false }: {
               // for an already-swapped row is not the name on screen.
               const prescribed = d.swappedFrom ?? d.name;
               const open = swapping === prescribed;
+              const flatIndex = drills.indexOf(d);
+              // A slot is part of the prescription, not visual decoration.
+              // Reordering a cool-down above the main lift while leaving it
+              // labelled as cool-down is contradictory, and grouping would
+              // immediately move it back on the next render anyway. Reorder
+              // within a section; the programme builder owns section order.
+              const reorderable = editMode && !!onReorder && group.drills.length > 1;
+              const previousIndex = k > 0 ? drills.indexOf(group.drills[k - 1]) : null;
+              const nextIndex = k < group.drills.length - 1 ? drills.indexOf(group.drills[k + 1]) : null;
               return (
-              <li key={k}>
+              <li key={k} draggable={reorderable}
+                onDragStart={() => setDragging(flatIndex)}
+                onDragEnd={() => setDragging(null)}
+                onDragOver={(event) => { if (reorderable) event.preventDefault(); }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  if (reorderable && dragging != null && dragging !== flatIndex) void onReorder?.(dragging, flatIndex);
+                  setDragging(null);
+                }}
+                className={dragging === flatIndex ? "opacity-50" : undefined}>
                 <div className="flex min-w-0 items-start gap-1 sm:gap-2">
+                  {reorderable && (
+                    <div className="flex shrink-0 flex-col items-center pt-1 text-slate-500">
+                      <span className="cursor-grab px-1 text-sm" aria-hidden>⠿</span>
+                      <button type="button" disabled={previousIndex == null} onClick={() => previousIndex != null && void onReorder?.(flatIndex, previousIndex)} className="tap-target h-7 px-1 text-[10px] disabled:opacity-20" aria-label={`Move ${d.name} up`}>↑</button>
+                      <button type="button" disabled={nextIndex == null} onClick={() => nextIndex != null && void onReorder?.(flatIndex, nextIndex)} className="tap-target h-7 px-1 text-[10px] disabled:opacity-20" aria-label={`Move ${d.name} down`}>↓</button>
+                    </div>
+                  )}
                   {compact
                     ? <CompactRow drill={d} onPick={onPick} />
                     : <DrillCard drill={d} onPick={onPick} rehab={group.rehab} slot={group.slot} />}
@@ -70,7 +99,7 @@ export function SessionDrills({ drills, onPick, onSwap, compact = false }: {
                       stage-two isometric is offering to leave the protocol —
                       the substitution the athlete wants there is a
                       conversation with a physio, not a tap. */}
-                  {onSwap && !d.skill && !d.rehab && (
+                  {editMode && onSwap && !d.skill && !d.rehab && (
                     <button
                       onClick={() => setSwapping(open ? null : prescribed)}
                       aria-label={`Swap ${d.name}`}
@@ -83,7 +112,7 @@ export function SessionDrills({ drills, onPick, onSwap, compact = false }: {
                     </button>
                   )}
                 </div>
-                {onSwap && open && (
+                {editMode && onSwap && open && (
                   <div className="mt-1.5">
                     <SwapSheet
                       name={prescribed}

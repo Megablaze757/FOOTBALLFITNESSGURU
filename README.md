@@ -100,7 +100,9 @@ add the webhook endpoint in the Stripe Dashboard pointing at the `stripe-webhook
   `is_admin()` + `admin_metrics()` helpers (SECURITY DEFINER, admin-gated), and admin
   read-all RLS policies.
 - **Scheduled emails** (`supabase/functions/`): `send-daily-reminders` (emails users who
-  haven't checked in today) and `weekly-summary` (per-user 7-day recap) — both via Resend.
+  haven't checked in today), `weekly-summary` (per-user 7-day recap), and
+  `milestone-notifications` (deduplicated streak celebrations) — all via Resend with
+  per-athlete preferences and delivery-attempt logging.
 - **Cron** (`supabase/cron/schedule.sql`): `pg_cron` + `pg_net` jobs that POST to those
   functions (08:00 daily / 04:00 Mondays), reading the service-role key from Vault. Run
   once after deploy; replace `<PROJECT_REF>`.
@@ -122,9 +124,11 @@ add the webhook endpoint in the Stripe Dashboard pointing at the `stripe-webhook
 
 ## Deploying everything (needs the real Supabase project)
 
-1. Apply migrations `0001`–`0005` (CLI `supabase db push`, or paste into SQL Editor).
+1. Apply every migration in `supabase/migrations` in filename order (CLI `supabase db push`,
+   or paste the not-yet-applied files into the SQL Editor).
 2. Deploy edge functions: `assess-readiness`, `process-daily-state`, `process-video`,
-   `create-checkout`, `stripe-webhook --no-verify-jwt`, `send-daily-reminders`, `weekly-summary`.
+   `create-checkout`, `stripe-webhook --no-verify-jwt`, `send-daily-reminders`, `weekly-summary`,
+   `deadline-reminders`, and `milestone-notifications`.
 3. `supabase secrets set` the worker/Stripe/Resend keys + URLs (see `.env.example`).
 4. Deploy `ai-worker/` and `cv-worker/` (Railway/Render — `Dockerfile`s provided).
 5. Add DB webhooks: `daily_check_ins` → `process-daily-state`; `videos` → `process-video`.

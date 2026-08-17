@@ -489,6 +489,7 @@ function GoalBuilder({ painMap, painNote, latestBench, sport, initialPositions, 
     // users, so first-time conversion stays correct and the repeat count doubles
     // as a signal that people rebuild.
     track("program_built", { goal: g, block: 1 });
+    invalidate();
     onCreated();
   }
 
@@ -1062,8 +1063,35 @@ function ActiveProgram({
     if (e) return;
     // The plan is cached by useAsync, and a swap has to show on every screen
     // that reads it rather than only where it was made.
-    invalidate("coach:");
-    location.reload();
+    invalidate();
+    onChange();
+  }
+
+  async function saveDrillOrder(from: number, to: number) {
+    if (!nextSession || from === to) return;
+    const visible = [...sessionDrills];
+    const [moved] = visible.splice(from, 1);
+    visible.splice(to, 0, moved);
+    // Rehab additions are not part of the programme row. Preserve them in the
+    // live view but only persist the prescribed exercises they sit around.
+    const order = new Map(
+      visible.filter((drill) => !drill.rehab).map((drill, index) => [drill.swappedFrom ?? drill.name, index]),
+    );
+    const nextPlan = {
+      ...plan,
+      weeks: plan.weeks.map((week) => week.week !== nextSession.w ? week : {
+        ...week,
+        sessions: week.sessions.map((session) => session.day !== nextSession.s.day ? session : {
+          ...session,
+          drills: [...session.drills].sort((a, b) =>
+            (order.get(a.name) ?? Number.MAX_SAFE_INTEGER) - (order.get(b.name) ?? Number.MAX_SAFE_INTEGER)),
+        }),
+      }),
+    };
+    const { error: reorderError } = await createClient().from("programs").update({ plan: nextPlan }).eq("id", program.id);
+    if (reorderError) { setActionError(`Couldn't save that exercise order: ${reorderError.message}`); return; }
+    invalidate();
+    onChange();
   }
 
   const bench = (program.target_metric && program.target_value != null && program.baseline_value != null)
@@ -1083,6 +1111,7 @@ function ActiveProgram({
   const [switching, setSwitching] = useState(false);
   const [advancing, setAdvancing] = useState(false);
   const [playing, setPlaying] = useState(false);
+  const [editingSession, setEditingSession] = useState(false);
   /**
    * The exercise whose detail sheet is open.
    *
@@ -1124,6 +1153,7 @@ function ActiveProgram({
       .from("programs").update({ plan: newPlan, in_season: nextSeason }).eq("id", program.id);
     setSwitching(false);
     if (seasonErr) { setActionError(`Couldn't switch phase: ${seasonErr.message}`); return; }
+    invalidate();
     onChange();
   }
 
@@ -1211,7 +1241,7 @@ function ActiveProgram({
             : base;
         });
         const { data: existing } = await supabase
-          .from("training_logs").select("drills, total_minutes, intensity, session_type, notes").eq("user_id", userId).eq("log_date", today).maybeSingle();
+          .from("training_logs").select("drills, total_minutes, duration_seconds, intensity, session_type, notes").eq("user_id", userId).eq("log_date", today).maybeSingle();
         const merged = dedupeDrills([...(existing?.drills ?? []), ...newDrills]);
         /**
          * WHAT THE ATHLETE SAID BEATS WHAT WE GUESSED.
@@ -1231,12 +1261,15 @@ function ActiveProgram({
          */
         const prescribed = prescribedEffort({ weeks: [{ sessions: [logged] }] } as never);
         const intensity = result?.intensity ?? existing?.intensity ?? prescribed ?? (logged.title.includes("Rehab") ? 4 : 7);
+        const addedMinutes = result?.minutes ?? 45;
+        const existingSeconds = existing?.duration_seconds ?? (existing?.total_minutes ?? 0) * 60;
         const { error: logErr } = await supabase.from("training_logs").upsert(
           {
             user_id: userId,
             log_date: today,
             drills: merged,
-            total_minutes: (existing?.total_minutes ?? 0) + (result?.minutes ?? 45),
+            total_minutes: Math.round(existingSeconds / 60 + addedMinutes),
+            duration_seconds: Math.round(existingSeconds + addedMinutes * 60),
             intensity,
             session_type: result?.sessionType ?? logged.kind ?? existing?.session_type ?? "workout",
             notes: result?.notes ?? logged.notes ?? existing?.notes ?? null,
@@ -1259,6 +1292,7 @@ function ActiveProgram({
         }
       }
     }
+    invalidate();
     onChange();
   }
 
@@ -1298,6 +1332,7 @@ function ActiveProgram({
     }
     await supabase.from("programs").update({ status: "archived" }).eq("id", program.id);
     setAdvancing(false);
+    invalidate();
     onChange();
   }
 
@@ -1306,6 +1341,7 @@ function ActiveProgram({
     setActionError(null);
     const { error } = await createClient().from("programs").update({ status: "archived" }).eq("id", program.id);
     if (error) { setActionError(`Couldn't archive this block: ${error.message}`); return; }
+    invalidate();
     onChange();
   }
 
@@ -1320,6 +1356,7 @@ function ActiveProgram({
     const { error } = await createClient().from("programs").delete().eq("id", program.id);
     setDeleting(false);
     if (error) { setDeleteError(error.message); return; }
+    invalidate();
     onChange();
   }
 
@@ -1535,17 +1572,24 @@ function ActiveProgram({
       {/* Readiness-aware: what to do today */}
       {tab === "today" && nextSession && todaySession && (
         <section className="card p-4 sm:p-5">
-          <div className="mb-2 flex items-center justify-between">
+          <div className="mb-2 flex items-center justify-between gap-3">
             {/* "Today's session" was shown unconditionally, but nextSession is
                 simply the next UNTICKED one — so after you'd trained it kept
                 presenting the following session as today's, which is how people
                 end up doing two in a day or assuming the app lost the first. */}
             <h2 className="field-label !mb-0">{loggedToday ? "Next session" : "Today’s session"}</h2>
-            {readiness && (
-              <span className="chip" style={{ color: readiness.status === "Green" ? "#34d399" : readiness.status === "Yellow" ? "#fbbf24" : "#fb5d6b" }}>
-                Readiness {readiness.status}
-              </span>
-            )}
+            <div className="flex items-center gap-2">
+              {readiness && (
+                <span className="chip" style={{ color: readiness.status === "Green" ? "#34d399" : readiness.status === "Yellow" ? "#fbbf24" : "#fb5d6b" }}>
+                  Readiness {readiness.status}
+                </span>
+              )}
+              <button type="button" onClick={() => setEditingSession((editing) => !editing)}
+                className={`tap-target rounded-xl px-2 text-sm ${editingSession ? "bg-pitch-400/10 text-pitch-400" : "text-slate-500 hover:bg-white/[0.05] hover:text-slate-300"}`}
+                aria-label={editingSession ? "Finish editing session" : "Edit session"} aria-pressed={editingSession}>
+                {editingSession ? "Done" : "⋮"}
+              </button>
+            </div>
           </div>
           {/* The session shown is the ADJUSTED one. Readiness used to be
               measured, displayed, then ignored: Yellow told you to cut a set
@@ -1611,7 +1655,9 @@ function ActiveProgram({
               <SessionDrills
                 drills={sessionDrills}
                 onPick={(name) => setShowing(name)}
-                onSwap={saveSwap}
+                onSwap={editingSession ? saveSwap : undefined}
+                onReorder={editingSession ? saveDrillOrder : undefined}
+                editMode={editingSession}
               />
             </div>}
             <button onClick={() => setPlaying(true)} className="btn-primary mt-4">

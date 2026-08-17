@@ -16,6 +16,7 @@ import { testedMaxesFrom } from "@/lib/strength-standards";
 import { FeatureLock, tierOfSub } from "@/components/FeatureLock";
 import { can } from "@/lib/subscription";
 import type { NutritionLog, StrengthBenchmark, Subscription, TrainingLog } from "@/lib/types";
+import { isActivity } from "@/lib/training-duration";
 
 // The bars and totals are a month. Strength moves slower than that — a squat
 // that added 10kg over the winter shows nothing across four weeks — so the
@@ -49,7 +50,7 @@ export function ProgressPanel({ userId }: { userId: string }) {
       // daily_check_ins and body_logs — and naming it made PostgREST reject this
       // whole query, so this panel also had no name and no sex. See
       // lib/schema-columns.test.ts.
-      supabase.from("profiles").select("full_name, sex, sport").eq("id", userId).maybeSingle(),
+      supabase.from("profiles").select("full_name, sex, sport, distance_unit").eq("id", userId).maybeSingle(),
       supabase.from("subscriptions").select("*").eq("user_id", userId).maybeSingle(),
       /**
        * BODYWEIGHT, FROM WHEREVER IT WAS ACTUALLY ENTERED.
@@ -107,6 +108,7 @@ export function ProgressPanel({ userId }: { userId: string }) {
       }),
       sex: ((profile as { sex?: string | null } | null)?.sex === "female" ? "female" : "male") as "male" | "female",
       sport: (profile as { sport?: string | null } | null)?.sport ?? null,
+      distanceUnit: ((profile as { distance_unit?: string | null } | null)?.distance_unit === "mi" ? "mi" : "km") as "km" | "mi",
       sub: (sub ?? null) as Subscription | null,
       tested: testedMaxesFrom(benchmarks ?? []),
       benchmarks: (benchmarks ?? []) as StrengthBenchmark[],
@@ -128,7 +130,7 @@ export function ProgressPanel({ userId }: { userId: string }) {
 
   const t = summarizeTraining(data?.training ?? []);
   const n = summarizeNutrition(data?.nutrition ?? []);
-  const hasTraining = (data?.training?.length ?? 0) > 0;
+  const hasTraining = (data?.training?.filter(isActivity).length ?? 0) > 0;
   const hasNutrition = (data?.nutrition?.length ?? 0) > 0;
 
   // A runner opening Performance wants mileage, pace, zones and race results —
@@ -141,6 +143,7 @@ export function ProgressPanel({ userId }: { userId: string }) {
         logs={data.trainingLong ?? []}
         benchmarks={data.benchmarks ?? []}
         name={data.name ?? "Runner"}
+        distanceUnit={data.distanceUnit ?? "km"}
       />
     );
   }

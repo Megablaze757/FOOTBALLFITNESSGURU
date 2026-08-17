@@ -122,10 +122,10 @@ export function goalBlendCopy(goals: GoalPreference[]): string {
 export function goalPreviewCopy(goals: GoalPreference[]): string {
   const types = sanitiseGoals(goals).map((g) => g.type);
   const primary = types[0];
-  if (primary === "strength" && types.includes("hypertrophy")) return "Next-week preview: main lifts move to 4–6 × 3–6 with long rests; accessories use 3–5 × 8–12 and 60–90s rests.";
-  if (primary === "strength") return "Next-week preview: 5–6 working exercises, mostly 4–6 × 3–6 at RPE 8–9 with 3–5 minute rests.";
-  if (primary === "hypertrophy") return "Next-week preview: 7–9 working exercises at 3–5 × 8–15, with more isolation work and 60–90s rests.";
-  if (primary === "endurance" || primary === "fat_loss") return "Next-week preview: 8–10 working movements at 2–4 × 15–25, shorter rests and more conditioning.";
+  if (primary === "strength" && types.includes("hypertrophy")) return "Next-week preview: 3–4 × 6–12 with 90–120s rests; the main lift stays the priority.";
+  if (primary === "strength") return "Next-week preview: the primary lift gets 4–6 × 3–6 at RPE 8–9 with 3–5 minute rests; other work stays at 2–3 sets.";
+  if (primary === "hypertrophy") return "Next-week preview: mostly 3 × 8–15, with more isolation work and 60–90s rests.";
+  if (primary === "endurance" || primary === "fat_loss") return "Next-week preview: 2–3 × 15–25, shorter rests and more conditioning.";
   if (primary === "mobility" || primary === "rehab" || primary === "injury_recovery") return "Next-week preview: load gives way to controlled range-of-motion, band work and low-impact recovery.";
   return "Next-week preview: your primary goal anchors the main block; lower-priority goals shape accessories and conditioning.";
 }
@@ -319,12 +319,38 @@ function adaptDose(drills: ProgramDrill[], goals: GoalPreference[]): ProgramDril
   return drills.map((d) => {
     if (!d.slot || !MAIN_SLOTS.has(d.slot)) return d;
     const compound = d.slot === "primary" || d.slot === "secondary";
-    if (mixedStrengthMuscle) return compound
-      ? { ...d, sets: clamp(d.sets, 4, 6), reps: clamp(d.reps, 3, 6), rest: Math.max(d.rest ?? 0, 180), intensity: "RPE 8–9" }
-      : { ...d, sets: clamp(d.sets, 3, 5), reps: clamp(d.reps, 8, 12), rest: clamp(d.rest ?? 75, 60, 90), intensity: "RPE 7–9" };
-    if (primary === "strength") return { ...d, sets: clamp(d.sets, 4, 6), reps: clamp(d.reps, 3, 6), rest: Math.max(d.rest ?? 0, 180), intensity: "RPE 8–9" };
-    if (primary === "hypertrophy") return { ...d, sets: clamp(d.sets, 3, 5), reps: clamp(d.reps, compound ? 6 : 8, compound ? 12 : 15), rest: clamp(d.rest ?? 75, 60, 90), intensity: "RPE 7–9" };
-    if (primary === "endurance" || primary === "fat_loss") return { ...d, sets: clamp(d.sets, 2, 4), reps: clamp(d.reps, 15, 25), rest: clamp(d.rest ?? 45, 30, 60), intensity: "RPE 5–7" };
+    const primaryLift = d.slot === "primary";
+    // Four-plus sets are reserved for the one lift the strength session is
+    // built around. Applying 4–6 to every secondary and accessory turned a
+    // sensible range into 25–35 working sets in one day.
+    if (mixedStrengthMuscle) return {
+      ...d,
+      sets: primaryLift ? clamp(d.sets, 3, 4) : clamp(d.sets, 2, 3),
+      reps: clamp(d.reps, 6, 12),
+      rest: clamp(d.rest ?? 105, 90, 120),
+      intensity: "RPE 7–9",
+    };
+    if (primary === "strength") return {
+      ...d,
+      sets: primaryLift ? clamp(d.sets, 4, 6) : clamp(d.sets, 2, 3),
+      reps: clamp(d.reps, 3, 6),
+      rest: clamp(d.rest ?? 180, 180, 300),
+      intensity: "RPE 8–9",
+    };
+    if (primary === "hypertrophy") return {
+      ...d,
+      sets: 3,
+      reps: clamp(d.reps, compound ? 8 : 10, 15),
+      rest: clamp(d.rest ?? 75, 60, 90),
+      intensity: "RPE 7–9",
+    };
+    if (primary === "endurance" || primary === "fat_loss") return {
+      ...d,
+      sets: clamp(d.sets, 2, 3),
+      reps: clamp(d.reps, 15, 25),
+      rest: clamp(d.rest ?? 45, 30, 60),
+      intensity: "RPE 5–7",
+    };
     return d;
   });
 }

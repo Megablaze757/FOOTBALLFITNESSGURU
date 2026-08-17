@@ -48,6 +48,15 @@ test("calculates distance-weighted pace and duration-weighted heart rate", () =>
   assert.equal(result.current.longestKm, 10);
 });
 
+test("uses exact mm:ss duration for pace instead of the rounded minute summary", () => {
+  const result = summarizeRunProgress([
+    run("2026-08-16", { distance_km: 5.66, total_minutes: 26, duration_seconds: 25 * 60 + 30 }),
+  ], [], "2026-08-16");
+
+  assert.equal(result.current.durationMinutes, 25.5);
+  assert.equal(result.current.avgPaceSecPerKm, 270);
+});
+
 test("infers a zone from run type for older rows and tracks unzoned distance", () => {
   const result = summarizeRunProgress([
     run("2026-08-16", { zone: null, run_type: "easy", distance_km: 6 }),

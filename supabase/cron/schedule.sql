@@ -56,6 +56,13 @@ select cron.schedule(
   $$ select public.invoke_edge('deadline-reminders') $$
 );
 
+-- 5. Streak and consistency milestones — after the daily reminder window.
+select cron.schedule(
+  'streak-milestone-emails',
+  '30 9 * * *',
+  $$ select public.invoke_edge('milestone-notifications') $$
+);
+
 -- Inspect / remove:
 --   select * from cron.job;
 --   select cron.unschedule('daily-journal-reminder');

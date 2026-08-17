@@ -31,6 +31,10 @@ export function ProfileForm({ profile, email }: { profile: Profile; email: strin
   // new row defaults to visible, which is what makes a leaderboard work at all;
   // showing it as "show me on leaderboards" is what makes the choice legible.
   const [onBoards, setOnBoards] = useState(!profile.leaderboard_opt_out);
+  const [emailWeekly, setEmailWeekly] = useState(profile.email_weekly_summary ?? true);
+  const [emailCheckins, setEmailCheckins] = useState(profile.email_checkin_reminders ?? true);
+  const [emailMilestones, setEmailMilestones] = useState(profile.email_milestones ?? true);
+  const [emailPrograms, setEmailPrograms] = useState(profile.email_program_reminders ?? true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -70,6 +74,10 @@ export function ProfileForm({ profile, email }: { profile: Profile; email: strin
         experience_years: experience ? Number(experience) : null,
         role, sport, positions, position: positions[0] ?? null, level,
         leaderboard_opt_out: !onBoards,
+        email_weekly_summary: emailWeekly,
+        email_checkin_reminders: emailCheckins,
+        email_milestones: emailMilestones,
+        email_program_reminders: emailPrograms,
       })
       .eq("id", profile.id);
 
@@ -83,6 +91,7 @@ export function ProfileForm({ profile, email }: { profile: Profile; email: strin
       // "Coach" and saving leaves the Squad entry missing until a reload — which
       // reads as the setting not having taken.
       clearCoachRoleCache();
+      invalidate();
     }
     setSaving(false);
   }
@@ -187,11 +196,31 @@ export function ProfileForm({ profile, email }: { profile: Profile; email: strin
         </label>
       </div>
 
+      <fieldset className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-4">
+        <legend className="field-label px-1">Email notifications</legend>
+        <p className="mb-3 text-xs text-slate-500">Choose what is useful. Account and security emails are unaffected.</p>
+        <div className="space-y-3">
+          <EmailChoice label="Daily check-in reminder" checked={emailCheckins} onChange={setEmailCheckins} />
+          <EmailChoice label="Weekly training summary" checked={emailWeekly} onChange={setEmailWeekly} />
+          <EmailChoice label="Streaks and milestones" checked={emailMilestones} onChange={setEmailMilestones} />
+          <EmailChoice label="Program deadline reminders" checked={emailPrograms} onChange={setEmailPrograms} />
+        </div>
+      </fieldset>
+
       {error && <p className="text-sm text-readiness-red">{error}</p>}
       {saved && <p className="text-sm text-pitch-400">Saved.</p>}
 
       <button type="submit" disabled={saving} className="btn-primary">{saving ? "Saving…" : "Save profile"}</button>
       <button type="button" onClick={handleSignOut} className="btn-ghost">Sign out</button>
     </form>
+  );
+}
+
+function EmailChoice({ label, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }) {
+  return (
+    <label className="flex cursor-pointer items-center justify-between gap-3 text-sm text-slate-300">
+      <span>{label}</span>
+      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} className="h-5 w-5 accent-pitch-500" />
+    </label>
   );
 }

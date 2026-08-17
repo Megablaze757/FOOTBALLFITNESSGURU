@@ -13,14 +13,19 @@ export function RunningProgress({
   logs,
   benchmarks,
   name,
+  distanceUnit,
 }: {
   logs: TrainingLog[];
   benchmarks: StrengthBenchmark[];
   name: string;
+  distanceUnit: "km" | "mi";
 }) {
   const summary = summarizeRunProgress(logs, benchmarks, todayLocal());
   const hasRuns = summary.current.runs > 0 || summary.previous.runs > 0;
-  const headline = runningHeadline(summary);
+  const headline = runningHeadline(summary, distanceUnit);
+  const distance = (km: number) => formatKm(distanceUnit === "mi" ? km * 0.621371 : km);
+  const pace = (secondsPerKm: number) => formatPace(distanceUnit === "mi" ? Math.round(secondsPerKm * 1.609344) : secondsPerKm);
+  const converted = (km: number) => distanceUnit === "mi" ? km * 0.621371 : km;
 
   if (!hasRuns && !summary.races.length) {
     return (
@@ -95,8 +100,8 @@ export function RunningProgress({
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <RunStat
           label="Distance"
-          value={`${formatKm(summary.current.distanceKm)}km`}
-          sub={comparison(summary.distanceDeltaKm, summary.previous.distanceKm, "km")}
+          value={`${distance(summary.current.distanceKm)}${distanceUnit}`}
+          sub={comparison(converted(summary.distanceDeltaKm), converted(summary.previous.distanceKm), distanceUnit)}
         />
         <RunStat
           label="Time running"
@@ -105,13 +110,13 @@ export function RunningProgress({
         />
         <RunStat
           label="Average pace"
-          value={summary.current.avgPaceSecPerKm ? `${formatPace(summary.current.avgPaceSecPerKm)}/km` : "—"}
-          sub={paceComparison(summary.current.avgPaceSecPerKm, summary.previous.avgPaceSecPerKm)}
+          value={summary.current.avgPaceSecPerKm ? `${pace(summary.current.avgPaceSecPerKm)}/${distanceUnit}` : "—"}
+          sub={paceComparison(summary.current.avgPaceSecPerKm, summary.previous.avgPaceSecPerKm, distanceUnit)}
         />
         <RunStat
           label="Longest run"
-          value={summary.current.longestKm ? `${formatKm(summary.current.longestKm)}km` : "—"}
-          sub={summary.previous.longestKm ? comparison(summary.current.longestKm - summary.previous.longestKm, summary.previous.longestKm, "km") : "this block"}
+          value={summary.current.longestKm ? `${distance(summary.current.longestKm)}${distanceUnit}` : "—"}
+          sub={summary.previous.longestKm ? comparison(converted(summary.current.longestKm - summary.previous.longestKm), converted(summary.previous.longestKm), distanceUnit) : "this block"}
         />
       </div>
 
@@ -124,9 +129,9 @@ export function RunningProgress({
           <span className="text-[11px] text-slate-500">8 rolling weeks</span>
         </div>
         <MiniBars
-          data={summary.weekly}
+          data={summary.weekly.map((week) => ({ ...week, value: +converted(week.value).toFixed(2) }))}
           color="#38bdf8"
-          unit="km"
+          unit={distanceUnit}
           height={110}
           emptyLabel="Log distance with a run to build your mileage chart."
         />
@@ -146,14 +151,14 @@ export function RunningProgress({
         <div className="grid grid-cols-2 divide-x divide-y divide-white/[0.06] sm:grid-cols-4 sm:divide-y-0">
           <InlineStat
             label="Distance"
-            value={summary.zone2.distanceKm ? `${formatKm(summary.zone2.distanceKm)}km` : "—"}
-            sub={comparison(summary.zone2.distanceDeltaKm, summary.zone2.previousDistanceKm, "km")}
+            value={summary.zone2.distanceKm ? `${distance(summary.zone2.distanceKm)}${distanceUnit}` : "—"}
+            sub={comparison(converted(summary.zone2.distanceDeltaKm), converted(summary.zone2.previousDistanceKm), distanceUnit)}
             good={summary.zone2.distanceDeltaKm > 0}
           />
           <InlineStat
             label="Average pace"
-            value={summary.zone2.avgPaceSecPerKm ? `${formatPace(summary.zone2.avgPaceSecPerKm)}/km` : "—"}
-            sub={paceGain(summary.zone2.paceGainSecPerKm)}
+            value={summary.zone2.avgPaceSecPerKm ? `${pace(summary.zone2.avgPaceSecPerKm)}/${distanceUnit}` : "—"}
+            sub={paceGain(summary.zone2.paceGainSecPerKm, distanceUnit)}
             good={(summary.zone2.paceGainSecPerKm ?? 0) > 0}
           />
           <InlineStat
@@ -163,7 +168,7 @@ export function RunningProgress({
           />
           <InlineStat
             label="Longest easy run"
-            value={summary.zone2.longestKm ? `${formatKm(summary.zone2.longestKm)}km` : "—"}
+            value={summary.zone2.longestKm ? `${distance(summary.zone2.longestKm)}${distanceUnit}` : "—"}
             sub={`${summary.zone2.runs} Zone 2 run${summary.zone2.runs === 1 ? "" : "s"}`}
           />
         </div>
@@ -199,7 +204,7 @@ export function RunningProgress({
                   <div className="h-full rounded-full" style={{ width: `${row.pct}%`, background: zone.colour }} />
                 </div>
                 <div className="text-right text-xs tabular-nums text-slate-300">
-                  {formatKm(row.distanceKm)}km <span className="text-slate-600">· {row.pct}%</span>
+                  {distance(row.distanceKm)}{distanceUnit} <span className="text-slate-600">· {row.pct}%</span>
                 </div>
               </div>
             );
@@ -207,7 +212,7 @@ export function RunningProgress({
         </div>
         {summary.unzonedKm > 0 && (
           <p className="mt-3 text-xs text-slate-500">
-            {formatKm(summary.unzonedKm)}km has no zone yet and is excluded from the percentages.
+            {distance(summary.unzonedKm)}{distanceUnit} has no zone yet and is excluded from the percentages.
           </p>
         )}
         {summary.split && <p className="mt-3 text-xs text-slate-400">{summary.split.note}</p>}
@@ -252,12 +257,12 @@ export function RunningProgress({
       <ShareButton
         stats={{
           name,
-          headlineValue: `${formatKm(summary.current.distanceKm)}km`,
+          headlineValue: `${distance(summary.current.distanceKm)}${distanceUnit}`,
           headlineLabel: "in the last 28 days",
           stats: [
             { label: "Runs", value: String(summary.current.runs) },
-            { label: "Average pace", value: summary.current.avgPaceSecPerKm ? `${formatPace(summary.current.avgPaceSecPerKm)}/km` : "—" },
-            { label: "Longest run", value: summary.current.longestKm ? `${formatKm(summary.current.longestKm)}km` : "—" },
+            { label: "Average pace", value: summary.current.avgPaceSecPerKm ? `${pace(summary.current.avgPaceSecPerKm)}/${distanceUnit}` : "—" },
+            { label: "Longest run", value: summary.current.longestKm ? `${distance(summary.current.longestKm)}${distanceUnit}` : "—" },
           ],
           caption: "Build the engine. Keep the easy days easy.",
         }}
@@ -270,7 +275,8 @@ export function RunningProgress({
   );
 }
 
-function runningHeadline(summary: RunningProgressSummary): { title: string; body: string } {
+function runningHeadline(summary: RunningProgressSummary, unit: "km" | "mi"): { title: string; body: string } {
+  const distance = (km: number) => unit === "mi" ? km * 0.621371 : km;
   const improvedRace = summary.races.find((race) => race.isPb && (race.gainSeconds ?? 0) > 0);
   if (improvedRace) {
     return {
@@ -280,19 +286,19 @@ function runningHeadline(summary: RunningProgressSummary): { title: string; body
   }
   if ((summary.zone2.paceGainSecPerKm ?? 0) >= 5) {
     return {
-      title: `Your Zone 2 pace is ${formatSeconds(summary.zone2.paceGainSecPerKm!)} per km faster`,
+      title: `Your Zone 2 pace is ${formatSeconds(unit === "mi" ? summary.zone2.paceGainSecPerKm! * 1.609344 : summary.zone2.paceGainSecPerKm!)} per ${unit} faster`,
       body: `That comparison is against the previous 28 days of your own Zone 2 running. Average heart rate is shown alongside it so you can judge whether the effort stayed genuinely easy.`,
     };
   }
   if (summary.zone2.distanceDeltaKm >= 0.5) {
     return {
-      title: `You added ${formatKm(summary.zone2.distanceDeltaKm)}km of Zone 2 work`,
+      title: `You added ${formatKm(distance(summary.zone2.distanceDeltaKm))}${unit} of Zone 2 work`,
       body: "More easy aerobic volume is useful progress even before race pace changes. The pace and heart-rate trend below shows how efficiently you covered it.",
     };
   }
   if (summary.distanceDeltaKm >= 0.5) {
     return {
-      title: `You ran ${formatKm(summary.distanceDeltaKm)}km farther than the previous block`,
+      title: `You ran ${formatKm(distance(summary.distanceDeltaKm))}${unit} farther than the previous block`,
       body: "This compares equal 28-day windows, so a longer calendar month cannot inflate the result.",
     };
   }
@@ -328,9 +334,10 @@ function formatKm(value: number): string {
 
 function formatDuration(minutes: number): string {
   if (!minutes) return "—";
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  const rest = minutes % 60;
+  const totalSeconds = Math.round(minutes * 60);
+  if (totalSeconds < 3600) return `${Math.floor(totalSeconds / 60)}m ${String(totalSeconds % 60).padStart(2, "0")}s`;
+  const hours = Math.floor(totalSeconds / 3600);
+  const rest = Math.floor((totalSeconds % 3600) / 60);
   return rest ? `${hours}h ${rest}m` : `${hours}h`;
 }
 
@@ -340,16 +347,17 @@ function comparison(delta: number, previous: number, unit: string): string {
   return `${delta > 0 ? "+" : "−"}${formatKm(Math.abs(delta))}${unit} vs previous`;
 }
 
-function paceComparison(current: number | null, previous: number | null): string {
+function paceComparison(current: number | null, previous: number | null, unit: "km" | "mi"): string {
   if (current == null) return "add time + distance";
   if (previous == null) return "first measured block";
-  return paceGain(previous - current);
+  return paceGain(previous - current, unit);
 }
 
-function paceGain(gain: number | null): string {
+function paceGain(gain: number | null, unit: "km" | "mi"): string {
   if (gain == null) return "needs both 28-day blocks";
   if (gain === 0) return "same as previous";
-  return `${formatSeconds(Math.abs(gain))}/km ${gain > 0 ? "faster" : "slower"}`;
+  const converted = unit === "mi" ? gain * 1.609344 : gain;
+  return `${formatSeconds(Math.abs(converted))}/${unit} ${gain > 0 ? "faster" : "slower"}`;
 }
 
 function hrComparison(current: number | null, previous: number | null): string {

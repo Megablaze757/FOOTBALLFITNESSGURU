@@ -7,6 +7,7 @@ import { totalReps } from "./training-sets";
 import { intervalEffort } from "./running";
 import type { DailyCheckIn, NutritionLog, TrainingLog } from "./types";
 import { todayLocal, daysAgoLocal } from "./day";
+import { durationMinutes, isActivity } from "./training-duration";
 
 /**
  * How much harder a minute of contact is than a minute of running.
@@ -36,6 +37,7 @@ export const CONTACT_WEIGHT = 2;
  * anyone who logs both.
  */
 export function sessionLoad(t: TrainingLog): number {
+  if (!isActivity(t)) return 0;
   /**
    * INTERVAL SESSIONS CARRY THEIR OWN DURATION.
    *
@@ -56,7 +58,8 @@ export function sessionLoad(t: TrainingLog): number {
     zone: t.zone,
     type: t.run_type,
   });
-  const duration = t.total_minutes ?? (measured ? measured.workMinutes + measured.recoveryMinutes : 0);
+  const exactDuration = durationMinutes(t);
+  const duration = exactDuration > 0 ? exactDuration : (measured ? measured.workMinutes + measured.recoveryMinutes : 0);
 
   const minutes = duration + (t.contact_minutes ?? 0) * (CONTACT_WEIGHT - 1);
   /**
@@ -195,8 +198,8 @@ export function weeklyReport(
   const prevCutoff = daysAgoLocal(14, asOf);
 
   const weekCheck = checkIns.filter((c) => c.check_in_date > cutoff);
-  const weekTrain = training.filter((t) => t.log_date > cutoff);
-  const prevTrain = training.filter((t) => t.log_date > prevCutoff && t.log_date <= cutoff);
+  const weekTrain = training.filter((t) => isActivity(t) && t.log_date > cutoff);
+  const prevTrain = training.filter((t) => isActivity(t) && t.log_date > prevCutoff && t.log_date <= cutoff);
   const weekNut = nutrition.filter((n) => n.log_date > cutoff);
 
   const totalLoad = Math.round(weekTrain.reduce((s, t) => s + sessionLoad(t), 0));
@@ -246,20 +249,25 @@ export function weeklyReport(
 export function hasTrainingContent(t: {
   drills?: unknown[] | null;
   total_minutes?: number | null;
+  duration_seconds?: number | null;
   intensity?: number | null;
   distance_km?: number | null;
   contact_minutes?: number | null;
   run_type?: string | null;
+  session_type?: string | null;
 } | null | undefined): boolean {
   if (!t) return false;
   return !!(
     (t.drills?.length ?? 0) > 0 ||
     t.total_minutes ||
+    t.duration_seconds ||
     t.intensity ||
     t.distance_km ||
     t.contact_minutes ||
     // A run type alone is a logged session: picking "Recovery run" and nothing
     // else still says what you did, and the 80/20 easy-hard report needs the row.
-    t.run_type
+    t.run_type ||
+    t.session_type === "active_rest" ||
+    t.session_type === "rest_day"
   );
 }

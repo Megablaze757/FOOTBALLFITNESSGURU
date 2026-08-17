@@ -45,7 +45,7 @@ test("goals are deduplicated, capped at three, and priorities follow their order
   ]);
   assert.deepEqual(engineAnchor([{ type: "hypertrophy", priority: 1 }]), { goal: "strength", focus: "aesthetics" });
   assert.match(goalBlendCopy(goals), /Strength anchors the main lifts/);
-  assert.match(goalPreviewCopy(goals), /4–6 × 3–6/);
+  assert.match(goalPreviewCopy(goals), /3–4 × 6–12/);
 });
 
 test("a six or seven day rotation has no gaps and recognises active rest", () => {
@@ -97,10 +97,12 @@ test("custom rotation repeats, logs active rest as a real day, and adapts mixed 
     assert.ok(workout.drills.some((d) => d.name === "Band pull-aparts" && d.slot === "warmup"));
     assert.equal(workout.drills.some((d) => d.name === "Incline Dumbbell Bench Press" && d.slot === "warmup"), false);
     const main = workout.drills.find((d) => d.slot === "primary")!;
-    assert.ok(main.reps >= 3 && main.reps <= 6, "mixed goal main lifts use strength reps");
-    assert.ok((main.rest ?? 0) >= 180);
+    assert.ok(main.sets >= 3 && main.sets <= 4, "combined goals use the combined set range");
+    assert.ok(main.reps >= 6 && main.reps <= 12, "combined goals use the combined rep range");
+    assert.ok((main.rest ?? 0) >= 90 && (main.rest ?? 0) <= 120);
     const accessory = workout.drills.find((d) => d.slot === "accessory")!;
-    assert.ok(accessory.reps >= 8 && accessory.reps <= 12, "mixed goal accessories use hypertrophy reps");
+    assert.ok(accessory.reps >= 6 && accessory.reps <= 12, "combined accessories stay in the combined range");
+    assert.ok(accessory.sets <= 3, "four-plus sets are reserved for primary strength work");
 
     assert.equal(rest.kind, "active_rest");
     assert.equal(rest.drills.length, 0);

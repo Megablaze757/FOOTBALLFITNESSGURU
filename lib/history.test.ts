@@ -30,6 +30,15 @@ test("drill frequency tracks sessions, sets and best load", () => {
   assert.equal(s.drillFrequency[0].name, "Squat"); // most frequent first
 });
 
+test("training history uses exact duration and leaves rest days out", () => {
+  const s = summarizeTraining([
+    { ...tlog("2026-06-01", [], 26), duration_seconds: 25 * 60 + 30 },
+    { ...tlog("2026-06-02", [], 0), session_type: "rest_day" },
+  ]);
+  assert.equal(s.totalSessions, 1);
+  assert.deepEqual(s.minutes, [{ date: "2026-06-01", value: 25.5 }]);
+});
+
 test("calories computed from macros (4/4/9)", () => {
   assert.equal(caloriesFromMacros({ protein: 150, carbs: 200, fats: 60 }), 150 * 4 + 200 * 4 + 60 * 9);
 });
