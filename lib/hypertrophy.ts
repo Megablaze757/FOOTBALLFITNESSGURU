@@ -26,6 +26,7 @@ import { isExcluded, hasEquipmentFor, type Constraints, type Region } from "./co
 import { MOVEMENTS } from "./movements";
 import { standardFor } from "./strength-standards";
 import { runZoneLabel, runZoneFeel } from "./running";
+import { exerciseMeasure } from "./exercise-measure";
 // From ./engine, not ./coach: coach.ts imports this module, so taking the
 // program shapes from there made the two files import each other.
 import type { ProgramPlan, ProgramWeek, ProgramSession, ProgramDrill, BodyArea } from "./engine";
@@ -951,13 +952,23 @@ function drillFrom(m: Movement, weekIndex: number, blockScale: number, load: str
    * name the job first and let the description stand on its own.
    */
   const why = m.ex.why ?? `builds the ${GROUP_LABEL[m.group]}`;
+  const timed = exerciseMeasure(m.ex.name) === "seconds";
+  // Static core/isometric work arrived through the gym catalogue and inherited
+  // the universal hypertrophy dose: "3 × 12, leave two reps in the tank". It
+  // has no repetitions. Progress the hold across the block and deload it like
+  // every other time-based movement.
+  const holdSeconds = [30, 35, 45, 25][weekIndex] ?? 30;
+  const prescribedSets = Math.max(2, Math.round(sets * blockScale));
   return {
     name: m.ex.name,
-    sets: Math.max(2, Math.round(sets * blockScale)),
-    reps,
+    sets: prescribedSets,
+    reps: timed ? holdSeconds : reps,
     cue,
     reason: `${role} for ${GROUP_LABEL[m.group]}. ${why}`,
-    progression: WEEK_PROGRESSION[weekIndex],
+    progression: timed
+      ? ["Own the position for every second.", "Add five seconds to each hold.", "Longest clean holds of the block.", "Deload: shorten the holds and recover."][weekIndex]
+      : WEEK_PROGRESSION[weekIndex],
+    prescription: timed ? `${prescribedSets} × ${holdSeconds}s` : undefined,
     // Three minutes is for the lift the session is BUILT on — the heaviest
     // thing you do, limited by systemic fatigue. Giving every compound the same
     // rest priced a hypertrophy day at 145 minutes, which is not a session
@@ -965,7 +976,7 @@ function drillFrom(m: Movement, weekIndex: number, blockScale: number, load: str
     rest: !m.compound ? REST_ISOLATION : anchor ? REST_ANCHOR : REST_COMPOUND,
     // Reps in reserve, not RPE, and spelled out — "RPE 8" is jargon to most
     // people using this, and "leave 2 in the tank" is the same instruction.
-    intensity: load ?? (rir === 0 ? "to failure" : `leave ${rir} in the tank`),
+    intensity: timed ? "stop when position breaks" : load ?? (rir === 0 ? "to failure" : `leave ${rir} in the tank`),
     tempo: m.ex.tempo && m.ex.tempo !== "Controlled" ? m.ex.tempo : undefined,
   };
 }

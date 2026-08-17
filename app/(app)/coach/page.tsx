@@ -56,6 +56,7 @@ import {
   warmupClassificationWarnings,
   type AdaptiveGoalType, type GoalPreference, type MusclePriority, type ProgramSettings, type ScheduleDay,
 } from "@/lib/program-preferences";
+import { measuredTrainingFields } from "@/lib/exercise-measure";
 
 /** Latest recorded value per benchmark metric, newest test first. */
 function latestBenchmarks(rows: StrengthBenchmark[]): Record<string, number> {
@@ -103,6 +104,12 @@ const COACH_TABS: { id: CoachTab; label: string; icon: IconName }[] = [
   { id: "today", label: "Today", icon: "bolt" },
   { id: "program", label: "Program", icon: "calendar" },
 ];
+
+// The local program engine takes milliseconds and is a complete, audited path.
+// Give a healthy model a brief chance to personalise the wording and exercise
+// mix, then use that engine. This is deliberately far below invokeAI's default
+// ceiling for long-form coach work: the athlete is actively waiting here.
+const PROGRAM_AI_TIMEOUT_MS = 6_000;
 
 export default function CoachPage() {
   const user = useCurrentUser();
@@ -296,11 +303,10 @@ function GoalBuilder({ painMap, painNote, latestBench, sport, initialPositions, 
   /**
    * Build and save a program.
    *
-   * Runs as a background job so you can leave this page while it works. The
-   * AI call can take the best part of a minute for a four-week block, and
-   * before this you had to sit and watch it — on a phone, on a page you had
-   * already read. The job survives navigating away; the tray tells you when
-   * it's done.
+   * Runs as a background job so you can leave this page while it works. A
+   * healthy AI response gets a short window; after that the local engine takes
+   * over instead of leaving "Building your program" on screen. The job still
+   * survives navigating away and the tray tells you when it is done.
    */
   function settingsFor(g: GoalType, days?: number, quick = false): ProgramSettings {
     const count = days ?? daysPerWeek;
@@ -326,7 +332,18 @@ function GoalBuilder({ painMap, painNote, latestBench, sport, initialPositions, 
     setCreating(true);
     setBuildingId(tileId ?? null);
     setError(null);
-    startJob("program", "Building your program", () => buildAndSave(g, f, pos, style, days, settings));
+    startJob("program", "Building your program", async () => {
+      try {
+        return await buildAndSave(g, f, pos, style, days, settings);
+      } finally {
+        // The job tray already records a thrown error. The button state belongs
+        // to this page and must be released on every exit — including a failed
+        // profile update or database request before savePlan reaches its own
+        // cleanup. Otherwise the next attempt is impossible without a reload.
+        setCreating(false);
+        setBuildingId(null);
+      }
+    });
   }
 
   async function buildAndSave(g: GoalType, f: TrainingFocus, pos: string[], style: SplitStyle | undefined, days: number | undefined, settings: ProgramSettings) {
@@ -360,14 +377,15 @@ function GoalBuilder({ painMap, painNote, latestBench, sport, initialPositions, 
       return await savePlan(plan, g, f, pos, settings);
     }
 
-    // Prefer the AI backend (Cloudflare Worker / Edge Function); fall back to the
-    // local engine (works offline / on Pages).
+    // Prefer a prompt AI answer only while it is genuinely faster than making
+    // the athlete wait. The local engine is complete, works offline and builds
+    // the same four-week block in milliseconds.
     let plan: ProgramPlan;
     try {
       const data = await invokeAI<{ plan?: ProgramPlan }>("generate-program", {
         goal: g, goals: settings.goals, settings, pain_map: painMap, notes, in_season: inSeason,
         sport, position: pos, focus: f, days_per_week: days ?? daysPerWeek, split: style,
-      });
+      }, PROGRAM_AI_TIMEOUT_MS);
       if (!data?.plan) throw new Error("fallback");
       /**
        * TRUST THE MODEL WITH THE TRAINING, NOT WITH THE SAFETY SCAFFOLDING.
@@ -1229,11 +1247,18 @@ function ActiveProgram({
         // dropped them on the floor. `result` is absent when a session is ticked
         // off by hand rather than played, and 45 is still the estimate then.
         const newDrills = logged.drills.map((d) => {
-          const reps = result?.repsByDrill[d.name] != null
-            // repsByDrill is the TOTAL across sets; drills store per-set reps.
-            ? Math.max(0, Math.round(result.repsByDrill[d.name] / Math.max(1, d.sets)))
+          const performance = result?.performanceByDrill?.[d.name];
+          // Player values are totals across sets; drill JSON stores a per-set
+          // dose. The unit is preserved so 3 × 30s of plank enters history as
+          // ninety seconds, never ninety repetitions.
+          const amount = performance
+            ? Math.max(0, Math.round(performance.value / Math.max(1, d.sets)))
             : d.reps;
-          const base: TrainingDrill = { name: d.name, sets: d.sets, reps, load_kg: null };
+          const base: TrainingDrill = {
+            name: d.name, sets: d.sets, load_kg: null,
+            ...measuredTrainingFields(d.name, amount, d.prescription),
+          };
+          const reps = base.reps;
           // Programme warm-ups are retained in history but deliberately carry
           // no working volume, PRs or tonnage.
           return d.slot === "warmup"

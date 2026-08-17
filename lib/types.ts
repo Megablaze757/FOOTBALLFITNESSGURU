@@ -145,6 +145,14 @@ export interface AiPlan {
 
 export interface TrainingDrill {
   name: string;
+  /** How this movement is measured. Additive inside the drills JSONB. */
+  measure?: "reps" | "seconds" | "minutes" | "metres";
+  /** Per working set. Timed holds are not disguised as repetitions anymore. */
+  duration_seconds?: number | null;
+  /** Per working set for carries, sprints and other distance prescriptions. */
+  distance_m?: number | null;
+  /** Original programme wording, retained so its unit survives into check-in. */
+  prescription?: string | null;
   /** Summary. Derived from sets_detail when that is present — see lib/training-sets.ts. */
   sets: number;
   /** Summary: the rounded average when sets varied. Never the source of truth. */

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { exerciseMuscles } from "@/lib/muscle-volume";
 import { demoImplement, exerciseProgression, PROGRESSION_NOTE, type Exercise } from "@/lib/exercises";
-import { ExerciseSteps } from "@/components/ExerciseDemo";
+import { ExerciseVisual } from "@/components/ExerciseVisual";
 import { Portal } from "@/components/Portal";
 import { Icon } from "@/components/Icon";
 import { createClient } from "@/lib/supabase/client";
@@ -53,13 +53,13 @@ export function ExerciseDetailCard({ ex, sets, reps }: { ex: Exercise; sets?: nu
 
   return (
     <div className="space-y-4">
-      <div className="grid aspect-[4/3] w-full place-items-center overflow-hidden rounded-2xl border border-white/10 bg-slate-100 shadow-card sm:aspect-[16/9]">
-        {ex.video_url ? (
-          <video src={ex.video_url} autoPlay muted loop playsInline className="h-full w-full object-cover" />
-        ) : (
-          <ExerciseSteps pattern={ex.demo} implement={demoImplement(ex)} muscles={activatedMuscles} name={ex.name} className="h-full w-full !rounded-none" />
-        )}
-      </div>
+      <ExerciseVisual
+        pattern={ex.demo}
+        implement={demoImplement(ex)}
+        muscles={activatedMuscles}
+        name={ex.name}
+        videoUrl={ex.video_url}
+      />
 
       <div className="flex min-w-0 items-start justify-between gap-3">
         <div className="min-w-0 flex-1">

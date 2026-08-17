@@ -10,6 +10,7 @@ import { FeatureLock } from "@/components/FeatureLock";
 import { EXERCISES, EXERCISE_CATEGORIES, SPORTS, DIFFICULTIES, EQUIPMENT_BUCKETS, getExercisesForSport, demoImplement, rowToExercise, exerciseEquip, withinLevel, type Exercise, type ExerciseCategory, type SportId, type Difficulty } from "@/lib/exercises";
 import { ExerciseDemo } from "@/components/ExerciseDemo";
 import { ExerciseModal } from "@/components/ExerciseDetail";
+import { exerciseMuscles } from "@/lib/muscle-volume";
 import { CustomExerciseForm } from "@/components/CustomExerciseForm";
 import { ZoneGuide, RunTypeGuide } from "@/components/ZoneGuide";
 import { Tabs, TabPanel } from "@/components/Tabs";
@@ -36,6 +37,11 @@ const PAGE = 24;
 
 const DIFF_COLOR: Record<Difficulty, string> = { easy: "#34d399", medium: "#e3b53f", advanced: "#fb5d6b" };
 const DIFF_LABEL: Record<Difficulty, string> = { easy: "Beginner", medium: "Intermediate", advanced: "Advanced" };
+
+function demoMuscles(ex: Exercise): string[] {
+  const { primary, secondary } = exerciseMuscles(ex.name, ex.muscles);
+  return [primary, ...secondary].filter((muscle): muscle is string => !!muscle);
+}
 
 export default function LibraryPage() {
   const user = useCurrentUser();
@@ -342,7 +348,7 @@ export default function LibraryPage() {
                 className="card card-hover flex items-center gap-3 border-l-4 border-l-pitch-400/60 p-3 text-left"
               >
                 <span className="grid h-14 w-12 shrink-0 place-items-center overflow-hidden rounded-xl border border-white/10 bg-black/40">
-                  <ExerciseDemo pattern={ex.demo} implement={demoImplement(ex)} className="h-11 w-9" />
+                  <ExerciseDemo pattern={ex.demo} implement={demoImplement(ex)} muscles={demoMuscles(ex)} name={ex.name} className="h-11 w-9" />
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-bold text-slate-100">{ex.name}</span>
@@ -367,7 +373,7 @@ export default function LibraryPage() {
             className="card card-hover flex items-center gap-4 p-4 text-left"
           >
             <span className="grid h-20 w-16 shrink-0 place-items-center overflow-hidden rounded-2xl border border-white/10 bg-black/40">
-              <ExerciseDemo pattern={ex.demo} implement={demoImplement(ex)} className="h-16 w-12" />
+              <ExerciseDemo pattern={ex.demo} implement={demoImplement(ex)} muscles={demoMuscles(ex)} name={ex.name} className="h-16 w-12" />
             </span>
             <span className="min-w-0 flex-1">
               <span className="flex items-center gap-1.5">

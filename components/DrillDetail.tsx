@@ -2,7 +2,7 @@
 
 import { getExerciseByName } from "@/lib/exercises";
 import { howToFor, type HowTo } from "@/lib/how-to";
-import { ExerciseSteps } from "@/components/ExerciseDemo";
+import { ExerciseVisual } from "@/components/ExerciseVisual";
 import { ExerciseModal, Sheet } from "@/components/ExerciseDetail";
 
 /**
@@ -28,9 +28,7 @@ const NEEDS_LABEL = {
 export function HowToCard({ how }: { how: HowTo }) {
   return (
     <div className="space-y-4">
-      <div className="grid aspect-[4/3] w-full place-items-center overflow-hidden rounded-2xl border border-white/10 bg-slate-100 shadow-card sm:aspect-[16/9]">
-        <ExerciseSteps pattern={how.demo} implement={how.implement} muscles={how.muscles} name={how.name} className="h-full w-full !rounded-none" />
-      </div>
+      <ExerciseVisual pattern={how.demo} implement={how.implement} muscles={how.muscles} name={how.name} />
       <div className="min-w-0">
         <span className="chip text-pitch-400">{how.tag}</span>
         <h3 className="mt-2 break-words text-2xl font-extrabold leading-tight text-slate-100">{how.name}</h3>

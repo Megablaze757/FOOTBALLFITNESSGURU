@@ -19,6 +19,7 @@ import type { TrainingState } from "@/components/TrainingLogInput";
 import type { Biometric } from "@/lib/biometrics";
 import type { CheckInInput, TrainingDrill, TrainingLog } from "@/lib/types";
 import { todayLocal, daysAgoLocal } from "@/lib/day";
+import { measuredTrainingFields } from "@/lib/exercise-measure";
 
 export default function JournalPage() {
   const user = useCurrentUser();
@@ -94,13 +95,19 @@ export default function JournalPage() {
     // Flattened back to the log shape AFTER the corrections, so the sets on
     // offer are the sets that were actually prescribed today.
     const planned = applySwaps(
-      (eased?.drills ?? []).map((d) => ({ name: d.name, sets: d.sets, reps: d.reps, load_kg: null })) as TrainingDrill[],
+      (eased?.drills ?? []).map((d) => ({
+        name: d.name, sets: d.sets, load_kg: null,
+        ...measuredTrainingFields(d.name, d.reps, d.prescription),
+      })) as TrainingDrill[],
       ((program as { swaps?: SwapMap } | null)?.swaps ?? {}) as SwapMap,
     );
     const rehabbed = applyRehabToSession<TrainingDrill>(
       planned,
       rehab as RehabPlanRow | null,
-      (e) => ({ name: e.name, ...parseDose(e.dose), load_kg: null }),
+      (e) => {
+        const parsed = parseDose(e.dose);
+        return { name: e.name, sets: parsed.sets, load_kg: null, ...measuredTrainingFields(e.name, parsed.reps, e.dose) };
+      },
     );
     return {
       existing,

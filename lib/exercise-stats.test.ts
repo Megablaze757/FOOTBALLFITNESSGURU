@@ -122,6 +122,21 @@ test("loadless work still tracks reps, and offers only that metric", () => {
   assert.equal(valueAt(p, "e1rm"), null);
 });
 
+test("planks progress by hold duration, never fictional reps or weight", () => {
+  const logs = [
+    log("2026-01-01", [{ name: "Plank", sets: 3, reps: 0, duration_seconds: 30, measure: "seconds" }]),
+    // A legacy row used reps to hold the seconds. Name classification recovers it.
+    log("2026-01-08", [{ name: "Plank", sets: 3, reps: 45, load_kg: null }]),
+  ];
+  const option = exerciseOptions(logs)[0];
+  assert.equal(option.hasDuration, true);
+  assert.deepEqual(metricsFor(option.hasLoad, option.hasDuration).map((m) => m.id), ["duration"]);
+  const series = exerciseSeries(logs, "Plank");
+  assert.deepEqual(series.map((p) => p.durationSeconds), [30, 45]);
+  assert.deepEqual(series.map((p) => p.reps), [0, 0]);
+  assert.equal(valueAt(series[1], "duration"), 45);
+});
+
 test("other exercises don't leak into the series", () => {
   const logs = [log("2026-01-01", [
     { name: "Squat", sets: 3, reps: 5, load_kg: 100 },

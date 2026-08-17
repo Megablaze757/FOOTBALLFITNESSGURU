@@ -8,8 +8,10 @@ import { createClient } from "@/lib/supabase/client";
 // Worker's own 55s chain budget, so the server's error (which says WHICH model
 // failed and why) arrives instead of the client's silent abort.
 //
-// Long enough only because these calls run in the background now — see
-// lib/jobs.tsx. Nobody is watching a spinner for a minute.
+// This is the ceiling for long-form AI work. Latency-sensitive features pass a
+// smaller route-specific timeout: program generation, for example, has a fast
+// local engine waiting behind the model and should never make an athlete watch
+// a minute-long spinner just to get to it.
 const AI_TIMEOUT_MS = 60_000;
 
 /**
@@ -77,9 +79,23 @@ export async function invokeAI<T = unknown>(fn: string, body: unknown, timeoutMs
     }
   }
 
-  const { data, error } = await supabase.functions.invoke(fn, { body: body as Record<string, unknown> });
-  if (error) throw error;
-  return data as T;
+  // `timeoutMs` used to protect only the Worker path. When the app was pointed
+  // directly at Supabase, the exact same call could wait forever and a caller's
+  // local fallback was therefore unreachable. Promise.race cannot cancel the
+  // Edge invocation, but it does release the UI at the promised deadline; the
+  // late response is ignored.
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const request = supabase.functions.invoke(fn, { body: body as Record<string, unknown> });
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error("ai timed out")), timeoutMs);
+    });
+    const { data, error } = await Promise.race([request, timeout]);
+    if (error) throw error;
+    return data as T;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 /**

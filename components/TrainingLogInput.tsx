@@ -17,6 +17,7 @@ import {
   describeSets, drillTonnage, hasSetDetail, lastSetsFor, setsOf, totalReps,
   warmupSetsOf, workingSetsOf, withSets, type DrillSet,
 } from "@/lib/training-sets";
+import { durationPerSet, exerciseMeasure, formatMeasuredDose } from "@/lib/exercise-measure";
 
 export interface TrainingState {
   drills: TrainingDrill[];
@@ -43,6 +44,17 @@ export interface TrainingState {
   intervals?: number | null;
   interval_seconds?: number | null;
   recovery_seconds?: number | null;
+}
+
+function lastDrill(history: { log_date?: string; drills?: TrainingDrill[] | null }[], name: string): TrainingDrill | null {
+  const key = name.trim().toLowerCase();
+  let latest: { date: string; drill: TrainingDrill } | null = null;
+  for (const log of history) {
+    const found = (log.drills ?? []).find((drill) => drill.name.trim().toLowerCase() === key);
+    const date = log.log_date ?? "";
+    if (found && (!latest || date > latest.date)) latest = { date, drill: found };
+  }
+  return latest?.drill ?? null;
 }
 
 export function TrainingLogInput({ value, onChange, planned = [], sport = "all", history = [], distanceUnit = "km", onDistanceUnitChange }: {
@@ -343,6 +355,10 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
             // hint, the seed when switching to per-set rows, and the greyed
             // placeholder in each load box.
             const prev = lastSetsFor(history, d.name);
+            const previousDrill = lastDrill(history, d.name);
+            const measure = exerciseMeasure(d.name, d.prescription);
+            const timed = measure === "seconds" || measure === "minutes";
+            const secondsPerSet = durationPerSet(d) ?? 0;
             const warmups = warmupSetsOf(d);
             const working = workingSetsOf(d);
             const warmupOpen = warmupsOpen.has(i);
@@ -373,10 +389,12 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
                   helpful default from last week's data they forgot to change.
                   Saying it out loud makes the default checkable, and doubles as
                   the thing they are trying to beat. */}
-              {prev && (
+              {(timed ? previousDrill : prev) && (
                 <p className="mt-1.5 text-[11px] text-slate-500">
                   Last time: <span className="tabular-nums text-slate-400">
-                    {describeSets({ sets: prev.length, reps: prev[0]?.reps ?? 0, sets_detail: prev })}
+                    {timed && previousDrill
+                      ? formatMeasuredDose(previousDrill)
+                      : describeSets({ sets: prev!.length, reps: prev![0]?.reps ?? 0, sets_detail: prev! })}
                   </span>
                 </p>
               )}
@@ -386,7 +404,27 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
                   type three rows to say that would be a worse form for the
                   common case. Sets/Reps/kg stays the default; per-set rows are
                   one tap away and only for the sessions that need them. */}
-              {!hasSetDetail(d) ? (
+              {timed ? (
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <NumField label="Sets" value={d.sets} onChange={(v) => setDrill(i, { sets: v || 0 })} />
+                  <NumField
+                    label={measure === "minutes" ? "Minutes / set" : "Seconds / set"}
+                    value={measure === "minutes" ? +(secondsPerSet / 60).toFixed(1) : secondsPerSet}
+                    onChange={(v) => {
+                      const amount = Number(v) || 0;
+                      setDrill(i, {
+                        measure,
+                        duration_seconds: amount * (measure === "minutes" ? 60 : 1),
+                        // Zero means downstream strength charts never call a
+                        // 45-second plank "45 reps". The real dose is above.
+                        reps: 0,
+                        load_kg: null,
+                        sets_detail: undefined,
+                      });
+                    }}
+                  />
+                </div>
+              ) : !hasSetDetail(d) ? (
                 <>
                   <div className="mt-2 grid grid-cols-3 gap-2">
                     <NumField label="Sets" value={d.sets} onChange={(v) => setDrill(i, { sets: v || 0 })} />
@@ -533,7 +571,7 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
               {/* Optional prep sets live beside the lift they prepare. They are
                   persisted in sets_detail, but every performance reader filters
                   them through workingSetsOf before doing arithmetic. */}
-              <div className="mt-3 border-t border-white/[0.06] pt-2">
+              {!timed && <div className="mt-3 border-t border-white/[0.06] pt-2">
                 <button
                   type="button"
                   onClick={() => setWarmupsOpen((current) => {
@@ -592,7 +630,7 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
                     <p className="text-[10px] leading-relaxed text-slate-500">Warm-up sets stay in history but do not count toward PRs, 1RM, strength ratings or working volume.</p>
                   </div>
                 )}
-              </div>
+              </div>}
             </li>
             );
           })}
