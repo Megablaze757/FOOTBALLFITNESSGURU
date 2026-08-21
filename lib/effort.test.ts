@@ -2,9 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
-  effortCheck, prescribedEffort, rpeOf, EFFORT_TOLERANCE, MIN_SESSIONS_FOR_VERDICT,
+  effortCheck, effortText, prescribedEffort, rpeOf,
+  EFFORT_TOLERANCE, MIN_SESSIONS_FOR_VERDICT,
 } from "./effort";
-import type { ProgramPlan } from "./coach";
+import { buildProgram, type ProgramPlan } from "./coach";
 
 /** A plan whose working drills sit at the given RPEs, plus light work either side. */
 function planAt(...rpes: number[]): ProgramPlan {
@@ -141,4 +142,74 @@ test("completing a session never overwrites a reported effort", () => {
     "the existing row's intensity is not read, so it cannot be preserved");
   assert.match(noComments, /existing\?\.intensity \?\?/,
     "a reported intensity is no longer preferred over the estimate");
+});
+
+// --- Saying what the number means --------------------------------------------
+
+/**
+ * "Idiot-proof the whole site / granny-able."
+ *
+ * Audited over 606 distinct athlete-facing strings from generated blocks. Only
+ * one piece of jargon was left with nothing attached to it: RPE. Running zones
+ * already carry their meaning inline — "Zone 2 (Easy) — full sentences without
+ * gasping" — and reps-in-reserve is plain English already.
+ *
+ * The codebase had already decided this and applied it to one engine. See
+ * drillFrom in lib/hypertrophy.ts: "'RPE 8' is jargon to most people using
+ * this". The S&C engine, the preference pass, the template days and the run
+ * builder all carried on emitting a bare number.
+ */
+
+test("an effort target says what the number means", () => {
+  assert.equal(effortText(8), "RPE 8 — 2 reps left in you");
+  assert.equal(effortText(9), "RPE 9 — 1 rep left in you");
+  assert.equal(effortText(10), "RPE 10 — to failure, nothing left");
+  // Below six there are no meaningful "reps left" — it is simply easy, and
+  // saying "5 reps left in you" of a warm-up set is a strange thing to read.
+  assert.match(effortText(4) ?? "", /easy/);
+});
+
+test("a half-point is a range, not a rounding", () => {
+  // The engine writes 7.5 precisely because it sits between two rep counts.
+  // Rounding it to "3 reps left" states a precision the prescription never had.
+  assert.equal(effortText(7.5), "RPE 7.5 — 2–3 reps left in you");
+  assert.equal(effortText(8.5), "RPE 8.5 — 1–2 reps left in you");
+});
+
+test("the number survives, because the check-in asks for it back", () => {
+  // Both, not either. Somebody who knows the scale reads the number instantly,
+  // and it is the same scale the athlete is asked to report against.
+  for (const n of [5, 6, 7, 7.5, 8, 9, 10]) {
+    assert.equal(rpeOf(effortText(n)), n, `effortText(${n}) is not readable back`);
+  }
+});
+
+test("nothing is invented from nothing", () => {
+  assert.equal(effortText(null), undefined);
+  assert.equal(effortText(undefined), undefined);
+  assert.equal(effortText(Number.NaN), undefined);
+});
+
+test("no generated block shows a bare RPE number", () => {
+  // THE TEST THAT WOULD HAVE CAUGHT IT. Each engine was individually
+  // defensible and four of them emitted `RPE ${n}` with nothing beside it —
+  // the S&C engine, the hypertrophy finisher, the preference pass and the run
+  // builder. Only walking real output finds that.
+  const bare: string[] = [];
+  for (const sport of ["football", "gym", "running", "rugby"]) {
+    for (const goal of ["strength", "endurance", "speed", "aesthetics"]) {
+      const plan = buildProgram({ sport, goal, daysPerWeek: 4 } as any);
+      for (const week of plan.weeks) {
+        for (const session of week.sessions) {
+          for (const drill of session.drills) {
+            const text = drill.intensity ?? "";
+            if (!/RPE/i.test(text)) continue;
+            // An RPE with no words after it is a number the athlete cannot use.
+            if (!/—/.test(text)) bare.push(`${sport}/${goal} ${drill.name}: "${text}"`);
+          }
+        }
+      }
+    }
+  }
+  assert.deepEqual(bare.slice(0, 6), [], `${bare.length} drills carry a bare RPE`);
 });

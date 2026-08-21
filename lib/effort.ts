@@ -56,6 +56,51 @@ const EMPTY: EffortCheck = {
   verdict: "unknown", sessions: 0, avgReported: null, prescribed: null, gap: null, note: null,
 };
 
+/**
+ * How hard a set should feel, written the way people talk.
+ *
+ * THE CODEBASE ALREADY DECIDED THIS AND THEN APPLIED IT TO ONE ENGINE. See
+ * drillFrom in lib/hypertrophy.ts: "Reps in reserve, not RPE, and spelled out —
+ * 'RPE 8' is jargon to most people using this, and 'leave 2 in the tank' is the
+ * same instruction." Correct, and the S&C engine, the preference pass and the
+ * template days all carried on emitting a bare `RPE 8`.
+ *
+ * Measured over 606 distinct athlete-facing strings from generated blocks, RPE
+ * was the only piece of jargon left with no explanation attached to it
+ * anywhere. Running zones already carry theirs inline — "Zone 2 (Easy) — full
+ * sentences without gasping" — and reps-in-reserve is plain English already.
+ *
+ * BOTH, NOT EITHER. The number stays, because somebody who knows the scale
+ * reads it instantly and because it is what the check-in asks them to report
+ * back. The words go next to it, because somebody who does not know the scale
+ * currently has nothing at all to go on.
+ */
+export function effortText(rpe: number | null | undefined): string | undefined {
+  if (rpe == null || !Number.isFinite(rpe)) return undefined;
+  const n = Math.max(1, Math.min(10, rpe));
+  if (n >= 10) return "RPE 10 — to failure, nothing left";
+  if (n <= 5) return `RPE ${trim(n)} — easy, well short of hard`;
+  const left = 10 - n;
+  // A HALF-POINT RPE IS A RANGE, NOT A ROUNDING. 7.5 is "two or three left",
+  // and rounding it to three states a precision the prescription never had —
+  // the engine writes 7.5 precisely because it is between two rep counts.
+  if (!Number.isInteger(left)) {
+    return `RPE ${trim(n)} — ${Math.floor(left)}–${Math.ceil(left)} reps left in you`;
+  }
+  return `RPE ${trim(n)} — ${left} rep${left === 1 ? "" : "s"} left in you`;
+}
+
+/** A range, for template days that prescribe one. */
+export function effortRangeText(low: number, high: number): string {
+  const lowLeft = Math.round(10 - Math.min(low, high));
+  const highLeft = Math.round(10 - Math.max(low, high));
+  return `RPE ${trim(low)}–${trim(high)} — ${highLeft}–${lowLeft} reps left in you`;
+}
+
+function trim(n: number): string {
+  return Number.isInteger(n) ? String(n) : n.toFixed(1);
+}
+
 /** Pull "RPE 8" out of a drill's intensity string. */
 export function rpeOf(intensity: string | null | undefined): number | null {
   const text = String(intensity ?? "");

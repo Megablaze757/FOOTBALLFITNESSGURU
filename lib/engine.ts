@@ -29,6 +29,7 @@
 // =============================================================================
 
 import type { PainMap } from "./types";
+import { effortText, rpeOf } from "./effort";
 import type { SportId } from "./exercises";
 import { isExcluded, EMPTY_CONSTRAINTS, type Constraints } from "./constraints";
 import { positionProfile, type PositionProfile } from "./position-profile";
@@ -1009,11 +1010,26 @@ function restated(prescription: string, from: number, to: number): string {
   return prescription.startsWith(`${from} ×`) ? prescription.replace(`${from} ×`, `${to} ×`) : prescription;
 }
 
+/**
+ * One notch easier.
+ *
+ * REGENERATED, NOT EDITED IN PLACE. This used to swap the number inside the
+ * string and return `RPE ${n-1}`, which was harmless while the string was only
+ * a number — and became a lie the moment effort targets started carrying their
+ * meaning with them (see effortText in lib/effort.ts). Rewriting "RPE 8 — 2
+ * reps left in you" by regex gives "RPE 7", losing the words, and a naive
+ * substitution would give "RPE 7 — 2 reps left in you", which is wrong.
+ *
+ * Anything the RPE scale cannot be read out of — "leave 2 in the tank", "stop
+ * when position breaks" — is returned untouched rather than mangled.
+ */
 function easeIntensity(intensity?: string): string | undefined {
   if (!intensity) return intensity;
-  const m = intensity.match(/RPE\s*([\d.]+)/i);
-  if (!m) return intensity;
-  return `RPE ${Math.max(5, Number(m[1]) - 1)}`;
+  const rpe = rpeOf(intensity);
+  if (rpe == null) return intensity;
+  // A range ("RPE 7–9") has no single number to ease; leave it as written.
+  if (/\d\s*[–-]\s*\d/.test(intensity)) return intensity;
+  return effortText(Math.max(5, rpe - 1)) ?? intensity;
 }
 
 /** A 4-week block: pain-aware, structured, and different every session. */
@@ -1305,7 +1321,10 @@ export function buildBlock(input: EngineInput): ProgramPlan {
             prescription: zone ? `${prescriptionText(dose)} · ${zone}` : prescriptionText(dose),
             slot,
             rest: dose.rest,
-            intensity: dose.rpe != null ? `RPE ${dose.rpe}` : undefined,
+            // The words alongside the number — see effortText. This was the
+            // last bare `RPE 8` reaching an athlete, and it is the main S&C
+            // engine, so it was most of them.
+            intensity: effortText(dose.rpe),
             tempo: dose.tempo,
           });
         }

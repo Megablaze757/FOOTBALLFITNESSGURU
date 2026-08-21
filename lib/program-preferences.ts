@@ -1,3 +1,4 @@
+import { effortRangeText, effortText } from "./effort";
 import type { PainMap } from "./types";
 import type { GoalType, ProgramDrill, ProgramPlan, ProgramSession, TrainingFocus } from "./engine";
 import { getExerciseByName, type SportId } from "./exercises";
@@ -330,28 +331,28 @@ function adaptDose(drills: ProgramDrill[], goals: GoalPreference[]): ProgramDril
       sets: primaryLift ? clamp(d.sets, 3, 4) : clamp(d.sets, 2, 3),
       reps: clamp(d.reps, 6, 12),
       rest: clamp(d.rest ?? 105, 90, 120),
-      intensity: "RPE 7–9",
+      intensity: effortRangeText(7, 9),
     };
     if (primary === "strength") return {
       ...d,
       sets: primaryLift ? clamp(d.sets, 4, 6) : clamp(d.sets, 2, 3),
       reps: clamp(d.reps, 3, 6),
       rest: clamp(d.rest ?? 180, 180, 300),
-      intensity: "RPE 8–9",
+      intensity: effortRangeText(8, 9),
     };
     if (primary === "hypertrophy") return {
       ...d,
       sets: 3,
       reps: clamp(d.reps, compound ? 8 : 10, 15),
       rest: clamp(d.rest ?? 75, 60, 90),
-      intensity: "RPE 7–9",
+      intensity: effortRangeText(7, 9),
     };
     if (primary === "endurance" || primary === "fat_loss") return {
       ...d,
       sets: clamp(d.sets, 2, 3),
       reps: clamp(d.reps, 15, 25),
       rest: clamp(d.rest ?? 45, 30, 60),
-      intensity: "RPE 5–7",
+      intensity: effortRangeText(5, 7),
     };
     return d;
   });
@@ -474,7 +475,7 @@ function ensurePreferredMovements(
       name: movement.name, sets: movement.dose.sets, reps: movement.dose.reps,
       prescription: movement.dose.unit === "reps" ? undefined : `${movement.dose.sets} × ${movement.dose.reps} ${movement.dose.unit}`,
       slot: movement.slot, rest: movement.dose.rest,
-      intensity: movement.dose.rpe ? `RPE ${movement.dose.rpe}` : undefined,
+      intensity: effortText(movement.dose.rpe),
       tempo: movement.dose.tempo, cue: movement.cue,
       reason: "Chosen in your programme builder and placed on the best-fitting day.",
       preferred: true,
@@ -503,7 +504,7 @@ function toAccessory(m: Movement): ProgramDrill {
     reps: m.dose.reps,
     slot: m.slot === "primary" ? "secondary" : m.slot,
     rest: m.dose.rest,
-    intensity: m.dose.rpe ? `RPE ${m.dose.rpe}` : undefined,
+    intensity: effortText(m.dose.rpe),
     tempo: m.dose.tempo,
     cue: m.cue,
     reason: "Added to give this session a balanced, complete main block.",

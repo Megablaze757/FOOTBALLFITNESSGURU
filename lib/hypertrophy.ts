@@ -20,6 +20,7 @@
 // =============================================================================
 
 import type { PainMap } from "./types";
+import { effortText } from "./effort";
 import type { Exercise } from "./exercises";
 import { IMPORTED_EXERCISES, STAPLES } from "./exercise-catalog";
 import { isExcluded, hasEquipmentFor, type Constraints, type Region } from "./constraints";
@@ -1198,6 +1199,6 @@ function cardioFinisher(offset: number, deload: boolean, constraints: Constraint
       : "Add a couple of minutes a week, or keep it flat — this is a finisher, not a session to chase.",
     slot: "conditioning",
     rest: m.dose.rest,
-    intensity: m.dose.rpe ? `RPE ${m.dose.rpe}` : undefined,
+    intensity: effortText(m.dose.rpe),
   };
 }

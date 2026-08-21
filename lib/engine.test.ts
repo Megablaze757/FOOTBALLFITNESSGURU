@@ -1,4 +1,5 @@
 import { test } from "node:test";
+import { rpeOf } from "./effort";
 import assert from "node:assert/strict";
 import { buildBlock, prescriptionText, restText, painByArea, adjustForReadiness, type ProgramDrill, type ProgramPlan } from "./engine";
 import { MOVEMENTS, PROGRAMMED_IDS, MOVEMENT_BY_ID, movementsInSlot, normaliseKit } from "./movements";
@@ -180,11 +181,21 @@ test("everything is dosed properly, not just sets and reps", () => {
   assert.ok(primaries.some((d) => d.intensity?.startsWith("RPE")), "main lifts should carry a target effort");
 });
 
+/**
+ * EVERY EFFORT CHECK READS `rpeOf`, NOT ITS OWN REGEX.
+ *
+ * Four of these stripped non-digits out of `intensity` and took the number.
+ * That worked while the string was exactly "RPE 8" and broke the moment effort
+ * targets started carrying their meaning — "RPE 7 — 3 reps left in you"
+ * strips to "73". lib/effort.ts owns the parsing precisely so a format change
+ * has one place to update, and four private copies is what stops that being
+ * true.
+ */
 test("effort climbs to the peak and drops on the deload", () => {
   const plan = buildBlock({ goal: "strength", painMap: {}, sport: "weightlifting" });
   const rpe = (wi: number) => {
     const vals = plan.weeks[wi].sessions.flatMap((s) => s.drills)
-      .map((d) => Number(d.intensity?.replace("RPE ", "")))
+      .map((d) => rpeOf(d.intensity) ?? 0)
       .filter((n) => Number.isFinite(n));
     return vals.reduce((a, b) => a + b, 0) / vals.length;
   };
@@ -425,7 +436,7 @@ test("sprints, jumps and change-of-direction never exceed RPE 8", () => {
         for (const d of s.drills) {
           const m = MOVEMENTS.find((x) => x.name === d.name);
           if (!m || !quality.has(m.pattern) || !d.intensity) continue;
-          const rpe = Number(d.intensity.replace(/[^\d.]/g, ""));
+          const rpe = rpeOf(d.intensity) ?? 0;
           assert.ok(
             rpe <= 8,
             `${w.theme} week: ${d.name} (${m.pattern}) prescribed at ${d.intensity}`
@@ -444,7 +455,7 @@ test("but strength work still climbs into the peak week", () => {
     const m = MOVEMENTS.find((x) => x.name === d.name);
     if (!m || !d.intensity) return false;
     const heavy = ["squat", "hinge", "push_h", "push_v", "pull_h", "pull_v"].includes(m.pattern);
-    return heavy && Number(d.intensity.replace(/[^\d.]/g, "")) >= 9;
+    return heavy && (rpeOf(d.intensity) ?? 0) >= 9;
   });
   assert.ok(hard.length > 0, "peak week should push the strength lifts to RPE 9");
 });
@@ -586,7 +597,7 @@ test("a block that isn't about conditioning doesn't smuggle in a second hard ses
     for (const wk of plan.weeks) {
       for (const s of wk.sessions) {
         for (const c of s.drills.filter((d) => d.slot === "conditioning")) {
-          const rpe = Number((c.intensity ?? "").replace(/[^\d.]/g, "")) || 0;
+          const rpe = rpeOf(c.intensity) ?? 0;
           assert.ok(
             rpe < 9,
             `${goal} wk${wk.week} "${s.title}": ${c.name} at ${c.intensity} is a second hard session, not support`

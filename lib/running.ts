@@ -1286,6 +1286,15 @@ export interface RunProgramPlan {
   block: number;
 }
 
+/** Three or four words for how an effort feels, for a chip rather than a guide. */
+function effortWord(topRpe: number): string {
+  if (topRpe <= 3) return "very easy";
+  if (topRpe <= 5) return "easy, chatty";
+  if (topRpe <= 7) return "comfortably hard";
+  if (topRpe <= 8) return "hard";
+  return "very hard";
+}
+
 function runDrill(s: RunSession, zonePaces: PaceZoneRange[] | null): RunProgramDrill {
   const t = runType(s.type)!;
   const z = ZONES[s.zone];
@@ -1309,7 +1318,14 @@ function runDrill(s: RunSession, zonePaces: PaceZoneRange[] | null): RunProgramD
     cue: t.howTo,
     reason: t.purpose,
     prescription: `${amount} · Zone ${z.id} (${z.name})${pace ? ` · ${formatPaceRange(pace)}/km` : ""}`,
-    intensity: `RPE ${z.rpe[0]}–${z.rpe[1]}`,
+    // Spelled out, like everywhere else — see effortText in lib/effort.ts for
+    // why "RPE 8" alone is not an instruction. Written inline rather than
+    // imported because this module is deliberately import-free: pulling in
+    // lib/effort would create a cycle through engine.ts.
+    //
+    // Not `z.feel`, which is a full sentence and belongs in the zone guide.
+    // This sits on a chip beside the rest and the tempo.
+    intensity: `RPE ${z.rpe[0]}–${z.rpe[1]} — ${effortWord(z.rpe[1])}`,
     progression: t.watchFor,
   };
 }
