@@ -21,14 +21,36 @@ export const ENDURANCE_SESSION_MAX_MINUTES = 120;
 export const ACTIVE_REST_MAX_MINUTES = 60;
 export const FINISHER_MAX_MINUTES = 30;
 
+/**
+ * A session whose RUN is the main work, not a finisher after it.
+ *
+ * "No lifts at all" was the test, and it was right until a runner's hard days
+ * gained supporting strength work (see lib/runner-strength.ts). The moment they
+ * did, two things went wrong at once: the session lost its two-hour endurance
+ * budget and dropped to the ninety-minute lifting one, AND its run started
+ * being treated as a finisher — so a 63-minute VO2 session was trimmed to 30 to
+ * make room for five accessory lifts. Cutting a runner's quality session in
+ * half to fit the work that supports it is precisely backwards.
+ *
+ * What actually distinguishes the two cases is which quality the session is
+ * FOR, and `focus` already says. A lifter's easy run sits in a strength-focused
+ * session and is correctly capped; a runner's tempo sits in an
+ * endurance-focused one and is the reason they turned up.
+ */
 function isDedicatedEndurance(session: ProgramSession, goal: GoalType): boolean {
   return goal === "endurance"
     && session.focus === "endurance"
     && session.drills.filter((d) => d.slot === "primary" || d.slot === "secondary" || d.slot === "accessory").length === 0;
 }
 
+function isEnduranceLed(session: ProgramSession, goal: GoalType): boolean {
+  return session.kind === "run" || isDedicatedEndurance(session, goal);
+}
+
 export function sessionBudgetMinutes(session: ProgramSession, goal: GoalType): number {
-  return isDedicatedEndurance(session, goal)
+  // Endurance-LED, not endurance-only: a runner's session with lifting bolted
+  // on is still a two-hour day, because the run in it is still the run.
+  return isEnduranceLed(session, goal)
     ? ENDURANCE_SESSION_MAX_MINUTES
     : STANDARD_SESSION_MAX_MINUTES;
 }
@@ -131,7 +153,9 @@ function optionsFor(
   fullDose: boolean,
 ): FitOption[] {
   let full = drill;
-  if (capFinisher && drill.slot === "conditioning") {
+  // The cap is for FINISHERS. On a session the run leads, it would be trimming
+  // the main event to protect the accessories.
+  if (capFinisher && drill.slot === "conditioning" && !isEnduranceLed(session, goal)) {
     full = trimTimedDrill(drill, FINISHER_MAX_MINUTES);
   }
 

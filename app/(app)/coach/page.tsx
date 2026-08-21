@@ -1682,9 +1682,15 @@ function ActiveProgram({
                 Already trained today. Here&apos;s what&apos;s next, whenever you&apos;re ready.
               </p>
             )}
-            {readiness?.status === "Yellow" && (
-              <p className="mb-2 mt-1 text-xs text-amber-300">
-                Readiness is moderate, so today is lighter — a set off, and easier targets.
+            {/* WHAT READINESS DID TO TODAY, measured rather than asserted.
+                This was a fixed sentence — "a set off, and easier targets" —
+                written once and never checked against the session underneath
+                it, and shown only on Yellow, so a Red day replaced the whole
+                session with a bike ride and said nothing at all. The line now
+                comes from the adaptation itself; see adjustForReadiness. */}
+            {todaySession?.adaptation && (
+              <p className={`mb-2 mt-1 text-xs ${readiness?.status === "Red" ? "text-sky-300" : "text-amber-300"}`}>
+                {todaySession.adaptation}
               </p>
             )}
             {/* WHAT THE REHAB PLAN DID TO THIS SESSION, said out loud.

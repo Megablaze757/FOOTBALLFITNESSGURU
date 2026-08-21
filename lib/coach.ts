@@ -15,9 +15,10 @@ import { positionLabel } from "./positions";
 import { positionProfile } from "./position-profile";
 import { sportTerms } from "./sport-terms";
 import { MOVEMENTS, regionOfMovement, type Movement, type GoalType, type BodyArea } from "./movements";
-import { buildBlock, painByArea, type ProgramPlan, type TrainingFocus } from "./engine";
+import { buildBlock, painByArea, type ProgramPlan, type ProgramSession, type TrainingFocus } from "./engine";
 import { balancePlanVolume, spacePlanSessions, volumeShortfall, LANDMARKS } from "./muscle-volume";
 import { buildRunProgram, type RunnerLevel } from "./running";
+import { addRunnerStrength } from "./runner-strength";
 import { orderPlan, validatePlan } from "./program-validate";
 import { enforceProgramSessionBudgets } from "./session-budget";
 import {
@@ -447,6 +448,26 @@ export interface BuildProgramInput {
  * strength goal here would take away the leg-durability work that keeps them
  * running, which is the opposite of helping.
  */
+/**
+ * Which of a run week's days are the hard ones.
+ *
+ * `RunSession.hard` is known inside lib/running.ts and does not survive the
+ * conversion to a ProgramSession — and lib/running.ts is deliberately
+ * import-free, so it cannot be handed the strength module without creating a
+ * cycle. The zone is on the prescription the engine itself wrote, so it is read
+ * back rather than guessed: Zone 4 and above is a quality session in every
+ * definition this app uses (see HARD_RUN_TYPES).
+ */
+function runHardDays(plan: { weeks: { sessions: { drills: { prescription?: string }[] }[] }[] }, weekIndex: number): Set<number> {
+  const out = new Set<number>();
+  const week = plan.weeks[weekIndex];
+  week?.sessions.forEach((session, i) => {
+    const zone = Number(/Zone (\d)/.exec(session.drills[0]?.prescription ?? "")?.[1] ?? 0);
+    if (zone >= 4) out.add(i);
+  });
+  return out;
+}
+
 function wantsRunPlan(input: BuildProgramInput): boolean {
   if (input.goal === "injury_recovery" || input.focus === "rehab") return false;
   if (input.sport !== "running") return false;
@@ -512,11 +533,46 @@ export function buildProgram(input: BuildProgramInput): ProgramPlan {
       // pace. The engine can't take the impact away, so it takes the intensity.
       recoveryBias: sore.some((a) => ["knee", "ankle", "hamstring", "hip"].includes(a)),
     });
-    if (!input.settings && !input.goals?.length) return enforceProgramSessionBudgets(runPlan);
-    const goals = input.goals?.length ? input.goals : [{ type: input.goal, priority: 1 as const }];
-    return enforceProgramSessionBudgets(
-      applyProgramPreferences(runPlan, input.settings ?? { goals }, { painMap: input.painMap, constraints, sport: input.sport }),
-    );
+    /**
+     * THE STRENGTH WORK A RUNNER'S PLAN DID NOT HAVE.
+     *
+     * Measured: a runner on five days a week received five runs and ZERO
+     * strength sessions. Every session was a single run drill — no warm-up, no
+     * lifting, no cool-down — because this branch returns before `finishPlan`
+     * and therefore skipped the whole checklist. See lib/runner-strength.ts.
+     *
+     * WHY NOT `finishPlan` HERE. It balances weekly volume to a floor of ten
+     * sets per trained muscle, which is the right target for somebody whose
+     * training IS lifting and the wrong one for somebody whose training is
+     * running. Balancing a runner's two supporting sessions up to a lifter's
+     * dose turns the support into a second programme and takes the legs the
+     * running needed. A runner's volume is dosed in kilometres, upstream, by
+     * `weeklyVolumePlan`.
+     *
+     * So the structural half of the checklist runs and the volume half does
+     * not — which is exactly the split lib/program-validate.ts was separated
+     * out to make possible.
+     */
+    const withStrength: ProgramPlan = {
+      ...runPlan,
+      weeks: runPlan.weeks.map((week, wi) => ({
+        ...week,
+        sessions: addRunnerStrength(
+          week.sessions as ProgramSession[],
+          (_session, i) => runHardDays(runPlan, wi).has(i),
+        ),
+      })),
+    } as ProgramPlan;
+
+    const checked = validatePlan(withStrength).plan;
+    const base = !input.settings && !input.goals?.length
+      ? checked
+      : applyProgramPreferences(
+          checked,
+          input.settings ?? { goals: input.goals?.length ? input.goals : [{ type: input.goal, priority: 1 as const }] },
+          { painMap: input.painMap, constraints, sport: input.sport },
+        );
+    return orderPlan(enforceProgramSessionBudgets(base));
   }
 
   if (wantsHypertrophy(input)) {

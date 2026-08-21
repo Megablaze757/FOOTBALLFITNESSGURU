@@ -86,8 +86,33 @@ export interface ProgramSession {
   title: string;
   focus: GoalType;
   drills: ProgramDrill[];
-  /** Active rest is a real scheduled day, not an empty workout. */
-  kind?: "workout" | "active_rest";
+  /**
+   * Active rest is a real scheduled day, not an empty workout. "run" is a day
+   * whose RUN is the main work rather than a finisher after it.
+   *
+   * Stated rather than inferred, after two attempts to infer it. "No lifts in
+   * the session" stopped being true the moment a runner's hard days gained
+   * supporting strength; "endurance focus and some conditioning" is true of a
+   * footballer's conditioning day too, and a footballer's long run genuinely IS
+   * a finisher that should be capped at thirty minutes. The two cases look
+   * identical from the outside and are opposite in what they need, so the
+   * builder that knows says so.
+   */
+  kind?: "workout" | "active_rest" | "run";
+  /**
+   * What today's readiness did to this session, in the athlete's words.
+   *
+   * The adaptation itself has worked for a while — Yellow drops a set and eases
+   * the effort target, Red replaces the session outright — and the only thing
+   * the screen said about it was a fixed line reading "today is lighter — a set
+   * off, and easier targets". That sentence is written once and never checked
+   * against what happened, so on a session where two of nine drills were eased
+   * it was overstating, and on Red it was simply not shown.
+   *
+   * This is computed from the difference between the two sessions, so it cannot
+   * drift from the thing it describes.
+   */
+  adaptation?: string;
   durationMinutes?: number | null;
   rpe?: number | null;
   notes?: string | null;
@@ -901,11 +926,17 @@ export type ReadinessStatus = "Green" | "Yellow" | "Red";
  *   RED    — replace it entirely with a real recovery session that can be
  *            played and logged like any other.
  */
+/** Working sets in a session — what a volume reduction is measured against. */
+function workingSets(session: ProgramSession): number {
+  return session.drills.reduce((n, d) =>
+    d.slot === "warmup" || d.slot === "cooldown" || d.skill ? n : n + Math.max(0, d.sets), 0);
+}
+
 export function adjustForReadiness(session: ProgramSession, status: ReadinessStatus): ProgramSession {
   if (status === "Green") return session;
 
   if (status === "Yellow") {
-    return {
+    const eased: ProgramSession = {
       ...session,
       title: `${session.title} · eased back`,
       drills: session.drills.map((d) => {
@@ -922,6 +953,25 @@ export function adjustForReadiness(session: ProgramSession, status: ReadinessSta
         };
       }),
     };
+    /**
+     * THE REAL NUMBER, not a round one.
+     *
+     * A drill already on one set cannot lose another, and the warm-up, the
+     * cool-down and the ball work are untouched by design — so "20% less
+     * volume" is a guess and the arithmetic is right there. Saying the true
+     * figure is also what makes the sentence worth reading twice: an athlete
+     * who sees 11% one day and 23% the next learns that the app is measuring
+     * rather than reassuring.
+     */
+    const from = workingSets(session);
+    const to = workingSets(eased);
+    const cut = from > 0 ? Math.round(((from - to) / from) * 100) : 0;
+    return {
+      ...eased,
+      adaptation: cut > 0
+        ? `Your readiness is down, so today is ${cut}% lighter — ${from - to} fewer working ${from - to === 1 ? "set" : "sets"} and a notch off every effort target.`
+        : "Your readiness is down, so every effort target is a notch easier today. The sets stay, because there was nothing left to trim.",
+    };
   }
 
   // Red. Not "here's some advice", an actual session.
@@ -932,6 +982,12 @@ export function adjustForReadiness(session: ProgramSession, status: ReadinessSta
   return {
     ...session,
     title: "Recovery session",
+    // RED SAID NOTHING AT ALL. The session was silently replaced — the athlete
+    // opened their plan expecting a lower day and found a bike ride, with no
+    // explanation anywhere on the screen. Replacing somebody's session is the
+    // largest thing this app does to a plan without being asked.
+    adaptation: "Your readiness is low, so the session is replaced with easy aerobic work. "
+      + "Training hard today would cost more than it buys — the plan picks up where it left off tomorrow.",
     drills: [
       ...keep.filter((d) => d.slot === "warmup"),
       ...(spin ? [{

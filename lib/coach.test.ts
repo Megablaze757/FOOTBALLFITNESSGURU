@@ -150,7 +150,13 @@ test("every run in a runner's plan names its zone", () => {
   const plan = buildProgram({ goal: "endurance", painMap: {}, sport: "running", daysPerWeek: 4 });
   for (const w of plan.weeks) {
     for (const s of w.sessions) {
-      assert.match(s.drills[0].prescription ?? "", /Zone [1-5]/, `${s.title} has no zone`);
+      // THE RUN, not the first drill. A runner's hard days now carry supporting
+      // strength work and a warm-up in front of it (lib/runner-strength.ts), so
+      // drills[0] is a glute bridge — which correctly has no zone, because it
+      // is not a run.
+      const run = s.drills.find((d) => d.slot === "conditioning");
+      assert.ok(run, `${s.title} has no run in it at all`);
+      assert.match(run.prescription ?? "", /Zone [1-5]/, `${s.title} has no zone`);
     }
   }
 });
@@ -253,7 +259,8 @@ test("a logged race turns the plan's zones into real paces", () => {
     goal: "endurance", painMap: {}, sport: "running", daysPerWeek: 4,
     weeklyKm: 40, thresholdSecPerKm: 255,
   });
-  const p = withRace.weeks[0].sessions[0].drills[0].prescription!;
+  const run = withRace.weeks[0].sessions[0].drills.find((d) => d.slot === "conditioning");
+  const p = run?.prescription ?? "";
   assert.match(p, /\d+:\d\d–\d+:\d\d\/km/, `expected a pace range, got: ${p}`);
 });
 

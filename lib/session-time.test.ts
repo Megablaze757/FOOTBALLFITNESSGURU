@@ -56,8 +56,11 @@ test("runner estimates use the whole session, not one interval or an invented pa
   const sessions = plan.weeks[0].sessions;
   const interval = sessions.find((s) => /interval/i.test(s.title));
   const distance = sessions.find((s) => /easy run/i.test(s.title));
-  assert.ok(interval && prescribedDurationMinutes(interval.drills[0])! >= 40, "an interval session was priced as one repeat");
-  assert.ok(distance && prescribedDurationMinutes(distance.drills[0])! >= 40, "a distance run has no usable time estimate");
+  // The run itself. A hard day now opens with a warm-up and carries supporting
+  // strength afterwards, so drills[0] is a glute bridge with no duration at all.
+  const runIn = (s: typeof interval) => s?.drills.find((d) => d.slot === "conditioning");
+  assert.ok(interval && prescribedDurationMinutes(runIn(interval)!)! >= 40, "an interval session was priced as one repeat");
+  assert.ok(distance && prescribedDurationMinutes(runIn(distance)!)! >= 40, "a distance run has no usable time estimate");
 });
 
 test("the estimate is rounded, because it is an estimate", () => {

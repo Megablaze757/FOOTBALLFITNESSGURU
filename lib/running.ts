@@ -1020,7 +1020,29 @@ export function buildRunWeek(opts: {
   // only to keep the week's total honest.
   const hardKm = hardBudget > 0 ? +(remaining * 0.3 / hardBudget).toFixed(1) : 0;
   const easyDays = days - 1 - hardBudget;
-  const easyKm = easyDays > 0 ? +((remaining - hardKm * hardBudget) / easyDays).toFixed(1) : 0;
+  const rawEasyKm = easyDays > 0 ? +((remaining - hardKm * hardBudget) / easyDays).toFixed(1) : 0;
+
+  /**
+   * THE LONG RUN HAS TO BE THE LONGEST RUN.
+   *
+   * The easy days absorb whatever is left after the long run and the quality
+   * session, and on a short week there is a lot left: 40km over three days gave
+   * a 14km "long run" and an 18.2km "easy run", and at 55km it was 16.9 against
+   * 22.1. Every single week of a three-day block came out with the easy day as
+   * the longest run in it.
+   *
+   * That is not a labelling nitpick. It is the week's hardest session wearing
+   * the name of its easiest, so everything downstream believes the wrong thing:
+   * the plan protects the wrong day, the strength work lands on the wrong one,
+   * and the athlete is told a 22km run is easy.
+   *
+   * Swapping is the whole fix. It changes no distances and no weekly total —
+   * only which day carries which name — and it cannot make the week harder,
+   * because both runs were already in it.
+   */
+  const swap = rawEasyKm > longKm;
+  const easyKm = swap ? longKm : rawEasyKm;
+  const anchorKm = swap ? rawEasyKm : longKm;
 
   // Spread hard days as far apart as possible across the non-long days.
   //
@@ -1086,8 +1108,8 @@ export function buildRunWeek(opts: {
     type: "long",
     label: long.label,
     zone: long.primaryZone,
-    km: longKm || null,
-    minutes: Math.round(longKm * 6) || long.minutes[0],
+    km: anchorKm || null,
+    minutes: Math.round(anchorKm * 6) || long.minutes[0],
     detail: long.howTo,
     hard: false,
   });
@@ -1190,6 +1212,10 @@ export function buildRunProgram(input: RunProgramInput): RunProgramPlan {
       title: `Day ${s.day} · ${s.label}`,
       focus: goalType,
       drills: [runDrill(s, zonePaces)],
+      // See ProgramSession.kind: what stops the time-budget pass trimming a
+      // 63-minute VO2 session to 30 to make room for the lifting that supports
+      // it, and what tells the checklist the run comes first.
+      kind: "run" as const,
     }));
 
     return {
@@ -1240,6 +1266,8 @@ export interface RunProgramSession {
   title: string;
   focus: RunGoal;
   drills: RunProgramDrill[];
+  /** Always "run" — the run is the session, not a finisher after one. */
+  kind: "run";
 }
 
 export interface RunProgramWeek {

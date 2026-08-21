@@ -33,6 +33,27 @@ import { similarExercises } from "./exercise-match";
 const SECTION_ORDER: Slot[] = ["warmup", "primary", "secondary", "accessory", "skill", "conditioning", "cooldown"];
 const SECTION_INDEX = new Map(SECTION_ORDER.map((s, i) => [s, i]));
 
+/**
+ * WHERE THE RUNNING GOES DEPENDS ON WHOSE SESSION IT IS.
+ *
+ * A lifter's easy run is a finisher and belongs at the end: doing it first
+ * would make the lifting worse, which is the whole reason it is last. A
+ * runner's tempo session is the point of the day and belongs first, for exactly
+ * the same reason in reverse — the strength work that now sits on their hard
+ * days (see lib/runner-strength.ts) must not be what they are tired from when
+ * they try to hold pace.
+ *
+ * One fixed order cannot be right for both, and the difference is not cosmetic:
+ * it is which quality the athlete is fresh for. The session already knows —
+ * `focus` says what the day is for — so it is asked rather than guessed.
+ */
+const ENDURANCE_LED_ORDER: Slot[] = ["warmup", "conditioning", "primary", "secondary", "accessory", "skill", "cooldown"];
+const ENDURANCE_LED_INDEX = new Map(ENDURANCE_LED_ORDER.map((s, i) => [s, i]));
+
+function indexFor(session: Pick<ProgramSession, "kind">): Map<Slot, number> {
+  return session.kind === "run" ? ENDURANCE_LED_INDEX : SECTION_INDEX;
+}
+
 export type CorrectionKind = "duplicate" | "section" | "order" | "warmup" | "cooldown";
 
 export interface Correction {
@@ -214,10 +235,11 @@ function validateSession(
   // working block. Stable within a tier, so whatever ordering the engine or the
   // muscle-spacing pass already chose between two compounds survives.
   const before = drills.map((d) => d.name).join("|");
+  const order = indexFor(session);
   const ranked = drills.map((d, i) => {
     const kind = kindOf(d.name, d.slot);
     const slot = isWorkingSet(kind) ? mainSlotFor(kind) : (d.slot ?? sectionFor(d.name, d.slot));
-    return { d: { ...d, slot }, i, kind, section: SECTION_INDEX.get(slot) ?? 99 };
+    return { d: { ...d, slot }, i, kind, section: order.get(slot) ?? 99 };
   });
   ranked.sort((a, b) => a.section - b.section || KIND_RANK[a.kind] - KIND_RANK[b.kind] || a.i - b.i);
   drills = ranked.map((r) => r.d);
@@ -276,10 +298,11 @@ export function orderPlan(plan: ProgramPlan): ProgramPlan {
     weeks: plan.weeks.map((week) => ({
       ...week,
       sessions: week.sessions.map((session) => {
+        const order = indexFor(session);
         const ranked = (session.drills ?? []).map((d, i) => {
           const kind = kindOf(d.name, d.slot);
           const slot = isWorkingSet(kind) ? mainSlotFor(kind) : (d.slot ?? sectionFor(d.name, d.slot));
-          return { d: { ...d, slot }, i, kind, section: SECTION_INDEX.get(slot) ?? 99 };
+          return { d: { ...d, slot }, i, kind, section: order.get(slot) ?? 99 };
         });
         ranked.sort((a, b) => a.section - b.section || KIND_RANK[a.kind] - KIND_RANK[b.kind] || a.i - b.i);
         return { ...session, drills: ranked.map((r) => r.d) };
