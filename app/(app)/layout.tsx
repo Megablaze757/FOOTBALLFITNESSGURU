@@ -9,6 +9,7 @@ import { SuspendedGate } from "@/components/SuspendedGate";
 import { LoadErrorBanner } from "@/components/LoadErrorBanner";
 import { JobsProvider } from "@/lib/jobs";
 import { JobTray } from "@/components/JobTray";
+import { HealthConsentGate } from "@/components/HealthConsentGate";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useSession();
@@ -28,6 +29,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <UserProvider user={user}>
+      <HealthConsentGate userId={user.id}>
       {/* Above the router outlet on purpose: work started inside a page has to
           outlive that page being navigated away from. */}
       <JobsProvider>
@@ -54,6 +56,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       </div>
       </SuspendedGate>
       </JobsProvider>
+      </HealthConsentGate>
     </UserProvider>
   );
 }

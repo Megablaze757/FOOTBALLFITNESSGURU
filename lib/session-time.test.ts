@@ -2,8 +2,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { buildProgram } from "./coach";
-import { drillSeconds, sessionMinutes, sessionLength } from "./session-time";
-import type { ProgramDrill } from "./engine";
+import { drillSeconds, prescribedDurationMinutes, sessionMinutes, sessionLength } from "./session-time";
+import {
+  ACTIVE_REST_MAX_MINUTES,
+  sessionBudgetMinutes,
+} from "./session-budget";
+import type { GoalType, ProgramDrill, TrainingFocus } from "./engine";
+import type { SportId } from "./exercises";
 
 /**
  * "A total time of each session as well."
@@ -36,6 +41,25 @@ test("conditioning is priced in the units it was prescribed in", () => {
   assert.ok(hills > 15 && hills < 25, `an 8 × 60s hill set priced at ${Math.round(hills)} min`);
 });
 
+test("a coaching note that mentions minutes is not priced as a timed exercise", () => {
+  const note = d({
+    sets: 1,
+    reps: 1,
+    prescription: "Every long run over 90 minutes",
+    slot: "skill",
+  });
+  assert.ok(drillSeconds(note) < 2 * 60, "a fuelling reminder became a 90-minute exercise");
+});
+
+test("runner estimates use the whole session, not one interval or an invented pace", () => {
+  const plan = buildProgram({ painMap: {}, goal: "endurance", sport: "running", daysPerWeek: 5, weeklyKm: 50 });
+  const sessions = plan.weeks[0].sessions;
+  const interval = sessions.find((s) => /interval/i.test(s.title));
+  const distance = sessions.find((s) => /easy run/i.test(s.title));
+  assert.ok(interval && prescribedDurationMinutes(interval.drills[0])! >= 40, "an interval session was priced as one repeat");
+  assert.ok(distance && prescribedDurationMinutes(distance.drills[0])! >= 40, "a distance run has no usable time estimate");
+});
+
 test("the estimate is rounded, because it is an estimate", () => {
   // "63 min" claims a confidence this does not have.
   assert.equal(sessionMinutes({ drills: [d({ sets: 4, reps: 8, rest: 120 })] }) % 5, 0);
@@ -48,19 +72,31 @@ test("no generated session is longer than an athlete will actually train", () =>
    * the session, and an abandoned session and a skipped one look identical to
    * the app — it records the miss and nothing about why.
    */
+  const sports: SportId[] = ["football", "rugby", "basketball", "running", "weightlifting", "gym"];
+  const goals: GoalType[] = ["speed", "agility", "strength", "endurance", "injury_recovery", "skill"];
+  const focuses: TrainingFocus[] = ["performance", "fitness", "aesthetics", "rehab"];
   const long: string[] = [];
-  for (const [sport, focus] of [["gym", "aesthetics"], ["football", "performance"], ["rugby", "performance"]] as const) {
-    for (const daysPerWeek of [3, 4, 5]) {
-      const plan = buildProgram({ painMap: {}, goal: "strength", sport, focus, daysPerWeek });
-      for (const w of plan.weeks) {
-        for (const s of w.sessions) {
-          const mins = sessionMinutes(s);
-          if (mins > 115) long.push(`${sport}/${daysPerWeek}d wk${w.week} ${s.title}: ${mins} min`);
+
+  // Every public combination, including the maximum ten-exercise preference.
+  // The previous audit sampled three sports, one goal and 3–5 days, then let
+  // 115 minutes pass under a comment that promised ninety. That is how the
+  // 150-minute variants survived it.
+  for (const sport of sports) for (const goal of goals) for (const focus of focuses) {
+    for (let daysPerWeek = 2; daysPerWeek <= 7; daysPerWeek += 1) {
+      for (const customised of [false, true]) {
+        const plan = buildProgram({
+          painMap: {}, goal, sport, focus, daysPerWeek,
+          ...(customised ? { settings: { goals: [{ type: goal, priority: 1 }], exerciseTarget: 10 } } : {}),
+        });
+        for (const w of plan.weeks) for (const s of w.sessions) {
+          const mins = s.kind === "active_rest" ? (s.durationMinutes ?? 30) : sessionMinutes(s);
+          const cap = s.kind === "active_rest" ? ACTIVE_REST_MAX_MINUTES : sessionBudgetMinutes(s, plan.goal);
+          if (mins > cap) long.push(`${sport}/${goal}/${focus}/${daysPerWeek}d/w${w.week}/${s.title}: ${mins} > ${cap} min`);
         }
       }
     }
   }
-  assert.deepEqual(long.slice(0, 6), [], `${long.length} generated sessions run past what people finish`);
+  assert.deepEqual(long.slice(0, 6), [], `${long.length} generated sessions run past their real cap`);
 });
 
 test("a finisher is finisher-length", () => {

@@ -19,6 +19,8 @@ const SYSTEM =
   "nutrition targets and intake, and their ranked lifts. " +
   "Answer the question directly and practically, grounded in that briefing and quoting the " +
   "athlete's own numbers back to them where it helps. " +
+  "Use the recent conversation before answering; a follow-up refers to it unless the athlete clearly changes topic. " +
+  "Never ask again for a measurement or preference that is already present in the briefing. " +
   "USE THE BRIEFING BEFORE ANYTHING ELSE: if it contains the answer — a rehab stage, a calorie " +
   "target, a lift, a prescribed effort — cite it rather than speaking generally. " +
   "If the briefing says something is not recorded, SAY SO and ask for it, rather than assuming a " +
@@ -54,7 +56,7 @@ Deno.serve(async (req: Request) => {
   const gate = await requireTier(req, "silver", "Ask the coach");
   if (gate.denied) return gate.denied;
 
-  const { question, context, briefing } = await req.json().catch(() => ({}));
+  const { question, context, briefing, history } = await req.json().catch(() => ({}));
   if (!question) return json({ error: "question required" }, 400);
 
   /**
@@ -71,18 +73,21 @@ Deno.serve(async (req: Request) => {
    * facts is worse than answering from a briefing, and much better than a 400.
    */
   const ctx = typeof briefing === "string" && briefing.trim().length > 0
-    ? briefing
+    ? briefing.trim().slice(0, 8_000)
     : [
         `Goal: ${context?.goal ?? "general"}`,
         `Sore areas: ${(context?.soreAreas ?? []).join(", ") || "none"}`,
         `Today's readiness: ${context?.readinessStatus ?? "unknown"}`,
         `Current plan drills: ${(context?.programDrills ?? []).join(", ") || "none"}`,
       ].join("\n");
+  const prior = chatHistory(history);
 
   try {
     const { text } = await complete({
       system: SYSTEM,
-      user: `Here is everything known about this athlete.\n\n${ctx}\n\n---\n\nTheir question: ${question}`,
+      user:
+        `ATHLETE BRIEFING (current source of truth):\n${ctx}\n\n` +
+        `RECENT CONVERSATION:\n${prior}\n\nCURRENT QUESTION:\n${String(question).slice(0, 600)}`,
       maxTokens: 900,
       // A one-word reply is a failed rung, not an answer. The /coach chat falls
       // back to the local engine on any error, so a blank-ish response here is
@@ -95,3 +100,15 @@ Deno.serve(async (req: Request) => {
     return json({ error: String(e) }, 500);
   }
 });
+
+function chatHistory(raw: unknown): string {
+  if (!Array.isArray(raw)) return "No previous turns.";
+  const turns = raw.slice(-12).flatMap((turn) => {
+    if (!turn || typeof turn !== "object") return [];
+    const value = turn as { role?: unknown; content?: unknown };
+    if (value.role !== "user" && value.role !== "assistant") return [];
+    const content = String(value.content ?? "").trim().slice(0, 800);
+    return content ? [`${value.role === "user" ? "Athlete" : "Coach"}: ${content}`] : [];
+  });
+  return turns.length ? turns.join("\n").slice(-6_000) : "No previous turns.";
+}

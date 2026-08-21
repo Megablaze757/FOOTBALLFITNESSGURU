@@ -12,6 +12,10 @@ test("progression method matches how each drill is actually overloaded", () => {
   assert.equal(exerciseProgression(getExerciseByName("Flying 20m sprints")!), "skill");
   // conditioning → time
   assert.equal(exerciseProgression(getExerciseByName("Tempo runs")!), "time");
+  // Static holds are time, regardless of a bench/band appearing in equipment.
+  assert.equal(exerciseProgression(getExerciseByName("Plank")!), "time");
+  assert.equal(exerciseProgression(getExerciseByName("Copenhagen plank")!), "time");
+  assert.equal(exerciseProgression(getExerciseByName("Spanish squat iso-hold")!), "time");
   // bodyweight strength → reps
   assert.equal(exerciseProgression(getExerciseByName("Pull-up")!), "reps");
 });

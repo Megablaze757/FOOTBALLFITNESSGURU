@@ -9,6 +9,7 @@ import { captureRef, getRef, clearRef } from "@/lib/referral";
 import { Logo } from "@/components/Logo";
 import { track } from "@/lib/funnel";
 import { PAID_TIER } from "@/lib/subscription";
+import { HEALTH_CONSENT_VERSION } from "@/lib/consent";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -32,6 +33,7 @@ export default function LoginPage() {
   // code heard out loud — "use SACHA20" — has no link to stash.
   const [refCode, setRefCode] = useState("");
   const [refState, setRefState] = useState<"idle" | "checking" | "ok" | "bad">("idle");
+  const [healthConsent, setHealthConsent] = useState(false);
 
   useEffect(() => { captureRef(); }, []); // in case they land straight on /login?ref=
 
@@ -146,6 +148,11 @@ export default function LoginPage() {
         if (/confirm/i.test(error.message)) setAwaitingConfirm(true);
       } else router.push("/home");
     } else {
+      if (!healthConsent) {
+        setError("Please make a choice about health-data processing before creating an account.");
+        setLoading(false);
+        return;
+      }
       // The referral code travels in the signup METADATA, not as a follow-up
       // update. The old code wrote to profiles straight after signUp — but on
       // an email-confirmation signup there is no session yet, so RLS rejected
@@ -156,7 +163,12 @@ export default function LoginPage() {
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: { data: { full_name: fullName, ...(ref ? { referral_code: ref } : {}) } },
+        options: { data: {
+          full_name: fullName,
+          health_data_consent: true,
+          health_data_consent_version: HEALTH_CONSENT_VERSION,
+          ...(ref ? { referral_code: ref } : {}),
+        } },
       });
       if (error) setError(error.message);
       else if (data.user && (data.user.identities?.length ?? 0) === 0) {
@@ -312,6 +324,29 @@ export default function LoginPage() {
             >
               Forgot password?
             </button>
+          )}
+
+          {mode === "sign_up" && (
+            <div className="space-y-2">
+              <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                <input
+                  type="checkbox"
+                  checked={healthConsent}
+                  onChange={(event) => setHealthConsent(event.target.checked)}
+                  className="mt-0.5 h-5 w-5 shrink-0 accent-pitch-500"
+                />
+                <span className="text-xs leading-relaxed text-slate-300">
+                  I explicitly consent to PocketAthlete processing health and fitness data I enter —
+                  including pain, sleep, fatigue, weight, body composition, nutrition and training —
+                  to personalise readiness, recovery, food and training guidance. Relevant details may
+                  be sent to the AI providers named in the <a href="/privacy" className="text-pitch-400 underline">privacy policy</a>.
+                </span>
+              </label>
+              <p className="text-[11px] leading-relaxed text-slate-500">
+                This choice is separate from the <a href="/terms" className="underline hover:text-slate-300">terms</a>.
+                You can withdraw it from Profile; processing then stops unless the law requires otherwise.
+              </p>
+            </div>
           )}
 
           {verifying && (

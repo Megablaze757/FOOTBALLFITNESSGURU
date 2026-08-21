@@ -43,6 +43,10 @@ export interface Subscription {
   stripe_customer_id: string | null;
   stripe_subscription_id: string | null;
   stripe_price_id: string | null;
+  /** Stripe's exact state; `status` above is the app access state. */
+  stripe_status?: string | null;
+  trial_end?: string | null;
+  trial_reminder_created_at?: string | null;
   current_period_end: string | null;
   cancel_at_period_end: boolean;
   /** When a paused subscription starts billing again. Null unless paused. */
@@ -141,6 +145,14 @@ export interface AiPlan {
 
 export interface TrainingDrill {
   name: string;
+  /** How this movement is measured. Additive inside the drills JSONB. */
+  measure?: "reps" | "seconds" | "minutes" | "metres";
+  /** Per working set. Timed holds are not disguised as repetitions anymore. */
+  duration_seconds?: number | null;
+  /** Per working set for carries, sprints and other distance prescriptions. */
+  distance_m?: number | null;
+  /** Original programme wording, retained so its unit survives into check-in. */
+  prescription?: string | null;
   /** Summary. Derived from sets_detail when that is present — see lib/training-sets.ts. */
   sets: number;
   /** Summary: the rounded average when sets varied. Never the source of truth. */
@@ -153,7 +165,7 @@ export interface TrainingDrill {
    * the whole record for them. Ask lib/training-sets.ts rather than reading
    * either shape directly.
    */
-  sets_detail?: { reps: number; load_kg?: number | null }[];
+  sets_detail?: { reps: number; load_kg?: number | null; isWarmup?: boolean }[];
   notes?: string | null;
 }
 
@@ -163,9 +175,16 @@ export interface TrainingLog {
   log_date: string;
   drills: TrainingDrill[];
   total_minutes: number | null;
+  /** Exact duration. Added after total_minutes so mm:ss is never rounded away. */
+  duration_seconds?: number | null;
   intensity: number | null;
   /** Distance covered. What a runner actually plans in — see migration 0062. */
   distance_km?: number | null;
+  /** Original value and unit as entered, alongside canonical distance_km. */
+  distance_value?: number | null;
+  distance_unit?: "km" | "mi" | null;
+  pace_seconds_per_km?: number | null;
+  avg_speed_kmh?: number | null;
   /** Contact work, weighted above running minutes in sessionLoad. */
   contact_minutes?: number | null;
   /** Which of the fourteen run types this was — see lib/running.ts, migration 0064. */
@@ -183,6 +202,10 @@ export interface TrainingLog {
   intervals?: number | null;
   interval_seconds?: number | null;
   recovery_seconds?: number | null;
+  /** A deliberately light day still counts as attendance, but not strength volume. */
+  session_type?: "workout" | "active_rest" | "rest_day" | null;
+  /** Free-text detail for an active-rest day or the session as a whole. */
+  notes?: string | null;
   created_at: string;
 }
 
@@ -216,6 +239,10 @@ export interface Program {
    * deleting a key. See migration 0086 and lib/exercise-match.ts.
    */
   swaps?: Record<string, string> | null;
+  /** Ordered objectives. Additive: goal_type remains the backwards-compatible anchor. */
+  goals?: import("./program-preferences").GoalPreference[] | null;
+  /** Custom rotation and advanced generation controls used to build this block. */
+  settings?: import("./program-preferences").ProgramSettings | null;
   created_at: string;
 }
 
@@ -248,4 +275,19 @@ export interface Profile {
   onboarded?: boolean | null;
   level?: string | null;
   leaderboard_opt_out?: boolean | null;
+  goals?: import("./program-preferences").GoalPreference[] | null;
+  saved_exercises?: string[] | null;
+  distance_unit?: "km" | "mi" | null;
+  calorie_target?: number | null;
+  protein_target?: number | null;
+  carbs_target?: number | null;
+  fats_target?: number | null;
+  email_weekly_summary?: boolean | null;
+  email_checkin_reminders?: boolean | null;
+  email_workout_reminders?: boolean | null;
+  email_milestones?: boolean | null;
+  email_program_reminders?: boolean | null;
+  in_app_training_reminders?: boolean | null;
+  health_data_consent_at?: string | null;
+  health_data_consent_version?: string | null;
 }

@@ -9,6 +9,7 @@
 // =============================================================================
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { sendAndLog } from "../_shared/email.ts";
 
 const FROM = Deno.env.get("REMINDER_FROM") ?? "AI Coach <noreply@example.com>";
 const APP_URL = Deno.env.get("APP_URL") ?? "http://localhost:3000";
@@ -30,35 +31,24 @@ Deno.serve(async () => {
   const resendKey = Deno.env.get("RESEND_API_KEY");
   const { data: list } = await supabase.auth.admin.listUsers({ perPage: 1000 });
   const emailById = new Map((list?.users ?? []).map((u) => [u.id, u.email]));
+  const { data: profiles } = await supabase.from("profiles").select("id, email_program_reminders");
+  const enabled = new Set((profiles ?? []).filter((profile) => profile.email_program_reminders !== false).map((profile) => profile.id));
 
   let sent = 0;
   for (const p of programs ?? []) {
     const email = emailById.get(p.user_id);
-    if (!email || !resendKey) continue;
+    if (!email || !enabled.has(p.user_id)) continue;
     const total = (p.plan?.weeks ?? []).reduce((n: number, w: { sessions: unknown[] }) => n + w.sessions.length, 0);
     const done = (p.completed_sessions ?? []).length;
     const daysLeft = Math.ceil((new Date(p.target_date).getTime() - Date.now()) / 86400_000);
-    if (await sendEmail(resendKey, email, p.goal_type, daysLeft, done, total)) sent++;
+    const pct = total ? Math.round((done / total) * 100) : 0;
+    if (await sendAndLog({ supabase, userId: p.user_id, type: "program_deadline", apiKey: resendKey,
+      from: FROM, to: email, subject: `⏳ ${daysLeft} days left on your ${p.goal_type} goal`,
+      html: `<p>Your <b>${p.goal_type}</b> program target is <b>${daysLeft} day(s)</b> away — you're <b>${pct}%</b> through the plan (${done}/${total} sessions).</p>
+             <p>Stay on it — finish strong.</p><p><a href="${APP_URL}/coach">Open your program →</a></p>` })) sent++;
   }
   return json({ reminded: sent }, 200);
 });
-
-async function sendEmail(apiKey: string, to: string, goal: string, daysLeft: number, done: number, total: number): Promise<boolean> {
-  const pct = total ? Math.round((done / total) * 100) : 0;
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      from: FROM,
-      to,
-      subject: `⏳ ${daysLeft} days left on your ${goal} goal`,
-      html: `<p>Your <b>${goal}</b> program target is <b>${daysLeft} day(s)</b> away — you're <b>${pct}%</b> through the plan (${done}/${total} sessions).</p>
-             <p>Stay on it — finish strong.</p>
-             <p><a href="${APP_URL}/coach">Open your program →</a></p>`,
-    }),
-  });
-  return res.ok;
-}
 
 function json(data: unknown, status: number): Response {
   return new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json" } });

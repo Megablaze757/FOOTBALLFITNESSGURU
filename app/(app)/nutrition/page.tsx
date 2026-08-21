@@ -14,7 +14,7 @@ import { MealCheckIn } from "@/components/MealCheckIn";
 import { TodayFood } from "@/components/TodayFood";
 import { QuickCalories } from "@/components/QuickCalories";
 import { WaterRow } from "@/components/WaterRow";
-import { addEntry, addQuickCalories, entriesForDay, logTotals, removeByRef, type FoodEntry } from "@/lib/food-log";
+import { addEntry, entriesForDay, logTotals, removeByRef, type FoodEntry } from "@/lib/food-log";
 import type { Macros } from "@/lib/meal-plan";
 import { Tabs, TabPanel } from "@/components/Tabs";
 import { FuelRings } from "@/components/FuelRings";
@@ -27,6 +27,7 @@ import { daysAgoLocal, todayLocal } from "@/lib/day";
 import { selectProfile } from "@/lib/profile-columns";
 import { latestBodyweight } from "@/lib/bodyweight";
 import { currentPain } from "@/lib/pain";
+import { durationMinutes, isActivity } from "@/lib/training-duration";
 
 /** Exactly the shape written to `nutrition_logs`, so what we save and what we
  *  hand back to the page cannot describe the row differently. */
@@ -59,14 +60,14 @@ export default function NutritionPage() {
       // athlete who reported a sore knee without weighing in still counts.
       supabase.from("daily_check_ins").select("check_in_date, pain_map").eq("user_id", user.id).order("check_in_date", { ascending: false }).limit(1).maybeSingle(),
       supabase.from("programs").select("goal_type").eq("user_id", user.id).eq("status", "active").maybeSingle(),
-      supabase.from("training_logs").select("log_date, total_minutes").eq("user_id", user.id).gte("log_date", since),
+      supabase.from("training_logs").select("log_date, total_minutes, duration_seconds, session_type").eq("user_id", user.id).gte("log_date", since),
       // Split into stable and recently-added columns. Naming a column the
       // database hasn't got yet makes PostgREST reject the WHOLE row, and this
       // page then renders an athlete with no height, no weight and no plan —
       // which is exactly what happened when 0066-0069 hadn't been applied.
       selectProfile(supabase, user.id,
         "height_cm, birth_year, sex, activity_level, diet_goal, diet_pattern, diet_avoid, meals_per_day, diet_notes, meal_plan_seed, sport",
-        ["meal_plan_swaps", "meal_plan_recent", "meal_plan_starred"]),
+        ["meal_plan_swaps", "meal_plan_recent", "meal_plan_starred", "calorie_target", "protein_target", "carbs_target", "fats_target"]),
       supabase.from("body_logs").select("log_date, weight_kg").eq("user_id", user.id)
         .not("weight_kg", "is", null).order("log_date", { ascending: false }).limit(1),
     ]);
@@ -93,17 +94,18 @@ export default function NutritionPage() {
       diet_pattern?: string; diet_avoid?: string[]; meals_per_day?: number; diet_notes?: string;
       meal_plan_seed?: number | null; meal_plan_swaps?: Record<string, string> | null;
       meal_plan_recent?: string[] | null; meal_plan_starred?: string[] | null; sport?: string;
+      calorie_target?: number | null; protein_target?: number | null; carbs_target?: number | null; fats_target?: number | null;
     } | null;
     return {
       sub: (sub ?? null) as Subscription | null,
       log,
       weightKg: bodyweight?.kg ?? null,
       goal: (program?.goal_type ?? null) as GoalType | null,
-      avgMinutes: avgDailyMinutes((training ?? []) as Pick<TrainingLog, "total_minutes">[]),
+      avgMinutes: avgDailyMinutes((training ?? []) as Pick<TrainingLog, "total_minutes" | "duration_seconds" | "session_type">[]),
       // How much of the window is actually backed by a log. Below a handful of
       // days we trust what they told us about their week over what we measured,
       // so a quiet fortnight doesn't quietly cut their calories.
-      trainingDays: (training ?? []).length,
+      trainingDays: ((training ?? []) as Pick<TrainingLog, "session_type">[]).filter(isActivity).length,
       injured,
       // Seed the planner from the profile so stats survive between visits.
       stats: {
@@ -134,6 +136,12 @@ export default function NutritionPage() {
       // Frames the verdict in their sport's terms — carbs for a runner, protein
       // for a lifter, rather than one neutral sentence for everyone.
       sport: sportProfile(pr?.sport as string | undefined),
+      customTargets: {
+        calories: pr?.calorie_target ?? null,
+        protein: pr?.protein_target ?? null,
+        carbs: pr?.carbs_target ?? null,
+        fats: pr?.fats_target ?? null,
+      },
     };
   }, [user.id], `nutrition:${user.id}`);
 
@@ -200,7 +208,7 @@ export default function NutritionPage() {
   // and sex for the meal planner and then handed the targets card nothing but a
   // weight — so the card was estimating from scratch beside a planner that had
   // the real numbers.
-  const targets = nutritionTargets({
+  const automaticTargets = nutritionTargets({
     weightKg: data?.weightKg ?? null,
     goal: data?.goal ?? null, // sport goal — sets the macro split
     avgTrainingMinutes: data?.avgMinutes ?? 0,
@@ -212,6 +220,25 @@ export default function NutritionPage() {
     trainingDaysLogged: data?.trainingDays ?? 0,
     injured: data?.injured ?? false,
   });
+  const custom = data?.customTargets;
+  const targets: NutritionTargets | null = automaticTargets
+    ? {
+        ...automaticTargets,
+        calories: custom?.calories ?? automaticTargets.calories,
+        protein: custom?.protein ?? automaticTargets.protein,
+        carbs: custom?.carbs ?? automaticTargets.carbs,
+        fats: custom?.fats ?? automaticTargets.fats,
+        rationale: [custom?.calories, custom?.protein, custom?.carbs, custom?.fats].some((value) => value != null)
+          ? "Your custom targets. Reset any field to the coach target whenever you want."
+          : automaticTargets.rationale,
+      }
+    : custom?.calories != null && custom.protein != null && custom.carbs != null && custom.fats != null
+      ? {
+          calories: custom.calories, protein: custom.protein, carbs: custom.carbs, fats: custom.fats,
+          water_ml: 3000, rationale: "Your custom targets.", basis: "estimated", bmr: null, tdee: null,
+          missing: ["weight", "height", "age", "sex"], guard: null,
+        }
+      : null;
   return (
     <NutritionTabs
       userId={user.id}
@@ -223,6 +250,7 @@ export default function NutritionPage() {
       today={today}
       log={data?.log}
       targets={targets}
+      coachTargets={automaticTargets}
       stats={data?.stats ?? null}
       prefs={data?.prefs ?? null}
       dietNotes={data?.dietNotes ?? null}
@@ -312,9 +340,9 @@ function listWords(words: string[]): string {
   return `${words.slice(0, -1).join(", ")} and ${words[words.length - 1]}`;
 }
 
-function avgDailyMinutes(rows: Pick<TrainingLog, "total_minutes">[]): number {
+function avgDailyMinutes(rows: Pick<TrainingLog, "total_minutes" | "duration_seconds" | "session_type">[]): number {
   if (!rows.length) return 0;
-  const total = rows.reduce((s, r) => s + (r.total_minutes ?? 0), 0);
+  const total = rows.filter(isActivity).reduce((s, r) => s + durationMinutes(r), 0);
   return Math.round(total / 14); // spread across the 14-day window
 }
 
@@ -329,14 +357,17 @@ const NUTRITION_TABS = [
   { id: "plan" as const, label: "Meal plan", icon: "clipboard" as IconName },
 ];
 
-function NutritionTabs({ userId, today, log, targets, stats, prefs, dietNotes, mealSeed, mealSwaps, mealRecent, mealStarred, sport, context, onSaved }: {
-  userId: string; today: string; log: any; targets: NutritionTargets | null;
+function NutritionTabs({ userId, today, log, targets, coachTargets, stats, prefs, dietNotes, mealSeed, mealSwaps, mealRecent, mealStarred, sport, context, onSaved }: {
+  userId: string; today: string; log: any; targets: NutritionTargets | null; coachTargets: NutritionTargets | null;
   onSaved: (row: NutritionRow) => void;
   stats: Partial<BodyStats> | null; prefs: Partial<MealPrefs> | null; dietNotes: string | null;
   mealSeed: number | null; mealSwaps: Record<string, string>; mealRecent: string[]; mealStarred: string[];
   sport: SportProfile; context: TargetContext;
 }) {
   const [tab, setTab] = useState<"today" | "plan">("today");
+  const plannerTargets = targets ? {
+    calories: targets.calories, protein: targets.protein, carbs: targets.carbs, fats: targets.fats,
+  } : null;
   return (
     <div className="mx-auto max-w-2xl space-y-5">
       <Header />
@@ -352,6 +383,7 @@ function NutritionTabs({ userId, today, log, targets, stats, prefs, dietNotes, m
           today={today}
           initial={log}
           targets={targets}
+          coachTargets={coachTargets}
           stats={stats}
           prefs={prefs}
           dietNotes={dietNotes}
@@ -365,7 +397,7 @@ function NutritionTabs({ userId, today, log, targets, stats, prefs, dietNotes, m
           onSaved={onSaved}
         />
       ) : (
-        <MealPlanner userId={userId} initial={stats} initialPrefs={prefs} initialNotes={dietNotes} initialSeed={mealSeed} initialSwaps={mealSwaps} initialRecent={mealRecent} initialStarred={mealStarred} context={context} />
+        <MealPlanner userId={userId} initial={stats} initialPrefs={prefs} initialNotes={dietNotes} initialSeed={mealSeed} initialSwaps={mealSwaps} initialRecent={mealRecent} initialStarred={mealStarred} context={context} targetOverrides={plannerTargets} />
       )}
       </TabPanel>
     </div>
@@ -382,8 +414,8 @@ function Header() {
   );
 }
 
-function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietNotes, mealSeed, mealSwaps, mealRecent, mealStarred, sport, context, onAddStats, onSaved }: {
-  userId: string; today: string; initial: any; targets: NutritionTargets | null;
+function NutritionTracker({ userId, today, initial, targets, coachTargets, stats, prefs, dietNotes, mealSeed, mealSwaps, mealRecent, mealStarred, sport, context, onAddStats, onSaved }: {
+  userId: string; today: string; initial: any; targets: NutritionTargets | null; coachTargets: NutritionTargets | null;
   /** Takes the row we just wrote, so a remount reads it without a refetch. */
   onSaved: (row: NutritionRow) => void;
   stats: Partial<BodyStats> | null; prefs: Partial<MealPrefs> | null; dietNotes: string | null;
@@ -402,6 +434,11 @@ function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietN
   const [calories, setCalories] = useState<string>(
     initial?.daily_calorie_target?.toString() ?? (targets ? String(targets.calories) : "")
   );
+  const [proteinTarget, setProteinTarget] = useState<string>(targets ? String(targets.protein) : "");
+  const [carbsTarget, setCarbsTarget] = useState<string>(targets ? String(targets.carbs) : "");
+  const [fatsTarget, setFatsTarget] = useState<string>(targets ? String(targets.fats) : "");
+  const [targetsDirty, setTargetsDirty] = useState(false);
+  const [resetTargets, setResetTargets] = useState(false);
   const [water, setWater] = useState<number>(initial?.daily_water_intake_ml ?? 0);
   /**
    * Today's food, itemised — and the ONLY record of what was eaten.
@@ -436,7 +473,7 @@ function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietN
   const totals = logTotals(entries);
   const eaten = totals.kcal;
 
-  useEffect(() => { setSaved(false); }, [calories, water, entries]);
+  useEffect(() => { setSaved(false); }, [calories, proteinTarget, carbsTarget, fatsTarget, water, entries]);
 
   // macroKcal used to be here, feeding a second 4xl headline number that
   // competed with the calorie one. Both claimed to be "today", and they
@@ -451,8 +488,15 @@ function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietN
    * 2,400 in the box and watch the bar keep filling towards the computed 2,900.
    */
   const targetKcal = Number(calories) || targets?.calories || 0;
+  const displayTargets = targets ? {
+    ...targets,
+    calories: targetKcal,
+    protein: Number(proteinTarget) || targets.protein,
+    carbs: Number(carbsTarget) || targets.carbs,
+    fats: Number(fatsTarget) || targets.fats,
+  } : null;
 
-  const verdict = fuelVerdict(targets, eaten, water, sport);
+  const verdict = fuelVerdict(displayTargets, eaten, water, sport);
 
   /**
    * Adopt the computed calorie target as your own.
@@ -465,8 +509,13 @@ function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietN
    * hadn't touched. `macros` means eaten, and only eaten.
    */
   function applyTargets() {
-    if (!targets) return;
-    setCalories(String(targets.calories));
+    if (!coachTargets) return;
+    setCalories(String(coachTargets.calories));
+    setProteinTarget(String(coachTargets.protein));
+    setCarbsTarget(String(coachTargets.carbs));
+    setFatsTarget(String(coachTargets.fats));
+    setTargetsDirty(false);
+    setResetTargets(true);
   }
 
   /**
@@ -559,7 +608,7 @@ function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietN
       setSaved(true);
       // Home reads this day from its own query and its own cache key, and it is
       // not on screen — dropping it is the whole fix there.
-      invalidate(`home:${userId}`);
+      invalidate();
       /**
        * HAND THE PAGE THE ROW WE JUST WROTE, rather than making it go and read
        * it back.
@@ -588,7 +637,30 @@ function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietN
     setSaving(false);
   }
 
-  const save = () => persist();
+  const save = async () => {
+    setSaving(true);
+    if (targetsDirty || resetTargets) {
+      const targetValues = resetTargets ? {
+        calorie_target: null, protein_target: null, carbs_target: null, fats_target: null,
+      } : {
+        calorie_target: targetKcal || null,
+        protein_target: Number(proteinTarget) || null,
+        carbs_target: Number(carbsTarget) || null,
+        fats_target: Number(fatsTarget) || null,
+      };
+      const { error: targetError } = await createClient().from("profiles").update(targetValues).eq("id", userId);
+      if (targetError) {
+        setError(`Could not save targets: ${targetError.message}`);
+        setSaving(false);
+        return;
+      }
+      setTargetsDirty(false);
+      setResetTargets(false);
+    }
+    invalidate("nutrition:");
+    invalidate("coach:");
+    await persist();
+  };
 
   return (
     // Header and width live on the tab shell now, so they don't render twice.
@@ -620,12 +692,12 @@ function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietN
             instruction that matters was below the fold. In this state the
             prompt IS the hero. The rings come back the moment they can say
             something. */}
-        {targets ? (
+        {displayTargets ? (
           <FuelRings
             eaten={eaten}
             targetKcal={targetKcal}
             macros={{ protein: totals.protein, carbs: totals.carbs, fats: totals.fats }}
-            targets={targets}
+            targets={displayTargets}
           />
         ) : null}
 
@@ -676,7 +748,15 @@ function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietN
             goal, neither of which depends on a weight. */}
         <QuickCalories
           hidden={!targets}
-          onAdd={(kc) => applyEntries(addQuickCalories(entries, kc))}
+          onAdd={(item) => applyEntries(addEntry(entries, {
+            kcal: item.kcal,
+            protein: item.protein ?? 0,
+            carbs: item.carbs ?? 0,
+            fats: item.fats ?? 0,
+            label: item.label ?? "Quick add",
+            notes: item.notes,
+            source: "manual",
+          }))}
         />
 
         {/* Water rides along the bottom as a slim bar. It is one number and two
@@ -752,8 +832,13 @@ function NutritionTracker({ userId, today, initial, targets, stats, prefs, dietN
           <div className="space-y-3">
             <label className="block">
               <span className="field-label">Daily calorie target</span>
-              <input type="number" inputMode="numeric" value={calories} onChange={(e) => setCalories(e.target.value)} placeholder="e.g. 2800" className="field" />
+              <input type="number" inputMode="numeric" value={calories} onChange={(e) => { setCalories(e.target.value); setTargetsDirty(true); setResetTargets(false); }} placeholder="e.g. 2800" className="field" />
             </label>
+            <div className="grid grid-cols-3 gap-2">
+              <label><span className="field-label">Protein target</span><input type="number" min={0} value={proteinTarget} onChange={(e) => { setProteinTarget(e.target.value); setTargetsDirty(true); setResetTargets(false); }} className="field" placeholder="g" /></label>
+              <label><span className="field-label">Carb target</span><input type="number" min={0} value={carbsTarget} onChange={(e) => { setCarbsTarget(e.target.value); setTargetsDirty(true); setResetTargets(false); }} className="field" placeholder="g" /></label>
+              <label><span className="field-label">Fat target</span><input type="number" min={0} value={fatsTarget} onChange={(e) => { setFatsTarget(e.target.value); setTargetsDirty(true); setResetTargets(false); }} className="field" placeholder="g" /></label>
+            </div>
             {/* THE "MACROS EATEN TODAY" BOXES ARE GONE, and their absence is
                 the point. Three number inputs sat here for correcting the day
                 by hand, which existed only because the day had no itemised

@@ -4,6 +4,7 @@ import { splitFor, buildHypertrophyProgram, groupOf, isCompound, regionOfMovemen
 import { parseConstraints, EMPTY_CONSTRAINTS } from "./constraints";
 import { buildProgram } from "./coach";
 import { weeklyMuscleVolume, auditWeek, LANDMARKS } from "./muscle-volume";
+import { exerciseMeasure } from "./exercise-measure";
 
 const gymPlan = (over: Partial<Parameters<typeof buildProgram>[0]> = {}) =>
   buildProgram({ goal: "strength", painMap: {}, sport: "gym", focus: "aesthetics", daysPerWeek: 3, ...over });
@@ -11,6 +12,16 @@ const gymPlan = (over: Partial<Parameters<typeof buildProgram>[0]> = {}) =>
 const allDrills = (p: ReturnType<typeof buildProgram>) =>
   p.weeks.flatMap((w) => w.sessions.flatMap((s) => s.drills));
 const allNames = (p: ReturnType<typeof buildProgram>) => allDrills(p).map((d) => d.name.toLowerCase());
+
+test("static holds in gym plans are prescribed and progressed as time", () => {
+  const plans = [2, 3, 4, 5, 6].map((daysPerWeek) => gymPlan({ daysPerWeek }));
+  const holds = plans.flatMap(allDrills).filter((d) => exerciseMeasure(d.name) === "seconds");
+  assert.ok(holds.length > 0, "the audit did not reach a static hold");
+  for (const hold of holds) {
+    assert.match(hold.prescription ?? "", /^\d+ × \d+s$/, hold.name);
+    assert.doesNotMatch(`${hold.progression} ${hold.intensity}`, /weight|reps? in the tank/i, hold.name);
+  }
+});
 
 // --- split selection ---------------------------------------------------------
 
@@ -135,7 +146,7 @@ test("reps stay in the hypertrophy range all block", () => {
   // and its `reps` field carries minutes or seconds rather than repetitions —
   // "1 × 20 minutes" is not a set of twenty. Asserting a rep range over it
   // would be checking the wrong unit, not catching a bad prescription.
-  for (const d of allDrills(gymPlan()).filter((d) => d.slot !== "conditioning")) {
+  for (const d of allDrills(gymPlan()).filter((d) => d.slot !== "conditioning" && exerciseMeasure(d.name, d.prescription) === "reps")) {
     assert.ok(d.reps >= 6 && d.reps <= 15, `${d.name} prescribed ${d.reps} reps`);
   }
 });

@@ -176,6 +176,15 @@ export default {
 
   // Cron triggers (configured in wrangler.toml) → reminder emails + storage cleanup.
   async scheduled(event: ScheduledController, env: Env): Promise<void> {
+    // The evening trigger has one job: remind an athlete who has neither logged
+    // training nor an explicit rest day. Running that at 08:00 would call a
+    // perfectly normal day "missing" before it had started.
+    if (event.cron === "0 19 * * *") {
+      try { await sendWorkoutReminders(env); } catch (e) { console.error("cron job failed:", String(e)); }
+      try { await emailNotifications(env); } catch (e) { console.error("cron job failed:", String(e)); }
+      return;
+    }
+
     const isMonday = new Date().getUTCDay() === 1;
     // Each job is isolated: a failure in one must not stop the others. Before
     // this, one bad email address could abort the whole run, and the retention
@@ -186,9 +195,10 @@ export default {
       () => approveDueCommissions(env),
       () => sendDailyReminders(env),
       () => sendDeadlineReminders(env),
+      () => createTrialEndingReminders(env),
+      ...(isMonday ? [() => sendWeeklySummaries(env)] : []),
       () => purgeExpiredVideos(env),
       () => emailNotifications(env),
-      ...(isMonday ? [() => sendWeeklySummaries(env)] : []),
     ]) {
       try { await job(); } catch (e) { console.error("cron job failed:", String(e)); }
     }
@@ -429,7 +439,7 @@ function overBudget(state: BudgetState): Response {
 // nobody is watching a spinner and the budget can be what the work actually
 // needs. Callers pass their own client-side timeout to match.
 // Bump on every paste into the Cloudflare dashboard. GET /health reports it.
-const WORKER_VERSION = "2026-08-14.2";
+const WORKER_VERSION = "2026-08-17.1";
 
 const CHAIN_BUDGET_MS = 55_000;
 /**
@@ -1074,23 +1084,54 @@ async function coachChat(req: Request, env: Env): Promise<Response> {
   if (gate) return gate;
   const budget = await checkBudget(env, u.id);
   if (!budget.allowed) return overBudget(budget);
-  const body = (await req.json()) as { question: string; context: Record<string, unknown> };
-  const question = (body.question ?? "").slice(0, 600); // cap input for speed + abuse control
+  const body = (await req.json()) as {
+    question?: unknown;
+    context?: Record<string, unknown>;
+    briefing?: unknown;
+    history?: unknown;
+  };
+  const question = String(body.question ?? "").trim().slice(0, 600); // cap input for speed + abuse control
   const context = body.context;
   if (!question) return json({ error: "question required" }, 400);
   const sys =
-    "You are the athlete's personal football S&C coach and physio. Answer directly and practically " +
-    "in 2–4 sentences, grounded in their context. Explain the 'why' behind drills, respect any pain by " +
-    "favouring lower-impact options, and advise seeing a physio for sharp/persistent pain. No diagnosis.";
-  const ctx =
+    "You are this athlete's personal strength & conditioning, recovery and nutrition coach. " +
+    "Use their full briefing and the recent conversation before answering; a follow-up refers to that conversation unless they clearly change topic. " +
+    "Answer directly and practically in 2–6 sentences, quote their own measurements or targets where useful, and never ask again for a fact present in the briefing. " +
+    "If a value is explicitly missing, say so rather than inventing it. Explain the why behind drills, respect pain with lower-impact options, " +
+    "and advise seeing a physio for sharp or persistent pain. Do not diagnose.";
+  const fallback =
     `Goal: ${context?.goal ?? "general"}\nSore areas: ${(context?.soreAreas as string[])?.join(", ") || "none"}\n` +
-    `Readiness: ${context?.readinessStatus ?? "unknown"}\nPlan drills: ${(context?.programDrills as string[])?.join(", ") || "none"}`;
+    `Readiness: ${context?.readinessStatus ?? "unknown"}\nPlan drills: ${(context?.programDrills as string[])?.join(", ") || "none"}\n` +
+    `Bodyweight: ${context?.bodyweightKg ?? "not recorded"}kg\nHeight: ${context?.heightCm ?? "not recorded"}cm\n` +
+    `Nutrition targets: ${context?.calorieTarget ?? "not recorded"} kcal, ${context?.proteinTarget ?? "not recorded"}g protein`;
+  // The page already derives the authoritative numbers. The production route
+  // used to discard this field and rebuild a four-line context, which is why
+  // it asked athletes for height and weight the page had just sent it.
+  const ctx = typeof body.briefing === "string" && body.briefing.trim()
+    ? body.briefing.trim().slice(0, 8_000)
+    : fallback;
+  const history = coachHistory(body.history);
   const { text, model } = await meteredComplete(env, u.id, {
     system: sys,
-    user: `Context:\n${ctx}\n\nQuestion: ${question}`,
-    maxTokens: 320,
+    user:
+      `ATHLETE BRIEFING (current source of truth):\n${ctx}\n\n` +
+      `RECENT CONVERSATION:\n${history}\n\nCURRENT QUESTION:\n${question}`,
+    maxTokens: 650,
+    validate: (answer) => answer.trim().length > 20,
   });
   return json({ answer: text, model });
+}
+
+function coachHistory(raw: unknown): string {
+  if (!Array.isArray(raw)) return "No previous turns.";
+  const turns = raw.slice(-12).flatMap((turn) => {
+    if (!turn || typeof turn !== "object") return [];
+    const value = turn as { role?: unknown; content?: unknown };
+    if (value.role !== "user" && value.role !== "assistant") return [];
+    const content = String(value.content ?? "").trim().slice(0, 800);
+    return content ? [`${value.role === "user" ? "Athlete" : "Coach"}: ${content}`] : [];
+  });
+  return turns.length ? turns.join("\n").slice(-6_000) : "No previous turns.";
 }
 
 
@@ -1745,13 +1786,29 @@ async function injuryPlan(req: Request, env: Env): Promise<Response> {
   const budget = await checkBudget(env, u.id);
   if (!budget.allowed) return overBudget(budget);
 
-  const { description, area, weeks, sport } = (await req.json()) as {
+  const { description, area, weeks, sport, athlete } = (await req.json()) as {
     description?: string; area?: string; weeks?: number; sport?: string;
+    athlete?: {
+      age?: number | null; sex?: string | null; trainingFocus?: string | null;
+      trainingExperienceYears?: number | null; currentGoal?: string | null;
+      inSeason?: boolean | null; fatigue?: number | null; sleepQuality?: number | null;
+      currentPain?: Record<string, number>; programExercises?: string[];
+    };
   };
   const desc = (description ?? "").trim().slice(0, 600);
   if (desc.length < 10) return json({ error: "Tell me a bit more about it — what hurts, when, and for how long." }, 400);
   const duration = Math.max(0, Math.min(520, Number(weeks) || 0));
   const chronic = duration >= 6;
+  const athleteBrief = [
+    `Age: ${athlete?.age ?? "not recorded"}`,
+    `Sex: ${athlete?.sex ?? "not recorded"}`,
+    `Training experience: ${athlete?.trainingExperienceYears ?? "not recorded"} years`,
+    `Training focus: ${athlete?.trainingFocus ?? "not recorded"}`,
+    `Current programme goal: ${athlete?.currentGoal ?? "none"}${athlete?.inSeason == null ? "" : athlete.inSeason ? ", in season" : ", out of season"}`,
+    `Latest recovery: fatigue ${athlete?.fatigue ?? "not recorded"}/10, sleep ${athlete?.sleepQuality ?? "not recorded"}/10`,
+    `Current pain map: ${Object.entries(athlete?.currentPain ?? {}).map(([name, value]) => `${name} ${value}/10`).join(", ") || "none recorded"}`,
+    `Current programme exercises: ${(athlete?.programExercises ?? []).slice(0, 40).join(", ") || "none available"}`,
+  ].join("\n");
 
   const sys =
     "You are an experienced strength & conditioning coach writing a graded loading plan for an athlete with a niggle. " +
@@ -1774,7 +1831,8 @@ async function injuryPlan(req: Request, env: Env): Promise<Response> {
     system: sys,
     user:
       `Sport: ${sport || "general"}\nArea: ${area || "unspecified"}\n` +
-      `How long: ${duration ? `${duration} week(s)` : "not stated"}\nDescription: ${desc}`,
+      `How long: ${duration ? `${duration} week(s)` : "not stated"}\nDescription: ${desc}\n\n` +
+      `ATHLETE CONTEXT ALREADY ON FILE:\n${athleteBrief}`,
     // 4 stages x 3 exercises, each with a name, dose and cue, plus red flags —
     // that runs past 1400 tokens on a verbose model, and a truncated response
     // fails parseInjuryPlan, which reads as "the AI returned nothing usable"
@@ -2591,6 +2649,8 @@ async function upsertSub(env: Env, sub: any): Promise<void> {
       stripe_customer_id: sub.customer,
       stripe_subscription_id: sub.id,
       stripe_price_id: item?.price?.id ?? null,
+      stripe_status: s ?? null,
+      trial_end: sub.trial_end ? new Date(sub.trial_end * 1000).toISOString() : null,
       current_period_end: (() => {
         const cpe = sub.current_period_end ?? item?.current_period_end;
         return cpe ? new Date(cpe * 1000).toISOString() : null;
@@ -2819,104 +2879,386 @@ async function approveDueCommissions(env: Env): Promise<void> {
   if (n > 0) console.log(`commission: approved ${n} line(s) for payout`);
 }
 
-// --- Notification emails -----------------------------------------------------
+// --- Notifications -----------------------------------------------------------
 //
-// A nudge for anything still unread. Only unread ones: if they've already seen
-// it in the app, emailing about it is nagging rather than notifying. Marked as
-// emailed either way so nobody is told twice.
+// Scheduled jobs create one row. That row is the source for both the in-app
+// banner and (when the athlete's matching switch is on) email. One idempotency
+// key prevents a retried cron, a second Worker instance or a manual trigger
+// from telling somebody twice.
+
+type EmailCategory = "none" | "checkin" | "workout" | "weekly" | "milestone" | "program" | "essential";
+
+interface ReminderProfile {
+  id: string;
+  health_data_consent_at: string | null;
+  in_app_training_reminders: boolean;
+  email_weekly_summary: boolean;
+  email_checkin_reminders: boolean;
+  email_workout_reminders: boolean;
+  email_milestones: boolean;
+  email_program_reminders: boolean;
+}
+
+interface NotificationInput {
+  user_id: string;
+  kind: string;
+  title: string;
+  body: string;
+  href: string;
+  dedupe_key: string;
+  show_in_app: boolean;
+  email_category: EmailCategory;
+}
+
+async function reminderProfiles(env: Env): Promise<Map<string, ReminderProfile>> {
+  const r = await supa(env,
+    "profiles?select=id,health_data_consent_at,in_app_training_reminders,email_weekly_summary,email_checkin_reminders," +
+    "email_workout_reminders,email_milestones,email_program_reminders");
+  if (!r.ok) throw new Error(`profiles for reminders: ${r.status}`);
+  const rows = (await r.json()) as ReminderProfile[];
+  return new Map((rows ?? []).map((p) => [p.id, p]));
+}
+
+function emailEnabled(profile: ReminderProfile, category: EmailCategory): boolean {
+  if (category === "essential") return true;
+  if (category === "checkin") return profile.email_checkin_reminders !== false;
+  if (category === "workout") return profile.email_workout_reminders !== false;
+  if (category === "weekly") return profile.email_weekly_summary !== false;
+  if (category === "milestone") return profile.email_milestones !== false;
+  if (category === "program") return profile.email_program_reminders !== false;
+  return false;
+}
+
+function wants(profile: ReminderProfile | undefined, category: EmailCategory): profile is ReminderProfile {
+  return !!profile && !!profile.health_data_consent_at &&
+    (profile.in_app_training_reminders !== false || emailEnabled(profile, category));
+}
+
+async function queueNotifications(env: Env, rows: NotificationInput[]): Promise<boolean> {
+  if (!rows.length) return true;
+  const r = await supa(env, "notifications?on_conflict=user_id,dedupe_key", {
+    method: "POST",
+    headers: { Prefer: "resolution=ignore-duplicates,return=minimal" },
+    body: JSON.stringify(rows),
+  });
+  if (!r.ok) console.error(`queue notifications failed (${r.status}): ${await r.text()}`);
+  return r.ok;
+}
+
+async function sendDailyReminders(env: Env): Promise<void> {
+  const today = new Date().toISOString().slice(0, 10);
+  const [doneResponse, profiles] = await Promise.all([
+    supa(env, `daily_check_ins?check_in_date=eq.${today}&select=user_id`),
+    reminderProfiles(env),
+  ]);
+  if (!doneResponse.ok) throw new Error(`daily check-ins for reminders: ${doneResponse.status}`);
+  const done = (await doneResponse.json()) as { user_id: string }[];
+  const checked = new Set((done ?? []).map((row) => row.user_id));
+  const rows: NotificationInput[] = [];
+  for (const profile of profiles.values()) {
+    if (checked.has(profile.id) || !wants(profile, "checkin")) continue;
+    rows.push({
+      user_id: profile.id,
+      kind: "check_in_reminder",
+      title: "Your daily check-in",
+      body: "Log sleep, fatigue and soreness to refresh today's readiness score.",
+      href: "/journal",
+      dedupe_key: `check-in:${today}`,
+      show_in_app: profile.in_app_training_reminders !== false,
+      email_category: "checkin",
+    });
+  }
+  await queueNotifications(env, rows);
+}
+
+async function sendWorkoutReminders(env: Env): Promise<void> {
+  const today = new Date().toISOString().slice(0, 10);
+  const [programResponse, logResponse, profiles] = await Promise.all([
+    supa(env, "programs?status=eq.active&select=user_id"),
+    supa(env, `training_logs?log_date=eq.${today}&select=user_id`),
+    reminderProfiles(env),
+  ]);
+  if (!programResponse.ok || !logResponse.ok) throw new Error("workout reminder inputs unavailable");
+  const active = new Set(((await programResponse.json()) as { user_id: string }[]).map((row) => row.user_id));
+  const logged = new Set(((await logResponse.json()) as { user_id: string }[]).map((row) => row.user_id));
+  const rows: NotificationInput[] = [];
+  for (const userId of active) {
+    const profile = profiles.get(userId);
+    if (logged.has(userId) || !wants(profile, "workout")) continue;
+    rows.push({
+      user_id: userId,
+      kind: "workout_reminder",
+      title: "Log today's training or rest day",
+      body: "A quick entry keeps training load, streaks and coach advice accurate.",
+      href: "/journal",
+      dedupe_key: `workout:${today}`,
+      show_in_app: profile.in_app_training_reminders !== false,
+      email_category: "workout",
+    });
+  }
+  await queueNotifications(env, rows);
+}
+
+async function sendDeadlineReminders(env: Env): Promise<void> {
+  const today = new Date().toISOString().slice(0, 10);
+  const in7 = new Date(Date.now() + 7 * 86400_000).toISOString().slice(0, 10);
+  const [programResponse, profiles] = await Promise.all([
+    supa(env,
+      `programs?status=eq.active&target_date=gte.${today}&target_date=lte.${in7}` +
+      "&select=id,user_id,goal_type,target_date,plan,completed_sessions"),
+    reminderProfiles(env),
+  ]);
+  if (!programResponse.ok) throw new Error(`program deadlines: ${programResponse.status}`);
+  const programs = (await programResponse.json()) as {
+    id: string; user_id: string; goal_type: string; target_date: string;
+    plan: { weeks?: { sessions?: unknown[] }[] } | null; completed_sessions: string[] | null;
+  }[];
+  const rows: NotificationInput[] = [];
+  for (const program of programs ?? []) {
+    const days = Math.max(0, Math.round((new Date(`${program.target_date}T00:00:00Z`).getTime() - new Date(`${today}T00:00:00Z`).getTime()) / 86_400_000));
+    if (![7, 3, 1, 0].includes(days)) continue;
+    const profile = profiles.get(program.user_id);
+    if (!wants(profile, "program")) continue;
+    const total = (program.plan?.weeks ?? []).reduce((sum, week) => sum + (week.sessions?.length ?? 0), 0);
+    const completed = program.completed_sessions?.length ?? 0;
+    const progress = total ? ` You're ${Math.round(completed / total * 100)}% through (${completed}/${total} sessions).` : "";
+    rows.push({
+      user_id: program.user_id,
+      kind: "program_deadline",
+      title: days === 0 ? `Target day: ${program.goal_type}` : `${days} day${days === 1 ? "" : "s"} to your ${program.goal_type} target`,
+      body: `${days === 0 ? "Your target date is today." : "Your target date is getting close."}${progress}`,
+      href: "/coach",
+      dedupe_key: `program-deadline:${program.id}:${program.target_date}:${days}`,
+      show_in_app: profile.in_app_training_reminders !== false,
+      email_category: "program",
+    });
+  }
+  await queueNotifications(env, rows);
+}
+
+async function sendWeeklySummaries(env: Env): Promise<void> {
+  const through = new Date().toISOString().slice(0, 10);
+  const weekAgo = new Date(Date.now() - 7 * 86400_000).toISOString().slice(0, 10);
+  const [checkResponse, trainingResponse, profiles] = await Promise.all([
+    supa(env, `daily_check_ins?check_in_date=gte.${weekAgo}&select=user_id`),
+    supa(env, `training_logs?log_date=gte.${weekAgo}&select=user_id,total_minutes,duration_seconds,session_type`),
+    reminderProfiles(env),
+  ]);
+  if (!checkResponse.ok || !trainingResponse.ok) throw new Error("weekly summary inputs unavailable");
+  const checks = (await checkResponse.json()) as { user_id: string }[];
+  const training = (await trainingResponse.json()) as {
+    user_id: string; total_minutes: number | null; duration_seconds: number | null; session_type: string | null;
+  }[];
+  const checkCount = new Map<string, number>();
+  const sessionCount = new Map<string, number>();
+  const minutes = new Map<string, number>();
+  for (const row of checks ?? []) checkCount.set(row.user_id, (checkCount.get(row.user_id) ?? 0) + 1);
+  for (const row of training ?? []) {
+    if (row.session_type === "rest_day") continue;
+    sessionCount.set(row.user_id, (sessionCount.get(row.user_id) ?? 0) + 1);
+    minutes.set(row.user_id, (minutes.get(row.user_id) ?? 0) + (row.duration_seconds != null ? row.duration_seconds / 60 : row.total_minutes ?? 0));
+  }
+  const active = new Set([...checkCount.keys(), ...sessionCount.keys()]);
+  const rows: NotificationInput[] = [];
+  for (const userId of active) {
+    const profile = profiles.get(userId);
+    if (!wants(profile, "weekly")) continue;
+    rows.push({
+      user_id: userId,
+      kind: "weekly_summary",
+      title: "Your week in training",
+      body: `${sessionCount.get(userId) ?? 0} sessions · ${Math.round(minutes.get(userId) ?? 0)} min · ${checkCount.get(userId) ?? 0}/7 check-ins.`,
+      href: "/dashboard",
+      dedupe_key: `weekly:${through}`,
+      show_in_app: profile.in_app_training_reminders !== false,
+      email_category: "weekly",
+    });
+  }
+  await queueNotifications(env, rows);
+}
+
+function gbDate(iso: string): string {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? iso : new Intl.DateTimeFormat("en-GB", {
+    day: "numeric", month: "long", year: "numeric", timeZone: "Europe/London",
+  }).format(date);
+}
+
+function money(amount: number | null | undefined, currency: string | null | undefined): string {
+  if (amount == null || !currency) return "the price shown at checkout";
+  try {
+    return new Intl.NumberFormat("en-GB", { style: "currency", currency: currency.toUpperCase() }).format(amount / 100);
+  } catch {
+    return `${(amount / 100).toFixed(2)} ${currency.toUpperCase()}`;
+  }
+}
+
+async function createTrialEndingReminders(env: Env): Promise<void> {
+  if (!env.STRIPE_SECRET_KEY) return;
+  const response = await supa(env,
+    "subscriptions?status=eq.active&cancel_at_period_end=eq.false&trial_reminder_created_at=is.null" +
+    "&or=(stripe_status.eq.trialing,stripe_status.is.null)" +
+    "&select=user_id,stripe_subscription_id,stripe_status,trial_end");
+  if (!response.ok) {
+    console.error(`trial reminder query failed (${response.status}) — is migration 0091 applied?`);
+    return;
+  }
+  const candidates = (await response.json()) as {
+    user_id: string; stripe_subscription_id: string | null; stripe_status: string | null; trial_end: string | null;
+  }[];
+  const now = Date.now();
+  const dueBy = now + 72 * 3600_000;
+
+  for (const candidate of candidates ?? []) {
+    if (!candidate.stripe_subscription_id) continue;
+    try {
+      // Retrieve once so the reminder contains the actual Stripe price and so
+      // rows created before migration 0091 gain trial_end/stripe_status.
+      const subscription = await stripe(env, `subscriptions/${candidate.stripe_subscription_id}`);
+      await upsertSub(env, subscription);
+      const trialEndSeconds = Number(subscription.trial_end) || 0;
+      const trialEndMs = trialEndSeconds * 1000;
+      if (subscription.status !== "trialing" || !trialEndSeconds || trialEndMs <= now || trialEndMs > dueBy || subscription.cancel_at_period_end) continue;
+
+      const item = subscription.items?.data?.[0];
+      const price = item?.price;
+      const amount = money(price?.unit_amount, price?.currency);
+      const interval = price?.recurring?.interval ? ` per ${price.recurring.interval}` : "";
+      const trialEnd = new Date(trialEndMs).toISOString();
+      const queued = await queueNotifications(env, [{
+        user_id: candidate.user_id,
+        kind: "trial_ending",
+        title: "Your free trial ends soon",
+        body: `Your trial ends on ${gbDate(trialEnd)}. Pro will charge ${amount}${interval} unless you cancel before then. Cancel from Profile → Cancel or pause.`,
+        href: "/profile",
+        dedupe_key: `trial-ending:${subscription.id}:${trialEndSeconds}`,
+        show_in_app: true,
+        email_category: "essential",
+      }]);
+      if (queued) {
+        await supa(env, `subscriptions?user_id=eq.${candidate.user_id}`, {
+          method: "PATCH",
+          headers: { Prefer: "return=minimal" },
+          body: JSON.stringify({ trial_reminder_created_at: new Date().toISOString() }),
+        });
+      }
+    } catch (error) {
+      console.error(`trial reminder failed for ${candidate.user_id}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+}
+
+// --- Notification email delivery --------------------------------------------
+
+interface EmailResult { ok: boolean; providerId?: string; error?: string }
+
+function escapeHtml(value: string): string {
+  return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;").replaceAll("'", "&#39;");
+}
+
+function appLink(env: Env, path: string): string {
+  return `${(env.APP_URL || "https://pocketathlete.com").replace(/\/$/, "")}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
+async function logEmail(env: Env, userId: string, type: string, result: EmailResult): Promise<void> {
+  await supa(env, "email_delivery_logs", {
+    method: "POST",
+    headers: { Prefer: "return=minimal" },
+    body: JSON.stringify({
+      user_id: userId,
+      email_type: type,
+      provider_id: result.providerId ?? null,
+      status: result.ok ? "sent" : "failed",
+      error_message: result.ok ? null : result.error ?? "Email provider did not accept the message",
+    }),
+  });
+}
 
 async function emailNotifications(env: Env): Promise<void> {
   if (!env.SUPABASE_SERVICE_ROLE_KEY) return;
-  const r = await svcRpc(env, "pending_notification_emails", {});
-  if (!r.ok) {
-    console.error(`pending_notification_emails unavailable (${r.status}) — is migration 0040 applied?`);
+  const response = await svcRpc(env, "pending_notification_emails", {});
+  if (!response.ok) {
+    console.error(`pending_notification_emails unavailable (${response.status}) — is migration 0091 applied?`);
     return;
   }
-  const rows = (await r.json()) as { id: string; user_id: string; title: string; body: string | null; href: string | null }[];
+  const rows = (await response.json()) as {
+    id: string; user_id: string; title: string; body: string | null; href: string | null;
+    kind: string; email_category: EmailCategory;
+  }[];
   if (!Array.isArray(rows) || rows.length === 0) return;
 
   const emails = await listUsers(env);
-  const sent: string[] = [];
-  for (const n of rows) {
-    const addr = emails.get(n.user_id);
-    // No address means nothing to send — but still mark it, or this row is
-    // retried every night forever.
-    if (addr) {
-      const link = `${env.APP_URL}${n.href ?? "/home"}`;
-      await email(env, addr, n.title,
-        `<p>${n.body ?? ""}</p><p><a href="${link}">Open PocketAthlete →</a></p>`);
+  const completed: string[] = [];
+  for (const notification of rows) {
+    const address = emails.get(notification.user_id);
+    if (!address) {
+      await logEmail(env, notification.user_id, `notification_${notification.kind}`, {
+        ok: false, error: "No email address on the auth user",
+      });
+      // Retrying cannot manufacture an address. Keep the audit row, but stop
+      // this notification occupying the queue forever.
+      completed.push(notification.id);
+      continue;
     }
-    sent.push(n.id);
+    const link = appLink(env, notification.href ?? "/home");
+    const settings = appLink(env, "/profile");
+    const body = escapeHtml(notification.body ?? "").replaceAll("\n", "<br>");
+    const result = await email(env, address, notification.title.replace(/[\r\n]+/g, " "),
+      `<h2>${escapeHtml(notification.title)}</h2><p>${body}</p>` +
+      `<p><a href="${link}">Open PocketAthlete →</a></p>` +
+      `<p style="color:#64748b;font-size:12px">${notification.email_category === "essential"
+        ? "This is an essential account or billing notice."
+        : `Change training email choices in <a href="${settings}">Notification settings</a>.`}</p>`);
+    await logEmail(env, notification.user_id, `notification_${notification.kind}`, result);
+    if (result.ok) completed.push(notification.id);
   }
-  if (sent.length) {
-    await supa(env, `notifications?id=in.(${sent.join(",")})`, {
+  if (completed.length) {
+    await supa(env, `notifications?id=in.(${completed.join(",")})`, {
       method: "PATCH",
       headers: { Prefer: "return=minimal" },
       body: JSON.stringify({ emailed_at: new Date().toISOString() }),
     });
   }
-  console.log(`notifications: emailed ${sent.length}`);
+  console.log(`notifications: emailed ${completed.length} of ${rows.length}`);
 }
 
-// --- Email reminders --------------------------------------------------------
-// Preferred sender is a Google Apps Script web app (free, uses your Gmail) when
-// GAS_EMAIL_URL is set; otherwise falls back to Resend if configured.
-async function email(env: Env, to: string, subject: string, html: string): Promise<void> {
-  if (env.GAS_EMAIL_URL) {
-    await fetch(env.GAS_EMAIL_URL, {
+// Preferred sender is a Google Apps Script web app (free, uses your Gmail)
+// when configured; Resend is the fallback. A provider's error status is not a
+// successful send — failed rows remain pending for the next cron run.
+async function email(env: Env, to: string, subject: string, html: string): Promise<EmailResult> {
+  try {
+    if (env.GAS_EMAIL_URL) {
+      const response = await fetch(env.GAS_EMAIL_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ secret: env.GAS_EMAIL_SECRET || "", to, subject, html, from: env.REMINDER_FROM || "" }),
+      });
+      const payload = await response.json().catch(() => ({})) as { id?: string; error?: string; message?: string };
+      return response.ok
+        ? { ok: true, providerId: payload.id }
+        : { ok: false, error: payload.error ?? payload.message ?? `Gmail sender returned ${response.status}` };
+    }
+    if (!env.RESEND_API_KEY) return { ok: false, error: "No email provider is configured" };
+    const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ secret: env.GAS_EMAIL_SECRET || "", to, subject, html, from: env.REMINDER_FROM || "" }),
+      headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ from: env.REMINDER_FROM || "PocketAthlete <noreply@example.com>", to, subject, html }),
     });
-    return;
+    const payload = await response.json().catch(() => ({})) as { id?: string; message?: string; name?: string };
+    return response.ok
+      ? { ok: true, providerId: payload.id }
+      : { ok: false, error: payload.message ?? payload.name ?? `Resend returned ${response.status}` };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) };
   }
-  if (!env.RESEND_API_KEY) return;
-  await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ from: env.REMINDER_FROM || "AI Coach <noreply@example.com>", to, subject, html }),
-  });
 }
+
 async function listUsers(env: Env): Promise<Map<string, string>> {
-  const r = await fetch(`${env.SUPABASE_URL}/auth/v1/admin/users?per_page=1000`, {
+  const response = await fetch(`${env.SUPABASE_URL}/auth/v1/admin/users?per_page=1000`, {
     headers: { apikey: env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}` },
   });
-  const j = (await r.json()) as { users?: { id: string; email: string }[] };
-  return new Map((j.users ?? []).map((u) => [u.id, u.email]));
-}
-async function sendDailyReminders(env: Env): Promise<void> {
-  const today = new Date().toISOString().slice(0, 10);
-  const done = (await (await supa(env, `daily_check_ins?check_in_date=eq.${today}&select=user_id`)).json()) as
-    { user_id: string }[] | null;
-  const checked = new Set((done ?? []).map((r) => r.user_id));
-  const emails = await listUsers(env);
-  for (const [id, addr] of emails) {
-    if (checked.has(id) || !addr) continue;
-    await email(env, addr, "Your daily check-in 🏃", `<p>Log how you feel today.</p><p><a href="${env.APP_URL}/journal">Check in →</a></p>`);
-  }
-}
-async function sendDeadlineReminders(env: Env): Promise<void> {
-  const today = new Date().toISOString().slice(0, 10);
-  const in7 = new Date(Date.now() + 7 * 86400_000).toISOString().slice(0, 10);
-  const progs = (await (await supa(env, `programs?status=eq.active&target_date=gte.${today}&target_date=lte.${in7}&select=user_id,goal_type,target_date`)).json()) as
-    { user_id: string; goal_type: string; target_date: string }[] | null;
-  const emails = await listUsers(env);
-  for (const p of progs ?? []) {
-    const addr = emails.get(p.user_id);
-    if (!addr) continue;
-    const days = Math.ceil((new Date(p.target_date).getTime() - Date.now()) / 86400_000);
-    await email(env, addr, `⏳ ${days} days left on your ${p.goal_type} goal`, `<p>${days} day(s) to your target. Finish strong — <a href="${env.APP_URL}/coach">open your program</a>.</p>`);
-  }
-}
-async function sendWeeklySummaries(env: Env): Promise<void> {
-  const weekAgo = new Date(Date.now() - 7 * 86400_000).toISOString().slice(0, 10);
-  const rows = (await (await supa(env, `daily_check_ins?check_in_date=gte.${weekAgo}&select=user_id`)).json()) as
-    { user_id: string }[] | null;
-  const counts = new Map<string, number>();
-  for (const r of rows ?? []) counts.set(r.user_id, (counts.get(r.user_id) ?? 0) + 1);
-  const emails = await listUsers(env);
-  for (const [id, n] of counts) {
-    const addr = emails.get(id);
-    if (addr) await email(env, addr, "Your weekly recovery summary 📊", `<p>You logged ${n} check-in(s) this week. <a href="${env.APP_URL}/dashboard">See your dashboard →</a></p>`);
-  }
+  if (!response.ok) throw new Error(`list auth users: ${response.status}`);
+  const payload = (await response.json()) as { users?: { id: string; email: string }[] };
+  return new Map((payload.users ?? []).filter((user) => !!user.email).map((user) => [user.id, user.email]));
 }

@@ -4,7 +4,7 @@ import { BackLink } from "@/components/BackLink";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/lib/auth";
-import { useAsync } from "@/lib/use-async";
+import { useAsync, invalidate } from "@/lib/use-async";
 import { MiniBars } from "@/components/MiniBars";
 import type { BodyLog } from "@/lib/types";
 import { daysAgoLocal, todayLocal } from "@/lib/day";
@@ -111,7 +111,7 @@ function BodyForm({ userId, today, onSaved }: { userId: string; today: string; o
 
     const { error: e } = await supabase.from("body_logs").upsert(payload, { onConflict: "user_id,log_date" });
     if (e) setError(e.message);
-    else { setSaved(true); setFile(null); onSaved(); }
+    else { setSaved(true); setFile(null); invalidate(); onSaved(); }
     setSaving(false);
   }
 

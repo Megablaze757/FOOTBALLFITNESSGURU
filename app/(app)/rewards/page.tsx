@@ -75,7 +75,7 @@ export default function RewardsPage() {
        * time 0066-0069 had not been applied: naming a column the database has
        * not got makes PostgREST reject the whole row.
        */
-      supabase.from("training_logs").select("log_date, intensity").eq("user_id", user.id).gte("log_date", since60),
+      supabase.from("training_logs").select("log_date, intensity, session_type").eq("user_id", user.id).gte("log_date", since60),
       supabase.from("programs").select("completed_sessions, status").eq("user_id", user.id),
       supabase.from("strength_benchmarks").select("id", head).eq("user_id", user.id),
       supabase.from("ai_plans").select("id", head).eq("user_id", user.id),
@@ -83,7 +83,7 @@ export default function RewardsPage() {
       // "days on your calorie target" costs nothing beyond two column names.
       supabase.from("nutrition_logs").select("log_date, calories_eaten, daily_calorie_target").eq("user_id", user.id).gte("log_date", since60),
       supabase.from("daily_check_ins").select("id", head).eq("user_id", user.id),
-      supabase.from("training_logs").select("id", head).eq("user_id", user.id),
+      supabase.from("training_logs").select("id", head).eq("user_id", user.id).or("session_type.is.null,session_type.neq.rest_day"),
       supabase.from("nutrition_logs").select("id", head).eq("user_id", user.id),
       /**
        * The same two things again, but as DATES rather than a total.
@@ -151,7 +151,7 @@ export default function RewardsPage() {
     });
 
     const checkDates = (checks.data ?? []).map((r) => r.check_in_date as string);
-    const trainDates = (training.data ?? []).map((r) => r.log_date as string);
+    const trainDates = (training.data ?? []).filter((r) => r.session_type !== "rest_day").map((r) => r.log_date as string);
     const nutriDates = (nutrition.data ?? []).map((r) => r.log_date as string);
     const progs = (programs.data ?? []) as { completed_sessions: string[] | null; status: string }[];
 

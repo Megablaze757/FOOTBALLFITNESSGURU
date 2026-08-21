@@ -30,6 +30,8 @@ export interface FoodEntry extends Macros {
    * twice — which a weekly plan does routinely.
    */
   ref?: string;
+  /** Optional detail for a manual quick add (portion, brand, context, etc.). */
+  notes?: string;
 }
 
 const ZERO: Macros = { kcal: 0, protein: 0, carbs: 0, fats: 0 };

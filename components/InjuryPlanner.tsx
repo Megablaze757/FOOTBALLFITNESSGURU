@@ -27,6 +27,19 @@ interface Plan {
   progressWhen: string;
 }
 
+interface InjuryAthleteContext {
+  age?: number | null;
+  sex?: string | null;
+  trainingFocus?: string | null;
+  trainingExperienceYears?: number | null;
+  currentGoal?: string | null;
+  inSeason?: boolean | null;
+  fatigue?: number | null;
+  sleepQuality?: number | null;
+  currentPain?: PainMap;
+  programExercises?: string[];
+}
+
 /**
  * The details that actually change a rehab plan, as taps.
  *
@@ -83,7 +96,7 @@ const DURATIONS = [
  * `description` are controlled by the page because it still needs both to match
  * the static protocols underneath.
  */
-export function InjuryPlanner({ sport, hurt, onHurtChange, description, onDescriptionChange, seeded }: {
+export function InjuryPlanner({ sport, hurt, onHurtChange, description, onDescriptionChange, seeded, athleteContext }: {
   sport: SportId;
   hurt: PainMap;
   onHurtChange: (next: PainMap) => void;
@@ -91,6 +104,8 @@ export function InjuryPlanner({ sport, hurt, onHurtChange, description, onDescri
   onDescriptionChange: (next: string) => void;
   /** True when the map was pre-filled from a recent check-in, so we can say so. */
   seeded?: boolean;
+  /** Relevant facts already recorded elsewhere; never make the athlete repeat them. */
+  athleteContext?: InjuryAthleteContext;
 }) {
   const [weeks, setWeeks] = useState<number | null>(null);
   const [plan, setPlan] = useState<Plan | null>(null);
@@ -189,7 +204,7 @@ export function InjuryPlanner({ sport, hurt, onHurtChange, description, onDescri
   async function buildPlan() {
     try {
       const res = await invokeAI<{ plan?: Plan; chronic?: boolean }>("injury-plan", {
-        description, area, weeks: weeks ?? 0, sport,
+        description, area, weeks: weeks ?? 0, sport, athlete: athleteContext,
       });
       if (!res?.plan) throw new Error("The AI returned nothing usable.");
       setPlan(res.plan);

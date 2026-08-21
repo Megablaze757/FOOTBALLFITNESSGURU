@@ -74,6 +74,25 @@ test("the best set of the day sets the day's estimate", () => {
   assert.equal(p.topLoad, 120);
 });
 
+test("warm-up sets never create a PR or inflate working volume", () => {
+  const logs = [log("2026-01-01", [{
+    name: "Squat",
+    sets: 1,
+    reps: 5,
+    load_kg: 60,
+    sets_detail: [
+      { reps: 1, load_kg: 100, isWarmup: true },
+      { reps: 5, load_kg: 60 },
+    ],
+  }])];
+  const [p] = exerciseSeries(logs, "Squat");
+  assert.equal(p.sets, 1);
+  assert.equal(p.reps, 5);
+  assert.equal(p.tonnage, 300);
+  assert.equal(p.topLoad, 60);
+  assert.equal(p.e1rm, estimate1RM(60, 5));
+});
+
 // --- series ------------------------------------------------------------------
 
 test("a day's sets are summed and the days come back in order", () => {
@@ -101,6 +120,21 @@ test("loadless work still tracks reps, and offers only that metric", () => {
   assert.deepEqual(metricsFor(true).map((m) => m.id), ["e1rm", "tonnage", "reps"]);
   assert.equal(valueAt(p, "reps"), 80);
   assert.equal(valueAt(p, "e1rm"), null);
+});
+
+test("planks progress by hold duration, never fictional reps or weight", () => {
+  const logs = [
+    log("2026-01-01", [{ name: "Plank", sets: 3, reps: 0, duration_seconds: 30, measure: "seconds" }]),
+    // A legacy row used reps to hold the seconds. Name classification recovers it.
+    log("2026-01-08", [{ name: "Plank", sets: 3, reps: 45, load_kg: null }]),
+  ];
+  const option = exerciseOptions(logs)[0];
+  assert.equal(option.hasDuration, true);
+  assert.deepEqual(metricsFor(option.hasLoad, option.hasDuration).map((m) => m.id), ["duration"]);
+  const series = exerciseSeries(logs, "Plank");
+  assert.deepEqual(series.map((p) => p.durationSeconds), [30, 45]);
+  assert.deepEqual(series.map((p) => p.reps), [0, 0]);
+  assert.equal(valueAt(series[1], "duration"), 45);
 });
 
 test("other exercises don't leak into the series", () => {

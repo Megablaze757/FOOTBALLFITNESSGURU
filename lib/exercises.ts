@@ -9,6 +9,7 @@
 import type { IconName } from "@/components/Icon";
 import { IMPORTED_EXERCISES, difficultyOf, equipBucket } from "./exercise-catalog";
 import { IMPORTED_HOWTO } from "./exercise-howto";
+import { exerciseMeasure } from "./exercise-measure";
 
 export type DemoPattern =
   | "squat" | "hinge" | "lunge" | "jump" | "plank"
@@ -908,6 +909,10 @@ export const PROGRESSION_NOTE: Record<ProgressionMethod, string> = {
 
 export function exerciseProgression(ex: Exercise): ProgressionMethod {
   const eq = ex.equipment.toLowerCase();
+  // Static holds progress by holding longer, even when their setup happens to
+  // contain a bench, band or optional weight. Copenhagen planks were being told
+  // to add kilograms because equipment was checked before the movement itself.
+  if (["seconds", "minutes"].includes(exerciseMeasure(ex.name))) return "time";
   if (/barbell|dumbbell|kettlebell|cable|weight/.test(eq)) return "load";
   if (ex.category === "Skill" || ex.category === "Speed" || ex.category === "Agility" || /ball/.test(eq)) return "skill";
   if (ex.category === "Endurance" || /bike/.test(eq)) return "time";

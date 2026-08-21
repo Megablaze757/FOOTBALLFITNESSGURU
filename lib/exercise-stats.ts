@@ -11,13 +11,17 @@
 // =============================================================================
 
 import type { TrainingDrill, TrainingLog } from "./types";
+import { workingSetsOf } from "./training-sets";
+import { durationPerSet, exerciseMeasure } from "./exercise-measure";
 
-export type Metric = "e1rm" | "tonnage" | "reps";
+export type Metric = "e1rm" | "tonnage" | "reps" | "duration";
 
 export interface ExercisePoint {
   date: string;
   /** Total reps performed: sum of sets x reps. */
   reps: number;
+  /** Longest completed hold/interval that day, in seconds. */
+  durationSeconds: number | null;
   sets: number;
   /** sets x reps x load. Null when the exercise carries no load. */
   tonnage: number | null;
@@ -36,6 +40,8 @@ export interface ExerciseOption {
   lastDate: string;
   /** Whether any entry carried a load, which decides the metrics on offer. */
   hasLoad: boolean;
+  /** Whether this movement is progressed by a hold/interval duration. */
+  hasDuration: boolean;
 }
 
 export type Direction = "improving" | "stable" | "declining";
@@ -96,7 +102,7 @@ export function exerciseOptions(logs: TrainingLog[]): ExerciseOption[] {
       if (!label) continue;
       const key = exerciseKey(label);
       const entry = byKey.get(key) ?? {
-        key, name: label, sessions: 0, lastDate: log.log_date, hasLoad: false,
+        key, name: label, sessions: 0, lastDate: log.log_date, hasLoad: false, hasDuration: false,
         spellings: new Map<string, number>(),
       };
       if (!seenToday.has(key)) {
@@ -105,6 +111,7 @@ export function exerciseOptions(logs: TrainingLog[]): ExerciseOption[] {
       }
       if (log.log_date > entry.lastDate) entry.lastDate = log.log_date;
       if (num(d.load_kg) > 0) entry.hasLoad = true;
+      if (durationPerSet(d) != null) entry.hasDuration = true;
       entry.spellings.set(label, (entry.spellings.get(label) ?? 0) + 1);
       byKey.set(key, entry);
     }
@@ -118,6 +125,7 @@ export function exerciseOptions(logs: TrainingLog[]): ExerciseOption[] {
       sessions: e.sessions,
       lastDate: e.lastDate,
       hasLoad: e.hasLoad,
+      hasDuration: e.hasDuration,
     }))
     .sort((a, b) => b.sessions - a.sessions || b.lastDate.localeCompare(a.lastDate) || a.name.localeCompare(b.name));
 }
@@ -144,20 +152,29 @@ export function exerciseSeries(logs: TrainingLog[], name: string): ExercisePoint
     for (const d of drillsOf(log)) {
       if (exerciseKey(d?.name ?? "") !== key) continue;
 
-      const sets = num(d.sets);
-      const reps = num(d.reps);
-      const load = num(d.load_kg);
-      const totalReps = sets * reps;
+      const detail = workingSetsOf(d);
+      const sets = detail.length;
+      const timed = ["seconds", "minutes"].includes(exerciseMeasure(d.name, d.prescription));
+      const totalReps = timed ? 0 : detail.reduce((n, s) => n + s.reps, 0);
+      const duration = durationPerSet(d);
 
       const p = byDate.get(log.log_date) ?? {
-        date: log.log_date, reps: 0, sets: 0, tonnage: null, topLoad: null, e1rm: null,
+        date: log.log_date, reps: 0, sets: 0, durationSeconds: null,
+        tonnage: null, topLoad: null, e1rm: null,
       };
       p.sets += sets;
       p.reps += totalReps;
-      if (load > 0) {
-        p.tonnage = (p.tonnage ?? 0) + totalReps * load;
+      if (duration != null) p.durationSeconds = Math.max(p.durationSeconds ?? 0, duration);
+      if (timed) {
+        byDate.set(log.log_date, p);
+        continue;
+      }
+      for (const set of detail) {
+        const load = num(set.load_kg);
+        if (load <= 0) continue;
+        p.tonnage = (p.tonnage ?? 0) + set.reps * load;
         p.topLoad = Math.max(p.topLoad ?? 0, load);
-        const est = estimate1RM(load, reps);
+        const est = estimate1RM(load, set.reps);
         // Best set of the day wins — a heavy triple beats a light ten.
         if (est != null) p.e1rm = Math.max(p.e1rm ?? 0, est);
       }
@@ -171,11 +188,13 @@ export function exerciseSeries(logs: TrainingLog[], name: string): ExercisePoint
 export function valueAt(p: ExercisePoint, metric: Metric): number | null {
   if (metric === "e1rm") return p.e1rm;
   if (metric === "tonnage") return p.tonnage;
+  if (metric === "duration") return p.durationSeconds;
   return p.reps || null;
 }
 
-/** The metrics worth offering for this exercise. Loadless work has only reps. */
-export function metricsFor(hasLoad: boolean): { id: Metric; label: string; unit: string }[] {
+/** The metrics worth offering for this exercise, in the unit it actually uses. */
+export function metricsFor(hasLoad: boolean, hasDuration = false): { id: Metric; label: string; unit: string }[] {
+  if (hasDuration) return [{ id: "duration", label: "Best hold", unit: "s" }];
   const reps = { id: "reps" as const, label: "Total reps", unit: "" };
   if (!hasLoad) return [reps];
   return [

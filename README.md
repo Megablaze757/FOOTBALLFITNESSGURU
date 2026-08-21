@@ -99,11 +99,12 @@ add the webhook endpoint in the Stripe Dashboard pointing at the `stripe-webhook
 - **Schema** (`supabase/migrations/0005_phase5_admin.sql`): extra performance indexes,
   `is_admin()` + `admin_metrics()` helpers (SECURITY DEFINER, admin-gated), and admin
   read-all RLS policies.
-- **Scheduled emails** (`supabase/functions/`): `send-daily-reminders` (emails users who
-  haven't checked in today) and `weekly-summary` (per-user 7-day recap) — both via Resend.
-- **Cron** (`supabase/cron/schedule.sql`): `pg_cron` + `pg_net` jobs that POST to those
-  functions (08:00 daily / 04:00 Mondays), reading the service-role key from Vault. Run
-  once after deploy; replace `<PROJECT_REF>`.
+- **Notifications** (`cloudflare/`): the production Worker creates one deduplicated row for
+  in-app and optional email delivery, sends consent/preference-aware web push, and sends the
+  exact price/date reminder before a free trial converts. Email uses Gmail/Apps Script or Resend.
+- **Scheduling**: Worker cron at 08:00 UTC handles check-in, deadline, weekly and trial notices;
+  19:00 UTC handles workout/rest-day logging. The older Supabase Edge reminder functions and
+  `supabase/cron/schedule.sql` remain only as a fallback and must not run alongside the Worker.
 - **Admin** (`app/admin`): standalone back-office (no athlete tab bar), gated to
   `profiles.role = 'admin'` — MRR, paid subs, DAU, total users, video queue health, and a
   failed-jobs table. Linked from Profile for admins.
@@ -117,19 +118,23 @@ add the webhook endpoint in the Stripe Dashboard pointing at the `stripe-webhook
 | Serverless glue | Supabase Edge Functions (Deno): readiness, process-daily-state, process-video, Stripe, email |
 | AI / ML | Python/FastAPI — `ai-worker/` (recovery LLM) + `cv-worker/` (MediaPipe biomechanics) |
 | Payments | Stripe (Checkout + webhook) |
-| Email | Resend (transactional) |
-| Scheduling | `pg_cron` + `pg_net` |
+| Email | Google Apps Script/Gmail or Resend (transactional) |
+| Scheduling | Cloudflare Worker cron (authoritative); Supabase cron fallback |
 
 ## Deploying everything (needs the real Supabase project)
 
-1. Apply migrations `0001`–`0005` (CLI `supabase db push`, or paste into SQL Editor).
+1. Apply every migration in `supabase/migrations` in filename order (CLI `supabase db push`,
+   or paste the not-yet-applied files into the SQL Editor).
 2. Deploy edge functions: `assess-readiness`, `process-daily-state`, `process-video`,
-   `create-checkout`, `stripe-webhook --no-verify-jwt`, `send-daily-reminders`, `weekly-summary`.
-3. `supabase secrets set` the worker/Stripe/Resend keys + URLs (see `.env.example`).
+   `create-checkout`, `stripe-webhook --no-verify-jwt`, and `resend-webhook --no-verify-jwt`.
+   Deploy the reminder functions only if deliberately using the Supabase fallback.
+3. `supabase secrets set` the worker/Stripe/Resend keys + URLs (see `.env.example`). In Resend,
+   subscribe the `resend-webhook` URL to sent/delivered/delayed/failed/bounced/complained events.
 4. Deploy `ai-worker/` and `cv-worker/` (Railway/Render — `Dockerfile`s provided).
 5. Add DB webhooks: `daily_check_ins` → `process-daily-state`; `videos` → `process-video`.
    Add the Stripe webhook endpoint → `stripe-webhook`.
-6. Run `supabase/cron/schedule.sql` (after storing the service-role key in Vault).
+6. Deploy the Cloudflare Worker with both cron triggers. Do not run
+   `supabase/cron/schedule.sql` at the same time; choose exactly one reminder scheduler.
 7. Set a user's `profiles.role = 'admin'` to access `/admin`.
 
 ## Premium intelligence layer
@@ -248,7 +253,7 @@ Helper scripts: `scripts/db-deploy.mjs` (apply migrations),
 `scripts/db-verify.mjs` (inspect schema), `scripts/seed-user.mjs` (demo users),
 `scripts/smoke-live.mjs` (live end-to-end check).
 
-Still pending (need third-party accounts): deploy the 7 edge functions + 2 Python workers,
+Still pending (need third-party accounts): deploy the required Edge Functions + 2 Python workers,
 Stripe + Resend keys, DB/Stripe webhooks, cron. See "Deploying everything" below — all turnkey.
 
 ## Local setup

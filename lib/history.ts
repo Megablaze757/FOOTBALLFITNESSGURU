@@ -5,6 +5,7 @@
 // the helper under the same name shadowed it silently.
 import { setCount, topLoad, totalReps as drillReps } from "./training-sets";
 import type { NutritionLog, TrainingLog } from "./types";
+import { durationMinutes, isActivity } from "./training-duration";
 
 export interface DayPoint {
   date: string; // ISO, oldest -> newest
@@ -41,7 +42,7 @@ function asc<T extends { log_date: string }>(rows: T[]): T[] {
 }
 
 export function summarizeTraining(logs: TrainingLog[]): TrainingSummary {
-  const sorted = asc(logs);
+  const sorted = asc(logs.filter(isActivity));
   const volume: DayPoint[] = [];
   const minutes: DayPoint[] = [];
   const byDrill = new Map<string, DrillStat>();
@@ -64,7 +65,7 @@ export function summarizeTraining(logs: TrainingLog[]): TrainingSummary {
       byDrill.set(key, stat);
     }
     volume.push({ date: log.log_date, value: dayVolume });
-    minutes.push({ date: log.log_date, value: log.total_minutes ?? 0 });
+    minutes.push({ date: log.log_date, value: +durationMinutes(log).toFixed(2) });
   }
 
   const drillFrequency = [...byDrill.values()].sort((a, b) => b.sessions - a.sessions || b.totalSets - a.totalSets);

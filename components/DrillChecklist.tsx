@@ -5,6 +5,7 @@ import type { DrillItem } from "@/lib/types";
 import { getExercise, demoImplement } from "@/lib/exercises";
 import { ExerciseModal } from "@/components/ExerciseDetail";
 import { ExerciseDemo } from "@/components/ExerciseDemo";
+import { exerciseMuscles } from "@/lib/muscle-volume";
 
 // Drill program with local completion state + progress bar. Each drill opens its
 // coached exercise detail (animated demo + cues) when tapped.
@@ -35,6 +36,8 @@ export function DrillChecklist({ drills }: { drills: DrillItem[] }) {
       <ul className="space-y-2">
         {drills.map((d) => {
           const ex = getExercise(d.id);
+          const target = ex ? exerciseMuscles(ex.name, ex.muscles) : null;
+          const muscles = target ? [target.primary, ...target.secondary].filter((muscle): muscle is string => !!muscle) : [];
           return (
             <li key={d.id} className={`card flex items-center gap-3 p-4 transition ${done[d.id] ? "opacity-50" : ""}`}>
               <input
@@ -52,7 +55,7 @@ export function DrillChecklist({ drills }: { drills: DrillItem[] }) {
               >
                 {ex && (
                   <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-white/10 bg-black/40">
-                    <ExerciseDemo pattern={ex.demo} implement={demoImplement(ex)} className="h-9 w-7" />
+                    <ExerciseDemo pattern={ex.demo} implement={demoImplement(ex)} muscles={muscles} name={ex.name} className="h-9 w-7" />
                   </span>
                 )}
                 <span className="min-w-0 flex-1">

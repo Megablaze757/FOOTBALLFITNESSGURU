@@ -60,7 +60,10 @@ export function NumberInput({
       inputMode={inputMode ?? (decimal ? "decimal" : "numeric")}
       min={min}
       max={max}
-      step={step ?? (decimal ? "0.1" : undefined)}
+      // A run logged as 5.66km used to be constrained to tenths here even
+      // though training_logs.distance_km stores hundredths. Keep decimal
+      // fields honest to the precision the database already supports.
+      step={step ?? (decimal ? "0.01" : undefined)}
       placeholder={placeholder}
       className={className}
       aria-label={ariaLabel}

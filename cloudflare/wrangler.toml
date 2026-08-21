@@ -2,9 +2,10 @@ name = "apex-api"
 main = "src/index.ts"
 compatibility_date = "2024-11-01"
 
-# Reminder emails: 08:00 UTC daily (daily + deadline reminders; weekly on Mondays).
+# 08:00 UTC: check-in, deadline, weekly and trial reminders.
+# 19:00 UTC: only the workout/rest-day logging reminder.
 [triggers]
-crons = ["0 8 * * *"]
+crons = ["0 8 * * *", "0 19 * * *"]
 
 # Non-secret defaults. Point these at your project.
 [vars]

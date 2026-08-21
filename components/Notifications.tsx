@@ -17,6 +17,13 @@ const ICON: Record<string, string> = {
   program_assigned: "📋",
   coach_request: "🧑‍🏫",
   general: "🔔",
+  check_in_reminder: "📝",
+  workout_reminder: "🏃",
+  weekly_summary: "📊",
+  program_deadline: "⏳",
+  milestone: "🏆",
+  trial_ending: "⏰",
+  billing: "💳",
 };
 
 /**
@@ -35,6 +42,7 @@ export function Notifications({ userId }: { userId: string }) {
       .from("notifications")
       .select("id, kind, title, body, href, created_at")
       .eq("user_id", userId)
+      .eq("show_in_app", true)
       .is("read_at", null)
       .order("created_at", { ascending: false })
       .limit(5)

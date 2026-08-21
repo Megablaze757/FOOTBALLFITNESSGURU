@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { METRIC_CATALOG, metricDef } from "@/lib/benchmarks";
 import { metricsForSport } from "@/lib/sport-profile";
 import { todayLocal } from "@/lib/day";
+import { invalidate } from "@/lib/use-async";
 
 export function BenchmarkForm({ onSaved, sport }: { onSaved?: () => void; sport?: string | null }) {
   // Their sport’s tests first. Everything stays available underneath — a
@@ -56,6 +57,9 @@ export function BenchmarkForm({ onSaved, sport }: { onSaved?: () => void; sport?
     setNotes("");
     setOpen(false);
     setSaving(false);
+    // Benchmarks drive Progress, strength ranks, runner ranks and Ask Coach.
+    // Clear every cached consumer before the next navigation.
+    invalidate();
     onSaved?.();
   }
 

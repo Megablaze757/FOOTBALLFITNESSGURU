@@ -44,10 +44,16 @@ export interface BriefingInput {
   positions?: string[];
   focus?: string | null;
   sex?: "male" | "female" | null;
+  heightCm?: number | null;
+  age?: number | null;
   bodyweight?: Bodyweight | null;
+  activityLevel?: string | null;
+  dietGoal?: string | null;
+  trainingExperienceYears?: number | null;
 
   /** The block. */
   goal?: GoalType | null;
+  goalDetails?: string[];
   blockWeek?: number | null;
   adherencePct?: number | null;
   inSeason?: boolean;
@@ -83,6 +89,7 @@ export interface BriefingInput {
   readinessReason?: string | null;
   fatigue?: number | null;
   sleepQuality?: number | null;
+  recoveryTrend?: { days: number; avgSleep: number | null; avgFatigue: number | null; checkIns: number } | null;
 
   /** Where it hurts, already aged — see lib/pain.ts. */
   pain?: Record<string, number>;
@@ -106,6 +113,7 @@ export interface BriefingInput {
   eatenToday?: { calories: number | null; protein: number | null } | null;
   avgCalories?: number | null;
   avgProtein?: number | null;
+  averageCalorieDeficit?: number | null;
 
   /** Strength. */
   ranks?: LiftRank[];
@@ -137,6 +145,15 @@ function athlete(a: BriefingInput): Section {
   const who = [a.sport, a.positions?.length ? a.positions.join(" / ") : null].filter(Boolean).join(" — ");
   if (who) lines.push(`Plays: ${who}`);
   if (a.focus) lines.push(`Training focus: ${a.focus}`);
+  if (a.sex) lines.push(`Sex: ${a.sex}.`);
+  if (a.age != null) lines.push(`Age: ${a.age}.`);
+  else lines.push("Age: not recorded.");
+  if (a.heightCm != null) lines.push(`Height: ${a.heightCm}cm.`);
+  else lines.push("Height: not recorded.");
+  if (a.activityLevel) lines.push(`Activity level: ${a.activityLevel}.`);
+  if (a.dietGoal) lines.push(`Diet goal: ${a.dietGoal}.`);
+  if (a.trainingExperienceYears != null) lines.push(`Training history: ${a.trainingExperienceYears} year${a.trainingExperienceYears === 1 ? "" : "s"}.`);
+  else lines.push("Training history: not recorded; do not assume beginner or advanced experience.");
   if (a.bodyweight) {
     lines.push(`Bodyweight: ${a.bodyweight.kg}kg (from their ${a.bodyweight.source}${a.bodyweight.date ? ` on ${a.bodyweight.date}` : ""})`);
   } else {
@@ -152,6 +169,7 @@ function block(a: BriefingInput): Section {
   if (a.goal) lines.push(`Current block: ${String(a.goal).replace("_", " ")}${a.inSeason ? ", in season" : ""}`);
   else lines.push("No active training block.");
   if (a.blockWeek) lines.push(`Week ${a.blockWeek} of the block.`);
+  if (a.goalDetails?.length) lines.push(`Ordered goals: ${a.goalDetails.join(" → ")}. Treat the first as the priority.`);
   if (a.adherencePct != null) lines.push(`Sessions completed: ${a.adherencePct}% of the block so far.`);
   if (a.nextSessionTitle) lines.push(`Next session: ${a.nextSessionTitle}`);
   for (const d of a.nextSessionDrills ?? []) {
@@ -210,6 +228,9 @@ function today(a: BriefingInput): Section {
   }
   if (a.fatigue != null) lines.push(`Fatigue: ${a.fatigue}/10`);
   if (a.sleepQuality != null) lines.push(`Sleep quality: ${a.sleepQuality}/10`);
+  if (a.recoveryTrend) {
+    lines.push(`Recovery over the last ${a.recoveryTrend.days} days (${a.recoveryTrend.checkIns} check-ins): average sleep ${a.recoveryTrend.avgSleep ?? "not recorded"}/10, average fatigue ${a.recoveryTrend.avgFatigue ?? "not recorded"}/10.`);
+  }
 
   /**
    * ALREADY TRAINED, said plainly and with an instruction attached.
@@ -288,6 +309,11 @@ function fuel(a: BriefingInput): Section {
   }
   if (a.avgCalories != null) {
     lines.push(`Recent average: ${a.avgCalories} kcal a day${a.avgProtein != null ? `, ${a.avgProtein}g protein` : ""}.`);
+  }
+  if (a.averageCalorieDeficit != null) {
+    lines.push(`Recent average calorie balance: ${a.averageCalorieDeficit > 0 ? `${a.averageCalorieDeficit} kcal below target` : `${Math.abs(a.averageCalorieDeficit)} kcal above target`} per logged day.`);
+  } else if (a.targets) {
+    lines.push("Calorie deficit/surplus cannot be calculated yet because there are not enough logged target-and-intake days.");
   }
   if (lines.length === 0) lines.push("No nutrition logged.");
   return { heading: "Nutrition", lines };

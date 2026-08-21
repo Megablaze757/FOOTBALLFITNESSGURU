@@ -3,6 +3,14 @@
 import { useMemo, useState } from "react";
 import { getExercisesForSport, exerciseEquip, type Exercise, type SportId } from "@/lib/exercises";
 import type { TrainingDrill } from "@/lib/types";
+import { exerciseMeasure, formatMeasuredDose } from "@/lib/exercise-measure";
+
+function starterDose(name: string): TrainingDrill {
+  const measure = exerciseMeasure(name);
+  if (measure === "seconds") return { name, sets: 3, reps: 0, load_kg: null, measure, duration_seconds: 30 };
+  if (measure === "metres") return { name, sets: 3, reps: 0, load_kg: null, measure, distance_m: 30 };
+  return { name, sets: 3, reps: 10, load_kg: null, measure: "reps" };
+}
 
 /**
  * Search the exercise library, or take what's already scheduled for today.
@@ -63,7 +71,7 @@ export function DrillPicker({ planned, chosen, onAdd, sport = "all" }: {
                 onClick={() => onAdd({ ...d })}
                 className="rounded-full border border-pitch-400/30 bg-pitch-400/[0.07] px-3 py-1.5 text-xs font-medium text-pitch-400 transition hover:bg-pitch-400/15"
               >
-                + {d.name} <span className="text-pitch-400/60">{d.sets}×{d.reps}</span>
+                + {d.name} <span className="text-pitch-400/60">{formatMeasuredDose(d)}</span>
               </button>
             ))}
           </div>
@@ -91,7 +99,7 @@ export function DrillPicker({ planned, chosen, onAdd, sport = "all" }: {
                   <button
                     type="button"
                     disabled={used}
-                    onClick={() => { onAdd({ name: e.name, sets: 3, reps: 10, load_kg: null }); setQ(""); }}
+                    onClick={() => { onAdd(starterDose(e.name)); setQ(""); }}
                     className="flex w-full items-center gap-2 rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2 text-left transition hover:bg-white/[0.06] disabled:opacity-40"
                   >
                     <span className="min-w-0 flex-1">

@@ -10,6 +10,7 @@ import { FeatureLock } from "@/components/FeatureLock";
 import { EXERCISES, EXERCISE_CATEGORIES, SPORTS, DIFFICULTIES, EQUIPMENT_BUCKETS, getExercisesForSport, demoImplement, rowToExercise, exerciseEquip, withinLevel, type Exercise, type ExerciseCategory, type SportId, type Difficulty } from "@/lib/exercises";
 import { ExerciseDemo } from "@/components/ExerciseDemo";
 import { ExerciseModal } from "@/components/ExerciseDetail";
+import { exerciseMuscles } from "@/lib/muscle-volume";
 import { CustomExerciseForm } from "@/components/CustomExerciseForm";
 import { ZoneGuide, RunTypeGuide } from "@/components/ZoneGuide";
 import { Tabs, TabPanel } from "@/components/Tabs";
@@ -36,6 +37,11 @@ const PAGE = 24;
 
 const DIFF_COLOR: Record<Difficulty, string> = { easy: "#34d399", medium: "#e3b53f", advanced: "#fb5d6b" };
 const DIFF_LABEL: Record<Difficulty, string> = { easy: "Beginner", medium: "Intermediate", advanced: "Advanced" };
+
+function demoMuscles(ex: Exercise): string[] {
+  const { primary, secondary } = exerciseMuscles(ex.name, ex.muscles);
+  return [primary, ...secondary].filter((muscle): muscle is string => !!muscle);
+}
 
 export default function LibraryPage() {
   const user = useCurrentUser();
@@ -65,6 +71,8 @@ export default function LibraryPage() {
   }, []);
   const [open, setOpen] = useState<Exercise | null>(null);
   const [custom, setCustom] = useState<Exercise[]>([]);
+  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+  const [savedOnly, setSavedOnly] = useState(false);
   const [shown, setShown] = useState(PAGE);
   // Feeds the zone guide so it shows THIS athlete's paces and heart rates
   // rather than a generic table. All optional — the guide degrades to the
@@ -89,12 +97,13 @@ export default function LibraryPage() {
   useEffect(() => {
     let active = true;
     const supabase = createClient();
-    supabase.from("profiles").select("sport, level, birth_year").eq("id", user.id).maybeSingle().then(({ data }) => {
-      const p = data as { sport?: string; level?: string; birth_year?: number | null } | null;
+    supabase.from("profiles").select("sport, level, birth_year, saved_exercises").eq("id", user.id).maybeSingle().then(({ data }) => {
+      const p = data as { sport?: string; level?: string; birth_year?: number | null; saved_exercises?: string[] } | null;
       if (!active) return;
       if (p?.sport && SPORTS.some((sp) => sp.id === p.sport)) setSport(p.sport as SportId);
       if (p?.level === "easy" || p?.level === "medium" || p?.level === "advanced") setLevel(p.level);
       if (p?.birth_year) setAthlete((a) => ({ ...a, age: new Date().getFullYear() - p.birth_year! }));
+      setSavedIds(new Set(p?.saved_exercises ?? []));
     });
     void reloadCustom();
     // Latest test only — zones should follow current fitness, not a personal
@@ -122,9 +131,10 @@ export default function LibraryPage() {
       (cat === "All" || e.category === cat) &&
       withinLevel(e, level) &&
       (equip === "all" || exerciseEquip(e) === equip) &&
+      (!savedOnly || savedIds.has(e.id)) &&
       (!query || e.name.toLowerCase().includes(query) || e.muscles.some((m) => m.toLowerCase().includes(query)))
     );
-  }, [sport, cat, level, equip, q, custom]);
+  }, [sport, cat, level, equip, q, custom, savedOnly, savedIds]);
 
   /**
    * Drills tagged for this sport, pulled to the front.
@@ -222,6 +232,14 @@ export default function LibraryPage() {
           can't find a movement actually is. */}
       <div className="flex flex-wrap items-center gap-3">
         <CustomExerciseForm coachId={user.id} onAdded={reloadCustom} scope="mine" />
+        <button
+          type="button"
+          onClick={() => setSavedOnly((v) => !v)}
+          aria-pressed={savedOnly}
+          className={`chip-option chip-option-sm ${savedOnly ? "text-pitch-400" : ""}`}
+        >
+          Saved{savedIds.size ? ` (${savedIds.size})` : ""}
+        </button>
         {custom.length > 0 && (
           <span className="text-xs text-slate-500">
             {custom.length} custom exercise{custom.length === 1 ? "" : "s"} in your library
@@ -330,7 +348,7 @@ export default function LibraryPage() {
                 className="card card-hover flex items-center gap-3 border-l-4 border-l-pitch-400/60 p-3 text-left"
               >
                 <span className="grid h-14 w-12 shrink-0 place-items-center overflow-hidden rounded-xl border border-white/10 bg-black/40">
-                  <ExerciseDemo pattern={ex.demo} implement={demoImplement(ex)} className="h-11 w-9" />
+                  <ExerciseDemo pattern={ex.demo} implement={demoImplement(ex)} muscles={demoMuscles(ex)} name={ex.name} className="h-11 w-9" />
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-bold text-slate-100">{ex.name}</span>
@@ -355,7 +373,7 @@ export default function LibraryPage() {
             className="card card-hover flex items-center gap-4 p-4 text-left"
           >
             <span className="grid h-20 w-16 shrink-0 place-items-center overflow-hidden rounded-2xl border border-white/10 bg-black/40">
-              <ExerciseDemo pattern={ex.demo} implement={demoImplement(ex)} className="h-16 w-12" />
+              <ExerciseDemo pattern={ex.demo} implement={demoImplement(ex)} muscles={demoMuscles(ex)} name={ex.name} className="h-16 w-12" />
             </span>
             <span className="min-w-0 flex-1">
               <span className="flex items-center gap-1.5">
@@ -408,7 +426,11 @@ export default function LibraryPage() {
         </button>
       )}
 
-      {open && <ExerciseModal ex={open} onClose={() => setOpen(null)} />}
+      {open && <ExerciseModal ex={open} onClose={() => {
+        setOpen(null);
+        void createClient().from("profiles").select("saved_exercises").eq("id", user.id).maybeSingle()
+          .then(({ data }) => setSavedIds(new Set(((data?.saved_exercises ?? []) as string[]))));
+      }} />}
       </div>
       )}
       </TabPanel>

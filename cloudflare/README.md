@@ -4,7 +4,8 @@ One Worker for the app's server-side needs, so **all your keys live in one place
 
 - **AI** (`/coach-chat`, `/generate-program`) via **OpenRouter** — use any model with one key.
 - **Stripe** (`/create-checkout`, `/stripe-webhook`) — subscriptions.
-- **Email** reminders via **Resend** on a daily cron (daily nudge, deadline reminders, weekly summary).
+- **Notifications** from one deduplicated queue: in-app banners, web push and email via
+  **Google Apps Script/Gmail or Resend**, including an exact-price trial-ending reminder.
 
 The static app talks to this Worker via `NEXT_PUBLIC_API_URL`. If that isn't set, the app falls
 back to Supabase Edge Functions / the local engine — so this is optional but unlocks the real AI +
@@ -57,7 +58,8 @@ Deploy prints your Worker URL, e.g. `https://apex-api.<you>.workers.dev`.
    dead slug costs one wasted attempt on every request. Responses carry a
    `model` field naming the rung that served them — handy for checking whether
    the free tier is actually carrying the load.
-5. **Email**: verify your sending domain in Resend and set `REMINDER_FROM` to an address on it.
+5. **Email**: configure either `GAS_EMAIL_URL` + `GAS_EMAIL_SECRET`, or verify your sending
+   domain in Resend and set `RESEND_API_KEY`. Set `REMINDER_FROM` to the verified sender.
 6. **Meal photos** use their own chain, `OPENROUTER_VISION_MODELS`, because none of
    the text rungs can see an image. Check the live one with
    `curl "$API/health"` — it reports `vision` alongside `model`.
@@ -90,7 +92,10 @@ reporting stale data as though it were current.
   Supabase session — the Worker verifies the caller's bearer token against Supabase before doing
   anything, so your keys can't be abused by anonymous traffic.
 - The `service_role` key is powerful — it only ever lives in the Worker's secrets, never in the app.
-- Cron runs at 08:00 UTC daily; adjust in `wrangler.toml`.
+- Cron runs at 08:00 UTC for check-in, deadline, weekly and trial reminders, and at 19:00 UTC
+  for the workout/rest-day logging reminder. Keep both triggers from `wrangler.toml`.
+- Apply migration `0091_notifications_trials_and_consent.sql` before this Worker. Do not also
+  run the legacy Supabase reminder crons, or users can receive duplicate messages.
 
 
 ## Is the deployed Worker the one in this repo?

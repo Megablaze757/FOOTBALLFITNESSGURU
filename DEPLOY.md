@@ -299,6 +299,7 @@ If `GAS_EMAIL_URL` is set it's used; otherwise the Worker falls back to Resend.
 - [ ] (billing) Stripe prices + webhook set
 - [ ] (email) Supabase custom SMTP: `mail.spacemail.com:465` — test email received
 - [ ] (email) Resend verified on a subdomain for Worker reminders
+- [ ] (email) `resend-webhook --no-verify-jwt` deployed; signing secret set; delivery events tested
 - [ ] Custom domain: `CNAME` present, base path empty, HTTPS enforced
 - [ ] Supabase Site URL + Stripe URLs + Worker `APP_URL` point at pocketathlete.com
 - [ ] DB password rotated + demo accounts removed before real users

@@ -19,6 +19,7 @@ import type { TrainingState } from "@/components/TrainingLogInput";
 import type { Biometric } from "@/lib/biometrics";
 import type { CheckInInput, TrainingDrill, TrainingLog } from "@/lib/types";
 import { todayLocal, daysAgoLocal } from "@/lib/day";
+import { measuredTrainingFields } from "@/lib/exercise-measure";
 
 export default function JournalPage() {
   const user = useCurrentUser();
@@ -38,7 +39,7 @@ export default function JournalPage() {
       supabase.from("daily_check_ins").select("*").eq("user_id", user.id).eq("check_in_date", today).maybeSingle(),
       supabase.from("training_logs").select("*").eq("user_id", user.id).eq("log_date", today).maybeSingle(),
       supabase.from("biometrics").select("*").eq("user_id", user.id).eq("metric_date", today).maybeSingle(),
-      supabase.from("profiles").select("sport").eq("id", user.id).maybeSingle(),
+      supabase.from("profiles").select("sport, distance_unit").eq("id", user.id).maybeSingle(),
       supabase.from("programs").select("plan, completed_sessions, swaps").eq("user_id", user.id).eq("status", "active").maybeSingle(),
       supabase.from("daily_check_ins").select("check_in_date").eq("user_id", user.id).gte("check_in_date", since60),
       /**
@@ -51,7 +52,7 @@ export default function JournalPage() {
        * the app contradicting itself, which is the specific complaint
        * LoadContext was added to fix. Keep these two queries in step.
        */
-      supabase.from("training_logs").select("log_date, total_minutes, intensity, drills, contact_minutes, distance_km")
+      supabase.from("training_logs").select("log_date, total_minutes, duration_seconds, intensity, drills, contact_minutes, distance_km, session_type")
         .eq("user_id", user.id).gte("log_date", since28),
       /**
        * THE REHAB PLAN THEY ARE ON.
@@ -94,13 +95,19 @@ export default function JournalPage() {
     // Flattened back to the log shape AFTER the corrections, so the sets on
     // offer are the sets that were actually prescribed today.
     const planned = applySwaps(
-      (eased?.drills ?? []).map((d) => ({ name: d.name, sets: d.sets, reps: d.reps, load_kg: null })) as TrainingDrill[],
+      (eased?.drills ?? []).map((d) => ({
+        name: d.name, sets: d.sets, load_kg: null,
+        ...measuredTrainingFields(d.name, d.reps, d.prescription),
+      })) as TrainingDrill[],
       ((program as { swaps?: SwapMap } | null)?.swaps ?? {}) as SwapMap,
     );
     const rehabbed = applyRehabToSession<TrainingDrill>(
       planned,
       rehab as RehabPlanRow | null,
-      (e) => ({ name: e.name, ...parseDose(e.dose), load_kg: null }),
+      (e) => {
+        const parsed = parseDose(e.dose);
+        return { name: e.name, sets: parsed.sets, load_kg: null, ...measuredTrainingFields(e.name, parsed.reps, e.dose) };
+      },
     );
     return {
       existing,
@@ -113,6 +120,7 @@ export default function JournalPage() {
       training: (training ?? null) as TrainingLog | null,
       bio: (bio ?? null) as Biometric | null,
       sport: (profile as { sport?: string } | null)?.sport ?? "football",
+      distanceUnit: ((profile as { distance_unit?: string } | null)?.distance_unit === "mi" ? "mi" : "km") as "km" | "mi",
       // Today's scheduled drills, so logging is a tap rather than retyping
       // names the program already knows — with the rehab plan already applied.
       planned: rehabbed.drills,
@@ -143,7 +151,16 @@ export default function JournalPage() {
     : undefined;
 
   const initialTraining: TrainingState | undefined = data?.training
-    ? { drills: data.training.drills ?? [], total_minutes: data.training.total_minutes, intensity: data.training.intensity }
+    ? {
+        drills: data.training.drills ?? [], total_minutes: data.training.total_minutes, intensity: data.training.intensity,
+        duration_seconds: data.training.duration_seconds,
+        distance_km: data.training.distance_km, distance_value: data.training.distance_value,
+        distance_unit: data.training.distance_unit, contact_minutes: data.training.contact_minutes,
+        run_type: data.training.run_type, zone: data.training.zone, avg_hr: data.training.avg_hr,
+        intervals: data.training.intervals, interval_seconds: data.training.interval_seconds,
+        recovery_seconds: data.training.recovery_seconds,
+        session_type: data.training.session_type ?? "workout", notes: data.training.notes,
+      }
     : undefined;
 
   const done = !!checkIn;
@@ -198,7 +215,7 @@ export default function JournalPage() {
               🩹 {data.rehabNote}
             </p>
           )}
-          <JournalForm initial={initial} initialTraining={initialTraining} sport={data?.sport} planned={data?.planned ?? []} history={data?.recentTraining ?? []} />
+          <JournalForm initial={initial} initialTraining={initialTraining} sport={data?.sport} distanceUnit={data?.distanceUnit ?? "km"} planned={data?.planned ?? []} history={data?.recentTraining ?? []} />
         </div>
       )}
 

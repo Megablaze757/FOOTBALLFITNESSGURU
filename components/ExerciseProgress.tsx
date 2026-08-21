@@ -23,7 +23,7 @@ export function ExerciseProgress({ logs, windowDays }: { logs: TrainingLog[]; wi
   const [wanted, setWanted] = useState<Metric>("e1rm");
 
   const selected = options.find((o) => o.key === picked) ?? options[0];
-  const metrics = metricsFor(selected?.hasLoad ?? false);
+  const metrics = metricsFor(selected?.hasLoad ?? false, selected?.hasDuration ?? false);
   // Derived, not stored: switching from a barbell lift to press-ups must not
   // leave "Est. 1RM" selected with nothing behind it.
   const metric = metrics.some((m) => m.id === wanted) ? wanted : metrics[0].id;
@@ -43,8 +43,8 @@ export function ExerciseProgress({ logs, windowDays }: { logs: TrainingLog[]; wi
       <section className="card p-5">
         <h2 className="field-label">Exercise progress</h2>
         <p className="rounded-2xl bg-white/[0.04] px-4 py-6 text-center text-xs text-slate-500">
-          Log a drill with its sets, reps and weight and we&apos;ll chart it here — including
-          your estimated one-rep max as it climbs.
+          Log a drill and we&apos;ll chart the measure it actually uses — weight and reps for
+          lifts, hold time for planks and isometrics.
         </p>
       </section>
     );

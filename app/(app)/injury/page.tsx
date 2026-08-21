@@ -69,12 +69,25 @@ export default function InjuryPage() {
 
   const { data, loading } = useAsync(async () => {
     const supabase = createClient();
-    const [{ data: profile }, { data: checkIn }] = await Promise.all([
-      supabase.from("profiles").select("sport").eq("id", user.id).maybeSingle(),
-      supabase.from("daily_check_ins").select("pain_map, check_in_date").eq("user_id", user.id)
+    const [{ data: profile }, { data: checkIn }, { data: program }] = await Promise.all([
+      supabase.from("profiles").select("sport, sex, birth_year, training_focus, experience_years").eq("id", user.id).maybeSingle(),
+      supabase.from("daily_check_ins").select("pain_map, check_in_date, fatigue_score, sleep_quality").eq("user_id", user.id)
         .order("check_in_date", { ascending: false }).limit(1).maybeSingle(),
+      supabase.from("programs").select("goal_type, in_season, plan").eq("user_id", user.id).eq("status", "active")
+        .order("created_at", { ascending: false }).limit(1).maybeSingle(),
     ]);
-    const ci = checkIn as { pain_map?: Record<string, number>; check_in_date?: string } | null;
+    const ci = checkIn as {
+      pain_map?: Record<string, number>; check_in_date?: string;
+      fatigue_score?: number | null; sleep_quality?: number | null;
+    } | null;
+    const pr = profile as {
+      sport?: string; sex?: string; birth_year?: number; training_focus?: string;
+      experience_years?: number;
+    } | null;
+    const active = program as {
+      goal_type?: string; in_season?: boolean;
+      plan?: { weeks?: { sessions?: { drills?: { name?: string }[] }[] }[] };
+    } | null;
     /**
      * This page had the right instinct first — it refused to pre-fill the body
      * map from a check-in older than three days, because seeding a three-week-
@@ -89,10 +102,26 @@ export default function InjuryPage() {
     const today = todayLocal();
     const fresh = ci?.check_in_date ? daysBetween(ci.check_in_date, today) <= PAIN_FRESH_DAYS : false;
     return {
-      sport: ((profile as { sport?: string } | null)?.sport ?? "football") as SportId,
+      sport: (pr?.sport ?? "football") as SportId,
       painMap: currentPain(ci?.pain_map, ci?.check_in_date, today),
       recentPain: fresh ? (ci?.pain_map ?? {}) : {},
       painNote: painAgeNote(ci?.check_in_date, today),
+      athleteContext: {
+        age: pr?.birth_year ? new Date().getFullYear() - pr.birth_year : null,
+        sex: pr?.sex ?? null,
+        trainingFocus: pr?.training_focus ?? null,
+        trainingExperienceYears: pr?.experience_years ?? null,
+        currentGoal: active?.goal_type ?? null,
+        inSeason: active?.in_season ?? null,
+        fatigue: ci?.fatigue_score ?? null,
+        sleepQuality: ci?.sleep_quality ?? null,
+        currentPain: currentPain(ci?.pain_map, ci?.check_in_date, today),
+        programExercises: Array.from(new Set(
+          (active?.plan?.weeks ?? []).flatMap((week) => (week.sessions ?? []).flatMap((session) =>
+            (session.drills ?? []).map((drill) => drill.name).filter((name): name is string => !!name)
+          )),
+        )).slice(0, 40),
+      },
     };
   }, [user.id], `injury:${user.id}`);
 
@@ -213,6 +242,7 @@ export default function InjuryPage() {
         description={desc}
         onDescriptionChange={setDesc}
         seeded={Object.keys(data.recentPain).length > 0}
+        athleteContext={data.athleteContext}
       />
 
       {/* ONE LIST, NOT THREE.

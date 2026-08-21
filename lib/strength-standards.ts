@@ -33,7 +33,7 @@
 
 import { estimate1RM, exerciseKey } from "./exercise-stats";
 import { variantFor } from "./lift-variants";
-import { setsOf } from "./training-sets";
+import { workingSetsOf } from "./training-sets";
 import type { MuscleGroup } from "./hypertrophy";
 import type { TrainingLog } from "./types";
 
@@ -395,7 +395,7 @@ export function rankedLifts(
       if (!r) continue;
       // Every set is a candidate, because the top set is not always the best
       // effort — 5 at 100kg estimates higher than 1 at 105kg.
-      for (const set of setsOf(drill)) {
+      for (const set of workingSetsOf(drill)) {
         if (set.load_kg == null || set.load_kg <= 0) continue;
         const e1rm = estimate1RM(set.load_kg, set.reps);
         if (e1rm == null) continue;

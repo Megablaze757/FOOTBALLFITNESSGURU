@@ -103,58 +103,224 @@ const POSES: Record<DemoPattern, { a: Joints; b: Joints }> = {
   },
 };
 
-const SEGMENTS: [keyof Joints, keyof Joints][] = [
-  ["head", "neck"], ["neck", "hip"],
-  ["neck", "lHand"], ["neck", "rHand"],
-  ["hip", "lKnee"], ["lKnee", "lAnkle"],
-  ["hip", "rKnee"], ["rKnee", "rAnkle"],
-];
+const BENCH_PRESS_POSE: { a: Joints; b: Joints } = {
+  a: {
+    head: [25, 65], neck: [34, 70], hip: [61, 83],
+    lHand: [31, 49], rHand: [48, 53],
+    lKnee: [72, 96], rKnee: [76, 96],
+    lAnkle: [84, 118], rAnkle: [91, 116],
+  },
+  b: {
+    head: [25, 65], neck: [34, 70], hip: [61, 83],
+    lHand: [31, 25], rHand: [45, 28],
+    lKnee: [72, 96], rKnee: [76, 96],
+    lAnkle: [84, 118], rAnkle: [91, 116],
+  },
+};
 
-/** One still frame of a movement. */
-function Figure({ j, pattern, implement, className, label }: {
-  j: Joints; pattern: DemoPattern; implement: Implement; className: string; label: string;
+function poseFor(pattern: DemoPattern, name?: string): { pose: { a: Joints; b: Joints }; bench: boolean } {
+  const bench = pattern === "press" && /bench|chest press|floor press|pec|\bfly\b|flyes|flies/i.test(name ?? "");
+  return { pose: bench ? BENCH_PRESS_POSE : (POSES[pattern] ?? POSES.squat), bench };
+}
+
+type MuscleZone = "chest" | "back" | "shoulders" | "arms" | "core" | "hips" | "upperLegs" | "calves";
+type Activation = "primary" | "secondary";
+
+function activationZones(muscles: readonly string[]): Partial<Record<MuscleZone, Activation>> {
+  const zones: Partial<Record<MuscleZone, Activation>> = {};
+  const mark = (zone: MuscleZone, level: Activation) => {
+    if (zones[zone] !== "primary") zones[zone] = level;
+  };
+
+  muscles.forEach((raw, index) => {
+    const muscle = raw.toLowerCase();
+    const level: Activation = index === 0 ? "primary" : "secondary";
+    if (/whole body|full body/.test(muscle)) {
+      (["chest", "back", "shoulders", "arms", "core", "hips", "upperLegs", "calves"] as MuscleZone[])
+        .forEach((zone) => mark(zone, level));
+      return;
+    }
+    if (/cardio|\blegs?\b/.test(muscle)) {
+      (["core", "hips", "upperLegs", "calves"] as MuscleZone[]).forEach((zone) => mark(zone, level));
+    }
+    if (/chest|pec/.test(muscle)) mark("chest", level);
+    if (/back|lat|trap|spine/.test(muscle)) mark("back", level);
+    if (/shoulder|delt|rotator cuff/.test(muscle)) mark("shoulders", level);
+    if (/bicep|tricep|forearm|grip|hands?/.test(muscle)) mark("arms", level);
+    if (/core|ab|oblique/.test(muscle)) mark("core", level);
+    if (/glute|adductor|groin|hip flexor|hip rotator/.test(muscle)) mark("hips", level);
+    if (/quad|hamstring|vmo|patellar|adductor|hip flexor/.test(muscle)) mark("upperLegs", level);
+    if (/calf|calves|achilles|ankle/.test(muscle)) mark("calves", level);
+  });
+  return zones;
+}
+
+function strongest(...levels: (Activation | undefined)[]): Activation | undefined {
+  return levels.includes("primary") ? "primary" : levels.includes("secondary") ? "secondary" : undefined;
+}
+
+const activationColour = (level: Activation) => level === "primary" ? "#ef4444" : "#f59e0b";
+
+function Segment({ from, to, width, activation }: {
+  from: XY;
+  to: XY;
+  width: number;
+  activation?: Activation;
 }) {
-  // Where the implement sits: on the back (squats) it rests at the neck; in the
-  // hands it sits at the mid-point of the two hands.
+  return (
+    <g>
+      <line x1={from[0]} y1={from[1]} x2={to[0]} y2={to[1]} stroke="#263241" strokeWidth={width + 3} strokeLinecap="round" />
+      <line x1={from[0]} y1={from[1]} x2={to[0]} y2={to[1]} stroke="url(#figure-surface)" strokeWidth={width} strokeLinecap="round" />
+      <line x1={from[0] - 1} y1={from[1]} x2={to[0] - 1} y2={to[1]} stroke="#ffffff" strokeOpacity={0.24} strokeWidth={1.5} strokeLinecap="round" />
+      {activation && (
+        <line
+          x1={from[0]} y1={from[1]} x2={to[0]} y2={to[1]}
+          stroke={activationColour(activation)} strokeWidth={Math.max(4, width - 3)}
+          strokeLinecap="round" strokeOpacity={activation === "primary" ? 0.95 : 0.72}
+          filter="url(#activation-glow)"
+        />
+      )}
+    </g>
+  );
+}
+
+/** One still frame of a movement, drawn as a shaded anatomical mannequin. */
+function Figure({ j, pattern, implement, muscles, bench = false, className, label }: {
+  j: Joints;
+  pattern: DemoPattern;
+  implement: Implement;
+  muscles: readonly string[];
+  bench?: boolean;
+  className: string;
+  label: string;
+}) {
+  const zones = activationZones(muscles);
+  const dx = j.hip[0] - j.neck[0];
+  const dy = j.hip[1] - j.neck[1];
+  const torsoLength = Math.max(1, Math.hypot(dx, dy));
+  const px = -dy / torsoLength;
+  const py = dx / torsoLength;
+  const point = (origin: XY, offset: number): XY => [origin[0] + px * offset, origin[1] + py * offset];
+  const lShoulder = point(j.neck, 9);
+  const rShoulder = point(j.neck, -9);
+  const lHip = point(j.hip, 6);
+  const rHip = point(j.hip, -6);
+  const torsoPath = `M ${lShoulder[0]} ${lShoulder[1]} Q ${point(j.neck, 12)[0]} ${point(j.neck, 12)[1]} ${lHip[0]} ${lHip[1]} Q ${j.hip[0]} ${j.hip[1] + 3} ${rHip[0]} ${rHip[1]} Q ${point(j.neck, -12)[0]} ${point(j.neck, -12)[1]} ${rShoulder[0]} ${rShoulder[1]} Z`;
+  const torsoAngle = Math.atan2(dy, dx) * 180 / Math.PI - 90;
+  const chestCentre: XY = [j.neck[0] + dx * 0.34, j.neck[1] + dy * 0.34];
+  const coreCentre: XY = [j.neck[0] + dx * 0.7, j.neck[1] + dy * 0.7];
+  const torsoActivation = strongest(zones.chest, zones.back);
+  const armActivation = strongest(zones.shoulders, zones.arms);
+  const upperLegActivation = strongest(zones.upperLegs, zones.hips);
+
   const handMid: XY = [(j.lHand[0] + j.rHand[0]) / 2, (j.lHand[1] + j.rHand[1]) / 2 - 2];
   const bar: XY = implement === "barbell_back" ? j.neck : handMid;
+  const groundY = Math.min(125, Math.max(j.lAnkle[1], j.rAnkle[1]) + 5);
 
   return (
-    <svg viewBox="0 0 100 130" className={`text-pitch-400 ${className}`} role="img" aria-label={label}>
+    <svg
+      viewBox="0 0 100 130"
+      className={className}
+      role="img"
+      aria-label={label}
+    >
+      <defs>
+        <linearGradient id="figure-surface" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#f1f5f9" />
+          <stop offset="0.42" stopColor="#94a3b8" />
+          <stop offset="0.72" stopColor="#64748b" />
+          <stop offset="1" stopColor="#334155" />
+        </linearGradient>
+        <radialGradient id="figure-head" cx="32%" cy="24%" r="72%">
+          <stop offset="0" stopColor="#ffffff" />
+          <stop offset="0.45" stopColor="#aeb9c7" />
+          <stop offset="1" stopColor="#445164" />
+        </radialGradient>
+        <filter id="figure-shadow" x="-40%" y="-40%" width="180%" height="190%">
+          <feDropShadow dx="1.5" dy="2.5" stdDeviation="2" floodColor="#0f172a" floodOpacity="0.5" />
+        </filter>
+        <filter id="activation-glow" x="-80%" y="-80%" width="260%" height="260%">
+          <feGaussianBlur stdDeviation="1.4" result="blur" />
+          <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+        </filter>
+      </defs>
+
+      <ellipse cx={(j.lAnkle[0] + j.rAnkle[0]) / 2} cy={groundY} rx={25} ry={3.5} fill="#0f172a" opacity={0.16} />
       {pattern === "pull" ? (
-        <line x1={24} y1={8} x2={76} y2={8} stroke="currentColor" strokeOpacity={0.3} strokeWidth={3} strokeLinecap="round" />
-      ) : (
-        <line x1={10} y1={124} x2={90} y2={124} stroke="currentColor" strokeOpacity={0.15} strokeWidth={2} />
-      )}
+        <line x1={24} y1={8} x2={76} y2={8} stroke="#475569" strokeOpacity={0.65} strokeWidth={3} strokeLinecap="round" />
+      ) : null}
 
       {/* Box for box jumps / depth drops */}
       {implement === "box" && (
-        <rect x={62} y={104} width={30} height={20} rx={2} fill="none" stroke="currentColor" strokeOpacity={0.4} strokeWidth={3} />
+        <rect x={62} y={104} width={30} height={20} rx={2} fill="#cbd5e1" stroke="#64748b" strokeWidth={2} />
+      )}
+      {bench && (
+        <g opacity={0.82}>
+          <line x1={17} y1={80} x2={68} y2={97} stroke="#475569" strokeWidth={6} strokeLinecap="round" />
+          <line x1={61} y1={95} x2={58} y2={119} stroke="#64748b" strokeWidth={3} strokeLinecap="round" />
+          <line x1={31} y1={84} x2={28} y2={111} stroke="#64748b" strokeWidth={3} strokeLinecap="round" />
+        </g>
       )}
 
-      <g fill="none" stroke="currentColor" strokeWidth={4.5} strokeLinecap="round" strokeLinejoin="round">
-        {SEGMENTS.map(([p, q], i) => {
-          const [x1, y1] = j[p] as XY, [x2, y2] = j[q] as XY;
-          return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} />;
-        })}
+      <g filter="url(#figure-shadow)">
+        <Segment from={lHip} to={j.lKnee} width={11} activation={upperLegActivation} />
+        <Segment from={rHip} to={j.rKnee} width={11} activation={upperLegActivation} />
+        <Segment from={j.lKnee} to={j.lAnkle} width={8} activation={zones.calves} />
+        <Segment from={j.rKnee} to={j.rAnkle} width={8} activation={zones.calves} />
 
-        <circle cx={j.head[0]} cy={j.head[1]} r={7} fill="currentColor" stroke="none" />
+        <path d={torsoPath} fill="url(#figure-surface)" stroke="#263241" strokeWidth={2.5} strokeLinejoin="round" />
+        <path d={torsoPath} fill="none" stroke="#ffffff" strokeOpacity={0.2} strokeWidth={1.2} />
+        {torsoActivation && (
+          <ellipse
+            cx={chestCentre[0]} cy={chestCentre[1]} rx={8.5} ry={6.5}
+            transform={`rotate(${torsoAngle} ${chestCentre[0]} ${chestCentre[1]})`}
+            fill={activationColour(torsoActivation)} opacity={torsoActivation === "primary" ? 0.92 : 0.7}
+            filter="url(#activation-glow)"
+          />
+        )}
+        {zones.core && (
+          <ellipse
+            cx={coreCentre[0]} cy={coreCentre[1]} rx={6.5} ry={8}
+            transform={`rotate(${torsoAngle} ${coreCentre[0]} ${coreCentre[1]})`}
+            fill={activationColour(zones.core)} opacity={zones.core === "primary" ? 0.92 : 0.68}
+            filter="url(#activation-glow)"
+          />
+        )}
+        {zones.hips && (
+          <ellipse cx={j.hip[0]} cy={j.hip[1]} rx={8} ry={5.5} fill={activationColour(zones.hips)} opacity={zones.hips === "primary" ? 0.92 : 0.68} filter="url(#activation-glow)" />
+        )}
 
-        {j.ball && <circle cx={j.ball[0]} cy={j.ball[1]} r={6} fill="currentColor" stroke="none" opacity={0.85} />}
+        <Segment from={lShoulder} to={j.lHand} width={8} activation={armActivation} />
+        <Segment from={rShoulder} to={j.rHand} width={8} activation={armActivation} />
+        {zones.shoulders && (
+          <>
+            <circle cx={lShoulder[0]} cy={lShoulder[1]} r={5.5} fill={activationColour(zones.shoulders)} opacity={0.9} filter="url(#activation-glow)" />
+            <circle cx={rShoulder[0]} cy={rShoulder[1]} r={5.5} fill={activationColour(zones.shoulders)} opacity={0.9} filter="url(#activation-glow)" />
+          </>
+        )}
+
+        <Segment from={j.head} to={j.neck} width={6} />
+        <circle cx={j.head[0]} cy={j.head[1]} r={8.5} fill="url(#figure-head)" stroke="#263241" strokeWidth={2.2} />
+
+        {j.ball && <circle cx={j.ball[0]} cy={j.ball[1]} r={7} fill="#e9b949" stroke="#7c5c11" strokeWidth={2} />}
 
         {/* Barbell — a bar with plates */}
         {(implement === "barbell_back" || implement === "barbell_hands") && (
           <>
-            <line x1={bar[0] - 16} y1={bar[1]} x2={bar[0] + 16} y2={bar[1]} strokeWidth={3} />
+            <line x1={bar[0] - 18} y1={bar[1]} x2={bar[0] + 18} y2={bar[1]} stroke="#1e293b" strokeWidth={3} strokeLinecap="round" />
             {[-16, 16].map((dx) => (
-              <rect key={dx} x={bar[0] + dx - 2} y={bar[1] - 6} width={4} height={12} rx={1} fill="currentColor" stroke="none" />
+              <rect key={dx} x={bar[0] + dx - 2.5} y={bar[1] - 7} width={5} height={14} rx={1.5} fill="#334155" stroke="#0f172a" strokeWidth={1} />
             ))}
           </>
         )}
 
         {/* Dumbbells at each hand */}
         {implement === "dumbbells" && ([j.lHand, j.rHand] as const).map((p, i) => (
-          <rect key={i} x={p[0] - 4} y={p[1] - 3} width={8} height={6} rx={1} fill="currentColor" stroke="none" />
+          <g key={i}>
+            <line x1={p[0] - 5} y1={p[1]} x2={p[0] + 5} y2={p[1]} stroke="#1e293b" strokeWidth={2.5} />
+            <rect x={p[0] - 6} y={p[1] - 4} width={3} height={8} rx={1} fill="#334155" />
+            <rect x={p[0] + 3} y={p[1] - 4} width={3} height={8} rx={1} fill="#334155" />
+          </g>
         ))}
       </g>
     </svg>
@@ -165,51 +331,65 @@ function Figure({ j, pattern, implement, className, label }: {
  * A single frame — the start position. Used for list thumbnails, where the
  * movement is identified by name and the picture only has to be recognisable.
  */
-export function ExerciseDemo({ pattern, implement = "none", className = "" }: {
-  pattern: DemoPattern; implement?: Implement; className?: string;
+export function ExerciseDemo({ pattern, implement = "none", muscles = [], name, className = "" }: {
+  pattern: DemoPattern; implement?: Implement; muscles?: readonly string[]; name?: string; className?: string;
 }) {
-  const pose = POSES[pattern] ?? POSES.squat;
-  return <Figure j={pose.a} pattern={pattern} implement={implement} className={className} label={`${pattern} start position`} />;
+  const { pose, bench } = poseFor(pattern, name);
+  return <Figure j={pose.a} pattern={pattern} implement={implement} muscles={muscles} bench={bench} className={className} label={`${name ?? pattern} start position`} />;
 }
 
 /**
  * Both key positions, labelled. This is what someone learning the movement
  * needs: where you begin, where you finish, and nothing invented in between.
  */
-export function ExerciseSteps({ pattern, implement = "none", className = "" }: {
-  pattern: DemoPattern; implement?: Implement; className?: string;
+export function ExerciseSteps({ pattern, implement = "none", muscles = [], name, className = "" }: {
+  pattern: DemoPattern; implement?: Implement; muscles?: readonly string[]; name?: string; className?: string;
 }) {
-  const pose = POSES[pattern] ?? POSES.squat;
-  const frames: { j: Joints; label: string }[] = [
-    { j: pose.a, label: "Start" },
-    { j: pose.b, label: "Finish" },
+  const { pose, bench } = poseFor(pattern, name);
+  const frames: { j: Joints; marker: string; label: string }[] = [
+    { j: pose.a, marker: "A", label: "Start" },
+    { j: pose.b, marker: "B", label: "Finish" },
   ];
   return (
-    // overflow-hidden is the backstop: whatever the flex maths does, nothing
-    // escapes this box onto the text below it.
-    <div className={`flex items-stretch justify-center gap-2 overflow-hidden ${className}`}>
-      {frames.map(({ j, label }, i) => (
-        // min-h-0 matters as much as min-w-0 and is far easier to forget. A
-        // flex child won't shrink below its content size without it, so the
-        // figure grew past its fixed-height container and sat on top of the
-        // description underneath.
-        <div key={label} className="flex min-h-0 min-w-0 flex-1 flex-col items-center gap-1">
-          <Figure
-            j={j}
-            pattern={pattern}
-            implement={implement}
-            // No h-full here: flex-1 already sizes it, and the two together are
-            // what made it refuse to shrink.
-            className="min-h-0 w-full flex-1"
-            label={`${pattern} ${label.toLowerCase()} position`}
-          />
-          <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-            {/* An arrow on the second frame reads as "and then this", which is
-                the one thing a pair of stills can't say on its own. */}
-            {i === 1 ? `→ ${label}` : label}
+    // The light coaching-board treatment deliberately separates this from the
+    // dark app chrome. The shaded mannequin carries the actual muscle data:
+    // red is the primary mover and amber is assistance, in both key positions.
+    <div className={`flex flex-col overflow-hidden rounded-2xl bg-slate-100 p-2 sm:p-3 ${className}`}>
+      <div className="flex min-h-0 flex-1 items-stretch justify-center gap-2 sm:gap-3">
+        {frames.map(({ j, marker, label }) => (
+          <div key={label} className="relative flex min-h-0 min-w-0 flex-1 flex-col items-center overflow-hidden rounded-xl bg-gradient-to-br from-white to-slate-200 px-2 pb-2 pt-8 shadow-sm">
+            <span className="absolute left-2 top-2 grid h-6 w-6 place-items-center rounded-full bg-pitch-400 text-[11px] font-black text-ink-900 shadow-sm" aria-hidden>
+              {marker}
+            </span>
+            <Figure
+              j={j}
+              pattern={pattern}
+              implement={implement}
+              muscles={muscles}
+              bench={bench}
+              className="min-h-0 w-full flex-1"
+              label={`${name ?? pattern} ${label.toLowerCase()} position`}
+            />
+            <span className="mt-1 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
+              {label}
+            </span>
+          </div>
+        ))}
+      </div>
+      {muscles.length > 0 && (
+        <div className="flex min-w-0 shrink-0 items-center justify-center gap-3 overflow-hidden px-1 pt-2 text-[9px] font-bold uppercase tracking-wide text-slate-600 sm:text-[10px]">
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span className="h-2 w-2 shrink-0 rounded-full bg-red-500 shadow-[0_0_7px_rgba(239,68,68,0.65)]" />
+            <span className="truncate">{muscles[0]}</span>
           </span>
+          {muscles.length > 1 && (
+            <span className="flex min-w-0 items-center gap-1.5">
+              <span className="h-2 w-2 shrink-0 rounded-full bg-amber-500 shadow-[0_0_7px_rgba(245,158,11,0.55)]" />
+              <span className="truncate">{muscles.slice(1, 4).join(" · ")}</span>
+            </span>
+          )}
         </div>
-      ))}
+      )}
     </div>
   );
 }

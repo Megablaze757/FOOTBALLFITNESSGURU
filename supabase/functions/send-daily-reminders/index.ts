@@ -9,6 +9,7 @@
 // =============================================================================
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { sendAndLog } from "../_shared/email.ts";
 
 const FROM = Deno.env.get("REMINDER_FROM") ?? "AI Coach <noreply@example.com>";
 const APP_URL = Deno.env.get("APP_URL") ?? "http://localhost:3000";
@@ -32,31 +33,22 @@ Deno.serve(async () => {
   if (error) return json({ error: error.message }, 500);
 
   const resendKey = Deno.env.get("RESEND_API_KEY");
+  const { data: profiles } = await supabase.from("profiles").select("id, email_checkin_reminders");
+  const enabled = new Set((profiles ?? []).filter((profile) => profile.email_checkin_reminders !== false).map((profile) => profile.id));
   let sent = 0;
   for (const u of list.users) {
-    if (checkedIn.has(u.id) || !u.email) continue;
-    if (!resendKey) continue; // dev: nothing to send through
-    const ok = await sendEmail(resendKey, u.email);
+    if (checkedIn.has(u.id) || !u.email || !enabled.has(u.id)) continue;
+    const ok = await sendAndLog({
+      supabase, userId: u.id, type: "checkin_reminder", apiKey: resendKey,
+      from: FROM, to: u.email, subject: "Your daily check-in 🏃",
+      html: `<p>Morning! Log how your body feels today to get your readiness score.</p>
+             <p><a href="${APP_URL}/journal">Open today's check-in →</a></p>`,
+    });
     if (ok) sent++;
   }
 
   return json({ reminded: sent, skipped_checked_in: checkedIn.size }, 200);
 });
-
-async function sendEmail(apiKey: string, to: string): Promise<boolean> {
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      from: FROM,
-      to,
-      subject: "Your daily check-in 🏃",
-      html: `<p>Morning! Log how your body feels today to get your readiness score.</p>
-             <p><a href="${APP_URL}/journal">Open today's check-in →</a></p>`,
-    }),
-  });
-  return res.ok;
-}
 
 function json(data: unknown, status: number): Response {
   return new Response(JSON.stringify(data), {

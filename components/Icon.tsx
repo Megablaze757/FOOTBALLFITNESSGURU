@@ -51,7 +51,7 @@ export type IconName =
   // the same picture for two different injuries is worse than no picture.
   | "bowl" | "snack" | "shake" | "walk" | "bath" | "foot" | "knee" | "hamstring"
   | "spine" | "shoulder" | "hip" | "lungs" | "impact" | "battery" | "jump"
-  | "split" | "dumbbell";
+  | "split" | "dumbbell" | "share" | "bookmark" | "calculator";
 
 /**
  * Body areas, drawn as one figure with the spot marked.
@@ -179,6 +179,9 @@ const PATHS: Record<IconName, React.ReactNode> = {
   jump: <><circle cx="12" cy="4.2" r="2.1" /><path d="M12 6.6v5.6" /><path d="m12 8.2-4.2-2.4M12 8.2l4.2-2.4" /><path d="m12 12.2-2.8 4.6M12 12.2l2.8 4.6" /><path d="M5.5 20.5h13" /></>,
   split: <><rect x="3" y="4" width="7" height="16" rx="1.6" /><rect x="14" y="4" width="7" height="16" rx="1.6" /></>,
   dumbbell: <><path d="M5 9v6M8 7.5v9M16 7.5v9M19 9v6" /><path d="M8 12h8" /></>,
+  share: <><circle cx="18" cy="5" r="2.5" /><circle cx="6" cy="12" r="2.5" /><circle cx="18" cy="19" r="2.5" /><path d="m8.2 10.8 7.6-4.4M8.2 13.2l7.6 4.4" /></>,
+  bookmark: <><path d="M6 3.5h12v17l-6-3.8-6 3.8Z" /></>,
+  calculator: <><rect x="4" y="2.5" width="16" height="19" rx="2.5" /><path d="M7.5 6h9v3h-9ZM8 13h.01M12 13h.01M16 13h.01M8 17h.01M12 17h.01M16 17h.01" /></>,
 };
 
 export function Icon({

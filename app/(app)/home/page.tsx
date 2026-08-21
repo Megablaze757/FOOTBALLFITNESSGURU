@@ -21,6 +21,7 @@ import { Notifications } from "@/components/Notifications";
 import type { CheckInInput, DailyInsight, TrainingLog } from "@/lib/types";
 import type { ProgramPlan } from "@/lib/engine";
 import { daysAgoLocal, todayLocal, lastNDaysLocal } from "@/lib/day";
+import { durationMinutes } from "@/lib/training-duration";
 
 export default function HomePage() {
   const user = useCurrentUser();
@@ -62,7 +63,7 @@ export default function HomePage() {
       // 40 days covers the streak; the 7-day count is taken from the same rows
       // rather than a second full scan.
       supabase.from("daily_check_ins").select("check_in_date").eq("user_id", user.id).gte("check_in_date", since),
-      supabase.from("training_logs").select("log_date").eq("user_id", user.id).eq("log_date", today).maybeSingle(),
+      supabase.from("training_logs").select("log_date, session_type").eq("user_id", user.id).eq("log_date", today).maybeSingle(),
       // Widened from select("log_date"). The row was already being fetched and
       // only its EXISTENCE used, to tick a quest — so Home knew whether you had
       // eaten and threw away what you had eaten. The fuel card below costs no
@@ -77,13 +78,13 @@ export default function HomePage() {
       // training load — without them sessionLoad has nothing to work with and
       // ACWR silently reads as "building" forever. 28 days is exactly ACWR's
       // chronic window, so pulling more was never useful.
-      supabase.from("training_logs").select("log_date, total_minutes, intensity, drills, contact_minutes, distance_km")
+      supabase.from("training_logs").select("log_date, total_minutes, duration_seconds, intensity, drills, contact_minutes, distance_km, session_type")
         .eq("user_id", user.id).gte("log_date", since28),
       supabase.from("videos").select("id", head).eq("user_id", user.id),
       supabase.from("strength_benchmarks").select("id", head).eq("user_id", user.id),
       supabase.from("ai_plans").select("id", head).eq("user_id", user.id),
       supabase.from("daily_check_ins").select("id", head).eq("user_id", user.id),
-      supabase.from("training_logs").select("id", head).eq("user_id", user.id),
+      supabase.from("training_logs").select("id", head).eq("user_id", user.id).or("session_type.is.null,session_type.neq.rest_day"),
       supabase.from("nutrition_logs").select("id", head).eq("user_id", user.id),
     ]);
 
@@ -114,14 +115,16 @@ export default function HomePage() {
       }
     }
     const streak = checkInStreak((streakRows ?? []).map((r) => r.check_in_date));
-    const quests = dailyQuests({ checkedInToday: !!checkIn, trainedToday: !!trainToday, nutritionToday: !!nutriToday });
+    const trainedToday = !!trainToday && trainToday.session_type !== "rest_day";
+    const quests = dailyQuests({ checkedInToday: !!checkIn, trainedToday, nutritionToday: !!nutriToday });
 
     // Rank + week-at-a-glance. Home used to show none of this, so an athlete
     // who hadn't checked in yet landed on a single empty-state card with
     // nothing to look at and no reason to stay.
     const since7 = daysAgoLocal(6);
     const checkDates = (streakRows ?? []).map((r) => r.check_in_date as string);
-    const trainRows = (recentTraining ?? []) as { log_date: string; total_minutes: number | null }[];
+    const trainRows = ((recentTraining ?? []) as { log_date: string; total_minutes: number | null; duration_seconds?: number | null; session_type?: string | null }[])
+      .filter((row) => row.session_type !== "rest_day");
     const programs = (progs ?? []) as { completed_sessions: string[] | null; status: string }[];
     const stats: ActivityStats = {
       // Spread first so a new stat added to ActivityStats defaults sensibly
@@ -183,7 +186,7 @@ export default function HomePage() {
     }));
     const week = {
       sessions: trainRows.filter((r) => r.log_date >= since7).length,
-      minutes: trainRows.filter((r) => r.log_date >= since7).reduce((n, r) => n + (r.total_minutes ?? 0), 0),
+      minutes: Math.round(trainRows.filter((r) => r.log_date >= since7).reduce((n, r) => n + durationMinutes(r), 0)),
       checkIns: stats.checkInsLast7,
       days,
     };
@@ -254,7 +257,7 @@ export default function HomePage() {
       stats: { ...stats, ...tierDays, ...xpExtras },
       challengeXp: xpExtras.challengeXp,
       week, acwr, standing,
-      nextSession, hasProgram: programCount > 0, trainedToday: !!trainToday,
+      nextSession, hasProgram: programCount > 0, trainedToday,
       nutriToday: (nutriToday ?? null) as { calories_eaten: number | null; daily_calorie_target: number | null } | null,
     };
   }, [user.id], `home:${user.id}`);

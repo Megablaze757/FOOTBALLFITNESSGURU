@@ -3,6 +3,15 @@
 import { useState } from "react";
 import { NumberInput } from "./NumberInput";
 
+export interface QuickCalorieInput {
+  kcal: number;
+  protein?: number;
+  carbs?: number;
+  fats?: number;
+  label?: string;
+  notes?: string;
+}
+
 /**
  * The fastest way to log a coffee and a banana without describing them.
  *
@@ -28,8 +37,8 @@ import { NumberInput } from "./NumberInput";
  */
 export function QuickCalories({ hidden, onAdd }: {
   hidden?: boolean;
-  /** Always positive; the caller appends it to today's list. */
-  onAdd: (kcal: number) => void;
+  /** Always positive; the caller appends the item to today's list. */
+  onAdd: (entry: QuickCalorieInput) => void;
 }) {
   /**
    * Empty, and the + inert until something is typed — where the water stepper
@@ -39,14 +48,29 @@ export function QuickCalories({ hidden, onAdd }: {
    * fixed number would just be a fourth button that takes two taps.
    */
   const [amount, setAmount] = useState<number | null>(null);
+  const [details, setDetails] = useState(false);
+  const [protein, setProtein] = useState<number | null>(null);
+  const [carbs, setCarbs] = useState<number | null>(null);
+  const [fats, setFats] = useState<number | null>(null);
+  const [label, setLabel] = useState("");
+  const [notes, setNotes] = useState("");
 
   function add(kcal: number) {
-    onAdd(kcal);
+    onAdd({
+      kcal,
+      protein: protein ?? 0,
+      carbs: carbs ?? 0,
+      fats: fats ?? 0,
+      label: label.trim() || undefined,
+      notes: notes.trim() || undefined,
+    });
     setAmount(null);
+    setProtein(null); setCarbs(null); setFats(null); setLabel(""); setNotes("");
   }
 
   return (
-    <div className={`mt-5 flex-wrap items-center gap-2 ${hidden ? "hidden" : "flex"}`}>
+    <div className={`mt-5 ${hidden ? "hidden" : "block"}`}>
+      <div className="flex flex-wrap items-center gap-2">
       {[200, 400, 600].map((kc) => (
         <button
           key={kc}
@@ -81,6 +105,29 @@ export function QuickCalories({ hidden, onAdd }: {
           +
         </button>
       </div>
+      </div>
+      <button type="button" onClick={() => setDetails((open) => !open)}
+        className="mt-2 text-xs font-semibold text-slate-500 hover:text-sky-300">
+        {details ? "Hide details" : "+ Add name or macros"}
+      </button>
+      {details && (
+        <div className="mt-3 space-y-3 rounded-xl border border-white/[0.07] bg-white/[0.02] p-3">
+          <label className="block">
+            <span className="field-label">Name (optional)</span>
+            <input value={label} onChange={(event) => setLabel(event.target.value)} className="field" placeholder="e.g. post-run smoothie" />
+          </label>
+          <div className="grid grid-cols-3 gap-2">
+            <label><span className="field-label">Protein</span><NumberInput value={protein} onChange={setProtein} min={0} max={500} className="field" placeholder="g" /></label>
+            <label><span className="field-label">Carbs</span><NumberInput value={carbs} onChange={setCarbs} min={0} max={750} className="field" placeholder="g" /></label>
+            <label><span className="field-label">Fat</span><NumberInput value={fats} onChange={setFats} min={0} max={300} className="field" placeholder="g" /></label>
+          </div>
+          <label className="block">
+            <span className="field-label">Notes (optional)</span>
+            <input value={notes} onChange={(event) => setNotes(event.target.value)} className="field" placeholder="portion, brand, timing…" />
+          </label>
+          <p className="text-[10px] text-slate-500">Enter calories above, then tap +. Any details here are saved with the item.</p>
+        </div>
+      )}
     </div>
   );
 }

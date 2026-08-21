@@ -72,10 +72,11 @@ function isOffline(err: { message?: string; code?: string } | null): boolean {
          m.includes("network request failed") || m.includes("load failed");
 }
 
-export function JournalForm({ initial, initialTraining, sport, planned = [], history = [] }: {
+export function JournalForm({ initial, initialTraining, sport, distanceUnit = "km", planned = [], history = [] }: {
   initial?: Partial<CheckInInput>;
   initialTraining?: TrainingState;
   sport?: string;
+  distanceUnit?: "km" | "mi";
   planned?: TrainingDrill[];
   /** Recent sessions, so a drill can be pre-filled with what it really was. */
   history?: { log_date?: string; drills?: TrainingDrill[] | null }[];
@@ -93,7 +94,7 @@ export function JournalForm({ initial, initialTraining, sport, planned = [], his
   const [weight, setWeight] = useState<string>(initial?.weight_kg?.toString() ?? "");
   const [isMatchDay, setIsMatchDay] = useState(initial?.is_match_day ?? false);
   const [minutes, setMinutes] = useState<string>(initial?.match_minutes_played?.toString() ?? "0");
-  const [training, setTraining] = useState<TrainingState>(initialTraining ?? { drills: [], total_minutes: null, intensity: null });
+  const [training, setTraining] = useState<TrainingState>(initialTraining ?? { drills: [], total_minutes: null, intensity: null, session_type: "workout", distance_unit: distanceUnit });
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -189,7 +190,9 @@ export function JournalForm({ initial, initialTraining, sport, planned = [], his
    * athlete's side, indistinguishable from work that was lost.
    */
   const [logTraining, setLogTraining] = useState(
-    (initialTraining?.drills.length ?? 0) > 0 || initialTraining?.total_minutes != null
+    initialTraining?.session_type !== "rest_day" && (
+      (initialTraining?.drills.length ?? 0) > 0 || initialTraining?.total_minutes != null || initialTraining?.session_type === "active_rest"
+    )
   );
 
   /**
@@ -223,6 +226,13 @@ export function JournalForm({ initial, initialTraining, sport, planned = [], his
   const today = todayLocal();
   const userId = useCurrentUser().id;
 
+  const changeDistanceUnit = useCallback((unit: "km" | "mi") => {
+    void createClient().from("profiles").update({ distance_unit: unit }).eq("id", userId).then(({ error }) => {
+      if (error) setError(`Could not save distance unit: ${error.message}`);
+      else invalidate("profile:");
+    });
+  }, [userId]);
+
   /**
    * Acute:chronic ratio, loaded up front so the result screen agrees with Home.
    *
@@ -242,7 +252,7 @@ export function JournalForm({ initial, initialTraining, sport, planned = [], his
       const since = daysAgoLocal(28);
       const { data } = await createClient()
         .from("training_logs")
-        .select("log_date, total_minutes, intensity, drills")
+        .select("log_date, total_minutes, duration_seconds, intensity, drills, contact_minutes, distance_km, session_type")
         .eq("user_id", userId)
         .gte("log_date", since);
       if (cancelled) return;
@@ -276,7 +286,7 @@ export function JournalForm({ initial, initialTraining, sport, planned = [], his
     setWeighing(draft.weighing ?? false);
     setLogTraining(
       draft.logTraining ??
-        ((draft.training?.drills?.length ?? 0) > 0 || draft.training?.total_minutes != null),
+        (draft.training?.session_type !== "rest_day" && ((draft.training?.drills?.length ?? 0) > 0 || draft.training?.total_minutes != null)),
     );
   }, []);
 
@@ -425,21 +435,36 @@ export function JournalForm({ initial, initialTraining, sport, planned = [], his
     // report needs that row to exist. It lives in hasTrainingContent now rather
     // than inline, because CheckInDone asks the same question to decide whether
     // to prompt for training, and two copies of this list would drift.
-    const trainingRow = hasTrainingContent({ ...training, drills: cleanDrills })
+    const trainingForSave = training.session_type === "rest_day"
+      ? { drills: [], total_minutes: null, duration_seconds: null, intensity: null, distance_km: null,
+          distance_value: null, distance_unit: training.distance_unit ?? distanceUnit, contact_minutes: null,
+          run_type: null, zone: null, avg_hr: null, intervals: null, interval_seconds: null,
+          recovery_seconds: null, session_type: "rest_day" as const, notes: training.notes ?? null }
+      : { ...training, drills: cleanDrills, session_type: training.session_type ?? "workout" as const };
+    const trainingRow = hasTrainingContent(trainingForSave)
       ? {
-          drills: cleanDrills,
-          total_minutes: training.total_minutes,
-          intensity: training.intensity,
-          distance_km: training.distance_km ?? null,
-          contact_minutes: training.contact_minutes ?? null,
-          run_type: training.run_type ?? null,
-          zone: training.zone ?? null,
-          avg_hr: training.avg_hr ?? null,
+          drills: trainingForSave.drills,
+          total_minutes: trainingForSave.total_minutes,
+          duration_seconds: trainingForSave.duration_seconds ?? null,
+          intensity: trainingForSave.intensity,
+          distance_km: trainingForSave.distance_km ?? null,
+          distance_value: trainingForSave.distance_value ?? null,
+          distance_unit: trainingForSave.distance_unit ?? distanceUnit,
+          pace_seconds_per_km: Number(trainingForSave.distance_km) > 0 && Number(trainingForSave.duration_seconds) > 0
+            ? Math.round(Number(trainingForSave.duration_seconds) / Number(trainingForSave.distance_km)) : null,
+          avg_speed_kmh: Number(trainingForSave.distance_km) > 0 && Number(trainingForSave.duration_seconds) > 0
+            ? +((Number(trainingForSave.distance_km) * 3600) / Number(trainingForSave.duration_seconds)).toFixed(2) : null,
+          contact_minutes: trainingForSave.contact_minutes ?? null,
+          run_type: trainingForSave.run_type ?? null,
+          zone: trainingForSave.zone ?? null,
+          avg_hr: trainingForSave.avg_hr ?? null,
           // How the session was broken up. What makes the intensity above a
           // measurement rather than a guess — see migration 0084.
-          intervals: training.intervals ?? null,
-          interval_seconds: training.interval_seconds ?? null,
-          recovery_seconds: training.recovery_seconds ?? null,
+          intervals: trainingForSave.intervals ?? null,
+          interval_seconds: trainingForSave.interval_seconds ?? null,
+          recovery_seconds: trainingForSave.recovery_seconds ?? null,
+          session_type: trainingForSave.session_type,
+          notes: trainingForSave.notes ?? null,
         }
       : null;
 
@@ -478,11 +503,16 @@ export function JournalForm({ initial, initialTraining, sport, planned = [], his
     }
 
     // Persist today's training (drills/volume) for history + AI progression.
-    if (trainingRow) {
-      await supabase.from("training_logs").upsert(
+    const { error: trainingError } = trainingRow
+      ? await supabase.from("training_logs").upsert(
         { user_id: user.id, log_date: today, ...trainingRow },
         { onConflict: "user_id,log_date" }
-      );
+      )
+      : await supabase.from("training_logs").delete().eq("user_id", user.id).eq("log_date", today);
+    if (trainingError) {
+      setError(`Check-in saved, but training could not be updated: ${trainingError.message}`);
+      setSaving(false);
+      return;
     }
 
     // Activation. Fired on every check-in rather than only the first, because
@@ -588,7 +618,7 @@ export function JournalForm({ initial, initialTraining, sport, planned = [], his
               clearDraft("checkin", userId, today);
               setPainMap({}); setFatigue(5); setSleep(7); setNutrition(6);
               setWeight(""); setIsMatchDay(false); setMinutes("0");
-              setTraining({ drills: [], total_minutes: null, intensity: null });
+              setTraining({ drills: [], total_minutes: null, intensity: null, session_type: "workout", distance_unit: distanceUnit });
               // The form's position resets with the values, or "start fresh"
               // leaves the body map open over a pain map it just emptied.
               setSore(null); setWeighing(false); setLogTraining(false); setDetailed(false);
@@ -724,7 +754,16 @@ export function JournalForm({ initial, initialTraining, sport, planned = [], his
 
               It opens in place now, with its own card and its own heading, and
               the quick check-in stays quick for anyone who doesn't want it. */}
-          {!logTraining ? (
+          <DayTypePicker
+            value={training.session_type ?? "workout"}
+            onChange={(session_type) => {
+              setTraining((current) => ({ ...current, session_type }));
+              if (session_type !== "rest_day") setLogTraining(true);
+              else setLogTraining(false);
+            }}
+          />
+
+          {training.session_type !== "rest_day" && (!logTraining ? (
             <button
               type="button"
               onClick={() => setLogTraining(true)}
@@ -751,7 +790,7 @@ export function JournalForm({ initial, initialTraining, sport, planned = [], his
                 <h2 className="field-label !mb-0">Today&apos;s training</h2>
                 <button
                   type="button"
-                  onClick={() => { setLogTraining(false); setTraining({ drills: [], total_minutes: null, intensity: null }); }}
+                  onClick={() => { setLogTraining(false); setTraining({ drills: [], total_minutes: null, intensity: null, session_type: "workout", distance_unit: distanceUnit }); }}
                   className="tap-target shrink-0 text-xs text-slate-500 hover:text-slate-300"
                 >
                   Didn&apos;t train
@@ -763,9 +802,11 @@ export function JournalForm({ initial, initialTraining, sport, planned = [], his
                 planned={planned}
                 history={history}
                 sport={(SPORTS.some((sp) => sp.id === sport) ? sport : "all") as SportId | "all"}
+                distanceUnit={distanceUnit}
+                onDistanceUnitChange={changeDistanceUnit}
               />
             </section>
-          )}
+          ))}
 
           {/* Full mode is now only about the things quick genuinely omits. */}
           <button
@@ -822,13 +863,20 @@ export function JournalForm({ initial, initialTraining, sport, planned = [], his
           <h2 className="field-label !mb-0">Today&apos;s training</h2>
           <span className="chip text-pitch-400">drills logged to history</span>
         </div>
-        <TrainingLogInput
-          value={training}
-          onChange={setTraining}
-          planned={planned}
-          history={history}
-          sport={(SPORTS.some((s) => s.id === sport) ? sport : "all") as SportId | "all"}
-        />
+        <DayTypePicker value={training.session_type ?? "workout"} onChange={(session_type) => setTraining((current) => ({ ...current, session_type }))} />
+        {training.session_type !== "rest_day" && (
+          <div className="mt-4">
+            <TrainingLogInput
+              value={training}
+              onChange={setTraining}
+              planned={planned}
+              history={history}
+              sport={(SPORTS.some((s) => s.id === sport) ? sport : "all") as SportId | "all"}
+              distanceUnit={distanceUnit}
+              onDistanceUnitChange={changeDistanceUnit}
+            />
+          </div>
+        )}
       </section>
       </>
       )}
@@ -852,6 +900,36 @@ export function JournalForm({ initial, initialTraining, sport, planned = [], his
         </p>
       )}
     </form>
+  );
+}
+
+function DayTypePicker({ value, onChange }: {
+  value: "workout" | "active_rest" | "rest_day";
+  onChange: (value: "workout" | "active_rest" | "rest_day") => void;
+}) {
+  const options = [
+    { id: "workout" as const, icon: "🏋️", label: "Workout", note: "Normal training" },
+    { id: "active_rest" as const, icon: "🚶", label: "Active rest", note: "Easy movement" },
+    { id: "rest_day" as const, icon: "😴", label: "Rest day", note: "No training" },
+  ];
+  return (
+    <fieldset className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-3">
+      <legend className="field-label px-1">What kind of day is it?</legend>
+      <div className="grid grid-cols-3 gap-2">
+        {options.map((option) => {
+          const active = value === option.id;
+          return (
+            <button key={option.id} type="button" onClick={() => onChange(option.id)} aria-pressed={active}
+              className={`min-h-16 rounded-xl border px-2 py-2 text-center transition ${active ? "border-pitch-400/50 bg-pitch-400/10 text-pitch-300" : "border-white/[0.07] bg-white/[0.02] text-slate-400"}`}>
+              <span className="block text-base" aria-hidden>{option.icon}</span>
+              <span className="block text-xs font-bold">{option.label}</span>
+              <span className="mt-0.5 hidden text-[9px] text-slate-500 sm:block">{option.note}</span>
+            </button>
+          );
+        })}
+      </div>
+      {value === "rest_day" && <p className="mt-2 text-xs text-slate-500">This records recovery without counting a training session or adding load.</p>}
+    </fieldset>
   );
 }
 

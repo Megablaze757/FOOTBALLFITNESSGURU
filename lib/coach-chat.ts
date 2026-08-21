@@ -9,6 +9,15 @@ export interface ChatContext {
   soreAreas: string[];
   readinessStatus: "Green" | "Yellow" | "Red" | null;
   programDrills: string[];
+  bodyweightKg?: number | null;
+  heightCm?: number | null;
+  calorieTarget?: number | null;
+  proteinTarget?: number | null;
+}
+
+export interface ChatTurn {
+  role: "user" | "assistant";
+  content: string;
 }
 
 export function localCoachAnswer(question: string, ctx: ChatContext): string {
@@ -32,7 +41,18 @@ export function localCoachAnswer(question: string, ctx: ChatContext): string {
   }
 
   if (/eat|nutrition|protein|carb|fuel|diet|weight/.test(q)) {
-    return "Head to Nutrition for your goal-based targets — protein scaled to your bodyweight and carbs weighted to fuel your sessions. Hit protein every day and time carbs around training.";
+    const targets = [
+      ctx.calorieTarget ? `${ctx.calorieTarget} kcal` : null,
+      ctx.proteinTarget ? `${ctx.proteinTarget}g protein` : null,
+    ].filter(Boolean).join(" and ");
+    const measurements = [
+      ctx.bodyweightKg ? `${ctx.bodyweightKg}kg` : null,
+      ctx.heightCm ? `${ctx.heightCm}cm` : null,
+    ].filter(Boolean).join(" at ");
+    if (targets) {
+      return `Your current daily targets are ${targets}${measurements ? `, using your recorded ${measurements}` : ""}. Hit protein across the day and put more of your carbs around training; log what you eat so I can compare the advice with what you actually manage.`;
+    }
+    return `I${measurements ? ` can see your recorded ${measurements}, but I` : ""} don't have a complete calorie and protein target yet. Add the missing details in Profile or Nutrition, then I can answer with your numbers instead of a generic estimate.`;
   }
 
   if (/season|taper|peak|match/.test(q)) {

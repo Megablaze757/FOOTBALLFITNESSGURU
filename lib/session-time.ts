@@ -43,6 +43,64 @@ const DEFAULT_REST = 90;
  */
 const CHANGEOVER = 60;
 
+const TOTAL_MINUTES = /(\d{1,3})\s*(?:min\b|mins\b|minutes?\b)\s+total\b/i;
+const DISTANCE_WITH_MINUTES = /^\s*(\d+(?:\.\d+)?)\s*km\b\s*·\s*(\d{1,3})\s*(?:min\b|mins\b|minutes?\b)/i;
+const LEADING_MINUTES = /^(\s*(?:\d+\s*[×x]\s*)?)(\d{1,3})(\s*(?:min\b|mins\b|minutes?\b))/i;
+
+/**
+ * The real timed dose written in a prescription, when it has one.
+ *
+ * A shaped running session puts the complete session first in importance even
+ * though the interval itself appears first in the text: "6 × 3 min · 50 min
+ * total" is a fifty-minute workout, not a three-minute one. Distance sessions
+ * carry their engine-calculated duration alongside the kilometres for the same
+ * reason — a distance alone cannot be turned into time without inventing pace.
+ */
+export function prescribedDurationMinutes(drill: ProgramDrill): number | null {
+  const dose = drill.prescription ?? "";
+  const total = TOTAL_MINUTES.exec(dose);
+  if (total) return Number(total[1]);
+  const distance = DISTANCE_WITH_MINUTES.exec(dose);
+  if (distance) return Number(distance[2]);
+  const leading = LEADING_MINUTES.exec(dose);
+  if (leading) return Math.max(1, Math.round(Number(drill.sets) || 1)) * Number(leading[2]);
+  return null;
+}
+
+/** Rewrite a timed dose while preserving the useful shape/zone copy around it. */
+export function withPrescribedDurationMinutes(drill: ProgramDrill, minutes: number): ProgramDrill {
+  const next = Math.max(1, Math.floor(minutes));
+  const dose = drill.prescription ?? "";
+
+  if (TOTAL_MINUTES.test(dose)) {
+    return { ...drill, prescription: dose.replace(TOTAL_MINUTES, `${next} min total`) };
+  }
+
+  const distance = DISTANCE_WITH_MINUTES.exec(dose);
+  if (distance) {
+    const previousMinutes = Number(distance[2]);
+    const previousKm = Number(distance[1]);
+    const nextKm = previousMinutes > 0
+      ? Math.max(0.5, Math.round((previousKm * next / previousMinutes) * 10) / 10)
+      : previousKm;
+    return {
+      ...drill,
+      prescription: dose.replace(DISTANCE_WITH_MINUTES, `${nextKm}km · ${next} min`),
+    };
+  }
+
+  const leading = LEADING_MINUTES.exec(dose);
+  if (!leading) return drill;
+  const sets = Math.max(1, Math.round(Number(drill.sets) || 1));
+  const perSet = Math.max(1, Math.floor(next / sets));
+  const priorPerSet = Number(leading[2]);
+  return {
+    ...drill,
+    reps: sets === 1 && Number(drill.reps) === priorPerSet ? perSet : drill.reps,
+    prescription: dose.replace(LEADING_MINUTES, `$1${perSet}$3`),
+  };
+}
+
 /** How long one drill takes, in seconds. */
 export function drillSeconds(drill: ProgramDrill): number {
   const sets = Math.max(1, Math.round(Number(drill.sets) || 1));
@@ -63,10 +121,19 @@ export function drillSeconds(drill: ProgramDrill): number {
    * adding sessions up and looking at the answers.
    */
   const dose = drill.prescription ?? "";
-  const minutes = /(\d{1,3})\s*min/i.exec(dose);
-  if (minutes) {
+  /**
+   * A duration has to be the DOSE at the start of the prescription.
+   *
+   * The old loose search found any number followed by "minutes" anywhere in
+   * the sentence. That priced the coaching note "Every long run over 90
+   * minutes" as another ninety-minute exercise, turning a real 95-minute
+   * session into a displayed 185-minute one. Anchoring still recognises
+   * "40 min" and "1 × 40 minutes", while ordinary coaching prose stays prose.
+   */
+  const minutes = prescribedDurationMinutes(drill);
+  if (minutes != null) {
     // A duration is the whole thing, rests included.
-    return sets * Number(minutes[1]) * 60 + CHANGEOVER;
+    return minutes * 60 + CHANGEOVER;
   }
   const metres = /(\d{1,4})\s*(m\b|metres|meters)/i.exec(dose);
   if (metres) {
