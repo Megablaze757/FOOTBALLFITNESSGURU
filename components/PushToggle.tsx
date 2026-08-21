@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { currentBrowser, installGuide } from "@/lib/browser";
 import { createClient } from "@/lib/supabase/client";
 
 /**
@@ -49,8 +50,12 @@ export function PushToggle() {
         // iOS only exposes PushManager to an installed PWA, so this is the
         // common case on iPhone — and "not supported" would be wrong and
         // discouraging when the fix is one Share-sheet tap away.
-        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-        return setState(isIOS ? "needs-install" : "unsupported");
+        //
+        // `currentBrowser` rather than a local regex: the old test was
+        // /iPad|iPhone|iPod/, and iPadOS 13+ reports itself as a Macintosh, so
+        // every modern iPad was told reminders were unsupported when they were
+        // one install away. See lib/browser.ts.
+        return setState(currentBrowser().platform === "ios" ? "needs-install" : "unsupported");
       }
       if (Notification.permission === "denied") return setState("blocked");
       const reg = await navigator.serviceWorker.ready;
@@ -135,6 +140,20 @@ export function PushToggle() {
               ? "Notifications are blocked for this site. Turn them back on in your browser's settings for pocketathlete.com."
               : "One nudge a day, only if you haven't checked in yet. No streak spam."}
           </p>
+          {/* AND HOW, because "add it to your home screen first" is a
+              requirement, not an instruction. It named the thing to do and
+              left the athlete to find out where the button is — on a platform
+              where the steps differ between Safari and Chrome, which is the
+              whole reason lib/browser.ts exists. */}
+          {state === "needs-install" && (
+            <ol className="mt-2 space-y-1">
+              {installGuide(currentBrowser()).steps.map((step, i) => (
+                <li key={step} className="flex gap-2 text-[11px] leading-relaxed text-slate-400">
+                  <span className="shrink-0 font-bold text-pitch-400">{i + 1}</span>{step}
+                </li>
+              ))}
+            </ol>
+          )}
         </div>
         {(state === "on" || state === "off") && (
           <button

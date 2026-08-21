@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { invalidate } from "@/lib/use-async";
 import { flushQueue, browserStore, queueCount, type QueuedCheckIn } from "@/lib/offline-queue";
 import { NATIVE_BUILD } from "@/lib/native";
+import { currentBrowser, installGuide, type BrowserEnv } from "@/lib/browser";
 
 /**
  * Everything that makes this an app rather than a web page: the service worker,
@@ -103,7 +104,8 @@ const DISMISSED = "pa:install-dismissed";
 
 function InstallPrompt() {
   const [deferred, setDeferred] = useState<InstallEvent | null>(null);
-  const [iosHint, setIosHint] = useState(false);
+  const [env, setEnv] = useState<BrowserEnv | null>(null);
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -111,35 +113,28 @@ function InstallPrompt() {
     // reviewer to "add this to your home screen" is the single clearest way to
     // say "this is a website" — the exact judgement 4.2 turns on.
     if (NATIVE_BUILD) return;
+
+    const here = currentBrowser();
     // Already installed — nothing to ask for.
-    const standalone = window.matchMedia("(display-mode: standalone)").matches ||
-      (window.navigator as { standalone?: boolean }).standalone === true;
-    if (standalone) return;
+    if (here.standalone) return;
     // Asked once and turned down. Nagging on every visit is how a prompt gets
     // ignored permanently.
     try { if (localStorage.getItem(DISMISSED)) return; } catch { /* no storage, show it */ }
+
+    setEnv(here);
 
     const onPrompt = (e: Event) => {
       e.preventDefault(); // stop Chrome's own mini-infobar; we choose the moment
       setDeferred(e as InstallEvent);
     };
     window.addEventListener("beforeinstallprompt", onPrompt);
-
-    // iOS Safari never fires beforeinstallprompt — installing is a manual
-    // Share-sheet action — so it needs instructions instead of a button.
-    // This also gates push: on iOS, notifications only work once installed.
-    const ua = navigator.userAgent;
-    const isIOS = /iPad|iPhone|iPod/.test(ua) && !(window as { MSStream?: unknown }).MSStream;
-    const isSafari = /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS/.test(ua);
-    if (isIOS && isSafari) setIosHint(true);
-
     return () => window.removeEventListener("beforeinstallprompt", onPrompt);
   }, []);
 
   function dismiss() {
     try { localStorage.setItem(DISMISSED, "1"); } catch { /* fine */ }
     setDeferred(null);
-    setIosHint(false);
+    setEnv(null);
   }
 
   async function install() {
@@ -149,7 +144,8 @@ function InstallPrompt() {
     dismiss();
   }
 
-  if (!deferred && !iosHint) return null;
+  if (!env) return null;
+  const guide = installGuide(env);
 
   return (
     // The bottom tab bar is fixed at bottom-4 with z-[60], so this sat
@@ -157,12 +153,56 @@ function InstallPrompt() {
     // an install prompt you cannot dismiss is worse than no prompt.
     // Sit above the bar (it hides at lg) and above it in the stack.
     <div className="fixed inset-x-3 bottom-28 z-[70] rounded-2xl border border-white/10 bg-ink-800/95 p-4 shadow-lg backdrop-blur lg:inset-x-auto lg:bottom-4 lg:right-4 lg:w-80">
-      <div className="text-sm font-semibold text-slate-100">Add PocketAthlete to your home screen</div>
+      <div className="text-sm font-semibold text-slate-100">
+        {guide.possible ? "Add PocketAthlete to your home screen" : guide.title}
+      </div>
       <p className="mt-1 text-xs text-slate-400">
-        {iosHint
-          ? "Tap the Share button, then “Add to Home Screen”. Reminders only work once it's installed."
-          : "Opens like an app, works without signal, and can remind you to check in."}
+        {guide.possible
+          ? "Opens like an app, works without signal, and can remind you to check in."
+          : guide.steps[0]}
       </p>
+
+      {/* THE STEPS FOR THE BROWSER THEY ARE ACTUALLY IN.
+          There used to be two cases — a button for Chromium, one sentence about
+          the Share sheet for iOS Safari — and everybody else got nothing at all.
+          Chrome on iPhone is the biggest of those: no iOS browser fires
+          `beforeinstallprompt`, and the old test named Safari, so the second
+          most common browser on the platform saw a blank screen.
+
+          Collapsed where a button exists, open where the steps ARE the answer,
+          because on iOS there is nothing else to offer. */}
+      {guide.possible && (
+        <details
+          open={open || !guide.promptable}
+          onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open)}
+          className="group mt-2"
+        >
+          <summary className="tap-target cursor-pointer list-none text-xs font-semibold text-pitch-400">
+            {guide.title}
+          </summary>
+          <ol className="mt-2 space-y-1.5">
+            {guide.steps.map((step, i) => (
+              <li key={step} className="flex gap-2 text-xs leading-relaxed text-slate-300">
+                <span className="shrink-0 font-bold text-pitch-400">{i + 1}</span>{step}
+              </li>
+            ))}
+          </ol>
+          {guide.note && <p className="mt-2 text-[11px] leading-relaxed text-slate-500">{guide.note}</p>}
+        </details>
+      )}
+      {!guide.possible && (
+        <ol className="mt-2 space-y-1.5">
+          {guide.steps.slice(1).map((step, i) => (
+            <li key={step} className="flex gap-2 text-xs leading-relaxed text-slate-300">
+              <span className="shrink-0 font-bold text-pitch-400">{i + 1}</span>{step}
+            </li>
+          ))}
+        </ol>
+      )}
+      {!guide.possible && guide.note && (
+        <p className="mt-2 text-[11px] leading-relaxed text-slate-500">{guide.note}</p>
+      )}
+
       <div className="mt-3 flex gap-2">
         {deferred && (
           <button onClick={install} className="tap-target flex-1 rounded-xl bg-pitch-500 px-3 py-2 text-xs font-semibold text-ink-900">
