@@ -10,6 +10,7 @@ import {
 import { parseSchedule } from "@/lib/meal-schedule";
 import { todayLocal } from "@/lib/day";
 import { Recipe } from "@/components/Recipe";
+import { NumberInput } from "@/components/NumberInput";
 import { Portal } from "@/components/Portal";
 import {
   estimateMeal, fromAiItems, roundMacros, fitDimensions, scaleItem, totalOf,
@@ -454,20 +455,44 @@ export function MealCheckIn({ stats, prefs, dietNotes, seed, swaps, recent, star
     reviseItems(shown.items.filter((_, i) => i !== index));
   }
 
+  /**
+   * OVERRIDE ONE MACRO OUTRIGHT.
+   *
+   * The quantity field is the better primitive — say it was 90g of rice and
+   * every macro follows correctly — and it cannot express "the model got the
+   * protein wrong". Somebody reading a label knows their shake is 25g of
+   * protein whatever the estimator thinks, and until now the only way to say so
+   * was to bin the estimate and type four numbers by hand.
+   *
+   * Held beside the items rather than folded into them: an override is a fact
+   * about the MEAL, and pushing it back into one arbitrary item would then be
+   * rescaled the next time that item's quantity changed.
+   */
+  const [override, setOverride] = useState<Partial<Macros>>({});
+  const [overrideOpen, setOverrideOpen] = useState(false);
+
+  /** What will actually be logged: the estimate, with any override on top. */
+  const finalMacros: Macros | null = shown
+    ? { ...shown.total, ...Object.fromEntries(Object.entries(override).filter(([, v]) => v != null)) } as Macros
+    : null;
+
   function addEstimate() {
     if (!shown || shown.items.length === 0) return;
     // shown.total, not a fresh sum: the two are kept equal by reviseItems, and
     // adding a number the athlete never saw is how a tracker loses trust.
+    const macros = finalMacros ?? shown.total;
     onAdd({
       // Name it after what was actually estimated, so the row in Today's food
       // says "Chicken, rice, broccoli" rather than an anonymous calorie figure.
       label: shown.items.map((i) => i.name).slice(0, 3).join(", ") || "Logged food",
-      macros: shown.total,
+      macros,
       source: "estimate",
     });
-    setAdded(`Added ${shown.total.kcal} kcal`);
+    setAdded(`Added ${macros.kcal} kcal`);
     setText("");
     setEstimate(null);
+    setOverride({});
+    setOverrideOpen(false);
     setPhoto(null);
     setTimeout(() => setAdded(null), 2500);
   }
@@ -612,8 +637,16 @@ export function MealCheckIn({ stats, prefs, dietNotes, seed, swaps, recent, star
         {shown && (
           <div className="mt-3 rounded-2xl border border-white/10 bg-white/[0.02] p-3">
             <div className="mb-2 flex items-center justify-between">
+              {/* ALL FOUR. The estimator has returned protein, carbs and fat
+                  since it was built — the prompt asks for them and the reader
+                  checks them against the calorie figure — and this line showed
+                  two of them, so as far as anybody using it was concerned the
+                  AI only estimated calories. */}
               <span className="text-xs font-semibold text-slate-300">
-                ~{shown.total.kcal} kcal · {shown.total.protein}g protein
+                ~{finalMacros?.kcal ?? shown.total.kcal} kcal
+                <span className="ml-2 font-normal text-slate-400">
+                  P {finalMacros?.protein ?? shown.total.protein}g · C {finalMacros?.carbs ?? shown.total.carbs}g · F {finalMacros?.fats ?? shown.total.fats}g
+                </span>
               </span>
               <span className="chip text-slate-400">{source === "ai" ? "AI estimate" : "On-device estimate"}</span>
               {aiError && (
@@ -665,6 +698,40 @@ export function MealCheckIn({ stats, prefs, dietNotes, seed, swaps, recent, star
             {shown.unmatched.length > 0 && (
               <p className="mt-2 text-xs text-amber-300">
                 Not recognised: {shown.unmatched.join(", ")} — try &ldquo;Estimate with AI&rdquo;, or add the calories by hand below.
+              </p>
+            )}
+
+            {/* THE OVERRIDE. Folded away, because the quantity fields above are
+                the right tool nine times in ten — correct the portion and every
+                macro follows. This is for the tenth: a label in your hand that
+                says 25g of protein, whatever the estimate thinks. */}
+            <button
+              type="button"
+              onClick={() => setOverrideOpen((open) => !open)}
+              className="tap-target mt-2 text-xs font-semibold text-slate-500 hover:text-sky-300"
+            >
+              {overrideOpen ? "Hide macros" : "Set the macros myself"}
+            </button>
+            {overrideOpen && (
+              <div className="mt-2 grid grid-cols-4 gap-2">
+                {(["kcal", "protein", "carbs", "fats"] as const).map((key) => (
+                  <label key={key} className="block">
+                    <span className="field-label">{key === "kcal" ? "kcal" : key === "fats" ? "Fat" : key}</span>
+                    <NumberInput
+                      value={override[key] ?? null}
+                      onChange={(next) => setOverride((o) => ({ ...o, [key]: next }))}
+                      min={0} max={key === "kcal" ? 5000 : 500}
+                      placeholder={String(shown.total[key])}
+                      className="field px-2 py-1 text-center text-xs tabular-nums"
+                      aria-label={`Override ${key}`}
+                    />
+                  </label>
+                ))}
+              </div>
+            )}
+            {overrideOpen && (
+              <p className="mt-1 text-[10px] text-slate-500">
+                Blank means &ldquo;use the estimate&rdquo;. Anything you type here is what gets logged.
               </p>
             )}
 

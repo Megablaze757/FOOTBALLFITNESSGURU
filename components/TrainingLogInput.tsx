@@ -429,6 +429,7 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
                     <NumField label="Reps" value={d.reps} onChange={(v) => setDrill(i, { reps: v || 0 })} />
                     <NumField
                       label="kg"
+                      decimal
                       value={d.load_kg ?? ""}
                       onChange={(v) => setDrill(i, { load_kg: v === "" ? null : v })}
                       optional
@@ -928,7 +929,7 @@ function UnitToggle({ unit, onChange }: { unit: "km" | "mi"; onChange: (next: "k
   );
 }
 
-function NumField({ label, value, onChange, optional, action }: { label: string; value: number | string; onChange: (v: number | "") => void; optional?: boolean; action?: ReactNode }) {
+function NumField({ label, value, onChange, optional, action, decimal }: { label: string; value: number | string; onChange: (v: number | "") => void; optional?: boolean; action?: ReactNode; decimal?: boolean }) {
   return (
     <div className="block">
       <span className="mb-1 flex min-h-6 items-center justify-center gap-1 text-center text-[10px] uppercase tracking-wider text-slate-500">{label}{action}</span>
@@ -937,11 +938,18 @@ function NumField({ label, value, onChange, optional, action }: { label: string;
           `v || 0` — the field snapped back to "0" the instant you pressed
           backspace and could not be emptied. Typing 12 meant overtyping a
           selected 0, which on a phone is a long-press. See NumberInput. */}
+      {/* A WHOLE-NUMBER FIELD CANNOT TAKE 12.5kg, and that is the complaint.
+          NumberInput truncates unless it is told otherwise — `Math.trunc(12.5)`
+          — and it also puts a keypad on screen with no decimal point on it. The
+          set-detail rows have asked for the decimal keypad since they were
+          built; this, the simple three-box row most people actually log in,
+          never did. Sets and reps stay whole, because 2.5 reps is not a thing. */}
       <NumberInput
         aria-label={label === "kg" ? "Weight in kilograms" : label}
         value={value === "" || value == null ? null : Number(value)}
         onChange={(n) => onChange(n == null ? "" : n)}
         min={0}
+        decimal={decimal}
         placeholder={optional ? "–" : ""}
         className="field min-h-[44px] py-1.5 text-center"
       />
