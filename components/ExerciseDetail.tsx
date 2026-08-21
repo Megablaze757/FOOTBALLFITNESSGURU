@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { formGuide, NO_GUIDE } from "@/lib/form-guide";
 import { exerciseMuscles } from "@/lib/muscle-volume";
 import { demoImplement, exerciseProgression, PROGRESSION_NOTE, type Exercise } from "@/lib/exercises";
 import { ExerciseVisual } from "@/components/ExerciseVisual";
@@ -15,7 +16,16 @@ export function ExerciseDetailCard({ ex, sets, reps }: { ex: Exercise; sets?: nu
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [shared, setShared] = useState(false);
-  const guideUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(`${ex.name} exercise proper form`)}`;
+  /**
+   * WATCH IT DONE PROPERLY.
+   *
+   * The button said "Visit ›", which promises nothing and could be a shop. A
+   * drawn figure tells a squat from a hinge in a list of three hundred; it
+   * cannot show a bar path, a tempo, or what a rounded back looks like from the
+   * side — so the teaching links out, and the link says what it is.
+   */
+  const guide = formGuide(ex.name);
+  const guideUrl = guide?.url ?? "";
   const targetMuscles = exerciseMuscles(ex.name, ex.muscles);
   const activatedMuscles = [targetMuscles.primary, ...targetMuscles.secondary].filter((m): m is string => !!m);
 
@@ -66,9 +76,18 @@ export function ExerciseDetailCard({ ex, sets, reps }: { ex: Exercise; sets?: nu
           <span className="chip text-pitch-400">{ex.category}</span>
           <h3 className="mt-2 break-words text-2xl font-extrabold leading-tight text-slate-100">{ex.name}</h3>
         </div>
-        <a href={guideUrl} target="_blank" rel="noreferrer" className="tap-target inline-flex min-h-[44px] shrink-0 items-center gap-2 rounded-full bg-pitch-400 px-5 text-sm font-bold text-ink-900 transition hover:bg-pitch-300">
-          Visit <span aria-hidden>›</span>
-        </a>
+        {guide ? (
+          <a
+            href={guide.url}
+            target="_blank"
+            rel="noreferrer"
+            className="tap-target inline-flex min-h-[44px] shrink-0 items-center gap-2 rounded-full bg-pitch-400 px-5 text-sm font-bold text-ink-900 transition hover:bg-pitch-300"
+          >
+            <span aria-hidden>▶</span> {guide.label}
+          </a>
+        ) : (
+          <span className="shrink-0 text-xs text-slate-500">{NO_GUIDE}</span>
+        )}
       </div>
 
       <p className="text-sm leading-relaxed text-slate-400">{ex.why}</p>

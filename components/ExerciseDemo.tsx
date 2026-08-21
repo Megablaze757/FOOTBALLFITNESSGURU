@@ -39,71 +39,132 @@ function shift(j: Joints, dx: number): Joints {
   };
 }
 
-const POSES: Record<DemoPattern, { a: Joints; b: Joints }> = {
+/**
+ * Which of the two frames IDENTIFIES the movement.
+ *
+ * THE STILL WAS ALWAYS `a`, AND `a` IS USUALLY SOMEBODY STANDING UP. A squat, a
+ * hinge, a lunge, a lateral shuffle and a ball drill all begin from the same
+ * neutral stand — so five of the eleven patterns drew the identical picture,
+ * and a library grid of three hundred exercises was three hundred copies of one
+ * standing figure. That is the "the images look worse than before": not the
+ * drawing, the CHOICE of frame. A picture that is the same for every row is
+ * decoration, and decoration that takes up a third of a card reads as broken.
+ *
+ * Stated per pattern rather than guessed, because the answer is not "always the
+ * second frame" either: a run is recognisable at either stride, and a jump is
+ * only a jump in the air. The animation still plays a → b; this is only which
+ * frame stands still.
+ */
+type PoseKey = "a" | "b";
+
+const POSES: Record<DemoPattern, { a: Joints; b: Joints; still: PoseKey }> = {
   squat: {
     a: STAND,
     b: { head: [50, 30], neck: [50, 44], hip: [50, 78], lHand: [43, 52], rHand: [57, 52],
       lKnee: [37, 90], rKnee: [63, 90], lAnkle: [45, 118], rAnkle: [55, 118] },
+    // the bottom. Standing up is not a squat.
+    still: "b",
   },
   hinge: {
     a: STAND,
     b: { head: [30, 46], neck: [40, 48], hip: [56, 60], lHand: [26, 82], rHand: [30, 84],
       lKnee: [52, 90], rKnee: [60, 90], lAnkle: [52, 118], rAnkle: [60, 118] },
+    // hips back, chest down — the only frame that is not a stand.
+    still: "b",
   },
   lunge: {
     a: STAND,
     b: { head: [50, 22], neck: [50, 34], hip: [50, 70], lHand: [45, 66], rHand: [55, 66],
       lKnee: [38, 96], rKnee: [66, 100], lAnkle: [38, 120], rAnkle: [80, 118] },
+    // split stance at depth.
+    still: "b",
   },
   jump: {
     a: { head: [50, 34], neck: [50, 47], hip: [50, 78], lHand: [38, 74], rHand: [62, 74],
       lKnee: [40, 96], rKnee: [60, 96], lAnkle: [44, 118], rAnkle: [56, 118] },
     b: { head: [50, 4], neck: [50, 18], hip: [50, 50], lHand: [40, 2], rHand: [60, 2],
       lKnee: [47, 76], rKnee: [53, 76], lAnkle: [47, 100], rAnkle: [53, 100] },
+    // in the air. A jump on the ground is a squat.
+    still: "b",
   },
   plank: {
     a: { head: [20, 76], neck: [30, 76], hip: [62, 74], lHand: [30, 100], rHand: [30, 100],
       lKnee: [80, 73], rKnee: [80, 73], lAnkle: [96, 72], rAnkle: [96, 72] },
     b: { head: [20, 72], neck: [30, 72], hip: [62, 70], lHand: [30, 100], rHand: [30, 100],
       lKnee: [80, 69], rKnee: [80, 69], lAnkle: [96, 68], rAnkle: [96, 68] },
+    // both frames are the same hold; either does.
+    still: "a",
   },
   run: {
     a: { head: [50, 15], neck: [50, 30], hip: [50, 62], lHand: [64, 50], rHand: [38, 70],
       lKnee: [48, 80], rKnee: [56, 96], lAnkle: [46, 96], rAnkle: [66, 114] },
     b: { head: [50, 15], neck: [50, 30], hip: [50, 62], lHand: [38, 70], rHand: [64, 50],
       lKnee: [44, 96], rKnee: [52, 80], lAnkle: [34, 114], rAnkle: [54, 96] },
+    // mid-stride, which is recognisable at either end.
+    still: "a",
   },
   lateral: {
-    a: shift({ head: [50, 16], neck: [50, 30], hip: [50, 64], lHand: [38, 58], rHand: [62, 58],
-      lKnee: [42, 90], rKnee: [60, 90], lAnkle: [38, 116], rAnkle: [64, 116] }, -12),
-    b: shift({ head: [50, 16], neck: [50, 30], hip: [50, 64], lHand: [38, 58], rHand: [62, 58],
-      lKnee: [42, 90], rKnee: [60, 90], lAnkle: [38, 116], rAnkle: [64, 116] }, 12),
+    /**
+     * A WIDE, LOADED ATHLETIC STANCE — not a stand nudged sideways.
+     *
+     * This was the same upright figure shifted 12 units left and right, which
+     * animates as a shuffle and, held still, is indistinguishable from
+     * standing. Sinking the hips, widening the feet past the shoulders and
+     * dropping the hands to a ready position is what a shuffle actually looks
+     * like at any instant of it.
+     */
+    a: shift({ head: [50, 26], neck: [50, 40], hip: [50, 72], lHand: [34, 66], rHand: [66, 66],
+      lKnee: [32, 94], rKnee: [68, 94], lAnkle: [26, 118], rAnkle: [74, 118] }, -8),
+    b: shift({ head: [50, 26], neck: [50, 40], hip: [50, 72], lHand: [34, 66], rHand: [66, 66],
+      lKnee: [32, 94], rKnee: [68, 94], lAnkle: [26, 118], rAnkle: [74, 118] }, 8),
+    // Either frame; they are one stance mirrored.
+    still: "a",
   },
   ball: {
-    a: { ...STAND, hip: [50, 66], lKnee: [44, 92], rKnee: [56, 92], lHand: [40, 58], rHand: [62, 56], ball: [38, 122] },
-    b: { ...STAND, hip: [50, 66], lKnee: [44, 92], rKnee: [56, 92], lHand: [38, 56], rHand: [60, 58], ball: [62, 122] },
+    /**
+     * OVER THE BALL, not standing next to one.
+     *
+     * It was STAND with a ball added at ankle height, so the figure read as a
+     * person who happened to have a football nearby. Leaning over it, knees
+     * soft, one foot reaching across is the shape of somebody actually
+     * touching the thing.
+     */
+    a: { head: [44, 22], neck: [46, 36], hip: [52, 68], lHand: [34, 60], rHand: [64, 58],
+      lKnee: [40, 94], rKnee: [60, 92], lAnkle: [34, 116], rAnkle: [62, 116], ball: [42, 114] },
+    b: { head: [56, 22], neck: [54, 36], hip: [48, 68], lHand: [36, 58], rHand: [66, 60],
+      lKnee: [40, 92], rKnee: [60, 94], lAnkle: [38, 116], rAnkle: [66, 116], ball: [58, 114] },
+    // Either; the two are one touch mirrored.
+    still: "a",
   },
   bike: {
     a: { head: [44, 28], neck: [50, 40], hip: [52, 72], lHand: [62, 64], rHand: [64, 66],
       lKnee: [44, 84], rKnee: [58, 92], lAnkle: [40, 100], rAnkle: [62, 108] },
     b: { head: [44, 28], neck: [50, 40], hip: [52, 72], lHand: [62, 64], rHand: [64, 66],
       lKnee: [58, 92], rKnee: [44, 84], lAnkle: [62, 108], rAnkle: [40, 100] },
+    // seated with the cranks turning; both frames are the same shape.
+    still: "a",
   },
   press: {
     a: { head: [50, 16], neck: [50, 30], hip: [50, 64], lHand: [39, 34], rHand: [61, 34],
       lKnee: [45, 90], rKnee: [55, 90], lAnkle: [45, 118], rAnkle: [55, 118] },
     b: { head: [50, 16], neck: [50, 30], hip: [50, 64], lHand: [44, 4], rHand: [56, 4],
       lKnee: [45, 90], rKnee: [55, 90], lAnkle: [45, 118], rAnkle: [55, 118] },
+    // locked out overhead. Arms at the shoulders is a stand holding something.
+    still: "b",
   },
   pull: {
     a: { head: [50, 26], neck: [50, 40], hip: [50, 74], lHand: [42, 8], rHand: [58, 8],
       lKnee: [48, 98], rKnee: [52, 98], lAnkle: [48, 120], rAnkle: [52, 120] },
     b: { head: [50, 12], neck: [50, 26], hip: [50, 60], lHand: [42, 8], rHand: [58, 8],
       lKnee: [48, 84], rKnee: [52, 84], lAnkle: [48, 106], rAnkle: [52, 106] },
+    // hanging at full stretch — the position that says pull-up.
+    still: "a",
   },
 };
 
-const BENCH_PRESS_POSE: { a: Joints; b: Joints } = {
+const BENCH_PRESS_POSE: { a: Joints; b: Joints; still: PoseKey } = {
+  // The bottom of the press. Locked out, a bench press is a person lying down.
+  still: "a",
   a: {
     head: [25, 65], neck: [34, 70], hip: [61, 83],
     lHand: [31, 49], rHand: [48, 53],
@@ -118,7 +179,7 @@ const BENCH_PRESS_POSE: { a: Joints; b: Joints } = {
   },
 };
 
-function poseFor(pattern: DemoPattern, name?: string): { pose: { a: Joints; b: Joints }; bench: boolean } {
+function poseFor(pattern: DemoPattern, name?: string): { pose: { a: Joints; b: Joints; still: PoseKey }; bench: boolean } {
   const bench = pattern === "press" && /bench|chest press|floor press|pec|\bfly\b|flyes|flies/i.test(name ?? "");
   return { pose: bench ? BENCH_PRESS_POSE : (POSES[pattern] ?? POSES.squat), bench };
 }
@@ -335,7 +396,11 @@ export function ExerciseDemo({ pattern, implement = "none", muscles = [], name, 
   pattern: DemoPattern; implement?: Implement; muscles?: readonly string[]; name?: string; className?: string;
 }) {
   const { pose, bench } = poseFor(pattern, name);
-  return <Figure j={pose.a} pattern={pattern} implement={implement} muscles={muscles} bench={bench} className={className} label={`${name ?? pattern} start position`} />;
+  // The frame that IDENTIFIES the movement, not the frame it starts from — see
+  // `still` on POSES. Drawing `a` everywhere made a squat, a hinge, a lunge, a
+  // shuffle and a ball drill into the same standing figure.
+  const still = pose[pose.still];
+  return <Figure j={still} pattern={pattern} implement={implement} muscles={muscles} bench={bench} className={className} label={`${name ?? pattern} position`} />;
 }
 
 /**

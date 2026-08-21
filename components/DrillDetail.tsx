@@ -1,6 +1,7 @@
 "use client";
 
 import { getExerciseByName } from "@/lib/exercises";
+import { formGuide, NO_GUIDE } from "@/lib/form-guide";
 import { howToFor, type HowTo } from "@/lib/how-to";
 import { ExerciseVisual } from "@/components/ExerciseVisual";
 import { ExerciseModal, Sheet } from "@/components/ExerciseDetail";
@@ -41,6 +42,26 @@ export function HowToCard({ how }: { how: HowTo }) {
           </div>
         )}
       </div>
+
+      {/* WATCH IT FIRST, IF YOU HAVE NEVER SEEN IT.
+          Above the written method on purpose: somebody who does not recognise
+          the name is not going to be helped by three lines of cues, and the
+          rest of this sheet is written for somebody who does. */}
+      {(() => {
+        const guide = formGuide(how.name);
+        return guide ? (
+          <a
+            href={guide.url}
+            target="_blank"
+            rel="noreferrer"
+            className="tap-target flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-pitch-400 px-4 text-sm font-bold text-ink-900 transition hover:bg-pitch-300"
+          >
+            <span aria-hidden>▶</span> {guide.label}
+          </a>
+        ) : (
+          <p className="text-center text-xs text-slate-500">{NO_GUIDE}</p>
+        );
+      })()}
 
       {/* WHAT YOU NEED, BEFORE HOW TO DO IT. Kit and space is the first reason
           a drill gets skipped, and finding out you needed six cones after
