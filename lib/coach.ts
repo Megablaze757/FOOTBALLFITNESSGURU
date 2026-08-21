@@ -197,8 +197,8 @@ export function finishPlan(plan: ProgramPlan, input: BuildProgramInput): Program
    * because `balancePlanVolume` had already dosed a session that then gained
    * five drills and lost others. The balancer has to see the finished shape.
    */
-  const structured = validatePlan(classified).plan;
-  const done = spacePlanSessions(balancePlanVolume(structured, floor));
+  const structural = validatePlan(classified);
+  const done = spacePlanSessions(balancePlanVolume(structural.plan, floor));
   // Old callers deliberately receive the engine's established prescription.
   // The richer preference pass changes exercise counts, rep ranges and weekly
   // shape, so only run it for programmes built with the new goal/settings UI.
@@ -217,7 +217,17 @@ export function finishPlan(plan: ProgramPlan, input: BuildProgramInput): Program
   // Say what the FITTED plan delivers. Computing this before the time fit made
   // the copy describe sets the athlete was never actually given.
   const note = volumeShortfall(fitted);
-  return note ? { ...fitted, constraints: [...fitted.constraints, note] } : fitted;
+  const constraints = note ? [...fitted.constraints, note] : fitted.constraints;
+
+  /**
+   * WHAT WAS CORRECTED, carried on the plan so the athlete can read it.
+   *
+   * First week only. Corrections repeat across four near-identical weeks, and
+   * "Moved Box jumps to the start" four times is noise — week one is the one
+   * being trained, and by week two the athlete has already seen the shape.
+   */
+  const corrections = [...new Set(structural.report.firstWeek.map((c) => c.note))];
+  return { ...fitted, constraints, ...(corrections.length ? { corrections } : {}) };
 }
 
 /** The training region a drill belongs to, if we've classified it. */

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { SLOT_LABEL, restText, type ProgramDrill, type Slot } from "@/lib/engine";
 import { howToFor } from "@/lib/how-to";
+import { KIND_LABEL, kindOf, isWorkingSet } from "@/lib/session-shape";
 import { ExerciseDemo } from "@/components/ExerciseDemo";
 import { SwapSheet } from "@/components/SwapSheet";
 import { Icon, type IconName } from "@/components/Icon";
@@ -174,8 +175,13 @@ function DrillCard({ drill, onPick, rehab, slot }: { drill: Drill; onPick?: (nam
       </span>
 
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[11px] text-slate-500">
-          {how?.tag ?? (drill.skill ? "Skill work" : "Exercise")}
+        {/* WHAT KIND OF EXERCISE THIS IS, next to what it trains.
+            The session no longer carries three strength headings, so the tier
+            that decides an exercise's position is stated on the exercise —
+            which is where it answers a question rather than posing one. */}
+        <span className="flex min-w-0 items-center gap-1.5 text-[11px] text-slate-500">
+          {kindBadge(drill)}
+          <span className="min-w-0 truncate">{how?.tag ?? (drill.skill ? "Skill work" : "Exercise")}</span>
         </span>
         <span className="mt-0.5 flex min-w-0 items-start justify-between gap-2">
           <span className="min-w-0 break-words text-sm font-bold leading-snug text-slate-100">
@@ -201,6 +207,28 @@ function DrillCard({ drill, onPick, rehab, slot }: { drill: Drill; onPick?: (nam
 
       {pickable && <span aria-hidden className="shrink-0 text-xs text-slate-600">›</span>}
     </button>
+  );
+}
+
+/**
+ * The fatigue tier, as a chip — but only where it means something.
+ *
+ * A warm-up and a cool-down already sit under headings that say what they are,
+ * so labelling a cat-cow "Prep" is a word that carries no information. The badge
+ * appears on working sets, where the session has deliberately stopped saying it
+ * in a heading.
+ */
+function kindBadge(drill: Drill) {
+  const kind = kindOf(drill.name, drill.slot);
+  if (!isWorkingSet(kind)) return null;
+  const tone = kind === "power" ? "bg-amber-400/15 text-amber-300"
+    : kind === "compound" || kind === "secondary" ? "bg-pitch-400/15 text-pitch-300"
+    : kind === "machine" ? "bg-sky-400/15 text-sky-300"
+    : "bg-white/[0.07] text-slate-400";
+  return (
+    <span className={`shrink-0 rounded px-1.5 py-px text-[9px] font-bold uppercase tracking-wider ${tone}`}>
+      {KIND_LABEL[kind]}
+    </span>
   );
 }
 
@@ -257,7 +285,15 @@ function sectionStyle(group: Group): { label: string; icon: IconName; wrap: stri
   if (slot === "conditioning") return { label: "Conditioning", icon: "run", wrap: "border-l-emerald-400/70 bg-emerald-400/[0.02]", text: "text-emerald-300/80" };
   if (slot === "cooldown") return { label: "Cool-down", icon: "stretch", wrap: "border-l-violet-400/70 bg-violet-400/[0.02]", text: "text-violet-300/80" };
   if (slot === "skill") return { label: "Skill", icon: "ball", wrap: "border-l-pitch-400/60 bg-pitch-400/[0.02]", text: "text-pitch-300/80" };
-  if (slot) return { label: slot === "primary" ? "Main / Strength" : SLOT_LABEL[slot], icon: "dumbbell", wrap: "border-l-pitch-400/70 bg-pitch-400/[0.02]", text: "text-pitch-300/80" };
+  // ONE HEADING FOR ALL THE STRENGTH WORK.
+  //
+  // "Main work", then "Secondary", then "Accessory" is how a coach files a
+  // session and not how anyone reads one — three headings over eight exercises,
+  // and an athlete reasonably asking what a SECONDARY section is and why their
+  // programme has one. The tiers still exist and still decide the order; they
+  // are now shown per exercise, on the card, where they answer a question the
+  // reader actually has ("why is this one after the squat?").
+  if (slot) return { label: "Main / Strength", icon: "dumbbell", wrap: "border-l-pitch-400/70 bg-pitch-400/[0.02]", text: "text-pitch-300/80" };
   return { label: "Workout", icon: "dumbbell", wrap: "border-l-white/15", text: "text-slate-400" };
 }
 
@@ -269,10 +305,17 @@ function sectionStyle(group: Group): { label: string; icon: IconName; wrap: stri
  * would present a hamstring protocol as a way to get warm — which is exactly
  * the confusion that had people skipping it.
  */
+const WORKING: (Slot | null)[] = ["primary", "secondary", "accessory"];
+
+/** The heading a slot sits under — the three working slots share one. */
+function headingSlot(slot: Slot | null): Slot | null {
+  return WORKING.includes(slot) ? "primary" : slot;
+}
+
 function groupBySlot(drills: Drill[]): Group[] {
   const out: Group[] = [];
   for (const d of drills) {
-    const slot = d.slot ?? null;
+    const slot = headingSlot(d.slot ?? null);
     const rehab = !!d.rehab;
     const last = out[out.length - 1];
     if (last && last.slot === slot && last.rehab === rehab) last.drills.push(d);

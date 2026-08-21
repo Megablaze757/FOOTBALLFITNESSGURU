@@ -223,9 +223,14 @@ function validateSession(
   drills = ranked.map((r) => r.d);
   if (drills.map((d) => d.name).join("|") !== before) {
     const first = drills.find((d) => isWorkingSet(kindOf(d.name, d.slot)));
-    push("order", first
-      ? `Reordered the session so ${first.name} comes first — the most demanding work belongs on a fresh nervous system.`
-      : "Reordered the session so the most demanding work comes first.");
+    // NOT NAMED, deliberately. A block has four or five sessions and each one
+    // opens on a different lift, so naming it produced "Reordered so Bench
+    // Press comes first", "so Barbell Back Squat comes first", "so Chin Ups
+    // comes first" — three notes that contradict each other once they are
+    // gathered onto one card. The rule is the same in every session; the lift
+    // is not the point of it.
+    void first;
+    push("order", "Reordered so the most demanding work comes first — power and heavy compounds before accessories.");
   }
 
   return { ...session, drills };

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { validatePlan, planIssues, orderPlan } from "./program-validate";
 import { kindOf, KIND_RANK, isWorkingSet, inFatigueOrder, sectionFor } from "./session-shape";
 import { buildProgram } from "./coach";
-import type { ProgramDrill, ProgramPlan, Slot } from "./engine";
+import { asGoalType, type ProgramDrill, type ProgramPlan, type Slot } from "./engine";
 
 /**
  * The checklist, tested against the session that prompted it.
@@ -194,4 +194,46 @@ test("fatigue tiers rank the way a coach would order them", () => {
   const ranks = order.map((n) => KIND_RANK[kindOf(n)]);
   assert.deepEqual(ranks, [...ranks].sort((a, b) => a - b), order.join(" → "));
   assert.equal(new Set(ranks).size, ranks.length, "each tier should be distinct");
+});
+
+test("a goal the engine does not know still builds a real session", () => {
+  // `programs.goal_type` is a bare text column the app casts rather than
+  // checks, and three real strings reach the engine that are not GoalTypes:
+  // "aesthetics", "power" and "fitness". `BLUEPRINTS[focus]` came back
+  // undefined for all three, every slot count with it, and the session was
+  // built EMPTY — 54 of 1,728 generated sessions contained one ball drill and
+  // nothing else, under a heading that read "Day 1".
+  for (const goal of ["aesthetics", "power", "fitness", "hypertrophy", "not_a_goal"]) {
+    for (const daysPerWeek of [3, 4, 5]) {
+      const plan = buildProgram({ sport: "football", goal, daysPerWeek } as never);
+      for (const week of plan.weeks) {
+        for (const session of week.sessions) {
+          // Not a working-set floor: a conditioning day is deliberately led by
+          // the conditioning and carries only two, which is the right shape for
+          // it. What must never happen again is a session that is one drill.
+          assert.ok(session.drills.length >= 4,
+            `${goal}/${daysPerWeek}d "${session.title}" has ${session.drills.length} drills`);
+          assert.ok(session.drills.some((d) => d.slot === "warmup"), `${goal}: no warm-up`);
+          assert.ok(session.drills.some((d) => d.slot === "cooldown"), `${goal}: no cool-down`);
+          // "Day 1" on its own is what an unreadable goal used to produce.
+          assert.ok(session.title.includes("·"), `${goal}: "${session.title}" has no session name`);
+        }
+      }
+    }
+  }
+});
+
+test("asGoalType maps the vocabulary the app actually stores", () => {
+  // Mapped rather than rejected: these mean something. Building muscle is
+  // strength work, power is speed work, general fitness is conditioning.
+  assert.equal(asGoalType("aesthetics"), "strength");
+  assert.equal(asGoalType("hypertrophy"), "strength");
+  assert.equal(asGoalType("power"), "speed");
+  assert.equal(asGoalType("fitness"), "endurance");
+  assert.equal(asGoalType("rehab"), "injury_recovery");
+  // A real GoalType passes through untouched.
+  assert.equal(asGoalType("endurance"), "endurance");
+  // And anything unreadable becomes the least wrong thing to hand somebody.
+  assert.equal(asGoalType("???"), "strength");
+  assert.equal(asGoalType(null), "strength");
 });

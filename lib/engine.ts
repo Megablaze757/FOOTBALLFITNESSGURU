@@ -103,6 +103,15 @@ export interface ProgramPlan {
   goals?: import("./program-preferences").GoalPreference[];
   /** The generation controls used for this block, retained for rebuilds. */
   settings?: import("./program-preferences").ProgramSettings;
+  /**
+   * What the checklist changed on its way here, in the athlete's words.
+   *
+   * Kept on the plan rather than returned alongside it because the plan is what
+   * gets saved and re-read: a correction the athlete can only see in the
+   * milliseconds after generation is a correction they will never see. See
+   * lib/program-validate.ts for why they are surfaced at all.
+   */
+  corrections?: string[];
 }
 
 export interface EngineInput {
@@ -753,6 +762,42 @@ function reasonFor(m: Movement, slot: Slot, ctx: Ctx): string {
   return `Supports ${ctx.focusGoal.replace("_", " ")} as a complement.`;
 }
 
+/**
+ * A goal string the engine can actually build from.
+ *
+ * WHY THIS EXISTS. `GoalType` is six values, and `programs.goal_type` is a bare
+ * text column the app casts to it rather than checks — a hazard `sessionTitle`
+ * below already guards against, and the blueprint did not. The consequence was
+ * far worse than a wrong label: `BLUEPRINTS[focus]` came back `undefined`, every
+ * slot count with it, and the session was built EMPTY. Measured over 108
+ * generated programs, 54 sessions came out containing one ball drill and
+ * nothing else — no warm-up, no lifts, no cool-down — under a heading that just
+ * said "Day 1".
+ *
+ * Three strings reach here that are not GoalTypes: "aesthetics", "power" and
+ * "fitness". They are real vocabulary — the goal picker's older labels and the
+ * adaptive-goal ids — and they mean something, so they are mapped rather than
+ * rejected: building muscle is strength work, power is speed work, and general
+ * fitness is conditioning. Anything else falls back to strength, because a
+ * strength session is the least wrong thing to hand somebody whose goal we
+ * could not read.
+ */
+const GOAL_ALIASES: Record<string, GoalType> = {
+  aesthetics: "strength",
+  hypertrophy: "strength",
+  power: "speed",
+  fitness: "endurance",
+  fat_loss: "endurance",
+  mobility: "injury_recovery",
+  rehab: "injury_recovery",
+};
+
+export function asGoalType(goal: string | null | undefined): GoalType {
+  const g = String(goal ?? "").trim().toLowerCase();
+  if (g in BLUEPRINTS) return g as GoalType;
+  return GOAL_ALIASES[g] ?? "strength";
+}
+
 // --- Building -----------------------------------------------------------------
 
 function sessionTitle(focus: GoalType, day: number): string {
@@ -827,7 +872,7 @@ function focusRotationFor(input: EngineInput, days: number): GoalType[] {
   // kept verbatim so this change cannot regress it.
   if (input.goal === "strength") return ["strength", "strength", "speed"];
 
-  const goal = input.goal;
+  const goal = asGoalType(input.goal);
   const complement: GoalType = goal === "speed" ? "agility" : "speed";
   if (days <= 2) return [goal, "strength"];
   if (days === 3) return [goal, "strength", goal];
@@ -1068,7 +1113,10 @@ export function buildBlock(input: EngineInput): ProgramPlan {
        */
       const seedFor = (slot: Slot) => (slot === "primary" ? di : blockSeed) + SLOT_SEED[slot];
 
-      const blueprint = { ...BLUEPRINTS[focusGoal] };
+      // `?? BLUEPRINTS.strength` is not redundant with asGoalType: the rotation
+      // is also reached through `input.focus` branches above, and an empty
+      // session is the one outcome that must not be possible here.
+      const blueprint = { ...(BLUEPRINTS[focusGoal] ?? BLUEPRINTS.strength) };
       // In-season conditioning is what the fixtures are for.
       if (input.isInSeason && blueprint.conditioning) blueprint.conditioning = 1;
 

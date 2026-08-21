@@ -1700,6 +1700,28 @@ function ActiveProgram({
                 </Link>
               </div>
             )}
+            {/* WHAT THE CHECKLIST CHANGED, and why.
+                An engine that silently rearranges a plan is indistinguishable
+                from one that generates a different plan every time you open it,
+                and the athlete has no way to learn what it is doing or to trust
+                it. Collapsed, because on a clean session there is nothing here
+                and on a corrected one it is an explanation rather than an
+                interruption — the plan below is still the answer. */}
+            {(program.plan.corrections?.length ?? 0) > 0 && (
+              <details className="group mb-2 mt-2 rounded-2xl border border-white/[0.07] bg-white/[0.03]">
+                <summary className="tap-target flex cursor-pointer list-none items-center justify-between px-3 py-2 text-xs font-semibold text-slate-300">
+                  <span>Why this session looks like this</span>
+                  <span className="text-slate-500 transition group-open:rotate-180">▾</span>
+                </summary>
+                <ul className="space-y-1.5 border-t border-white/[0.06] px-3 py-2.5">
+                  {program.plan.corrections!.map((note) => (
+                    <li key={note} className="flex gap-2 text-xs leading-relaxed text-slate-400">
+                      <span aria-hidden className="text-pitch-400">·</span>{note}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
             {sessionDrills.length > 0 && <div className="mt-2">
               <SessionDrills
                 drills={sessionDrills}
