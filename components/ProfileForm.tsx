@@ -9,7 +9,7 @@ import { PositionPicker } from "@/components/PositionPicker";
 import { positionList } from "@/lib/positions";
 import { validateUsername, USERNAME_MAX } from "@/lib/username";
 import { clearAllDrafts } from "@/lib/drafts";
-import { invalidate } from "@/lib/use-async";
+import { recordChanged } from "@/lib/data-events";
 import type { Profile } from "@/lib/types";
 import { HEALTH_CONSENT_VERSION } from "@/lib/consent";
 
@@ -102,7 +102,7 @@ export function ProfileForm({ profile, email }: { profile: Profile; email: strin
       // "Coach" and saving leaves the Squad entry missing until a reload — which
       // reads as the setting not having taken.
       clearCoachRoleCache();
-      invalidate();
+      recordChanged("profile", "goals");
     }
     setSaving(false);
   }
@@ -112,7 +112,7 @@ export function ProfileForm({ profile, email }: { profile: Profile; email: strin
     // Leaving a half-written check-in on a shared phone for whoever signs in
     // next is exactly the kind of thing nobody thinks about until it happens.
     clearAllDrafts(profile.id);
-    invalidate();
+    recordChanged("profile", "goals");
     await supabase.auth.signOut();
     router.replace("/login");
   }

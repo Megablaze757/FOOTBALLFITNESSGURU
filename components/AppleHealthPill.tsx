@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { recordChanged } from "@/lib/data-events";
 import { createClient } from "@/lib/supabase/client";
 import { isNative, readHealth, haptic } from "@/lib/native";
 import { todayLocal } from "@/lib/day";
@@ -78,6 +79,9 @@ export function AppleHealthPill({ onSleep }: {
           source: "apple_health",
         }, { onConflict: "user_id,metric_date" });
       }
+      // Sleep and HRV are inputs to readiness and to the biometric trends on
+      // Progress. Both were reading yesterday's row until a remount.
+      recordChanged("training", "profile");
     } catch { /* the check-in still works; the trend just misses a day */ }
 
     setSummary([

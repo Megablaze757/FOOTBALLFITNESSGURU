@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { recordChanged } from "@/lib/data-events";
 import { invokeAI } from "@/lib/api";
 import { createClient } from "@/lib/supabase/client";
 import { ConfirmButton } from "@/components/ConfirmButton";
@@ -154,6 +155,10 @@ export function InjuryPlanner({ sport, hurt, onHurtChange, description, onDescri
     // A failed write must not leave the UI claiming a stage the rest of the app
     // will not see — the check-in and the coach read the row, not this state.
     if (e) { setStage(stage); setError(`Could not save that stage — ${e.message}`); }
+    // The stage decides which exercises the check-in offers and what the coach
+    // prescribes around the injury. Both were reading the previous one until
+    // something happened to remount them.
+    else recordChanged("injury");
     setSavingStage(false);
   }
 
@@ -228,7 +233,12 @@ export function InjuryPlanner({ sport, hurt, onHurtChange, description, onDescri
           plan: res.plan,
         });
         if (saveErr) console.warn("rehab plan not saved:", saveErr.message);
-        else setSavedAt(new Date().toLocaleDateString(undefined, { day: "numeric", month: "short" }));
+        else {
+          setSavedAt(new Date().toLocaleDateString(undefined, { day: "numeric", month: "short" }));
+          // A live plan changes what the check-in offers and what the coach
+          // prescribes around the injury, on every screen already open.
+          recordChanged("injury");
+        }
       }
     } catch (e) {
       // Show what actually went wrong. This used to replace every failure with

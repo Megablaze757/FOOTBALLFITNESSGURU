@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { recordChanged } from "@/lib/data-events";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/Icon";
 import { createClient } from "@/lib/supabase/client";
@@ -36,6 +37,9 @@ export default function OnboardingPage() {
     }).eq("id", user.id);
     setSaving(false);
     if (error) { setError(`Couldn't save your details: ${error.message}`); return; }
+    // Sport, position and focus decide the whole first block and every label in
+    // the app. Anything already cached from before onboarding is now wrong.
+    recordChanged("profile", "goals");
     // Shape only — which sport, how many positions. Never the values themselves.
     track("onboarded", { sport, positions: positions.length });
     router.replace(next);

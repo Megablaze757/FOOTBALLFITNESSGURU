@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { recordChanged } from "@/lib/data-events";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -45,6 +46,9 @@ export function HealthConsentGate({ userId, children }: { userId: string; childr
       health_data_consent_at: new Date().toISOString(),
       health_data_consent_version: HEALTH_CONSENT_VERSION,
     }).eq("id", userId);
+    // Consent gates the health features and the optional emails, so anything
+    // cached from before it was given is showing the locked version.
+    if (!error) recordChanged("profile");
     setSaving(false);
     setStatus(error ? "error" : "consented");
   }

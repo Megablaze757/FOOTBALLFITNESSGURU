@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { invokeAI } from "@/lib/api";
-import { invalidate } from "@/lib/use-async";
+import { recordChanged } from "@/lib/data-events";
 
 /**
  * Cancelling, with one honest attempt to offer something better first.
@@ -90,7 +90,7 @@ export function CancelFlow({ onClose, onChanged }: { onClose: () => void; onChan
       });
       setEndsAt(res?.endsAt ?? null);
       setPhase("done-cancel");
-      invalidate();
+      recordChanged("everything");
       onChanged?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -107,7 +107,7 @@ export function CancelFlow({ onClose, onChanged }: { onClose: () => void; onChan
       });
       setEndsAt(res?.resumesAt ?? null);
       setPhase("done-pause");
-      invalidate();
+      recordChanged("everything");
       onChanged?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));

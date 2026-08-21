@@ -6,7 +6,8 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { type IconName } from "@/components/Icon";
 import { useCurrentUser } from "@/lib/auth";
-import { useAsync, invalidate } from "@/lib/use-async";
+import { useAsync } from "@/lib/use-async";
+import { recordChanged } from "@/lib/data-events";
 import { can } from "@/lib/subscription";
 import { FeatureLock } from "@/components/FeatureLock";
 import { MealPlanner } from "@/components/MealPlanner";
@@ -627,7 +628,7 @@ function NutritionTracker({ userId, today, initial, targets, coachTargets, stats
       setSaved(true);
       // Home reads this day from its own query and its own cache key, and it is
       // not on screen — dropping it is the whole fix there.
-      invalidate();
+      recordChanged("nutrition");
       /**
        * HAND THE PAGE THE ROW WE JUST WROTE, rather than making it go and read
        * it back.
@@ -676,8 +677,9 @@ function NutritionTracker({ userId, today, initial, targets, coachTargets, stats
       setTargetsDirty(false);
       setResetTargets(false);
     }
-    invalidate("nutrition:");
-    invalidate("coach:");
+    // Food logged today moves Home's "left to eat", the fuelling verdict and
+    // the report — named rather than listed, see lib/data-events.ts.
+    recordChanged("nutrition");
     await persist();
   };
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { invalidate } from "@/lib/use-async";
+import { recordChanged } from "@/lib/data-events";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -230,7 +230,7 @@ export function JournalForm({ initial, initialTraining, sport, distanceUnit = "k
   const changeDistanceUnit = useCallback((unit: "km" | "mi") => {
     void createClient().from("profiles").update({ distance_unit: unit }).eq("id", userId).then(({ error }) => {
       if (error) setError(`Could not save distance unit: ${error.message}`);
-      else invalidate("profile:");
+      else recordChanged("profile");
     });
   }, [userId]);
 
@@ -538,9 +538,14 @@ export function JournalForm({ initial, initialTraining, sport, distanceUnit = "k
     submittedRef.current = true;
     clearDraft("checkin", userId, today);
 
-    // A check-in changes readiness on Home, Stats and Coach — drop the cached
-    // page data so they refetch fresh rather than showing pre-check-in values.
-    invalidate();
+    /**
+      * A check-in changes readiness on Home, Progress and Coach, the week's
+      * load and mileage, and — when the weight box was filled in — every
+      * calorie target and strength rank in the app. Named rather than
+      * hand-picked, so a screen added later is covered by the map in
+      * lib/data-events.ts instead of by remembering this line exists.
+      */
+    recordChanged("training", "weight", "profile");
     // Readiness is computed client-side from the pure engine (also feeds Home).
     setResult(assessReadiness(input, { acwr }));
     setSaving(false);

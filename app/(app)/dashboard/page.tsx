@@ -128,7 +128,7 @@ export default function DashboardPage() {
   const user = useCurrentUser();
   const [tab, setTab] = useState<"recovery" | "progress">("recovery");
 
-  const { data, loading } = useAsync(async () => {
+  const { data, loading, revalidating } = useAsync(async () => {
     const supabase = createClient();
     const since = daysAgoLocal(28);
     const [{ data: rows }, { data: insightRow }, { data: training }, { data: nutrition }, { data: weekCheck }, { data: prof }, { data: bio }] = await Promise.all([
@@ -232,6 +232,18 @@ export default function DashboardPage() {
   return (
     <div className="animate-fade-up space-y-5">
       <Header source={resolved.source} />
+      {/* RECALCULATING, WITHOUT THROWING THE PAGE AWAY.
+          "Stats aren't changing when data is adjusted" was two bugs: the caches
+          were dropped without telling the screens reading them, and there was
+          no sign the numbers were being redone. Blanking to the skeleton would
+          answer the second by reintroducing a bug this page already fixed —
+          so the figures stay put and say they are being brought up to date. */}
+      {revalidating && (
+        <p className="flex items-center gap-2 text-xs text-slate-500" role="status">
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-pitch-400" />
+          Bringing your numbers up to date…
+        </p>
+      )}
       <Tabs tabs={TABS} active={tab} onChange={setTab} label="Progress sections" />
 
       {tab === "progress" && <TabPanel id="progress"><ProgressPanel userId={user.id} /></TabPanel>}

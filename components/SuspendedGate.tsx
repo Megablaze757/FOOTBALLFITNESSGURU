@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { clearAllDrafts } from "@/lib/drafts";
-import { invalidate } from "@/lib/use-async";
+import { recordChanged } from "@/lib/data-events";
 import { Logo } from "@/components/Logo";
 
 /**
@@ -39,7 +39,7 @@ export function SuspendedGate({ userId, children }: { userId: string; children: 
 
   async function signOut() {
     clearAllDrafts(userId);
-    invalidate();
+    recordChanged("everything");
     await createClient().auth.signOut();
     router.replace("/login");
   }

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { updateProfile } from "@/lib/profile-columns";
 import { ConfirmButton } from "@/components/ConfirmButton";
-import { invalidate } from "@/lib/use-async";
+import { recordChanged } from "@/lib/data-events";
 import {
   effectiveMealPrefs, planTargets, planWithinBudget, shoppingList, unmetSlots, dislikedFoodIds, favouriteFoodIds,
   swapKey, slotTargetKcal, type MealSwaps,
@@ -352,7 +352,7 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
     if (!error) {
       // The nutrition page caches its loader; without this the restored plan
       // would be the old seed until the cache expired.
-      invalidate(`nutrition:${userId}`);
+      recordChanged("nutrition");
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     }

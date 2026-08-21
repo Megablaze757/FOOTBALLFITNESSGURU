@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { invalidate } from "@/lib/use-async";
+import { recordChanged } from "@/lib/data-events";
 import { flushQueue, browserStore, queueCount, type QueuedCheckIn } from "@/lib/offline-queue";
 import { NATIVE_BUILD } from "@/lib/native";
 import { currentBrowser, installGuide, type BrowserEnv } from "@/lib/browser";
@@ -84,7 +84,7 @@ function useQueueDrain() {
       const { sent } = await flushQueue(store, send);
       // Home, Stats and Coach all read check-in data — without this they'd keep
       // showing the pre-sync view until a hard reload.
-      if (sent > 0 && !cancelled) invalidate();
+      if (sent > 0 && !cancelled) recordChanged("everything");
     }
 
     drain();

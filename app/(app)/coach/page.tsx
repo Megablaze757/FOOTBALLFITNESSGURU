@@ -6,7 +6,8 @@ import { createClient } from "@/lib/supabase/client";
 import { Icon, type IconName } from "@/components/Icon";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { useCurrentUser } from "@/lib/auth";
-import { useAsync, invalidate } from "@/lib/use-async";
+import { useAsync } from "@/lib/use-async";
+import { recordChanged } from "@/lib/data-events";
 import {
   goalsForSport, buildProgram, finishPlan, analyzeProgress, painByArea,
   FOCI,
@@ -498,7 +499,7 @@ function GoalBuilder({ painMap, painNote, latestBench, sport, initialPositions, 
     // users, so first-time conversion stays correct and the repeat count doubles
     // as a signal that people rebuild.
     track("program_built", { goal: g, block: 1 });
-    invalidate();
+    recordChanged("program");
     onCreated();
   }
 
@@ -1072,7 +1073,7 @@ function ActiveProgram({
     if (e) return;
     // The plan is cached by useAsync, and a swap has to show on every screen
     // that reads it rather than only where it was made.
-    invalidate();
+    recordChanged("program");
     onChange();
   }
 
@@ -1099,7 +1100,7 @@ function ActiveProgram({
     };
     const { error: reorderError } = await createClient().from("programs").update({ plan: nextPlan }).eq("id", program.id);
     if (reorderError) { setActionError(`Couldn't save that exercise order: ${reorderError.message}`); return; }
-    invalidate();
+    recordChanged("program");
     onChange();
   }
 
@@ -1162,7 +1163,7 @@ function ActiveProgram({
       .from("programs").update({ plan: newPlan, in_season: nextSeason }).eq("id", program.id);
     setSwitching(false);
     if (seasonErr) { setActionError(`Couldn't switch phase: ${seasonErr.message}`); return; }
-    invalidate();
+    recordChanged("program");
     onChange();
   }
 
@@ -1308,7 +1309,7 @@ function ActiveProgram({
         }
       }
     }
-    invalidate();
+    recordChanged("program");
     onChange();
   }
 
@@ -1348,7 +1349,7 @@ function ActiveProgram({
     }
     await supabase.from("programs").update({ status: "archived" }).eq("id", program.id);
     setAdvancing(false);
-    invalidate();
+    recordChanged("program");
     onChange();
   }
 
@@ -1357,7 +1358,7 @@ function ActiveProgram({
     setActionError(null);
     const { error } = await createClient().from("programs").update({ status: "archived" }).eq("id", program.id);
     if (error) { setActionError(`Couldn't archive this block: ${error.message}`); return; }
-    invalidate();
+    recordChanged("program");
     onChange();
   }
 
@@ -1372,7 +1373,7 @@ function ActiveProgram({
     const { error } = await createClient().from("programs").delete().eq("id", program.id);
     setDeleting(false);
     if (error) { setDeleteError(error.message); return; }
-    invalidate();
+    recordChanged("program");
     onChange();
   }
 

@@ -5,7 +5,8 @@ import { BackLink } from "@/components/BackLink";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/lib/auth";
-import { useAsync, invalidate } from "@/lib/use-async";
+import { useAsync } from "@/lib/use-async";
+import { recordChanged } from "@/lib/data-events";
 import { PlanGrid } from "@/components/PlanGrid";
 import { trackOnce, track } from "@/lib/funnel";
 import type { Subscription, Tier } from "@/lib/types";
@@ -82,7 +83,7 @@ function PricingInner() {
         if (sub?.status === "active") {
           // Drop every cached page, not just this one — the tier decides what
           // half the app renders.
-          invalidate();
+          recordChanged("everything");
           setActivation("active");
           reload();
           return;

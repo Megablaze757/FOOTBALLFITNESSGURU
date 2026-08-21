@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { invalidate } from "@/lib/use-async";
+import { recordChanged } from "@/lib/data-events";
 import { buildProgram, GOALS, goalsForSport, type GoalType } from "@/lib/coach";
 import { SPLIT_STYLES, type SplitStyle } from "@/lib/hypertrophy";
 import { ExercisePicker } from "@/components/ExercisePicker";
@@ -151,7 +151,7 @@ export function AssignProgram({ athleteId, athleteName, sport, position, coachId
       if (ok === 0) return;
     }
 
-    invalidate();           // their coach page is cached; drop it so the new plan shows
+    recordChanged("program");           // their coach page is cached; drop it so the new plan shows
     setDone(ok === 1 && targets.length === 1 ? athleteName : `${ok} athletes`);
     setOpen(false);
     onAssigned?.();

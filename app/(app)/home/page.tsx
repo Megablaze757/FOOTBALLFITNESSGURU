@@ -28,7 +28,7 @@ export default function HomePage() {
   const router = useRouter();
   const today = todayLocal();
 
-  const { data, loading } = useAsync(async () => {
+  const { data, loading, revalidating } = useAsync(async () => {
     const supabase = createClient();
     const since = daysAgoLocal(40);
     /**
@@ -326,6 +326,15 @@ export default function HomePage() {
   return (
     <div className="animate-fade-up space-y-5">
       <Greeting name={firstName} sub="Here's your day." streak={streak} />
+
+      {/* Same promise as Progress: the numbers on this page are being redone,
+          and nothing disappears while that happens. */}
+      {revalidating && (
+        <p className="flex items-center gap-2 text-xs text-slate-500" role="status">
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-pitch-400" />
+          Bringing your numbers up to date…
+        </p>
+      )}
 
       <Notifications userId={user.id} />
 

@@ -54,16 +54,41 @@ function readCache(key: string): unknown {
   return stored;
 }
 
-/** Drop cached entries after a mutation so the next read is fresh. Pass a
- *  prefix to clear a family of keys (e.g. "profile:") or nothing to clear all. */
+/**
+ * Everything currently on screen that reads cached data.
+ *
+ * THE HALF THAT WAS MISSING. `invalidate` cleared the cache and stopped, so a
+ * screen that was already mounted never learned anything had changed — it kept
+ * painting the numbers it loaded on mount until something remounted it. That is
+ * the whole of "my stats don't change when I adjust the data": the write landed,
+ * the cache was dropped, and the panel in front of the athlete carried on
+ * showing the figure from before the write.
+ *
+ * Clearing a cache is not a refresh. Telling the readers is.
+ */
+type Revalidator = (prefix?: string) => void;
+const readers = new Set<Revalidator>();
+
+/**
+ * Drop cached entries after a mutation, and refresh anything showing them.
+ *
+ * Pass a prefix to clear one family of keys ("profile:"), or nothing to clear
+ * everything. Prefer `recordChanged` in lib/data-events.ts, which names the
+ * change rather than asking each call site to work out which prefixes it
+ * touches — that guesswork is why several writes cleared nothing at all.
+ */
 export function invalidate(prefix?: string) {
   if (!prefix) {
     cache.clear();
     clearStored();
-    return;
+  } else {
+    for (const k of cache.keys()) if (k.startsWith(prefix)) cache.delete(k);
+    clearStored(prefix);
   }
-  for (const k of cache.keys()) if (k.startsWith(prefix)) cache.delete(k);
-  clearStored(prefix);
+  for (const reader of readers) {
+    // One broken listener must not stop the rest of the screen updating.
+    try { reader(prefix); } catch { /* ignore */ }
+  }
 }
 
 function clearStored(prefix?: string): void {
@@ -120,6 +145,16 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[] = [], cacheKey
   const [loading, setLoading] = useState(cached === undefined);
   const [error, setError] = useState<Error | null>(null);
   const [tick, setTick] = useState(0);
+  /**
+   * A refresh is running over data that is already on screen.
+   *
+   * Separate from `loading`, which means "there is nothing to paint yet". The
+   * difference matters: this page blanking to a skeleton on every save is a bug
+   * this codebase has already fixed once (see mutate below), and answering "the
+   * numbers must update after a change" by throwing the screen away would
+   * reintroduce it. Callers can show a quiet "updating…" and keep the figures.
+   */
+  const [revalidating, setRevalidating] = useState(false);
   const fnRef = useRef(fn);
   fnRef.current = fn;
 
@@ -143,6 +178,7 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[] = [], cacheKey
       .then((d) => {
         if (!active) return;
         setLoading(false);
+        setRevalidating(false);
         /**
          * A LOCAL WRITE THAT LANDED WHILE THIS WAS IN FLIGHT IS NEWER THAN THIS.
          *
@@ -168,15 +204,36 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[] = [], cacheKey
         const err = e instanceof Error ? e : new Error(String(e));
         setError(err);
         setLoading(false);
+        setRevalidating(false);
         reportLoadError(err, cacheKey);
       });
     return () => { active = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [...deps, tick]);
 
+  /**
+   * Refetch when something this page reads has changed underneath it.
+   *
+   * Only for keyed loaders: an unkeyed one has no identity, so there is no way
+   * to know whether a given change concerns it, and refetching all of them on
+   * every write would be a stampede.
+   */
+  useEffect(() => {
+    if (!cacheKey) return;
+    const onInvalidate = (prefix?: string) => {
+      if (prefix && !cacheKey.startsWith(prefix)) return;
+      setRevalidating(true);
+      setTick((t) => t + 1);
+    };
+    readers.add(onInvalidate);
+    return () => { readers.delete(onInvalidate); };
+  }, [cacheKey]);
+
   return {
     data,
     loading,
+    /** A refresh is in flight over data that is already on screen. */
+    revalidating,
     error,
     reload: () => {
       if (cacheKey) { cache.delete(cacheKey); clearStored(cacheKey); }

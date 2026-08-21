@@ -4,7 +4,8 @@ import { useEffect } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/lib/auth";
-import { useAsync, invalidate } from "@/lib/use-async";
+import { useAsync } from "@/lib/use-async";
+import { recordChanged } from "@/lib/data-events";
 import { ProfileForm } from "@/components/ProfileForm";
 import { CoachRequests } from "@/components/CoachRequests";
 import { CoachMessages } from "@/components/CoachMessages";
@@ -42,7 +43,7 @@ export default function ProfilePage() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (!new URLSearchParams(window.location.search).has("billing")) return;
-    invalidate("profile:");
+    recordChanged("profile");
     let n = 0;
     const t = setInterval(() => {
       reload();

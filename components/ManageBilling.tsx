@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { invokeAI } from "@/lib/api";
-import { invalidate } from "@/lib/use-async";
+import { recordChanged } from "@/lib/data-events";
 import { CancelFlow } from "@/components/CancelFlow";
 
 /**
@@ -77,7 +77,7 @@ export function ManageBilling({ hasBilling, onPaidPlan, cancelling, paused, resu
     setError(null);
     try {
       await invokeAI("resume-subscription", {});
-      invalidate();
+      recordChanged("everything");
       onChanged?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
