@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { invokeAI, estimateFood, backendCapabilities } from "@/lib/api";
 import { useJobs } from "@/lib/jobs";
 import {
-  planTargets, buildWeek, mealMacros, effectiveMealPrefs, DEFAULT_PREFS,
+  planTargets, buildWeek, mealMacros, effectiveMealPrefs, DEFAULT_PREFS, mergePrefs,
   type BodyStats, type MealPrefs, type PlannedMeal,
 } from "@/lib/meal-plan";
 import { parseSchedule } from "@/lib/meal-schedule";
@@ -249,7 +249,7 @@ export function MealCheckIn({ stats, prefs, dietNotes, seed, swaps, recent, star
     const week = buildWeek(
       planTargets(body, context), seed,
       // The SAME derivation MealPlanner uses, not a re-implementation of it.
-      effectiveMealPrefs({ ...DEFAULT_PREFS, ...(prefs ?? {}) }, dietNotes, starred),
+      effectiveMealPrefs(mergePrefs(DEFAULT_PREFS, prefs), dietNotes, starred),
       parseSchedule(dietNotes), swaps, recent
     );
     return week[DAY_INDEX()]?.meals ?? [];

@@ -2,12 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { updateProfile } from "@/lib/profile-columns";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { invalidate } from "@/lib/use-async";
 import {
   effectiveMealPrefs, planTargets, buildWeek, shoppingList, unmetSlots, dislikedFoodIds, favouriteFoodIds,
   swapKey, slotTargetKcal, type MealSwaps,
-  ACTIVITY_LEVELS, DIET_GOALS, DIET_PATTERNS, AVOIDANCES, DEFAULT_PREFS,
+  ACTIVITY_LEVELS, DIET_GOALS, DIET_PATTERNS, AVOIDANCES, DEFAULT_PREFS, mergePrefs,
   type BodyStats, type Sex, type ActivityLevel, type DietGoal, type PlannedDay, type PlanTargets,
   type MealPrefs, type DietPattern, type Avoidance,
 } from "@/lib/meal-plan";
@@ -82,7 +83,7 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
   const [starred, setStarred] = useState<string[]>(initialStarred ?? []);
   const [swapping, setSwapping] = useState<SwapTarget | null>(null);
   const [saved, setSaved] = useState(false);
-  const [prefs, setPrefs] = useState<MealPrefs>({ ...DEFAULT_PREFS, ...(initialPrefs ?? {}) });
+  const [prefs, setPrefs] = useState<MealPrefs>(() => mergePrefs(DEFAULT_PREFS, initialPrefs));
   const [notes, setNotes] = useState(initialNotes ?? "");
   const noteDislikes = useMemo(() => dislikedFoodIds(notes), [notes]);
   // "my favourite food is egg" used to do nothing at all. Now it biases the week.
@@ -275,7 +276,17 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
     setOpenDay(0);
     // Remember the stats AND which plan it was, so neither has to be redone.
     const supabase = createClient();
-    const { error } = await supabase.from("profiles").update({
+    /**
+     * "KEEP IT CHEAP" WAS NEVER SAVED — it lived in React state and nowhere
+     * else. That is worse than a setting that forgets itself: the nutrition
+     * page rebuilds this exact week from the seed plus the saved preferences,
+     * so a plan generated in budget mode was re-rendered without it. Same seed,
+     * different dinners, in two places at once.
+     *
+     * Split from the settled columns so an outstanding migration costs the two
+     * preferences rather than the whole save — see updateProfile.
+     */
+    const { error } = await updateProfile(supabase, userId, {
       height_cm: stats.heightCm,
       birth_year: new Date().getFullYear() - stats.age,
       sex, activity_level: activity, diet_goal: goal,
@@ -288,7 +299,10 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
       meal_plan_recent: justServed,
       // Stars are about the dishes, not this plan, so they carry over.
       meal_plan_starred: starred,
-    }).eq("id", userId);
+    }, {
+      diet_budget: prefs.budget,
+      diet_cook_level: prefs.cookLevel ?? "any",
+    });
     if (!error) {
       // The nutrition page caches its loader; without this the restored plan
       // would be the old seed until the cache expired.
@@ -560,16 +574,32 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
               <option value={5}>5 — two snacks</option>
             </select>
           </label>
-          <label className="flex items-end gap-2 pb-3">
-            <input
-              type="checkbox"
-              checked={prefs.budget}
-              onChange={(e) => setPrefs((p) => ({ ...p, budget: e.target.checked }))}
-              className="h-5 w-5 accent-pitch-500"
-            />
-            <span className="text-sm text-slate-300">Keep it cheap</span>
+          <label className="block">
+            {/* HOW MUCH COOKING, not how long. Recipes are rated from their own
+                contents — see lib/recipe-difficulty.ts — and somebody who
+                cannot face cooking should get the simple ones all week rather
+                than swapping dinner every night. */}
+            <span className="field-label">Cooking</span>
+            <select
+              value={prefs.cookLevel ?? "any"}
+              onChange={(e) => setPrefs((p) => ({ ...p, cookLevel: e.target.value as "any" | "easy" }))}
+              className="field [color-scheme:dark]"
+            >
+              <option value="any">Anything — I&apos;ll cook</option>
+              <option value="easy">Keep it simple</option>
+            </select>
           </label>
         </div>
+
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={prefs.budget}
+            onChange={(e) => setPrefs((p) => ({ ...p, budget: e.target.checked }))}
+            className="h-5 w-5 accent-pitch-500"
+          />
+          <span className="text-sm text-slate-300">Keep it cheap</span>
+        </label>
 
         <label className="block">
           <span className="field-label">Notes — anything else?</span>

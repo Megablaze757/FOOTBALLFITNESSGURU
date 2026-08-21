@@ -5,6 +5,7 @@ import {
   MEALS, mealAllowed, mealMacros, recipeSteps,
   type Meal, type MealPrefs, type Slot,
 } from "@/lib/meal-plan";
+import { cookRating } from "@/lib/recipe-difficulty";
 import { FOOD_BY_ID } from "@/lib/food-db";
 import { MealFilterBar } from "@/components/MealFilterBar";
 import { passesFilters, matchesQuery, activeFilterCount, NO_FILTERS, type MealFilters } from "@/lib/meal-filters";
@@ -165,7 +166,7 @@ export function MealSwap({ target, prefs, starred = [], onPick, onClose }: {
                     <span className="mt-0.5 block text-xs text-slate-500">
                       {Math.round(macros.kcal)} kcal · {Math.round(macros.protein)}g protein
                       {meal.minutes != null && ` · ${meal.minutes} min`}
-                      {` · ${recipeSteps(meal).length} steps`}
+                      {` · ${recipeSteps(meal).length} steps · ${cookRating(meal).label.toLowerCase()}`}
                     </span>
                     {stretch && (
                       <span className="mt-1 inline-block rounded-md bg-amber-400/10 px-1.5 py-0.5 text-[11px] text-amber-300">

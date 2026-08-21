@@ -1,5 +1,6 @@
 import { recipeSteps, recipeNote, recipeSearchUrl, type Meal, type Macros } from "@/lib/meal-plan";
 import { FOOD_BY_ID } from "@/lib/food-db";
+import { cookRating } from "@/lib/recipe-difficulty";
 
 /**
  * A meal, as something you can actually cook from.
@@ -47,6 +48,12 @@ export function Recipe({ meal, scale, macros }: {
             <span aria-hidden>⏱</span> {meal.minutes} min
           </span>
         )}
+        {/* Time says how long; this says how much attention. A fifteen-minute
+            stir-fry with a sauce to reduce is harder work than a forty-minute
+            tray bake, and only one of those two facts was on the card. */}
+        <span className="chip text-slate-300" title={cookRating(meal).blurb}>
+          {cookRating(meal).label} to cook
+        </span>
         <span className="chip text-slate-300">
           {Math.round(macros.kcal)} kcal · {Math.round(macros.protein)}g protein
         </span>

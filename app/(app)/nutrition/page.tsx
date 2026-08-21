@@ -67,7 +67,7 @@ export default function NutritionPage() {
       // which is exactly what happened when 0066-0069 hadn't been applied.
       selectProfile(supabase, user.id,
         "height_cm, birth_year, sex, activity_level, diet_goal, diet_pattern, diet_avoid, meals_per_day, diet_notes, meal_plan_seed, sport",
-        ["meal_plan_swaps", "meal_plan_recent", "meal_plan_starred", "calorie_target", "protein_target", "carbs_target", "fats_target"]),
+        ["meal_plan_swaps", "meal_plan_recent", "meal_plan_starred", "calorie_target", "protein_target", "carbs_target", "fats_target", "diet_budget", "diet_cook_level"]),
       supabase.from("body_logs").select("log_date, weight_kg").eq("user_id", user.id)
         .not("weight_kg", "is", null).order("log_date", { ascending: false }).limit(1),
     ]);
@@ -95,6 +95,7 @@ export default function NutritionPage() {
       meal_plan_seed?: number | null; meal_plan_swaps?: Record<string, string> | null;
       meal_plan_recent?: string[] | null; meal_plan_starred?: string[] | null; sport?: string;
       calorie_target?: number | null; protein_target?: number | null; carbs_target?: number | null; fats_target?: number | null;
+      diet_budget?: boolean | null; diet_cook_level?: string | null;
     } | null;
     return {
       sub: (sub ?? null) as Subscription | null,
@@ -120,6 +121,14 @@ export default function NutritionPage() {
         pattern: (pr?.diet_pattern as never) ?? undefined,
         avoid: (pr?.diet_avoid as never) ?? undefined,
         mealsPerDay: (pr?.meals_per_day as never) ?? undefined,
+        /**
+         * THE TWO THAT WERE ONLY EVER IN REACT STATE. This page rebuilds the
+         * saved week from the seed plus these preferences — so while "keep it
+         * cheap" went unsaved, a plan generated in budget mode was re-rendered
+         * here without it. One seed, two different sets of dinners.
+         */
+        budget: pr?.diet_budget ?? undefined,
+        cookLevel: (pr?.diet_cook_level as never) ?? undefined,
       },
       dietNotes: pr?.diet_notes ?? "",
       mealSeed: pr?.meal_plan_seed ?? null,

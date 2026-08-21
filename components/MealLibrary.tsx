@@ -10,6 +10,7 @@ import { selectProfile } from "@/lib/profile-columns";
 import { MealFilterBar } from "@/components/MealFilterBar";
 import { passesFilters, matchesQuery, activeFilterCount, NO_FILTERS, type MealFilters } from "@/lib/meal-filters";
 import { FOOD_BY_ID } from "@/lib/food-db";
+import { cookRating } from "@/lib/recipe-difficulty";
 
 /**
  * Every recipe in the book, browsable.
@@ -193,6 +194,9 @@ export function MealLibrary({ userId }: { userId: string }) {
                       <span className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-slate-500">
                         {m.slot}
                         {m.minutes != null && <span className="normal-case">· {m.minutes} min</span>}
+                        {/* HOW MUCH OF YOU IT NEEDS, which the time alone does
+                            not say — see lib/recipe-difficulty.ts. */}
+                        <CookBadge meal={m} />
                       </span>
                       <span className="mt-0.5 block text-sm font-bold text-slate-100">{m.name}</span>
                       {/* Value before label, and the two numbers anyone
@@ -313,5 +317,25 @@ function MealModal({ meal, canStar, starred, onStar, onClose }: {
         </div>
       </div>
     </Portal>
+  );
+}
+
+/**
+ * Easy / Medium / Involved, derived from the recipe itself.
+ *
+ * Colour-coded like the exercise difficulties on the other tab, because it is
+ * the same promise being made about a different kind of work.
+ */
+function CookBadge({ meal }: { meal: Meal }) {
+  const rating = cookRating(meal);
+  const tone = rating.level === "easy"
+    ? "bg-emerald-400/10 text-emerald-300"
+    : rating.level === "medium"
+      ? "bg-amber-400/10 text-amber-300"
+      : "bg-rose-400/10 text-rose-300";
+  return (
+    <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-semibold normal-case ${tone}`} title={rating.blurb}>
+      {rating.label}
+    </span>
   );
 }

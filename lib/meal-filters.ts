@@ -1,4 +1,5 @@
 import { mealMacros, mealTags, type Meal } from "./meal-plan";
+import { isEasyCook } from "./recipe-difficulty";
 
 /**
  * The filter row shared by the recipe library and the swap sheet.
@@ -16,6 +17,7 @@ import { mealMacros, mealTags, type Meal } from "./meal-plan";
  * WHAT EARNED A CHIP. Only the questions people actually arrive with:
  *
  *   - "I have no time tonight"          -> Under 15 min
+ *   - "I have no energy tonight"        -> Easy to cook
  *   - "I need to hit my protein"        -> High protein
  *   - "the ones I like"                 -> Starred
  *   - "no meat" / "no animal products"  -> Veggie, Vegan
@@ -28,6 +30,16 @@ import { mealMacros, mealTags, type Meal } from "./meal-plan";
 
 export interface MealFilters {
   quick: boolean;
+  /**
+   * Easy to COOK, which is not the same question as quick.
+   *
+   * A fifteen-minute stir-fry with nine ingredients and a sauce to reduce
+   * passes "under 15 min" and is harder work than a forty-minute tray bake you
+   * assemble once. Somebody cooking at nine at night after a session is asking
+   * how much of them the recipe needs, and time alone answers a different
+   * question. See lib/recipe-difficulty.ts.
+   */
+  easy: boolean;
   highProtein: boolean;
   starred: boolean;
   veggie: boolean;
@@ -35,7 +47,7 @@ export interface MealFilters {
 }
 
 export const NO_FILTERS: MealFilters = {
-  quick: false, highProtein: false, starred: false, veggie: false, vegan: false,
+  quick: false, easy: false, highProtein: false, starred: false, veggie: false, vegan: false,
 };
 
 /** Hands-on minutes at or under which a meal counts as "quick". */
@@ -60,6 +72,7 @@ export interface FilterChip {
 
 export const FILTER_CHIPS: FilterChip[] = [
   { id: "quick", label: `Under ${QUICK_MINUTES} min`, icon: "⏱" },
+  { id: "easy", label: "Easy to cook", icon: "🍳" },
   { id: "highProtein", label: `${HIGH_PROTEIN_G}g+ protein`, icon: "💪" },
   { id: "starred", label: "Starred", icon: "★" },
   { id: "veggie", label: "Veggie", icon: "🌱" },
@@ -74,6 +87,7 @@ export function passesFilters(
 ): boolean {
   // A meal with no stated time is not assumed quick. Unknown is not fast.
   if (f.quick && (meal.minutes ?? Number.POSITIVE_INFINITY) > QUICK_MINUTES) return false;
+  if (f.easy && !isEasyCook(meal)) return false;
   if (f.highProtein && mealMacros(meal).protein < HIGH_PROTEIN_G) return false;
   if (f.starred && !starredIds.includes(meal.id)) return false;
 

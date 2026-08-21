@@ -53,3 +53,40 @@ export async function selectProfile<T = Record<string, unknown>>(
   }
   return { data: retry.data as T | null, missing: optional };
 }
+
+/**
+ * Write a profile without letting one unmigrated column reject the whole update.
+ *
+ * THE SAME CONTRACT, IN THE OTHER DIRECTION. An UPDATE naming N columns is as
+ * all-or-nothing as a SELECT: one column the database has not got yet and
+ * PostgREST rejects the statement, so saving a meal plan fails entirely because
+ * of a preference nobody would miss. That is a strictly worse failure than the
+ * read side — a read that fails shows stale data, a write that fails loses what
+ * the athlete just did.
+ *
+ * So the new columns are separated from the settled ones. If the database
+ * refuses them, the settled write is retried on its own and the caller is told
+ * which columns did not land, rather than the save simply not happening.
+ */
+export async function updateProfile(
+  supabase: SupabaseClient,
+  userId: string,
+  /** Columns that have existed long enough to rely on. */
+  stable: Record<string, unknown>,
+  /** Columns from recent migrations, which production may not have yet. */
+  optional: Record<string, unknown> = {}
+): Promise<{ error: unknown; missing: string[] }> {
+  const names = Object.keys(optional);
+  const first = await supabase.from("profiles").update({ ...stable, ...optional }).eq("id", userId);
+  if (!first.error) return { error: null, missing: [] };
+  if (first.error.code !== "42703" || names.length === 0) return { error: first.error, missing: [] };
+
+  const retry = await supabase.from("profiles").update(stable).eq("id", userId);
+  if (retry.error) return { error: retry.error, missing: names };
+
+  console.warn(
+    `[profile] columns not in the database yet: ${names.join(", ")}. ` +
+    `Everything else saved; those settings will not persist until the migrations are applied.`
+  );
+  return { error: null, missing: names };
+}

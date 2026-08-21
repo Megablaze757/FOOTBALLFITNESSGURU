@@ -48,6 +48,17 @@ export interface MealPrefs {
   avoid: Avoidance[];
   mealsPerDay: 3 | 4 | 5;
   budget: boolean;      // prefer cheaper staples
+  /**
+   * How much cooking they are up for.
+   *
+   * "easy" is a PREFERENCE, not a filter. Cutting the book to the 38% of
+   * recipes rated easy would leave some slots with a handful of candidates,
+   * and the variety rule, the diet rules and the macro targets all need room
+   * to move — a plan that hits none of its protein targets but is simple to
+   * cook is not the trade anybody asked for. So the easy ones are offered
+   * first and the rest stay available. See lib/recipe-difficulty.ts.
+   */
+  cookLevel?: CookPreference;
   dislikes: string[];   // food ids the athlete never wants to see
   /** Food ids they've said they like. A nudge toward, not a guarantee of. */
   favourites?: string[];
@@ -262,8 +273,32 @@ export function effectiveMealPrefs(
 }
 
 export const DEFAULT_PREFS: MealPrefs = {
-  pattern: "omnivore", avoid: [], mealsPerDay: 4, budget: false, dislikes: [], favourites: [], starred: [],
+  pattern: "omnivore", avoid: [], mealsPerDay: 4, budget: false, cookLevel: "any",
+  dislikes: [], favourites: [], starred: [],
 };
+
+/**
+ * Layer saved preferences over the defaults, ignoring the ones that are absent.
+ *
+ * A PLAIN SPREAD IS WRONG HERE, and quietly. The saved profile is read with
+ * `?? undefined` on every field, so an athlete who has never set a diet pattern
+ * produces `{ pattern: undefined, avoid: undefined, mealsPerDay: undefined }` —
+ * and `{ ...DEFAULT_PREFS, ...that }` is not the defaults, it is undefined
+ * three times over. `prefs.avoid.length` then throws, and the only reason it
+ * never has is that migration 0030 backfilled every existing row with a
+ * default. One row inserted with an explicit null and the meal planner is a
+ * blank screen.
+ *
+ * Absent is not a value — the same rule the rest of this codebase keeps
+ * relearning.
+ */
+export function mergePrefs(base: MealPrefs, saved?: Partial<MealPrefs> | null): MealPrefs {
+  const merged = { ...base };
+  for (const [key, value] of Object.entries(saved ?? {})) {
+    if (value !== undefined && value !== null) (merged as Record<string, unknown>)[key] = value;
+  }
+  return merged;
+}
 
 /** Does this meal contain something the athlete said they like? */
 function isFavourite(meal: Meal, favourites: Set<string>): boolean {
@@ -331,18 +366,14 @@ export interface Meal {
 }
 
 /**
- * A meal's method as steps you can follow one at a time.
+ * The method-to-steps logic lives in `recipe-steps.ts` now.
  *
- * Splits on SENTENCE boundaries only, never on commas. Comma-splitting looked
- * tempting — most of these methods are comma-separated instructions — but it
- * mangles the ones with an aside in them ("season hard (turmeric and black
- * salt, if you have them)") and turns "Cheap, high protein and it freezes"
- * into three imaginary steps. A conservative split is never wrong; an
- * aggressive one is wrong in a way that makes the app look careless.
+ * Re-exported here because every caller already imports it from this module,
+ * exactly as MEALS is below. It moved so that lib/recipe-difficulty.ts — which
+ * counts a recipe's steps, and which this module now sorts on — could import it
+ * without the two of them forming a cycle.
  */
-export function recipeSteps(meal: Meal): string[] {
-  return splitMethod(meal).steps;
-}
+export { recipeSteps, recipeNote } from "./recipe-steps";
 
 /**
  * Somewhere to look up another version of this dish.
@@ -372,78 +403,6 @@ export function recipeSearchUrl(meal: Meal): string {
 }
 
 /**
- * The bit of a method that is commentary rather than instruction.
- *
- * Most of these recipes end on an aside — "Cheap, high protein and it freezes",
- * "Around 1,000 kcal without feeling like a challenge". True, useful, and not a
- * step. Numbering it tells someone to go and do it, which is the kind of small
- * wrongness that makes a whole feature feel machine-generated.
- */
-export function recipeNote(meal: Meal): string | undefined {
-  return meal.tip ?? splitMethod(meal).note;
-}
-
-/**
- * Verbs a cooking instruction actually starts with.
- *
- * A list, not a parts-of-speech guess. The set of imperatives used in a recipe
- * is small and closed, and enumerating it is both more accurate than a
- * heuristic and honest about where it will fail — a method starting with a verb
- * that isn't here degrades to "treated as a note", which is safe, rather than
- * to a mangled step.
- */
-const COOK_VERBS = new Set([
-  "add", "assemble", "bake", "beat", "blend", "blitz", "boil", "bring", "build",
-  "chop", "combine", "cook", "cover", "crack", "crisp", "crumble", "cube", "cut",
-  "defrost", "dice", "drain", "dress", "drizzle", "everything", "fill", "finish",
-  "fold", "fork", "fry", "grate", "grill", "heat", "keep", "layer", "leave",
-  "let", "loosen", "mash", "meanwhile", "microwave", "mix", "oven", "pan",
-  "plate", "pour", "press", "push", "put", "reduce", "reheat", "rinse", "roast",
-  "scramble", "sear", "season", "serve", "shake", "simmer", "slice", "snap",
-  "soften", "spread", "sprinkle", "squeeze", "steam", "stir", "take", "toast",
-  "top", "toss", "turn", "warm", "wilt", "whisk", "spoon", "tip", "rice",
-  "pasta", "potatoes", "beans", "lentils", "oven's", "under",
-]);
-
-function isInstruction(sentence: string): boolean {
-  const first = sentence.trim().toLowerCase().replace(/^[^a-z]+/, "").split(/[\s,]/)[0] ?? "";
-  return COOK_VERBS.has(first);
-}
-
-/**
- * Split a prose method into steps plus a trailing note.
- *
- * Sentence boundaries only — never commas. Comma-splitting was tempting, since
- * most of these are comma-separated instructions, but it turns an aside like
- * "season hard (turmeric and black salt, if you have them)" into two steps and
- * "Cheap, high protein and it freezes" into three. A conservative split is
- * never wrong; an aggressive one is wrong in a way that looks careless.
- *
- * Trailing sentences that don't begin with a cooking verb are lifted out as the
- * note. Only TRAILING ones: a non-instruction in the middle is usually context
- * for the step after it ("The tofu needs to be dry. Fry it hard...") and pulling
- * that to the bottom would break the sequence.
- */
-function splitMethod(meal: Meal): { steps: string[]; note?: string } {
-  if (meal.steps?.length) return { steps: meal.steps, note: meal.tip };
-
-  const sentences = meal.method
-    .split(/(?<=[.!?])\s+(?=[A-Z])/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-
-  const steps = [...sentences];
-  const notes: string[] = [];
-  // Peel commentary off the end, but never take the last instruction with it —
-  // a method must always have at least one step.
-  while (steps.length > 1 && !isInstruction(steps[steps.length - 1])) {
-    notes.unshift(steps.pop()!);
-  }
-
-  return { steps, note: notes.length ? notes.join(" ") : undefined };
-}
-
-/**
  * The recipes live in `meals-data.ts` now.
  *
  * Six hundred lines of dinners inside the scoring engine made both harder to
@@ -452,6 +411,7 @@ function splitMethod(meal: Meal): { steps: string[]; note?: string } {
  * imports MEALS from this module.
  */
 import { MEALS } from "./meals-data";
+import { cookRating, type CookPreference } from "./recipe-difficulty";
 export { MEALS };
 
 // --- macros ------------------------------------------------------------------
@@ -524,6 +484,11 @@ function mealCost(meal: Meal): number {
 
 function bySlot(slot: Slot, prefs: MealPrefs): Meal[] {
   const ok = MEALS.filter((m) => m.slot === slot && mealAllowed(m, prefs));
+  // Cooking level is NOT applied here. Ordering the candidate list only shifts
+  // a tie-break worth a tenth of a penny — the same reason `seed` decided
+  // nothing for so long — and sorting the pool easy-first moved a simple week
+  // from 33% easy to 39%. It is a real preference, so it is priced in the
+  // score like every other real preference. See FAFF_WEIGHT.
   return prefs.budget ? [...ok].sort(cheapest) : ok;
 }
 
@@ -1136,6 +1101,44 @@ export function buildWeek(
    *
    * Set in `weeklyRepeatPenalty` below, once `wanted` is known.
    */
+  /**
+   * WHAT AN INVOLVED RECIPE COSTS SOMEBODY WHO ASKED FOR SIMPLE FOOD, in pounds.
+   *
+   * Priced into the score for the same reason budget mode had to be. Sorting
+   * the candidate list changes almost nothing, because the top-scoring meal for
+   * an athlete and a slot genuinely is better than the rest by a wide margin —
+   * ordering the pool easy-first moved a simple week from 37% easy to 39%,
+   * which is not a preference anybody would notice they had set.
+   *
+   * A PRICE, NOT A FILTER, and that is the whole design. Cutting the book to
+   * the 38% rated easy leaves some slots with a handful of candidates, and the
+   * variety, diet and protein rules all need room to move. A simple week that
+   * misses its protein target every day is not the trade anybody asked for.
+   *
+   * Swept over 24 athlete/diet/seed combinations, reporting everything the
+   * weight can spend:
+   *
+   *     weight   easy   protein short   distinct meals   shop
+   *        0      37%            0.0%             24.7   £107.52
+   *        3      61%            0.0%             22.9   £110.85
+   *        5      67%            0.0%             21.3   £111.06
+   *        8      71%            0.0%             20.4   £111.29
+   *       12      75%            1.2%             19.6         —
+   *
+   * 5. Protein is untouched right up to 12, so the real currency here is
+   * VARIETY: leaning harder buys easy dinners with repetition, and by 8 the
+   * week has lost four distinct dishes for four more points of ease. Two thirds
+   * of the week is a preference you can feel, and "keep it simple" was never a
+   * promise that every single meal would be.
+   *
+   * The shop goes up about £3.50 — three per cent — because simple food is
+   * slightly less pack-efficient. Anybody who cares about that has "keep it
+   * cheap" beside this, and the two can be ticked together.
+   */
+  const FAFF_WEIGHT = 5;
+  const faff = (meal: Meal) =>
+    prefs.cookLevel === "easy" ? cookRating(meal).score * FAFF_WEIGHT : 0;
+
   const budgetScale = prefs.budget ? 0.35 : 1;
   /**
    * BUDGET MODE HAS TO ACTUALLY WEIGHT COST, and it didn't.
@@ -1493,6 +1496,10 @@ export function buildWeek(
             + mealCost(meal) * servingCostWeight
             - (isFavourite(meal, favourites) ? FAVOURITE_BONUS : 0)
             - (starred.has(meal.id) ? STARRED_BONUS : 0)
+            // What the faff is worth to somebody who said "keep it simple".
+            // Priced rather than filtered, so a recipe they need for their
+            // protein can still outbid it. See FAFF_WEIGHT.
+            + faff(meal)
             + fit
             + ((idx + seed + nth) % list.length) * 0.001,
           capped: (served.mealUses.get(meal.id) ?? 0) >= MAX_REPEATS,
