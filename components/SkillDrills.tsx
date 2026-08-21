@@ -65,7 +65,7 @@ export function SkillDrills({ sport, position }: { sport: SportId; position?: st
             <button
               key={o.id}
               onClick={() => setHave(o.id)}
-              className={`flex-1 rounded-xl border py-2 text-xs font-semibold transition ${
+              className={`min-h-[44px] flex-1 rounded-xl border py-2 text-xs font-semibold transition ${
                 have === o.id
                   ? "border-pitch-400/50 bg-pitch-400/10 text-pitch-400"
                   : "border-white/10 bg-white/[0.03] text-slate-300"
@@ -104,7 +104,7 @@ export function SkillDrills({ sport, position }: { sport: SportId; position?: st
 function DrillCard({ drill, highlight }: { drill: SkillDrill; highlight: boolean }) {
   return (
     <details className={`card p-4 ${highlight ? "ring-1 ring-pitch-400/30" : ""}`}>
-      <summary className="flex cursor-pointer list-none items-start gap-3">
+      <summary className="min-h-[44px] flex cursor-pointer list-none items-start gap-3">
         <span className="min-w-0 flex-1">
           <span className="flex flex-wrap items-center gap-2">
             <span className="chip text-pitch-400">{drill.skill}</span>

@@ -164,7 +164,7 @@ export function AssignProgram({ athleteId, athleteName, sport, position, coachId
 
   if (!open) {
     return (
-      <button onClick={() => setOpen(true)} className="text-xs font-semibold text-pitch-400 hover:underline">
+      <button onClick={() => setOpen(true)} className="tap-target text-xs font-semibold text-pitch-400 hover:underline">
         Assign a program →
       </button>
     );
@@ -176,7 +176,7 @@ export function AssignProgram({ athleteId, athleteName, sport, position, coachId
         <span className="min-w-0 break-words text-sm font-bold text-slate-100">
           Program for {toTeam && squad.length ? `the whole squad (${squad.length})` : athleteName}
         </span>
-        <button onClick={() => setOpen(false)} className="shrink-0 text-xs text-slate-500">Cancel</button>
+        <button onClick={() => setOpen(false)} className="tap-target shrink-0 text-xs text-slate-500">Cancel</button>
       </div>
 
       {/* Whole-squad assignment. Each athlete is still built individually from
@@ -238,7 +238,7 @@ export function AssignProgram({ athleteId, athleteName, sport, position, coachId
             <button
               key={n}
               onClick={() => setDays(n)}
-              className={`flex-1 rounded-xl border py-2 text-sm font-bold transition ${
+              className={`min-h-[44px] flex-1 rounded-xl border py-2 text-sm font-bold transition ${
                 days === n ? "border-pitch-400/50 bg-pitch-400/10 text-pitch-400" : "border-white/10 bg-white/[0.03] text-slate-300"
               }`}
             >

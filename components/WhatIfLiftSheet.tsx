@@ -98,7 +98,7 @@ export function WhatIfLiftSheet({ initialExercise = "", onClose }: {
             <label>
               <span className="field-label flex items-center justify-between gap-2">
                 <span>Weight ({unit})</span>
-                <span className="inline-flex rounded-lg border border-white/10 p-0.5">
+                <span className="unit-toggle">
                   {(["kg", "lb"] as const).map((next) => (
                     <button
                       key={next}
@@ -109,7 +109,6 @@ export function WhatIfLiftSheet({ initialExercise = "", onClose }: {
                         setWeight((current) => current == null ? null : Math.round((next === "lb" ? current * 2.2046226218 : current / 2.2046226218) * 10) / 10);
                         setUnit(next);
                       }}
-                      className={`rounded-md px-2 py-1 text-[10px] font-bold uppercase ${unit === next ? "bg-pitch-400 text-ink-900" : "text-slate-500"}`}
                     >
                       {next}
                     </button>

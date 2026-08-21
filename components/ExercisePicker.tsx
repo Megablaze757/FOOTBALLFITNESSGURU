@@ -61,7 +61,7 @@ export function ExercisePicker({ sport, value, onChange }: {
               key={m.id}
               type="button"
               onClick={() => toggle(m.id)}
-              className="rounded-full bg-pitch-400/15 px-2.5 py-1 text-xs font-medium text-pitch-400"
+              className="min-h-[44px] rounded-full bg-pitch-400/15 px-2.5 py-1 text-xs font-medium text-pitch-400"
             >
               {m.name} ×
             </button>
@@ -93,7 +93,7 @@ export function ExercisePicker({ sport, value, onChange }: {
                   <button
                     type="button"
                     onClick={() => toggle(m.id)}
-                    className={`flex min-h-[2.5rem] w-full items-center justify-between gap-2 rounded-xl px-3 py-2 text-left text-xs transition ${
+                    className={`min-h-[44px] flex min-h-[2.5rem] w-full items-center justify-between gap-2 rounded-xl px-3 py-2 text-left text-xs transition ${
                       on ? "bg-pitch-400/15 text-pitch-400" : "text-slate-300 hover:bg-white/[0.06]"
                     }`}
                   >

@@ -167,7 +167,7 @@ export function ShoppingList({ list, seed, store, onStore, onCorrectPrice }: {
                       <button
                         onClick={() => toggle(l.food.id)}
                         aria-pressed={isTicked}
-                        className="flex min-w-0 flex-1 items-center gap-3 rounded-xl py-2 pl-1 pr-2 text-left transition hover:bg-white/[0.03]"
+                        className="min-h-[44px] flex min-w-0 flex-1 items-center gap-3 rounded-xl py-2 pl-1 pr-2 text-left transition hover:bg-white/[0.03]"
                       >
                         <span
                           className={`grid h-5 w-5 shrink-0 place-items-center rounded-md border text-[11px] font-bold transition ${

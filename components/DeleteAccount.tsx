@@ -106,14 +106,14 @@ export function DeleteAccount({ email }: { email: string }) {
                 <button
                   onClick={() => setOpen(false)}
                   disabled={busy}
-                  className="flex-1 rounded-2xl border border-white/10 px-4 py-2.5 text-sm font-semibold text-slate-300 transition hover:bg-white/[0.06]"
+                  className="min-h-[44px] flex-1 rounded-2xl border border-white/10 px-4 py-2.5 text-sm font-semibold text-slate-300 transition hover:bg-white/[0.06]"
                 >
                   Keep my account
                 </button>
                 <button
                   onClick={confirmDelete}
                   disabled={!matches || busy}
-                  className="flex-1 rounded-2xl bg-readiness-red px-4 py-2.5 text-sm font-semibold text-white transition disabled:opacity-40"
+                  className="min-h-[44px] flex-1 rounded-2xl bg-readiness-red px-4 py-2.5 text-sm font-semibold text-white transition disabled:opacity-40"
                 >
                   {busy ? "Deleting…" : "Delete forever"}
                 </button>

@@ -157,7 +157,7 @@ export function CoachChat({ context, briefing, suggestions, storageKey, userId }
           disabled={!restored}
           placeholder={restored ? "Ask about training, recovery or food…" : "Loading your conversation…"}
         />
-        <button type="submit" disabled={!input.trim() || thinking || !restored} className="rounded-2xl bg-gradient-to-br from-pitch-400 to-pitch-600 px-4 font-semibold text-ink-900 disabled:opacity-50">↑</button>
+        <button type="submit" disabled={!input.trim() || thinking || !restored} className="min-h-[44px] rounded-2xl bg-gradient-to-br from-pitch-400 to-pitch-600 px-4 font-semibold text-ink-900 disabled:opacity-50">↑</button>
       </form>
     </section>
   );

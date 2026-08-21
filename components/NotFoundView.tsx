@@ -92,7 +92,7 @@ export function NotFoundView() {
           <Link href="/home" className="btn-primary max-w-[14rem]">Back to home</Link>
           <button
             onClick={() => window.history.back()}
-            className="text-sm text-slate-400 transition hover:text-pitch-400"
+            className="tap-target text-sm text-slate-400 transition hover:text-pitch-400"
           >
             ← Go back
           </button>

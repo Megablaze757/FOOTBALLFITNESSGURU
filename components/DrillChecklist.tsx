@@ -50,7 +50,7 @@ export function DrillChecklist({ drills }: { drills: DrillItem[] }) {
               <button
                 type="button"
                 onClick={() => ex && setOpenId(d.id)}
-                className="flex flex-1 items-center gap-3 text-left disabled:cursor-default"
+                className="min-h-[44px] flex flex-1 items-center gap-3 text-left disabled:cursor-default"
                 disabled={!ex}
               >
                 {ex && (

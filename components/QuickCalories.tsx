@@ -107,7 +107,7 @@ export function QuickCalories({ hidden, onAdd }: {
       </div>
       </div>
       <button type="button" onClick={() => setDetails((open) => !open)}
-        className="mt-2 text-xs font-semibold text-slate-500 hover:text-sky-300">
+        className="tap-target mt-2 text-xs font-semibold text-slate-500 hover:text-sky-300">
         {details ? "Hide details" : "+ Add name or macros"}
       </button>
       {details && (

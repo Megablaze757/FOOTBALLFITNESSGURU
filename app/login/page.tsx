@@ -368,7 +368,7 @@ export default function LoginPage() {
                 type="button"
                 onClick={resendConfirmation}
                 disabled={cooldown > 0}
-                className="mt-2 text-sm font-semibold text-pitch-400 hover:underline disabled:text-slate-500 disabled:no-underline"
+                className="tap-target mt-2 text-sm font-semibold text-pitch-400 hover:underline disabled:text-slate-500 disabled:no-underline"
               >
                 {cooldown > 0 ? `Resend in ${cooldown}s` : "Resend confirmation email"}
               </button>
@@ -386,7 +386,7 @@ export default function LoginPage() {
             setError(null);
             setInfo(null);
           }}
-          className="mt-5 w-full text-sm text-slate-400 transition hover:text-pitch-400"
+          className="tap-target mt-5 w-full text-sm text-slate-400 transition hover:text-pitch-400"
         >
           {mode === "sign_in" ? "Need an account? Sign up" : "Have an account? Sign in"}
         </button>

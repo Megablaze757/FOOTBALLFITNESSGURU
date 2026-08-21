@@ -80,7 +80,7 @@ export function HealthConsentGate({ userId, children }: { userId: string; childr
         </button>
         <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-xs text-slate-500">
           <Link href="/profile" className="hover:text-slate-300">Manage or delete my account</Link>
-          <button onClick={signOut} className="hover:text-slate-300">Sign out</button>
+          <button onClick={signOut} className="tap-target hover:text-slate-300">Sign out</button>
         </div>
       </section>
     </main>

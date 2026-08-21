@@ -405,7 +405,7 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
                       value={d.load_kg ?? ""}
                       onChange={(v) => setDrill(i, { load_kg: v === "" ? null : v })}
                       optional
-                      action={<button type="button" onClick={() => setWhatIf(d.name)} className="grid h-6 w-6 place-items-center text-pitch-400" aria-label={`What-if lift check for ${d.name || "this exercise"}`}><Icon name="calculator" size={14} /></button>}
+                      action={<button type="button" onClick={() => setWhatIf(d.name)} className="tap-pad relative grid h-6 w-6 place-items-center text-pitch-400" aria-label={`What-if lift check for ${d.name || "this exercise"}`}><Icon name="calculator" size={14} /></button>}
                     />
                   </div>
                   <button
@@ -444,7 +444,7 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
                       <span>Reps</span>
                       <span className="flex items-center justify-center gap-1">
                         kg
-                        <button type="button" onClick={() => setWhatIf(d.name)} className="grid h-6 w-6 place-items-center text-pitch-400" aria-label={`What-if lift check for ${d.name || "this exercise"}`}><Icon name="calculator" size={14} /></button>
+                        <button type="button" onClick={() => setWhatIf(d.name)} className="tap-pad relative grid h-6 w-6 place-items-center text-pitch-400" aria-label={`What-if lift check for ${d.name || "this exercise"}`}><Icon name="calculator" size={14} /></button>
                       </span>
                     </div>
                     <span className="w-9 shrink-0" aria-hidden="true" />
@@ -885,10 +885,9 @@ function PaceLine({ km, seconds, unit }: { km: number | null | undefined; second
 /** km or miles, in the athlete's hands rather than buried in settings. */
 function UnitToggle({ unit, onChange }: { unit: "km" | "mi"; onChange: (next: "km" | "mi") => void }) {
   return (
-    <span className="inline-flex rounded-lg bg-white/[0.05] p-0.5">
+    <span className="unit-toggle unit-toggle-sky">
       {(["km", "mi"] as const).map((u) => (
         <button key={u} type="button" onClick={() => onChange(u)}
-          className={`rounded-md px-2 py-1 text-[10px] font-bold uppercase ${u === unit ? "bg-sky-400 text-ink-900" : "text-slate-400"}`}
           aria-label={u === "km" ? "Use kilometres" : "Use miles"}
           aria-pressed={u === unit}>{u}</button>
       ))}

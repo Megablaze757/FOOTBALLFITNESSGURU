@@ -141,7 +141,7 @@ export function Affiliates() {
                     ) : (
                       <button
                         onClick={() => { setEditing(r.code); setEditEmail(r.email ?? ""); }}
-                        className="mt-0.5 text-left text-xs text-slate-500 hover:text-pitch-400"
+                        className="min-h-[44px] mt-0.5 text-left text-xs text-slate-500 hover:text-pitch-400"
                       >
                         {/* AN AFFILIATE WITH NO EMAIL CANNOT SEE THEIR OWN
                             DASHBOARD, so the gap is called out rather than
@@ -156,10 +156,10 @@ export function Affiliates() {
                   <td className="py-2 text-right font-bold text-pitch-400">{r.paid}</td>
                   <td className="py-2 text-right">
                     <div className="flex justify-end gap-3">
-                      <button onClick={() => copy(r.code, "waitlist")} className="whitespace-nowrap text-xs text-slate-400 hover:text-pitch-400">
+                      <button onClick={() => copy(r.code, "waitlist")} className="tap-target whitespace-nowrap text-xs text-slate-400 hover:text-pitch-400">
                         {copied === `${r.code}:waitlist` ? "Copied ✓" : "Waitlist link"}
                       </button>
-                      <button onClick={() => copy(r.code, "site")} className="whitespace-nowrap text-xs text-slate-400 hover:text-pitch-400">
+                      <button onClick={() => copy(r.code, "site")} className="tap-target whitespace-nowrap text-xs text-slate-400 hover:text-pitch-400">
                         {copied === `${r.code}:site` ? "Copied ✓" : "Site link"}
                       </button>
                     </div>

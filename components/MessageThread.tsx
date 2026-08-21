@@ -64,7 +64,7 @@ export function MessageThread({ coachId, athleteId, meId, otherName }: {
 
       <form onSubmit={(e) => { e.preventDefault(); send(); }} className="flex gap-2">
         <input className="field flex-1" value={body} onChange={(e) => setBody(e.target.value)} placeholder={`Message ${otherName}…`} />
-        <button type="submit" disabled={!body.trim() || sending} className="rounded-2xl bg-gradient-to-br from-pitch-400 to-pitch-600 px-4 font-semibold text-ink-900 disabled:opacity-50">↑</button>
+        <button type="submit" disabled={!body.trim() || sending} className="min-h-[44px] rounded-2xl bg-gradient-to-br from-pitch-400 to-pitch-600 px-4 font-semibold text-ink-900 disabled:opacity-50">↑</button>
       </form>
     </section>
   );

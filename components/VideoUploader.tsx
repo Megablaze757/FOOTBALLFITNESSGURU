@@ -472,7 +472,7 @@ export function VideoUploader({ sport, onUploaded }: { sport?: string; onUploade
               for the analysis. They were two of the four things asked before
               you could press upload; they're one tap away instead. */}
           <details className="group rounded-2xl border border-white/[0.08]">
-            <summary className="flex cursor-pointer list-none items-center justify-between p-3 text-xs font-semibold text-slate-400">
+            <summary className="min-h-[44px] flex cursor-pointer list-none items-center justify-between p-3 text-xs font-semibold text-slate-400">
               <span>Details <span className="font-normal text-slate-600">session type, in-season</span></span>
               <span className="text-slate-600 transition group-open:rotate-180" aria-hidden>▾</span>
             </summary>

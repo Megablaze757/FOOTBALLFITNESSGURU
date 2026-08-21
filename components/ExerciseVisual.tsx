@@ -32,7 +32,7 @@ export function ExerciseVisual({ pattern, implement, muscles, name, videoUrl }: 
                 role="tab"
                 aria-selected={view === option}
                 onClick={() => setView(option)}
-                className={`min-h-[36px] rounded-full px-4 text-xs font-bold capitalize transition ${view === option ? "bg-pitch-400 text-ink-900" : "text-slate-400 hover:text-slate-200"}`}
+                className={`min-h-[44px] min-h-[36px] rounded-full px-4 text-xs font-bold capitalize transition ${view === option ? "bg-pitch-400 text-ink-900" : "text-slate-400 hover:text-slate-200"}`}
               >
                 {option}
               </button>

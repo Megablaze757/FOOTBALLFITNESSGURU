@@ -641,7 +641,7 @@ export function MealCheckIn({ stats, prefs, dietNotes, seed, swaps, recent, star
                     type="button"
                     onClick={() => removeItem(i)}
                     aria-label={`Remove ${it.name}`}
-                    className="shrink-0 px-1 text-slate-600 hover:text-readiness-red"
+                    className="tap-target shrink-0 px-1 text-slate-600 hover:text-readiness-red"
                   >
                     ✕
                   </button>

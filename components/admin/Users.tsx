@@ -87,7 +87,7 @@ export function Users() {
           <button
             key={f}
             onClick={() => setFilter(f)}
-            className={`rounded-full border px-3 py-1 text-xs font-medium capitalize transition ${
+            className={`min-h-[44px] rounded-full border px-3 py-1 text-xs font-medium capitalize transition ${
               filter === f ? "border-pitch-400/40 bg-pitch-400/10 text-pitch-400" : "border-white/10 bg-white/[0.03] text-slate-300"
             }`}
           >

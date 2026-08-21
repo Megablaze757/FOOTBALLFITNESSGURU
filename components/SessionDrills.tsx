@@ -241,7 +241,7 @@ function CompactRow({ drill, onPick }: { drill: Drill; onPick?: (name: string) =
     <button
       onClick={() => pickable && onPick!(drill.name)}
       disabled={!pickable}
-      className="min-w-0 flex-1 text-left disabled:cursor-default"
+      className="min-h-[44px] min-w-0 flex-1 text-left disabled:cursor-default"
     >
       <div className="flex min-w-0 items-baseline justify-between gap-2">
         <span className="min-w-0 break-words text-xs text-slate-300">

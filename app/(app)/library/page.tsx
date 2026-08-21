@@ -327,7 +327,7 @@ export default function LibraryPage() {
           {activeFilters > 0 && (
             <button
               onClick={() => { setLevel("advanced"); setEquip("all"); setCat("All"); }}
-              className="text-xs font-semibold text-pitch-400 hover:underline"
+              className="tap-target text-xs font-semibold text-pitch-400 hover:underline"
             >
               Clear filters
             </button>

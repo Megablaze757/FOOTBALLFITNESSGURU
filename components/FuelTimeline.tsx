@@ -44,7 +44,7 @@ export function FuelTimeline({ phases, label }: {
               key={p.when}
               onClick={() => setAt(i)}
               aria-pressed={on}
-              className={`flex shrink-0 items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold transition ${
+              className={`min-h-[44px] flex shrink-0 items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold transition ${
                 on
                   ? "border-pitch-400/50 bg-pitch-400/10 text-pitch-400"
                   : "border-white/10 bg-white/[0.02] text-slate-400 hover:border-white/20"

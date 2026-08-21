@@ -285,6 +285,34 @@ h1 { letter-spacing: -0.02em; }
     @apply gap-1 px-3 text-xs;
   }
 
+  /* A TWO-OPTION UNIT SWITCH — km/mi on a run, kg/lb on a lift.
+   *
+   * Written out by hand in two places, both at 22px tall, and neither could be
+   * fixed the usual way: `tap-pad` grows the hit area outward from the centre,
+   * and on two buttons sitting a couple of pixels apart the two 44px pads
+   * OVERLAP — the right-hand edge of "km" would select "mi". A bigger target
+   * that selects the wrong thing is worse than a small one.
+   *
+   * So the switch itself is 44px tall and the buttons fill it. The width stays
+   * small, for the reason `.chip-option-sm` already gives: the vertical
+   * dimension is the one a thumb misses, and these two are adjacent members of
+   * one control rather than independent targets.
+   *
+   * Selected state reads from aria-pressed so the announcement and the
+   * appearance cannot drift. */
+  .unit-toggle {
+    @apply inline-flex h-11 shrink-0 items-stretch rounded-xl bg-white/[0.05] p-0.5;
+  }
+  .unit-toggle > button {
+    @apply rounded-lg px-3 text-[10px] font-bold uppercase tracking-wide text-slate-400 transition;
+  }
+  .unit-toggle > button[aria-pressed="true"] {
+    @apply bg-pitch-400 text-ink-900;
+  }
+  .unit-toggle-sky > button[aria-pressed="true"] {
+    @apply bg-sky-400 text-ink-900;
+  }
+
   /* Any chip-sized control that is actually tappable. WCAG 2.5.8 (AA) sets the
      floor at 24×24; Apple's HIG and Material both say 44–48, and this is a
      phone-first app used with cold hands in a kit bag. The visual size is
@@ -296,7 +324,13 @@ h1 { letter-spacing: -0.02em; }
     min-width: 44px;
   }
   /* For chips that must stay visually small, grow the hit area outward instead
-     of the box. */
+     of the box. The positioning context comes with the class rather than being
+     the caller's job — the ::after is absolutely positioned, so a `tap-pad`
+     without a `relative` beside it silently grows the hit area of whatever
+     ancestor happened to be positioned, which is worse than doing nothing. */
+  .tap-pad {
+    @apply relative;
+  }
   .tap-pad::after {
     content: "";
     position: absolute;

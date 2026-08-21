@@ -249,7 +249,7 @@ export function BodyMap({
                   delete next[k];
                   onChange(next);
                 }}
-                className="flex items-center gap-1.5 rounded-full border border-pitch-400/40 bg-pitch-400/10 px-3 py-1.5 text-xs font-semibold text-pitch-400 transition hover:bg-pitch-400/20"
+                className="min-h-[44px] flex items-center gap-1.5 rounded-full border border-pitch-400/40 bg-pitch-400/10 px-3 py-1.5 text-xs font-semibold text-pitch-400 transition hover:bg-pitch-400/20"
               >
                 {/* ALL_REGIONS, not the visible side: a chip for a hamstring
                     must still say "L hamstring" while you are looking at the

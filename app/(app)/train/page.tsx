@@ -64,10 +64,10 @@ function DeleteVideo({ video, onDeleted }: { video: Video; onDeleted: () => void
   return (
     <div className="flex shrink-0 flex-col items-end gap-1">
       <div className="flex gap-1">
-        <button onClick={remove} disabled={busy} className="rounded-xl bg-readiness-red/15 px-2.5 py-1.5 text-xs font-semibold text-readiness-red disabled:opacity-50">
+        <button onClick={remove} disabled={busy} className="min-h-[44px] rounded-xl bg-readiness-red/15 px-2.5 py-1.5 text-xs font-semibold text-readiness-red disabled:opacity-50">
           {busy ? "…" : "Delete"}
         </button>
-        <button onClick={() => setConfirming(false)} disabled={busy} className="rounded-xl border border-white/10 px-2.5 py-1.5 text-xs text-slate-400">
+        <button onClick={() => setConfirming(false)} disabled={busy} className="min-h-[44px] rounded-xl border border-white/10 px-2.5 py-1.5 text-xs text-slate-400">
           Cancel
         </button>
       </div>

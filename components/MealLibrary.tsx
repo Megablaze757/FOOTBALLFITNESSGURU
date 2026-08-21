@@ -218,7 +218,7 @@ export function MealLibrary({ userId }: { userId: string }) {
                       // The divider is load-bearing. Without it the column read
                       // as part of the card and an unstarred ☆ looked like
                       // decoration in the corner rather than something to tap.
-                      className="grid w-12 shrink-0 place-items-center rounded-r-2xl border-l border-white/[0.06] text-lg transition hover:bg-white/[0.06]"
+                      className="min-h-[44px] grid w-12 shrink-0 place-items-center rounded-r-2xl border-l border-white/[0.06] text-lg transition hover:bg-white/[0.06]"
                     >
                       <span aria-hidden className={starred.includes(m.id) ? "text-amber-400" : "text-slate-600"}>
                         {starred.includes(m.id) ? "★" : "☆"}

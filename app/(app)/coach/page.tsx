@@ -696,7 +696,7 @@ function GoalBuilder({ painMap, painNote, latestBench, sport, initialPositions, 
                   <button
                     key={id}
                     onClick={() => setRunnerLevel(id)}
-                    className={`flex-1 rounded-xl border p-2.5 text-center transition ${
+                    className={`min-h-[44px] flex-1 rounded-xl border p-2.5 text-center transition ${
                       runnerLevel === id
                         ? "border-pitch-400/50 bg-pitch-400/10 text-pitch-400"
                         : "border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.06]"
@@ -723,7 +723,7 @@ function GoalBuilder({ painMap, painNote, latestBench, sport, initialPositions, 
               <button
                 key={n}
                 onClick={() => changeDays(n)}
-                className={`flex-1 rounded-xl border py-2.5 text-sm font-bold transition ${
+                className={`min-h-[44px] flex-1 rounded-xl border py-2.5 text-sm font-bold transition ${
                   daysPerWeek === n
                     ? "border-pitch-400/50 bg-pitch-400/10 text-pitch-400"
                     : "border-white/10 bg-white/[0.03] text-slate-300"
@@ -809,7 +809,7 @@ function GoalBuilder({ painMap, painNote, latestBench, sport, initialPositions, 
                 onChange={(e) => setExerciseTarget(Number(e.target.value))}
                 className="w-full"
               />
-              <button type="button" onClick={() => setExerciseTarget(null)} className="mt-1 text-xs font-semibold text-pitch-400">Use goal default</button>
+              <button type="button" onClick={() => setExerciseTarget(null)} className="tap-target mt-1 text-xs font-semibold text-pitch-400">Use goal default</button>
             </label>
             <div>
               <span className="field-label">Muscle priority</span>
@@ -942,7 +942,7 @@ function SeasonToggle({ inSeason, onChange }: { inSeason: boolean; onChange: (v:
           <button
             key={String(o.v)}
             onClick={() => onChange(o.v)}
-            className={`rounded-xl px-3 py-2 text-center transition ${inSeason === o.v ? "bg-gradient-to-br from-pitch-400 to-pitch-600 text-ink-900" : "text-slate-300 hover:bg-white/5"}`}
+            className={`min-h-[44px] rounded-xl px-3 py-2 text-center transition ${inSeason === o.v ? "bg-gradient-to-br from-pitch-400 to-pitch-600 text-ink-900" : "text-slate-300 hover:bg-white/5"}`}
           >
             <div className="text-sm font-semibold">{o.label}</div>
             <div className={`text-[10px] ${inSeason === o.v ? "text-ink-900/70" : "text-slate-500"}`}>{o.sub}</div>
@@ -1392,7 +1392,7 @@ function ActiveProgram({
       {actionError && (
         <div className="rounded-2xl border border-readiness-red/30 bg-readiness-red/10 p-3 text-sm text-slate-200">
           {actionError}
-          <button onClick={() => setActionError(null)} className="ml-2 text-xs text-slate-400 hover:text-pitch-400">Dismiss</button>
+          <button onClick={() => setActionError(null)} className="tap-target ml-2 text-xs text-slate-400 hover:text-pitch-400">Dismiss</button>
         </div>
       )}
       <header className="flex items-start justify-between">
@@ -1611,7 +1611,7 @@ function ActiveProgram({
             <div className="text-xs font-semibold text-slate-200">{program.in_season ? "🏟️ In-season" : "🏋️ Out-of-season"}</div>
             <div className="text-[11px] text-slate-500">{program.in_season ? "Tapered, recovery-weighted" : "Build phase, higher volume"}</div>
           </div>
-          <button onClick={switchSeason} disabled={switching} className="rounded-xl border border-white/10 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-white/5 disabled:opacity-50">
+          <button onClick={switchSeason} disabled={switching} className="min-h-[44px] rounded-xl border border-white/10 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-white/5 disabled:opacity-50">
             {switching ? "…" : `Switch to ${program.in_season ? "out-of-season" : "in-season"}`}
           </button>
         </div>

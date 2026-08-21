@@ -826,7 +826,7 @@ function NutritionTracker({ userId, today, initial, targets, coachTargets, stats
               {targets.basis === "estimated" && targets.missing.length > 0 && (
                 <button
                   onClick={onAddStats}
-                  className="mt-2 w-full rounded-xl bg-white/[0.04] px-3 py-2 text-left text-[11px] text-slate-400 transition hover:bg-white/[0.07] hover:text-slate-200"
+                  className="min-h-[44px] mt-2 w-full rounded-xl bg-white/[0.04] px-3 py-2 text-left text-[11px] text-slate-400 transition hover:bg-white/[0.07] hover:text-slate-200"
                 >
                   Add your {listWords(targets.missing)} to swap this estimate for a proper
                   metabolic calculation →

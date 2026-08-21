@@ -407,7 +407,7 @@ function WriterTab() {
       )}
 
       <details className="card p-4">
-        <summary className="cursor-pointer text-sm font-semibold text-slate-200">
+        <summary className="min-h-[44px] cursor-pointer text-sm font-semibold text-slate-200">
           The {allFacts().length} facts it can draw on
         </summary>
         <div className="mt-3 space-y-3">

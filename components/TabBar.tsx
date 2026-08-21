@@ -170,7 +170,7 @@ export function TabBar() {
           <li className="min-w-0 flex-1">
             <button
               onClick={() => setMoreOpen((v) => !v)}
-              className={`flex w-full flex-col items-center gap-1 rounded-2xl py-2 text-[10px] font-medium transition ${
+              className={`min-h-[44px] flex w-full flex-col items-center gap-1 rounded-2xl py-2 text-[10px] font-medium transition ${
                 moreOpen || moreActive ? "bg-pitch-400/10 text-pitch-400" : "text-slate-400 hover:text-slate-200"
               }`}
             >

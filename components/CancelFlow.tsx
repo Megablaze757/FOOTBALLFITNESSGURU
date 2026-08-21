@@ -168,7 +168,7 @@ export function CancelFlow({ onClose, onChanged }: { onClose: () => void; onChan
           <button
             onClick={cancel}
             disabled={busy}
-            className="mt-4 w-full text-sm font-semibold text-slate-400 underline underline-offset-4 hover:text-readiness-red"
+            className="tap-target mt-4 w-full text-sm font-semibold text-slate-400 underline underline-offset-4 hover:text-readiness-red"
           >
             {busy ? "Cancelling…" : "Skip and cancel my subscription"}
           </button>
@@ -204,7 +204,7 @@ export function CancelFlow({ onClose, onChanged }: { onClose: () => void; onChan
             >
               {busy ? "Cancelling…" : "Cancel anyway"}
             </button>
-            <button onClick={onClose} className="w-full py-1 text-xs text-slate-500 hover:text-slate-300">
+            <button onClick={onClose} className="min-h-[44px] w-full py-1 text-xs text-slate-500 hover:text-slate-300">
               Never mind, keep my plan
             </button>
           </div>

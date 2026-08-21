@@ -43,13 +43,13 @@ export function LoadErrorBanner() {
       <div className="mt-2.5 flex gap-2">
         <button
           onClick={() => window.location.reload()}
-          className="min-h-[2.25rem] flex-1 rounded-xl bg-pitch-400 px-3 text-xs font-bold text-slate-950"
+          className="min-h-[44px] min-h-[2.25rem] flex-1 rounded-xl bg-pitch-400 px-3 text-xs font-bold text-slate-950"
         >
           Try again
         </button>
         <button
           onClick={() => setDismissed(true)}
-          className="min-h-[2.25rem] rounded-xl bg-white/[0.06] px-3 text-xs font-semibold text-slate-300"
+          className="min-h-[44px] min-h-[2.25rem] rounded-xl bg-white/[0.06] px-3 text-xs font-semibold text-slate-300"
         >
           Dismiss
         </button>

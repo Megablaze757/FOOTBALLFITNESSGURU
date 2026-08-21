@@ -75,7 +75,7 @@ export function CustomExerciseForm({ coachId, onAdded, scope = "team" }: {
     <div className="card space-y-3 p-5">
       <div className="flex items-center justify-between">
         <h3 className="font-bold text-slate-100">{words.title}</h3>
-        <button onClick={() => setOpen(false)} className="text-sm text-slate-400 hover:text-pitch-400">Cancel</button>
+        <button onClick={() => setOpen(false)} className="tap-target text-sm text-slate-400 hover:text-pitch-400">Cancel</button>
       </div>
 
       <label className="block">
