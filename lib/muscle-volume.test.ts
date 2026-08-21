@@ -638,6 +638,12 @@ test("the volume bars can be reconciled with the sessions they describe", () => 
   const byEye: Partial<Record<MuscleGroup, number>> = {};
   for (const s of week.sessions) {
     for (const d of s.drills) {
+      // Count what `volumeBreakdown` counts. It has always skipped warm-ups,
+      // cool-downs, conditioning and skill work — this loop did not, and the
+      // two only agreed while most sessions had no warm-up to disagree about.
+      // An athlete counting sets by eye does not count their band pull-aparts
+      // as chest volume either.
+      if (d.slot === "warmup" || d.slot === "cooldown" || d.slot === "conditioning" || d.skill) continue;
       const primary = musclesForName(d.name)[0];
       if (primary) byEye[primary] = (byEye[primary] ?? 0) + d.sets;
     }

@@ -157,9 +157,16 @@ test("the cardio finisher is a finisher, not a second workout", () => {
     for (const s of w.sessions) {
       const cardio = s.drills.filter((d) => d.slot === "conditioning");
       assert.ok(cardio.length <= 1, `${s.title} has ${cardio.length} conditioning entries`);
-      // It closes the session — putting it before the lifting would make the
+      // It closes the WORK — putting it before the lifting would make the
       // lifting worse, which is the whole reason it goes last.
-      if (cardio.length) assert.equal(s.drills[s.drills.length - 1].slot, "conditioning");
+      //
+      // "Last drill in the session" was the same thing until every session
+      // gained a cool-down (lib/program-validate.ts). A stretch after the
+      // finisher is correct; the assertion just had no way to say so.
+      if (cardio.length) {
+        const work = s.drills.filter((d) => d.slot !== "cooldown");
+        assert.equal(work[work.length - 1].slot, "conditioning", s.title);
+      }
     }
   }
   // A VO2 session on top of a leg day is not a finisher, so the effort is capped.
@@ -319,8 +326,12 @@ test("a deload eases the same session rather than replacing it", () => {
 
 test("effort climbs across the block and backs off for the deload", () => {
   const plan = buildProgram({ goal: "strength", painMap: {}, sport: "gym", focus: "aesthetics", daysPerWeek: 4 });
+  // The first WORKING set, not the first drill. Sessions now open with a
+  // warm-up, whose effort target is deliberately "easy" and deliberately does
+  // not climb — see lib/program-validate.ts.
   const rir = plan.weeks.map((w) => {
-    const m = /leave (\d+) in the tank/.exec(w.sessions[0].drills[0].intensity ?? "");
+    const lift = w.sessions[0].drills.find((d) => d.slot !== "warmup" && d.slot !== "cooldown");
+    const m = /leave (\d+) in the tank/.exec(lift?.intensity ?? "");
     return m ? Number(m[1]) : null;
   });
   assert.deepEqual(rir, [3, 2, 1, 4], `reps in reserve across the block: ${rir.join(", ")}`);
@@ -347,7 +358,11 @@ test("sessions are anchored on staple lifts, not on novelty", () => {
   for (const daysPerWeek of [3, 4, 5]) {
     const plan = buildProgram({ goal: "strength", painMap: {}, sport: "gym", focus: "aesthetics", daysPerWeek });
     for (const s of plan.weeks[0].sessions) {
-      const opener = s.drills[0]?.name ?? "";
+      // The lift the session is BUILT ON, which is the first thing after the
+      // warm-up. Reading drills[0] meant this test only worked while gym
+      // sessions had no warm-up at all — which was itself the defect that
+      // lib/program-validate.ts was written to fix.
+      const opener = s.drills.find((d) => d.slot !== "warmup" && d.slot !== "cooldown")?.name ?? "";
       assert.ok(staples.has(opener.toLowerCase()),
         `${daysPerWeek}d "${s.title}" opens on ${opener}, which is not a lift to build a session on`);
     }

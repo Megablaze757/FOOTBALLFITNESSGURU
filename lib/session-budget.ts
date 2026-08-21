@@ -101,9 +101,19 @@ function valueOf(drill: ProgramDrill, index: number, drills: ProgramDrill[], ses
     : slot === "primary" ? 1900
     : slot === "secondary" ? 1100
     : slot === "conditioning" ? (session.focus === "endurance" || goal === "endurance" ? 1350 : 800)
-    : slot === "warmup" ? 750
+    // THE FIRST ONE IS STRUCTURAL; THE REST ARE NICE TO HAVE.
+    //
+    // A flat 750 for every warm-up drill ranked all of them above accessory
+    // work at 600 — so when the checklist started guaranteeing a warm-up on
+    // every session (see lib/program-validate.ts), a tight time budget kept
+    // three band exercises and dropped a working set to pay for them. Measured:
+    // muscles reaching the productive band fell from 88% to 79%.
+    //
+    // Being warmed up at all is worth more than an accessory. The third
+    // mobility drill is not.
+    : slot === "warmup" ? (firstIndex(drills, (d) => d.slot === "warmup") === index ? 750 : 320)
     : slot === "accessory" ? 600
-    : slot === "cooldown" ? 450
+    : slot === "cooldown" ? (firstIndex(drills, (d) => d.slot === "cooldown") === index ? 450 : 200)
     : 700;
   // Stable tie-break: if two combinations deliver the same training value,
   // retain the exercise the programme ranked earlier.

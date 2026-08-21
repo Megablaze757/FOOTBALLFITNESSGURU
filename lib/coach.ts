@@ -18,6 +18,7 @@ import { MOVEMENTS, regionOfMovement, type Movement, type GoalType, type BodyAre
 import { buildBlock, painByArea, type ProgramPlan, type TrainingFocus } from "./engine";
 import { balancePlanVolume, spacePlanSessions, volumeShortfall, LANDMARKS } from "./muscle-volume";
 import { buildRunProgram, type RunnerLevel } from "./running";
+import { orderPlan, validatePlan } from "./program-validate";
 import { enforceProgramSessionBudgets } from "./session-budget";
 import {
   applyProgramPreferences,
@@ -178,7 +179,26 @@ export function finishPlan(plan: ProgramPlan, input: BuildProgramInput): Program
       sessions: week.sessions.map((session) => ({ ...session, drills: strictSlots(session.drills) })),
     })),
   };
-  const done = spacePlanSessions(balancePlanVolume(classified, floor));
+  /**
+   * STRUCTURE FIRST, THEN DOSE, THEN FIT, THEN ORDER.
+   *
+   * `validatePlan` is split across this function deliberately, and the split is
+   * the whole reason the pipeline works:
+   *
+   *   here            the STRUCTURE — sections, duplicates, a warm-up and a
+   *                   cool-down on every session that has working sets
+   *   balance/space   the DOSE, computed on the session as it will actually be
+   *   budget          the FIT, dropping what does not fit the athlete's minutes
+   *   orderPlan       the ORDER, which adds nothing and cannot re-break the fit
+   *
+   * Running the whole checklist at the end was tried first and it took
+   * hamstrings in a football endurance block to 26 weekly sets against a
+   * ceiling of 22, and muscles reaching the productive band from 88% to 79% —
+   * because `balancePlanVolume` had already dosed a session that then gained
+   * five drills and lost others. The balancer has to see the finished shape.
+   */
+  const structured = validatePlan(classified).plan;
+  const done = spacePlanSessions(balancePlanVolume(structured, floor));
   // Old callers deliberately receive the engine's established prescription.
   // The richer preference pass changes exercise counts, rep ranges and weekly
   // shape, so only run it for programmes built with the new goal/settings UI.
@@ -189,7 +209,10 @@ export function finishPlan(plan: ProgramPlan, input: BuildProgramInput): Program
         input.settings ?? { goals: input.goals?.length ? input.goals : [{ type: input.goal, priority: 1 as const }] },
         { painMap: input.painMap, constraints: parseConstraints(input.notes), sport: input.sport },
       );
-  const fitted = enforceProgramSessionBudgets(shaped);
+  // Order last. It adds nothing, so it cannot push a fitted session back over
+  // the athlete's minutes — and it guarantees that whatever the budget dropped,
+  // what is left still runs power first and isolation last.
+  const fitted = orderPlan(enforceProgramSessionBudgets(shaped));
 
   // Say what the FITTED plan delivers. Computing this before the time fit made
   // the copy describe sets the athlete was never actually given.

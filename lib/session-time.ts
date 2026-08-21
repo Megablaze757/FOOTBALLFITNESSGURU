@@ -102,11 +102,26 @@ export function withPrescribedDurationMinutes(drill: ProgramDrill, minutes: numb
 }
 
 /** How long one drill takes, in seconds. */
+/**
+ * Setup between one WARM-UP drill and the next.
+ *
+ * A warm-up flows: you finish band pull-aparts and start shoulder dislocates
+ * without racking anything, finding anything or adjusting anything. Charging
+ * the full sixty was a real modelling error and it had a real consequence —
+ * once the checklist began guaranteeing a warm-up on every session, three
+ * minutes of imaginary changeover per session was enough, against a hard 90
+ * minute cap, to make the fit pass drop a working set to pay for it. Muscles
+ * reaching the productive band fell from 88% to 79% for want of time nobody
+ * actually spends.
+ */
+const PREP_CHANGEOVER = 15;
+
 export function drillSeconds(drill: ProgramDrill): number {
   const sets = Math.max(1, Math.round(Number(drill.sets) || 1));
   const reps = Math.max(0, Math.round(Number(drill.reps) || 0));
 
   const rest = drill.rest != null && drill.rest > 0 ? drill.rest : DEFAULT_REST;
+  const changeover = drill.slot === "warmup" || drill.slot === "cooldown" ? PREP_CHANGEOVER : CHANGEOVER;
 
   /**
    * CONDITIONING IS PRESCRIBED IN ITS OWN UNITS, AND THEY ARE NOT REPS.
@@ -140,11 +155,11 @@ export function drillSeconds(drill: ProgramDrill): number {
     // Five metres a second — a tempo run or a repeat, not a sprint PB and not a
     // jog. Good enough to tell a twelve-minute interval set from an hour.
     const work = sets * (Number(metres[1]) / 5);
-    return work + Math.max(0, sets - 1) * rest + CHANGEOVER;
+    return work + Math.max(0, sets - 1) * rest + changeover;
   }
   const seconds = /(\d{1,3})\s*(s\b|secs?|seconds?)/i.exec(dose);
   if (seconds) {
-    return sets * Number(seconds[1]) + Math.max(0, sets - 1) * rest + CHANGEOVER;
+    return sets * Number(seconds[1]) + Math.max(0, sets - 1) * rest + changeover;
   }
 
   const work = sets * reps * SECONDS_PER_REP;
@@ -152,7 +167,7 @@ export function drillSeconds(drill: ProgramDrill): number {
   // Counting the last one adds a rest period at the end of every exercise in
   // the session, which on a nine-movement day is a fictional quarter of an hour.
   const resting = Math.max(0, sets - 1) * rest;
-  return work + resting + CHANGEOVER;
+  return work + resting + changeover;
 }
 
 /** How long the whole session takes, in whole minutes. */
