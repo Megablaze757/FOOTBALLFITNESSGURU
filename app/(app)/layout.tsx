@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { CoachBubble } from "@/components/CoachBubble";
 import { useRouter } from "next/navigation";
 import { useSession, UserProvider } from "@/lib/auth";
 import { TabBar } from "@/components/TabBar";
@@ -49,6 +50,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </main>
         </div>
         <TabBar />
+        {/* THE COACH, WHEREVER YOU ARE. Questions arrive while you are looking
+            at something — a drill you do not recognise, a calorie target that
+            looks wrong — and a tab makes you leave the thing you are asking
+            about. Costs nothing until it is opened; see CoachBubble. */}
+        <CoachBubble />
         {/* One place that tells the truth when a query fails, instead of
             twenty-five pages rendering an empty list as if it were an answer. */}
         <LoadErrorBanner />

@@ -7,22 +7,8 @@ import { useTier } from "@/lib/use-tier";
 import { can } from "@/lib/subscription";
 import { FeatureLock } from "@/components/FeatureLock";
 import { CoachChat } from "@/components/CoachChat";
-import { buildBriefing } from "@/lib/coach-briefing";
-import { describeRehab, type RehabPlanRow } from "@/lib/rehab-plan";
-import { currentPain } from "@/lib/pain";
-import { effortCheck } from "@/lib/effort";
-import { latestBodyweight } from "@/lib/bodyweight";
-import { nutritionTargets } from "@/lib/nutrition";
-import { rankedLifts, bodyPartStrength, weakestLink, testedMaxesFrom } from "@/lib/strength-standards";
-import { relevantInjuryProtocols, baseAreaOf } from "@/lib/essentials";
-import { assessReadiness } from "@/lib/readiness";
-import { computeACWR } from "@/lib/load";
-import { painByArea } from "@/lib/coach";
-import { selectProfile } from "@/lib/profile-columns";
+import { loadCoachContext, coachContextKey } from "@/lib/coach-context";
 import { daysAgoLocal, todayLocal } from "@/lib/day";
-import type { CheckInInput, DailyCheckIn, Program, StrengthBenchmark, TrainingLog } from "@/lib/types";
-import type { GoalType } from "@/lib/coach";
-import { durationMinutes, isActivity } from "@/lib/training-duration";
 
 /**
  * Ask the coach — its own page, with the whole athlete behind it.
@@ -53,224 +39,13 @@ export default function AskCoachPage() {
   const { tier, loading: tierLoading } = useTier();
   const today = todayLocal();
 
-  const { data, loading } = useAsync(async () => {
-    const supabase = createClient();
-    const since30 = daysAgoLocal(29);
-    const since14 = daysAgoLocal(13);
-
-    const [
-      program, checkIn, recentChecks, training, profile, weighCheck, weighBody,
-      benches, allDrills, nutriToday, nutriRecent, rehab,
-    ] = await Promise.all([
-      supabase.from("programs").select("*").eq("user_id", user.id).eq("status", "active")
-        .order("created_at", { ascending: false }).limit(1).maybeSingle(),
-      // The latest check-in whatever its date — the pain map is aged below
-      // rather than filtered here, so an old report is discounted rather than
-      // hidden. See lib/pain.ts.
-      supabase.from("daily_check_ins").select("*").eq("user_id", user.id)
-        .order("check_in_date", { ascending: false }).limit(1).maybeSingle(),
-      supabase.from("daily_check_ins").select("check_in_date, sleep_quality, fatigue_score").eq("user_id", user.id)
-        .gte("check_in_date", since14).order("check_in_date", { ascending: true }),
-      supabase.from("training_logs").select("*").eq("user_id", user.id).gte("log_date", since30)
-        .order("log_date", { ascending: true }),
-      selectProfile(supabase, user.id, "full_name, sport, position, positions, training_focus, sex, height_cm, birth_year, activity_level, diet_goal, experience_years", ["goals", "calorie_target", "protein_target", "carbs_target", "fats_target"]),
-      supabase.from("daily_check_ins").select("check_in_date, weight_kg").eq("user_id", user.id)
-        .not("weight_kg", "is", null).order("check_in_date", { ascending: false }).limit(1),
-      supabase.from("body_logs").select("log_date, weight_kg").eq("user_id", user.id)
-        .not("weight_kg", "is", null).order("log_date", { ascending: false }).limit(1),
-      supabase.from("strength_benchmarks").select("*").eq("user_id", user.id)
-        .order("test_date", { ascending: false }).limit(20),
-      supabase.from("training_logs").select("log_date, drills").eq("user_id", user.id).not("drills", "is", null),
-      supabase.from("nutrition_logs").select("calories_eaten, macros").eq("user_id", user.id).eq("log_date", today).maybeSingle(),
-      supabase.from("nutrition_logs").select("calories_eaten, daily_calorie_target, macros").eq("user_id", user.id).gte("log_date", since14),
-      /**
-       * THEIR OWN REHAB PLAN, which the briefing never had.
-       *
-       * `relevantInjuryProtocols` is the app's static guidance for a body area
-       * — identical for everybody with a sore hamstring. This is the graded
-       * plan written for THIS injury, with the stage they are on. Its absence
-       * is the whole of "it's not reading my injury plan in ask coach": the
-       * coach had the textbook and not the athlete's notes.
-       */
-      supabase.from("rehab_plans").select("*").eq("user_id", user.id).eq("active", true)
-        .order("created_at", { ascending: false }).limit(1).maybeSingle(),
-    ]);
-
-    const pr = profile as {
-      full_name?: string; sport?: string; position?: string; positions?: string[];
-      training_focus?: string; sex?: string; height_cm?: number; birth_year?: number;
-      activity_level?: string; diet_goal?: string;
-      experience_years?: number; goals?: { type?: string; priority?: number }[];
-      calorie_target?: number; protein_target?: number; carbs_target?: number; fats_target?: number;
-    } | null;
-    const ci = checkIn.data as DailyCheckIn | null;
-    const prog = program.data as Program | null;
-    const logs = (training.data ?? []) as TrainingLog[];
-    const activityLogs = logs.filter(isActivity);
-
-    const bodyweight = latestBodyweight({
-      checkIns: (weighCheck.data ?? []).map((r) => ({ date: r.check_in_date as string, kg: r.weight_kg as number })),
-      weighIns: (weighBody.data ?? []).map((r) => ({ date: r.log_date as string, kg: r.weight_kg as number })),
-    });
-
-    // Aged, so a knee reported in March is discounted rather than presented to
-    // the coach as today's problem.
-    const pain = currentPain(ci?.pain_map, ci?.check_in_date, today);
-    const sex = (pr?.sex === "female" ? "female" : "male") as "male" | "female";
-    const age = pr?.birth_year ? new Date().getFullYear() - pr.birth_year : null;
-
-    const ranks = bodyweight?.kg ? rankedLifts(
-      (allDrills.data ?? []) as TrainingLog[], bodyweight.kg, sex,
-      testedMaxesFrom(benches.data ?? []),
-    ) : [];
-    const parts = bodyPartStrength(ranks);
-
-    const avgMinutes = activityLogs.length
-      ? Math.round(activityLogs.reduce((n, l) => n + durationMinutes(l), 0) / 30)
-      : 0;
-    const injured = Object.values(pain).some((v) => (Number(v) || 0) >= 4);
-
-    const computedTargets = nutritionTargets({
-      weightKg: bodyweight?.kg ?? null,
-      goal: (prog?.goal_type ?? null) as GoalType | null,
-      avgTrainingMinutes: avgMinutes,
-      heightCm: pr?.height_cm ?? null,
-      age,
-      sex,
-      activity: (pr?.activity_level as never) ?? null,
-      dietGoal: (pr?.diet_goal as never) ?? null,
-      trainingDaysLogged: activityLogs.length,
-      injured,
-    });
-    const targets = computedTargets
-      ? {
-          ...computedTargets,
-          calories: pr?.calorie_target ?? computedTargets.calories,
-          protein: pr?.protein_target ?? computedTargets.protein,
-          carbs: pr?.carbs_target ?? computedTargets.carbs,
-          fats: pr?.fats_target ?? computedTargets.fats,
-        }
-      : pr?.calorie_target != null && pr.protein_target != null && pr.carbs_target != null && pr.fats_target != null
-        ? {
-            calories: pr.calorie_target, protein: pr.protein_target, carbs: pr.carbs_target, fats: pr.fats_target,
-            water_ml: 3000, rationale: "Athlete-set targets.", basis: "estimated" as const,
-            bmr: null, tdee: null, missing: ["weight", "height", "age", "sex"], guard: null,
-          }
-        : null;
-
-    const readiness = ci ? assessReadiness({
-      pain_map: pain,
-      fatigue_score: ci.fatigue_score, sleep_quality: ci.sleep_quality,
-      nutrition_quality: ci.nutrition_quality, weight_kg: ci.weight_kg,
-      is_match_day: ci.is_match_day, match_minutes_played: ci.match_minutes_played,
-    } as CheckInInput, { acwr: computeACWR(logs).ratio }) : null;
-
-    const plan = prog?.plan ?? null;
-    const done = prog?.completed_sessions ?? [];
-    const allSessions = (plan?.weeks ?? []).flatMap((w) => w.sessions.map((s) => ({ w: w.week, s })));
-    const next = allSessions.find(({ w, s }) => !done.includes(`w${w}d${s.day}`));
-    const totalSessions = allSessions.length;
-
-    /**
-     * THE CLOSED LIST OF WHAT IS ACTUALLY PRESCRIBED.
-     *
-     * The briefing used to carry the next session's drills and nothing else, so
-     * a question about the block as a whole had almost nothing behind it — and
-     * the coach filled the gap, telling an athlete their preacher curls were
-     * going well when no preacher curl had ever been prescribed. Every drill in
-     * the plan, deduplicated, keeping the order it appears in so the first
-     * names are the ones they see most.
-     */
-    const programExercises = Array.from(new Set(
-      (plan?.weeks ?? []).flatMap((w) => w.sessions.flatMap((sn) => sn.drills.map((d) => d.name))),
-    ));
-
-    // "Going well" is a claim about performance, so it needs what was actually
-    // done rather than what was planned.
-    const loggedExercises = Array.from(new Set(
-      activityLogs.flatMap((t) => (t.drills ?? []).map((d) => String(d.name ?? "").trim()).filter(Boolean)),
-    )).slice(0, 60);
-
-    const recent = (nutriRecent.data ?? []) as { calories_eaten: number | null; daily_calorie_target: number | null; macros: { protein?: number } | null }[];
-    const avgOf = (pick: (r: (typeof recent)[0]) => number | null | undefined) => {
-      const ns = recent.map(pick).filter((n): n is number => typeof n === "number" && n > 0);
-      return ns.length ? Math.round(ns.reduce((a, b) => a + b, 0) / ns.length) : null;
-    };
-    const todayRow = nutriToday.data as { calories_eaten: number | null; macros: { protein?: number } | null } | null;
-    const balances = recent
-      .filter((row) => Number(row.calories_eaten) > 0 && Number(row.daily_calorie_target) > 0)
-      .map((row) => Number(row.daily_calorie_target) - Number(row.calories_eaten));
-    const recoveryRows = (recentChecks.data ?? []) as { sleep_quality: number | null; fatigue_score: number | null }[];
-    const recoveryAvg = (key: "sleep_quality" | "fatigue_score") => {
-      const values = recoveryRows.map((row) => row[key]).filter((value): value is number => value != null);
-      return values.length ? +(values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(1) : null;
-    };
-
-    const briefing = buildBriefing({
-      sport: pr?.sport, positions: pr?.positions?.length ? pr.positions : (pr?.position ? [pr.position] : []),
-      focus: pr?.training_focus, sex, heightCm: pr?.height_cm ?? null, age, bodyweight,
-      activityLevel: pr?.activity_level ?? null, dietGoal: pr?.diet_goal ?? null,
-      trainingExperienceYears: pr?.experience_years ?? null,
-      goal: (prog?.goal_type ?? null) as GoalType | null,
-      goalDetails: ((prog?.goals ?? pr?.goals ?? []) as { type?: string }[]).map((goal) => String(goal.type ?? "").replace(/_/g, " ")).filter(Boolean),
-      blockWeek: next?.w ?? null,
-      adherencePct: totalSessions ? Math.round((done.length / totalSessions) * 100) : null,
-      inSeason: !!prog?.in_season,
-      nextSessionTitle: next?.s.title ?? null,
-      // Today's own log, out of the 30 days already loaded — no extra query.
-      // Without it the coach recommends the session they have just finished.
-      trainedToday: (() => {
-        const t = activityLogs.find((l) => l.log_date === todayLocal());
-        return t ? { title: t.session_type === "active_rest" ? "Active rest" : null, minutes: durationMinutes(t), intensity: t.intensity } : null;
-      })(),
-      nextSessionDrills: (next?.s.drills ?? []).map((d) => ({
-        name: d.name, prescription: d.prescription, intensity: d.intensity,
-      })),
-      programExercises,
-      loggedExercises,
-      effort: effortCheck(activityLogs.map((t) => t.intensity), plan),
-      readinessStatus: (readiness?.status as "Green" | "Yellow" | "Red") ?? null,
-      readinessReason: readiness?.advice ?? null,
-      fatigue: ci?.fatigue_score ?? null,
-      sleepQuality: ci?.sleep_quality ?? null,
-      recoveryTrend: { days: 14, avgSleep: recoveryAvg("sleep_quality"), avgFatigue: recoveryAvg("fatigue_score"), checkIns: recoveryRows.length },
-      pain,
-      painReportedOn: ci?.check_in_date ?? null,
-      protocols: relevantInjuryProtocols(pain),
-      // Their own generated plan and the stage they are on — see lib/rehab-plan.ts.
-      rehab: describeRehab(rehab.data as RehabPlanRow | null),
-      targets,
-      eatenToday: todayRow ? { calories: todayRow.calories_eaten, protein: todayRow.macros?.protein ?? null } : null,
-      avgCalories: avgOf((r) => r.calories_eaten),
-      avgProtein: avgOf((r) => r.macros?.protein),
-      averageCalorieDeficit: balances.length ? Math.round(balances.reduce((sum, value) => sum + value, 0) / balances.length) : null,
-      ranks, parts, weak: weakestLink(parts),
-      benchmarks: latestBenchmarkValues((benches.data ?? []) as StrengthBenchmark[]),
-    });
-
-    return {
-      briefing,
-      // The narrow shape the offline fallback answers from — see CoachChat.
-      context: {
-        goal: (prog?.goal_type ?? null) as GoalType | null,
-        soreAreas: Object.entries(painByArea(pain)).filter(([, v]) => (v ?? 0) >= 4).map(([a]) => a.replace("_", " ")),
-        readinessStatus: (readiness?.status as "Green" | "Yellow" | "Red") ?? null,
-        programDrills: (next?.s.drills ?? []).map((d) => d.name),
-        bodyweightKg: bodyweight?.kg ?? null,
-        heightCm: pr?.height_cm ?? null,
-        calorieTarget: targets?.calories ?? null,
-        proteinTarget: targets?.protein ?? null,
-      },
-      /** Prompts that only appear when the coach can actually answer them. */
-      suggestions: [
-        ...(relevantInjuryProtocols(pain).length ? ["How is my rehab plan going?"] : []),
-        ...(next ? ["Why is this session built this way?"] : []),
-        ...(readiness ? ["Should I train hard today?"] : []),
-        ...(targets ? ["Am I eating enough for this block?"] : []),
-        ...(ranks.length ? ["What is my weakest area and how do I fix it?"] : []),
-      ].slice(0, 4),
-    };
-  }, [user.id], `ask:${user.id}`);
+  /**
+   * The same loader the floating bubble uses, behind the same cache key.
+   *
+   * It was 216 lines inline here, which was fine while this page was the only
+   * way to reach the coach. It is not any more — see lib/coach-context.ts.
+   */
+  const { data, loading } = useAsync(() => loadCoachContext(user.id), [user.id], coachContextKey(user.id));
 
   /**
    * KEPT SHORT SO THE CONVERSATION GETS THE SCREEN.
@@ -332,13 +107,4 @@ export default function AskCoachPage() {
       </details>
     </div>
   );
-}
-
-/** Newest recorded value per benchmark metric. */
-function latestBenchmarkValues(rows: StrengthBenchmark[]): Record<string, number> {
-  const out: Record<string, number> = {};
-  for (const r of [...rows].sort((a, b) => b.test_date.localeCompare(a.test_date))) {
-    for (const [k, v] of Object.entries(r.metrics ?? {})) if (!(k in out) && typeof v === "number") out[k] = v;
-  }
-  return out;
 }

@@ -9,7 +9,7 @@ interface Msg { role: "you" | "coach"; text: string }
 
 const SUGGESTIONS = ["Why is this drill in my plan?", "My knee hurts — what should I do?", "Am I ready to train hard today?"];
 
-export function CoachChat({ context, briefing, suggestions, storageKey, userId }: {
+export function CoachChat({ context, briefing, suggestions, storageKey, userId, fill }: {
   context: ChatContext;
   /**
    * The full athlete briefing — see lib/coach-briefing.ts. Optional because the
@@ -22,6 +22,15 @@ export function CoachChat({ context, briefing, suggestions, storageKey, userId }
   storageKey?: string;
   /** Enables private cross-device history when migration 0090 is present. */
   userId?: string;
+  /**
+   * Fill the container instead of sizing to the viewport.
+   *
+   * On /ask this component IS the page and knows how tall it should be. Inside
+   * the floating bubble it is a panel within a sheet that has already decided —
+   * and a child measuring itself against the viewport inside a parent that is
+   * 85% of it produces a composer 15% below the bottom of the screen.
+   */
+  fill?: boolean;
 }) {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [restored, setRestored] = useState(false);
@@ -133,8 +142,10 @@ export function CoachChat({ context, briefing, suggestions, storageKey, userId }
      * squared off toward whoever said it — so a glance sorts the conversation
      * before any reading happens.
      */
-    <section className="flex min-h-[calc(100dvh-14rem)] flex-col overflow-hidden rounded-3xl border border-white/[0.08] bg-white/[0.02]">
-      <header className="flex items-center gap-2.5 border-b border-white/[0.06] px-4 py-3">
+    <section className={fill
+      ? "flex h-full flex-col overflow-hidden bg-transparent"
+      : "flex min-h-[calc(100dvh-14rem)] flex-col overflow-hidden rounded-3xl border border-white/[0.08] bg-white/[0.02]"}>
+      {!fill && <header className="flex items-center gap-2.5 border-b border-white/[0.06] px-4 py-3">
         <CoachAvatar />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-bold leading-tight text-slate-100">Your coach</p>
@@ -152,7 +163,7 @@ export function CoachChat({ context, briefing, suggestions, storageKey, userId }
             New chat
           </button>
         )}
-      </header>
+      </header>}
 
       <div ref={listRef} className="no-scrollbar flex-1 space-y-3 overflow-y-auto px-4 py-4">
         {/* THE COACH SPEAKS FIRST. An empty chat with a blinking cursor asks
