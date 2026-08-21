@@ -295,6 +295,9 @@ export interface Profile {
   email_workout_reminders?: boolean | null;
   email_milestones?: boolean | null;
   email_program_reminders?: boolean | null;
+  /** Added by 0095. The two email types the app was asked for and had no category for. */
+  email_recovery_alerts?: boolean | null;
+  email_meal_plan?: boolean | null;
   in_app_training_reminders?: boolean | null;
   health_data_consent_at?: string | null;
   health_data_consent_version?: string | null;

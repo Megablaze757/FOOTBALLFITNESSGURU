@@ -37,6 +37,11 @@ export function ProfileForm({ profile, email }: { profile: Profile; email: strin
   const [emailWorkouts, setEmailWorkouts] = useState(profile.email_workout_reminders ?? true);
   const [emailMilestones, setEmailMilestones] = useState(profile.email_milestones ?? true);
   const [emailPrograms, setEmailPrograms] = useState(profile.email_program_reminders ?? true);
+  // The two the spec asked for that had no category at all — see migration
+  // 0095. A producer could not have written one even if it existed:
+  // email_category is constrained, and an unknown value is rejected.
+  const [emailRecovery, setEmailRecovery] = useState(profile.email_recovery_alerts ?? true);
+  const [emailMeals, setEmailMeals] = useState(profile.email_meal_plan ?? true);
   const [inAppReminders, setInAppReminders] = useState(profile.in_app_training_reminders ?? true);
   const [healthConsent, setHealthConsent] = useState(!!profile.health_data_consent_at);
   const [healthConsentAt, setHealthConsentAt] = useState(profile.health_data_consent_at ?? null);
@@ -85,6 +90,8 @@ export function ProfileForm({ profile, email }: { profile: Profile; email: strin
         email_workout_reminders: emailWorkouts,
         email_milestones: emailMilestones,
         email_program_reminders: emailPrograms,
+        email_recovery_alerts: emailRecovery,
+        email_meal_plan: emailMeals,
         in_app_training_reminders: inAppReminders,
         health_data_consent_at: consentTimestamp,
         health_data_consent_version: healthConsent ? HEALTH_CONSENT_VERSION : null,
@@ -218,6 +225,8 @@ export function ProfileForm({ profile, email }: { profile: Profile; email: strin
           <EmailChoice label="Weekly training summary" checked={emailWeekly} onChange={setEmailWeekly} />
           <EmailChoice label="Streaks and goal milestones" checked={emailMilestones} onChange={setEmailMilestones} />
           <EmailChoice label="Program deadline reminders" checked={emailPrograms} onChange={setEmailPrograms} />
+          <EmailChoice label="Recovery alerts" checked={emailRecovery} onChange={setEmailRecovery} />
+          <EmailChoice label="Weekly meal plan summary" checked={emailMeals} onChange={setEmailMeals} />
         </div>
       </fieldset>
 

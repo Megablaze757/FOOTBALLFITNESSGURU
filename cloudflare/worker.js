@@ -1,4 +1,7 @@
-// cloudflare/src/launch-email.ts
+var __defProp = Object.defineProperty;
+var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
+
+// src/launch-email.ts
 function launchEmail({ appUrl, ref, unsubscribeUrl }) {
   const cta = ref ? `${appUrl}/?ref=${encodeURIComponent(ref)}` : `${appUrl}/`;
   const subject = "Pocket Athlete is live \u{1F525} you're in";
@@ -128,6 +131,7 @@ function launchEmail({ appUrl, ref, unsubscribeUrl }) {
 </body></html>`;
   return { subject, html, text };
 }
+__name(launchEmail, "launchEmail");
 function ctaButton(href, label) {
   return `<tr><td style="padding-bottom:12px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
@@ -137,11 +141,13 @@ function ctaButton(href, label) {
     </table>
   </td></tr>`;
 }
+__name(ctaButton, "ctaButton");
 function positionStrip() {
-  const chip = (s) => `<span class="pa-chip" style="display:inline-block;background-color:#fbf4e0;border:1px solid #ecdfb6;color:#7d5c0c;font-size:12px;font-weight:700;padding:6px 11px;border-radius:999px;margin:0 5px 7px 0;white-space:nowrap;">${escapeHtml(s)}</span>`;
+  const chip = /* @__PURE__ */ __name((s) => `<span class="pa-chip" style="display:inline-block;background-color:#fbf4e0;border:1px solid #ecdfb6;color:#7d5c0c;font-size:12px;font-weight:700;padding:6px 11px;border-radius:999px;margin:0 5px 7px 0;white-space:nowrap;">${escapeHtml(s)}</span>`, "chip");
   const names = ["Prop", "Winger", "Goalkeeper", "Point guard", "Scrum-half", "Marathon", "+27 more"];
   return `<tr><td style="padding-bottom:20px;">${names.map(chip).join("")}</td></tr>`;
 }
+__name(positionStrip, "positionStrip");
 function statRow() {
   const stats = [
     ["33", "positions"],
@@ -162,6 +168,7 @@ function statRow() {
     </table>
   </td></tr>`;
 }
+__name(statRow, "statRow");
 function row(icon, title, body) {
   return `<tr><td style="padding-bottom:18px;">
     <table role="presentation" cellpadding="0" cellspacing="0" width="100%"><tr>
@@ -173,14 +180,17 @@ function row(icon, title, body) {
     </tr></table>
   </td></tr>`;
 }
+__name(row, "row");
 function escapeHtml(s) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
+__name(escapeHtml, "escapeHtml");
 function escapeAttr(s) {
   return escapeHtml(s).replace(/"/g, "&quot;");
 }
+__name(escapeAttr, "escapeAttr");
 
-// lib/affiliate.ts
+// ../lib/affiliate.ts
 var MAX_LEVEL = 2;
 var DEFAULT_RATES = {
   1: 20,
@@ -192,36 +202,47 @@ var MAX_TOTAL_PCT = 60;
 var STRIPE_PCT = 1.5;
 var STRIPE_FIXED_PENNIES = 20;
 function estimateStripeFee(grossPennies) {
-  if (grossPennies <= 0) return 0;
+  if (grossPennies <= 0)
+    return 0;
   return Math.min(grossPennies, Math.round(grossPennies * STRIPE_PCT / 100) + STRIPE_FIXED_PENNIES);
 }
+__name(estimateStripeFee, "estimateStripeFee");
 function netAfterFee(grossPennies, feePennies) {
-  if (grossPennies <= 0) return 0;
+  if (grossPennies <= 0)
+    return 0;
   const fee = typeof feePennies === "number" && feePennies >= 0 ? feePennies : estimateStripeFee(grossPennies);
   return Math.max(0, grossPennies - fee);
 }
+__name(netAfterFee, "netAfterFee");
 function pctOf(amountPennies, pct) {
-  if (!Number.isFinite(amountPennies) || !Number.isFinite(pct)) return 0;
-  if (amountPennies <= 0 || pct <= 0) return 0;
+  if (!Number.isFinite(amountPennies) || !Number.isFinite(pct))
+    return 0;
+  if (amountPennies <= 0 || pct <= 0)
+    return 0;
   return Math.floor(amountPennies * pct / 100);
 }
+__name(pctOf, "pctOf");
 function chainFor(startCode, byCode, byId) {
   const start = byCode.get(startCode);
-  if (!start || !start.active) return [];
+  if (!start || !start.active)
+    return [];
   const chain = [start];
   const seen = /* @__PURE__ */ new Set([start.id]);
   let current = start;
   while (chain.length < MAX_LEVEL) {
     const parentId = current.parentId;
-    if (!parentId || seen.has(parentId)) break;
+    if (!parentId || seen.has(parentId))
+      break;
     const parent = byId.get(parentId);
-    if (!parent || !parent.active) break;
+    if (!parent || !parent.active)
+      break;
     chain.push(parent);
     seen.add(parent.id);
     current = parent;
   }
   return chain;
 }
+__name(chainFor, "chainFor");
 function splitCommission({
   referralCode,
   paidPennies,
@@ -230,56 +251,72 @@ function splitCommission({
   byId,
   payerUserId
 }) {
-  if (!referralCode || paidPennies <= 0) return [];
+  if (!referralCode || paidPennies <= 0)
+    return [];
   const net = netAfterFee(paidPennies, stripeFeePennies);
-  if (net <= 0) return [];
+  if (net <= 0)
+    return [];
   const chain = chainFor(referralCode, byCode, byId);
-  if (!chain.length) return [];
-  if (payerUserId && chain.some((a) => a.userId && a.userId === payerUserId)) return [];
+  if (!chain.length)
+    return [];
+  if (payerUserId && chain.some((a) => a.userId && a.userId === payerUserId))
+    return [];
   const lines = [];
   let spentPct = 0;
   chain.forEach((affiliate, i) => {
     const level = i + 1;
     const requested = level === 1 ? affiliate.ratePct ?? DEFAULT_RATES[1] : DEFAULT_RATES[level];
-    if (!requested || requested <= 0) return;
+    if (!requested || requested <= 0)
+      return;
     const ratePct = Math.min(requested, MAX_TOTAL_PCT - spentPct);
-    if (ratePct <= 0) return;
+    if (ratePct <= 0)
+      return;
     spentPct += ratePct;
     const amountPennies = pctOf(net, ratePct);
-    if (amountPennies <= 0) return;
+    if (amountPennies <= 0)
+      return;
     lines.push({ affiliateId: affiliate.id, level, ratePct, amountPennies, netPennies: net });
   });
   return lines;
 }
+__name(splitCommission, "splitCommission");
 
-// lib/day.ts
+// ../lib/day.ts
 function toLocalDay(d = /* @__PURE__ */ new Date()) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 }
+__name(toLocalDay, "toLocalDay");
 function todayLocal() {
   return toLocalDay();
 }
+__name(todayLocal, "todayLocal");
 
-// lib/biometrics.ts
+// ../lib/biometrics.ts
 function toISODate(s) {
   const t = s.trim();
-  if (/^\d{4}-\d{2}-\d{2}/.test(t)) return t.slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}/.test(t))
+    return t.slice(0, 10);
   const d = new Date(t);
-  if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+  if (!isNaN(d.getTime()))
+    return d.toISOString().slice(0, 10);
   return null;
 }
+__name(toISODate, "toISODate");
 function parseOuraSleep(records) {
   const byDate = /* @__PURE__ */ new Map();
   for (const r of records ?? []) {
     const date = toISODate(r?.day ?? "");
-    if (!date) continue;
-    if (r.type && !/long_sleep|sleep/i.test(r.type)) continue;
+    if (!date)
+      continue;
+    if (r.type && !/long_sleep|sleep/i.test(r.type))
+      continue;
     const seconds = Number(r.total_sleep_duration) || 0;
     const existing = byDate.get(date);
-    if (existing && existing.seconds >= seconds) continue;
+    if (existing && existing.seconds >= seconds)
+      continue;
     const hrv = numOrNull(r.average_hrv);
     const rhr = numOrNull(r.lowest_heart_rate ?? r.average_heart_rate);
     const b = {
@@ -289,35 +326,43 @@ function parseOuraSleep(records) {
       sleep_hours: seconds > 0 ? +(seconds / 3600).toFixed(2) : null,
       source: "oura"
     };
-    if (b.hrv_ms == null && b.resting_hr == null && b.sleep_hours == null) continue;
+    if (b.hrv_ms == null && b.resting_hr == null && b.sleep_hours == null)
+      continue;
     byDate.set(date, { b, seconds });
   }
   return [...byDate.values()].map((v) => v.b).sort((a, b) => a.metric_date.localeCompare(b.metric_date));
 }
+__name(parseOuraSleep, "parseOuraSleep");
 function parseIngestPayload(body) {
   const rows = Array.isArray(body) ? body : [body];
   const out = /* @__PURE__ */ new Map();
   for (const raw of rows) {
-    if (!raw || typeof raw !== "object") continue;
+    if (!raw || typeof raw !== "object")
+      continue;
     const r = raw;
-    const pick = (keys) => {
+    const pick = /* @__PURE__ */ __name((keys) => {
       for (const k of Object.keys(r)) {
         const norm = k.toLowerCase().replace(/[^a-z]/g, "");
-        if (keys.includes(norm)) return r[k];
+        if (keys.includes(norm))
+          return r[k];
       }
       return void 0;
-    };
+    }, "pick");
     const date = toISODate(String(pick(["date", "day", "metricdate", "startdate"]) ?? "")) ?? todayLocal();
     let sleepAlreadyHours = false;
     const hrv = numOrNull(pick(["hrv", "hrvms", "heartratevariability", "sdnn"]));
     const rhr = numOrNull(pick(["restinghr", "restingheartrate", "rhr", "lowestheartrate"]));
     const sleepRaw = pick(["sleep", "sleephours", "hoursofsleep", "asleep"]);
     let sleep = durationTextToHours(String(sleepRaw ?? ""));
-    if (sleep == null) sleep = numOrNull(sleepRaw);
-    else sleepAlreadyHours = true;
+    if (sleep == null)
+      sleep = numOrNull(sleepRaw);
+    else
+      sleepAlreadyHours = true;
     const sleepMinutes = numOrNull(pick(["sleepminutes", "sleepmins", "minutesasleep"]));
-    if (sleep == null && sleepMinutes != null) sleep = +(sleepMinutes / 60).toFixed(2);
-    else if (sleep != null && !sleepAlreadyHours) sleep = sleepToHours(sleep);
+    if (sleep == null && sleepMinutes != null)
+      sleep = +(sleepMinutes / 60).toFixed(2);
+    else if (sleep != null && !sleepAlreadyHours)
+      sleep = sleepToHours(sleep);
     const b = {
       metric_date: date,
       hrv_ms: hrv,
@@ -325,18 +370,22 @@ function parseIngestPayload(body) {
       sleep_hours: sleep,
       source: "apple_health"
     };
-    if (b.hrv_ms == null && b.resting_hr == null && b.sleep_hours == null) continue;
+    if (b.hrv_ms == null && b.resting_hr == null && b.sleep_hours == null)
+      continue;
     out.set(date, b);
   }
   return [...out.values()].sort((a, b) => a.metric_date.localeCompare(b.metric_date));
 }
+__name(parseIngestPayload, "parseIngestPayload");
 function numOrNull(v) {
   const n = Number(v);
   return Number.isFinite(n) && n > 0 ? n : null;
 }
+__name(numOrNull, "numOrNull");
 function durationTextToHours(text) {
   const t = String(text ?? "").trim().toLowerCase();
-  if (!t) return null;
+  if (!t)
+    return null;
   const clock = /^(\d{1,2}):([0-5]?\d)(?::([0-5]?\d))?$/.exec(t);
   if (clock) {
     const h2 = Number(clock[1]) + Number(clock[2]) / 60 + Number(clock[3] ?? 0) / 3600;
@@ -345,46 +394,76 @@ function durationTextToHours(text) {
   const hours = /(\d+(?:\.\d+)?)\s*(?:h\b|hr|hrs|hour|hours)/.exec(t);
   const mins = /(\d+(?:\.\d+)?)\s*(?:m\b|min|mins|minute|minutes)/.exec(t);
   const secs = /(\d+(?:\.\d+)?)\s*(?:s\b|sec|secs|second|seconds)/.exec(t);
-  if (!hours && !mins && !secs) return null;
+  if (!hours && !mins && !secs)
+    return null;
   const h = Number(hours?.[1] ?? 0) + Number(mins?.[1] ?? 0) / 60 + Number(secs?.[1] ?? 0) / 3600;
   return Number.isFinite(h) && h > 0 ? +h.toFixed(2) : null;
 }
+__name(durationTextToHours, "durationTextToHours");
 function sleepToHours(n) {
-  if (n <= 24) return +n.toFixed(2);
-  if (n <= 1440) return +(n / 60).toFixed(2);
+  if (n <= 24)
+    return +n.toFixed(2);
+  if (n <= 1440)
+    return +(n / 60).toFixed(2);
   return +(n / 3600).toFixed(2);
 }
+__name(sleepToHours, "sleepToHours");
 
-// cloudflare/src/index.ts
+// src/index.ts
 var CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS"
 };
-var json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { ...CORS, "Content-Type": "application/json" } });
-var index_default = {
+var json = /* @__PURE__ */ __name((data, status = 200) => new Response(JSON.stringify(data), { status, headers: { ...CORS, "Content-Type": "application/json" } }), "json");
+var src_default = {
   async fetch(req, env) {
-    if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
+    if (req.method === "OPTIONS")
+      return new Response("ok", { headers: CORS });
     const { pathname } = new URL(req.url);
     try {
-      if (pathname.endsWith("/coach-chat")) return await coachChat(req, env);
-      if (pathname.endsWith("/generate-program")) return await generateProgram(req, env);
-      if (pathname.endsWith("/estimate-food")) return await estimateFood(req, env);
-      if (pathname.endsWith("/generate-challenges")) return await generateChallenges(req, env);
-      if (pathname.endsWith("/generate-content")) return await generateContent(req, env);
-      if (pathname.endsWith("/injury-plan")) return await injuryPlan(req, env);
-      if (pathname.endsWith("/create-checkout")) return await createCheckout(req, env);
-      if (pathname.endsWith("/billing-portal")) return await billingPortal(req, env);
-      if (pathname.endsWith("/cancel-subscription")) return await cancelSubscription(req, env);
-      if (pathname.endsWith("/pause-subscription")) return await pauseSubscription(req, env);
-      if (pathname.endsWith("/resume-subscription")) return await resumeSubscription(req, env);
-      if (pathname.endsWith("/delete-account")) return await deleteAccount(req, env);
-      if (pathname.endsWith("/stripe-webhook")) return await stripeWebhook(req, env);
-      if (pathname.endsWith("/admin-create-user")) return await adminCreateUser(req, env);
-      if (pathname.endsWith("/announce-launch")) return await announceLaunch(req, env);
-      if (pathname.endsWith("/connect-wearable")) return await connectWearable(req, env);
-      if (pathname.endsWith("/ingest-token")) return await mintIngestToken(req, env);
-      if (pathname.endsWith("/wearable-ingest")) return await wearableIngest(req, env);
+      if (pathname.endsWith("/coach-chat"))
+        return await coachChat(req, env);
+      if (pathname.endsWith("/generate-program"))
+        return await generateProgram(req, env);
+      if (pathname.endsWith("/estimate-food"))
+        return await estimateFood(req, env);
+      if (pathname.endsWith("/generate-challenges"))
+        return await generateChallenges(req, env);
+      if (pathname.endsWith("/generate-content"))
+        return await generateContent(req, env);
+      if (pathname.endsWith("/injury-plan"))
+        return await injuryPlan(req, env);
+      if (pathname.endsWith("/create-checkout"))
+        return await createCheckout(req, env);
+      if (pathname.endsWith("/billing-portal"))
+        return await billingPortal(req, env);
+      if (pathname.endsWith("/cancel-subscription"))
+        return await cancelSubscription(req, env);
+      if (pathname.endsWith("/pause-subscription"))
+        return await pauseSubscription(req, env);
+      if (pathname.endsWith("/resume-subscription"))
+        return await resumeSubscription(req, env);
+      if (pathname.endsWith("/delete-account"))
+        return await deleteAccount(req, env);
+      if (pathname.endsWith("/stripe-webhook"))
+        return await stripeWebhook(req, env);
+      if (pathname.endsWith("/admin-create-user"))
+        return await adminCreateUser(req, env);
+      if (pathname.endsWith("/announce-launch"))
+        return await announceLaunch(req, env);
+      if (pathname.endsWith("/connect-wearable"))
+        return await connectWearable(req, env);
+      if (pathname.endsWith("/ingest-token"))
+        return await mintIngestToken(req, env);
+      if (pathname.endsWith("/email-status"))
+        return await emailStatus(req, env);
+      if (pathname.endsWith("/email-test"))
+        return await emailTest(req, env);
+      if (pathname.endsWith("/email-retry"))
+        return await emailRetry(req, env);
+      if (pathname.endsWith("/wearable-ingest"))
+        return await wearableIngest(req, env);
       if (pathname.endsWith("/health")) {
         const chain = modelChain(env);
         const vision = visionChain(env);
@@ -452,28 +531,36 @@ var index_default = {
 };
 async function authUser(req, env) {
   const auth = req.headers.get("Authorization");
-  if (!auth) return null;
+  if (!auth)
+    return null;
   const r = await fetch(`${env.SUPABASE_URL}/auth/v1/user`, {
     headers: { Authorization: auth, apikey: env.SUPABASE_ANON_KEY }
   });
-  if (!r.ok) return null;
+  if (!r.ok)
+    return null;
   const u = await r.json();
   return u?.id ? { id: u.id, email: u.email } : null;
 }
+__name(authUser, "authUser");
 async function isAdmin(env, userId) {
-  if (!env.SUPABASE_SERVICE_ROLE_KEY) return false;
+  if (!env.SUPABASE_SERVICE_ROLE_KEY)
+    return false;
   const r = await fetch(`${env.SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}&select=role`, {
     headers: { apikey: env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}` }
   });
   const rows = await r.json();
   return rows?.[0]?.role === "admin";
 }
+__name(isAdmin, "isAdmin");
 async function adminCreateUser(req, env) {
   const u = await authUser(req, env);
-  if (!u) return json({ error: "unauthorized" }, 401);
-  if (!await isAdmin(env, u.id)) return json({ error: "admins only" }, 403);
+  if (!u)
+    return json({ error: "unauthorized" }, 401);
+  if (!await isAdmin(env, u.id))
+    return json({ error: "admins only" }, 403);
   const { email: email2, password, full_name, role } = await req.json();
-  if (!email2 || !password || password.length < 6) return json({ error: "email and a 6+ char password are required" }, 400);
+  if (!email2 || !password || password.length < 6)
+    return json({ error: "email and a 6+ char password are required" }, 400);
   const svc = { apikey: env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`, "Content-Type": "application/json" };
   const cr = await fetch(`${env.SUPABASE_URL}/auth/v1/admin/users`, {
     method: "POST",
@@ -481,7 +568,8 @@ async function adminCreateUser(req, env) {
     body: JSON.stringify({ email: email2, password, email_confirm: true, user_metadata: { full_name: full_name || null } })
   });
   const created = await cr.json();
-  if (!cr.ok || !created.id) return json({ error: created.msg || created.error_description || created.message || "could not create user" }, 400);
+  if (!cr.ok || !created.id)
+    return json({ error: created.msg || created.error_description || created.message || "could not create user" }, 400);
   await fetch(`${env.SUPABASE_URL}/rest/v1/profiles?id=eq.${created.id}`, {
     method: "PATCH",
     headers: { ...svc, Prefer: "return=minimal" },
@@ -489,31 +577,38 @@ async function adminCreateUser(req, env) {
   });
   return json({ ok: true, id: created.id, email: email2 });
 }
+__name(adminCreateUser, "adminCreateUser");
 var TIER_ORDER = ["bronze", "silver", "gold"];
 function meetsTier(have, need) {
   const h = TIER_ORDER.indexOf(have);
   const n = TIER_ORDER.indexOf(need);
   return (h < 0 ? 0 : h) >= (n < 0 ? 0 : n);
 }
+__name(meetsTier, "meetsTier");
 async function isSuspended(env, userId) {
-  if (!env.SUPABASE_SERVICE_ROLE_KEY) return false;
+  if (!env.SUPABASE_SERVICE_ROLE_KEY)
+    return false;
   try {
     const r = await supa(env, `profiles?id=eq.${userId}&select=suspended_at`);
-    if (!r.ok) return false;
+    if (!r.ok)
+      return false;
     const rows = await r.json();
     return !!rows?.[0]?.suspended_at;
   } catch {
     return false;
   }
 }
+__name(isSuspended, "isSuspended");
 async function requireTier(env, userId, need, feature) {
   if (await isSuspended(env, userId)) {
     return json({ error: "This account has been deactivated.", suspended: true }, 403);
   }
   const tier = await tierOf(env, userId);
-  if (meetsTier(tier, need)) return null;
+  if (meetsTier(tier, need))
+    return null;
   return json({ error: `${feature} is part of Pro`, upgrade: need, tier }, 402);
 }
+__name(requireTier, "requireTier");
 var TIER_BUDGET = {
   bronze: 0.4,
   // free users: enough to try the coach, not enough to cost real money
@@ -534,10 +629,12 @@ async function svcRpc(env, fn, body) {
     body: JSON.stringify(body)
   });
 }
+__name(svcRpc, "svcRpc");
 async function tierOf(env, userId) {
   try {
     const r = await supa(env, `subscriptions?user_id=eq.${userId}&select=tier,status`);
-    if (!r.ok) return "bronze";
+    if (!r.ok)
+      return "bronze";
     const rows = await r.json();
     const row2 = rows?.[0];
     return row2?.status === "active" && row2.tier ? row2.tier : "bronze";
@@ -545,6 +642,7 @@ async function tierOf(env, userId) {
     return "bronze";
   }
 }
+__name(tierOf, "tierOf");
 async function checkBudget(env, userId) {
   const dailyLimit = Number(env.AI_DAILY_LIMIT || "40");
   if (!env.SUPABASE_SERVICE_ROLE_KEY) {
@@ -558,10 +656,12 @@ async function checkBudget(env, userId) {
       p_budget: budget,
       p_daily_limit: dailyLimit
     });
-    if (!r.ok) return { allowed: false, spent: 0, callsToday: 0, budget };
+    if (!r.ok)
+      return { allowed: false, spent: 0, callsToday: 0, budget };
     const rows = await r.json();
     const row2 = rows?.[0];
-    if (!row2) return { allowed: false, spent: 0, callsToday: 0, budget };
+    if (!row2)
+      return { allowed: false, spent: 0, callsToday: 0, budget };
     return {
       allowed: row2.allowed === true,
       spent: Number(row2.spent) || 0,
@@ -572,18 +672,22 @@ async function checkBudget(env, userId) {
     return { allowed: false, spent: 0, callsToday: 0, budget };
   }
 }
+__name(checkBudget, "checkBudget");
 async function recordSpend(env, userId, costUsd) {
-  if (!env.SUPABASE_SERVICE_ROLE_KEY) return;
+  if (!env.SUPABASE_SERVICE_ROLE_KEY)
+    return;
   try {
     await svcRpc(env, "record_ai_spend", { p_user: userId, p_cost: costUsd });
   } catch {
   }
 }
+__name(recordSpend, "recordSpend");
 function overBudget(state) {
   const reason = state.spent >= state.budget ? "You've used this month's AI coaching allowance." : "You've hit today's AI coaching limit.";
   return json({ error: `${reason} The on-device coach still works, and your allowance resets \u2014 upgrade for more.` }, 429);
 }
-var WORKER_VERSION = "2026-08-17.1";
+__name(overBudget, "overBudget");
+var WORKER_VERSION = "2026-08-21.1";
 var ATTEMPT_TIMEOUT_MS = {
   groq: 1e4,
   openrouter: 2e4,
@@ -603,6 +707,7 @@ function keyFor(env, p) {
   const k = p === "groq" ? env.GROQ_SECRET : p === "nvidia" ? env.NVIDIA_SECRET : env.OPENROUTER_API_KEY;
   return (k || "").trim();
 }
+__name(keyFor, "keyFor");
 var PROVIDER_ORDER = ["groq", "openrouter", "nvidia"];
 var PROVIDER_DEADLINE_MS = {
   groq: 12e3,
@@ -617,41 +722,49 @@ var NVIDIA_DEFAULT_FALLBACKS = ["nvidia/llama-3.3-nemotron-super-49b-v1"];
 function isFree(r) {
   return r.provider === "openrouter" && r.model.endsWith(":free");
 }
+__name(isFree, "isFree");
 function chainFor2(env, p) {
-  if (!keyFor(env, p)) return [];
+  if (!keyFor(env, p))
+    return [];
   const raw = p === "groq" ? env.GROQ_FALLBACK_MODELS : p === "nvidia" ? env.NVIDIA_FALLBACK_MODELS : env.OPENROUTER_FREE_MODELS;
   const defaults = p === "groq" ? GROQ_DEFAULT_FALLBACKS : p === "nvidia" ? NVIDIA_DEFAULT_FALLBACKS : DEFAULT_FALLBACK_MODELS;
   const primary = (p === "groq" ? env.GROQ_MODEL || GROQ_DEFAULT_MODEL : p === "nvidia" ? env.NVIDIA_MODEL || NVIDIA_DEFAULT_MODEL : env.OPENROUTER_MODEL || "deepseek/deepseek-chat").trim();
   const configured = (raw || "").split(",").map((s) => s.trim()).filter(Boolean);
   return [primary, ...configured.length ? configured : defaults].filter((m, i, all) => m && all.indexOf(m) === i).map((model) => ({ provider: p, model }));
 }
+__name(chainFor2, "chainFor");
 function modelChain(env) {
   return PROVIDER_ORDER.flatMap((p) => chainFor2(env, p));
 }
+__name(modelChain, "modelChain");
 var VISION_DEFAULTS = {
   groq: [],
   openrouter: ["google/gemini-2.5-flash", "openai/gpt-4.1-mini"],
   nvidia: []
 };
 function visionChainFor(env, p) {
-  if (!keyFor(env, p)) return [];
+  if (!keyFor(env, p))
+    return [];
   const raw = p === "groq" ? env.GROQ_VISION_MODELS : p === "nvidia" ? env.NVIDIA_VISION_MODELS : env.OPENROUTER_VISION_MODELS;
   const configured = (raw || "").split(",").map((s) => s.trim()).filter(Boolean);
   const models = configured.length ? configured : VISION_DEFAULTS[p];
   return models.filter((m, i, all) => m && all.indexOf(m) === i).map((model) => ({ provider: p, model }));
 }
+__name(visionChainFor, "visionChainFor");
 var VISION_ORDER = ["openrouter", "groq", "nvidia"];
 function visionChain(env) {
   return VISION_ORDER.flatMap((p) => visionChainFor(env, p));
 }
+__name(visionChain, "visionChain");
 var PAID_PROMPT_PER_M = 0.2002;
 var PAID_COMPLETION_PER_M = 0.8001;
 function modelPrice(env, rung) {
-  if (isFree(rung)) return { prompt: 0, completion: 0 };
-  const num = (v, fallback) => {
+  if (isFree(rung))
+    return { prompt: 0, completion: 0 };
+  const num = /* @__PURE__ */ __name((v, fallback) => {
     const n = Number(v);
     return v && Number.isFinite(n) && n >= 0 ? n : fallback;
-  };
+  }, "num");
   if (rung.provider === "groq") {
     return {
       prompt: num(env.GROQ_PROMPT_PER_M, 0),
@@ -669,21 +782,25 @@ function modelPrice(env, rung) {
     completion: num(env.PAID_COMPLETION_PER_M, PAID_COMPLETION_PER_M)
   };
 }
+__name(modelPrice, "modelPrice");
 function costOf(env, rung, usage, maxTokens) {
-  if (typeof usage?.cost === "number" && usage.cost >= 0) return usage.cost;
+  if (typeof usage?.cost === "number" && usage.cost >= 0)
+    return usage.cost;
   const price = modelPrice(env, rung);
-  if (price.prompt === 0 && price.completion === 0) return 0;
+  if (price.prompt === 0 && price.completion === 0)
+    return 0;
   const promptTokens = usage?.prompt_tokens ?? 2e3;
   const completionTokens = usage?.completion_tokens ?? maxTokens;
   return (promptTokens * price.prompt + completionTokens * price.completion) / 1e6;
 }
+__name(costOf, "costOf");
 async function providerOnce(env, rung, system, user, maxTokens, json_mode = false, image) {
   const isOpenRouter = rung.provider === "openrouter";
   const model = rung.model;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), ATTEMPT_TIMEOUT_MS[rung.provider]);
   try {
-    const send = (withJsonMode) => fetch(
+    const send = /* @__PURE__ */ __name((withJsonMode) => fetch(
       PROVIDER_API[rung.provider],
       {
         method: "POST",
@@ -723,16 +840,20 @@ async function providerOnce(env, rung, system, user, maxTokens, json_mode = fals
         }),
         signal: ctrl.signal
       }
-    );
+    ), "send");
     let r = await send(json_mode);
     if (!r.ok && r.status === 400 && json_mode) {
       const detail = await r.text();
-      if (/response_format|json_object/i.test(detail)) r = await send(false);
-      else throw new Error(`400 ${detail.slice(0, 200)}`);
+      if (/response_format|json_object/i.test(detail))
+        r = await send(false);
+      else
+        throw new Error(`400 ${detail.slice(0, 200)}`);
     }
-    if (!r.ok) throw new Error(`${r.status} ${(await r.text()).slice(0, 200)}`);
+    if (!r.ok)
+      throw new Error(`${r.status} ${(await r.text()).slice(0, 200)}`);
     const data = await r.json();
-    if (data.error?.message) throw new Error(data.error.message.slice(0, 200));
+    if (data.error?.message)
+      throw new Error(data.error.message.slice(0, 200));
     const choice = data.choices?.[0];
     const text = choice?.message?.content ?? "";
     const finish = choice?.finish_reason;
@@ -746,11 +867,12 @@ async function providerOnce(env, rung, system, user, maxTokens, json_mode = fals
     clearTimeout(timer);
   }
 }
+__name(providerOnce, "providerOnce");
 async function complete(env, opts) {
   const started = Date.now();
   const trail = [];
   let spent = 0;
-  const attempt = async (rung) => {
+  const attempt = /* @__PURE__ */ __name(async (rung) => {
     const { text, cost, finish } = await providerOnce(env, rung, opts.system, opts.user, opts.maxTokens, opts.json, opts.image);
     spent += cost;
     if (opts.validate && !opts.validate(text)) {
@@ -763,7 +885,7 @@ async function complete(env, opts) {
       );
     }
     return { text, model: `${rung.provider}/${rung.model}`, cost: 0 };
-  };
+  }, "attempt");
   const chain = opts.image ? visionChain(env) : modelChain(env);
   if (!chain.length) {
     throw Object.assign(
@@ -771,7 +893,7 @@ async function complete(env, opts) {
       { cost: 0 }
     );
   }
-  const runQueued = async (rungs) => {
+  const runQueued = /* @__PURE__ */ __name(async (rungs) => {
     for (const rung of rungs) {
       const label = `${rung.provider}/${rung.model}`;
       if (Date.now() - started > PROVIDER_DEADLINE_MS[rung.provider]) {
@@ -786,14 +908,16 @@ async function complete(env, opts) {
       }
     }
     return null;
-  };
+  }, "runQueued");
   if (opts.image) {
     const seen = await runQueued(chain);
-    if (seen) return seen;
+    if (seen)
+      return seen;
     throw Object.assign(new Error(`all vision models failed \u2014 ${trail.join(" | ")}`), { cost: spent });
   }
   const fast = await runQueued(chain.filter((r) => r.provider === "groq"));
-  if (fast) return fast;
+  if (fast)
+    return fast;
   const orChain = chain.filter((r) => r.provider === "openrouter");
   const free = opts.priority ? [] : orChain.filter(isFree);
   const paid = orChain.filter((r) => !isFree(r));
@@ -810,11 +934,14 @@ async function complete(env, opts) {
     }
   }
   const viaPaid = await runQueued(paid);
-  if (viaPaid) return viaPaid;
+  if (viaPaid)
+    return viaPaid;
   const viaNvidia = await runQueued(chain.filter((r) => r.provider === "nvidia"));
-  if (viaNvidia) return viaNvidia;
+  if (viaNvidia)
+    return viaNvidia;
   throw Object.assign(new Error(`all models failed \u2014 ${trail.join(" | ")}`), { cost: spent });
 }
+__name(complete, "complete");
 async function meteredComplete(env, userId, opts) {
   try {
     const priority = meetsTier(await tierOf(env, userId), "silver");
@@ -827,17 +954,22 @@ async function meteredComplete(env, userId, opts) {
     throw e;
   }
 }
+__name(meteredComplete, "meteredComplete");
 async function coachChat(req, env) {
   const u = await authUser(req, env);
-  if (!u) return json({ error: "unauthorized" }, 401);
+  if (!u)
+    return json({ error: "unauthorized" }, 401);
   const gate = await requireTier(env, u.id, "silver", "Ask the coach");
-  if (gate) return gate;
+  if (gate)
+    return gate;
   const budget = await checkBudget(env, u.id);
-  if (!budget.allowed) return overBudget(budget);
+  if (!budget.allowed)
+    return overBudget(budget);
   const body = await req.json();
   const question = String(body.question ?? "").trim().slice(0, 600);
   const context = body.context;
-  if (!question) return json({ error: "question required" }, 400);
+  if (!question)
+    return json({ error: "question required" }, 400);
   const sys = "You are this athlete's personal strength & conditioning, recovery and nutrition coach. Use their full briefing and the recent conversation before answering; a follow-up refers to that conversation unless they clearly change topic. Answer directly and practically in 2\u20136 sentences, quote their own measurements or targets where useful, and never ask again for a fact present in the briefing. If a value is explicitly missing, say so rather than inventing it. Explain the why behind drills, respect pain with lower-impact options, and advise seeing a physio for sharp or persistent pain. Do not diagnose.";
   const fallback = `Goal: ${context?.goal ?? "general"}
 Sore areas: ${context?.soreAreas?.join(", ") || "none"}
@@ -863,24 +995,32 @@ ${question}`,
   });
   return json({ answer: text, model });
 }
+__name(coachChat, "coachChat");
 function coachHistory(raw) {
-  if (!Array.isArray(raw)) return "No previous turns.";
+  if (!Array.isArray(raw))
+    return "No previous turns.";
   const turns = raw.slice(-12).flatMap((turn) => {
-    if (!turn || typeof turn !== "object") return [];
+    if (!turn || typeof turn !== "object")
+      return [];
     const value = turn;
-    if (value.role !== "user" && value.role !== "assistant") return [];
+    if (value.role !== "user" && value.role !== "assistant")
+      return [];
     const content = String(value.content ?? "").trim().slice(0, 800);
     return content ? [`${value.role === "user" ? "Athlete" : "Coach"}: ${content}`] : [];
   });
   return turns.length ? turns.join("\n").slice(-6e3) : "No previous turns.";
 }
+__name(coachHistory, "coachHistory");
 async function generateProgram(req, env) {
   const u = await authUser(req, env);
-  if (!u) return json({ error: "unauthorized" }, 401);
+  if (!u)
+    return json({ error: "unauthorized" }, 401);
   const gate = await requireTier(env, u.id, "silver", "Training programs");
-  if (gate) return gate;
+  if (gate)
+    return gate;
   const budget = await checkBudget(env, u.id);
-  if (!budget.allowed) return overBudget(budget);
+  if (!budget.allowed)
+    return overBudget(budget);
   const { goal, pain_map, notes, in_season, sport, position, focus, days_per_week, split } = await req.json();
   const positions = (Array.isArray(position) ? position : [position]).filter((p) => typeof p === "string" && p.trim().length > 0).map((p) => p.trim());
   const SPLIT_BRIEF = {
@@ -890,7 +1030,8 @@ async function generateProgram(req, env) {
     bro: "a body-part split \u2014 one muscle group per session (chest day, back day, shoulders, arms, legs)",
     full_body: "full body every session, rotating which lifts lead"
   };
-  if (!goal) return json({ error: "goal required" }, 400);
+  if (!goal)
+    return json({ error: "goal required" }, 400);
   const days = Math.max(2, Math.min(5, Number(days_per_week) || 3));
   const sore = Object.entries(pain_map ?? {}).filter(([, v]) => Number(v) >= 4).map(([k, v]) => `${k} (${v})`).join(", ") || "none";
   const season = in_season ? "in-season (taper ~30%, recovery-weighted)" : "out-of-season (build, higher volume)";
@@ -911,24 +1052,31 @@ REQUIRED SPLIT: ${SPLIT_BRIEF[split]}. Name each session accordingly.` : ""),
     validate: (t) => parseSeedWeek(t) !== null
   });
   const seed = parseSeedWeek(text);
-  if (!seed) return json({ error: "bad ai output" }, 422);
+  if (!seed)
+    return json({ error: "bad ai output" }, 422);
   return json({ plan: expandWeeks(seed, goal), model });
 }
+__name(generateProgram, "generateProgram");
 function parseSeedWeek(raw) {
   const match = raw.match(/\{[\s\S]*\}/);
-  if (!match) return null;
+  if (!match)
+    return null;
   try {
     const p = JSON.parse(match[0]);
-    if (!Array.isArray(p.sessions) || p.sessions.length === 0) return null;
+    if (!Array.isArray(p.sessions) || p.sessions.length === 0)
+      return null;
     for (const s of p.sessions) {
-      if (!Array.isArray(s?.drills) || s.drills.length === 0) return null;
-      if (!s.drills.every((d) => typeof d?.name === "string" && d.name.trim())) return null;
+      if (!Array.isArray(s?.drills) || s.drills.length === 0)
+        return null;
+      if (!s.drills.every((d) => typeof d?.name === "string" && d.name.trim()))
+        return null;
     }
     return p;
   } catch {
     return null;
   }
 }
+__name(parseSeedWeek, "parseSeedWeek");
 var SHAPE = {
   load: [{ sets: 0, reps: 1 }, { sets: 1, reps: 0.85 }, { sets: 1, reps: 0.7 }, { sets: -1, reps: 1 }],
   reps: [{ sets: 0, reps: 1 }, { sets: 0, reps: 1.2 }, { sets: 1, reps: 1.35 }, { sets: -1, reps: 0.9 }],
@@ -981,13 +1129,16 @@ function expandWeeks(seed, goal) {
     weeks
   };
 }
+__name(expandWeeks, "expandWeeks");
 function parseFoodItems(raw) {
   const match = raw.match(/\{[\s\S]*\}/);
-  if (!match) return null;
+  if (!match)
+    return null;
   try {
     const parsed = JSON.parse(match[0]);
     const items = parsed.items;
-    if (!Array.isArray(items) || items.length === 0) return null;
+    if (!Array.isArray(items) || items.length === 0)
+      return null;
     const out = items.map((i) => i).filter((i) => typeof i.name === "string" && Number(i.kcal) > 0).map((i) => ({
       name: String(i.name).slice(0, 60),
       qty: Math.max(1, Math.round(Number(i.qty) || 1)),
@@ -1002,25 +1153,31 @@ function parseFoodItems(raw) {
     return null;
   }
 }
+__name(parseFoodItems, "parseFoodItems");
 async function estimateFood(req, env) {
   const u = await authUser(req, env);
-  if (!u) return json({ error: "unauthorized" }, 401);
+  if (!u)
+    return json({ error: "unauthorized" }, 401);
   const gate = await requireTier(env, u.id, "silver", "Nutrition");
-  if (gate) return gate;
+  if (gate)
+    return gate;
   const budget = await checkBudget(env, u.id);
-  if (!budget.allowed) return overBudget(budget);
+  if (!budget.allowed)
+    return overBudget(budget);
   const { text, image } = await req.json();
   const meal = (text ?? "").trim().slice(0, 300);
   const MAX_IMAGE_CHARS = 15e5;
   const photo = typeof image === "string" && image.startsWith("data:image/") ? image : null;
-  if (image && !photo) return json({ error: "image must be a data: URL" }, 400);
+  if (image && !photo)
+    return json({ error: "image must be a data: URL" }, 400);
   if (photo && photo.length > MAX_IMAGE_CHARS) {
     return json({ error: "that photo is too large \u2014 try again, or describe the meal instead" }, 413);
   }
   if (photo && !visionChain(env).length) {
     return json({ error: "this server can't read photos right now \u2014 describe the meal instead", vision: false }, 503);
   }
-  if (!photo && meal.length < 2) return json({ error: "text or image required" }, 400);
+  if (!photo && meal.length < 2)
+    return json({ error: "text or image required" }, 400);
   const sys = (photo ? 'You estimate the nutrition of a meal an athlete has photographed. Work out the portion from the picture before you estimate anything else. Use whatever is in shot for scale: a dinner plate is about 27cm across and a side plate about 20cm, a fork is about 19cm long, a standard mug holds about 300ml, and a closed fist is roughly 150-200g of a dense food. State which reference you used in the name, e.g. "Rice (fills a third of a 27cm plate)". Estimate the FOOD, not the container \u2014 a half-empty bowl is a half portion. If something is stacked or partly hidden, say so in the name and estimate the visible part plus a conservative allowance, e.g. "Chips (pile, lower layer hidden \u2014 estimated)". Never invent a food you cannot see. If the picture is too dark or blurred to identify anything, return an empty items array rather than guessing. ' : "You estimate the nutrition of a meal an athlete describes in plain language. Where they give a household measure, convert it: a heaped tablespoon is about 15g dry rice or 20g peanut butter, a slice of medium bread about 40g, a mug of dry oats about 90g, a supermarket chicken breast about 170g, a large egg about 58g, a tin of tuna about 145g drained. If they give no quantity at all, use a normal adult portion and say so in the name. ") + 'Output ONLY valid minified JSON: {items:[{name:string,qty:number,unit:"g"|"ml"|"each",kcal:number,protein:number,carbs:number,fats:number}]}. One entry per distinct food. Use UK supermarket products and typical British home cooking. For rice, pasta, couscous and oats give the DRY weight, and say "(dry)" in the name. Include cooking fat if the dish obviously used it \u2014 a fried egg or a stir fry carries oil the athlete did not mention and it is often 100+ kcal. Round quantities to something a person would say: to the nearest 10g under 200g, nearest 25g above. Never give a quantity to the gram. Put any real uncertainty in the name, in brackets, in plain words. Do not hedge in the numbers. kcal must be the total for the stated qty, not per 100g, and must be greater than zero, and must be consistent with the macros you give (protein and carbs 4 kcal/g, fat 9 kcal/g, within 10%). No prose outside the JSON.';
   const { text: raw, model } = await meteredComplete(env, u.id, {
     system: sys,
@@ -1035,19 +1192,24 @@ async function estimateFood(req, env) {
     validate: (t) => parseFoodItems(t) !== null
   });
   const items = parseFoodItems(raw);
-  if (!items) return json({ error: "could not read that meal" }, 422);
+  if (!items)
+    return json({ error: "could not read that meal" }, 422);
   return json({ items, model });
 }
+__name(estimateFood, "estimateFood");
 async function announceLaunch(req, env) {
   const user = await authUser(req, env);
-  if (!user) return json({ error: "unauthorized" }, 401);
-  if (!await isAdmin(env, user.id)) return json({ error: "forbidden" }, 403);
-  if (!env.RESEND_API_KEY) return json({ error: "RESEND_API_KEY is not set on this Worker" }, 500);
+  if (!user)
+    return json({ error: "unauthorized" }, 401);
+  if (!await isAdmin(env, user.id))
+    return json({ error: "forbidden" }, 403);
+  if (!env.RESEND_API_KEY)
+    return json({ error: "RESEND_API_KEY is not set on this Worker" }, 500);
   const body = await req.json().catch(() => ({}));
   const appUrl = env.APP_URL || "https://pocketathlete.com";
   const from = env.REMINDER_FROM || "PocketAthlete <info@pocketathlete.com>";
   const limit = Math.min(250, Math.max(1, Number(body.limit) || 100));
-  const send = async (to, subject, html, text, unsub) => {
+  const send = /* @__PURE__ */ __name(async (to, subject, html, text, unsub) => {
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },
@@ -1064,10 +1226,11 @@ async function announceLaunch(req, env) {
       })
     });
     return res.ok;
-  };
+  }, "send");
   const testTo = (body.testTo || "").trim();
   if (testTo) {
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(testTo)) return json({ error: "that is not an email address" }, 400);
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(testTo))
+      return json({ error: "that is not an email address" }, 400);
     const own = await (await supa(
       env,
       `waitlist?email=eq.${encodeURIComponent(testTo.toLowerCase())}&select=unsub_token,referral_code,source`
@@ -1083,13 +1246,14 @@ async function announceLaunch(req, env) {
     `waitlist?unsubscribed_at=is.null&launch_emailed_at=is.null&select=id,email,referral_code,source,unsub_token&order=created_at.asc&limit=${limit}`
   )).json();
   const rows = pending ?? [];
-  const remaining = async () => {
+  const remaining = /* @__PURE__ */ __name(async () => {
     const r = await supa(env, "waitlist?unsubscribed_at=is.null&launch_emailed_at=is.null&select=id", {
       headers: { Prefer: "count=exact", Range: "0-0" }
     });
     return Number((r.headers.get("content-range") || "/0").split("/")[1]) || 0;
-  };
-  if (body.dryRun) return json({ dryRun: true, wouldSend: rows.length, remaining: await remaining() });
+  }, "remaining");
+  if (body.dryRun)
+    return json({ dryRun: true, wouldSend: rows.length, remaining: await remaining() });
   let sent = 0;
   let failed = 0;
   for (const row2 of rows) {
@@ -1109,9 +1273,11 @@ async function announceLaunch(req, env) {
   }
   return json({ sent, failed, remaining: await remaining() });
 }
+__name(announceLaunch, "announceLaunch");
 async function connectWearable(req, env) {
   const u = await authUser(req, env);
-  if (!u) return json({ error: "unauthorized" }, 401);
+  if (!u)
+    return json({ error: "unauthorized" }, 401);
   const { provider, token } = await req.json();
   if (provider !== "oura") {
     return json({
@@ -1119,7 +1285,8 @@ async function connectWearable(req, env) {
     }, 400);
   }
   const access = (token ?? "").trim();
-  if (access.length < 20) return json({ error: "that doesn't look like an Oura personal access token" }, 400);
+  if (access.length < 20)
+    return json({ error: "that doesn't look like an Oura personal access token" }, 400);
   let rows;
   try {
     rows = await fetchOura(access);
@@ -1140,18 +1307,22 @@ async function connectWearable(req, env) {
   });
   return json({ ok: true, days: saved });
 }
+__name(connectWearable, "connectWearable");
 async function mintIngestToken(req, env) {
   const u = await authUser(req, env);
-  if (!u) return json({ error: "unauthorized" }, 401);
+  if (!u)
+    return json({ error: "unauthorized" }, 401);
   const token = crypto.randomUUID();
   const r = await supa(env, `/rest/v1/profiles?id=eq.${u.id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ ingest_token: token })
   });
-  if (!r.ok) return json({ error: "could not create a token" }, 500);
+  if (!r.ok)
+    return json({ error: "could not create a token" }, 500);
   return json({ token, url: `${new URL(req.url).origin}${new URL(req.url).pathname.replace(/\/ingest-token$/, "/wearable-ingest")}` });
 }
+__name(mintIngestToken, "mintIngestToken");
 async function wearableIngest(req, env) {
   const auth = req.headers.get("Authorization") ?? "";
   const token = auth.replace(/^Bearer\s+/i, "").trim();
@@ -1160,7 +1331,8 @@ async function wearableIngest(req, env) {
   }
   const r = await supa(env, `/rest/v1/profiles?ingest_token=eq.${token}&select=id`);
   const found = r.ok ? await r.json() : [];
-  if (!found.length) return json({ error: "unauthorized" }, 401);
+  if (!found.length)
+    return json({ error: "unauthorized" }, 401);
   const rows = parseIngestPayload(await req.json().catch(() => null));
   if (!rows.length) {
     return json({ error: "nothing usable in that payload \u2014 send hrv, restingHR and/or sleepHours" }, 400);
@@ -1168,6 +1340,7 @@ async function wearableIngest(req, env) {
   const saved = await saveBiometrics(env, found[0].id, rows);
   return json({ ok: true, days: saved });
 }
+__name(wearableIngest, "wearableIngest");
 async function fetchOura(accessToken, days = 7) {
   const end = /* @__PURE__ */ new Date();
   const start = new Date(end.getTime() - days * 864e5);
@@ -1176,16 +1349,20 @@ async function fetchOura(accessToken, days = 7) {
   const timer = setTimeout(() => ctrl.abort(), 15e3);
   try {
     const r = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` }, signal: ctrl.signal });
-    if (r.status === 401 || r.status === 403) throw new Error("token rejected or expired");
-    if (!r.ok) throw new Error(`${r.status}`);
+    if (r.status === 401 || r.status === 403)
+      throw new Error("token rejected or expired");
+    if (!r.ok)
+      throw new Error(`${r.status}`);
     const body = await r.json();
     return parseOuraSleep(body.data ?? []);
   } finally {
     clearTimeout(timer);
   }
 }
+__name(fetchOura, "fetchOura");
 async function saveBiometrics(env, userId, rows) {
-  if (!rows.length) return 0;
+  if (!rows.length)
+    return 0;
   const existing = await supa(
     env,
     `/rest/v1/biometrics?user_id=eq.${userId}&source=eq.manual&select=metric_date&metric_date=in.(${rows.map((r2) => r2.metric_date).join(",")})`
@@ -1194,7 +1371,8 @@ async function saveBiometrics(env, userId, rows) {
     existing.ok ? (await existing.json()).map((r2) => r2.metric_date) : []
   );
   const writable = rows.filter((r2) => !manual.has(r2.metric_date));
-  if (!writable.length) return 0;
+  if (!writable.length)
+    return 0;
   const r = await supa(env, "/rest/v1/biometrics?on_conflict=user_id,metric_date", {
     method: "POST",
     headers: { "Content-Type": "application/json", Prefer: "resolution=merge-duplicates" },
@@ -1202,9 +1380,11 @@ async function saveBiometrics(env, userId, rows) {
   });
   return r.ok ? writable.length : 0;
 }
+__name(saveBiometrics, "saveBiometrics");
 async function syncWearables(env) {
   const r = await supa(env, "/rest/v1/wearable_connections?provider=eq.oura&access_token=not.is.null&select=user_id,access_token");
-  if (!r.ok) return;
+  if (!r.ok)
+    return;
   const conns = await r.json();
   for (const c of conns) {
     let error = null;
@@ -1220,34 +1400,45 @@ async function syncWearables(env) {
     });
   }
 }
+__name(syncWearables, "syncWearables");
 function parseInjuryPlan(raw) {
   const match = raw.match(/\{[\s\S]*\}/);
-  if (!match) return null;
+  if (!match)
+    return null;
   try {
     const p = JSON.parse(match[0]);
     const stages = p.stages;
-    if (!Array.isArray(stages) || stages.length === 0) return null;
+    if (!Array.isArray(stages) || stages.length === 0)
+      return null;
     for (const s of stages) {
       const st = s;
-      if (typeof st?.name !== "string" || !Array.isArray(st?.exercises) || st.exercises.length === 0) return null;
+      if (typeof st?.name !== "string" || !Array.isArray(st?.exercises) || st.exercises.length === 0)
+        return null;
     }
-    if (!Array.isArray(p.redFlags) || p.redFlags.length === 0) return null;
-    if (typeof p.summary !== "string" || !p.summary.trim()) return null;
+    if (!Array.isArray(p.redFlags) || p.redFlags.length === 0)
+      return null;
+    if (typeof p.summary !== "string" || !p.summary.trim())
+      return null;
     return p;
   } catch {
     return null;
   }
 }
+__name(parseInjuryPlan, "parseInjuryPlan");
 async function injuryPlan(req, env) {
   const u = await authUser(req, env);
-  if (!u) return json({ error: "unauthorized" }, 401);
+  if (!u)
+    return json({ error: "unauthorized" }, 401);
   const gate = await requireTier(env, u.id, "silver", "The injury planner");
-  if (gate) return gate;
+  if (gate)
+    return gate;
   const budget = await checkBudget(env, u.id);
-  if (!budget.allowed) return overBudget(budget);
+  if (!budget.allowed)
+    return overBudget(budget);
   const { description, area, weeks, sport, athlete } = await req.json();
   const desc = (description ?? "").trim().slice(0, 600);
-  if (desc.length < 10) return json({ error: "Tell me a bit more about it \u2014 what hurts, when, and for how long." }, 400);
+  if (desc.length < 10)
+    return json({ error: "Tell me a bit more about it \u2014 what hurts, when, and for how long." }, 400);
   const duration = Math.max(0, Math.min(520, Number(weeks) || 0));
   const chronic = duration >= 6;
   const athleteBrief = [
@@ -1279,9 +1470,11 @@ ${athleteBrief}`,
     validate: (t) => parseInjuryPlan(t) !== null
   });
   const plan = parseInjuryPlan(text);
-  if (!plan) return json({ error: "bad ai output" }, 422);
+  if (!plan)
+    return json({ error: "bad ai output" }, 422);
   return json({ plan, model, chronic });
 }
+__name(injuryPlan, "injuryPlan");
 var CHALLENGE_METRICS = [
   "check_ins",
   "training_sessions",
@@ -1293,11 +1486,13 @@ var CHALLENGE_METRICS = [
 ];
 function parseChallengeList(raw) {
   const match = raw.match(/\{[\s\S]*\}/);
-  if (!match) return null;
+  if (!match)
+    return null;
   try {
     const parsed = JSON.parse(match[0]);
     const list = parsed.challenges;
-    if (!Array.isArray(list)) return null;
+    if (!Array.isArray(list))
+      return null;
     const ok = list.filter((c) => {
       const o = c;
       return o && CHALLENGE_METRICS.includes(String(o.metric)) && String(o.title ?? "").trim().length > 0;
@@ -1307,17 +1502,22 @@ function parseChallengeList(raw) {
     return null;
   }
 }
+__name(parseChallengeList, "parseChallengeList");
 var CONTENT_FORMATS = ["caption", "hook", "carousel", "script", "thread"];
 var BANNED_CLAIM = /\b(\d[\d,.]*\s*(k|m|\+)?\s*(users|athletes|members|downloads|customers|signups)|thousands of|trusted by|clinically proven|scientifically proven|guarantee[ds]?|cures?|prevents? injur|diagnos)/i;
 async function generateContent(req, env) {
   const u = await authUser(req, env);
-  if (!u) return json({ error: "unauthorized" }, 401);
-  if (!await isAdmin(env, u.id)) return json({ error: "admins only" }, 403);
+  if (!u)
+    return json({ error: "unauthorized" }, 401);
+  if (!await isAdmin(env, u.id))
+    return json({ error: "admins only" }, 403);
   const budget = await checkBudget(env, u.id);
-  if (!budget.allowed) return overBudget(budget);
+  if (!budget.allowed)
+    return overBudget(budget);
   const { format, topic, facts, tone, count } = await req.json();
   const fmt = CONTENT_FORMATS.includes(format) ? format : "caption";
-  if (!topic) return json({ error: "topic required" }, 400);
+  if (!topic)
+    return json({ error: "topic required" }, 400);
   const n = Math.max(1, Math.min(6, Number(count) || 3));
   const SHAPE2 = {
     caption: "a social caption of 20-60 words, ending with one line of call to action",
@@ -1363,13 +1563,17 @@ ${allowed.map((f) => `- ${f}`).join("\n") || "- (none supplied)"}`;
     rejected: flagged.length
   });
 }
+__name(generateContent, "generateContent");
 async function generateChallenges(req, env) {
   const u = await authUser(req, env);
-  if (!u) return json({ error: "unauthorized" }, 401);
+  if (!u)
+    return json({ error: "unauthorized" }, 401);
   const gate = await requireTier(env, u.id, "silver", "Personalised objectives");
-  if (gate) return gate;
+  if (gate)
+    return gate;
   const budget = await checkBudget(env, u.id);
-  if (!budget.allowed) return overBudget(budget);
+  if (!budget.allowed)
+    return overBudget(budget);
   const { activity, sport, goal } = await req.json();
   const sys = `You set three weekly challenges for an athlete using a training app, to be shown as game-style objectives. Output ONLY valid minified JSON: {challenges:[{title:string,blurb:string,icon:string,metric:string,target:number}]}. metric MUST be one of: ${CHALLENGE_METRICS.join(", ")}. Any other value is rejected and the challenge is discarded. Use a DIFFERENT metric for each of the three. target is a number achievable in one week (check-ins and food logs max 7, training and program sessions max 6, benchmarks and videos max 3). Aim at what they are NEGLECTING \u2014 look at the activity numbers and target the weakest habit, not the one they already do. title is under 6 words and reads like a game objective ('Fuel like a pro', 'Perfect week'). blurb is one short sentence saying what to do and why it matters. icon is a single emoji. No prose outside the JSON.`;
   const ctx = `Sport: ${sport || "general"}
@@ -1383,12 +1587,15 @@ Last 7 days \u2014 ${Object.entries(activity ?? {}).map(([k, v]) => `${k}: ${v}`
     validate: (t) => parseChallengeList(t) !== null
   });
   const challenges = parseChallengeList(text);
-  if (!challenges) return json({ error: "bad ai output" }, 422);
+  if (!challenges)
+    return json({ error: "bad ai output" }, 422);
   return json({ challenges, model });
 }
+__name(generateChallenges, "generateChallenges");
 function form(obj) {
   return Object.entries(obj).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join("&");
 }
+__name(form, "form");
 async function stripe(env, path, body) {
   const r = await fetch(`https://api.stripe.com/v1/${path}`, {
     method: body ? "POST" : "GET",
@@ -1396,9 +1603,11 @@ async function stripe(env, path, body) {
     body: body ? form(body) : void 0
   });
   const j = await r.json();
-  if (!r.ok) throw new Error(`stripe ${r.status}: ${JSON.stringify(j)}`);
+  if (!r.ok)
+    throw new Error(`stripe ${r.status}: ${JSON.stringify(j)}`);
   return j;
 }
+__name(stripe, "stripe");
 async function supa(env, path, init = {}) {
   return fetch(`${env.SUPABASE_URL}/rest/v1/${path}`, {
     ...init,
@@ -1410,15 +1619,18 @@ async function supa(env, path, init = {}) {
     }
   });
 }
+__name(supa, "supa");
 async function createCheckout(req, env) {
   const user = await authUser(req, env);
-  if (!user) return json({ error: "unauthorized" }, 401);
+  if (!user)
+    return json({ error: "unauthorized" }, 401);
   try {
     await req.json();
   } catch {
   }
   const priceId = env.STRIPE_PRICE_GOLD;
-  if (!priceId) return json({ error: "Pro price not configured \u2014 set STRIPE_PRICE_GOLD and redeploy" }, 503);
+  if (!priceId)
+    return json({ error: "Pro price not configured \u2014 set STRIPE_PRICE_GOLD and redeploy" }, 503);
   const tier = "gold";
   const existing = await (await supa(env, `subscriptions?user_id=eq.${user.id}&select=stripe_customer_id,stripe_subscription_id`)).json();
   const prior = existing?.[0];
@@ -1444,13 +1656,17 @@ async function createCheckout(req, env) {
   });
   return json({ url: session.url, trialDays: eligibleForTrial ? trialDays : 0 });
 }
+__name(createCheckout, "createCheckout");
 async function billingPortal(req, env) {
   const user = await authUser(req, env);
-  if (!user) return json({ error: "unauthorized" }, 401);
-  if (!env.STRIPE_SECRET_KEY) return json({ error: "billing not configured" }, 503);
+  if (!user)
+    return json({ error: "unauthorized" }, 401);
+  if (!env.STRIPE_SECRET_KEY)
+    return json({ error: "billing not configured" }, 503);
   const rows = await (await supa(env, `subscriptions?user_id=eq.${user.id}&select=stripe_customer_id`)).json();
   const customerId = rows?.[0]?.stripe_customer_id;
-  if (!customerId) return json({ error: "no-billing-account" }, 404);
+  if (!customerId)
+    return json({ error: "no-billing-account" }, 404);
   try {
     const session = await stripe(env, "billing_portal/sessions", {
       customer: customerId,
@@ -1469,9 +1685,11 @@ async function billingPortal(req, env) {
     throw e;
   }
 }
+__name(billingPortal, "billingPortal");
 var MAX_PAUSE_DAYS = 120;
 async function recordCancellationFeedback(env, userId, reason, detail, outcome) {
-  if (!reason) return;
+  if (!reason)
+    return;
   try {
     await supa(env, "cancellation_feedback", {
       method: "POST",
@@ -1486,17 +1704,22 @@ async function recordCancellationFeedback(env, userId, reason, detail, outcome) 
     console.error("cancellation feedback not recorded:", String(e));
   }
 }
+__name(recordCancellationFeedback, "recordCancellationFeedback");
 async function stripeSubIdFor(env, userId) {
   const rows = await (await supa(env, `subscriptions?user_id=eq.${userId}&select=stripe_subscription_id`)).json();
   return rows?.[0]?.stripe_subscription_id ?? null;
 }
+__name(stripeSubIdFor, "stripeSubIdFor");
 async function cancelSubscription(req, env) {
   const user = await authUser(req, env);
-  if (!user) return json({ error: "unauthorized" }, 401);
-  if (!env.STRIPE_SECRET_KEY) return json({ error: "billing not configured" }, 503);
+  if (!user)
+    return json({ error: "unauthorized" }, 401);
+  if (!env.STRIPE_SECRET_KEY)
+    return json({ error: "billing not configured" }, 503);
   const { reason, detail } = await req.json().catch(() => ({}));
   const subId = await stripeSubIdFor(env, user.id);
-  if (!subId) return json({ error: "no-billing-account" }, 404);
+  if (!subId)
+    return json({ error: "no-billing-account" }, 404);
   const sub = await stripe(env, `subscriptions/${subId}`, { cancel_at_period_end: "true" });
   await recordCancellationFeedback(env, user.id, reason, detail, "cancelled");
   await upsertSub(env, sub);
@@ -1505,17 +1728,21 @@ async function cancelSubscription(req, env) {
     endsAt: sub.current_period_end ? new Date(sub.current_period_end * 1e3).toISOString() : null
   });
 }
+__name(cancelSubscription, "cancelSubscription");
 async function pauseSubscription(req, env) {
   const user = await authUser(req, env);
-  if (!user) return json({ error: "unauthorized" }, 401);
-  if (!env.STRIPE_SECRET_KEY) return json({ error: "billing not configured" }, 503);
+  if (!user)
+    return json({ error: "unauthorized" }, 401);
+  if (!env.STRIPE_SECRET_KEY)
+    return json({ error: "billing not configured" }, 503);
   const { days, reason, detail } = await req.json().catch(() => ({}));
   const requested = Math.round(Number(days) || 0);
   if (!Number.isFinite(requested) || requested < 7 || requested > MAX_PAUSE_DAYS) {
     return json({ error: `Choose a pause between 7 and ${MAX_PAUSE_DAYS} days.` }, 400);
   }
   const subId = await stripeSubIdFor(env, user.id);
-  if (!subId) return json({ error: "no-billing-account" }, 404);
+  if (!subId)
+    return json({ error: "no-billing-account" }, 404);
   const resumesAt = Math.floor(Date.now() / 1e3) + requested * 86400;
   const sub = await stripe(env, `subscriptions/${subId}`, {
     "pause_collection[behavior]": "void",
@@ -1525,12 +1752,16 @@ async function pauseSubscription(req, env) {
   await upsertSub(env, sub);
   return json({ ok: true, resumesAt: new Date(resumesAt * 1e3).toISOString() });
 }
+__name(pauseSubscription, "pauseSubscription");
 async function resumeSubscription(req, env) {
   const user = await authUser(req, env);
-  if (!user) return json({ error: "unauthorized" }, 401);
-  if (!env.STRIPE_SECRET_KEY) return json({ error: "billing not configured" }, 503);
+  if (!user)
+    return json({ error: "unauthorized" }, 401);
+  if (!env.STRIPE_SECRET_KEY)
+    return json({ error: "billing not configured" }, 503);
   const subId = await stripeSubIdFor(env, user.id);
-  if (!subId) return json({ error: "no-billing-account" }, 404);
+  if (!subId)
+    return json({ error: "no-billing-account" }, 404);
   const sub = await stripe(env, `subscriptions/${subId}`, {
     cancel_at_period_end: "false",
     pause_collection: ""
@@ -1538,15 +1769,20 @@ async function resumeSubscription(req, env) {
   await upsertSub(env, sub);
   return json({ ok: true, tier: sub.metadata?.tier ?? null });
 }
+__name(resumeSubscription, "resumeSubscription");
 async function deleteAccount(req, env) {
   const user = await authUser(req, env);
-  if (!user) return json({ error: "unauthorized" }, 401);
-  if (!env.SUPABASE_SERVICE_ROLE_KEY) return json({ error: "not configured" }, 503);
+  if (!user)
+    return json({ error: "unauthorized" }, 401);
+  if (!env.SUPABASE_SERVICE_ROLE_KEY)
+    return json({ error: "not configured" }, 503);
   const { confirm } = await req.json();
   const expected = (user.email ?? "").trim().toLowerCase();
   const given = (confirm ?? "").trim().toLowerCase();
-  if (!expected) return json({ error: "This account has no email on record \u2014 contact support to delete it." }, 409);
-  if (given !== expected) return json({ error: "Type your email address exactly to confirm." }, 400);
+  if (!expected)
+    return json({ error: "This account has no email on record \u2014 contact support to delete it." }, 409);
+  if (given !== expected)
+    return json({ error: "Type your email address exactly to confirm." }, 400);
   if (await isAdmin(env, user.id)) {
     const r = await supa(env, "profiles?role=eq.admin&select=id");
     const admins = await r.json();
@@ -1591,6 +1827,7 @@ async function deleteAccount(req, env) {
   }
   return json({ ok: true });
 }
+__name(deleteAccount, "deleteAccount");
 async function listUserObjects(env, bucket, userId) {
   const out = [];
   const LIMIT = 100;
@@ -1604,14 +1841,21 @@ async function listUserObjects(env, bucket, userId) {
       },
       body: JSON.stringify({ prefix: `${userId}/`, limit: LIMIT, offset })
     });
-    if (!r.ok) return null;
+    if (!r.ok)
+      return null;
     const page = await r.json();
-    if (!Array.isArray(page) || page.length === 0) return out;
-    for (const o of page) if (o?.name) out.push(`${userId}/${o.name}`);
-    if (page.length < LIMIT) return out;
-    if (out.length > 5e3) return out;
+    if (!Array.isArray(page) || page.length === 0)
+      return out;
+    for (const o of page)
+      if (o?.name)
+        out.push(`${userId}/${o.name}`);
+    if (page.length < LIMIT)
+      return out;
+    if (out.length > 5e3)
+      return out;
   }
 }
+__name(listUserObjects, "listUserObjects");
 async function stripeWebhook(req, env) {
   const sig = req.headers.get("stripe-signature");
   const payload = await req.text();
@@ -1665,23 +1909,29 @@ async function stripeWebhook(req, env) {
   }
   return json({ received: true });
 }
+__name(stripeWebhook, "stripeWebhook");
 async function stripeFeeFor(env, chargeId) {
-  if (!chargeId) return null;
+  if (!chargeId)
+    return null;
   try {
     const charge = await stripe(env, `charges/${chargeId}`);
     const txId = charge?.balance_transaction;
-    if (!txId) return null;
+    if (!txId)
+      return null;
     const tx = await stripe(env, `balance_transactions/${txId}`);
     return typeof tx?.fee === "number" ? tx.fee : null;
   } catch {
     return null;
   }
 }
+__name(stripeFeeFor, "stripeFeeFor");
 async function accrueCommission(env, invoice) {
-  if (!env.SUPABASE_SERVICE_ROLE_KEY) return;
+  if (!env.SUPABASE_SERVICE_ROLE_KEY)
+    return;
   const paid = Number(invoice?.amount_paid ?? 0);
   const invoiceId = invoice?.id;
-  if (!invoiceId || paid <= 0) return;
+  if (!invoiceId || paid <= 0)
+    return;
   const subId = invoice?.subscription;
   let userId = invoice?.subscription_details?.metadata?.user_id;
   if (!userId && subId) {
@@ -1690,14 +1940,17 @@ async function accrueCommission(env, invoice) {
     } catch {
     }
   }
-  if (!userId) return;
+  if (!userId)
+    return;
   const profRes = await supa(env, `profiles?id=eq.${userId}&select=referral_code`);
   const prof = await profRes.json();
   const code = prof?.[0]?.referral_code;
-  if (!code) return;
+  if (!code)
+    return;
   const affRes = await supa(env, "affiliates?select=id,code,parent_id,rate_pct,active,user_id");
   const rows = await affRes.json();
-  if (!Array.isArray(rows) || !rows.length) return;
+  if (!Array.isArray(rows) || !rows.length)
+    return;
   const nodes = rows.map((r) => ({
     id: r.id,
     code: r.code,
@@ -1718,7 +1971,8 @@ async function accrueCommission(env, invoice) {
     byId,
     payerUserId: userId
   });
-  if (!lines.length) return;
+  if (!lines.length)
+    return;
   const feeUsed = fee ?? estimateStripeFee(paid);
   await supa(env, "affiliate_commissions", {
     method: "POST",
@@ -1737,9 +1991,12 @@ async function accrueCommission(env, invoice) {
     })))
   });
 }
+__name(accrueCommission, "accrueCommission");
 async function reverseCommission(env, opts) {
-  if (!env.SUPABASE_SERVICE_ROLE_KEY) return;
-  if (!opts.chargeId && !opts.invoiceId) return;
+  if (!env.SUPABASE_SERVICE_ROLE_KEY)
+    return;
+  if (!opts.chargeId && !opts.invoiceId)
+    return;
   const r = await svcRpc(env, "reverse_commission", {
     p_charge: opts.chargeId,
     p_invoice: opts.invoiceId,
@@ -1754,15 +2011,18 @@ async function reverseCommission(env, opts) {
   const n = Number(await r.json());
   console.log(`commission: ${opts.reason} touched ${n} line(s) for ${opts.chargeId ?? opts.invoiceId}`);
 }
+__name(reverseCommission, "reverseCommission");
 async function upsertSub(env, sub) {
   const uid = sub.metadata?.user_id;
   const tier = sub.metadata?.tier;
-  if (!uid || !tier) return;
+  if (!uid || !tier)
+    return;
   const item = sub.items?.data?.[0];
   const s = sub.status;
   let status = s === "active" || s === "trialing" ? "active" : s === "past_due" || s === "unpaid" ? "past_due" : s === "canceled" ? "canceled" : "incomplete";
   const pausedUntil = sub.pause_collection ? Number(sub.pause_collection.resumes_at) || null : null;
-  if (sub.pause_collection) status = "paused";
+  if (sub.pause_collection)
+    status = "paused";
   await supa(env, "subscriptions?on_conflict=user_id", {
     method: "POST",
     headers: { Prefer: "resolution=merge-duplicates" },
@@ -1784,25 +2044,32 @@ async function upsertSub(env, sub) {
     }])
   });
 }
+__name(upsertSub, "upsertSub");
 var STRIPE_TOLERANCE_S = 300;
 async function verifyStripe(payload, header, secret) {
   const parts = Object.fromEntries(header.split(",").map((kv) => kv.split("=")));
   const t = parts["t"];
   const v1 = parts["v1"];
-  if (!t || !v1) return false;
+  if (!t || !v1)
+    return false;
   const age = Math.abs(Date.now() / 1e3 - Number(t));
-  if (!Number.isFinite(age) || age > STRIPE_TOLERANCE_S) return false;
+  if (!Number.isFinite(age) || age > STRIPE_TOLERANCE_S)
+    return false;
   const enc = new TextEncoder();
   const key = await crypto.subtle.importKey("raw", enc.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   const mac = await crypto.subtle.sign("HMAC", key, enc.encode(`${t}.${payload}`));
   const hex = [...new Uint8Array(mac)].map((b) => b.toString(16).padStart(2, "0")).join("");
-  if (hex.length !== v1.length) return false;
+  if (hex.length !== v1.length)
+    return false;
   let diff = 0;
-  for (let i = 0; i < hex.length; i++) diff |= hex.charCodeAt(i) ^ v1.charCodeAt(i);
+  for (let i = 0; i < hex.length; i++)
+    diff |= hex.charCodeAt(i) ^ v1.charCodeAt(i);
   return diff === 0;
 }
+__name(verifyStripe, "verifyStripe");
 async function removeObjects(env, bucket, paths) {
-  if (!paths.length) return true;
+  if (!paths.length)
+    return true;
   const r = await fetch(`${env.SUPABASE_URL}/storage/v1/object/${bucket}`, {
     method: "DELETE",
     headers: {
@@ -1814,15 +2081,18 @@ async function removeObjects(env, bucket, paths) {
   });
   return r.ok;
 }
+__name(removeObjects, "removeObjects");
 async function purgeExpiredVideos(env) {
-  if (!env.SUPABASE_SERVICE_ROLE_KEY) return;
+  if (!env.SUPABASE_SERVICE_ROLE_KEY)
+    return;
   const r = await svcRpc(env, "expired_video_paths", {});
   if (!r.ok) {
     console.error(`expired_video_paths unavailable (${r.status}) \u2014 is migration 0036 applied?`);
     return;
   }
   const rows = await r.json();
-  if (!Array.isArray(rows) || rows.length === 0) return;
+  if (!Array.isArray(rows) || rows.length === 0)
+    return;
   let removed = 0;
   const CHUNK = 50;
   for (let i = 0; i < rows.length; i += CHUNK) {
@@ -1834,22 +2104,28 @@ async function purgeExpiredVideos(env) {
     }
     const ids = batch.map((v) => v.id).join(",");
     const del = await supa(env, `videos?id=in.(${ids})`, { method: "DELETE", headers: { Prefer: "return=minimal" } });
-    if (del.ok) removed += batch.length;
-    else console.error(`row delete failed after storage delete for ${batch.length} clips`);
+    if (del.ok)
+      removed += batch.length;
+    else
+      console.error(`row delete failed after storage delete for ${batch.length} clips`);
   }
   console.log(`retention: removed ${removed} expired clip(s) of ${rows.length} due`);
 }
+__name(purgeExpiredVideos, "purgeExpiredVideos");
 function b64url(bytes) {
   const b = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
   let s = "";
-  for (const byte of b) s += String.fromCharCode(byte);
+  for (const byte of b)
+    s += String.fromCharCode(byte);
   return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
+__name(b64url, "b64url");
 function b64urlToBytes(s) {
   const padded = s.replace(/-/g, "+").replace(/_/g, "/").padEnd(s.length + (4 - s.length % 4) % 4, "=");
   const raw = atob(padded);
   return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
 }
+__name(b64urlToBytes, "b64urlToBytes");
 async function vapidHeader(env, audience) {
   const key = await crypto.subtle.importKey(
     "jwk",
@@ -1882,6 +2158,7 @@ async function vapidHeader(env, audience) {
   );
   return `vapid t=${header}.${claims}.${b64url(sig)}, k=${env.VAPID_PUBLIC_KEY}`;
 }
+__name(vapidHeader, "vapidHeader");
 async function pushOne(env, endpoint) {
   try {
     const audience = new URL(endpoint).origin;
@@ -1895,15 +2172,19 @@ async function pushOne(env, endpoint) {
         Urgency: "normal"
       }
     });
-    if (res.status === 404 || res.status === 410) return "gone";
+    if (res.status === 404 || res.status === 410)
+      return "gone";
     return res.ok ? "ok" : "retry";
   } catch {
     return "retry";
   }
 }
+__name(pushOne, "pushOne");
 async function sendPushReminders(env) {
-  if (!env.VAPID_PRIVATE_KEY || !env.VAPID_PUBLIC_KEY) return;
-  if (!env.SUPABASE_SERVICE_ROLE_KEY) return;
+  if (!env.VAPID_PRIVATE_KEY || !env.VAPID_PUBLIC_KEY)
+    return;
+  if (!env.SUPABASE_SERVICE_ROLE_KEY)
+    return;
   const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
   const r = await svcRpc(env, "push_targets_for_reminder", { for_date: today });
   if (!r.ok) {
@@ -1911,70 +2192,93 @@ async function sendPushReminders(env) {
     return;
   }
   const targets = await r.json();
-  if (!Array.isArray(targets) || targets.length === 0) return;
+  if (!Array.isArray(targets) || targets.length === 0)
+    return;
   const dead = [];
   let sent = 0;
   for (const t of targets) {
     const outcome = await pushOne(env, t.endpoint);
-    if (outcome === "ok") sent++;
-    else if (outcome === "gone") dead.push(t.sub_id);
+    if (outcome === "ok")
+      sent++;
+    else if (outcome === "gone")
+      dead.push(t.sub_id);
   }
-  if (dead.length) await svcRpc(env, "mark_push_failed", { sub_ids: dead });
+  if (dead.length)
+    await svcRpc(env, "mark_push_failed", { sub_ids: dead });
   console.log(`push: ${sent} sent, ${dead.length} dead of ${targets.length} due`);
 }
+__name(sendPushReminders, "sendPushReminders");
 async function approveDueCommissions(env) {
-  if (!env.SUPABASE_SERVICE_ROLE_KEY) return;
+  if (!env.SUPABASE_SERVICE_ROLE_KEY)
+    return;
   const r = await svcRpc(env, "approve_due_commissions", {});
   if (!r.ok) {
     console.error(`approve_due_commissions unavailable (${r.status}) \u2014 is migration 0052 applied?`);
     return;
   }
   const n = Number(await r.json());
-  if (n > 0) console.log(`commission: approved ${n} line(s) for payout`);
+  if (n > 0)
+    console.log(`commission: approved ${n} line(s) for payout`);
 }
+__name(approveDueCommissions, "approveDueCommissions");
 async function reminderProfiles(env) {
   const r = await supa(
     env,
     "profiles?select=id,health_data_consent_at,in_app_training_reminders,email_weekly_summary,email_checkin_reminders,email_workout_reminders,email_milestones,email_program_reminders"
   );
-  if (!r.ok) throw new Error(`profiles for reminders: ${r.status}`);
+  if (!r.ok)
+    throw new Error(`profiles for reminders: ${r.status}`);
   const rows = await r.json();
   return new Map((rows ?? []).map((p) => [p.id, p]));
 }
+__name(reminderProfiles, "reminderProfiles");
 function emailEnabled(profile, category) {
-  if (category === "essential") return true;
-  if (category === "checkin") return profile.email_checkin_reminders !== false;
-  if (category === "workout") return profile.email_workout_reminders !== false;
-  if (category === "weekly") return profile.email_weekly_summary !== false;
-  if (category === "milestone") return profile.email_milestones !== false;
-  if (category === "program") return profile.email_program_reminders !== false;
+  if (category === "essential")
+    return true;
+  if (category === "checkin")
+    return profile.email_checkin_reminders !== false;
+  if (category === "workout")
+    return profile.email_workout_reminders !== false;
+  if (category === "weekly")
+    return profile.email_weekly_summary !== false;
+  if (category === "milestone")
+    return profile.email_milestones !== false;
+  if (category === "program")
+    return profile.email_program_reminders !== false;
   return false;
 }
+__name(emailEnabled, "emailEnabled");
 function wants(profile, category) {
   return !!profile && !!profile.health_data_consent_at && (profile.in_app_training_reminders !== false || emailEnabled(profile, category));
 }
+__name(wants, "wants");
 async function queueNotifications(env, rows) {
-  if (!rows.length) return true;
+  if (!rows.length)
+    return true;
   const r = await supa(env, "notifications?on_conflict=user_id,dedupe_key", {
     method: "POST",
     headers: { Prefer: "resolution=ignore-duplicates,return=minimal" },
     body: JSON.stringify(rows)
   });
-  if (!r.ok) console.error(`queue notifications failed (${r.status}): ${await r.text()}`);
+  if (!r.ok)
+    console.error(`queue notifications failed (${r.status}): ${await r.text()}`);
   return r.ok;
 }
+__name(queueNotifications, "queueNotifications");
 async function sendDailyReminders(env) {
   const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
   const [doneResponse, profiles] = await Promise.all([
     supa(env, `daily_check_ins?check_in_date=eq.${today}&select=user_id`),
     reminderProfiles(env)
   ]);
-  if (!doneResponse.ok) throw new Error(`daily check-ins for reminders: ${doneResponse.status}`);
+  if (!doneResponse.ok)
+    throw new Error(`daily check-ins for reminders: ${doneResponse.status}`);
   const done = await doneResponse.json();
   const checked = new Set((done ?? []).map((row2) => row2.user_id));
   const rows = [];
   for (const profile of profiles.values()) {
-    if (checked.has(profile.id) || !wants(profile, "checkin")) continue;
+    if (checked.has(profile.id) || !wants(profile, "checkin"))
+      continue;
     rows.push({
       user_id: profile.id,
       kind: "check_in_reminder",
@@ -1988,6 +2292,7 @@ async function sendDailyReminders(env) {
   }
   await queueNotifications(env, rows);
 }
+__name(sendDailyReminders, "sendDailyReminders");
 async function sendWorkoutReminders(env) {
   const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
   const [programResponse, logResponse, profiles] = await Promise.all([
@@ -1995,13 +2300,15 @@ async function sendWorkoutReminders(env) {
     supa(env, `training_logs?log_date=eq.${today}&select=user_id`),
     reminderProfiles(env)
   ]);
-  if (!programResponse.ok || !logResponse.ok) throw new Error("workout reminder inputs unavailable");
+  if (!programResponse.ok || !logResponse.ok)
+    throw new Error("workout reminder inputs unavailable");
   const active = new Set((await programResponse.json()).map((row2) => row2.user_id));
   const logged = new Set((await logResponse.json()).map((row2) => row2.user_id));
   const rows = [];
   for (const userId of active) {
     const profile = profiles.get(userId);
-    if (logged.has(userId) || !wants(profile, "workout")) continue;
+    if (logged.has(userId) || !wants(profile, "workout"))
+      continue;
     rows.push({
       user_id: userId,
       kind: "workout_reminder",
@@ -2015,6 +2322,7 @@ async function sendWorkoutReminders(env) {
   }
   await queueNotifications(env, rows);
 }
+__name(sendWorkoutReminders, "sendWorkoutReminders");
 async function sendDeadlineReminders(env) {
   const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
   const in7 = new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10);
@@ -2025,14 +2333,17 @@ async function sendDeadlineReminders(env) {
     ),
     reminderProfiles(env)
   ]);
-  if (!programResponse.ok) throw new Error(`program deadlines: ${programResponse.status}`);
+  if (!programResponse.ok)
+    throw new Error(`program deadlines: ${programResponse.status}`);
   const programs = await programResponse.json();
   const rows = [];
   for (const program of programs ?? []) {
     const days = Math.max(0, Math.round(((/* @__PURE__ */ new Date(`${program.target_date}T00:00:00Z`)).getTime() - (/* @__PURE__ */ new Date(`${today}T00:00:00Z`)).getTime()) / 864e5));
-    if (![7, 3, 1, 0].includes(days)) continue;
+    if (![7, 3, 1, 0].includes(days))
+      continue;
     const profile = profiles.get(program.user_id);
-    if (!wants(profile, "program")) continue;
+    if (!wants(profile, "program"))
+      continue;
     const total = (program.plan?.weeks ?? []).reduce((sum, week) => sum + (week.sessions?.length ?? 0), 0);
     const completed = program.completed_sessions?.length ?? 0;
     const progress = total ? ` You're ${Math.round(completed / total * 100)}% through (${completed}/${total} sessions).` : "";
@@ -2049,6 +2360,7 @@ async function sendDeadlineReminders(env) {
   }
   await queueNotifications(env, rows);
 }
+__name(sendDeadlineReminders, "sendDeadlineReminders");
 async function sendWeeklySummaries(env) {
   const through = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
   const weekAgo = new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 10);
@@ -2057,15 +2369,18 @@ async function sendWeeklySummaries(env) {
     supa(env, `training_logs?log_date=gte.${weekAgo}&select=user_id,total_minutes,duration_seconds,session_type`),
     reminderProfiles(env)
   ]);
-  if (!checkResponse.ok || !trainingResponse.ok) throw new Error("weekly summary inputs unavailable");
+  if (!checkResponse.ok || !trainingResponse.ok)
+    throw new Error("weekly summary inputs unavailable");
   const checks = await checkResponse.json();
   const training = await trainingResponse.json();
   const checkCount = /* @__PURE__ */ new Map();
   const sessionCount = /* @__PURE__ */ new Map();
   const minutes = /* @__PURE__ */ new Map();
-  for (const row2 of checks ?? []) checkCount.set(row2.user_id, (checkCount.get(row2.user_id) ?? 0) + 1);
+  for (const row2 of checks ?? [])
+    checkCount.set(row2.user_id, (checkCount.get(row2.user_id) ?? 0) + 1);
   for (const row2 of training ?? []) {
-    if (row2.session_type === "rest_day") continue;
+    if (row2.session_type === "rest_day")
+      continue;
     sessionCount.set(row2.user_id, (sessionCount.get(row2.user_id) ?? 0) + 1);
     minutes.set(row2.user_id, (minutes.get(row2.user_id) ?? 0) + (row2.duration_seconds != null ? row2.duration_seconds / 60 : row2.total_minutes ?? 0));
   }
@@ -2073,7 +2388,8 @@ async function sendWeeklySummaries(env) {
   const rows = [];
   for (const userId of active) {
     const profile = profiles.get(userId);
-    if (!wants(profile, "weekly")) continue;
+    if (!wants(profile, "weekly"))
+      continue;
     rows.push({
       user_id: userId,
       kind: "weekly_summary",
@@ -2087,6 +2403,7 @@ async function sendWeeklySummaries(env) {
   }
   await queueNotifications(env, rows);
 }
+__name(sendWeeklySummaries, "sendWeeklySummaries");
 function gbDate(iso) {
   const date = new Date(iso);
   return Number.isNaN(date.getTime()) ? iso : new Intl.DateTimeFormat("en-GB", {
@@ -2096,16 +2413,20 @@ function gbDate(iso) {
     timeZone: "Europe/London"
   }).format(date);
 }
+__name(gbDate, "gbDate");
 function money(amount, currency) {
-  if (amount == null || !currency) return "the price shown at checkout";
+  if (amount == null || !currency)
+    return "the price shown at checkout";
   try {
     return new Intl.NumberFormat("en-GB", { style: "currency", currency: currency.toUpperCase() }).format(amount / 100);
   } catch {
     return `${(amount / 100).toFixed(2)} ${currency.toUpperCase()}`;
   }
 }
+__name(money, "money");
 async function createTrialEndingReminders(env) {
-  if (!env.STRIPE_SECRET_KEY) return;
+  if (!env.STRIPE_SECRET_KEY)
+    return;
   const response = await supa(
     env,
     "subscriptions?status=eq.active&cancel_at_period_end=eq.false&trial_reminder_created_at=is.null&or=(stripe_status.eq.trialing,stripe_status.is.null)&select=user_id,stripe_subscription_id,stripe_status,trial_end"
@@ -2118,13 +2439,15 @@ async function createTrialEndingReminders(env) {
   const now = Date.now();
   const dueBy = now + 72 * 36e5;
   for (const candidate of candidates ?? []) {
-    if (!candidate.stripe_subscription_id) continue;
+    if (!candidate.stripe_subscription_id)
+      continue;
     try {
       const subscription = await stripe(env, `subscriptions/${candidate.stripe_subscription_id}`);
       await upsertSub(env, subscription);
       const trialEndSeconds = Number(subscription.trial_end) || 0;
       const trialEndMs = trialEndSeconds * 1e3;
-      if (subscription.status !== "trialing" || !trialEndSeconds || trialEndMs <= now || trialEndMs > dueBy || subscription.cancel_at_period_end) continue;
+      if (subscription.status !== "trialing" || !trialEndSeconds || trialEndMs <= now || trialEndMs > dueBy || subscription.cancel_at_period_end)
+        continue;
       const item = subscription.items?.data?.[0];
       const price = item?.price;
       const amount = money(price?.unit_amount, price?.currency);
@@ -2152,12 +2475,71 @@ async function createTrialEndingReminders(env) {
     }
   }
 }
+__name(createTrialEndingReminders, "createTrialEndingReminders");
 function escapeHtml2(value) {
   return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#39;");
 }
+__name(escapeHtml2, "escapeHtml");
 function appLink(env, path) {
   return `${(env.APP_URL || "https://pocketathlete.com").replace(/\/$/, "")}${path.startsWith("/") ? path : `/${path}`}`;
 }
+__name(appLink, "appLink");
+async function emailStatus(req, env) {
+  const user = await authUser(req, env);
+  if (!user)
+    return json({ error: "unauthorized" }, 401);
+  if (!await isAdmin(env, user.id))
+    return json({ error: "forbidden" }, 403);
+  const provider = env.GAS_EMAIL_URL ? "gmail" : env.RESEND_API_KEY ? "resend" : null;
+  return json({
+    version: WORKER_VERSION,
+    provider,
+    configured: provider !== null,
+    from: env.REMINDER_FROM || null,
+    // The Gmail sender checks a shared secret. Configured without it, every
+    // send is rejected by the script and logged as a failure with a message
+    // nobody would connect to a missing variable.
+    gmailSecretSet: !!env.GAS_EMAIL_SECRET,
+    resendFallback: !!env.RESEND_API_KEY,
+    serviceRoleSet: !!env.SUPABASE_SERVICE_ROLE_KEY,
+    crons: ["0 8 * * *", "0 19 * * *"],
+    note: provider ? "Sending through " + (provider === "gmail" ? "the Gmail Apps Script" : "Resend") + "." : "No email provider is set on this Worker. Set GAS_EMAIL_URL + GAS_EMAIL_SECRET, or RESEND_API_KEY."
+  });
+}
+__name(emailStatus, "emailStatus");
+async function emailTest(req, env) {
+  const user = await authUser(req, env);
+  if (!user)
+    return json({ error: "unauthorized" }, 401);
+  if (!await isAdmin(env, user.id))
+    return json({ error: "forbidden" }, 403);
+  const body = await req.json().catch(() => ({}));
+  const to = (body.to || user.email || "").trim();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to))
+    return json({ error: "that is not an email address" }, 400);
+  const when = (/* @__PURE__ */ new Date()).toISOString();
+  const result = await email(
+    env,
+    to,
+    "PocketAthlete \u2014 test email",
+    `<h2>It works</h2><p>This is a test from the PocketAthlete admin dashboard.</p><p style="color:#64748b;font-size:12px">Sent ${escapeHtml2(when)} by Worker ${escapeHtml2(WORKER_VERSION)}.</p>`
+  );
+  await logEmail(env, user.id, "admin_test", result);
+  return result.ok ? json({ ok: true, to, provider: env.GAS_EMAIL_URL ? "gmail" : "resend", providerId: result.providerId ?? null }) : json({ ok: false, to, error: result.error ?? "the provider did not accept the message" }, 502);
+}
+__name(emailTest, "emailTest");
+async function emailRetry(req, env) {
+  const user = await authUser(req, env);
+  if (!user)
+    return json({ error: "unauthorized" }, 401);
+  if (!await isAdmin(env, user.id))
+    return json({ error: "forbidden" }, 403);
+  if (!env.SUPABASE_SERVICE_ROLE_KEY)
+    return json({ error: "SUPABASE_SERVICE_ROLE_KEY is not set on this Worker" }, 500);
+  await emailNotifications(env);
+  return json({ ok: true, ran: "emailNotifications" });
+}
+__name(emailRetry, "emailRetry");
 async function logEmail(env, userId, type, result) {
   await supa(env, "email_delivery_logs", {
     method: "POST",
@@ -2171,15 +2553,18 @@ async function logEmail(env, userId, type, result) {
     })
   });
 }
+__name(logEmail, "logEmail");
 async function emailNotifications(env) {
-  if (!env.SUPABASE_SERVICE_ROLE_KEY) return;
+  if (!env.SUPABASE_SERVICE_ROLE_KEY)
+    return;
   const response = await svcRpc(env, "pending_notification_emails", {});
   if (!response.ok) {
     console.error(`pending_notification_emails unavailable (${response.status}) \u2014 is migration 0091 applied?`);
     return;
   }
   const rows = await response.json();
-  if (!Array.isArray(rows) || rows.length === 0) return;
+  if (!Array.isArray(rows) || rows.length === 0)
+    return;
   const emails = await listUsers(env);
   const completed = [];
   for (const notification of rows) {
@@ -2202,7 +2587,8 @@ async function emailNotifications(env) {
       `<h2>${escapeHtml2(notification.title)}</h2><p>${body}</p><p><a href="${link}">Open PocketAthlete \u2192</a></p><p style="color:#64748b;font-size:12px">${notification.email_category === "essential" ? "This is an essential account or billing notice." : `Change training email choices in <a href="${settings}">Notification settings</a>.`}</p>`
     );
     await logEmail(env, notification.user_id, `notification_${notification.kind}`, result);
-    if (result.ok) completed.push(notification.id);
+    if (result.ok)
+      completed.push(notification.id);
   }
   if (completed.length) {
     await supa(env, `notifications?id=in.(${completed.join(",")})`, {
@@ -2213,6 +2599,7 @@ async function emailNotifications(env) {
   }
   console.log(`notifications: emailed ${completed.length} of ${rows.length}`);
 }
+__name(emailNotifications, "emailNotifications");
 async function email(env, to, subject, html) {
   try {
     if (env.GAS_EMAIL_URL) {
@@ -2224,7 +2611,8 @@ async function email(env, to, subject, html) {
       const payload2 = await response2.json().catch(() => ({}));
       return response2.ok ? { ok: true, providerId: payload2.id } : { ok: false, error: payload2.error ?? payload2.message ?? `Gmail sender returned ${response2.status}` };
     }
-    if (!env.RESEND_API_KEY) return { ok: false, error: "No email provider is configured" };
+    if (!env.RESEND_API_KEY)
+      return { ok: false, error: "No email provider is configured" };
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },
@@ -2236,14 +2624,17 @@ async function email(env, to, subject, html) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) };
   }
 }
+__name(email, "email");
 async function listUsers(env) {
   const response = await fetch(`${env.SUPABASE_URL}/auth/v1/admin/users?per_page=1000`, {
     headers: { apikey: env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}` }
   });
-  if (!response.ok) throw new Error(`list auth users: ${response.status}`);
+  if (!response.ok)
+    throw new Error(`list auth users: ${response.status}`);
   const payload = await response.json();
   return new Map((payload.users ?? []).filter((user) => !!user.email).map((user) => [user.id, user.email]));
 }
+__name(listUsers, "listUsers");
 export {
-  index_default as default
+  src_default as default
 };

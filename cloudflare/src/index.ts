@@ -117,6 +117,12 @@ export default {
       if (pathname.endsWith("/announce-launch")) return await announceLaunch(req, env);
       if (pathname.endsWith("/connect-wearable")) return await connectWearable(req, env);
       if (pathname.endsWith("/ingest-token")) return await mintIngestToken(req, env);
+      // Admin email tooling. See emailStatus for why this cannot be answered
+      // from the app: the provider key is a Worker secret and secrets cannot be
+      // read back out, so only the Worker knows whether email can send at all.
+      if (pathname.endsWith("/email-status")) return await emailStatus(req, env);
+      if (pathname.endsWith("/email-test")) return await emailTest(req, env);
+      if (pathname.endsWith("/email-retry")) return await emailRetry(req, env);
       // NOT session-authenticated — see the function. An Apple Shortcut cannot
       // hold a Supabase JWT, so this one carries its own bearer token.
       if (pathname.endsWith("/wearable-ingest")) return await wearableIngest(req, env);
@@ -439,7 +445,7 @@ function overBudget(state: BudgetState): Response {
 // nobody is watching a spinner and the budget can be what the work actually
 // needs. Callers pass their own client-side timeout to match.
 // Bump on every paste into the Cloudflare dashboard. GET /health reports it.
-const WORKER_VERSION = "2026-08-17.1";
+const WORKER_VERSION = "2026-08-21.1";
 
 const CHAIN_BUDGET_MS = 55_000;
 /**
@@ -3159,6 +3165,96 @@ function escapeHtml(value: string): string {
 
 function appLink(env: Env, path: string): string {
   return `${(env.APP_URL || "https://pocketathlete.com").replace(/\/$/, "")}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
+/**
+ * IS EMAIL CONFIGURED AT ALL?
+ *
+ * The single most useful thing an admin can know, and the app cannot work it
+ * out. GAS_EMAIL_URL and RESEND_API_KEY are Cloudflare secrets; a secret cannot
+ * be read back — not from the dashboard, not from the API — so nothing outside
+ * this Worker can tell "no provider configured" from "the cron has not run
+ * yet". Both look identical from the database: no rows.
+ *
+ * Worse, the Worker is pasted into the dashboard by hand, and pasting does not
+ * apply anything in wrangler.toml. A var set in the repo and never set in the
+ * dashboard is unset in production, which has already happened here more than
+ * once — see the note above OPENROUTER_FREE_MODELS.
+ *
+ * Reports WHETHER each secret is present, never its value. A boolean cannot
+ * leak a key.
+ */
+async function emailStatus(req: Request, env: Env): Promise<Response> {
+  const user = await authUser(req, env);
+  if (!user) return json({ error: "unauthorized" }, 401);
+  if (!(await isAdmin(env, user.id))) return json({ error: "forbidden" }, 403);
+
+  const provider = env.GAS_EMAIL_URL ? "gmail" : env.RESEND_API_KEY ? "resend" : null;
+  return json({
+    version: WORKER_VERSION,
+    provider,
+    configured: provider !== null,
+    from: env.REMINDER_FROM || null,
+    // The Gmail sender checks a shared secret. Configured without it, every
+    // send is rejected by the script and logged as a failure with a message
+    // nobody would connect to a missing variable.
+    gmailSecretSet: !!env.GAS_EMAIL_SECRET,
+    resendFallback: !!env.RESEND_API_KEY,
+    serviceRoleSet: !!env.SUPABASE_SERVICE_ROLE_KEY,
+    crons: ["0 8 * * *", "0 19 * * *"],
+    note: provider
+      ? "Sending through " + (provider === "gmail" ? "the Gmail Apps Script" : "Resend") + "."
+      : "No email provider is set on this Worker. Set GAS_EMAIL_URL + GAS_EMAIL_SECRET, or RESEND_API_KEY.",
+  });
+}
+
+/**
+ * Send one email, through the same function everything else uses.
+ *
+ * DELIBERATELY NOT ITS OWN SENDER. A test that talks to Resend directly proves
+ * Resend works and says nothing about the path the reminders take — which, when
+ * GAS_EMAIL_URL is set, is not Resend at all. This calls `email`, so a pass
+ * means the real pipeline can send and a failure carries the real error.
+ *
+ * Logged like any other send, so the test appears in the audit trail it is
+ * being used to check.
+ */
+async function emailTest(req: Request, env: Env): Promise<Response> {
+  const user = await authUser(req, env);
+  if (!user) return json({ error: "unauthorized" }, 401);
+  if (!(await isAdmin(env, user.id))) return json({ error: "forbidden" }, 403);
+
+  const body = (await req.json().catch(() => ({}))) as { to?: string };
+  const to = (body.to || user.email || "").trim();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) return json({ error: "that is not an email address" }, 400);
+
+  const when = new Date().toISOString();
+  const result = await email(env, to, "PocketAthlete — test email",
+    `<h2>It works</h2><p>This is a test from the PocketAthlete admin dashboard.</p>` +
+    `<p style="color:#64748b;font-size:12px">Sent ${escapeHtml(when)} by Worker ${escapeHtml(WORKER_VERSION)}.</p>`);
+  await logEmail(env, user.id, "admin_test", result);
+
+  return result.ok
+    ? json({ ok: true, to, provider: env.GAS_EMAIL_URL ? "gmail" : "resend", providerId: result.providerId ?? null })
+    : json({ ok: false, to, error: result.error ?? "the provider did not accept the message" }, 502);
+}
+
+/**
+ * Run the notification email queue now, instead of waiting for 08:00.
+ *
+ * RETRY IS ALREADY THE DEFAULT — a failed send leaves `emailed_at` null, so the
+ * next cron picks the same row up again. What was missing is a way to make that
+ * happen while somebody is watching, which is the difference between "we think
+ * it is fixed" and "it sent".
+ */
+async function emailRetry(req: Request, env: Env): Promise<Response> {
+  const user = await authUser(req, env);
+  if (!user) return json({ error: "unauthorized" }, 401);
+  if (!(await isAdmin(env, user.id))) return json({ error: "forbidden" }, 403);
+  if (!env.SUPABASE_SERVICE_ROLE_KEY) return json({ error: "SUPABASE_SERVICE_ROLE_KEY is not set on this Worker" }, 500);
+
+  await emailNotifications(env);
+  return json({ ok: true, ran: "emailNotifications" });
 }
 
 async function logEmail(env: Env, userId: string, type: string, result: EmailResult): Promise<void> {

@@ -4,6 +4,8 @@ import { createClient } from "@/lib/supabase/client";
 import { useAsync } from "@/lib/use-async";
 import { LaunchToggle } from "@/components/admin/LaunchToggle";
 import { WaitlistAnnounce } from "@/components/admin/WaitlistAnnounce";
+import { EmailOps } from "@/components/admin/EmailOps";
+import { WeightLogs, CustomExerciseLog } from "@/components/admin/DataLogs";
 import { AdminShell, AdminArea, Drawer } from "@/components/admin/AdminShell";
 import type { Video } from "@/lib/types";
 
@@ -29,6 +31,22 @@ export default function AdminOps() {
       <AdminArea title="Launch" note="What the public can see, and who has been told">
         <LaunchToggle />
         <WaitlistAnnounce />
+      </AdminArea>
+
+      {/* EMAIL SITS ABOVE THE JOB QUEUE because it is the one that fails
+          silently. A failed video job is visible to the person who uploaded it;
+          an email that never sent is visible to nobody at all. */}
+      <AdminArea title="Email" note="Whether it can send, what it sent, and why">
+        <EmailOps />
+      </AdminArea>
+
+      <AdminArea title="Data" note="Read-only, for answering 'my number is wrong'">
+        <Drawer summary="Weight logs">
+          <WeightLogs />
+        </Drawer>
+        <Drawer summary="Exercises athletes added themselves">
+          <CustomExerciseLog />
+        </Drawer>
       </AdminArea>
 
       <AdminArea title="Jobs" note="Only worth opening when something looks wrong">
