@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { sessionLoad, computeACWR, checkInStreak, weeklyReport, tonnage, totalDistanceKm, hasTrainingContent } from "./load";
+import { sessionLoad, computeACWR, checkInStreak, weeklyReport, tonnage, totalDistanceKm, averagePaceSeconds, hasTrainingContent } from "./load";
 import type { DailyCheckIn, NutritionLog, TrainingLog } from "./types";
 
 const day = (offset: number, from = new Date("2026-06-28")) =>
@@ -166,4 +166,50 @@ test("active rest and rest-day rows both count as an intentional check-in choice
 test("zero is not a logged value", () => {
   // 0 minutes at 0 intensity is an empty form, not a session.
   assert.equal(hasTrainingContent({ total_minutes: 0, intensity: 0, distance_km: 0 }), false);
+});
+
+// --- pace ---------------------------------------------------------------------
+
+/**
+ * "No runner-specific stats."
+ *
+ * Distance was there and pace was not, and the reason was upstream: the mm:ss
+ * field and the live pace lived only on the runner fast path, so for everybody
+ * else the app held a distance and a duration rounded to the nearest minute.
+ * With both recorded properly, the number a runner actually talks about can be
+ * shown.
+ */
+
+const run = (km: number, seconds: number): TrainingLog =>
+  ({ distance_km: km, duration_seconds: seconds } as TrainingLog);
+
+test("a week's pace is weighted by distance, not averaged over runs", () => {
+  // THE BUG THIS AVOIDS. A 1km strider at 4:00 and a 20km long run at 5:30
+  // average to 4:45 if you mean the paces, which describes neither run. Total
+  // time over total distance is what a watch reports for one run and what this
+  // reports for a week of them.
+  const week = [run(1, 240), run(20, 6600)];
+  assert.equal(averagePaceSeconds(week), Math.round((240 + 6600) / 21));
+  assert.notEqual(averagePaceSeconds(week), 285, "the paces were meaned");
+});
+
+test("a run with no time has no pace, and does not drag the week to zero", () => {
+  // Absent is not zero. Counting a missing duration as 0 seconds reports a
+  // week's pace of nothing at all.
+  const week = [run(10, 3000), run(5, 0), { distance_km: 8 } as TrainingLog];
+  assert.equal(averagePaceSeconds(week), 300);
+  assert.equal(averagePaceSeconds([]), null);
+  assert.equal(averagePaceSeconds([run(0, 1800)]), null, "a session with no distance is not a run");
+});
+
+test("pace is read to the second, not to the rounded minute", () => {
+  // A 5k in 27:34 stored as 28 minutes is a pace six seconds per kilometre out
+  // — the difference between a Zone 2 run and a tempo.
+  assert.equal(averagePaceSeconds([run(5, 27 * 60 + 34)]), 331);
+  assert.equal(averagePaceSeconds([run(5, 28 * 60)]), 336);
+});
+
+test("a row written before duration_seconds existed still has a pace", () => {
+  // durationSeconds falls back to total_minutes, so old logs keep counting.
+  assert.equal(averagePaceSeconds([{ distance_km: 10, total_minutes: 50 } as TrainingLog]), 300);
 });

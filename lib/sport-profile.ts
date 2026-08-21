@@ -84,6 +84,7 @@ export type DashboardStat =
   | "weightChange"
   | "sessions"
   | "distance"      // running
+  | "avgPace"       // running
   | "tonnage"       // weightlifting, gym
   | "contactLoad";  // rugby
 
@@ -146,7 +147,16 @@ const PROFILES: Record<SportId, SportProfile> = {
     tagline: "Build mileage without buying an injury.",
     tools: order("progress", "plan", "injury", "nutrition", "guides", "exercises", "video"),
     headlineMetrics: ["run_5k_min", "run_10k_min", "run_1500m_min", "squat_1rm"],
-    dashboardStats: ["distance", "injuryRisk", "avgSleep", "fatigueTrend"],
+    /**
+     * PACE IS THE OTHER HALF OF A RUNNER'S WEEK, and it was missing because
+     * nothing could record it: the mm:ss field and the live pace lived only on
+     * the runner fast path, so the app held a distance and a duration rounded
+     * to the nearest minute. It has both properly now, so the number a runner
+     * actually talks about can finally be shown. Fatigue trend gives way for
+     * it — the fatigue chart is further down this page, and pace is not
+     * anywhere else.
+     */
+    dashboardStats: ["distance", "avgPace", "injuryRisk", "avgSleep"],
   },
   weightlifting: {
     id: "weightlifting",

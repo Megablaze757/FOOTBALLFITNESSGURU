@@ -7,7 +7,7 @@ import { totalReps } from "./training-sets";
 import { intervalEffort } from "./running";
 import type { DailyCheckIn, NutritionLog, TrainingLog } from "./types";
 import { todayLocal, daysAgoLocal } from "./day";
-import { durationMinutes, isActivity } from "./training-duration";
+import { durationMinutes, durationSeconds, isActivity } from "./training-duration";
 
 /**
  * How much harder a minute of contact is than a minute of running.
@@ -103,6 +103,37 @@ export function totalDistanceKm(logs: TrainingLog[]): number {
   // total to tenths made a correctly saved 5.66km appear as 5.7km on Progress,
   // which looked exactly like the input had been changed after saving.
   return +logs.reduce((s, t) => s + (Number(t.distance_km) || 0), 0).toFixed(2);
+}
+
+/**
+ * Average pace across a set of runs, in seconds per kilometre.
+ *
+ * DISTANCE-WEIGHTED, not a mean of the paces. Averaging "5:00/km" and
+ * "6:00/km" gives 5:30 whether the first was a 1km strider or a 20km long run,
+ * and a runner who did both would be shown a number that describes neither. The
+ * honest figure is total time over total distance, which is what a watch
+ * reports for a single run and what this reports for a week of them.
+ *
+ * Only runs with BOTH numbers count. A run logged with a distance and no time
+ * has no pace, and treating its time as zero would report a pace of nothing at
+ * all — absent is not zero.
+ *
+ * `pace_seconds_per_km` is stored on the row and deliberately not read here:
+ * it is derived from the same two fields, and recomputing from the totals is
+ * the only way to weight it. Rows written before that column existed still
+ * count, because they still have the distance and the duration.
+ */
+export function averagePaceSeconds(logs: TrainingLog[]): number | null {
+  let km = 0;
+  let seconds = 0;
+  for (const log of logs) {
+    const distance = Number(log.distance_km) || 0;
+    const time = durationSeconds(log);
+    if (distance <= 0 || time <= 0) continue;
+    km += distance;
+    seconds += time;
+  }
+  return km > 0 ? Math.round(seconds / km) : null;
 }
 
 export type LoadZone = "building" | "detraining" | "optimal" | "caution" | "danger";

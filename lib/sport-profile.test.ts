@@ -204,12 +204,20 @@ test("each sport leads with the number it actually cares about", () => {
 });
 
 test("sport-specific stats are only asked for by the sports that can supply them", () => {
-  // distance and contact minutes come from fields only shown to runners and
-  // rugby players (see TrainingLogInput), so any other sport asking for them
-  // would render a permanent dash.
+  // Contact minutes come from a field only rugby players are shown (see
+  // TrainingLogInput), so any other sport asking for it renders a permanent
+  // dash. Distance and pace are no longer in that category — every sport can
+  // log a run now, and the programme prescribes them in all six — but they are
+  // still a runner's headline numbers rather than a footballer's, so they lead
+  // for exactly one sport.
   for (const id of ALL) {
     const stats: string[] = [...sportProfile(id).dashboardStats];
-    if (id !== "running") assert.ok(!stats.includes("distance"), `${id} asks for distance but is never asked for it`);
     if (id !== "rugby") assert.ok(!stats.includes("contactLoad"), `${id} asks for contact load but is never asked for it`);
+    if (id !== "running") {
+      assert.ok(!stats.includes("distance"), `${id} leads with distance, which is a runner's number`);
+      assert.ok(!stats.includes("avgPace"), `${id} leads with pace, which is a runner's number`);
+    }
   }
+  // And a runner's two lead the row, in that order.
+  assert.deepEqual(sportProfile("running").dashboardStats.slice(0, 2), ["distance", "avgPace"]);
 });

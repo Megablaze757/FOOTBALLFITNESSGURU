@@ -10,8 +10,8 @@ import { useCurrentUser } from "@/lib/auth";
 import { useAsync } from "@/lib/use-async";
 import { summarizeTrends, type Trend } from "@/lib/trends";
 import { resolveInsight, actionLabel } from "@/lib/insights";
-import { computeACWR, weeklyReport, tonnage, totalDistanceKm, type LoadZone } from "@/lib/load";
-import { easyShare } from "@/lib/running";
+import { computeACWR, weeklyReport, tonnage, totalDistanceKm, averagePaceSeconds, type LoadZone } from "@/lib/load";
+import { easyShare, formatPace } from "@/lib/running";
 import { BiometricTrends } from "@/components/BiometricTrends";
 import type { Biometric } from "@/lib/biometrics";
 import { sportProfile, type SportProfile } from "@/lib/sport-profile";
@@ -204,6 +204,7 @@ export default function DashboardPage() {
   const since7 = daysAgoLocal(6);
   const thisWeek = data!.training.filter((t) => t.log_date >= since7);
   const weekDistance = totalDistanceKm(thisWeek);
+  const weekPace = averagePaceSeconds(thisWeek);
   const weekTonnage = tonnage(thisWeek);
   const weekContact = thisWeek.reduce((n, t) => n + (Number(t.contact_minutes) || 0), 0);
 
@@ -333,6 +334,16 @@ export default function DashboardPage() {
             case "distance":
               // Runners plan in distance; this comes from the check-in's km field.
               return <StatCard key={key} label="Distance · 7d" value={weekDistance > 0 ? `${weekDistance} km` : "–"} />;
+            case "avgPace":
+              // Distance-weighted over the week, so one fast kilometre does not
+              // outrank a long run — see averagePaceSeconds.
+              return (
+                <StatCard
+                  key={key}
+                  label="Avg pace · 7d"
+                  value={weekPace != null ? `${formatPace(weekPace)}/km` : "–"}
+                />
+              );
             case "tonnage":
               // Computed from logged sets x reps x load — no extra input needed.
               return (
