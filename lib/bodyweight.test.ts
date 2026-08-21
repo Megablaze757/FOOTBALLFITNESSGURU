@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
-  latestBodyweight, weightAgeDays, weightProvenance, weightIsStale, WEIGHT_STALE_DAYS,
+  latestBodyweight, weightSeries, weightAgeDays, weightProvenance, weightIsStale, WEIGHT_STALE_DAYS,
 } from "./bodyweight";
 
 test("the freshest weight wins, whichever table it came from", () => {
@@ -154,4 +154,75 @@ test("the rewards page never defaults a missing bodyweight to zero", () => {
   const noComments = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
   assert.ok(!/weight_kg\s*\?\?\s*0/.test(noComments),
     "`weight_kg ?? 0` is back: every lift divided by a zero bodyweight ranks as nothing");
+});
+
+// --- the chart, which was reading one table -----------------------------------
+
+/**
+ * THE OTHER HALF OF THE SAME BUG. Every reader was taught to look in both
+ * tables. The chart on /body was not — it plotted body_logs alone, so an
+ * athlete who answers the weight question in their daily check-in saw a trend
+ * that stopped at whenever they last opened that page. "Shows old data instead
+ * of the most recent", and the recent data was two tables deep in the app.
+ */
+test("the trend is drawn from every weight the athlete has recorded", () => {
+  const series = weightSeries({
+    checkIns: [
+      { date: "2026-08-12", kg: 79.2 },
+      { date: "2026-08-14", kg: 78.8 },
+    ],
+    weighIns: [{ date: "2026-08-01", kg: 80 }],
+  });
+  assert.deepEqual(series.map((p) => p.date), ["2026-08-01", "2026-08-12", "2026-08-14"]);
+  assert.equal(series[2].kg, 78.8, "the check-in weights are missing from the chart");
+});
+
+test("the chart reads left to right, whatever order the rows arrived in", () => {
+  const series = weightSeries({
+    checkIns: [{ date: "2026-08-14", kg: 77 }, { date: "2026-07-02", kg: 84 }],
+    weighIns: [{ date: "2026-08-01", kg: 80 }],
+  });
+  assert.deepEqual(series.map((p) => p.kg), [84, 80, 77], "oldest first, so a chart needs no reversing");
+});
+
+test("one day is one point", () => {
+  // Two bars for one Tuesday reads as a two-kilo swing inside a day. The scale
+  // wins the tie, for the same reason it wins it in latestBodyweight.
+  const series = weightSeries({
+    checkIns: [{ date: "2026-08-10", kg: 81 }],
+    weighIns: [{ date: "2026-08-10", kg: 78.5 }],
+  });
+  assert.equal(series.length, 1);
+  assert.equal(series[0].kg, 78.5);
+  assert.equal(series[0].source, "weigh-in");
+});
+
+test("the headline number is the end of the line it is drawn beside", () => {
+  // They are one function now precisely so they cannot disagree — a page that
+  // says 78.8 kg above a chart ending at 80 is a page nobody trusts again.
+  const sources = {
+    checkIns: [{ date: "2026-08-14", kg: 78.8 }, { date: "2026-08-02", kg: 80 }],
+    weighIns: [{ date: "2026-08-10", kg: 79.4 }, { date: "2026-08-14", kg: 78.5 }],
+  };
+  const series = weightSeries(sources);
+  assert.deepEqual(latestBodyweight(sources), series[series.length - 1]);
+});
+
+test("nothing recorded is an empty chart, not a zero", () => {
+  assert.deepEqual(weightSeries({}), []);
+  assert.deepEqual(weightSeries({ checkIns: [{ date: "2026-08-10", kg: 0 }], weighIns: null }), [],
+    "a zero weight is absent, not a data point at the bottom of the axis");
+  // A profile weight has no date, so it cannot be plotted — and must not
+  // silently become today's bar.
+  assert.equal(latestBodyweight({ profileKg: 80 })?.source, "profile");
+});
+
+test("the Body page asks both tables", () => {
+  // THE TEST THAT WOULD HAVE CAUGHT IT. weightSeries can be perfect and the
+  // page still draws half the data if it only ever queries one table — the bug
+  // lives in the seam, so the test has to span it.
+  const page = readFileSync(new URL("../app/(app)/body/page.tsx", import.meta.url), "utf8");
+  assert.match(page, /from\("body_logs"\)/);
+  assert.match(page, /from\("daily_check_ins"\)/, "the check-in weights are still invisible on this page");
+  assert.match(page, /weightSeries\(/, "the page is still merging the two sources by hand");
 });

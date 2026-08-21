@@ -67,28 +67,50 @@ export function latestBodyweight(sources: {
   weighIns?: WeightRow[] | null;
   profileKg?: number | null;
 }): Bodyweight | null {
-  const dated: Bodyweight[] = [];
-  for (const r of sources.checkIns ?? []) {
-    if (isRealWeight(r.kg) && r.date) dated.push({ kg: r.kg, date: r.date, source: "check-in" });
-  }
-  for (const r of sources.weighIns ?? []) {
-    if (isRealWeight(r.kg) && r.date) dated.push({ kg: r.kg, date: r.date, source: "weigh-in" });
-  }
-
-  if (dated.length > 0) {
-    // ISO dates sort lexicographically, which is the whole reason this codebase
-    // stores local days as strings — see lib/day.ts.
-    dated.sort((a, b) => {
-      if (a.date !== b.date) return (b.date ?? "").localeCompare(a.date ?? "");
-      return rank(b.source) - rank(a.source);
-    });
-    return dated[0];
-  }
+  // Built from the same series the chart draws, so the headline number and the
+  // last bar can never be two different weights.
+  const series = weightSeries(sources);
+  if (series.length > 0) return series[series.length - 1];
 
   if (isRealWeight(sources.profileKg)) {
     return { kg: sources.profileKg, date: null, source: "profile" };
   }
   return null;
+}
+
+/**
+ * Every weight this athlete has recorded, oldest first, one per day.
+ *
+ * THE OTHER HALF OF THE SAME BUG. The readers were taught to look in both
+ * tables; the chart on /body was not. It plots `body_logs` and nothing else, so
+ * an athlete who answers the weight question in their daily check-in — the
+ * quicker of the two, and the one the app asks them for — opens Body and sees a
+ * trend that stops at whenever they last visited that page. Weeks of weights
+ * the app is holding, and asking about every morning, are not on the graph:
+ * "shows old data instead of the most recent", exactly.
+ *
+ * ONE POINT PER DAY, and a tie goes to the weigh-in for the same reason it does
+ * above — the scale is the instrument, the check-in slider is memory. Two bars
+ * for one Tuesday would also read as a two-kilo swing inside a day.
+ */
+export function weightSeries(sources: {
+  checkIns?: WeightRow[] | null;
+  weighIns?: WeightRow[] | null;
+}): Bodyweight[] {
+  const byDay = new Map<string, Bodyweight>();
+  const offer = (row: WeightRow, source: WeightSource) => {
+    if (!isRealWeight(row.kg) || !row.date) return;
+    const held = byDay.get(row.date);
+    if (held && rank(held.source) >= rank(source)) return;
+    byDay.set(row.date, { kg: row.kg, date: row.date, source });
+  };
+  for (const r of sources.checkIns ?? []) offer(r, "check-in");
+  for (const r of sources.weighIns ?? []) offer(r, "weigh-in");
+
+  // ISO dates sort lexicographically, which is the whole reason this codebase
+  // stores local days as strings — see lib/day.ts. Ascending, because a chart
+  // reads left to right and the caller should not have to reverse it.
+  return [...byDay.values()].sort((a, b) => (a.date ?? "").localeCompare(b.date ?? ""));
 }
 
 /** Narrowing guard: a usable weight is a positive, finite number. */

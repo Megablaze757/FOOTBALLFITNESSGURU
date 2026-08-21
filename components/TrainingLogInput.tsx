@@ -182,10 +182,6 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
   };
 
   const exactSeconds = value.duration_seconds ?? ((value.total_minutes ?? 0) * 60);
-  const livePace = Number(value.distance_km) > 0 && exactSeconds > 0
-    ? Math.round(exactSeconds / Number(value.distance_km))
-    : null;
-
   const setDrill = (i: number, patch: Partial<TrainingDrill>) =>
     update({ drills: value.drills.map((d, idx) => (idx === i ? { ...d, ...patch } : d)) });
 
@@ -225,14 +221,7 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
               <div className="block">
                 <span className="field-label flex items-center justify-between gap-2">
                   Distance
-                  <span className="inline-flex rounded-lg bg-white/[0.05] p-0.5">
-                    {(["km", "mi"] as const).map((u) => (
-                      <button key={u} type="button" onClick={() => setUnit(u)}
-                        className={`rounded-md px-2 py-1 text-[10px] font-bold uppercase ${unit === u ? "bg-sky-400 text-ink-900" : "text-slate-400"}`}
-                        aria-label={u === "km" ? "Use kilometres" : "Use miles"}
-                        aria-pressed={unit === u}>{u}</button>
-                    ))}
-                  </span>
+                  <UnitToggle unit={unit} onChange={setUnit} />
                 </span>
                 <NumberInput
                   decimal min={0} max={unit === "mi" ? 310 : 500} step="0.001"
@@ -242,25 +231,10 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
                   aria-label={`Distance in ${unit === "mi" ? "miles" : "kilometres"}`}
                 />
               </div>
-              <fieldset>
-                <legend className="field-label">Time (mm:ss)</legend>
-                <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-                  <NumberInput min={0} max={2880}
-                    value={exactSeconds ? Math.floor(exactSeconds / 60) : null}
-                    onChange={(next) => setDurationPart("minutes", next)} placeholder="mm" className="field text-center" aria-label="Run minutes" />
-                  <span className="font-bold text-slate-500">:</span>
-                  <NumberInput min={0} max={59}
-                    value={exactSeconds ? exactSeconds % 60 : null}
-                    onChange={(next) => setDurationPart("seconds", next)} placeholder="ss" className="field text-center" aria-label="Run seconds" />
-                </div>
-              </fieldset>
+              <RunTime seconds={exactSeconds} onPart={setDurationPart} />
             </div>
 
-            <div className={`rounded-xl px-3 py-2 text-xs ${livePace ? "bg-sky-400/10 text-sky-300" : "bg-white/[0.03] text-slate-500"}`}>
-              {livePace
-                ? <>Average pace <strong className="tabular-nums text-slate-100">{unit === "mi" ? formatPace(Math.round(livePace * 1.609344)) : formatPace(livePace)}/{unit}</strong> · {((value.distance_km ?? 0) / (exactSeconds / 3600)).toFixed(2)} km/h</>
-                : "Add distance and time and your average pace appears here automatically."}
-            </div>
+            <PaceLine km={value.distance_km} seconds={exactSeconds} unit={unit} />
 
             <div>
               <span className="field-label">Actual zone</span>
@@ -644,15 +618,20 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
       {whatIf !== null && <WhatIfLiftSheet initialExercise={whatIf} onClose={() => setWhatIf(null)} />}
       {detail && <DrillModal name={detail} onClose={() => setDetail(null)} />}
 
-      {sport !== "running" && <div className="grid grid-cols-2 gap-3">
-        <label className="block">
+      {/* WHOLE MINUTES ARE FINE FOR A GYM SESSION AND USELESS FOR A RUN.
+          A 5k in 27:34 logged as "28" is a pace 6 seconds per kilometre out,
+          which is the difference between a Zone 2 run and a tempo. When there
+          IS a run, the time is asked for beside the distance in mm:ss and this
+          box gets out of the way, so there is only ever one place to put it. */}
+      {sport !== "running" && <div className={`grid gap-3 ${value.run_type ? "grid-cols-1" : "grid-cols-2"}`}>
+        {!value.run_type && <label className="block">
           <span className="field-label">Duration (min)</span>
           <NumberInput
             value={value.total_minutes ?? null}
             onChange={(v) => updateDerived({ total_minutes: v, duration_seconds: v == null ? null : v * 60 })}
             min={0} placeholder="e.g. 75" className="field"
           />
-        </label>
+        </label>}
         <label className="block">
           <span className="field-label">
             Intensity {value.intensity ?? "–"}
@@ -702,26 +681,40 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
 
       {sport !== "running" && value.run_type && (
         <div className="space-y-3 rounded-2xl border border-white/[0.08] bg-white/[0.02] p-3">
-          <div className="grid grid-cols-2 gap-3">
-            <label className="block">
-              <span className="field-label">Distance ({unit})</span>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="block">
+              <span className="field-label flex items-center justify-between gap-2">
+                Distance
+                <UnitToggle unit={unit} onChange={setUnit} />
+              </span>
               <NumberInput
-                decimal min={0} max={unit === "mi" ? 310 : 500}
+                decimal min={0} max={unit === "mi" ? 310 : 500} step="0.001"
                 value={shownDistance}
                 onChange={setDistance}
                 placeholder="e.g. 8.5" className="field"
+                aria-label={`Distance in ${unit === "mi" ? "miles" : "kilometres"}`}
               />
-            </label>
-            <label className="block">
-              <span className="field-label">Avg HR (optional)</span>
-              <NumberInput
-                min={30} max={250}
-                value={value.avg_hr ?? null}
-                onChange={(v) => update({ avg_hr: v })}
-                placeholder="off your watch" className="field"
-              />
-            </label>
+            </div>
+            {/* THE FIELD EVERY SPORT BUT ONE WAS MISSING. Runners have had
+                mm:ss and a live pace since the fast path was built; a
+                footballer logging Tuesday's easy run had a whole-minute
+                duration box three sections up and no pace anywhere. The app
+                prescribes runs in all six sports — it has to be able to
+                receive one back. */}
+            <RunTime seconds={exactSeconds} onPart={setDurationPart} />
           </div>
+
+          <PaceLine km={value.distance_km} seconds={exactSeconds} unit={unit} />
+
+          <label className="block">
+            <span className="field-label">Avg HR <span className="normal-case tracking-normal text-slate-600">(optional)</span></span>
+            <NumberInput
+              min={30} max={250}
+              value={value.avg_hr ?? null}
+              onChange={(v) => update({ avg_hr: v })}
+              placeholder="off your watch" className="field"
+            />
+          </label>
 
           {/* HOW THE SESSION WAS BUILT.
               Only for the runs that HAVE a structure — an easy run has no reps
@@ -839,6 +832,67 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
         </label>
       )}
     </div>
+  );
+}
+
+/**
+ * A run's time, to the second.
+ *
+ * Two boxes rather than one "seconds" field, because nobody reads their watch
+ * in seconds — it says 27:34 and this asks for 27 and 34.
+ */
+function RunTime({ seconds, onPart }: {
+  seconds: number;
+  onPart: (part: "minutes" | "seconds", next: number | null) => void;
+}) {
+  return (
+    <fieldset>
+      <legend className="field-label">Time (mm:ss)</legend>
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+        <NumberInput min={0} max={2880}
+          value={seconds ? Math.floor(seconds / 60) : null}
+          onChange={(next) => onPart("minutes", next)} placeholder="mm" className="field text-center" aria-label="Run minutes" />
+        <span className="font-bold text-slate-500">:</span>
+        <NumberInput min={0} max={59}
+          value={seconds ? seconds % 60 : null}
+          onChange={(next) => onPart("seconds", next)} placeholder="ss" className="field text-center" aria-label="Run seconds" />
+      </div>
+    </fieldset>
+  );
+}
+
+/**
+ * The number the athlete actually wanted, worked out from the two they gave.
+ *
+ * Shown in the unit they are typing in — a miles runner does not want km/h, and
+ * being handed the wrong unit is how a good number becomes noise.
+ */
+function PaceLine({ km, seconds, unit }: { km: number | null | undefined; seconds: number; unit: "km" | "mi" }) {
+  const distance = Number(km) > 0 ? Number(km) : 0;
+  const secondsPerKm = distance > 0 && seconds > 0 ? Math.round(seconds / distance) : null;
+  const kmh = secondsPerKm ? distance / (seconds / 3600) : null;
+  return (
+    <div className={`rounded-xl px-3 py-2 text-xs ${secondsPerKm ? "bg-sky-400/10 text-sky-300" : "bg-white/[0.03] text-slate-500"}`}>
+      {secondsPerKm && kmh
+        ? <>Average pace <strong className="tabular-nums text-slate-100">
+            {formatPace(unit === "mi" ? Math.round(secondsPerKm * 1.609344) : secondsPerKm)}/{unit}
+          </strong> · {(unit === "mi" ? kmh / 1.609344 : kmh).toFixed(2)} {unit === "mi" ? "mph" : "km/h"}</>
+        : "Add distance and time and your average pace appears here automatically."}
+    </div>
+  );
+}
+
+/** km or miles, in the athlete's hands rather than buried in settings. */
+function UnitToggle({ unit, onChange }: { unit: "km" | "mi"; onChange: (next: "km" | "mi") => void }) {
+  return (
+    <span className="inline-flex rounded-lg bg-white/[0.05] p-0.5">
+      {(["km", "mi"] as const).map((u) => (
+        <button key={u} type="button" onClick={() => onChange(u)}
+          className={`rounded-md px-2 py-1 text-[10px] font-bold uppercase ${u === unit ? "bg-sky-400 text-ink-900" : "text-slate-400"}`}
+          aria-label={u === "km" ? "Use kilometres" : "Use miles"}
+          aria-pressed={u === unit}>{u}</button>
+      ))}
+    </span>
   );
 }
 

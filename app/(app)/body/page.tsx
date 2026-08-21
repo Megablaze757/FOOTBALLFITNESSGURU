@@ -8,6 +8,7 @@ import { useAsync, invalidate } from "@/lib/use-async";
 import { MiniBars } from "@/components/MiniBars";
 import type { BodyLog } from "@/lib/types";
 import { daysAgoLocal, todayLocal } from "@/lib/day";
+import { weightSeries, weightProvenance } from "@/lib/bodyweight";
 
 export default function BodyPage() {
   const user = useCurrentUser();
@@ -19,6 +20,20 @@ export default function BodyPage() {
     const { data: logs } = await supabase
       .from("body_logs").select("*").eq("user_id", user.id).gte("log_date", since).order("log_date", { ascending: true });
     const rows = (logs ?? []) as BodyLog[];
+
+    /**
+     * THE WEIGHTS THIS PAGE WAS MISSING.
+     *
+     * The chart plotted body_logs and nothing else, so somebody who answers the
+     * weight question in their daily check-in — the quicker of the two, and the
+     * one the app asks them for every morning — opened this page and saw a trend
+     * that stopped at whenever they last visited it. The number was never lost;
+     * it was in the other table, and every other reader in the app has looked in
+     * both since lib/bodyweight.ts existed. This one did not.
+     */
+    const { data: checkIns } = await supabase
+      .from("daily_check_ins").select("check_in_date, weight_kg").eq("user_id", user.id)
+      .not("weight_kg", "is", null).gte("check_in_date", since).order("check_in_date", { ascending: true });
     // Sign photo URLs for the gallery.
     const withPhotos = rows.filter((r) => r.photo_path);
     const signed: Record<string, string> = {};
@@ -26,11 +41,21 @@ export default function BodyPage() {
       const { data: s } = await supabase.storage.from("photos").createSignedUrl(r.photo_path!, 600);
       if (s) signed[r.id] = s.signedUrl;
     }
-    return { rows, signed };
+    return {
+      rows, signed,
+      checkIns: (checkIns ?? []).map((r) => ({ date: r.check_in_date as string, kg: r.weight_kg as number })),
+    };
   }, [user.id], `body:${user.id}`);
 
   const rows = data?.rows ?? [];
-  const weightSeries = rows.filter((r) => r.weight_kg != null).map((r) => ({ date: r.log_date, value: Number(r.weight_kg) }));
+  // Both tables, one point per day, freshest last — the same resolver the
+  // headline number, the calorie target and the strength ranks all read.
+  const weights = weightSeries({
+    checkIns: data?.checkIns,
+    weighIns: rows.map((r) => ({ date: r.log_date, kg: r.weight_kg })),
+  });
+  const current = weights.length > 0 ? weights[weights.length - 1] : null;
+  const bars = weights.map((w) => ({ date: w.date!, value: w.kg }));
   const bfSeries = rows.filter((r) => r.body_fat_pct != null).map((r) => ({ date: r.log_date, value: Number(r.body_fat_pct) }));
   const photos = rows.filter((r) => r.photo_path && data?.signed[r.id]);
 
@@ -48,12 +73,21 @@ export default function BodyPage() {
         <div className="card h-40 animate-pulse" />
       ) : (
         <>
-          {weightSeries.length > 0 && (
-            <div className="card p-5">
+          <div className="card p-5">
+            <div className="flex items-baseline justify-between gap-3">
               <h2 className="field-label">Weight over time</h2>
-              <MiniBars data={weightSeries} color="#e3b53f" unit=" kg" emptyLabel="Add a weight below and this fills in. Two entries a week is enough to see a trend." />
+              {/* WHICH NUMBER IS CURRENT, AND WHERE IT CAME FROM. Two places
+                  record a weight and the athlete cannot be expected to hold
+                  which one was last. */}
+              {current && (
+                <span className="text-xs text-slate-400">
+                  <span className="font-bold text-slate-100">{current.kg} kg</span>{" "}
+                  {weightProvenance(current, today)}
+                </span>
+              )}
             </div>
-          )}
+            <MiniBars data={bars} color="#e3b53f" unit=" kg" emptyLabel="Add a weight below and this fills in. Two entries a week is enough to see a trend." />
+          </div>
           {bfSeries.length > 0 && (
             <div className="card p-5">
               <h2 className="field-label">Body fat over time</h2>
