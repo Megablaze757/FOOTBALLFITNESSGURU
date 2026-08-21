@@ -35,6 +35,58 @@ export const METRIC_CATALOG: MetricDef[] = [
   { key: "pullups_max", label: "Max pull-ups", unit: "reps" },
 ];
 
+/** One saved test. Only the fields a resolver has to read. */
+export interface BenchmarkRow {
+  test_date?: string | null;
+  created_at?: string | null;
+  metrics?: Record<string, unknown> | null;
+}
+
+/**
+ * The most recent value of each metric, across every test.
+ *
+ * THE LATEST ROW IS NOT THE LATEST NUMBER, and that is the bug this exists to
+ * stop. The form saves what you typed and nothing more — "enter at least one
+ * metric" — so a row is a TEST, not a profile: squat on Monday, 5k on Saturday,
+ * two rows with one number each. Anything reading `.limit(1)` therefore sees
+ * Saturday's 5k and no squat at all, and reports a lifter who has never
+ * squatted. The zone guide on the library page did exactly that, and quietly
+ * fell back to generic pace bands for runners whose last test happened to be a
+ * lift.
+ *
+ * Newest wins per metric, not biggest: this answers "where are you now", which
+ * is what a prescription and a pace band need. Best-ever is a different
+ * question and lib/strength-standards.ts already answers it — a rank must never
+ * fall because of one bad day, while a working weight must follow the bad day
+ * or it prescribes a lift you cannot make.
+ *
+ * Same-day tests are ordered by `created_at`, because a date alone cannot
+ * separate two rows saved an hour apart and the row order out of PostgREST is
+ * not a promise.
+ */
+export function latestMetrics(rows: readonly BenchmarkRow[] | null | undefined): Record<string, number> {
+  const newestFirst = [...(rows ?? [])].sort((a, b) => {
+    const date = String(b.test_date ?? "").localeCompare(String(a.test_date ?? ""));
+    return date !== 0 ? date : String(b.created_at ?? "").localeCompare(String(a.created_at ?? ""));
+  });
+
+  const out: Record<string, number> = {};
+  for (const row of newestFirst) {
+    for (const [key, raw] of Object.entries(row.metrics ?? {})) {
+      // A metric saved as null or as text is absent, not zero — writing 0 here
+      // would prescribe a zero-kilo working weight and rank it as untrained.
+      if (key in out) continue;
+      // Number(null) is 0 and Number("") is 0, so the guard has to come before
+      // the coercion — which is precisely how a null squat became a zero-kilo
+      // one-rep max the first time this was written.
+      if (raw === null || raw === undefined || raw === "") continue;
+      const value = typeof raw === "number" ? raw : Number(raw);
+      if (Number.isFinite(value)) out[key] = value;
+    }
+  }
+  return out;
+}
+
 export function metricDef(key: string): MetricDef {
   return METRIC_CATALOG.find((m) => m.key === key) ?? { key, label: key, unit: "" };
 }

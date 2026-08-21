@@ -8,6 +8,7 @@ import { useTier } from "@/lib/use-tier";
 import { can } from "@/lib/subscription";
 import { FeatureLock } from "@/components/FeatureLock";
 import { EXERCISES, EXERCISE_CATEGORIES, SPORTS, DIFFICULTIES, EQUIPMENT_BUCKETS, getExercisesForSport, demoImplement, rowToExercise, exerciseEquip, withinLevel, type Exercise, type ExerciseCategory, type SportId, type Difficulty } from "@/lib/exercises";
+import { latestMetrics } from "@/lib/benchmarks";
 import { ExerciseDemo } from "@/components/ExerciseDemo";
 import { ExerciseModal } from "@/components/ExerciseDetail";
 import { exerciseMuscles } from "@/lib/muscle-volume";
@@ -106,11 +107,20 @@ export default function LibraryPage() {
       setSavedIds(new Set(p?.saved_exercises ?? []));
     });
     void reloadCustom();
-    // Latest test only — zones should follow current fitness, not a personal
-    // best from two seasons ago.
-    supabase.from("strength_benchmarks").select("metrics").order("test_date", { ascending: false }).limit(1)
+    /**
+     * The latest value of each metric — which is not the latest ROW.
+     *
+     * This asked for one row and used its metrics. The benchmark form saves
+     * only what you typed, so a row is a test and not a profile: a runner who
+     * logged a squat last week has a newest row with no run time in it, and the
+     * zone guide silently fell back to generic pace bands for somebody who had
+     * entered their 5k. Newest-per-metric across every test, so zones still
+     * follow current fitness rather than a personal best from two seasons ago.
+     */
+    supabase.from("strength_benchmarks").select("test_date, created_at, metrics")
+      .order("test_date", { ascending: false }).limit(50)
       .then(({ data }) => {
-        if (active && data?.[0]) setBenchmarks((data[0] as { metrics: Record<string, number> }).metrics);
+        if (active && data?.length) setBenchmarks(latestMetrics(data));
       });
     supabase.from("biometrics").select("resting_hr").not("resting_hr", "is", null)
       .order("metric_date", { ascending: false }).limit(1)

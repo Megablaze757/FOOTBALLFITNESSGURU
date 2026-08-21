@@ -36,7 +36,7 @@ import {
   ZONE_LIST, type RunnerLevel,
 } from "@/lib/running";
 import { track } from "@/lib/funnel";
-import { METRIC_CATALOG, metricDef, benchmarkProgress } from "@/lib/benchmarks";
+import { METRIC_CATALOG, metricDef, benchmarkProgress, latestMetrics } from "@/lib/benchmarks";
 import { RingProgress } from "@/components/RingProgress";
 import { Tabs, TabPanel } from "@/components/Tabs";
 import { CoachChat } from "@/components/CoachChat";
@@ -57,15 +57,6 @@ import {
   type AdaptiveGoalType, type GoalPreference, type MusclePriority, type ProgramSettings, type ScheduleDay,
 } from "@/lib/program-preferences";
 import { measuredTrainingFields } from "@/lib/exercise-measure";
-
-/** Latest recorded value per benchmark metric, newest test first. */
-function latestBenchmarks(rows: StrengthBenchmark[]): Record<string, number> {
-  const out: Record<string, number> = {};
-  for (const r of [...rows].sort((a, b) => b.test_date.localeCompare(a.test_date))) {
-    for (const [k, v] of Object.entries(r.metrics ?? {})) if (!(k in out) && typeof v === "number") out[k] = v;
-  }
-  return out;
-}
 
 function dedupeDrills(drills: TrainingDrill[]): TrainingDrill[] {
   const seen = new Set<string>();
@@ -145,7 +136,7 @@ export default function CoachPage() {
       checkIn: (checkIn ?? null) as DailyCheckIn | null,
       training: (training ?? []) as TrainingLog[],
       checkHist: (checkHist ?? []) as { check_in_date: string; pain_map: Record<string, number> | null }[],
-      latestBench: latestBenchmarks((benches ?? []) as StrengthBenchmark[]),
+      latestBench: latestMetrics((benches ?? []) as StrengthBenchmark[]),
       sport: (p?.sport ?? "football") as SportId,
       // Profiles written before 0042 only have the single column.
       positions: positionList(p?.positions?.length ? p.positions : p?.position),
