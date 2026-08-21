@@ -59,6 +59,15 @@ export interface MealPrefs {
    * first and the rest stay available. See lib/recipe-difficulty.ts.
    */
   cookLevel?: CookPreference;
+  /**
+   * A weekly shop they cannot go over, in pounds.
+   *
+   * The tick box asks "would you rather be cheap"; this asks "how much have you
+   * got". They are different questions and only one of them has an answer you
+   * can check afterwards, which is why the plan can say whether it managed it.
+   * Null means no ceiling — the tick box alone.
+   */
+  weeklyBudget?: number | null;
   dislikes: string[];   // food ids the athlete never wants to see
   /** Food ids they've said they like. A nudge toward, not a guarantee of. */
   favourites?: string[];
@@ -1048,7 +1057,17 @@ export function buildWeek(
    * them unless nothing better exists. It stays a COST and never a ban, which
    * is what keeps a narrow diet from running out of food.
    */
-  recent: string[] = []
+  recent: string[] = [],
+  /**
+   * How hard to lean on price, as a multiplier on the two cost terms.
+   *
+   * NOT A PREFERENCE, which is why it is a parameter and not a field on
+   * MealPrefs: nothing in the UI sets it and nothing persists it. It exists so
+   * `planWithinBudget` can ask the same planner the same question at four
+   * different intensities and keep the cheapest answer that is still a
+   * defensible week. 1 is the ordinary plan.
+   */
+  costPressure = 1
 ): PlannedDay[] {
   const pools: Record<Slot, Meal[]> = {
     Breakfast: bySlot("Breakfast", prefs), Lunch: bySlot("Lunch", prefs),
@@ -1139,7 +1158,12 @@ export function buildWeek(
   const faff = (meal: Meal) =>
     prefs.cookLevel === "easy" ? cookRating(meal).score * FAFF_WEIGHT : 0;
 
-  const budgetScale = prefs.budget ? 0.35 : 1;
+  /**
+   * A £ ceiling IS budget mode, with a number attached. Someone who says they
+   * have sixty pounds has told you at least as much as the tick box does.
+   */
+  const thrifty = prefs.budget || prefs.weeklyBudget != null;
+  const budgetScale = thrifty ? 0.35 : 1;
   /**
    * BUDGET MODE HAS TO ACTUALLY WEIGHT COST, and it didn't.
    *
@@ -1196,7 +1220,7 @@ export function buildWeek(
    * file has refused four times now. 1.5/6 saves the most and takes the worst
    * budget day down to 71% of target; nobody ticked a box asking for that.
    */
-  const costWeight = prefs.budget ? 2 : 1;
+  const costWeight = (thrifty ? 2 : 1) * costPressure;
   /**
    * AND IT HAS TO WEIGHT WHAT A DISH COSTS, not only what it adds today.
    *
@@ -1244,7 +1268,7 @@ export function buildWeek(
    * that box.
    */
   const SERVING_COST_WEIGHT = 4.5;
-  const servingCostWeight = prefs.budget ? SERVING_COST_WEIGHT : 0;
+  const servingCostWeight = (thrifty ? SERVING_COST_WEIGHT : 0) * costPressure;
   /**
    * Budget mode does not pay for variety.
    *
@@ -1944,6 +1968,181 @@ export function shoppingList(week: PlannedDay[], pricing: PricingOptions = {}): 
 }
 
 /** Plain-text list, for pasting into a supermarket app or messaging it to someone. */
+/**
+ * A week that fits a stated budget, or the closest honest attempt at one.
+ *
+ * WHY A TICK BOX WAS NOT ENOUGH. "Keep it cheap" asks whether they would rather
+ * be cheap; a number asks how much they have. Only the second has an answer you
+ * can check afterwards, and checking it is most of the value — somebody with
+ * sixty pounds needs to know before Monday whether this plan is a sixty-pound
+ * plan.
+ *
+ * HOW IT SEARCHES. The planner already prices every candidate meal; the two
+ * cost terms just carry a fixed weight. So this asks the same planner the same
+ * question at increasing cost pressure and takes the FIRST week that comes in
+ * under the ceiling — first rather than cheapest, because pressure is spent in
+ * variety and in how well each meal fits the slot, and there is no reason to
+ * spend more of either than the budget actually requires.
+ *
+ * WHAT IT WILL NOT DO IS LIE. If no pressure gets under the number, it returns
+ * the cheapest week it could build and says so, with what that week costs.
+ * Silently serving a £78 plan to somebody who typed £60 is the failure mode
+ * this whole feature exists to prevent, and quietly starving the plan to hit
+ * £60 is the other one — so a week that drops a day below 90% of its protein
+ * target is rejected however cheap it is.
+ *
+ * Judged on `ongoingTotal`: a weekly budget means an ordinary week, and `total`
+ * re-buys the olive oil and the spice jars every Monday. The first shop is
+ * dearer and the result says by how much.
+ */
+export interface BudgetedWeek {
+  days: PlannedDay[];
+  list: ShoppingList;
+  /** The ceiling asked for, or null when there wasn't one. */
+  budget: number | null;
+  /** An ordinary week's shop — what the budget is judged against. */
+  weeklyCost: number;
+  /** The first shop, which also stocks the cupboard. */
+  firstShopCost: number;
+  /** False when even the cheapest defensible week came in over. */
+  met: boolean;
+  /** One line for the athlete. Null when there is no budget to report on. */
+  note: string | null;
+}
+
+/**
+ * How hard to lean on price, in order. 1 is the ordinary plan; each step buys
+ * a cheaper shop with variety and slot-fit. Stops at 6 because past there the
+ * week collapses onto the same four cheap dinners and the protein floor starts
+ * rejecting the results anyway.
+ */
+const BUDGET_PRESSURE = [1, 2, 3.5, 6];
+
+/** No day may fall below this share of its protein target, however cheap it is. */
+const BUDGET_PROTEIN_FLOOR = 0.9;
+
+/**
+ * …nor below this share of what the unpressured week would have delivered.
+ *
+ * 5% is inside the noise of portion scaling and well outside a real loss: it
+ * lets a cheaper chicken thigh replace a chicken breast and stops a week of
+ * pasta replacing a week of food.
+ */
+const BUDGET_PROTEIN_KEEP = 0.95;
+
+export function planWithinBudget(
+  targets: PlanTargets,
+  seed = 0,
+  prefs: MealPrefs = DEFAULT_PREFS,
+  schedule: DietSchedule = EMPTY_SCHEDULE,
+  swaps: MealSwaps = {},
+  recent: string[] = [],
+  pricing: PricingOptions = {},
+): BudgetedWeek {
+  const build = (pressure: number) => {
+    const days = buildWeek(targets, seed, prefs, schedule, swaps, recent, pressure);
+    return { days, list: shoppingList(days, pricing) };
+  };
+
+  const budget = Number.isFinite(Number(prefs.weeklyBudget)) && Number(prefs.weeklyBudget) > 0
+    ? Number(prefs.weeklyBudget)
+    : null;
+
+  const baseline = build(1);
+  if (budget == null) {
+    return {
+      ...baseline, budget: null, met: true, note: null,
+      weeklyCost: baseline.list.ongoingTotal,
+      firstShopCost: baseline.list.total,
+    };
+  }
+
+  /**
+   * The week they would have had if they had never mentioned money.
+   *
+   * NOT `baseline`. A stated budget turns budget mode on, so even at pressure 1
+   * the plan is already leaning on price — and measuring the protein floor
+   * against THAT lets the whole drop happen for free before the search starts.
+   * Measured, on a 62kg athlete: the returned week was 36% short of the worst
+   * day in the plan they would otherwise have been served, and every step of
+   * the search passed its own floor. The reference has to be the plan without
+   * the budget. Built once, never returned.
+   */
+  const reference = buildWeek(targets, seed, { ...prefs, budget: false, weeklyBudget: null }, schedule, swaps, recent);
+
+  let best: { days: PlannedDay[]; list: ShoppingList } | null = null;
+  for (const pressure of BUDGET_PRESSURE) {
+    const attempt = pressure === 1 ? baseline : build(pressure);
+    // Every returned week passes the floor, INCLUDING the unpressured one. It
+    // was seeded as `best` at first and therefore never checked, which is how a
+    // 62kg athlete asking for £30 was handed a week 36% short on its worst day
+    // — the answer to an impossible budget is the plan they would have had,
+    // not the cheapest thing the search happened to start from.
+    if (!feedsThem(attempt.days, reference, targets)) continue;
+    if (!best || attempt.list.ongoingTotal < best.list.ongoingTotal) best = attempt;
+    if (attempt.list.ongoingTotal <= budget) {
+      return { ...attempt, budget, met: true, ...costs(attempt.list), note: metNote(attempt.list, budget) };
+    }
+  }
+
+  const fallback = best ?? { days: reference, list: shoppingList(reference, pricing) };
+
+  /**
+   * The week they would have had may fit the budget by itself.
+   *
+   * Every pressured week can fail the protein floor while the ordinary one is
+   * comfortably under the ceiling — that is precisely the 95kg cutting athlete,
+   * whose £88 week clears their protein and whose every cheaper week does not.
+   * Reporting "we could not manage £200" about an £88 plan is nonsense, and it
+   * is what happens if the only way to be `met` is to have found a saving.
+   */
+  if (fallback.list.ongoingTotal <= budget) {
+    return { ...fallback, budget, met: true, ...costs(fallback.list), note: metNote(fallback.list, budget) };
+  }
+
+  return {
+    ...fallback, budget, met: false, ...costs(fallback.list),
+    note: `The cheapest week we can build that still feeds you properly is £${fallback.list.ongoingTotal.toFixed(2)}`
+      + ` — £${(fallback.list.ongoingTotal - budget).toFixed(2)} over your £${budget.toFixed(2)}.`
+      + ` Cooking fewer, larger meals or eating out less are the two biggest levers left.`,
+  };
+}
+
+const costs = (list: ShoppingList) => ({ weeklyCost: list.ongoingTotal, firstShopCost: list.total });
+
+function metNote(list: ShoppingList, budget: number): string {
+  const under = budget - list.ongoingTotal;
+  const first = list.total > list.ongoingTotal
+    ? ` The first shop is £${list.total.toFixed(2)} because it stocks the cupboard — oil, spices and rice last for weeks.`
+    : "";
+  return `An ordinary week comes to £${list.ongoingTotal.toFixed(2)}, £${under.toFixed(2)} under your budget.${first}`;
+}
+
+/**
+ * A cheap week still has to be the week they would otherwise have had.
+ *
+ * Protein is the term the planner spends first when cost is pushed hard, and
+ * the one an athlete cannot make up elsewhere, so it is the floor. Calories
+ * look after themselves: the size term keeps every slot near its target and
+ * cheap food is not small food.
+ *
+ * MEASURED AGAINST THE UNPRESSURED WEEK, not only against the target. A flat
+ * "90% of target" bar rejected every single option for a 95kg athlete cutting —
+ * because the ordinary plan does not reach 90% for them either, and holding the
+ * cheap week to a standard the normal week never met means the budget feature
+ * silently does nothing for exactly the people most likely to use it. The
+ * question a floor should ask is "is this materially worse than what they would
+ * have got", and the answer here is the more forgiving of the two bars.
+ */
+function feedsThem(days: PlannedDay[], baseline: PlannedDay[], targets: PlanTargets): boolean {
+  return days.every((day, i) => {
+    if (day.meals.length === 0) return true; // a day they said they are eating out
+    const wouldHaveHad = baseline[i]?.macros.protein ?? 0;
+    const floor = Math.min(targets.protein * BUDGET_PROTEIN_FLOOR, wouldHaveHad * BUDGET_PROTEIN_KEEP);
+    return day.macros.protein >= floor;
+  });
+}
+
 export function shoppingListText(list: ShoppingList): string {
   const out: string[] = ["Shopping list — PocketAthlete", ""];
   for (const group of list.byAisle) {

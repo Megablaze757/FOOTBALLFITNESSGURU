@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { invokeAI, estimateFood, backendCapabilities } from "@/lib/api";
 import { useJobs } from "@/lib/jobs";
 import {
-  planTargets, buildWeek, mealMacros, effectiveMealPrefs, DEFAULT_PREFS, mergePrefs,
+  planTargets, planWithinBudget, mealMacros, effectiveMealPrefs, DEFAULT_PREFS, mergePrefs,
   type BodyStats, type MealPrefs, type PlannedMeal,
 } from "@/lib/meal-plan";
 import { parseSchedule } from "@/lib/meal-schedule";
@@ -17,8 +17,17 @@ import {
 } from "@/lib/food-estimate";
 import type { Macros, MealSwaps } from "@/lib/meal-plan";
 import type { TargetContext } from "@/lib/nutrition";
+import type { StoreId } from "@/lib/food-db";
 
 interface Props {
+  /**
+   * Which supermarket prices are quoted in — from the profile.
+   *
+   * Needed here only because a stated budget changes which meals the planner
+   * picks, and store prices differ by a flat index per shop. Without it this
+   * screen would rebuild a different week from the same seed.
+   */
+  store?: StoreId | null;
   stats: Partial<BodyStats> | null;
   prefs: Partial<MealPrefs> | null;
   dietNotes: string | null;
@@ -113,7 +122,7 @@ async function shrinkImage(file: File): Promise<string> {
  *
  * All three feed the same daily totals, which the tracker above then saves.
  */
-export function MealCheckIn({ stats, prefs, dietNotes, seed, swaps, recent, starred, context, onAdd, onRemoveRef, userId }: Props) {
+export function MealCheckIn({ stats, prefs, dietNotes, seed, swaps, recent, starred, context, onAdd, onRemoveRef, userId, store }: Props) {
   /**
    * WHICH MEALS ARE TICKED, KEPT ACROSS NAVIGATION.
    *
@@ -246,14 +255,18 @@ export function MealCheckIn({ stats, prefs, dietNotes, seed, swaps, recent, star
       activity: stats?.activity ?? "moderate",
       goal: stats?.goal ?? "maintain",
     };
-    const week = buildWeek(
+    // planWithinBudget, not buildWeek: a stated budget makes the planner lean
+    // harder on price, so a screen that called the plain builder would show a
+    // different Tuesday from the one on the Meal plan tab — the same seed, two
+    // sets of dinners. Priced by store only, for the same reason there.
+    const week = planWithinBudget(
       planTargets(body, context), seed,
       // The SAME derivation MealPlanner uses, not a re-implementation of it.
       effectiveMealPrefs(mergePrefs(DEFAULT_PREFS, prefs), dietNotes, starred),
-      parseSchedule(dietNotes), swaps, recent
-    );
+      parseSchedule(dietNotes), swaps, recent, { store: store ?? undefined },
+    ).days;
     return week[DAY_INDEX()]?.meals ?? [];
-  }, [stats, prefs, dietNotes, seed, swaps, recent, starred, context]);
+  }, [stats, prefs, dietNotes, seed, swaps, recent, starred, context, store]);
 
   /**
    * The meal whose recipe is open, if any.

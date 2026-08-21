@@ -6,7 +6,7 @@ import { updateProfile } from "@/lib/profile-columns";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { invalidate } from "@/lib/use-async";
 import {
-  effectiveMealPrefs, planTargets, buildWeek, shoppingList, unmetSlots, dislikedFoodIds, favouriteFoodIds,
+  effectiveMealPrefs, planTargets, planWithinBudget, shoppingList, unmetSlots, dislikedFoodIds, favouriteFoodIds,
   swapKey, slotTargetKcal, type MealSwaps,
   ACTIVITY_LEVELS, DIET_GOALS, DIET_PATTERNS, AVOIDANCES, DEFAULT_PREFS, mergePrefs,
   type BodyStats, type Sex, type ActivityLevel, type DietGoal, type PlannedDay, type PlanTargets,
@@ -19,6 +19,7 @@ import { Recipe } from "@/components/Recipe";
 import { MealSwap, type SwapTarget } from "@/components/MealSwap";
 import { FOOD_BY_ID as FOOD_LOOKUP } from "@/lib/food-db";
 import { ShoppingList } from "@/components/ShoppingList";
+import { NumberInput } from "@/components/NumberInput";
 
 interface Props {
   userId: string;
@@ -44,9 +45,18 @@ interface Props {
   initialStarred?: string[] | null;
   /** Athlete-set calorie/macros override the calculated plan targets. */
   targetOverrides?: Partial<Pick<PlanTargets, "calories" | "protein" | "carbs" | "fats">> | null;
+  /**
+   * Which supermarket prices are quoted in.
+   *
+   * From the profile, not from this device. Once a budget can change the plan,
+   * the store is an INPUT to it — prices differ by a flat index per shop, so an
+   * athlete whose phone said Aldi and whose laptop said Tesco would be handed
+   * two different weeks from one seed.
+   */
+  initialStore?: StoreId | null;
 }
 
-export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initialSeed, initialSwaps, initialRecent, initialStarred, context, targetOverrides }: Props) {
+export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initialSeed, initialSwaps, initialRecent, initialStarred, context, targetOverrides, initialStore }: Props) {
   const [sex, setSex] = useState<Sex>(initial?.sex ?? "male");
   const [age, setAge] = useState(String(initial?.age ?? 20));
   const [heightCm, setHeightCm] = useState(String(initial?.heightCm ?? 178));
@@ -139,21 +149,28 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
    * shopper Tesco prices. Corrections are keyed by food and kept across weeks:
    * what a pack costs is a fact about their supermarket, not about this plan.
    */
-  const [store, setStore] = useState<StoreId>("tesco");
+  const [store, setStore] = useState<StoreId>(initialStore ?? "tesco");
   const [priceOverrides, setPriceOverrides] = useState<PriceOverrides>({});
 
   useEffect(() => {
     try {
-      const s = window.localStorage.getItem("shop:store");
-      if (s && SUPERMARKETS.some((x) => x.id === s)) setStore(s as StoreId);
+      // The profile wins; this is the fallback for an athlete who set their
+      // shop before it was saved anywhere but here.
+      if (!initialStore) {
+        const s = window.localStorage.getItem("shop:store");
+        if (s && SUPERMARKETS.some((x) => x.id === s)) setStore(s as StoreId);
+      }
       const raw = window.localStorage.getItem("shop:prices");
       if (raw) setPriceOverrides(JSON.parse(raw));
     } catch { /* a corrupt or blocked store just means estimates */ }
-  }, []);
+  }, [initialStore]);
 
   const chooseStore = (id: StoreId) => {
     setStore(id);
     try { window.localStorage.setItem("shop:store", id); } catch { /* ignore */ }
+    // An input to the plan belongs with the athlete. Best-effort: a failure
+    // here costs the cross-device agreement, not the price on screen.
+    void updateProfile(createClient(), userId, {}, { shop_store: id });
   };
   const correctPrice = (foodId: string, price: number | null) => {
     setPriceOverrides((prev) => {
@@ -168,24 +185,51 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
     () => (week ? shoppingList(week, { store, overrides: priceOverrides }) : null),
     [week, store, priceOverrides]
   );
+
+  /**
+   * Whether the week came in under the budget, and what to say about it.
+   *
+   * Held beside the week rather than derived from `list`, because the answer is
+   * decided while the week is being BUILT — the planner leans harder on price
+   * until it fits — and the list can only report what the chosen week costs.
+   */
+  const [budgetNote, setBudgetNote] = useState<{ met: boolean; note: string } | null>(null);
+
+  /**
+   * Build a week, honouring the budget if there is one.
+   *
+   * Every rebuild goes through here so the four call sites cannot drift — a
+   * regenerate that ignored the budget while the first build honoured it would
+   * be the most confusing possible version of this feature.
+   *
+   * PRICED BY STORE ONLY, never by the athlete's own price corrections. Those
+   * live on this device; the plan must be a function of things that live with
+   * the athlete, or the same seed produces different food on their phone and
+   * their laptop. Corrections still refine the number the shopping list shows.
+   */
+  const planWeek = (opts: { seed: number; prefs: MealPrefs; swaps: MealSwaps; recent: string[] }) => {
+    const result = planWithinBudget(targets, opts.seed, opts.prefs, schedule, opts.swaps, opts.recent, { store });
+    setBudgetNote(result.note ? { met: result.met, note: result.note } : null);
+    return result.days;
+  };
   // If someone excludes enough, a meal slot can end up with nothing in it —
   // better to say so than to quietly hand back a short day.
   // Foods named in the notes are excluded on top of the tapped preferences.
   // Shared with MealCheckIn — see effectiveMealPrefs. The two screens rebuild
-  // the same week from the same seed and must feed buildWeek identically.
+  // the same week from the same seed and must feed the planner identically.
   const effectivePrefs = useMemo(
     () => effectiveMealPrefs(prefs, notes, starred),
     [prefs, notes, starred]
   );
   const gaps = useMemo(() => unmetSlots(effectivePrefs), [effectivePrefs]);
 
-  // Rebuild the plan they were already on. buildWeek is pure, so the same seed
+  // Rebuild the plan they were already on. The planner is pure, so the same seed
   // and the same saved inputs give back the identical week — which is the point:
   // regenerating with a fresh random seed would hand them a different plan from
   // the shopping list they'd already started buying against.
   useEffect(() => {
     if (seed === null || week) return;
-    setWeek(buildWeek(targets, seed, effectivePrefs, schedule, swaps, recent));
+    setWeek(planWeek({ seed, prefs: effectivePrefs, swaps, recent }));
     // Only on mount, and only to restore. Changing stats afterwards should not
     // silently rewrite the plan under them — that's what Generate is for.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -204,7 +248,7 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
     if (!swapping || seed === null) return;
     const next = { ...swaps, [swapKey(swapping.dayIndex, swapping.slot, swapping.nth)]: mealId };
     setSwaps(next);
-    setWeek(buildWeek(targets, seed, effectivePrefs, schedule, next, recent));
+    setWeek(planWeek({ seed, prefs: effectivePrefs, swaps: next, recent }));
     setSwapping(null);
     // Best effort: the swap is already on screen, and an older database without
     // the column must not make the feature look broken.
@@ -237,7 +281,7 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
   async function clearSwaps() {
     if (seed === null) return;
     setSwaps({});
-    setWeek(buildWeek(targets, seed, effectivePrefs, schedule, {}, recent));
+    setWeek(planWeek({ seed, prefs: effectivePrefs, swaps: {}, recent }));
     try {
       await createClient().from("profiles").update({ meal_plan_swaps: {} }).eq("id", userId);
     } catch { /* ignore */ }
@@ -272,7 +316,7 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
     // A new seed is a new plan, so the old positions mean nothing — keeping the
     // swaps would move someone's Thursday dinner onto an unrelated slot.
     setSwaps({});
-    setWeek(buildWeek(targets, next!, effectivePrefs, schedule, {}, justServed));
+    setWeek(planWeek({ seed: next!, prefs: effectivePrefs, swaps: {}, recent: justServed }));
     setOpenDay(0);
     // Remember the stats AND which plan it was, so neither has to be redone.
     const supabase = createClient();
@@ -302,6 +346,8 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
     }, {
       diet_budget: prefs.budget,
       diet_cook_level: prefs.cookLevel ?? "any",
+      diet_weekly_budget: prefs.weeklyBudget ?? null,
+      shop_store: store,
     });
     if (!error) {
       // The nutrition page caches its loader; without this the restored plan
@@ -591,15 +637,31 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
           </label>
         </div>
 
-        <label className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={prefs.budget}
-            onChange={(e) => setPrefs((p) => ({ ...p, budget: e.target.checked }))}
-            className="h-5 w-5 accent-pitch-500"
-          />
-          <span className="text-sm text-slate-300">Keep it cheap</span>
-        </label>
+        <div className="grid grid-cols-2 gap-3">
+          <label className="block">
+            {/* A NUMBER, NOT A MOOD. The tick box asks whether they would
+                rather be cheap; this asks how much they have — and only the
+                second has an answer the plan can be checked against
+                afterwards. Blank means no ceiling. */}
+            <span className="field-label">Weekly budget (£)</span>
+            <NumberInput
+              decimal min={10} max={1000}
+              value={prefs.weeklyBudget ?? null}
+              onChange={(next) => setPrefs((p) => ({ ...p, weeklyBudget: next }))}
+              placeholder="optional, e.g. 60" className="field"
+              aria-label="Weekly food budget in pounds"
+            />
+          </label>
+          <label className="flex items-center gap-2 pb-3 pt-6">
+            <input
+              type="checkbox"
+              checked={prefs.budget}
+              onChange={(e) => setPrefs((p) => ({ ...p, budget: e.target.checked }))}
+              className="h-5 w-5 accent-pitch-500"
+            />
+            <span className="text-sm text-slate-300">Keep it cheap</span>
+          </label>
+        </div>
 
         <label className="block">
           <span className="field-label">Notes — anything else?</span>
@@ -803,6 +865,16 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
             </div>
           </div>
 
+          {/* WHETHER IT FITS, SAID OUT LOUD.
+              A budget the plan silently fails is worse than no budget: the
+              athlete finds out at the till. When no amount of leaning on price
+              gets a defensible week under the number, this says what the
+              cheapest one costs instead of quietly serving it. */}
+          {budgetNote && (
+            <p className={`card p-4 text-sm ${budgetNote.met ? "text-slate-300" : "text-readiness-yellow"}`}>
+              {budgetNote.met ? "✓ " : "⚠ "}{budgetNote.note}
+            </p>
+          )}
           {list && <ShoppingList list={list} seed={seed} store={store} onStore={chooseStore} onCorrectPrice={correctPrice} />}
         </>
       )}

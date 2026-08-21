@@ -20,6 +20,7 @@ import { Tabs, TabPanel } from "@/components/Tabs";
 import { FuelRings } from "@/components/FuelRings";
 import { clampWaterMl, nutritionTargets, type NutritionTargets, type TargetContext } from "@/lib/nutrition";
 import { sportProfile, type SportProfile } from "@/lib/sport-profile";
+import type { StoreId } from "@/lib/food-db";
 import type { BodyStats, MealPrefs } from "@/lib/meal-plan";
 import type { GoalType } from "@/lib/coach";
 import type { Subscription, Tier, TrainingLog } from "@/lib/types";
@@ -67,7 +68,7 @@ export default function NutritionPage() {
       // which is exactly what happened when 0066-0069 hadn't been applied.
       selectProfile(supabase, user.id,
         "height_cm, birth_year, sex, activity_level, diet_goal, diet_pattern, diet_avoid, meals_per_day, diet_notes, meal_plan_seed, sport",
-        ["meal_plan_swaps", "meal_plan_recent", "meal_plan_starred", "calorie_target", "protein_target", "carbs_target", "fats_target", "diet_budget", "diet_cook_level"]),
+        ["meal_plan_swaps", "meal_plan_recent", "meal_plan_starred", "calorie_target", "protein_target", "carbs_target", "fats_target", "diet_budget", "diet_cook_level", "diet_weekly_budget", "shop_store"]),
       supabase.from("body_logs").select("log_date, weight_kg").eq("user_id", user.id)
         .not("weight_kg", "is", null).order("log_date", { ascending: false }).limit(1),
     ]);
@@ -96,6 +97,7 @@ export default function NutritionPage() {
       meal_plan_recent?: string[] | null; meal_plan_starred?: string[] | null; sport?: string;
       calorie_target?: number | null; protein_target?: number | null; carbs_target?: number | null; fats_target?: number | null;
       diet_budget?: boolean | null; diet_cook_level?: string | null;
+      diet_weekly_budget?: number | null; shop_store?: string | null;
     } | null;
     return {
       sub: (sub ?? null) as Subscription | null,
@@ -129,7 +131,11 @@ export default function NutritionPage() {
          */
         budget: pr?.diet_budget ?? undefined,
         cookLevel: (pr?.diet_cook_level as never) ?? undefined,
+        weeklyBudget: pr?.diet_weekly_budget ?? undefined,
       },
+      // An input to the plan once there is a budget, so it comes from the
+      // athlete rather than from this device. See migration 0093.
+      store: (pr?.shop_store as never) ?? null,
       dietNotes: pr?.diet_notes ?? "",
       mealSeed: pr?.meal_plan_seed ?? null,
       // Hand-picked meals, applied on top of the seed. An older database
@@ -267,6 +273,7 @@ export default function NutritionPage() {
       mealSwaps={data?.mealSwaps ?? {}}
       mealRecent={data?.mealRecent ?? []}
       mealStarred={data?.mealStarred ?? []}
+      shopStore={data?.store ?? null}
       sport={data?.sport ?? sportProfile(null)}
       // The SAME inputs the card above was computed from. Both the planner and
       // the meal check-in recompute with these, so all three agree by
@@ -366,11 +373,12 @@ const NUTRITION_TABS = [
   { id: "plan" as const, label: "Meal plan", icon: "clipboard" as IconName },
 ];
 
-function NutritionTabs({ userId, today, log, targets, coachTargets, stats, prefs, dietNotes, mealSeed, mealSwaps, mealRecent, mealStarred, sport, context, onSaved }: {
+function NutritionTabs({ userId, today, log, targets, coachTargets, stats, prefs, dietNotes, mealSeed, mealSwaps, mealRecent, mealStarred, shopStore, sport, context, onSaved }: {
   userId: string; today: string; log: any; targets: NutritionTargets | null; coachTargets: NutritionTargets | null;
   onSaved: (row: NutritionRow) => void;
   stats: Partial<BodyStats> | null; prefs: Partial<MealPrefs> | null; dietNotes: string | null;
   mealSeed: number | null; mealSwaps: Record<string, string>; mealRecent: string[]; mealStarred: string[];
+  shopStore: StoreId | null;
   sport: SportProfile; context: TargetContext;
 }) {
   const [tab, setTab] = useState<"today" | "plan">("today");
@@ -400,13 +408,14 @@ function NutritionTabs({ userId, today, log, targets, coachTargets, stats, prefs
           mealSwaps={mealSwaps}
           mealRecent={mealRecent}
           mealStarred={mealStarred}
+          shopStore={shopStore}
           sport={sport}
           context={context}
           onAddStats={() => setTab("plan")}
           onSaved={onSaved}
         />
       ) : (
-        <MealPlanner userId={userId} initial={stats} initialPrefs={prefs} initialNotes={dietNotes} initialSeed={mealSeed} initialSwaps={mealSwaps} initialRecent={mealRecent} initialStarred={mealStarred} context={context} targetOverrides={plannerTargets} />
+        <MealPlanner userId={userId} initial={stats} initialPrefs={prefs} initialNotes={dietNotes} initialSeed={mealSeed} initialSwaps={mealSwaps} initialRecent={mealRecent} initialStarred={mealStarred} initialStore={shopStore} context={context} targetOverrides={plannerTargets} />
       )}
       </TabPanel>
     </div>
@@ -423,7 +432,7 @@ function Header() {
   );
 }
 
-function NutritionTracker({ userId, today, initial, targets, coachTargets, stats, prefs, dietNotes, mealSeed, mealSwaps, mealRecent, mealStarred, sport, context, onAddStats, onSaved }: {
+function NutritionTracker({ userId, today, initial, targets, coachTargets, stats, prefs, dietNotes, mealSeed, mealSwaps, mealRecent, mealStarred, shopStore, sport, context, onAddStats, onSaved }: {
   userId: string; today: string; initial: any; targets: NutritionTargets | null; coachTargets: NutritionTargets | null;
   /** Takes the row we just wrote, so a remount reads it without a refetch. */
   onSaved: (row: NutritionRow) => void;
@@ -432,6 +441,7 @@ function NutritionTracker({ userId, today, initial, targets, coachTargets, stats
   context: TargetContext;
   /** Which plan they're on, so today's tick-list is THAT plan and not another. */
   mealSeed: number | null; mealSwaps: Record<string, string>; mealRecent: string[]; mealStarred: string[];
+  shopStore: StoreId | null;
   /** Colours the rings and frames the verdict in this sport's terms. */
   sport: SportProfile;
   /** Sends them to the tab that collects height/age/sex, so the estimate sharpens. */
@@ -788,7 +798,7 @@ function NutritionTracker({ userId, today, initial, targets, coachTargets, stats
 
       <MealCheckIn
         userId={userId} stats={stats} prefs={prefs} dietNotes={dietNotes} seed={mealSeed}
-        swaps={mealSwaps} recent={mealRecent} starred={mealStarred} context={context}
+        swaps={mealSwaps} recent={mealRecent} starred={mealStarred} context={context} store={shopStore}
         onAdd={addFood}
         onRemoveRef={(ref) => applyEntries(removeByRef(entries, ref))}
       />
