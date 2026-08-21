@@ -186,6 +186,73 @@ export const FOODS: Food[] = [
   { id: "quinoa", name: "Quinoa", aisle: "Cupboard", kcal: 368, protein: 14, carbs: 64, fats: 6, unit: "g", packSize: 500, packPrice: 2.80, packLabel: "500g bag", keeps: true },
   { id: "coconut_yoghurt", name: "Coconut yoghurt", aisle: "Dairy & eggs", kcal: 130, protein: 1.5, carbs: 6, fats: 11, unit: "g", packSize: 350, packPrice: 2.20, packLabel: "350g tub" },
   { id: "seeds_mixed", name: "Mixed seeds", aisle: "Cupboard", kcal: 570, protein: 20, carbs: 12, fats: 48, unit: "g", packSize: 250, packPrice: 2.00, packLabel: "250g bag", keeps: true },
+
+  // ===========================================================================
+  // WHAT THE RECIPE BOOK KEPT RUNNING OUT OF.
+  //
+  // "A lot of people didn't like the recipes." Counting what the book could
+  // actually be built from says why, and every one of these exists to unlock
+  // dishes rather than to pad a table:
+  //
+  // NO PLANT MILK THAT ISN'T SOYA. `soy_milk` was the only one, so a vegan who
+  // avoids soy had no milk at all — no porridge, no overnight oats, no shake,
+  // no smoothie. Their breakfast pool was NINE. Oat and almond between them
+  // reopen the whole slot, and almond is the one that is also gluten-free.
+  //
+  // NO GLUTEN-FREE NOODLE, PASTA OR WRAP. Every long carb in the book was
+  // wheat: pasta, couscous, egg noodles, pittas, wraps, bread. A gluten-free
+  // athlete had rice, potatoes and quinoa, which is why their lunches came out
+  // at 26 against an omnivore's 51. Rice noodles and corn tortillas are the two
+  // that carry the most dishes each.
+  //
+  // TICKING "NO PORK" DID NOTHING, because there was no pork in the database.
+  // An avoidance in the UI that excludes zero meals is a promise the app was
+  // not keeping.
+  //
+  // ONLY FIVE ANIMAL PROTEINS, three of them premium. The plan is now asked to
+  // keep meat and fish on an omnivore's menu (see SOURCE_WEEKLY_BUDGET in
+  // meal-plan.ts) and there were 24 meat dishes and 20 fish ones to do it from,
+  // so it ran into the repeat cap rather than the budget. Cod, mackerel,
+  // sardines, thighs and bacon are also the CHEAP end of animal protein, which
+  // the old table had none of — salmon and chicken breast are what made "eat
+  // meat" and "eat cheaply" mutually exclusive.
+  //
+  // Same maintained UK pricing as everything above, reviewed July 2026.
+  // ===========================================================================
+
+  // --- Plant milks that aren't soya ----------------------------------------
+  { id: "oat_milk", name: "Oat milk", aisle: "Dairy & eggs", kcal: 45, protein: 1, carbs: 6.7, fats: 1.5, unit: "ml", packSize: 1000, packPrice: 1.20, packLabel: "1L carton", tags: ["gluten"], budget: "value" },
+  { id: "almond_milk", name: "Almond milk (unsweetened)", aisle: "Dairy & eggs", kcal: 24, protein: 0.5, carbs: 0.1, fats: 1.1, unit: "ml", packSize: 1000, packPrice: 1.40, packLabel: "1L carton", tags: ["nuts"] },
+
+  // --- Carbs without wheat --------------------------------------------------
+  { id: "rice_noodles", name: "Rice noodles", aisle: "Cupboard", kcal: 364, protein: 6, carbs: 82, fats: 0.6, unit: "g", packSize: 250, packPrice: 1.50, packLabel: "250g pack", budget: "value", keeps: true },
+  { id: "corn_tortilla", name: "Corn tortillas", aisle: "Bakery", kcal: 45, protein: 1.2, carbs: 9.5, fats: 0.6, unit: "each", packSize: 8, packPrice: 1.80, packLabel: "8 pack", keeps: true },
+  { id: "rice_cakes", name: "Rice cakes", aisle: "Cupboard", kcal: 380, protein: 8, carbs: 81, fats: 3, unit: "g", packSize: 130, packPrice: 0.90, packLabel: "14 cakes", budget: "value", keeps: true },
+  { id: "oatcakes", name: "Oatcakes", aisle: "Cupboard", kcal: 430, protein: 10, carbs: 60, fats: 16, unit: "g", packSize: 300, packPrice: 1.20, packLabel: "300g pack", tags: ["gluten"], budget: "value", keeps: true },
+
+  // --- Cheap animal protein -------------------------------------------------
+  { id: "white_fish", name: "Frozen cod loins", aisle: "Frozen", kcal: 82, protein: 18, carbs: 0, fats: 0.7, unit: "g", packSize: 480, packPrice: 5.50, packLabel: "4 loins, 480g", tags: ["fish"], keeps: true },
+  { id: "mackerel_tin", name: "Mackerel fillets in tomato", aisle: "Cupboard", kcal: 200, protein: 19, carbs: 2, fats: 13, unit: "g", packSize: 250, packPrice: 2.40, packLabel: "2 x 125g tins", tags: ["fish"], budget: "value", keeps: true },
+  { id: "sardines_tin", name: "Sardines in olive oil", aisle: "Cupboard", kcal: 195, protein: 21, carbs: 0, fats: 12, unit: "g", packSize: 240, packPrice: 1.60, packLabel: "2 x 120g tins", tags: ["fish"], budget: "value", keeps: true },
+  { id: "chicken_thigh", name: "Chicken thigh fillets", aisle: "Meat & fish", kcal: 146, protein: 20, carbs: 0, fats: 7.3, unit: "g", packSize: 640, packPrice: 4.75, packLabel: "640g pack", tags: ["meat"], budget: "value" },
+  { id: "bacon_medallions", name: "Bacon medallions", aisle: "Meat & fish", kcal: 130, protein: 23, carbs: 0.6, fats: 4, unit: "g", packSize: 200, packPrice: 2.50, packLabel: "200g pack", tags: ["meat", "pork"] },
+  { id: "chorizo", name: "Cooking chorizo", aisle: "Meat & fish", kcal: 340, protein: 22, carbs: 1.5, fats: 28, unit: "g", packSize: 200, packPrice: 2.30, packLabel: "200g ring", tags: ["meat", "pork"], keeps: true },
+
+  // --- Plant protein that isn't soy ----------------------------------------
+  { id: "butter_beans", name: "Butter beans", aisle: "Cupboard", kcal: 100, protein: 6.5, carbs: 13, fats: 0.5, unit: "g", packSize: 800, packPrice: 1.40, packLabel: "2 x 400g tins", budget: "value", keeps: true },
+  { id: "kidney_beans", name: "Red kidney beans", aisle: "Cupboard", kcal: 100, protein: 6.9, carbs: 14, fats: 0.5, unit: "g", packSize: 800, packPrice: 1.30, packLabel: "2 x 400g tins", budget: "value", keeps: true },
+  // A seed paste, so it carries neither the nut nor the soy tag — which is what
+  // makes it the fat and the flavour for the diet with the fewest of both.
+  { id: "tahini", name: "Tahini", aisle: "Cupboard", kcal: 595, protein: 17, carbs: 9, fats: 54, unit: "g", packSize: 300, packPrice: 2.50, packLabel: "300g jar", keeps: true },
+  { id: "cashews", name: "Cashew nuts", aisle: "Cupboard", kcal: 580, protein: 18, carbs: 27, fats: 44, unit: "g", packSize: 200, packPrice: 2.50, packLabel: "200g bag", tags: ["nuts"], keeps: true },
+
+  // --- Things that make a dish taste of somewhere --------------------------
+  { id: "harissa", name: "Rose harissa", aisle: "Cupboard", kcal: 130, protein: 3, carbs: 10, fats: 8, unit: "g", packSize: 90, packPrice: 1.40, packLabel: "90g jar", keeps: true },
+  { id: "gochujang", name: "Gochujang paste", aisle: "Cupboard", kcal: 210, protein: 5, carbs: 40, fats: 2, unit: "g", packSize: 200, packPrice: 2.50, packLabel: "200g tub", tags: ["soy", "gluten"], keeps: true },
+  { id: "mozzarella", name: "Mozzarella", aisle: "Dairy & eggs", kcal: 250, protein: 18, carbs: 1.5, fats: 19, unit: "g", packSize: 125, packPrice: 0.85, packLabel: "125g ball", tags: ["dairy"], budget: "value" },
+  { id: "kale", name: "Curly kale", aisle: "Fruit & veg", kcal: 49, protein: 4.3, carbs: 4, fats: 0.9, unit: "g", packSize: 200, packPrice: 1.00, packLabel: "200g bag", budget: "value" },
+  { id: "mango_frozen", name: "Frozen mango chunks", aisle: "Frozen", kcal: 60, protein: 0.7, carbs: 14, fats: 0.2, unit: "g", packSize: 500, packPrice: 2.20, packLabel: "500g bag", keeps: true },
+  { id: "dates", name: "Medjool dates", aisle: "Cupboard", kcal: 282, protein: 2.5, carbs: 68, fats: 0.2, unit: "g", packSize: 250, packPrice: 1.80, packLabel: "250g pack", keeps: true },
 ];
 
 export const FOOD_BY_ID: Record<string, Food> = Object.fromEntries(FOODS.map((f) => [f.id, f]));

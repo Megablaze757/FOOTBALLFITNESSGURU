@@ -109,6 +109,74 @@ export const FOOD_KEYWORDS: Record<string, string[]> = {
   quinoa: ["quinoa"],
   coconut_yoghurt: ["coconut yoghurt", "coconut yogurt", "yoghurt", "yogurt"],
   seeds_mixed: ["seeds", "seed"],
+  // THE FOODS THE BOX COULD NEVER HEAR. Thirty-one entries had no keywords at
+  // all, and they were not obscure ones — mushrooms, avocado, prawns, peppers,
+  // halloumi, cucumber. "I don't like mushrooms" is about as ordinary as a
+  // sentence in this box gets, and it did precisely nothing. The aromatics are
+  // here too: somebody who cannot eat garlic has a real problem, and it is not
+  // the app's place to decide that is too small a request to hear.
+  garlic: ["garlic"],
+  ginger: ["ginger"],
+  // NARROW ON PURPOSE. These keywords are read by two things — the dislikes
+  // parser and the meal-photo estimator — and the second one punishes a broad
+  // match: "curry" alone caught "chicken and a katsu curry sauce" and quietly
+  // costed it as 180 kcal of curry paste instead of reporting that it did not
+  // know what katsu sauce was. A word that names a DISH cannot name an
+  // ingredient here, however natural it feels to add it.
+  chilli_fresh: ["chilli", "chili", "chillies", "spicy"],
+  spice_mix: ["cumin", "paprika", "turmeric", "spices"],
+  curry_paste: ["curry paste"],
+  soy_sauce: ["soy sauce", "soya sauce"],
+  stock_cubes: ["stock", "stock cubes", "bouillon"],
+  lemon: ["lemon", "lemons"],
+  honey: ["honey"],
+  maple_syrup: ["maple", "maple syrup"],
+  pesto: ["pesto"],
+  coconut_milk: ["coconut milk"],
+  passata: ["passata", "tomato", "tomatoes"],
+  hummus: ["hummus", "houmous"],
+  peppers: ["pepper", "peppers", "bell pepper"],
+  mushrooms: ["mushroom", "mushrooms"],
+  courgette: ["courgette", "courgettes", "zucchini"],
+  carrots: ["carrot", "carrots"],
+  sweetcorn: ["sweetcorn", "corn"],
+  peas_frozen: ["peas", "pea"],
+  cucumber: ["cucumber"],
+  avocado: ["avocado", "avocados"],
+  tomatoes_fresh: ["tomato", "tomatoes", "cherry tomatoes"],
+  feta: ["feta", "cheese"],
+  halloumi: ["halloumi", "cheese"],
+  cottage_cheese: ["cottage cheese", "cheese"],
+  prawns: ["prawn", "prawns", "shrimp", "fish", "shellfish"],
+  edamame: ["edamame", "soya", "soy"],
+  noodles: ["noodles", "noodle"],
+  couscous: ["couscous"],
+  pitta: ["pitta", "pita", "bread"],
+  // The second wave of ingredients (see the block at the end of FOODS). A food
+  // the notes box cannot name is a food the athlete cannot refuse: "I don't eat
+  // pork" has to reach the bacon, or the sentence does nothing.
+  oat_milk: ["oat milk", "oatly"],
+  almond_milk: ["almond milk"],
+  rice_noodles: ["rice noodles", "noodles"],
+  corn_tortilla: ["corn tortilla", "tortilla", "taco", "tacos"],
+  rice_cakes: ["rice cakes", "rice cake"],
+  oatcakes: ["oatcake", "oatcakes"],
+  white_fish: ["cod", "white fish", "fish"],
+  mackerel_tin: ["mackerel", "fish"],
+  sardines_tin: ["sardine", "sardines", "fish"],
+  chicken_thigh: ["chicken", "thigh", "thighs"],
+  bacon_medallions: ["bacon", "pork"],
+  chorizo: ["chorizo", "pork"],
+  butter_beans: ["butter bean", "butter beans"],
+  kidney_beans: ["kidney bean", "kidney beans"],
+  tahini: ["tahini", "sesame"],
+  cashews: ["cashew", "cashews"],
+  harissa: ["harissa"],
+  gochujang: ["gochujang"],
+  mozzarella: ["mozzarella", "cheese"],
+  kale: ["kale"],
+  mango_frozen: ["mango"],
+  dates: ["date", "dates"],
 };
 
 const NEGATION = /(don'?t|do not|dont|\bno\b|\bnot\b|hate|avoid|without|can'?t|cant|dislike|allerg|rather not|no more)/;
@@ -1099,8 +1167,33 @@ export function buildWeek(
    * 95kg athlete building, budget mode came out at £106.55 against £93.95 for
    * not using it at all. Sharing the weight with the pro-rata term below fixes
    * it — see SERVING_COST_WEIGHT, which was swept jointly with this.
+   *
+   * RAISED TO 2 AT 256 RECIPES, and this is the third time this pair has had to
+   * move for the same reason: the right weights depend on how much choice there
+   * is, so every substantial addition to the book invalidates the last sweep.
+   * At 1.5/4 two of 36 athlete/diet combinations came out DEARER in budget
+   * mode, one of them by £6.45 — the exact failure `budget mode is cheaper for
+   * every athlete` exists to catch, and it caught it.
+   *
+   * Swept jointly again over 36 combinations, reporting both things that matter
+   * rather than only the money:
+   *
+   *      pair    dearer   avg saving   budget days under 90% protein
+   *    1.5/4       2/36        £15.99                           0.4%
+   *    1.75/4      2/36        £15.59                           0.8%
+   *    1.9/4       1/36        £15.67                           2.8%
+   *    2/4         0/36        £15.52                           2.8%
+   *    2/4.5       0/36        £14.89                           0.8%
+   *    2/5         0/36        £16.83                           2.4%
+   *    1.5/6       0/36        £19.64                           2.0%
+   *
+   * 2/4.5. It is the only pairing that is clean on the constraint AND keeps the
+   * protein where it was — every other zero-dearer option buys the last pound or
+   * two of saving out of the athlete's protein target, which is the trade this
+   * file has refused four times now. 1.5/6 saves the most and takes the worst
+   * budget day down to 71% of target; nobody ticked a box asking for that.
    */
-  const costWeight = prefs.budget ? 1.5 : 1;
+  const costWeight = prefs.budget ? 2 : 1;
   /**
    * AND IT HAS TO WEIGHT WHAT A DISH COSTS, not only what it adds today.
    *
@@ -1147,7 +1240,7 @@ export function buildWeek(
    * mode deciding the athlete would rather be cheap than fed. Nobody ticked
    * that box.
    */
-  const SERVING_COST_WEIGHT = 4;
+  const SERVING_COST_WEIGHT = 4.5;
   const servingCostWeight = prefs.budget ? SERVING_COST_WEIGHT : 0;
   /**
    * Budget mode does not pay for variety.
@@ -1583,7 +1676,20 @@ export function buildWeek(
       // Rounded rather than floored so a fourteen-main week aims at seven
       // instead of drifting a slot behind all week.
       const owed = Math.round(mainsServed * SOURCE_SHARE);
-      if (sourcesServed < owed && !carriesSource(pick.meal, sources)) {
+      /**
+       * A STARRED DISH IS NEVER DISPLACED, by this or by anything.
+       *
+       * Left out, this pass would quietly reach past the one meal the athlete
+       * explicitly asked for — the ingredient rotation above it has guarded
+       * against exactly that since it was written (`pickFatigue` reads zero for
+       * a star), and omitting the same guard here took starred dishes served in
+       * week one and then dropped from 3% to 4.4%.
+       *
+       * The star is the strongest preference signal the app has: somebody
+       * pressed a button on that specific dish. "You should eat more fish" is
+       * not a good enough reason to take it away from them.
+       */
+      if (sourcesServed < owed && !starred.has(pick.meal.id) && !carriesSource(pick.meal, sources)) {
         const left = sourceBudget - sourceSpend;
         const pickDensity = proteinDensity(pick.meal);
         const pickSeen = seenLastWeek(pick.meal);

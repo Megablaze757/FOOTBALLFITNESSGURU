@@ -153,7 +153,15 @@ test("free-text notes exclude the foods named in a dislike", () => {
 });
 
 test("notes only exclude foods inside a negated clause", () => {
-  assert.deepEqual(dislikedFoodIds("I love chicken but no fish").sort(), ["salmon_fillet", "tuna_tin"]);
+  // ALL the fish, not a sample of it. Pinning the list meant that adding cod,
+  // mackerel and sardines to the database silently made this test the thing
+  // that was wrong — and the failure mode it guards against is somebody being
+  // served a fish they said they would not eat.
+  const noFish = dislikedFoodIds("I love chicken but no fish");
+  for (const id of ["salmon_fillet", "tuna_tin", "white_fish", "mackerel_tin", "sardines_tin"]) {
+    assert.ok(noFish.includes(id), `"no fish" should exclude ${id}`);
+  }
+  assert.ok(!noFish.some((id) => id.startsWith("chicken")), "the loved half must survive");
   assert.deepEqual(dislikedFoodIds("chicken and rice are great"), []);
 });
 

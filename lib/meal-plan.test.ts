@@ -100,8 +100,12 @@ test("naming a favourite food actually does something", () => {
   // "my favourite food is egg" used to be a no-op — the notes box only ever
   // understood exclusions, so a stated preference was silently ignored.
   assert.deepEqual(favouriteFoodIds("my favourite food is egg"), ["eggs"]);
-  assert.deepEqual(favouriteFoodIds("I love chicken"), ["chicken_breast"]);
   assert.deepEqual(favouriteFoodIds("please include rice"), ["rice"]);
+  // EVERY CUT OF IT, not the one the database happened to hold first. This
+  // asserted ["chicken_breast"] until thighs were added, at which point the
+  // correct answer changed and the pinned one became wrong — somebody who says
+  // they love chicken did not mean the breast specifically.
+  assert.deepEqual(favouriteFoodIds("I love chicken").sort(), ["chicken_breast", "chicken_thigh"]);
 });
 
 test("a favourite is not read as a dislike, and vice versa", () => {
