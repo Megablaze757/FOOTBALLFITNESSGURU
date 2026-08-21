@@ -272,12 +272,18 @@ export default function AskCoachPage() {
     };
   }, [user.id], `ask:${user.id}`);
 
+  /**
+   * KEPT SHORT SO THE CONVERSATION GETS THE SCREEN.
+   *
+   * The page used to open with a heading, a line of prose, a chat window 288px
+   * tall and a paragraph underneath explaining what the coach can see — so on a
+   * phone the actual conversation was the smallest thing on it. The subtitle
+   * moved into the chat's own header, where it says the same thing beside the
+   * face saying it.
+   */
   const header = (
-    <header className="mb-5">
-      <h1 className="text-3xl font-extrabold tracking-tight">Ask coach</h1>
-      <p className="mt-1 max-w-prose text-sm text-slate-400">
-        Your plan, your injuries, your food and your lifts — all in front of it before you ask.
-      </p>
+    <header className="mb-3">
+      <h1 className="text-2xl font-extrabold tracking-tight">Ask coach</h1>
     </header>
   );
 
@@ -308,15 +314,22 @@ export default function AskCoachPage() {
         storageKey={`coach-chat:${user.id}`}
         userId={user.id}
       />
-      {/* WHAT IT CAN SEE, said plainly. An athlete who does not know the coach
-          has their rehab plan will not ask about it, and one who assumes it can
-          see things it cannot will be misled by a confident answer. */}
-      <p className="mt-3 text-[11px] leading-relaxed text-slate-500">
-        It can see your current block and next session, today&apos;s readiness and check-in, anything
-        you have marked as sore along with the rehab protocol for it, your calorie and protein
-        targets against what you have logged, and every lift it has ranked. It cannot see anything
-        you have not recorded — if it says a number is missing, that is why.
-      </p>
+      {/* WHAT IT CAN SEE, said plainly — but folded away.
+          An athlete who does not know the coach has their rehab plan will not
+          ask about it, and one who assumes it can see things it cannot will be
+          misled by a confident answer. So it stays, one tap from the chat,
+          rather than taking four lines off the conversation on every visit. */}
+      <details className="mt-3 text-[11px] leading-relaxed text-slate-500">
+        <summary className="tap-target inline-flex cursor-pointer list-none items-center font-semibold hover:text-slate-300">
+          What can it see?
+        </summary>
+        <p className="mt-1.5">
+          Your current block and next session, today&apos;s readiness and check-in, anything
+          you have marked as sore along with the rehab protocol for it, your calorie and protein
+          targets against what you have logged, and every lift it has ranked. It cannot see anything
+          you have not recorded — if it says a number is missing, that is why.
+        </p>
+      </details>
     </div>
   );
 }

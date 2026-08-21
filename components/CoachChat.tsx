@@ -114,51 +114,175 @@ export function CoachChat({ context, briefing, suggestions, storageKey, userId }
     requestAnimationFrame(() => listRef.current?.scrollTo({ top: 1e6, behavior: "smooth" }));
   }
 
+  const canSend = input.trim().length > 0 && !thinking && restored;
+  const prompts = suggestions ?? SUGGESTIONS;
+
   return (
-    <section className="card p-5">
-      <div className="mb-3 flex items-center gap-2">
-        <h2 className="field-label !mb-0">Ask your coach</h2>
-        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-pitch-400" />
+    /**
+     * A CONVERSATION, NOT A FORM WITH A LOG ABOVE IT.
+     *
+     * This was a card with `max-h-72` of scroll, identical bubbles on both
+     * sides, and a grey box that said "Coach is thinking…". Everything worked
+     * and none of it read as a chat: with the same shape, the same colour
+     * weight and no avatar, the only thing separating your words from the
+     * coach's was which margin they were pushed against, and a 288px window is
+     * a transcript viewer rather than somewhere you talk.
+     *
+     * Now it fills the screen and the composer sits at the bottom where a
+     * thumb already is. Each side has its own shape — the tail corner is
+     * squared off toward whoever said it — so a glance sorts the conversation
+     * before any reading happens.
+     */
+    <section className="flex min-h-[calc(100dvh-14rem)] flex-col overflow-hidden rounded-3xl border border-white/[0.08] bg-white/[0.02]">
+      <header className="flex items-center gap-2.5 border-b border-white/[0.06] px-4 py-3">
+        <CoachAvatar />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-bold leading-tight text-slate-100">Your coach</p>
+          <p className="flex items-center gap-1.5 text-[11px] text-slate-500">
+            <span className="h-1.5 w-1.5 rounded-full bg-readiness-green" />
+            {thinking ? "Typing…" : "Has your plan, food and lifts in front of it"}
+          </p>
+        </div>
         {messages.length > 0 && (
           <button
             type="button"
             onClick={clearConversation}
-            className="tap-target ml-auto px-1 text-[11px] font-semibold text-slate-500 transition hover:text-slate-300"
+            className="tap-target shrink-0 px-2 text-[11px] font-semibold text-slate-500 transition hover:text-slate-300"
           >
             New chat
           </button>
         )}
+      </header>
+
+      <div ref={listRef} className="no-scrollbar flex-1 space-y-3 overflow-y-auto px-4 py-4">
+        {/* THE COACH SPEAKS FIRST. An empty chat with a blinking cursor asks
+            somebody to think of a question, which is the hardest part. */}
+        {messages.length === 0 && (
+          <Bubble role="coach">
+            Ask me anything about your training, your recovery or your food — I have already read
+            your block, today&apos;s check-in and every lift you have ranked.
+          </Bubble>
+        )}
+
+        {/* THE FACE ONLY ON THE LAST OF A RUN. Repeating it beside every
+            bubble in a four-paragraph answer is four identical badges down the
+            margin, which is noise pretending to be information. */}
+        {messages.map((m, i) => (
+          <Bubble key={i} role={m.role} showAvatar={messages[i + 1]?.role !== m.role}>
+            {m.text}
+          </Bubble>
+        ))}
+
+        {thinking && (
+          <div className="flex items-end gap-2">
+            <CoachAvatar small />
+            <div className="flex items-center gap-1 rounded-2xl rounded-bl-md bg-white/[0.06] px-4 py-3">
+              {[0, 1, 2].map((dot) => (
+                <span
+                  key={dot}
+                  className="h-1.5 w-1.5 animate-typing-dot rounded-full bg-slate-400"
+                  style={{ animationDelay: `${dot * 0.16}s` }}
+                />
+              ))}
+              <span className="sr-only">Coach is typing</span>
+            </div>
+          </div>
+        )}
       </div>
 
-      {messages.length > 0 && (
-        <div ref={listRef} className="mb-3 max-h-72 space-y-2 overflow-y-auto no-scrollbar">
-          {messages.map((m, i) => (
-            <div key={i} className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${m.role === "you" ? "ml-auto bg-pitch-400/15 text-slate-100" : "bg-white/[0.05] text-slate-200"}`}>
-              {m.text}
-            </div>
+      {/* KEPT WITHIN REACH, not deleted on the first message. The old row
+          vanished the moment a conversation started, so the four questions the
+          coach can actually answer were only ever offered to somebody who had
+          not asked anything yet. */}
+      {!thinking && input.trim() === "" && (
+        <div className="no-scrollbar flex gap-2 overflow-x-auto px-4 pb-2">
+          {prompts.map((s) => (
+            <button
+              key={s}
+              onClick={() => ask(s)}
+              disabled={!restored}
+              className="chip shrink-0 whitespace-nowrap text-slate-300 hover:border-pitch-400/50 hover:text-pitch-400 disabled:opacity-40"
+            >
+              {s}
+            </button>
           ))}
-          {thinking && <div className="rounded-2xl bg-white/[0.05] px-3 py-2 text-sm text-slate-500">Coach is thinking…</div>}
         </div>
       )}
 
-      {messages.length === 0 && (
-        <div className="mb-3 flex flex-wrap gap-2">
-          {(suggestions ?? SUGGESTIONS).map((s) => (
-            <button key={s} onClick={() => ask(s)} className="chip text-slate-300 hover:border-pitch-400/50 hover:text-pitch-400">{s}</button>
-          ))}
-        </div>
-      )}
-
-      <form onSubmit={(e) => { e.preventDefault(); ask(input); }} className="flex gap-2">
+      <form
+        onSubmit={(e) => { e.preventDefault(); ask(input); }}
+        className="flex items-end gap-2 border-t border-white/[0.06] bg-white/[0.02] px-3 py-3"
+      >
         <input
-          className="field flex-1"
+          className="field min-h-[44px] flex-1 rounded-full px-4"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           disabled={!restored}
+          aria-label="Ask your coach"
           placeholder={restored ? "Ask about training, recovery or food…" : "Loading your conversation…"}
         />
-        <button type="submit" disabled={!input.trim() || thinking || !restored} className="min-h-[44px] rounded-2xl bg-gradient-to-br from-pitch-400 to-pitch-600 px-4 font-semibold text-ink-900 disabled:opacity-50">↑</button>
+        <button
+          type="submit"
+          disabled={!canSend}
+          aria-label="Send"
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-gradient-to-br from-pitch-400 to-pitch-600 text-lg font-bold text-ink-900 transition disabled:opacity-40"
+        >
+          ↑
+        </button>
       </form>
     </section>
+  );
+}
+
+/**
+ * One turn.
+ *
+ * THE TAIL IS THE WHOLE POINT. Both sides used `rounded-2xl` on all four
+ * corners, so the bubbles were the same object in two colours and the only
+ * signal was the margin. Squaring the corner nearest the speaker gives each
+ * side a direction, which is what makes a stack of them read as a conversation
+ * at a glance rather than as a list.
+ */
+function Bubble({ role, children, showAvatar = true }: {
+  role: "you" | "coach";
+  children: React.ReactNode;
+  showAvatar?: boolean;
+}) {
+  const mine = role === "you";
+  return (
+    <div className={`flex items-end gap-2 ${mine ? "justify-end" : ""}`}>
+      {/* A spacer where the avatar would be, so a run of coach messages keeps
+          one left edge instead of stepping in and out by 24px. */}
+      {!mine && (showAvatar ? <CoachAvatar small /> : <span className="w-6 shrink-0" aria-hidden />)}
+      <div
+        className={`max-w-[82%] whitespace-pre-wrap px-4 py-2.5 text-sm leading-relaxed ${
+          mine
+            ? "rounded-2xl rounded-br-md border border-pitch-400/25 bg-pitch-400/20 text-slate-100"
+            : "rounded-2xl rounded-bl-md bg-white/[0.06] text-slate-200"
+        }`}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Who is talking.
+ *
+ * A mark rather than a photograph: there is no coach to photograph, and a stock
+ * headshot would be pretending there is. It repeats beside every answer so a
+ * long reply that scrolls past its own start still says who wrote it.
+ */
+function CoachAvatar({ small }: { small?: boolean }) {
+  return (
+    <span
+      aria-hidden
+      className={`grid shrink-0 place-items-center rounded-full bg-gradient-to-br from-pitch-400 to-pitch-600 font-black text-ink-900 ${
+        small ? "h-6 w-6 text-[10px]" : "h-9 w-9 text-xs"
+      }`}
+    >
+      PA
+    </span>
   );
 }

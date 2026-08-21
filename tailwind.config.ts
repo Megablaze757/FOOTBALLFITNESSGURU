@@ -80,10 +80,17 @@ const config: Config = {
         shimmer: {
           "100%": { transform: "translateX(100%)" },
         },
+        /* The three dots while the coach is composing an answer. Staggered by
+           delay at the call site so they ripple rather than blink together. */
+        "typing-dot": {
+          "0%, 60%, 100%": { opacity: "0.25", transform: "translateY(0)" },
+          "30%": { opacity: "1", transform: "translateY(-3px)" },
+        },
       },
       animation: {
         "fade-up": "fade-up 0.5s cubic-bezier(0.22,1,0.36,1) both",
         "scale-in": "scale-in 0.4s cubic-bezier(0.22,1,0.36,1) both",
+        "typing-dot": "typing-dot 1.2s ease-in-out infinite",
       },
     },
   },
