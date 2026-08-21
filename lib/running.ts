@@ -298,6 +298,34 @@ export function repPace(thresholdSecPerKm: number): { fastSecPerKm: number; slow
 
 const KM_PER_MILE = 1.609344;
 
+/**
+ * Pace and speed from a distance and a time.
+ *
+ * ONE FORMULA, because there were three: the check-in drew a live pace, the
+ * save wrote `pace_seconds_per_km`, and the Progress row averaged a week of
+ * them. Two of the three read the SESSION duration, which for anybody but a
+ * runner is not how long they ran — a 20-minute run inside a 90-minute session
+ * came out at 20:00/km.
+ *
+ * Null rather than zero when either number is missing: a run with no time has
+ * no pace, and 0 seconds per kilometre is a number the rest of the app would
+ * happily average in.
+ */
+export interface RunPace {
+  secondsPerKm: number;
+  kmh: number;
+}
+
+export function runPace(distanceKm: number | null | undefined, seconds: number | null | undefined): RunPace | null {
+  const km = Number(distanceKm);
+  const time = Number(seconds);
+  if (!Number.isFinite(km) || !Number.isFinite(time) || km <= 0 || time <= 0) return null;
+  return {
+    secondsPerKm: Math.round(time / km),
+    kmh: +((km * 3600) / time).toFixed(2),
+  };
+}
+
 /** "4:15" from 255 seconds. Pace is always mm:ss — never decimal minutes. */
 export function formatPace(secPerKm: number, unit: "km" | "mile" = "km"): string {
   const s = unit === "mile" ? secPerKm * KM_PER_MILE : secPerKm;

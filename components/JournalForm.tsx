@@ -13,6 +13,7 @@ import { BodyMap } from "@/components/BodyMap";
 import { AppleHealthPill } from "@/components/AppleHealthPill";
 import { ReadinessGauge } from "@/components/ReadinessGauge";
 import { TrainingLogInput, type TrainingState } from "@/components/TrainingLogInput";
+import { runPace } from "@/lib/running";
 import { enqueue, browserStore, queueCount } from "@/lib/offline-queue";
 import { track } from "@/lib/funnel";
 import { useCurrentUser } from "@/lib/auth";
@@ -436,11 +437,12 @@ export function JournalForm({ initial, initialTraining, sport, distanceUnit = "k
     // than inline, because CheckInDone asks the same question to decide whether
     // to prompt for training, and two copies of this list would drift.
     const trainingForSave = training.session_type === "rest_day"
-      ? { drills: [], total_minutes: null, duration_seconds: null, intensity: null, distance_km: null,
+      ? { drills: [], total_minutes: null, duration_seconds: null, run_seconds: null, intensity: null, distance_km: null,
           distance_value: null, distance_unit: training.distance_unit ?? distanceUnit, contact_minutes: null,
           run_type: null, zone: null, avg_hr: null, intervals: null, interval_seconds: null,
           recovery_seconds: null, session_type: "rest_day" as const, notes: training.notes ?? null }
       : { ...training, drills: cleanDrills, session_type: training.session_type ?? "workout" as const };
+    const runTime = trainingForSave.run_seconds ?? trainingForSave.duration_seconds ?? null;
     const trainingRow = hasTrainingContent(trainingForSave)
       ? {
           drills: trainingForSave.drills,
@@ -450,10 +452,16 @@ export function JournalForm({ initial, initialTraining, sport, distanceUnit = "k
           distance_km: trainingForSave.distance_km ?? null,
           distance_value: trainingForSave.distance_value ?? null,
           distance_unit: trainingForSave.distance_unit ?? distanceUnit,
-          pace_seconds_per_km: Number(trainingForSave.distance_km) > 0 && Number(trainingForSave.duration_seconds) > 0
-            ? Math.round(Number(trainingForSave.duration_seconds) / Number(trainingForSave.distance_km)) : null,
-          avg_speed_kmh: Number(trainingForSave.distance_km) > 0 && Number(trainingForSave.duration_seconds) > 0
-            ? +((Number(trainingForSave.distance_km) * 3600) / Number(trainingForSave.duration_seconds)).toFixed(2) : null,
+          /**
+           * FROM THE RUN'S CLOCK, NOT THE SESSION'S. This read
+           * duration_seconds, so a footballer who ran 5k inside a 90-minute
+           * session had it saved as 18:00/km. Falls back to the session for a
+           * log with no run time, because for a runner the two are the same
+           * and that is how every row written before 0094 was recorded.
+           */
+          run_seconds: trainingForSave.run_seconds ?? null,
+          pace_seconds_per_km: runPace(trainingForSave.distance_km, runTime)?.secondsPerKm ?? null,
+          avg_speed_kmh: runPace(trainingForSave.distance_km, runTime)?.kmh ?? null,
           contact_minutes: trainingForSave.contact_minutes ?? null,
           run_type: trainingForSave.run_type ?? null,
           zone: trainingForSave.zone ?? null,

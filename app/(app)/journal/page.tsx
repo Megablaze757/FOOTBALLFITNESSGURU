@@ -154,6 +154,9 @@ export default function JournalPage() {
     ? {
         drills: data.training.drills ?? [], total_minutes: data.training.total_minutes, intensity: data.training.intensity,
         duration_seconds: data.training.duration_seconds,
+        // Without this an edit re-saves the run with no clock, and the pace the
+        // row already carried is recomputed from the session instead.
+        run_seconds: data.training.run_seconds,
         distance_km: data.training.distance_km, distance_value: data.training.distance_value,
         distance_unit: data.training.distance_unit, contact_minutes: data.training.contact_minutes,
         run_type: data.training.run_type, zone: data.training.zone, avg_hr: data.training.avg_hr,

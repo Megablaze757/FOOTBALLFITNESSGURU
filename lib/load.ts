@@ -128,7 +128,13 @@ export function averagePaceSeconds(logs: TrainingLog[]): number | null {
   let seconds = 0;
   for (const log of logs) {
     const distance = Number(log.distance_km) || 0;
-    const time = durationSeconds(log);
+    /**
+     * THE RUN'S CLOCK, NOT THE SESSION'S. A footballer who runs 5k inside a
+     * 90-minute session is not running at 18:00/km. Rows written before the two
+     * were told apart fall back to the session, which is the honest reading of
+     * them — at the time, a run was all the app knew about.
+     */
+    const time = Number(log.run_seconds) > 0 ? Number(log.run_seconds) : durationSeconds(log);
     if (distance <= 0 || time <= 0) continue;
     km += distance;
     seconds += time;

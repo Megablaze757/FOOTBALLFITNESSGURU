@@ -9,7 +9,7 @@ import { DrillModal } from "@/components/DrillDetail";
 import { WhatIfLiftSheet } from "@/components/WhatIfLiftSheet";
 import {
   RUN_TYPES, ZONE_LIST, ZONES, runType, describeShape, shapeMidpoint, intervalEffort,
-  formatPace,
+  formatPace, runPace,
   type RunTypeId, type ZoneId,
 } from "@/lib/running";
 import { useRef, useState, type ReactNode } from "react";
@@ -22,8 +22,13 @@ import { durationPerSet, exerciseMeasure, formatMeasuredDose } from "@/lib/exerc
 export interface TrainingState {
   drills: TrainingDrill[];
   total_minutes: number | null;
-  /** Exact elapsed time, so a 27:43 run is not rewritten as 28 minutes. */
+  /** Exact elapsed SESSION time, so a 27:43 session is not rewritten as 28 minutes. */
   duration_seconds?: number | null;
+  /**
+   * Time spent running, which is only the same as the session for a runner.
+   * Pace comes from this and the distance — see migration 0094.
+   */
+  run_seconds?: number | null;
   session_type?: "workout" | "active_rest" | "rest_day";
   notes?: string | null;
   intensity: number | null;
@@ -173,15 +178,37 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
     onDistanceUnitChange?.(next);
   };
 
-  const setDurationPart = (part: "minutes" | "seconds", next: number | null) => {
-    const current = value.duration_seconds ?? ((value.total_minutes ?? 0) * 60);
+  /**
+   * How long the run took. Falls back to the session for rows written before
+   * the two were told apart — for those, a run WAS the session as far as the
+   * app could tell, so that is the honest reading of them.
+   */
+  const runSeconds = value.run_seconds ?? (value.run_type ? value.duration_seconds ?? ((value.total_minutes ?? 0) * 60) : 0);
+
+  /**
+   * The run's own clock.
+   *
+   * SEPARATE FROM THE SESSION, and that is the whole point. A footballer's
+   * Tuesday is a 90-minute session with a 20-minute run inside it; pace worked
+   * out from the session reads 4:30/km as 20:00/km, which is not a rounding
+   * error but a different sport. For a runner the two ARE the same thing, so
+   * the fast path writes both and the session box stays out of the way.
+   */
+  const setRunPart = (part: "minutes" | "seconds", next: number | null) => {
+    const current = runSeconds;
     const minutes = part === "minutes" ? (next ?? 0) : Math.floor(current / 60);
     const seconds = part === "seconds" ? (next ?? 0) : current % 60;
-    const duration = Math.max(0, minutes * 60 + seconds);
-    updateDerived({ duration_seconds: duration || null, total_minutes: duration ? Math.round(duration / 60) : null });
+    const run = Math.max(0, minutes * 60 + seconds) || null;
+    updateDerived(sport === "running"
+      // A runner's run is their session. Writing only run_seconds would leave
+      // their session duration blank and take their training load with it.
+      ? { run_seconds: run, duration_seconds: run, total_minutes: run ? Math.round(run / 60) : null }
+      : { run_seconds: run });
   };
 
-  const exactSeconds = value.duration_seconds ?? ((value.total_minutes ?? 0) * 60);
+  const setSessionMinutes = (next: number | null) =>
+    updateDerived({ total_minutes: next, duration_seconds: next == null ? null : next * 60 });
+
   const setDrill = (i: number, patch: Partial<TrainingDrill>) =>
     update({ drills: value.drills.map((d, idx) => (idx === i ? { ...d, ...patch } : d)) });
 
@@ -231,10 +258,10 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
                   aria-label={`Distance in ${unit === "mi" ? "miles" : "kilometres"}`}
                 />
               </div>
-              <RunTime seconds={exactSeconds} onPart={setDurationPart} />
+              <RunTime seconds={runSeconds} onPart={setRunPart} />
             </div>
 
-            <PaceLine km={value.distance_km} seconds={exactSeconds} unit={unit} />
+            <PaceLine km={value.distance_km} seconds={runSeconds} unit={unit} />
 
             <div>
               <span className="field-label">Actual zone</span>
@@ -618,20 +645,26 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
       {whatIf !== null && <WhatIfLiftSheet initialExercise={whatIf} onClose={() => setWhatIf(null)} />}
       {detail && <DrillModal name={detail} onClose={() => setDetail(null)} />}
 
-      {/* WHOLE MINUTES ARE FINE FOR A GYM SESSION AND USELESS FOR A RUN.
-          A 5k in 27:34 logged as "28" is a pace 6 seconds per kilometre out,
-          which is the difference between a Zone 2 run and a tempo. When there
-          IS a run, the time is asked for beside the distance in mm:ss and this
-          box gets out of the way, so there is only ever one place to put it. */}
-      {sport !== "running" && <div className={`grid gap-3 ${value.run_type ? "grid-cols-1" : "grid-cols-2"}`}>
-        {!value.run_type && <label className="block">
-          <span className="field-label">Duration (min)</span>
+      {/* THE WHOLE SESSION, WHICH IS NOT THE RUN.
+          These were briefly one field, and one field cannot answer both
+          questions: a footballer's Tuesday is a 90-minute session with a
+          20-minute run inside it, and pace worked out from the session reads
+          4:30/km as 20:00/km. Whole minutes are right here — session length
+          drives training load, and load has never needed the seconds. The run's
+          own clock is in the run block below, in mm:ss, because six seconds a
+          kilometre is the difference between Zone 2 and a tempo. */}
+      {sport !== "running" && <div className="grid grid-cols-2 gap-3">
+        <label className="block">
+          <span className="field-label">Session length (min)</span>
           <NumberInput
             value={value.total_minutes ?? null}
-            onChange={(v) => updateDerived({ total_minutes: v, duration_seconds: v == null ? null : v * 60 })}
+            onChange={setSessionMinutes}
             min={0} placeholder="e.g. 75" className="field"
           />
-        </label>}
+          {value.run_type && (
+            <span className="mt-1 block text-[11px] text-slate-500">Everything, warm-up to shower. The run&apos;s own time is below.</span>
+          )}
+        </label>
         <label className="block">
           <span className="field-label">
             Intensity {value.intensity ?? "–"}
@@ -701,10 +734,10 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
                 duration box three sections up and no pace anywhere. The app
                 prescribes runs in all six sports — it has to be able to
                 receive one back. */}
-            <RunTime seconds={exactSeconds} onPart={setDurationPart} />
+            <RunTime seconds={runSeconds} onPart={setRunPart} />
           </div>
 
-          <PaceLine km={value.distance_km} seconds={exactSeconds} unit={unit} />
+          <PaceLine km={value.distance_km} seconds={runSeconds} unit={unit} />
 
           <label className="block">
             <span className="field-label">Avg HR <span className="normal-case tracking-normal text-slate-600">(optional)</span></span>
@@ -868,15 +901,15 @@ function RunTime({ seconds, onPart }: {
  * being handed the wrong unit is how a good number becomes noise.
  */
 function PaceLine({ km, seconds, unit }: { km: number | null | undefined; seconds: number; unit: "km" | "mi" }) {
-  const distance = Number(km) > 0 ? Number(km) : 0;
-  const secondsPerKm = distance > 0 && seconds > 0 ? Math.round(seconds / distance) : null;
-  const kmh = secondsPerKm ? distance / (seconds / 3600) : null;
+  // The same function the save writes with. Two copies of one formula is how
+  // the check-in came to show a pace the saved row disagreed with.
+  const pace = runPace(km, seconds);
   return (
-    <div className={`rounded-xl px-3 py-2 text-xs ${secondsPerKm ? "bg-sky-400/10 text-sky-300" : "bg-white/[0.03] text-slate-500"}`}>
-      {secondsPerKm && kmh
+    <div className={`rounded-xl px-3 py-2 text-xs ${pace ? "bg-sky-400/10 text-sky-300" : "bg-white/[0.03] text-slate-500"}`}>
+      {pace
         ? <>Average pace <strong className="tabular-nums text-slate-100">
-            {formatPace(unit === "mi" ? Math.round(secondsPerKm * 1.609344) : secondsPerKm)}/{unit}
-          </strong> · {(unit === "mi" ? kmh / 1.609344 : kmh).toFixed(2)} {unit === "mi" ? "mph" : "km/h"}</>
+            {formatPace(unit === "mi" ? Math.round(pace.secondsPerKm * 1.609344) : pace.secondsPerKm)}/{unit}
+          </strong> · {(unit === "mi" ? pace.kmh / 1.609344 : pace.kmh).toFixed(2)} {unit === "mi" ? "mph" : "km/h"}</>
         : "Add distance and time and your average pace appears here automatically."}
     </div>
   );

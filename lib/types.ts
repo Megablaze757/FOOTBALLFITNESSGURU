@@ -175,8 +175,16 @@ export interface TrainingLog {
   log_date: string;
   drills: TrainingDrill[];
   total_minutes: number | null;
-  /** Exact duration. Added after total_minutes so mm:ss is never rounded away. */
+  /** Exact SESSION duration. Added after total_minutes so mm:ss is never rounded away. */
   duration_seconds?: number | null;
+  /**
+   * Time spent RUNNING, which is not the session duration.
+   *
+   * A footballer's Tuesday is a 90-minute session with a 20-minute run in it.
+   * Pace worked out from the session reads 4:30/km as 20:00/km — not a rounding
+   * error, a different sport. See migration 0094.
+   */
+  run_seconds?: number | null;
   intensity: number | null;
   /** Distance covered. What a runner actually plans in — see migration 0062. */
   distance_km?: number | null;
