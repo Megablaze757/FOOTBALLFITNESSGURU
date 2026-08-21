@@ -1,0 +1,145 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+
+/**
+ * The paste-ready copy must be the migrations it claims to be.
+ *
+ * A second source of truth for schema changes fails silently: the repo says one
+ * thing, the database says another, and the only symptom is a feature behaving
+ * like last week. That is exactly what the "Apply SQL to Supabase" workflow was
+ * written to stop happening — the launch email kept going out with the old copy
+ * after every artifact in the repo had been regenerated — and a stale combined
+ * file walks straight back into it.
+ *
+ * Rebuild with: node scripts/build-apply-sql.mjs
+ */
+
+const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
+
+const PARTS = [
+  "0092_meal_plan_preferences",
+  "0093_meal_budget_and_store",
+  "0094_run_duration",
+  "0095_admin_visibility_and_email_audit",
+];
+
+const combined = read("../supabase/apply-0092-0095.sql");
+
+/**
+ * Split SQL into statements, without cutting a function body in half.
+ *
+ * A naive split on ";" tears `do $$ ... end $$;` and every `create or replace
+ * function ... $$ ... $$;` into fragments — the first attempt at this reported
+ * "end if" as a statement that cannot be run twice, which is true and useless.
+ * Dollar-quoted bodies are skipped over whole.
+ */
+function statementsIn(sql: string): string[] {
+  const out: string[] = [];
+  let buffer = "";
+  let i = 0;
+  while (i < sql.length) {
+    if (sql.startsWith("$$", i)) {
+      const end = sql.indexOf("$$", i + 2);
+      const body = end === -1 ? sql.slice(i) : sql.slice(i, end + 2);
+      buffer += body;
+      i += body.length;
+      continue;
+    }
+    if (sql[i] === "-" && sql[i + 1] === "-") {
+      const nl = sql.indexOf("\n", i);
+      i = nl === -1 ? sql.length : nl;
+      continue;
+    }
+    // Block comments too: the migrations use /** … */ for the notes that
+    // explain a function, and Postgres accepts them the same as `--`.
+    if (sql[i] === "/" && sql[i + 1] === "*") {
+      const end = sql.indexOf("*/", i + 2);
+      i = end === -1 ? sql.length : end + 2;
+      continue;
+    }
+    if (sql[i] === ";") {
+      out.push(buffer);
+      buffer = "";
+      i += 1;
+      continue;
+    }
+    buffer += sql[i];
+    i += 1;
+  }
+  out.push(buffer);
+  return out.map((s) => s.replace(/\s+/g, " ").trim()).filter(Boolean);
+}
+
+
+test("the combined file contains every migration it names, in order", () => {
+  let cursor = 0;
+  for (const part of PARTS) {
+    const sql = read(`../supabase/migrations/${part}.sql`).replace(/\s+$/, "");
+    const at = combined.indexOf(sql, cursor);
+    assert.notEqual(at, -1,
+      `${part} is missing or has drifted from the combined file — run: node scripts/build-apply-sql.mjs`);
+    assert.ok(at > cursor, `${part} is out of order in the combined file`);
+    cursor = at + sql.length;
+  }
+});
+
+test("it carries nothing the migrations do not", () => {
+  // A hand-added statement here would run against the database and exist in no
+  // migration, so a fresh project rebuilt from supabase/migrations would be
+  // missing it — the worst kind of drift, because it only shows up on a rebuild.
+  const bodyStart = combined.indexOf("-- 0092_meal_plan_preferences.sql");
+  const body = combined.slice(bodyStart);
+  const fromMigrations = PARTS
+    .map((p) => read(`../supabase/migrations/${p}.sql`).replace(/\s+$/, ""))
+    .join("\n");
+
+  const inMigrations = new Set(statementsIn(fromMigrations));
+  for (const statement of statementsIn(body)) {
+    assert.ok(inMigrations.has(statement),
+      `the combined file has a statement no migration does:\n  ${statement.slice(0, 120)}`);
+  }
+});
+
+test("running it twice is safe", () => {
+  /**
+   * SOMEBODY WILL RUN IT TWICE. They will not remember whether they already
+   * pasted it, and the honest answer to that doubt is "just run it again" —
+   * which is only true if every statement can be.
+   */
+  const statements = statementsIn(combined);
+
+  const REPEATABLE = [
+    /^alter table [\w.]+ add column if not exists/i,
+    /^alter table [\w.]+ drop constraint if exists/i,
+    /^alter table [\w.]+ add constraint/i,       // always preceded by a drop
+    /^alter table [\w.]+ alter column/i,          // setting a type it already has is a no-op
+    /^alter table [\w.]+ enable row level security/i,
+    /^create table if not exists/i,
+    /^create index if not exists/i,
+    /^create unique index if not exists/i,
+    /^create or replace function/i,
+    /^drop policy if exists/i,
+    /^create policy/i,                            // always preceded by a drop
+    /^comment on/i,
+    /^notify pgrst/i,
+    /^revoke /i,
+    /^grant /i,
+    /^do \$\$/i,                                  // guarded blocks
+  ];
+
+  for (const statement of statements) {
+    assert.ok(REPEATABLE.some((rule) => rule.test(statement)),
+      `this cannot be run twice:\n  ${statement.slice(0, 140)}`);
+  }
+});
+
+test("it says how to run it and what is still outstanding", () => {
+  // The file is read by somebody who has not seen this conversation.
+  assert.match(combined, /SQL Editor/);
+  assert.match(combined, /Apply SQL to Supabase/);
+  assert.match(combined, /SAFE TO RUN TWICE/);
+  // The Worker is deployed by hand and is not in this file. Somebody who runs
+  // the SQL and stops will find the admin email panel still not answering.
+  assert.match(combined, /cloudflare\/worker\.js/);
+});

@@ -32,3 +32,8 @@ end $$;
 
 comment on column public.profiles.diet_weekly_budget is 'Weekly food budget in GBP. The planner leans on price until an ordinary week fits it.';
 comment on column public.profiles.shop_store is 'Which supermarket prices are quoted in — an input to the plan, so it lives here and not in localStorage.';
+
+-- New columns are invisible to PostgREST until it reloads its schema cache.
+-- It polls, but a plan saved in the same minute as the migration would fail
+-- with "column does not exist" on a column that does.
+notify pgrst, 'reload schema';

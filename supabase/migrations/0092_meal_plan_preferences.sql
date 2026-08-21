@@ -34,3 +34,8 @@ end $$;
 
 comment on column public.profiles.diet_budget is 'Prefer cheaper staples when building a meal plan.';
 comment on column public.profiles.diet_cook_level is 'any | easy — how much cooking the athlete is up for.';
+
+-- New columns are invisible to PostgREST until it reloads its schema cache.
+-- It polls, but a plan saved in the same minute as the migration would fail
+-- with "column does not exist" on a column that does.
+notify pgrst, 'reload schema';
