@@ -152,7 +152,7 @@ export function howToFor(name: string): HowTo | null {
   const close = findExercise(name);
   if (close) return exerciseHowTo(close, name.trim());
 
-  return fallbackHowTo(name.trim());
+  return genericHowTo(name.trim());
 }
 
 function exerciseHowTo(ex: Exercise, displayName = ex.name): HowTo {
@@ -174,8 +174,19 @@ function exerciseHowTo(ex: Exercise, displayName = ex.name): HowTo {
   };
 }
 
-/** A useful, honest card for a coach-entered movement the catalogue has never seen. */
-function fallbackHowTo(name: string): HowTo {
+/**
+ * A useful, honest card for a movement the catalogue has never seen.
+ *
+ * Exported because the injury planner needs it directly. Rehab plans are
+ * written by the model, so their exercise names are unbounded, and that screen
+ * looks its names up WITH the injured area — "wall slide" is a supported squat
+ * for a knee and a scapular slide for a shoulder, so a lookup without the area
+ * refuses rather than guessing. When it refuses, the athlete was shown "no demo
+ * for this one" and left with a dose and no instruction. This is the card that
+ * goes there: a figure, a plain safety note, and no claim to be exact coaching
+ * for a movement nobody wrote coaching for.
+ */
+export function genericHowTo(name: string): HowTo {
   // The same guesser the check-in uses when it saves one of these names as a
   // real exercise, so the card drawn here and the card drawn from the saved row
   // are the same card. This file used to carry its own copy of these patterns.

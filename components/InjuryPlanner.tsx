@@ -10,6 +10,8 @@ import { BodyMap } from "@/components/BodyMap";
 import type { PainMap } from "@/lib/types";
 import type { SportId } from "@/lib/exercises";
 import { findExercise } from "@/lib/exercise-match";
+import { genericHowTo } from "@/lib/how-to";
+import { ExerciseDemo } from "@/components/ExerciseDemo";
 import { ExerciseDetailCard } from "@/components/ExerciseDetail";
 
 interface Stage {
@@ -341,8 +343,7 @@ export function InjuryPlanner({ sport, hurt, onHurtChange, description, onDescri
                               type="button"
                               onClick={() => setShowing(open ? null : ex.name)}
                               aria-expanded={open}
-                              disabled={!lib}
-                              className="flex w-full items-baseline justify-between gap-2 p-3 text-left disabled:cursor-default"
+                              className="flex w-full items-baseline justify-between gap-2 p-3 text-left"
                             >
                               <span className="min-w-0">
                                 <span className="block text-sm font-semibold text-slate-100">{ex.name}</span>
@@ -350,9 +351,7 @@ export function InjuryPlanner({ sport, hurt, onHurtChange, description, onDescri
                               </span>
                               <span className="flex shrink-0 items-baseline gap-2">
                                 <span className="text-xs text-slate-400">{ex.dose}</span>
-                                {lib && (
-                                  <span className={`text-xs text-pitch-400 transition ${open ? "rotate-180" : ""}`}>▾</span>
-                                )}
+                                <span className={`text-xs text-pitch-400 transition ${open ? "rotate-180" : ""}`}>▾</span>
                               </span>
                             </button>
                             {lib && open && (
@@ -360,13 +359,7 @@ export function InjuryPlanner({ sport, hurt, onHurtChange, description, onDescri
                                 <ExerciseDetailCard ex={lib} />
                               </div>
                             )}
-                            {!lib && (
-                              // Said out loud rather than rendering a dead
-                              // chevron somebody taps three times.
-                              <p className="px-3 pb-3 text-[11px] text-slate-600">
-                                No demo for this one — follow the note above, and stop if it hurts.
-                              </p>
-                            )}
+                            {!lib && open && <GenericRehabCard name={ex.name} />}
                           </li>
                         );
                       })}
@@ -577,6 +570,38 @@ function Step({ n, title, done, children }: {
         <span className="text-sm font-bold text-slate-200">{title}</span>
       </div>
       <div className="pl-[34px]">{children}</div>
+    </div>
+  );
+}
+
+/**
+ * What to show for a rehab exercise the library has never heard of.
+ *
+ * Rehab plans are written by the model, so the names are unbounded, and the
+ * lookup deliberately refuses a near-miss: "wall slide" is a supported squat
+ * for a knee and a scapular slide for a shoulder, and confident coaching for
+ * the wrong movement is worse on an injury than none. What was there instead
+ * was "No demo for this one" — a dose with no instruction, on the one screen
+ * where somebody is already hurt and least able to improvise.
+ *
+ * A figure, and a plain note that says outright this is general guidance. The
+ * same honest card the check-in draws for a movement somebody typed in
+ * themselves — see genericHowTo.
+ */
+function GenericRehabCard({ name }: { name: string }) {
+  const how = genericHowTo(name);
+  return (
+    <div className="space-y-2 border-t border-white/[0.08] p-3">
+      <ExerciseDemo pattern={how.demo} implement={how.implement} muscles={how.muscles} name={name} className="h-28" />
+      <p className="text-[11px] leading-relaxed text-slate-400">
+        This one is not in the exercise library, so there is no step-by-step for it.
+        Follow the note above, keep it slow, and stop if it hurts rather than pushing through.
+      </p>
+      <ul className="flex flex-wrap gap-1.5">
+        {how.cues.map((cue) => (
+          <li key={cue} className="rounded-md bg-white/[0.05] px-2 py-1 text-[10px] text-slate-400">{cue}</li>
+        ))}
+      </ul>
     </div>
   );
 }

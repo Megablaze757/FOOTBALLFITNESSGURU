@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { howToFor, hasHowTo } from "./how-to";
+import { readFileSync } from "node:fs";
+import { howToFor, hasHowTo, genericHowTo } from "./how-to";
 import { buildProgram } from "./coach";
 import { getExerciseByName } from "./exercises";
 import { SKILL_DRILLS } from "./skills";
@@ -125,4 +126,26 @@ test("a coach-entered exercise still gets an honest fallback card", () => {
   assert.equal(howToFor("   "), null);
   assert.equal(hasHowTo("Tight cone weave"), true);
   assert.equal(hasHowTo("Single-arm landmine rainbow press"), true);
+});
+
+test("an injury plan never leaves an exercise with a dose and no instruction", () => {
+  // Rehab plans are written by the model, so their exercise names are
+  // unbounded — and the injury screen looks them up WITH the injured area,
+  // because "wall slide" is a supported squat for a knee and a scapular slide
+  // for a shoulder. That lookup is right to refuse rather than guess, and what
+  // it refused to was "No demo for this one": a dose with no instruction, on
+  // the one screen where somebody is already hurt.
+  const planner = readFileSync(new URL("../components/InjuryPlanner.tsx", import.meta.url), "utf8");
+  // Comments stripped first: the note explaining what was removed names the old
+  // string, and a test that trips on its own explanation is a test nobody keeps.
+  const rendered = planner.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  assert.ok(!/No demo for this one/.test(rendered), "the dead end is back");
+  assert.match(rendered, /genericHowTo\(/, "there is no fallback card for a name the library lacks");
+  assert.ok(!/disabled=\{!lib\}/.test(rendered), "the row is un-tappable again when the lookup misses");
+
+  // And the card it falls back to is honest about what it is.
+  const generic = genericHowTo("Banded scapular clock drill");
+  assert.equal(generic.teaches, false, "generic safety guidance must not claim to be movement coaching");
+  assert.ok(generic.cues.length > 0);
+  assert.ok(generic.muscles.length > 0);
 });
