@@ -65,7 +65,17 @@ function categoryOf(muscle: string): ExerciseCategory {
   return muscle.toLowerCase().includes("whole") ? "Power" : "Strength";
 }
 
-function demoOf(name: string, muscle: string): DemoPattern {
+/**
+ * Which movement figure to draw for a name.
+ *
+ * Exported because it is not only the importer that has to guess: a coach-typed
+ * name reaching lib/how-to.ts, and an athlete's own exercise saved from a
+ * check-in, both need the same answer. A second copy of these patterns drifts
+ * from this one and two screens then draw a different picture for one movement.
+ *
+ * `muscle` was never read — the name says everything this can tell.
+ */
+export function demoOf(name: string): DemoPattern {
   const n = name.toLowerCase();
   if (/deadlift|romanian|rdl|good morning|hip thrust|glute bridge|hyperextension|back extension|pull through|swing|shrug/.test(n)) return "hinge";
   if (/lunge|split squat|step up|bulgarian/.test(n)) return "lunge";
@@ -176,7 +186,7 @@ function build(raw: string): Exercise[] {
       id: slug(name),
       name,
       category: categoryOf(muscle),
-      demo: demoOf(name, muscle),
+      demo: demoOf(name),
       equipment,
       muscles: [muscle],
       tempo: "Controlled",

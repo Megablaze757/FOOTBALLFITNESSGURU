@@ -40,6 +40,7 @@ import { SKILL_DRILLS, type SkillDrill } from "./skills";
 import { RUN_TYPES } from "./running";
 import { exerciseMuscles } from "./muscle-volume";
 import { equipBucket } from "./exercise-catalog";
+import { guessDemo, guessImplement, guessMuscles } from "./exercise-guess";
 
 export type HowToSource = "exercise" | "skill" | "run";
 
@@ -175,59 +176,22 @@ function exerciseHowTo(ex: Exercise, displayName = ex.name): HowTo {
 
 /** A useful, honest card for a coach-entered movement the catalogue has never seen. */
 function fallbackHowTo(name: string): HowTo {
-  const demo = fallbackPattern(name);
-  const fallback = musclesForPattern(demo);
-  const { primary, secondary } = exerciseMuscles(name, fallback);
-  const muscles = [primary, ...secondary].filter((muscle): muscle is string => !!muscle);
-
+  // The same guesser the check-in uses when it saves one of these names as a
+  // real exercise, so the card drawn here and the card drawn from the saved row
+  // are the same card. This file used to carry its own copy of these patterns.
+  const muscles = guessMuscles(name);
   return {
     name,
     source: "exercise",
-    tag: [primary ?? "Full body", "Custom exercise"].join(" · "),
+    tag: [muscles[0] ?? "Full body", "Custom exercise"].join(" · "),
     why: "This movement was added to your session outside the exercise library, so its exact coaching notes are not available yet.",
     steps: ["Follow the setup and range your coach prescribed. Use a controlled tempo, stop before technique changes, and record a note if this name needs clarifying."],
     cues: ["Controlled reps", "Use a pain-free range", "Stop when form changes"],
     teaches: false,
-    demo,
-    implement: fallbackImplement(name, demo),
-    muscles: muscles.length ? muscles : fallback,
+    demo: guessDemo(name),
+    implement: guessImplement(name),
+    muscles,
   };
-}
-
-function fallbackPattern(name: string): DemoPattern {
-  const value = name.toLowerCase();
-  if (/run|sprint|jog|stride|shuttle/.test(value)) return "run";
-  if (/ball|dribbl|pass|shoot|kick|touch/.test(value)) return "ball";
-  if (/jump|hop|bound|pogo|calf/.test(value)) return "jump";
-  if (/lunge|split squat|step[ -]?up/.test(value)) return "lunge";
-  if (/deadlift|hinge|good morning|swing|hip thrust|bridge/.test(value)) return "hinge";
-  if (/row|pull|chin|curl|lat /.test(value)) return "pull";
-  if (/press|push|bench|fly|extension/.test(value)) return "press";
-  if (/plank|core|crunch|sit[ -]?up|carry|rotation/.test(value)) return "plank";
-  if (/lateral|side|agility|cut|change of direction/.test(value)) return "lateral";
-  return "squat";
-}
-
-function musclesForPattern(pattern: DemoPattern): string[] {
-  switch (pattern) {
-    case "press": return ["Chest", "Shoulders", "Triceps"];
-    case "pull": return ["Back", "Biceps"];
-    case "hinge": return ["Hamstrings", "Glutes", "Back"];
-    case "plank": return ["Core", "Shoulders"];
-    case "run":
-    case "jump":
-    case "lateral": return ["Quads", "Glutes", "Hamstrings", "Calves"];
-    case "ball": return ["Quads", "Glutes", "Calves", "Core"];
-    default: return ["Quads", "Glutes", "Core"];
-  }
-}
-
-function fallbackImplement(name: string, pattern: DemoPattern): Implement {
-  const value = name.toLowerCase();
-  if (/dumbbell|\bdb\b/.test(value)) return "dumbbells";
-  if (/barbell/.test(value)) return pattern === "squat" || pattern === "lunge" ? "barbell_back" : "barbell_hands";
-  if (/box|bench|step/.test(value)) return "box";
-  return "none";
 }
 
 /** True when there is something worth opening a detail sheet for. */

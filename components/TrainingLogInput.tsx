@@ -189,9 +189,6 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
   const setDrill = (i: number, patch: Partial<TrainingDrill>) =>
     update({ drills: value.drills.map((d, idx) => (idx === i ? { ...d, ...patch } : d)) });
 
-  const addDrill = (name = "") =>
-    update({ drills: [...value.drills, { name, sets: 3, reps: 10, load_kg: null }] });
-
   const removeDrill = (i: number) => update({ drills: value.drills.filter((_, idx) => idx !== i) });
 
   return (
@@ -643,10 +640,6 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
         onAdd={(d) => update({ drills: [...value.drills, d] })}
         sport={sport}
       />
-
-      <button type="button" onClick={() => addDrill()} className="chip text-pitch-400">
-        + Add something not in the library
-      </button>
 
       {whatIf !== null && <WhatIfLiftSheet initialExercise={whatIf} onClose={() => setWhatIf(null)} />}
       {detail && <DrillModal name={detail} onClose={() => setDetail(null)} />}
