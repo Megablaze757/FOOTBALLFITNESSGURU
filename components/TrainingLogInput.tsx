@@ -5,6 +5,8 @@ import type { TrainingDrill } from "@/lib/types";
 import { NumberInput } from "@/components/NumberInput";
 import type { SportId } from "@/lib/exercises";
 import { DrillPicker } from "@/components/DrillPicker";
+import { OtherActivity } from "@/components/OtherActivity";
+import { suggestedSessionMinutes, isActivityDrill } from "@/lib/activities";
 import { Icon } from "@/components/Icon";
 import { DrillModal } from "@/components/DrillDetail";
 import { WhatIfLiftSheet } from "@/components/WhatIfLiftSheet";
@@ -347,9 +349,16 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
         </section>
       )}
 
-      {value.drills.length > 0 && (
+      {/* EXERCISES ONLY. Activities are drills too — measured in minutes rather
+          than sets — and they have their own block below, which shows them with
+          the duration that is the whole record of them. Listing them here as
+          well would put a padel match in a row with a reps box and a kg box,
+          which is the shape this feature exists to avoid. `i` is still the
+          index into the real array, so editing and removal stay correct. */}
+      {value.drills.some((d) => !isActivityDrill(d)) && (
         <ul className="space-y-2">
           {value.drills.map((d, i) => {
+            if (isActivityDrill(d)) return null;
             // Last time's sets, read once per drill. Used three ways below: the
             // hint, the seed when switching to per-set rows, and the greyed
             // placeholder in each load box.
@@ -647,6 +656,25 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
         chosen={value.drills.map((d) => d.name)}
         onAdd={(d) => update({ drills: [...value.drills, d] })}
         sport={sport}
+      />
+
+      {/* THE TRAINING NOBODY PROGRAMMED. Padel, a ride, a swim, a kickabout —
+          none of which fits a picker that asks for sets, reps and a weight.
+          Measured in minutes; see lib/activities.ts. */}
+      <OtherActivity
+        drills={value.drills}
+        onChange={(drills) => {
+          // The session length follows the activities only while it is blank.
+          // Somebody who logged an hour of padel inside a ninety-minute session
+          // has said something the form must not overwrite.
+          const suggested = suggestedSessionMinutes(drills);
+          update(value.total_minutes == null && suggested != null
+            ? { drills, total_minutes: suggested, duration_seconds: suggested * 60 }
+            : { drills });
+        }}
+        onSuggestIntensity={(intensity) => {
+          if (value.intensity == null) update({ intensity });
+        }}
       />
 
       {whatIf !== null && <WhatIfLiftSheet initialExercise={whatIf} onClose={() => setWhatIf(null)} />}

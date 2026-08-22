@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { isActivityDrill, activityMinutes, matchActivity } from "@/lib/activities";
 import type { CheckInInput, TrainingLog, ReadinessStatus } from "@/lib/types";
 import { assessReadiness } from "@/lib/readiness";
 import { hasTrainingContent } from "@/lib/load";
@@ -109,6 +110,17 @@ export function CheckInDone({
               <ul className="space-y-1 pl-5 text-xs text-slate-400">
                 {training!.drills.map((d, i) => {
                   const warmups = warmupSetsOf(d);
+                  // An activity is measured in minutes, and describeSets would
+                  // read it as "1 × 60" — a padel match reported as one set of
+                  // sixty reps. See lib/activities.ts.
+                  if (isActivityDrill(d)) {
+                    return (
+                      <li key={`${d.name}-${i}`}>
+                        <span aria-hidden className="mr-1">{matchActivity(d.name)?.emoji ?? "🏃"}</span>
+                        <span className="text-slate-300">{d.name}</span> · {activityMinutes(d)} min
+                      </li>
+                    );
+                  }
                   return (
                     <li key={`${d.name}-${i}`}>
                       <span className="text-slate-300">{d.name}</span> · {describeSets(d)}
