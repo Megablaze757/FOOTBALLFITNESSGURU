@@ -88,5 +88,8 @@ test("the fast AI path follows payment, not a tier name", () => {
     !/const priority = \(await tierOf\(env, userId\)\) === "gold"/.test(worker),
     'priority was pinned to "gold", which pushed paying Pro users onto the free model queue',
   );
-  assert.ok(/const priority = meetsTier\(/.test(worker), "priority should ask whether they paid");
+  // Matched loosely at the front: the app-wide spend ceiling added a condition
+  // ahead of this one (`!opts.freeOnly &&`), and what is being asserted is that
+  // payment is what decides the fast path — not that nothing else may.
+  assert.ok(/const priority = [^;]*meetsTier\(/.test(worker), "priority should ask whether they paid");
 });

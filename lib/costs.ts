@@ -51,6 +51,22 @@ export const PLATFORM: { label: string; gbp: number; note: string }[] = [
  * Cards issued outside the UK cost more; this is the floor, not the ceiling,
  * and it is labelled as an estimate for that reason.
  */
+/**
+ * THE APP-WIDE MONTHLY AI CEILING, in USD. Mirrored in the Worker, which
+ * enforces it (APP_BUDGET_USD in cloudflare/src/index.ts).
+ *
+ * $94 is £74 here, and £74 is what is left of a £100-a-month all-in bill once
+ * PLATFORM is paid. So this is not a guess at what AI will cost — it is the
+ * most it is allowed to cost, and the Worker stops paying for models before it
+ * is exceeded.
+ *
+ * TWO COPIES OF ONE NUMBER, and that is a deliberate cost. The Worker is a
+ * separate module deployed by pasting a file into a dashboard; it cannot import
+ * from lib/. lib/ai-ceiling.test.ts asserts the two agree, so drift fails the
+ * build rather than showing an admin a limit that is not the limit.
+ */
+export const AI_CEILING_USD = 94;
+
 export const STRIPE_PERCENT = 0.015;
 export const STRIPE_FIXED_GBP = 0.20;
 
@@ -83,11 +99,14 @@ export function costLines({ aiSpendUsd, paidSubs, mrr, commissionGbp = 0 }: Usag
     basis: "estimated" as const,
   }));
 
-  // The one line that is not a guess.
+  // The one line that is not a guess — and the one line with a ceiling on it,
+  // which is worth saying here because this is where somebody comes when they
+  // are worried about the bill. A cap nobody can see is a cap nobody trusts.
+  const ceilingGbp = round2(AI_CEILING_USD * USD_TO_GBP);
   lines.push({
     label: "AI providers",
     monthly: round2(aiSpendUsd * USD_TO_GBP),
-    note: `Recorded per call in ai_spend — $${round2(aiSpendUsd).toFixed(2)} this month`,
+    note: `Recorded per call in ai_spend — $${round2(aiSpendUsd).toFixed(2)} of a $${AI_CEILING_USD} (£${ceilingGbp.toFixed(0)}) monthly ceiling`,
     basis: "measured",
   });
 

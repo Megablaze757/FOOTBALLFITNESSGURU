@@ -466,6 +466,8 @@ var src_default = {
         return await connectWearable(req, env);
       if (pathname.endsWith("/ingest-token"))
         return await mintIngestToken(req, env);
+      if (pathname.endsWith("/ai-status"))
+        return await aiStatus(req, env);
       if (pathname.endsWith("/email-status"))
         return await emailStatus(req, env);
       if (pathname.endsWith("/email-test"))
@@ -628,6 +630,13 @@ var TIER_BUDGET = {
   // of £20
 };
 var HARD_CEILING_USD = 10;
+var APP_BUDGET_USD = 94;
+var FREE_ONLY_ABOVE = 0.75;
+function envNum(v, fallback) {
+  const n = Number(v);
+  return v !== void 0 && v !== "" && Number.isFinite(n) && n >= 0 ? n : fallback;
+}
+__name(envNum, "envNum");
 async function svcRpc(env, fn, body) {
   return fetch(`${env.SUPABASE_URL}/rest/v1/rpc/${fn}`, {
     method: "POST",
@@ -655,9 +664,19 @@ async function tierOf(env, userId) {
 __name(tierOf, "tierOf");
 async function checkBudget(env, userId) {
   const dailyLimit = Number(env.AI_DAILY_LIMIT || "40");
-  if (!env.SUPABASE_SERVICE_ROLE_KEY) {
-    return { allowed: false, spent: 0, callsToday: 0, budget: 0 };
-  }
+  const appBudget = envNum(env.MONTHLY_BUDGET_USD, APP_BUDGET_USD);
+  const denied = /* @__PURE__ */ __name((budget2) => ({
+    allowed: false,
+    spent: 0,
+    callsToday: 0,
+    budget: budget2,
+    appSpent: 0,
+    appBudget,
+    paidAllowed: false,
+    appSpendKnown: false
+  }), "denied");
+  if (!env.SUPABASE_SERVICE_ROLE_KEY)
+    return denied(0);
   const tier = await tierOf(env, userId);
   const budget = Math.min(TIER_BUDGET[tier] ?? TIER_BUDGET.bronze, HARD_CEILING_USD);
   try {
@@ -667,19 +686,25 @@ async function checkBudget(env, userId) {
       p_daily_limit: dailyLimit
     });
     if (!r.ok)
-      return { allowed: false, spent: 0, callsToday: 0, budget };
+      return denied(budget);
     const rows = await r.json();
     const row2 = rows?.[0];
     if (!row2)
-      return { allowed: false, spent: 0, callsToday: 0, budget };
+      return denied(budget);
+    const appSpendKnown = row2.app_spent !== void 0 && row2.app_spent !== null;
+    const appSpent = Number(row2.app_spent) || 0;
     return {
-      allowed: row2.allowed === true,
+      allowed: row2.allowed === true && !(appSpendKnown && appSpent >= appBudget),
       spent: Number(row2.spent) || 0,
       callsToday: Number(row2.calls_today) || 0,
-      budget
+      budget,
+      appSpent,
+      appBudget,
+      paidAllowed: !appSpendKnown || appSpent < appBudget * FREE_ONLY_ABOVE,
+      appSpendKnown
     };
   } catch {
-    return { allowed: false, spent: 0, callsToday: 0, budget };
+    return denied(budget);
   }
 }
 __name(checkBudget, "checkBudget");
@@ -693,11 +718,12 @@ async function recordSpend(env, userId, costUsd) {
 }
 __name(recordSpend, "recordSpend");
 function overBudget(state) {
-  const reason = state.spent >= state.budget ? "You've used this month's AI coaching allowance." : "You've hit today's AI coaching limit.";
-  return json({ error: `${reason} The on-device coach still works, and your allowance resets \u2014 upgrade for more.` }, 429);
+  const reason = state.appSpendKnown && state.appSpent >= state.appBudget ? "AI coaching is paused for the rest of the month." : state.spent >= state.budget ? "You've used this month's AI coaching allowance." : "You've hit today's AI coaching limit.";
+  const tail = state.appSpendKnown && state.appSpent >= state.appBudget ? "The on-device coach still works, and everything else in the app is unaffected." : "The on-device coach still works, and your allowance resets \u2014 upgrade for more.";
+  return json({ error: `${reason} ${tail}` }, 429);
 }
 __name(overBudget, "overBudget");
-var WORKER_VERSION = "2026-08-21.1";
+var WORKER_VERSION = "2026-08-22.1";
 var ATTEMPT_TIMEOUT_MS = {
   groq: 1e4,
   openrouter: 2e4,
@@ -896,10 +922,17 @@ async function complete(env, opts) {
     }
     return { text, model: `${rung.provider}/${rung.model}`, cost: 0 };
   }, "attempt");
-  const chain = opts.image ? visionChain(env) : modelChain(env);
+  const full = opts.image ? visionChain(env) : modelChain(env);
+  const billsNothing = /* @__PURE__ */ __name((r) => {
+    const price = modelPrice(env, r);
+    return price.prompt === 0 && price.completion === 0;
+  }, "billsNothing");
+  const chain = opts.freeOnly ? full.filter(billsNothing) : full;
   if (!chain.length) {
     throw Object.assign(
-      new Error(opts.image ? "no vision model configured" : "no AI provider configured"),
+      new Error(
+        opts.freeOnly && full.length ? "monthly AI budget reached \u2014 no free model is configured to fall back to" : opts.image ? "no vision model configured" : "no AI provider configured"
+      ),
       { cost: 0 }
     );
   }
@@ -929,7 +962,7 @@ async function complete(env, opts) {
   if (fast)
     return fast;
   const orChain = chain.filter((r) => r.provider === "openrouter");
-  const free = opts.priority ? [] : orChain.filter(isFree);
+  const free = opts.priority && !opts.freeOnly ? [] : orChain.filter(isFree);
   const paid = orChain.filter((r) => !isFree(r));
   if (free.length && Date.now() - started > FREE_RACE_START_BY_MS) {
     free.forEach((r) => trail.push(`${r.model}: skipped (too late to be worth racing)`));
@@ -954,7 +987,7 @@ async function complete(env, opts) {
 __name(complete, "complete");
 async function meteredComplete(env, userId, opts) {
   try {
-    const priority = meetsTier(await tierOf(env, userId), "silver");
+    const priority = !opts.freeOnly && meetsTier(await tierOf(env, userId), "silver");
     const { text, model, cost } = await complete(env, { ...opts, priority });
     await recordSpend(env, userId, cost);
     return { text, model };
@@ -991,6 +1024,7 @@ Nutrition targets: ${context?.calorieTarget ?? "not recorded"} kcal, ${context?.
   const ctx = typeof body.briefing === "string" && body.briefing.trim() ? body.briefing.trim().slice(0, 8e3) : fallback;
   const history = coachHistory(body.history);
   const { text, model } = await meteredComplete(env, u.id, {
+    freeOnly: !budget.paidAllowed,
     system: sys,
     user: `ATHLETE BRIEFING (current source of truth):
 ${ctx}
@@ -1047,6 +1081,7 @@ async function generateProgram(req, env) {
   const season = in_season ? "in-season (taper ~30%, recovery-weighted)" : "out-of-season (build, higher volume)";
   const sys = `You are an elite strength & conditioning coach & physio working across sports (football, rugby, weightlifting, gym, basketball, running). Choose exercises appropriate to the athlete's SPORT, POSITION and FOCUS (e.g. a weightlifter gets barbell squat/bench/deadlift; a rugby prop gets contact & scrum power; 'general fitness' is conditioning-led). BODYBUILDING RULE \u2014 if the focus is 'muscle & aesthetics' or the sport is 'gym', build a HYPERTROPHY program, not a conditioning circuit: use a proper split sized to the training days (2 days full-body A/B, 3 days push/pull/legs, 4 days upper/lower, 5 days push/pull/legs/upper/lower) and NAME each session that way ('Push \u2014 chest, shoulders & triceps'). Open each session with 1-2 compound lifts, then 3-4 ISOLATION exercises (curls, lateral raises, leg extensions, leg curls, flyes, pushdowns, calf raises) \u2014 isolation work is most of a bodybuilding program and must be present. Keep every rep count between 6 and 15 for the whole block: compounds 6-10, isolation 10-15. Progress by adding reps within the range, then a set, then load \u2014 do NOT drop into 3-5 rep powerlifting territory. Never prescribe sprints, ladder drills, cone work, burpees or sport skills to this athlete. For this athlete the 6-15 rep rule OVERRIDES the rep-drop guidance in the periodisation notes below \u2014 peak week means more sets and more load, not fewer reps. Output ONLY valid minified JSON matching this TypeScript type: {goal:string;summary:string;constraints:string[];sessions:{day:number;title:string;focus:string;drills:{name:string;sets:number;reps:number;cue:string;prog:"load"|"reps"|"hold"}[]}[]}. Give exactly ONE week of ${days} sessions \u2014 the first week of a 4-week block. Do NOT output weeks 2-4; they are derived automatically. Set sets/reps as the STARTING week: moderate, technique-first, a couple of reps in reserve. prog says how that drill gets harder over the block: "load" for anything you add weight to, "reps" for bodyweight and conditioning, "hold" for skill work that progresses by difficulty. cue is one short coaching sentence. Work around sore areas with lower-impact drills. ATHLETE NOTES ARE BINDING. If the notes rule out a body part, movement or equipment ('I don't train legs', 'no running', 'no barbell'), that thing must not appear ANYWHERE in the program \u2014 not once, not lightened, not as a warm-up. Fill the freed volume with work they do want, and state the exclusion in \`constraints\` so they can see you followed it. No prose outside the JSON.`;
   const { text, model } = await meteredComplete(env, u.id, {
+    freeOnly: !budget.paidAllowed,
     system: sys,
     user: `Sport: ${sport || "football"}
 ` + (positions.length > 1 ? `Position/event: ${positions[0]} (main), also plays ${positions.slice(1).join(" and ")} \u2014 cover the demands of all of them.
@@ -1190,6 +1225,7 @@ async function estimateFood(req, env) {
     return json({ error: "text or image required" }, 400);
   const sys = (photo ? 'You estimate the nutrition of a meal an athlete has photographed. Work out the portion from the picture before you estimate anything else. Use whatever is in shot for scale: a dinner plate is about 27cm across and a side plate about 20cm, a fork is about 19cm long, a standard mug holds about 300ml, and a closed fist is roughly 150-200g of a dense food. State which reference you used in the name, e.g. "Rice (fills a third of a 27cm plate)". Estimate the FOOD, not the container \u2014 a half-empty bowl is a half portion. If something is stacked or partly hidden, say so in the name and estimate the visible part plus a conservative allowance, e.g. "Chips (pile, lower layer hidden \u2014 estimated)". Never invent a food you cannot see. If the picture is too dark or blurred to identify anything, return an empty items array rather than guessing. ' : "You estimate the nutrition of a meal an athlete describes in plain language. Where they give a household measure, convert it: a heaped tablespoon is about 15g dry rice or 20g peanut butter, a slice of medium bread about 40g, a mug of dry oats about 90g, a supermarket chicken breast about 170g, a large egg about 58g, a tin of tuna about 145g drained. If they give no quantity at all, use a normal adult portion and say so in the name. ") + 'Output ONLY valid minified JSON: {items:[{name:string,qty:number,unit:"g"|"ml"|"each",kcal:number,protein:number,carbs:number,fats:number}]}. One entry per distinct food. Use UK supermarket products and typical British home cooking. For rice, pasta, couscous and oats give the DRY weight, and say "(dry)" in the name. Include cooking fat if the dish obviously used it \u2014 a fried egg or a stir fry carries oil the athlete did not mention and it is often 100+ kcal. Round quantities to something a person would say: to the nearest 10g under 200g, nearest 25g above. Never give a quantity to the gram. Put any real uncertainty in the name, in brackets, in plain words. Do not hedge in the numbers. kcal must be the total for the stated qty, not per 100g, and must be greater than zero, and must be consistent with the macros you give (protein and carbs 4 kcal/g, fat 9 kcal/g, within 10%). No prose outside the JSON.';
   const { text: raw, model } = await meteredComplete(env, u.id, {
+    freeOnly: !budget.paidAllowed,
     system: sys,
     user: photo ? meal ? `Estimate this meal. The athlete also says: ${meal}` : "Estimate this meal from the photo." : `The athlete ate: ${meal}`,
     // A photo produces more items than a typed sentence usually does, so it
@@ -1463,6 +1499,7 @@ async function injuryPlan(req, env) {
   ].join("\n");
   const sys = "You are an experienced strength & conditioning coach writing a graded loading plan for an athlete with a niggle. You have NOT examined them and cannot see imaging. NEVER name a diagnosis, never say what is torn or damaged, and never predict a return-to-play date. If the description suggests something that needs assessment, say so plainly and keep the plan conservative. Output ONLY valid minified JSON: {summary:string,seeAProfessional:string,stages:[{name:string,timeframe:string,goal:string,exercises:[{name:string,dose:string,note:string}],avoid:string[]}],redFlags:string[],progressWhen:string}. 3-4 stages moving from settling symptoms, through controlled loading, to return to sport. timeframe is a rough guide phrased as a range, and must be framed as depending on how symptoms respond, not on the calendar. dose is sets/reps/holds. note is the one cue that matters. avoid lists what to stay off during that stage. redFlags are specific, checkable signs that mean stop and get assessed \u2014 night pain, giving way, numbness, inability to weight-bear, swelling that returns each session. progressWhen states the symptom-based criterion for moving to the next stage, never a number of days. " + (chronic ? "This has lasted 6+ weeks. Say clearly in seeAProfessional that a persistent problem should be assessed in person by a physiotherapist, that self-management has evidently not resolved it, and keep early stages gentle. " : "Keep seeAProfessional brief but real: if it worsens or doesn't settle in 2-3 weeks, get it looked at. ") + "No prose outside the JSON.";
   const { text, model } = await meteredComplete(env, u.id, {
+    freeOnly: !budget.paidAllowed,
     system: sys,
     user: `Sport: ${sport || "general"}
 Area: ${area || "unspecified"}
@@ -1543,6 +1580,7 @@ Tone: ${tone || "direct, confident, no hype"}
 Facts you may use (and nothing else):
 ${allowed.map((f) => `- ${f}`).join("\n") || "- (none supplied)"}`;
   const { text, model } = await meteredComplete(env, u.id, {
+    freeOnly: !budget.paidAllowed,
     system: sys,
     user,
     maxTokens: 1200,
@@ -1590,6 +1628,7 @@ async function generateChallenges(req, env) {
 Goal: ${goal || "general fitness"}
 Last 7 days \u2014 ${Object.entries(activity ?? {}).map(([k, v]) => `${k}: ${v}`).join(", ") || "no activity"}`;
   const { text, model } = await meteredComplete(env, u.id, {
+    freeOnly: !budget.paidAllowed,
     system: sys,
     user: ctx,
     maxTokens: 600,
@@ -2494,6 +2533,36 @@ function appLink(env, path) {
   return `${(env.APP_URL || "https://pocketathlete.com").replace(/\/$/, "")}${path.startsWith("/") ? path : `/${path}`}`;
 }
 __name(appLink, "appLink");
+async function aiStatus(req, env) {
+  const user = await authUser(req, env);
+  if (!user)
+    return json({ error: "unauthorized" }, 401);
+  if (!await isAdmin(env, user.id))
+    return json({ error: "forbidden" }, 403);
+  const state = await checkBudget(env, user.id);
+  const chain = modelChain(env);
+  const priced = chain.filter((r) => {
+    const price = modelPrice(env, r);
+    return price.prompt > 0 || price.completion > 0;
+  });
+  return json({
+    version: WORKER_VERSION,
+    appSpent: +state.appSpent.toFixed(4),
+    appBudget: state.appBudget,
+    /** False = migration 0096 has not been applied and the ceiling is not enforcing. */
+    appSpendKnown: state.appSpendKnown,
+    /** False = paid rungs are switched off right now; the app is on free models. */
+    paidAllowed: state.paidAllowed,
+    freeOnlyAbove: +(state.appBudget * FREE_ONLY_ABOVE).toFixed(2),
+    // Which rungs cost money, so "we are on free models" can be checked rather
+    // than believed. A ladder with no free rung would go dark at the ceiling
+    // instead of slowing down, and that is worth knowing BEFORE it happens.
+    paidModels: priced.map((r) => `${r.provider}/${r.model}`),
+    freeModels: chain.filter((r) => !priced.includes(r)).map((r) => `${r.provider}/${r.model}`),
+    note: !state.appSpendKnown ? "The app-wide ceiling is NOT enforcing: apply migration 0096 to Supabase." : state.appSpent >= state.appBudget ? "At the ceiling. AI calls are refused until the 1st; the on-device engine still serves." : state.paidAllowed ? "Under budget. The full ladder is in use." : "Near the ceiling \u2014 paid models are switched off, free models only."
+  });
+}
+__name(aiStatus, "aiStatus");
 async function emailStatus(req, env) {
   const user = await authUser(req, env);
   if (!user)
