@@ -107,6 +107,69 @@ export const SECTION_LINKS: Record<string, readonly { href: string; label: strin
 };
 
 /**
+ * Routes that belong to a section but are not listed in its row.
+ *
+ * SECTION_LINKS already says where most things live, and `parentOf` reads it
+ * first. These are the leaves that nothing links to from a chip — you arrive at
+ * them from a card, a button or a deep link — and which therefore need the way
+ * back stated somewhere.
+ */
+const EXTRA_PARENTS: Record<string, string> = {
+  "/benchmarks": "/dashboard",
+  "/body": "/dashboard",
+  "/report": "/dashboard",
+  "/squad": "/profile",
+  "/pricing": "/profile",
+  "/partner": "/profile",
+  "/onboarding": "/home",
+  "/ask": "/home",
+};
+
+/**
+ * The way back out of a page, named.
+ *
+ * WHY IT NAMES THE DESTINATION rather than saying "back". "Back" is the
+ * browser's word for the previous page, and this is not that: it is a link to
+ * a fixed place, so from Exercises it goes to Training whether you arrived
+ * from Training or from a search result. A label that says "Training" is the
+ * information; "back" is only the grammar around it. Same reasoning as
+ * components/BackLink.tsx, which said it first.
+ *
+ * `router.back()` was the other option and is worse here: half the ways into
+ * these pages are deep links and notification taps, where the previous entry
+ * is another site or nothing at all.
+ *
+ * Null for the four tabs and for Home, which are where back would go.
+ */
+export function parentOf(pathname: string): { href: string; label: string } | null {
+  const path = pathname.split("?")[0].replace(/\/$/, "") || "/";
+  const label = (href: string) =>
+    NAV_ITEMS.find((i) => i.href === href)?.label ?? "Back";
+
+  const isTab = MOBILE_NAV.some((t) => t.href === path);
+  if (isTab || path === "/home" || path === "/") return null;
+
+  for (const [section, links] of Object.entries(SECTION_LINKS)) {
+    if (links.some((l) => l.href.split("?")[0] === path)) {
+      return { href: section, label: label(section) };
+    }
+  }
+
+  const extra = EXTRA_PARENTS[path];
+  if (extra) return { href: extra, label: extra === "/home" ? "Home" : label(extra) };
+
+  // A sub-route of something known — /train/view under /train, /squad/view
+  // under /squad. Walk up one level rather than dumping them on Home.
+  const up = path.slice(0, path.lastIndexOf("/"));
+  if (up && up !== path) {
+    const owner = parentOf(up);
+    if (NAV_ITEMS.some((i) => i.href === up)) return { href: up, label: label(up) };
+    if (owner) return owner;
+  }
+  return { href: "/home", label: "Home" };
+}
+
+/**
  * Shown only to coaches, appended by SideNav and linked from Profile.
  *
  * /squad is the whole coach product — roster, readiness at a glance, assigning
