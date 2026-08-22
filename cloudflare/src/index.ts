@@ -1,3 +1,20 @@
+// =============================================================================
+// THIS IS TYPESCRIPT. DO NOT PASTE IT INTO THE CLOUDFLARE DASHBOARD.
+//
+// It was pasted into the dashboard editor and produced
+//
+//   Uncaught SyntaxError: Unexpected token 'export' at index.js:24
+//
+// which is the runtime telling you it has been handed a language it does not
+// speak: `env: Env`, `Promise<Map<string, string>>` and `export interface` are
+// types, and Workers run JavaScript.
+//
+// The file to paste is  cloudflare/worker.js  — the same code, bundled and with
+// the types stripped, rebuilt by `node scripts/build-worker-bundle.mjs`. Its own
+// header says so. This file is what `wrangler deploy` reads (see wrangler.toml
+// `main`), and what you edit.
+// =============================================================================
+
 import { launchEmail } from "./launch-email";
 
 // =============================================================================

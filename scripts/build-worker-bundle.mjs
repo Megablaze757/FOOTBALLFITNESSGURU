@@ -28,7 +28,18 @@ try {
   execFileSync("npx", ["wrangler", "deploy", "--dry-run", "--outdir", out], {
     cwd: join(ROOT, "cloudflare"), stdio: "pipe",
   });
-  const bundled = readFileSync(join(out, "index.js"), "utf8")
+  const HEADER = `// =============================================================================
+// PASTE THIS FILE INTO THE CLOUDFLARE DASHBOARD. Not cloudflare/src/index.ts.
+//
+// Generated — do not edit. Rebuild with:  node scripts/build-worker-bundle.mjs
+//
+// src/index.ts is TypeScript, and pasting it gives
+// "Uncaught SyntaxError: Unexpected token 'export'" because Workers run
+// JavaScript. This is the same code with the types stripped and the imports
+// inlined. Select all of it, paste over everything in the editor, and deploy.
+// =============================================================================
+`;
+  const bundled = HEADER + readFileSync(join(out, "index.js"), "utf8")
     // No .map ships next to it, and a sourceMappingURL pointing at nothing
     // makes browser devtools report a fetch error on every load.
     .replace(/\n\/\/# sourceMappingURL=.*\n?$/, "\n");

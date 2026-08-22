@@ -1,3 +1,13 @@
+// =============================================================================
+// PASTE THIS FILE INTO THE CLOUDFLARE DASHBOARD. Not cloudflare/src/index.ts.
+//
+// Generated — do not edit. Rebuild with:  node scripts/build-worker-bundle.mjs
+//
+// src/index.ts is TypeScript, and pasting it gives
+// "Uncaught SyntaxError: Unexpected token 'export'" because Workers run
+// JavaScript. This is the same code with the types stripped and the imports
+// inlined. Select all of it, paste over everything in the editor, and deploy.
+// =============================================================================
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
