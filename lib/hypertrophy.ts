@@ -20,6 +20,7 @@
 // =============================================================================
 
 import { movementKey, preferUnused } from "./movement-key";
+import { handsFor } from "./dumbbell";
 import type { PainMap } from "./types";
 import { effortText } from "./effort";
 import type { Exercise } from "./exercises";
@@ -1012,8 +1013,21 @@ function loadFor(
   const rir = WEEK_RIR[weekIndex] ?? 2;
   const repsToFailure = reps + rir;
   const working = max / (1 + repsToFailure / 30);
-  const rounded = Math.max(20, Math.round(working / 2.5) * 2.5);
-  return `${rounded}kg · leave ${rir} in the tank`;
+  /**
+   * A DUMBBELL PRESCRIPTION IS PER HAND, because that is the number an athlete
+   * loads. The 1RM standards are whole-lift, so a 60kg dumbbell bench came out
+   * as "60kg" next to a movement nobody benches 60kg dumbbells on — a set that
+   * cannot be attempted, printed with a decimal of confidence.
+   *
+   * The floor moves with it: 20kg is a sensible smallest barbell prescription
+   * and an absurd smallest dumbbell one.
+   */
+  const hands = handsFor(m.ex.name);
+  const perHand = working / hands;
+  const floor = hands === 2 ? 5 : 20;
+  const rounded = Math.max(floor, Math.round(perHand / 2.5) * 2.5);
+  const each = hands === 2 ? " each" : "";
+  return `${rounded}kg${each} · leave ${rir} in the tank`;
 }
 
 function drillFrom(m: Movement, weekIndex: number, blockScale: number, load: string | null, anchor: boolean): ProgramDrill {

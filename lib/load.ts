@@ -3,6 +3,7 @@
 // and a weekly report. Real sports-science used by pro setups; pure + tested.
 // =============================================================================
 
+import { totalLoadKg } from "./dumbbell";
 import { totalReps } from "./training-sets";
 import { intervalEffort } from "./running";
 import type { DailyCheckIn, NutritionLog, TrainingLog } from "./types";
@@ -84,13 +85,20 @@ export function sessionLoad(t: TrainingLog): number {
  * heavy triple and a set of twenty can sit at the same RPE for wildly different
  * work — and this is computable from drills we already store, so it needs no new
  * input from the athlete.
+ *
+ * A DUMBBELL WEIGHT IS WHAT IS IN ONE HAND. "I pressed the 30s" is 60kg of
+ * dumbbell, and taking the logged 30 at face value recorded half the work — on
+ * every dumbbell set, in every week, for everyone who trains with them. Single-
+ * arm work is one dumbbell and is not doubled. See lib/dumbbell.ts, which is
+ * also what the log field's label and the prescribed weight read from, so the
+ * three cannot drift apart.
  */
 export function tonnage(logs: TrainingLog[]): number {
   return logs.reduce(
     (total, t) =>
       total +
       (t.drills ?? []).reduce(
-        (s, d) => s + (Number(d.sets) || 0) * (Number(d.reps) || 0) * (Number(d.load_kg) || 0),
+        (s, d) => s + (Number(d.sets) || 0) * (Number(d.reps) || 0) * (totalLoadKg(d.name ?? "", d.load_kg) ?? 0),
         0
       ),
     0

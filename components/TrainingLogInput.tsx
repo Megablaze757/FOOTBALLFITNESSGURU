@@ -1,5 +1,6 @@
 "use client";
 
+import { loadUnitLabel, handsFor } from "@/lib/dumbbell";
 import type { TrainingDrill } from "@/lib/types";
 import { NumberInput } from "@/components/NumberInput";
 import type { SportId } from "@/lib/exercises";
@@ -427,8 +428,12 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
                   <div className="mt-2 grid grid-cols-3 gap-2">
                     <NumField label="Sets" value={d.sets} onChange={(v) => setDrill(i, { sets: v || 0 })} />
                     <NumField label="Reps" value={d.reps} onChange={(v) => setDrill(i, { reps: v || 0 })} />
+                    {/* "kg each" on a two-dumbbell lift. The app was taking a
+                        dumbbell weight as the total and recording half the
+                        work, and the field that caused it said nothing about
+                        which number it wanted — see lib/dumbbell.ts. */}
                     <NumField
-                      label="kg"
+                      label={loadUnitLabel(d.name ?? "")}
                       decimal
                       value={d.load_kg ?? ""}
                       onChange={(v) => setDrill(i, { load_kg: v === "" ? null : v })}
@@ -471,7 +476,8 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
                     <div className="grid flex-1 grid-cols-2 gap-2 text-center text-[10px] uppercase tracking-wider text-slate-500">
                       <span>Reps</span>
                       <span className="flex items-center justify-center gap-1">
-                        kg
+                        {/* "kg each" on a two-dumbbell lift — see lib/dumbbell.ts. */}
+                        {loadUnitLabel(d.name ?? "")}
                         <button type="button" onClick={() => setWhatIf(d.name)} className="tap-pad relative grid h-6 w-6 place-items-center text-pitch-400" aria-label={`What-if lift check for ${d.name || "this exercise"}`}><Icon name="calculator" size={14} /></button>
                       </span>
                     </div>
@@ -493,7 +499,7 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
                           className="field min-h-[44px] py-1.5 text-center"
                         />
                         <NumberInput
-                          aria-label={`Set ${si + 1} weight in kilograms`}
+                          aria-label={`Set ${si + 1} weight in kilograms${handsFor(d.name ?? "") === 2 ? ", per dumbbell" : ""}`}
                           value={st.load_kg ?? null}
                           min={0}
                           decimal

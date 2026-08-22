@@ -31,7 +31,10 @@ test("the weight field takes hundredths, and offers a keypad that can type them"
 });
 
 test("a decimal load survives the round trip through a set", () => {
-  const drill: TrainingDrill = { name: "Dumbbell curl", sets: 3, reps: 10, load_kg: 12.5 };
+  // A BARBELL lift on purpose. This test is about decimals, and a dumbbell
+  // weight is per hand, so a dumbbell example would fold two separate claims
+  // into one number — see lib/dumbbell.ts and its own tests.
+  const drill: TrainingDrill = { name: "Barbell curl", sets: 3, reps: 10, load_kg: 12.5 };
   // Expanded from the simple three-box row...
   for (const set of setsOf(drill)) {
     assert.equal(set.load_kg, 12.5, "expanding the drill into sets rounded the load");
@@ -50,12 +53,20 @@ test("volume adds hundredths without drifting", () => {
   // display that trusts it shows 367.49999999999994 kg moved.
   const logs = [{
     drills: [
-      { name: "Dumbbell curl", sets: 3, reps: 10, load_kg: 12.25 },
-      { name: "Lateral raise", sets: 3, reps: 12, load_kg: 6.5 },
+      { name: "Barbell curl", sets: 3, reps: 10, load_kg: 12.25 },
+      { name: "Cable lateral raise", sets: 3, reps: 12, load_kg: 6.5 },
     ],
   }] as TrainingLog[];
   const total = tonnage(logs);
   assert.ok(Math.abs(total - 601.5) < 1e-6, `tonnage came out at ${total}`);
+
+  // And the same arithmetic with the dumbbell convention on top: per hand, so
+  // twice the weight moves. Asserted here rather than only in dumbbell.test.ts
+  // because this is the file somebody reads when a total looks wrong.
+  const dumbbells = [{
+    drills: [{ name: "Dumbbell curl", sets: 3, reps: 10, load_kg: 12.25 }],
+  }] as TrainingLog[];
+  assert.ok(Math.abs(tonnage(dumbbells) - 735) < 1e-6, `dumbbell tonnage came out at ${tonnage(dumbbells)}`);
 });
 
 test("a 1RM estimated from a decimal load stays sane", () => {

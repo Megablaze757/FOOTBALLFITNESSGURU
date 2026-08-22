@@ -23,6 +23,7 @@
 // numbers that add up rather than a stale "3 × 10" beside sets of 12, 10 and 8.
 // =============================================================================
 
+import { handsFor } from "./dumbbell";
 import type { TrainingDrill } from "./types";
 
 export interface DrillSet {
@@ -189,7 +190,13 @@ export function lastSetsFor(
  *
  * Bodyweight sets contribute zero rather than being skipped: the total is
  * tonnage lifted, and a set with no bar on it did not lift any.
+ *
+ * A DUMBBELL WEIGHT IS PER HAND, so a two-dumbbell lift moves twice what was
+ * typed. The name is optional only because older callers pass a drill without
+ * one; without it the number is the barbell reading, which is what it always
+ * was. See lib/dumbbell.ts.
  */
-export function drillTonnage(drill: Pick<TrainingDrill, "sets" | "reps" | "load_kg" | "sets_detail">): number {
-  return workingSetsOf(drill).reduce((n, s) => n + s.reps * (s.load_kg ?? 0), 0);
+export function drillTonnage(drill: Pick<TrainingDrill, "sets" | "reps" | "load_kg" | "sets_detail"> & { name?: string }): number {
+  const hands = handsFor(drill.name ?? "");
+  return workingSetsOf(drill).reduce((n, s) => n + s.reps * (s.load_kg ?? 0) * hands, 0);
 }

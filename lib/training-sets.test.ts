@@ -163,7 +163,11 @@ test("the set rows meet the playbook the rest of the app follows", () => {
   // Dropping the per-row visible label is only acceptable because each input
   // still names itself to assistive tech.
   assert.match(block, /aria-label=\{`Set \$\{si \+ 1\} reps`\}/, "the reps field has no accessible name");
-  assert.match(block, /aria-label=\{`Set \$\{si \+ 1\} weight in kilograms`\}/, "the kg field has no accessible name");
+  // Matched on the opening of the label rather than the whole of it: a
+  // two-dumbbell lift appends ", per dumbbell", because the weight is per hand
+  // and the visible column header shortens that to "kg each". See
+  // lib/dumbbell.ts.
+  assert.match(block, /aria-label=\{`Set \$\{si \+ 1\} weight in kilograms/, "the kg field has no accessible name");
   assert.match(INPUT, /aria-label=\{`Remove set \$\{si \+ 1\}`\}/, "the remove button is an unlabelled ✕");
 
   // Headers appear once, above the rows — not inside the map.
