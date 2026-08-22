@@ -18,13 +18,17 @@ import { readFileSync } from "node:fs";
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
 
 const PARTS = [
+  "0088_program_preferences_and_active_rest",
+  "0089_post_completion_preferences",
+  "0090_coach_conversation",
+  "0091_notifications_trials_and_consent",
   "0092_meal_plan_preferences",
   "0093_meal_budget_and_store",
   "0094_run_duration",
   "0095_admin_visibility_and_email_audit",
 ];
 
-const combined = read("../supabase/apply-0092-0095.sql");
+const combined = read("../supabase/apply-0088-0095.sql");
 
 /**
  * Split SQL into statements, without cutting a function body in half.
@@ -33,6 +37,13 @@ const combined = read("../supabase/apply-0092-0095.sql");
  * function ... $$ ... $$;` into fragments — the first attempt at this reported
  * "end if" as a statement that cannot be run twice, which is true and useless.
  * Dollar-quoted bodies are skipped over whole.
+ *
+ * SO ARE SINGLE-QUOTED STRINGS. `comment on column ... is 'workout and
+ * active_rest count as activity; rest_day records an intentional recovery
+ * day.'` contains a semicolon inside the comment TEXT, and splitting there
+ * reported the second half of an English sentence as an unrepeatable
+ * statement. Doubled quotes ('') are an escaped quote inside a string, not the
+ * end of one.
  */
 function statementsIn(sql: string): string[] {
   const out: string[] = [];
@@ -44,6 +55,17 @@ function statementsIn(sql: string): string[] {
       const body = end === -1 ? sql.slice(i) : sql.slice(i, end + 2);
       buffer += body;
       i += body.length;
+      continue;
+    }
+    if (sql[i] === "'") {
+      let end = i + 1;
+      while (end < sql.length) {
+        if (sql[end] === "'" && sql[end + 1] === "'") { end += 2; continue; }
+        if (sql[end] === "'") { end += 1; break; }
+        end += 1;
+      }
+      buffer += sql.slice(i, end);
+      i = end;
       continue;
     }
     if (sql[i] === "-" && sql[i + 1] === "-") {
@@ -119,13 +141,24 @@ test("running it twice is safe", () => {
     /^create index if not exists/i,
     /^create unique index if not exists/i,
     /^create or replace function/i,
+    // A plain `create function` is repeatable only because the migration drops
+    // it immediately above — which it must, since a function whose RETURNS
+    // TABLE changed cannot be replaced in place.
+    /^create function/i,
+    /^create or replace view/i,
     /^drop policy if exists/i,
+    // A function whose signature changed cannot be replaced in place, so the
+    // migration drops it first. `if exists` is what makes that repeatable.
+    /^drop (function|view|trigger|index|table) if exists/i,
     /^create policy/i,                            // always preceded by a drop
     /^comment on/i,
     /^notify pgrst/i,
     /^revoke /i,
     /^grant /i,
     /^do \$\$/i,                                  // guarded blocks
+    // The confirmation line at the end of a migration. It reads the database
+    // and changes nothing, which is the definition of safe to repeat.
+    /^select /i,
   ];
 
   for (const statement of statements) {

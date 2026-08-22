@@ -1,5 +1,5 @@
 -- =============================================================================
--- PocketAthlete — migrations 0092 to 0095, in one file.
+-- PocketAthlete — migrations 0088 to 0095, in one file.
 --
 -- HOW TO RUN IT. Either:
 --
@@ -7,7 +7,7 @@
 --      -> Run. It is one transaction-free script; run it top to bottom.
 --
 --   2. Or, from GitHub: Actions -> "Apply SQL to Supabase" -> Run workflow,
---      with file = supabase/apply-0092-0095.sql. That needs the repo secret
+--      with file = supabase/apply-0088-0095.sql. That needs the repo secret
 --      SUPABASE_ACCESS_TOKEN (supabase.com/dashboard/account/tokens).
 --      Prefer this one: it prints what the database returned and fails the run
 --      on a non-2xx, so "did it apply?" has an answer in the log rather than in
@@ -22,7 +22,30 @@
 -- degrades to what it did before and says which migration is missing rather
 -- than showing an empty screen. Applying it turns those features on.
 --
+-- IT STARTS AT 0088 FOR A REASON. An earlier version of this file began at
+-- 0092 and failed on a real database with `42703: column "email_category" does
+-- not exist`, four hundred lines in: 0095 reads a column that 0091 adds, and
+-- 0091 had never been applied. A combined file has to reach back to the last
+-- migration anybody is sure about, and since every statement here is safe to
+-- run twice, including one you already have costs nothing at all.
+--
 -- WHAT IT ADDS, in order:
+--
+--   0088  Ordered programme goals and saved exercises on the profile, and
+--         active-rest days as a real kind of training log rather than an
+--         absence of one.
+--
+--   0089  A run's own distance, pace and unit; explicit rest days; display
+--         preferences; custom nutrition targets; and the email controls the
+--         notification pipeline below reads.
+--
+--   0090  The last turns of Ask Coach, so a follow-up is still a follow-up
+--         after a refresh or on another device.
+--
+--   0091  ONE notification pipeline, trial-ending reminders, and health
+--         consent recorded rather than assumed. This is the one that was
+--         missing: it adds notifications.email_category, which 0095's admin
+--         email views select from.
 --
 --   0092  Meal-plan preferences that were only ever held in React state.
 --         "Keep it cheap" has existed since the planner did and was never
@@ -55,6 +78,395 @@
 -- Worker is deployed by hand. /health reports version 2026-08-21.1 once it is.
 -- =============================================================================
 
+
+-- ============================================================================
+-- 0088_program_preferences_and_active_rest.sql
+-- ============================================================================
+
+-- Audit follow-up: additive programme preferences and explicit active-rest logs.
+-- Existing goal_type and JSON plan rows remain valid; nothing is rewritten.
+
+alter table public.profiles
+  add column if not exists goals jsonb not null default '[]'::jsonb,
+  add column if not exists saved_exercises text[] not null default '{}';
+
+alter table public.programs
+  add column if not exists goals jsonb not null default '[]'::jsonb,
+  add column if not exists settings jsonb not null default '{}'::jsonb;
+
+alter table public.training_logs
+  add column if not exists session_type text,
+  add column if not exists notes text;
+
+alter table public.training_logs drop constraint if exists training_logs_session_type_check;
+alter table public.training_logs add constraint training_logs_session_type_check
+  check (session_type is null or session_type = any (array['workout', 'active_rest']));
+
+comment on column public.profiles.goals is
+  'Up to three ordered programme goals: [{type,priority}]. The first is the anchor.';
+comment on column public.programs.settings is
+  'Snapshot of the custom rotation and advanced controls used to build the block.';
+comment on column public.training_logs.session_type is
+  'active_rest counts toward attendance while its empty drills contribute no strength volume.';
+
+-- ============================================================================
+-- 0089_post_completion_preferences.sql
+-- ============================================================================
+
+-- Post-completion audit: precise run duration, explicit rest days, athlete
+-- display preferences, custom nutrition targets and email controls.
+
+alter table public.training_logs
+  add column if not exists duration_seconds integer,
+  add column if not exists distance_value numeric(8,3),
+  add column if not exists distance_unit text,
+  add column if not exists pace_seconds_per_km integer,
+  add column if not exists avg_speed_kmh numeric(6,2);
+
+alter table public.training_logs drop constraint if exists training_logs_duration_seconds_check;
+alter table public.training_logs add constraint training_logs_duration_seconds_check
+  check (duration_seconds is null or (duration_seconds >= 0 and duration_seconds <= 172800));
+
+alter table public.training_logs drop constraint if exists training_logs_distance_unit_check;
+alter table public.training_logs add constraint training_logs_distance_unit_check
+  check (distance_unit is null or distance_unit = any (array['km', 'mi']));
+
+alter table public.training_logs drop constraint if exists training_logs_session_type_check;
+alter table public.training_logs add constraint training_logs_session_type_check
+  check (session_type is null or session_type = any (array['workout', 'active_rest', 'rest_day']));
+
+alter table public.profiles
+  add column if not exists distance_unit text not null default 'km',
+  add column if not exists calorie_target integer,
+  add column if not exists protein_target integer,
+  add column if not exists carbs_target integer,
+  add column if not exists fats_target integer,
+  add column if not exists email_weekly_summary boolean not null default true,
+  add column if not exists email_checkin_reminders boolean not null default true,
+  add column if not exists email_workout_reminders boolean not null default true,
+  add column if not exists email_milestones boolean not null default true,
+  add column if not exists email_program_reminders boolean not null default true;
+
+alter table public.profiles drop constraint if exists profiles_distance_unit_check;
+alter table public.profiles add constraint profiles_distance_unit_check
+  check (distance_unit = any (array['km', 'mi']));
+
+alter table public.profiles drop constraint if exists profiles_custom_nutrition_targets_check;
+alter table public.profiles add constraint profiles_custom_nutrition_targets_check check (
+  (calorie_target is null or calorie_target between 800 and 10000) and
+  (protein_target is null or protein_target between 0 and 1000) and
+  (carbs_target is null or carbs_target between 0 and 1500) and
+  (fats_target is null or fats_target between 0 and 500)
+);
+
+comment on column public.training_logs.duration_seconds is
+  'Exact elapsed run/session duration. total_minutes remains a rounded backwards-compatible summary.';
+comment on column public.training_logs.session_type is
+  'workout and active_rest count as activity; rest_day records an intentional recovery day.';
+
+create table if not exists public.email_delivery_logs (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references public.profiles(id) on delete set null,
+  email_type text not null,
+  provider_id text,
+  status text not null,
+  error_message text,
+  created_at timestamptz not null default now()
+);
+alter table public.email_delivery_logs drop constraint if exists email_delivery_logs_status_check;
+alter table public.email_delivery_logs add constraint email_delivery_logs_status_check
+  check (status in ('attempted', 'sent', 'delivered', 'delayed', 'failed', 'bounced', 'complained', 'skipped'));
+create index if not exists email_delivery_logs_user_created
+  on public.email_delivery_logs (user_id, created_at desc);
+create unique index if not exists email_delivery_logs_provider_id_unique
+  on public.email_delivery_logs (provider_id) where provider_id is not null;
+alter table public.email_delivery_logs enable row level security;
+drop policy if exists "email delivery: read own" on public.email_delivery_logs;
+create policy "email delivery: read own" on public.email_delivery_logs
+  for select to authenticated using (user_id = auth.uid());
+
+notify pgrst, 'reload schema';
+
+-- ============================================================================
+-- 0090_coach_conversation.sql
+-- ============================================================================
+
+-- Recent Ask Coach turns, so a follow-up is a follow-up after navigation,
+-- refresh or another device. The model receives only the latest 12; the table
+-- is the athlete's private record and cascades with account deletion.
+
+create table if not exists public.coach_messages (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  role text not null check (role in ('user', 'assistant')),
+  content text not null check (char_length(content) between 1 and 4000),
+  created_at timestamptz not null default now()
+);
+
+create index if not exists coach_messages_user_created_idx
+  on public.coach_messages (user_id, created_at desc);
+
+alter table public.coach_messages enable row level security;
+
+drop policy if exists "coach messages: read own" on public.coach_messages;
+create policy "coach messages: read own"
+  on public.coach_messages for select to authenticated
+  using (user_id = auth.uid());
+
+drop policy if exists "coach messages: insert own" on public.coach_messages;
+create policy "coach messages: insert own"
+  on public.coach_messages for insert to authenticated
+  with check (user_id = auth.uid());
+
+drop policy if exists "coach messages: delete own" on public.coach_messages;
+create policy "coach messages: delete own"
+  on public.coach_messages for delete to authenticated
+  using (user_id = auth.uid());
+
+comment on table public.coach_messages is
+  'Private recent Ask Coach conversation. Sent back as bounded context for follow-up questions.';
+
+-- ============================================================================
+-- 0091_notifications_trials_and_consent.sql
+-- ============================================================================
+
+-- =============================================================================
+-- 0091 — one notification pipeline, trial-ending reminders and recorded health
+-- consent.
+--
+-- Safe to paste into the Supabase SQL editor more than once.
+-- =============================================================================
+
+-- Notification choices --------------------------------------------------------
+
+alter table public.profiles
+  add column if not exists in_app_training_reminders boolean not null default true,
+  add column if not exists health_data_consent_at timestamptz,
+  add column if not exists health_data_consent_version text;
+
+comment on column public.profiles.health_data_consent_at is
+  'When the athlete made the separate, express health-data consent statement.';
+comment on column public.profiles.health_data_consent_version is
+  'Version of the health-data notice accepted by the athlete.';
+
+alter table public.notifications
+  add column if not exists dedupe_key text,
+  add column if not exists show_in_app boolean not null default true,
+  add column if not exists email_category text not null default 'none';
+
+alter table public.notifications drop constraint if exists notifications_kind_check;
+alter table public.notifications add constraint notifications_kind_check check (
+  kind in (
+    'program_assigned', 'coach_request', 'general',
+    'check_in_reminder', 'workout_reminder', 'weekly_summary',
+    'program_deadline', 'milestone', 'trial_ending', 'billing'
+  )
+);
+
+alter table public.notifications drop constraint if exists notifications_email_category_check;
+alter table public.notifications add constraint notifications_email_category_check check (
+  email_category in ('none', 'checkin', 'workout', 'weekly', 'milestone', 'program', 'essential')
+);
+
+-- A normal unique index still permits multiple NULL keys, which preserves old
+-- and coach-created notifications while making scheduled jobs idempotent.
+create unique index if not exists notifications_user_dedupe_unique
+  on public.notifications (user_id, dedupe_key);
+
+create index if not exists notifications_pending_email_idx
+  on public.notifications (emailed_at, created_at)
+  where emailed_at is null and email_category <> 'none';
+
+-- The athlete may dismiss a row, but cannot turn an ordinary coach message into
+-- an essential billing email or rewrite what the sender said.
+revoke update on public.notifications from authenticated;
+grant update (read_at) on public.notifications to authenticated;
+
+drop policy if exists "notifications: coach notify" on public.notifications;
+create policy "notifications: coach notify" on public.notifications
+  for insert to authenticated with check (
+    public.is_coach_of(user_id)
+    and kind in ('program_assigned', 'coach_request', 'general')
+    and (
+      email_category = 'none'
+      or (kind = 'program_assigned' and email_category = 'program')
+    )
+    and show_in_app
+    and dedupe_key is null
+  );
+
+-- The Worker asks for ready-to-send rows. Optional training emails obey the
+-- switches already shown on Profile; an essential billing notice is not
+-- suppressed merely because its in-app copy was opened first.
+drop function if exists public.pending_notification_emails();
+create function public.pending_notification_emails()
+returns table (
+  id uuid,
+  user_id uuid,
+  title text,
+  body text,
+  href text,
+  kind text,
+  email_category text
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select n.id, n.user_id, n.title, n.body, n.href, n.kind, n.email_category
+    from public.notifications n
+    join public.profiles p on p.id = n.user_id
+   where n.emailed_at is null
+     and n.email_category <> 'none'
+     and (n.email_category = 'essential' or n.read_at is null)
+     and (n.email_category = 'essential' or p.health_data_consent_at is not null)
+     and n.created_at > now() - case
+       when n.email_category = 'essential' then interval '30 days'
+       else interval '7 days'
+     end
+     and case n.email_category
+       when 'essential' then true
+       when 'checkin' then p.email_checkin_reminders
+       when 'workout' then p.email_workout_reminders
+       when 'weekly' then p.email_weekly_summary
+       when 'milestone' then p.email_milestones
+       when 'program' then p.email_program_reminders
+       else false
+     end
+   order by n.created_at
+   limit 200;
+$$;
+
+revoke execute on function public.pending_notification_emails() from public, anon, authenticated;
+grant execute on function public.pending_notification_emails() to service_role;
+
+-- Web push is a separate device-level opt-in, but it still obeys the global
+-- app-reminder switch and never inspects check-in state after health consent is
+-- withdrawn.
+create or replace function public.push_targets_for_reminder(for_date date)
+returns table (endpoint text, sub_id uuid)
+language sql
+security definer
+set search_path = public, pg_temp
+as $$
+  select s.endpoint, s.id
+    from public.push_subscriptions s
+    join public.profiles p on p.id = s.user_id
+   where s.failed_at is null
+     and p.in_app_training_reminders
+     and p.health_data_consent_at is not null
+     and not exists (
+       select 1 from public.daily_check_ins c
+        where c.user_id = s.user_id and c.check_in_date = for_date
+     );
+$$;
+
+revoke all on function public.push_targets_for_reminder(date) from public, anon, authenticated;
+grant execute on function public.push_targets_for_reminder(date) to service_role;
+
+-- Trial state -----------------------------------------------------------------
+
+alter table public.subscriptions
+  add column if not exists stripe_status text,
+  add column if not exists trial_end timestamptz,
+  add column if not exists trial_reminder_created_at timestamptz;
+
+create index if not exists subscriptions_trial_reminder_due_idx
+  on public.subscriptions (trial_end)
+  where stripe_status = 'trialing'
+    and trial_end is not null
+    and trial_reminder_created_at is null;
+
+-- The sold Pro plan and historic silver data value now grant identical access,
+-- quota and retention. Keeping a hidden 60-day tier in this function made the
+-- privacy policy and the product disagree.
+create or replace function public.expired_video_paths()
+returns table (id uuid, storage_path text)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select v.id, v.storage_path
+    from public.videos v
+    left join public.subscriptions s
+      on s.user_id = v.user_id and s.status = 'active'
+   where v.created_at < now() - (
+           case coalesce(s.tier, 'bronze')
+             when 'gold' then interval '180 days'
+             when 'silver' then interval '180 days'
+             else interval '14 days'
+           end)
+   limit 500;
+$$;
+
+revoke execute on function public.expired_video_paths() from public, anon, authenticated;
+grant execute on function public.expired_video_paths() to service_role;
+
+-- New-account consent ---------------------------------------------------------
+--
+-- This keeps the current first-touch referral ledger and signup funnel logic.
+-- The timestamp is server generated; the browser supplies only the express
+-- yes/no statement and the notice version it displayed.
+
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  is_live boolean;
+  v_meta text;
+  v_code text;
+  v_health_consent boolean;
+  v_health_version text;
+begin
+  select coalesce(launched, false) into is_live from public.app_settings where id;
+
+  v_meta := nullif(trim(new.raw_user_meta_data ->> 'referral_code'), '');
+  if v_meta is not null then
+    perform public.claim_referral(new.email, v_meta, 'signup');
+  end if;
+  v_code := public.referrer_for_email(new.email);
+
+  v_health_consent := lower(coalesce(new.raw_user_meta_data ->> 'health_data_consent', 'false')) = 'true';
+  v_health_version := nullif(trim(new.raw_user_meta_data ->> 'health_data_consent_version'), '');
+
+  insert into public.profiles (
+    id, full_name, avatar_url, beta, referral_code,
+    health_data_consent_at, health_data_consent_version
+  )
+  values (
+    new.id,
+    new.raw_user_meta_data ->> 'full_name',
+    new.raw_user_meta_data ->> 'avatar_url',
+    not coalesce(is_live, false),
+    v_code,
+    case when v_health_consent then now() else null end,
+    case when v_health_consent then coalesce(v_health_version, '2026-08-17') else null end
+  )
+  on conflict (id) do nothing;
+
+  insert into public.funnel_events (user_id, event, meta)
+  select new.id, 'signup',
+         jsonb_build_object('since_signup_s', 0, 'referred', v_code is not null)
+   where not exists (
+     select 1 from public.funnel_events e
+      where e.user_id = new.id and e.event = 'signup'
+   );
+
+  return new;
+end;
+$$;
+
+notify pgrst, 'reload schema';
+
+select
+  'OK - migration 0091 applied' as result,
+  count(*) filter (where stripe_status = 'trialing' and trial_end is not null) as tracked_trials
+from public.subscriptions;
 
 -- ============================================================================
 -- 0092_meal_plan_preferences.sql

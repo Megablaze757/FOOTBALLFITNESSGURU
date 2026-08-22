@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // =============================================================================
-// Rebuild supabase/apply-0092-0095.sql from the migrations it claims to be.
+// Rebuild supabase/apply-0088-0095.sql from the migrations it claims to be.
 //
 // WHY A SCRIPT AND NOT A HAND-EDITED FILE. A paste-ready copy of four
 // migrations is a second source of truth, and the failure mode is silent: the
@@ -15,14 +15,32 @@
 
 import { readFileSync, writeFileSync } from "node:fs";
 
+/**
+ * STARTS AT 0088, NOT 0092.
+ *
+ * The first version of this file began at 0092 and it failed on a real
+ * database: 0095 reads notifications.email_category, which 0091 adds, and 0091
+ * had never been applied. The error was `42703: column "email_category" does
+ * not exist` at line 434 of a 438-line paste — which tells you nothing about
+ * which migration is missing, and leaves the database half-changed.
+ *
+ * A combined file has to be self-contained back to the last migration anyone
+ * is sure about. Every one of these is idempotent (lib/apply-sql.test.ts checks
+ * it), so including one that has already been applied costs nothing, and
+ * leaving one out costs an error nobody can diagnose from the message.
+ */
 const PARTS = [
+  "0088_program_preferences_and_active_rest",
+  "0089_post_completion_preferences",
+  "0090_coach_conversation",
+  "0091_notifications_trials_and_consent",
   "0092_meal_plan_preferences",
   "0093_meal_budget_and_store",
   "0094_run_duration",
   "0095_admin_visibility_and_email_audit",
 ];
 
-const OUT = "supabase/apply-0092-0095.sql";
+const OUT = "supabase/apply-0088-0095.sql";
 const HEADER_END = "-- =============================================================================\n\n\n";
 
 const existing = readFileSync(OUT, "utf8");
