@@ -10,18 +10,19 @@ import { useAsync } from "@/lib/use-async";
 import { assessReadiness } from "@/lib/readiness";
 import { actionLabel } from "@/lib/insights";
 import { checkInStreak, computeACWR } from "@/lib/load";
-import { dailyQuests, computeXp, levelFor, activitySpans, type ActivityStats, type LevelInfo, type Standing, EMPTY_STATS } from "@/lib/gamification";
-import { fetchXpExtras } from "@/lib/athlete-xp";
+import { dailyQuests } from "@/lib/gamification";
 import { biometricSignal, type Biometric } from "@/lib/biometrics";
 import { sportProfile } from "@/lib/sport-profile";
 import { ReadinessGauge } from "@/components/ReadinessGauge";
 import { TodayCard } from "@/components/TodayCard";
+import { HomeStats } from "@/components/HomeStats";
 import { WeekStrip } from "@/components/WeekStrip";
 import { Notifications } from "@/components/Notifications";
 import type { CheckInInput, DailyInsight, TrainingLog } from "@/lib/types";
 import type { ProgramPlan } from "@/lib/engine";
 import { daysAgoLocal, todayLocal, lastNDaysLocal } from "@/lib/day";
 import { durationMinutes } from "@/lib/training-duration";
+import { homeStats } from "@/lib/home-stats";
 
 export default function HomePage() {
   const user = useCurrentUser();
@@ -53,10 +54,9 @@ export default function HomePage() {
     const [
       { data: profile }, { data: checkIn }, { data: streakRows },
       { data: trainToday }, { data: nutriToday }, { data: bio },
-      { data: activeProgram }, { data: progs },
+      { data: activeProgram },
       { data: recentTraining },
-      { count: videoCount }, { count: benchCount }, { count: aiPlanCount },
-      { count: checkInCount }, { count: trainingCount }, { count: nutritionCount },
+      { count: videoCount }, { count: checkInCount }, { count: nutritionCount },
     ] = await Promise.all([
       supabase.from("profiles").select("full_name, onboarded, sport").eq("id", user.id).maybeSingle(),
       supabase.from("daily_check_ins").select("*").eq("user_id", user.id).eq("check_in_date", today).maybeSingle(),
@@ -73,18 +73,20 @@ export default function HomePage() {
         .gte("metric_date", since28).order("metric_date", { ascending: true }),
       supabase.from("programs").select("plan, completed_sessions").eq("user_id", user.id)
         .eq("status", "active").order("created_at", { ascending: false }).limit(1).maybeSingle(),
-      supabase.from("programs").select("completed_sessions, status").eq("user_id", user.id),
       // intensity and drills come along so the readiness verdict can account for
       // training load — without them sessionLoad has nothing to work with and
       // ACWR silently reads as "building" forever. 28 days is exactly ACWR's
       // chronic window, so pulling more was never useful.
-      supabase.from("training_logs").select("log_date, total_minutes, duration_seconds, intensity, drills, contact_minutes, distance_km, session_type")
+      // run_seconds and run_type come along for HomeStats: pace worked out from
+      // the SESSION reads a footballer's 5k inside a 90-minute session as
+      // 18:00/km, which is not a rounding error but a different sport.
+      supabase.from("training_logs").select("log_date, total_minutes, duration_seconds, intensity, drills, contact_minutes, distance_km, run_seconds, run_type, session_type")
         .eq("user_id", user.id).gte("log_date", since28),
+      // Three head-counts, not six. The benchmark, AI-plan and training totals
+      // fed only the XP level this page no longer shows; these three are what
+      // the "getting started" checklist asks about.
       supabase.from("videos").select("id", head).eq("user_id", user.id),
-      supabase.from("strength_benchmarks").select("id", head).eq("user_id", user.id),
-      supabase.from("ai_plans").select("id", head).eq("user_id", user.id),
       supabase.from("daily_check_ins").select("id", head).eq("user_id", user.id),
-      supabase.from("training_logs").select("id", head).eq("user_id", user.id).or("session_type.is.null,session_type.neq.rest_day"),
       supabase.from("nutrition_logs").select("id", head).eq("user_id", user.id),
     ]);
 
@@ -125,35 +127,18 @@ export default function HomePage() {
     const checkDates = (streakRows ?? []).map((r) => r.check_in_date as string);
     const trainRows = ((recentTraining ?? []) as { log_date: string; total_minutes: number | null; duration_seconds?: number | null; session_type?: string | null }[])
       .filter((row) => row.session_type !== "rest_day");
-    const programs = (progs ?? []) as { completed_sessions: string[] | null; status: string }[];
-    const stats: ActivityStats = {
-      // Spread first so a new stat added to ActivityStats defaults sensibly
-      // here instead of breaking every call site that builds one by hand.
-      ...EMPTY_STATS,
-      // Lifetime totals come from head-counts — the row data was only ever
-      // being counted, so there was no reason to transfer it.
-      checkIns: checkInCount ?? 0,
-      streak,
-      trainingSessions: trainingCount ?? 0,
-      completedSessions: programs.reduce((n, p) => n + (p.completed_sessions?.length ?? 0), 0),
-      completedBlocks: programs.filter((p) => p.status === "archived").length,
-      benchmarks: benchCount ?? 0,
-      videos: videoCount ?? 0,
-      nutritionLogs: nutritionCount ?? 0,
-      // From the 40-day streak rows already in hand.
-      checkInsLast7: checkDates.filter((d) => d >= since7).length,
-      // A rest day is one you checked in on and did not train. Both lists are
-      // already here, so this costs no extra query — see ActivityStats.
-      restDaysLogged: checkDates.filter((d) => !trainRows.map((t) => t.log_date).includes(d)).length,
-      /**
-       * Derived from the same lists as Rewards, so the two cannot disagree —
-       * except for `perfectDaysLast7`, which is 0 here and honestly so: Home
-       * loads only TODAY's nutrition row, not the week's dates. Nothing on this
-       * page reads it (XP does not, and badges are rendered on Rewards), and an
-       * extra query to fill in a number nobody looks at would be worse.
-       */
-      ...activitySpans(checkDates, trainRows.map((t) => t.log_date), []),
-    };
+    /**
+     * HOME NO LONGER COMPUTES AN XP TOTAL, so the twelve-field ActivityStats it
+     * used to assemble is down to the one number the week strip reads.
+     *
+     * Everything else in that object existed to feed `computeXp` — lifetime
+     * counts of benchmarks, videos, nutrition logs, completed blocks, the
+     * longest streaks — and the level it produced is gone from this page. The
+     * two head-counts that fed only those are gone with it. Rewards still
+     * builds the full set, from the same helpers, and is the one place that
+     * needs to.
+     */
+    const checkInsLast7 = checkDates.filter((d) => d >= since7).length;
     /**
      * The last seven days, day by day.
      *
@@ -184,10 +169,23 @@ export default function HomePage() {
       checkedIn: checkSet.has(iso),
       trained: trainSet.has(iso),
     }));
+    /**
+     * The three numbers Home leads with, chosen from what this athlete does.
+     *
+     * Off the 28 days already in hand for the acute:chronic ratio, so it costs
+     * no extra query. `recentTraining` — not `trainRows` — because a rest day
+     * is a fact about the week and home-stats filters them itself.
+     */
+    const since14 = daysAgoLocal(13);
+    const logs = (recentTraining ?? []) as unknown as TrainingLog[];
+    const thisWeek = logs.filter((r) => r.log_date >= since7);
+    const lastWeek = logs.filter((r) => r.log_date >= since14 && r.log_date < since7);
+    const activity = homeStats((profile as { sport?: string } | null)?.sport, thisWeek, lastWeek);
+
     const week = {
       sessions: trainRows.filter((r) => r.log_date >= since7).length,
       minutes: Math.round(trainRows.filter((r) => r.log_date >= since7).reduce((n, r) => n + durationMinutes(r), 0)),
-      checkIns: stats.checkInsLast7,
+      checkIns: checkInsLast7,
       days,
     };
     // "Getting started" asks whether they've EVER done each thing. It used to
@@ -203,60 +201,31 @@ export default function HomePage() {
 
     const acwr = computeACWR(trainRows as unknown as TrainingLog[]);
 
-    // WHERE THIS ATHLETE SITS AGAINST EVERYONE ELSE.
-    //
-    // Only the two ranks above Legend need it, and they are unreachable until
-    // there are a hundred athletes — so this failing is not an error worth
-    // showing anyone. A null standing makes rankFor behave exactly as it did
-    // before those ranks existed.
-    let standing: Standing | null = null;
-    let tierDays = { apexDays: 0, apexBestRun: 0, eliteDays: 0, eliteBestRun: 0 };
-    try {
-      const { data: st } = await supabase.rpc("ladder_standing");
-      const row = (Array.isArray(st) ? st[0] : st) as { athletes?: number; place?: number } | null;
-      // `place` in SQL, `position` here: position() is a built-in in Postgres
-      // and a column of that name will not compile. Mapped once, at the edge.
-      if (row?.athletes != null && row?.place != null) {
-        standing = { athletes: Number(row.athletes), position: Number(row.place) };
-      }
-
-      // TODAY IS RECORDED SERVER-SIDE, not from the standing above.
-      //
-      // The badges for Elite and Apex count days held, so a day has to be
-      // written down — and it is written by a function that recomputes the
-      // standing itself. A badge worth having cannot be awarded on the client's
-      // say-so, and this client has already been told its own position.
-      // Returns 'none' and writes nothing for anyone who has not earned one,
-      // including admins, who are off the ladder entirely.
-      await supabase.rpc("record_ladder_standing");
-
-      const { data: days } = await supabase.rpc("ladder_tier_days");
-      for (const r of (days ?? []) as { standing_tier: string; days: number; best_run: number }[]) {
-        if (r.standing_tier === "Apex") {
-          tierDays = { ...tierDays, apexDays: Number(r.days) || 0, apexBestRun: Number(r.best_run) || 0 };
-        } else if (r.standing_tier === "Elite") {
-          tierDays = { ...tierDays, eliteDays: Number(r.days) || 0, eliteBestRun: Number(r.best_run) || 0 };
-        }
-      }
-    } catch {
-      // 0081/0082 not applied yet, or offline. The ladder just ends at Legend
-      // and the standing badges stay at zero — neither is an error worth
-      // showing anybody.
-    }
-
     /**
-     * The XP sources that are not row counts — strength tiers and recorded
-     * challenge completions. Home used to omit BOTH, so it showed a lower level
-     * than Rewards for the same athlete on the same day: Silver 1 against Gold
-     * 3. See lib/athlete-xp.ts.
+     * A WRITE WITH NO READ, AND IT HAS TO STAY.
+     *
+     * Home no longer shows a rank or an XP bar, so the two queries that fetched
+     * the standing and the days-held counters are gone with them. This one is
+     * not a query: `record_ladder_standing` recomputes the athlete's position
+     * server-side and writes down that they held it today, which is what the
+     * Elite and Apex badges count. Home is the page people open daily, so it is
+     * the only place that heartbeat reliably happens — dropping it would leave
+     * those badges accruing only on the days somebody visited Rewards.
+     *
+     * Returns 'none' and writes nothing for anyone who has not earned a
+     * standing, including admins, who are off the ladder entirely. Failing is
+     * not an error worth showing anybody: 0081/0082 may not be applied, or the
+     * device may be offline.
      */
-    const xpExtras = await fetchXpExtras(supabase, user.id);
+    try {
+      await supabase.rpc("record_ladder_standing");
+    } catch {
+      // See above. The badges simply do not gain a day.
+    }
 
     return {
       profile, checkIn, insight, streak, quests, bioSignal, setup,
-      stats: { ...stats, ...tierDays, ...xpExtras },
-      challengeXp: xpExtras.challengeXp,
-      week, acwr, standing,
+      week, acwr, activity,
       nextSession, hasProgram: programCount > 0, trainedToday,
       nutriToday: (nutriToday ?? null) as { calories_eaten: number | null; daily_calorie_target: number | null } | null,
     };
@@ -275,7 +244,6 @@ export default function HomePage() {
 
   if (loading || needsOnboarding) return <Skeleton />;
 
-  const level = levelFor(computeXp(data!.stats) + data!.challengeXp, data!.standing);
   // From the saved target — not recomputed. Three places already worked out
   // calories and two of them disagreed; a fourth here would be the same bug.
   const kcalLeft = data!.nutriToday?.daily_calorie_target
@@ -366,7 +334,6 @@ export default function HomePage() {
 
       <TodayCard
         quests={data!.quests}
-        level={level}
         sessionTitle={data!.nextSession?.title ?? null}
         sessionSub={data!.nextSession ? `Week ${data!.nextSession.week} · ${data!.nextSession.drills} exercise${data!.nextSession.drills === 1 ? "" : "s"}` : null}
         kcalLeft={kcalLeft}
@@ -388,6 +355,12 @@ export default function HomePage() {
         accent="#5fd3c4"
         complete={data!.quests.every((q) => q.done)}
       />
+
+      {/* THE NUMBERS YOUR SPORT IS MEASURED IN, WHERE THE XP BAR USED TO BE.
+          A runner gets distance and pace, a lifter weight moved, a rugby player
+          contact minutes — chosen from what they actually log rather than from
+          what they signed up as. See lib/home-stats.ts. */}
+      <HomeStats stats={data!.activity} />
 
       {/* Only once they have checked in. A readiness gauge before any input is
           a dial pointing at nothing, and the coach has nothing to go on. */}

@@ -12,18 +12,23 @@ import { EMPTY_XP_EXTRAS } from "./athlete-xp";
  * A level is an identity rather than a statistic, so getting it wrong on the
  * first screen somebody opens is worse than getting a chart wrong — they cannot
  * tell which of the app's two claims about them is real.
+ *
+ * THE FIX IS NOW STRUCTURAL. Home does not show a level at all: it closes on
+ * what the week actually did rather than on a bar filling toward a rank, so
+ * there is only one screen making the claim and nothing for it to disagree
+ * with. The rule this test keeps is the one that outlived the bug — exactly one
+ * place computes a level, and it uses every source.
  */
-test("both screens build the level from the same sources", () => {
+test("one screen computes the level, and it uses every source", () => {
   const home = readFileSync(new URL("../app/(app)/home/page.tsx", import.meta.url), "utf8");
   const rewards = readFileSync(new URL("../app/(app)/rewards/page.tsx", import.meta.url), "utf8");
+  const code = (src: string) => src.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, "");
 
-  for (const [name, src] of [["home", home], ["rewards", rewards]] as const) {
-    assert.match(src, /fetchXpExtras\(/,
-      `${name} assembles its own XP sources, so the two can disagree about somebody's level again`);
-  }
-  // And Home must actually ADD the challenge XP, not merely fetch it.
-  assert.match(home, /computeXp\(data!\.stats\) \+ data!\.challengeXp/,
-    "home computes XP without the challenge total, which is how it under-reported the level");
+  assert.match(rewards, /fetchXpExtras\(/,
+    "Rewards no longer pulls the XP sources that are not row counts — strength tiers and challenges");
+  assert.match(code(rewards), /computeXp\(/, "Rewards no longer computes a level");
+  assert.ok(!/computeXp\(|levelFor\(|fetchXpExtras\(/.test(code(home)),
+    "Home computes a level again — two screens deriving one identity is how they came to disagree");
 });
 
 /**
