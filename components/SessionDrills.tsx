@@ -51,8 +51,8 @@ export function SessionDrills({ drills, onPick, onSwap, onReorder, editMode = fa
       {grouped.map((group, gi) => (
         <li key={gi} className={`min-w-0 overflow-hidden ${compact ? "mt-2 pl-2" : "mt-5 rounded-2xl border-l-4 px-2 py-4 sm:mt-6 sm:p-4"} ${sectionStyle(group).wrap}`}>
           {group.rehab ? (
-            <div className={`mb-2 flex items-center gap-2 font-bold ${compact ? "text-[10px] uppercase tracking-wider" : "text-[17px]"} text-amber-400/80`}>
-              <Icon name="plaster" size={compact ? 13 : 18} /> Rehab <span className="text-[10px] font-medium text-amber-300/60">do this first</span>
+            <div className={`mb-2 flex items-center gap-2 font-bold ${compact ? "text-[10px] uppercase tracking-wider" : "text-[17px]"} text-orange-300`}>
+              <Icon name="plaster" size={compact ? 13 : 18} /> Rehab <span className="text-[10px] font-medium text-orange-300/70">do this first</span>
             </div>
           ) : group.slot ? (
             <div className={`mb-2 flex items-center gap-2 font-bold ${compact ? "text-[10px] uppercase tracking-wider" : "text-[17px]"} ${sectionStyle(group).text}`}>
@@ -167,7 +167,7 @@ function DrillCard({ drill, onPick, rehab, slot }: { drill: Drill; onPick?: (nam
       } ${pickable ? "hover:border-white/20 hover:bg-white/[0.06]" : ""}`}
     >
       <span className={`grid h-14 w-12 shrink-0 place-items-center overflow-hidden rounded-xl border bg-black/40 ${
-        rehab ? "border-amber-400/20" : "border-white/10"
+        rehab ? "border-orange-400/25" : "border-white/10"
       }`}>
         {how
           ? <ExerciseDemo pattern={how.demo} implement={how.implement} muscles={how.muscles} name={how.name} className="h-12 w-10" />
@@ -279,7 +279,7 @@ function displayName(drill: Drill): string {
 }
 
 function sectionStyle(group: Group): { label: string; icon: IconName; wrap: string; text: string } {
-  if (group.rehab) return { label: "Rehab", icon: "plaster", wrap: "border-l-amber-400/70 bg-amber-400/[0.025]", text: "text-amber-400/80" };
+  if (group.rehab) return { label: "Rehab", icon: "plaster", wrap: "border-l-orange-400/70 bg-orange-400/[0.03]", text: "text-orange-300" };
   const slot = group.slot;
   if (slot === "warmup") return { label: "Warm-up", icon: "bolt", wrap: "border-l-sky-400/70 bg-sky-400/[0.02]", text: "text-sky-300/80" };
   if (slot === "conditioning") return { label: "Conditioning", icon: "run", wrap: "border-l-emerald-400/70 bg-emerald-400/[0.02]", text: "text-emerald-300/80" };

@@ -1031,6 +1031,39 @@ export function getExercisesForSport(sport: SportId | "all"): Exercise[] {
   return [...specific, ...general];
 }
 
+/**
+ * The runs, by id.
+ *
+ * A LIST RATHER THAN A RULE, because the rule was wrong. "demo is run and the
+ * category is Endurance" also catches a sled push and a stair interval, which
+ * are movements with technique worth looking up — exactly what the library is
+ * for. What these eleven have in common is not a property of the row, it is
+ * that each one is a SESSION prescribed by zone and duration rather than an
+ * exercise you perform. That is a judgement, so it is written down as one.
+ */
+const RUN_SESSION_IDS = new Set([
+  "tempo_runs", "easy_run", "long_run", "threshold_run", "vo2_intervals",
+  "fartlek_run", "progression_run", "hill_repeats", "recovery_run",
+  "shuttle_runs", "strides",
+]);
+
+/**
+ * A run is not a movement you look up.
+ *
+ * The library answers "how do I do this exercise" and shows a figure, the
+ * muscles and the kit. An "Easy run" row opened to a card telling you to go for
+ * a run — which nobody needed, and which put a dozen of them in front of the
+ * movements people came for. Runs are prescribed by zone and duration and
+ * explained on Guides, so they are filtered out of the library's list.
+ *
+ * The entries stay in EXERCISES: the programme prescribes them by name, the
+ * check-in matches them, and the detail is still reachable from a session. This
+ * only decides what the library SHOWS.
+ */
+export function isRunEntry(e: Pick<Exercise, "id">): boolean {
+  return RUN_SESSION_IDS.has(e.id);
+}
+
 export const EXERCISE_CATEGORIES: ExerciseCategory[] =
   ["Speed", "Agility", "Power", "Strength", "Mobility", "Rehab", "Recovery", "Endurance", "Skill"];
 

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { SectionNav } from "@/components/SectionNav";
+import { SessionWhy } from "@/components/SessionWhy";
 import { createClient } from "@/lib/supabase/client";
 import { Icon, type IconName } from "@/components/Icon";
 import { ConfirmButton } from "@/components/ConfirmButton";
@@ -1005,7 +1006,7 @@ function ActiveProgram({
   const adherence = totalSessions ? Math.round((doneCount / totalSessions) * 100) : 0;
 
   // The next session that isn't ticked off — what to do today.
-  const allSessions = plan.weeks.flatMap((w) => w.sessions.map((s) => ({ w: w.week, s })));
+  const allSessions = plan.weeks.flatMap((week) => week.sessions.map((s) => ({ w: week.week, s, week })));
   const nextSession = allSessions.find(({ w, s }) => !program.completed_sessions.includes(`w${w}d${s.day}`));
   const complete = doneCount >= totalSessions && totalSessions > 0;
   // Whether anything has been logged today, so the page can stop calling the
@@ -1725,6 +1726,23 @@ function ActiveProgram({
                   ))}
                 </ul>
               </details>
+            )}
+            {/* WHY THIS SESSION, TODAY. The plan could already explain itself
+                when something went wrong — a readiness adaptation, a rehab
+                substitution, a validator correction. The ordinary case said
+                nothing, so an athlete opening Tuesday saw a list and had to
+                take it on faith. Every line is derived from the session below
+                it; see lib/session-why.ts. */}
+            {nextSession && todaySession && (
+              <SessionWhy
+                week={nextSession.week}
+                totalWeeks={plan.weeks.length}
+                session={{ focus: todaySession.focus, kind: todaySession.kind, drills: sessionDrills }}
+                readiness={(readiness?.status as "Green" | "Yellow" | "Red" | undefined) ?? null}
+                hasRehab={sessionDrills.some((d) => d.rehab)}
+                isInSeason={!!program.in_season}
+                storageKey={userId}
+              />
             )}
             {sessionDrills.length > 0 && <div className="mt-2">
               <SessionDrills

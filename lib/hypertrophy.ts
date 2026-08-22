@@ -48,7 +48,8 @@ export type MuscleGroup =
   | "chest" | "back" | "shoulders" | "biceps" | "triceps"
   | "quads" | "hamstrings" | "glutes" | "calves" | "adductors" | "core";
 
-const GROUP_LABEL: Record<MuscleGroup, string> = {
+/** Muscle-group ids in the words an athlete uses. Exported for the "why" card. */
+export const GROUP_LABEL: Record<MuscleGroup, string> = {
   chest: "chest", back: "back", shoulders: "shoulders", biceps: "biceps", triceps: "triceps",
   quads: "quads", hamstrings: "hamstrings", glutes: "glutes", calves: "calves",
   adductors: "adductors", core: "core",

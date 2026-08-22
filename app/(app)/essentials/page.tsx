@@ -15,10 +15,11 @@ import { SkillDrills } from "@/components/SkillDrills";
 import { Tabs, TabPanel } from "@/components/Tabs";
 import { ProtocolCard } from "@/components/ProtocolCard";
 import { FuelTimeline } from "@/components/FuelTimeline";
+import { RunningGuide } from "@/components/RunningGuide";
 
 // The Playbook covers four unrelated topics. Stacked, that ran to six and a
 // half screens on a phone; split into tabs each view is about two.
-type TabId = "position" | "skills" | "fuel";
+type TabId = "position" | "skills" | "fuel" | "running";
 const TABS: { id: TabId; label: string; icon: IconName }[] = [
   { id: "position", label: "Your position", icon: "target" },
   { id: "skills", label: "Skill drills", icon: "ball" },
@@ -27,6 +28,13 @@ const TABS: { id: TabId; label: string; icon: IconName }[] = [
   // the warm-up was stranded under "Your position", equally unfindable for
   // anyone trying to avoid getting hurt.
   { id: "fuel", label: "Fuel & recovery", icon: "plate" },
+  // MOVED OFF THE EXERCISE LIBRARY, where it was a page of reading collapsed
+  // under a list of movements. The library answers "how do I do this"; zones
+  // and run types are a reference you read once and come back to, which is what
+  // Guides is for. Not gated on the athlete's sport — runs are programmed in
+  // every sport, and a footballer told to do a Zone 2 run needs this as much as
+  // a runner does.
+  { id: "running", label: "Running", icon: "run" },
 ];
 
 export default function EssentialsPage() {
@@ -148,6 +156,12 @@ export default function EssentialsPage() {
       {/* Technical work. The position guide says a centre back needs heading;
           this is where they find out how to actually practise it. */}
       {tab === "skills" && <TabPanel id="skills"><SkillDrills sport={sport} position={positions} /></TabPanel>}
+
+      {tab === "running" && (
+        <TabPanel id="running">
+          <RunningGuide />
+        </TabPanel>
+      )}
 
       {/* One block, not two. `tab === "fuel"` was tested twice in a row with a
           separate section under each — same condition, same tab, two places to

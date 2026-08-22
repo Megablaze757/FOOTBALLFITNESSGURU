@@ -2,18 +2,18 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import Link from "next/link";
 import { Icon, type IconName } from "@/components/Icon";
 import { useCurrentUser } from "@/lib/auth";
 import { useTier } from "@/lib/use-tier";
 import { can } from "@/lib/subscription";
 import { FeatureLock } from "@/components/FeatureLock";
-import { EXERCISES, EXERCISE_CATEGORIES, SPORTS, DIFFICULTIES, EQUIPMENT_BUCKETS, getExercisesForSport, demoImplement, rowToExercise, exerciseEquip, withinLevel, type Exercise, type ExerciseCategory, type SportId, type Difficulty } from "@/lib/exercises";
+import { EXERCISES, EXERCISE_CATEGORIES, SPORTS, DIFFICULTIES, EQUIPMENT_BUCKETS, getExercisesForSport, demoImplement, rowToExercise, exerciseEquip, withinLevel, type Exercise, type ExerciseCategory, type SportId, type Difficulty, isRunEntry } from "@/lib/exercises";
 import { latestMetrics } from "@/lib/benchmarks";
 import { ExerciseDemo } from "@/components/ExerciseDemo";
 import { ExerciseModal } from "@/components/ExerciseDetail";
 import { exerciseMuscles } from "@/lib/muscle-volume";
 import { CustomExerciseForm } from "@/components/CustomExerciseForm";
-import { ZoneGuide, RunTypeGuide } from "@/components/ZoneGuide";
 import { Tabs, TabPanel } from "@/components/Tabs";
 import { MealLibrary } from "@/components/MealLibrary";
 import { MEALS } from "@/lib/meal-plan";
@@ -35,6 +35,9 @@ const LIBRARY_TABS = [
 // How many cards to render at once. Every card carries an animated SVG demo, so
 // showing all 300+ was both a 44-screen page and a scrolling performance issue.
 const PAGE = 24;
+
+/** How many rows this page can show. Runs are on Guides — see isRunEntry. */
+const MOVEMENT_COUNT = EXERCISES.filter((e) => !isRunEntry(e)).length;
 
 const DIFF_COLOR: Record<Difficulty, string> = { easy: "#34d399", medium: "#e3b53f", advanced: "#fb5d6b" };
 const DIFF_LABEL: Record<Difficulty, string> = { easy: "Beginner", medium: "Intermediate", advanced: "Advanced" };
@@ -96,11 +99,6 @@ export default function LibraryPage() {
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [savedOnly, setSavedOnly] = useState(false);
   const [shown, setShown] = useState(PAGE);
-  // Feeds the zone guide so it shows THIS athlete's paces and heart rates
-  // rather than a generic table. All optional — the guide degrades to the
-  // standard bands and says so.
-  const [benchmarks, setBenchmarks] = useState<Record<string, number> | null>(null);
-  const [athlete, setAthlete] = useState<{ age: number | null; restingHr: number | null }>({ age: null, restingHr: null });
 
   /**
    * Re-read the athlete's own and their coach's exercises.
@@ -119,35 +117,18 @@ export default function LibraryPage() {
   useEffect(() => {
     let active = true;
     const supabase = createClient();
-    supabase.from("profiles").select("sport, level, birth_year, saved_exercises").eq("id", user.id).maybeSingle().then(({ data }) => {
-      const p = data as { sport?: string; level?: string; birth_year?: number | null; saved_exercises?: string[] } | null;
+    // Two queries lighter than it was. The benchmarks and the resting heart
+    // rate were fetched only to shade the zone guide, which has moved to Guides
+    // and loads its own — see components/RunningGuide.tsx. A search screen has
+    // no business fetching a heart rate.
+    supabase.from("profiles").select("sport, level, saved_exercises").eq("id", user.id).maybeSingle().then(({ data }) => {
+      const p = data as { sport?: string; level?: string; saved_exercises?: string[] } | null;
       if (!active) return;
       if (p?.sport && SPORTS.some((sp) => sp.id === p.sport)) setSport(p.sport as SportId);
       if (p?.level === "easy" || p?.level === "medium" || p?.level === "advanced") setLevel(p.level);
-      if (p?.birth_year) setAthlete((a) => ({ ...a, age: new Date().getFullYear() - p.birth_year! }));
       setSavedIds(new Set(p?.saved_exercises ?? []));
     });
     void reloadCustom();
-    /**
-     * The latest value of each metric — which is not the latest ROW.
-     *
-     * This asked for one row and used its metrics. The benchmark form saves
-     * only what you typed, so a row is a test and not a profile: a runner who
-     * logged a squat last week has a newest row with no run time in it, and the
-     * zone guide silently fell back to generic pace bands for somebody who had
-     * entered their 5k. Newest-per-metric across every test, so zones still
-     * follow current fitness rather than a personal best from two seasons ago.
-     */
-    supabase.from("strength_benchmarks").select("test_date, created_at, metrics")
-      .order("test_date", { ascending: false }).limit(50)
-      .then(({ data }) => {
-        if (active && data?.length) setBenchmarks(latestMetrics(data));
-      });
-    supabase.from("biometrics").select("resting_hr").not("resting_hr", "is", null)
-      .order("metric_date", { ascending: false }).limit(1)
-      .then(({ data }) => {
-        if (active && data?.[0]) setAthlete((a) => ({ ...a, restingHr: (data[0] as { resting_hr: number }).resting_hr }));
-      });
     return () => { active = false; };
     // reloadCustom is a useCallback with no deps, so it is stable for the life
     // of the component — listing it changes nothing and only adds a name the
@@ -158,6 +139,8 @@ export default function LibraryPage() {
     const all = [...custom, ...getExercisesForSport(sport)];
     const query = q.trim().toLowerCase();
     return all.filter((e) =>
+      // Runs live on Guides now — see isRunEntry and the pointer card below.
+      !isRunEntry(e) &&
       (sport === "all" || !e.sports || e.sports.includes(sport)) &&
       (cat === "All" || e.category === cat) &&
       withinLevel(e, level) &&
@@ -198,7 +181,9 @@ export default function LibraryPage() {
       <h1 className="text-3xl font-extrabold tracking-tight">Exercises</h1>
       <p className="mt-1 text-sm text-slate-400">
         {tab === "moves"
-          ? `Look up any movement — how to do it, what it works, and when to use it. ${EXERCISES.length} in total.`
+          // Counted after the runs come out, so the number on the screen is the
+          // number of rows you can actually scroll through.
+          ? `Look up any movement — how to do it, what it works, and when to use it. ${MOVEMENT_COUNT} in total.`
           : `Every recipe the meal planner can serve — method, timings and macros. ${MEALS.length} in total.`}
       </p>
     </header>
@@ -278,27 +263,27 @@ export default function LibraryPage() {
         )}
       </div>
 
-      {/* Running zones — the reference every run prescription points back at.
-          Collapsed by default: it's a page of reading, and the library's job is
-          still to find a movement. Not gated on the athlete's sport, because
-          runs are now programmed in every sport and a footballer told to do a
-          Zone 2 run needs to know what that means as much as a runner does. */}
-      <details className="group card overflow-hidden">
-        <summary className="flex cursor-pointer list-none items-center justify-between p-4 text-sm font-semibold text-slate-200">
-          <span>
-            Running zones
-            <span className="ml-2 text-xs font-normal text-slate-500">what Zone 1–5 actually mean</span>
-          </span>
-          <span className="text-xs text-slate-500 transition group-open:rotate-180">▾</span>
-        </summary>
-        <div className="space-y-4 border-t border-white/[0.08] p-4">
-          <ZoneGuide metrics={benchmarks} age={athlete.age} restingHr={athlete.restingHr} />
-          <div>
-            <h3 className="field-label">The runs themselves</h3>
-            <RunTypeGuide />
-          </div>
-        </div>
-      </details>
+      {/* RUNNING IS NOT IN HERE ANY MORE, and the pointer is the whole of what
+          replaced it. This page answers "how do I do this movement" — a search
+          screen for a catalogue of exercises — and a run is not a movement you
+          look up, it is a session with a zone and a duration. The zone guide
+          and the run types were a page of reading collapsed under a list, and
+          the run entries themselves ("Easy run", "Tempo runs") were rows you
+          could open to be told to go for a run.
+          Both now live on Guides, which is the page for reference. */}
+      <Link
+        href="/essentials"
+        className="card card-hover flex items-center gap-3 p-4 text-sm"
+      >
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-sky-400/10 text-sky-300">
+          <Icon name="run" size={18} />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block font-semibold text-slate-100">Running is in Guides</span>
+          <span className="block text-xs text-slate-400">Zones 1–5, and what each run type is for.</span>
+        </span>
+        <span className="shrink-0 text-slate-600">›</span>
+      </Link>
 
       {/* Sport stays visible — it's the filter people change most. The other
           three used to sit under it as three more horizontal scrollers, which

@@ -98,7 +98,11 @@ test("no screen reads only the newest row", () => {
   // THE TEST THAT WOULD HAVE CAUGHT IT. The resolver can be perfect and a page
   // still reports a lifter who has never squatted, because the bug is in the
   // query. Two pages had their own answer to this; one of them was wrong.
-  for (const page of ["../app/(app)/library/page.tsx", "../app/(app)/coach/page.tsx"]) {
+  // The library used to be one of these. It fetched benchmarks only to shade
+  // the running zone guide, and that guide has moved to Guides and loads its
+  // own — so the query moved with it. The property is unchanged; the list
+  // follows the code rather than the code being kept where a test expects it.
+  for (const page of ["../components/RunningGuide.tsx", "../app/(app)/coach/page.tsx"]) {
     const src = readFileSync(new URL(page, import.meta.url), "utf8");
     const at = src.indexOf('from("strength_benchmarks")');
     assert.ok(at > 0, `${page} no longer reads benchmarks`);

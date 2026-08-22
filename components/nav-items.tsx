@@ -87,6 +87,7 @@ export const SECTION_LINKS: Record<string, readonly { href: string; label: strin
   "/coach": [
     { href: "/journal", label: "Today's log", icon: "journal" },
     { href: "/library", label: "Exercises", icon: "library" },
+    { href: "/essentials", label: "Guides", icon: "playbook" },
     { href: "/train", label: "Video analysis", icon: "train" },
   ],
   "/nutrition": [
