@@ -142,5 +142,15 @@ test("both times are asked for, and only one of them in seconds", () => {
 test("for a runner, the run is the session", () => {
   // Writing only run_seconds for them would leave the session duration blank
   // and take their training load with it.
-  assert.match(form, /sport === "running"[\s\S]{0,200}duration_seconds: run/);
+  //
+  // Matched on the branch rather than on its distance from `sport ===
+  // "running"`: the runner path grew a second case when a day was allowed to
+  // hold more than one session, and the claim being made here is about what a
+  // lone run writes, not about how many lines away it is written.
+  const runPart = form.slice(form.indexOf("const setRunPart"), form.indexOf("const setSessionMinutes"));
+  const lone = runPart.slice(runPart.indexOf("if (!value.drills.some(isActivityDrill))"));
+  assert.match(lone, /duration_seconds: run/);
+  assert.match(lone, /total_minutes: run \? Math\.round\(run \/ 60\) : null/);
+  assert.match(runPart, /if \(sport !== "running"\) \{[\s\S]{0,120}run_seconds: run \}\);/,
+    "a non-runner's session length now follows their run clock");
 });

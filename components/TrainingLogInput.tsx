@@ -6,7 +6,7 @@ import { NumberInput } from "@/components/NumberInput";
 import type { SportId } from "@/lib/exercises";
 import { DrillPicker } from "@/components/DrillPicker";
 import { OtherActivity } from "@/components/OtherActivity";
-import { suggestedSessionMinutes, isActivityDrill } from "@/lib/activities";
+import { isActivityDrill, dayTotals, mainSessionDrill, mainSessionLabel } from "@/lib/activities";
 import { Icon } from "@/components/Icon";
 import { DrillModal } from "@/components/DrillDetail";
 import { WhatIfLiftSheet } from "@/components/WhatIfLiftSheet";
@@ -102,6 +102,17 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
   const ratedItThemselves = useRef(false);
 
   const update = (patch: Partial<TrainingState>) => onChange({ ...value, ...patch });
+
+  /**
+   * How many sessions today.
+   *
+   * Two or more, and the boxes at the bottom of this form stop meaning "this
+   * session" and start meaning "today" — so they say so. A field labelled
+   * "Session length" showing 135 after a 90-minute rugby session and a
+   * 45-minute gym one reads as a bug, and the athlete's first instinct is to
+   * correct it back to 90.
+   */
+  const sessions = value.drills.filter(isActivityDrill).length;
 
   /**
    * Change something the derivation reads, and let the intensity follow.
@@ -202,15 +213,90 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
     const minutes = part === "minutes" ? (next ?? 0) : Math.floor(current / 60);
     const seconds = part === "seconds" ? (next ?? 0) : current % 60;
     const run = Math.max(0, minutes * 60 + seconds) || null;
-    updateDerived(sport === "running"
-      // A runner's run is their session. Writing only run_seconds would leave
-      // their session duration blank and take their training load with it.
-      ? { run_seconds: run, duration_seconds: run, total_minutes: run ? Math.round(run / 60) : null }
-      : { run_seconds: run });
+
+    if (sport !== "running") {
+      updateDerived({ run_seconds: run });
+      return;
+    }
+
+    // A runner's run is their session. Writing only run_seconds would leave
+    // their session duration blank and take their training load with it.
+    if (!value.drills.some(isActivityDrill)) {
+      updateDerived({ run_seconds: run, duration_seconds: run, total_minutes: run ? Math.round(run / 60) : null });
+      return;
+    }
+
+    // UNLESS THE RUN IS ONE OF SEVERAL SESSIONS TODAY. Once a second session is
+    // logged, the run has its own entry in the list and the day's boxes are the
+    // day's total — so this clock moves the run's entry, and the total follows
+    // from the list. Writing the run straight into total_minutes here would
+    // erase the other session every time the athlete corrected their time.
+    const mins = run ? Math.round(run / 60) : 0;
+    const drills = value.drills.map((drill) =>
+      isActivityDrill(drill) && drill.name === mainSessionLabel(sport)
+        ? { ...drill, duration_seconds: mins * 60, reps: mins }
+        : drill);
+    const totals = dayTotals(drills);
+    updateDerived({
+      run_seconds: run,
+      drills,
+      total_minutes: totals.minutes,
+      duration_seconds: totals.minutes == null ? null : totals.minutes * 60,
+    });
   };
 
   const setSessionMinutes = (next: number | null) =>
     updateDerived({ total_minutes: next, duration_seconds: next == null ? null : next * 60 });
+
+  /**
+   * ADDING A SECOND SESSION MAKES THE FIRST ONE EXPLICIT.
+   *
+   * The log holds one duration and one effort for the whole day, so "spin this
+   * morning, padel this afternoon" either overwrote itself or went unrecorded —
+   * and a double day is the hardest kind, stored as the lightest.
+   *
+   * As soon as there is more than one session, the day's boxes stop being one
+   * session's numbers and become the day's total, computed from all of them.
+   * The session that was already in those boxes is written into the list first,
+   * so nothing is lost and the athlete can see both of the things they did
+   * rather than a total with no explanation.
+   *
+   * Once converted, the day's minutes and effort are derived on every change —
+   * duration-weighted, so minutes × intensity still equals what the sessions
+   * actually cost. See `dayTotals`.
+   */
+  const setSessions = (next: TrainingDrill[]) => {
+    const was = value.drills.filter(isActivityDrill).length;
+    const now = next.filter(isActivityDrill).length;
+    // No session list before and none after — an ordinary day, and its boxes
+    // are the athlete's own to fill in.
+    if (was === 0 && now === 0) {
+      update({ drills: next });
+      return;
+    }
+
+    // FOLD THE DAY'S OWN SESSION INTO THE LIST, once, as the list begins.
+    let drills = next;
+    if (was === 0 && (value.total_minutes ?? 0) > 0) {
+      const first = mainSessionDrill(sport, value.total_minutes as number, value.intensity ?? null);
+      if (first) drills = [...next.filter((d) => !isActivityDrill(d)), first, ...next.filter(isActivityDrill)];
+    }
+
+    // Derived on EVERY change, not only when a session is added: a day whose
+    // total was worked out from two sessions and then lost one of them would
+    // otherwise keep claiming both, which overstates the load — the exact
+    // failure this whole change exists to fix, pointing the other way.
+    const totals = dayTotals(drills);
+    update({
+      drills,
+      total_minutes: totals.minutes,
+      duration_seconds: totals.minutes == null ? null : totals.minutes * 60,
+      // Absent is not zero: sessions logged without an effort leave the day's
+      // rating where the athlete last put it rather than dropping it to
+      // nothing for having recorded less.
+      intensity: totals.intensity ?? value.intensity ?? null,
+    });
+  };
 
   const setDrill = (i: number, patch: Partial<TrainingDrill>) =>
     update({ drills: value.drills.map((d, idx) => (idx === i ? { ...d, ...patch } : d)) });
@@ -661,21 +747,7 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
       {/* THE TRAINING NOBODY PROGRAMMED. Padel, a ride, a swim, a kickabout —
           none of which fits a picker that asks for sets, reps and a weight.
           Measured in minutes; see lib/activities.ts. */}
-      <OtherActivity
-        drills={value.drills}
-        onChange={(drills) => {
-          // The session length follows the activities only while it is blank.
-          // Somebody who logged an hour of padel inside a ninety-minute session
-          // has said something the form must not overwrite.
-          const suggested = suggestedSessionMinutes(drills);
-          update(value.total_minutes == null && suggested != null
-            ? { drills, total_minutes: suggested, duration_seconds: suggested * 60 }
-            : { drills });
-        }}
-        onSuggestIntensity={(intensity) => {
-          if (value.intensity == null) update({ intensity });
-        }}
-      />
+      <OtherActivity drills={value.drills} onChange={setSessions} />
 
       {whatIf !== null && <WhatIfLiftSheet initialExercise={whatIf} onClose={() => setWhatIf(null)} />}
       {detail && <DrillModal name={detail} onClose={() => setDetail(null)} />}
@@ -690,23 +762,29 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
           kilometre is the difference between Zone 2 and a tempo. */}
       {sport !== "running" && <div className="grid grid-cols-2 gap-3">
         <label className="block">
-          <span className="field-label">Session length (min)</span>
+          <span className="field-label">{sessions > 1 ? "Today's total (min)" : "Session length (min)"}</span>
           <NumberInput
             value={value.total_minutes ?? null}
             onChange={setSessionMinutes}
             min={0} placeholder="e.g. 75" className="field"
           />
-          {value.run_type && (
+          {sessions > 1 ? (
+            // Added up for them, and still theirs to correct — a number the
+            // form works out is not a number the form should defend.
+            <span className="mt-1 block text-[11px] text-slate-500">Added up from your {sessions} sessions above.</span>
+          ) : value.run_type ? (
             <span className="mt-1 block text-[11px] text-slate-500">Everything, warm-up to shower. The run&apos;s own time is below.</span>
-          )}
+          ) : null}
         </label>
         <label className="block">
           <span className="field-label">
-            Intensity {value.intensity ?? "–"}
+            {sessions > 1 ? "Today's effort" : "Intensity"} {value.intensity ?? "–"}
             {/* Where the number came from. A slider that moved on its own with
                 no explanation reads as a bug, and the athlete needs to know it
                 is theirs to change. */}
-            {effort && !ratedItThemselves.current && (
+            {sessions > 1 ? (
+              <span className="ml-1 font-normal text-pitch-400">· averaged</span>
+            ) : effort && !ratedItThemselves.current && (
               <span className="ml-1 font-normal text-pitch-400">· from your intervals</span>
             )}
           </span>

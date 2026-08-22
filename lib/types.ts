@@ -167,6 +167,24 @@ export interface TrainingDrill {
    */
   sets_detail?: { reps: number; load_kg?: number | null; isWarmup?: boolean }[];
   notes?: string | null;
+  /**
+   * When in the day this happened — see lib/activities.ts.
+   *
+   * A day is not one session. "Spin this morning, padel this afternoon" and
+   * "rugby training, gym later" are two sessions each, and the log held one
+   * duration and one effort for the whole day. The database enforces one ROW
+   * per day (unique_training_day, migration 0006), so the sessions live in
+   * this JSONB array — which is why these are additive fields and not columns.
+   */
+  part_of_day?: "morning" | "afternoon" | "evening" | null;
+  /**
+   * How hard THIS session was, out of ten.
+   *
+   * Named `effort` rather than `intensity` on purpose: the log row already has
+   * an `intensity`, and that one is the whole day. This is the per-session
+   * number the day's is worked out from — see `dayTotals`.
+   */
+  effort?: number | null;
 }
 
 export interface TrainingLog {

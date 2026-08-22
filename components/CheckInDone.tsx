@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { isActivityDrill, activityMinutes, matchActivity } from "@/lib/activities";
+import { isActivityDrill, activityMinutes, matchActivity, PARTS_OF_DAY } from "@/lib/activities";
 import type { CheckInInput, TrainingLog, ReadinessStatus } from "@/lib/types";
 import { assessReadiness } from "@/lib/readiness";
 import { hasTrainingContent } from "@/lib/load";
@@ -51,6 +51,16 @@ export function CheckInDone({
 
   const trained = hasTrainingContent(training);
 
+  /**
+   * Sessions, not exercises.
+   *
+   * A day can be spin at seven and padel at one, or rugby training and then the
+   * gym. Reporting that back as "Training logged — 135 min" hides the harder
+   * fact: they trained twice. The count is what the athlete recognises, and it
+   * is the thing the load numbers are actually reacting to.
+   */
+  const sessions = (training?.drills ?? []).filter(isActivityDrill).length;
+
   const sleep = checkIn.sleep_quality ?? null;
   const fatigue = checkIn.fatigue_score ?? null;
 
@@ -98,8 +108,19 @@ export function CheckInDone({
             <div className="flex items-center gap-2 text-sm text-slate-300">
               <span className="text-pitch-400">✓</span>
               <span>
-                {training?.session_type === "rest_day" ? "Rest day logged" : training?.session_type === "active_rest" ? "Active rest logged" : "Training logged"}
-                {training?.duration_seconds ? ` — ${Math.floor(training.duration_seconds / 60)}:${String(training.duration_seconds % 60).padStart(2, "0")}` : training?.total_minutes ? ` — ${training.total_minutes} min` : ""}
+                {training?.session_type === "rest_day"
+                  ? "Rest day logged"
+                  : training?.session_type === "active_rest"
+                    ? "Active rest logged"
+                    : sessions > 1 ? `${sessions} sessions logged` : "Training logged"}
+                {/* A stopwatch reading is right for one session and wrong for
+                    a day: "135:00" next to two sessions reads as a clock that
+                    ran for two and a quarter hours without stopping. */}
+                {sessions > 1 && training?.total_minutes
+                  ? ` — ${training.total_minutes} min`
+                  : training?.duration_seconds
+                    ? ` — ${Math.floor(training.duration_seconds / 60)}:${String(training.duration_seconds % 60).padStart(2, "0")}`
+                    : training?.total_minutes ? ` — ${training.total_minutes} min` : ""}
                 {training?.distance_value
                   ? `, ${training.distance_value} ${training.distance_unit ?? "km"}`
                   : training?.distance_km ? `, ${training.distance_km} km` : ""}
@@ -114,10 +135,16 @@ export function CheckInDone({
                   // read it as "1 × 60" — a padel match reported as one set of
                   // sixty reps. See lib/activities.ts.
                   if (isActivityDrill(d)) {
+                    // When and how hard, because that is what tells two
+                    // sessions apart — "Padel 60" twice in a list is a typo
+                    // until one of them says morning and the other evening.
+                    const when = PARTS_OF_DAY.find((p) => p.id === d.part_of_day);
                     return (
                       <li key={`${d.name}-${i}`}>
                         <span aria-hidden className="mr-1">{matchActivity(d.name)?.emoji ?? "🏃"}</span>
-                        <span className="text-slate-300">{d.name}</span> · {activityMinutes(d)} min
+                        <span className="text-slate-300">{d.name}</span>
+                        {when ? ` · ${when.label}` : ""} · {activityMinutes(d)} min
+                        {d.effort ? ` · ${d.effort}/10` : ""}
                       </li>
                     );
                   }
