@@ -32,6 +32,13 @@ alter table public.profiles
   add column if not exists email_milestones boolean not null default true,
   add column if not exists email_program_reminders boolean not null default true;
 
+-- The column is added with a default just above, so existing rows arrive as
+-- 'km' — unless an earlier hand-edit put something else there. Same guard as
+-- 0088 and 0091: a constraint added against live data has to say what happens
+-- to the rows that do not fit, and kilometres is what the app assumed anyway.
+update public.profiles set distance_unit = 'km'
+ where distance_unit is null or distance_unit <> all (array['km', 'mi']);
+
 alter table public.profiles drop constraint if exists profiles_distance_unit_check;
 alter table public.profiles add constraint profiles_distance_unit_check
   check (distance_unit = any (array['km', 'mi']));

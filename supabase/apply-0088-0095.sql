@@ -98,9 +98,33 @@ alter table public.training_logs
   add column if not exists session_type text,
   add column if not exists notes text;
 
+-- A MIGRATION HAS TO BE SAFE IN A DATABASE THAT IS AHEAD OF IT.
+--
+-- This originally allowed only 'workout' and 'active_rest'. 0089 widens it to
+-- include 'rest_day' a few lines later, the app has been writing rest_day ever
+-- since, and re-running this file then failed outright:
+--
+--   ERROR: 23514: check constraint "training_logs_session_type_check" of
+--   relation "training_logs" is violated by some row
+--
+-- Every statement in these files is written to be safe to run twice, and this
+-- one was not — it narrowed the schema back to what it was before 0089, against
+-- data written under 0089. So it states the final set rather than the interim
+-- one, which makes the 0088 -> 0089 step a no-op and re-running either safe.
+--
+-- The clean-up above it is for the same reason from the other direction: a
+-- value outside the set is legacy or hand-written and means nothing to the app,
+-- which reads exactly these three. Nulling it is how every row before this
+-- column existed already reads, and the alternative is a migration nobody can
+-- apply at all.
+update public.training_logs
+   set session_type = null
+ where session_type is not null
+   and session_type <> all (array['workout', 'active_rest', 'rest_day']);
+
 alter table public.training_logs drop constraint if exists training_logs_session_type_check;
 alter table public.training_logs add constraint training_logs_session_type_check
-  check (session_type is null or session_type = any (array['workout', 'active_rest']));
+  check (session_type is null or session_type = any (array['workout', 'active_rest', 'rest_day']));
 
 comment on column public.profiles.goals is
   'Up to three ordered programme goals: [{type,priority}]. The first is the anchor.';
@@ -146,6 +170,13 @@ alter table public.profiles
   add column if not exists email_workout_reminders boolean not null default true,
   add column if not exists email_milestones boolean not null default true,
   add column if not exists email_program_reminders boolean not null default true;
+
+-- The column is added with a default just above, so existing rows arrive as
+-- 'km' — unless an earlier hand-edit put something else there. Same guard as
+-- 0088 and 0091: a constraint added against live data has to say what happens
+-- to the rows that do not fit, and kilometres is what the app assumed anyway.
+update public.profiles set distance_unit = 'km'
+ where distance_unit is null or distance_unit <> all (array['km', 'mi']);
 
 alter table public.profiles drop constraint if exists profiles_distance_unit_check;
 alter table public.profiles add constraint profiles_distance_unit_check
@@ -253,6 +284,24 @@ alter table public.notifications
   add column if not exists dedupe_key text,
   add column if not exists show_in_app boolean not null default true,
   add column if not exists email_category text not null default 'none';
+
+-- SAFE IN A DATABASE THAT ALREADY HAS DATA IN IT.
+--
+-- Same lesson as the session_type constraint in 0088, which failed outright on
+-- a live database. Adding a check to a column that has been free text is a
+-- promise about every row already in the table, and a notification whose kind
+-- is not one of these can no longer be rendered anyway — 'general' is the
+-- catch-all the list already carries, so it is where they go.
+--
+-- Idempotent by shape: the second run finds nothing left to move.
+update public.notifications
+   set kind = 'general'
+ where kind is null
+    or kind <> all (array[
+      'program_assigned', 'coach_request', 'general',
+      'check_in_reminder', 'workout_reminder', 'weekly_summary',
+      'program_deadline', 'milestone', 'trial_ending', 'billing'
+    ]);
 
 alter table public.notifications drop constraint if exists notifications_kind_check;
 alter table public.notifications add constraint notifications_kind_check check (

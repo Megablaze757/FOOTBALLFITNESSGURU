@@ -22,6 +22,24 @@ alter table public.notifications
   add column if not exists show_in_app boolean not null default true,
   add column if not exists email_category text not null default 'none';
 
+-- SAFE IN A DATABASE THAT ALREADY HAS DATA IN IT.
+--
+-- Same lesson as the session_type constraint in 0088, which failed outright on
+-- a live database. Adding a check to a column that has been free text is a
+-- promise about every row already in the table, and a notification whose kind
+-- is not one of these can no longer be rendered anyway — 'general' is the
+-- catch-all the list already carries, so it is where they go.
+--
+-- Idempotent by shape: the second run finds nothing left to move.
+update public.notifications
+   set kind = 'general'
+ where kind is null
+    or kind <> all (array[
+      'program_assigned', 'coach_request', 'general',
+      'check_in_reminder', 'workout_reminder', 'weekly_summary',
+      'program_deadline', 'milestone', 'trial_ending', 'billing'
+    ]);
+
 alter table public.notifications drop constraint if exists notifications_kind_check;
 alter table public.notifications add constraint notifications_kind_check check (
   kind in (

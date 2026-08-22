@@ -159,6 +159,15 @@ test("running it twice is safe", () => {
     // The confirmation line at the end of a migration. It reads the database
     // and changes nothing, which is the definition of safe to repeat.
     /^select /i,
+    /**
+     * A repair that only touches rows a constraint is about to reject.
+     *
+     * Repeatable because it is idempotent by shape: the second run finds
+     * nothing left to change. It exists because a constraint added against
+     * data written under a LATER migration cannot be applied at all — see the
+     * session_type note in 0088.
+     */
+    /^update [\w.]+ set .* where /is,
   ];
 
   for (const statement of statements) {
