@@ -501,6 +501,7 @@ Bulgarian Split Squat|Legs
  * than the spine of the whole block.
  */
 export const STAPLES: readonly string[] = [
+  // The classics, in rank order. These anchor a session first.
   "Barbell Back Squat", "Barbell Front Squat", "Barbell Deadlift", "Romanian Deadlift",
   "Bench Press", "Incline Bench Press", "Barbell Overhead Press", "Barbell Row",
   "Pull Ups", "Chin Ups", "Lat Pulldown", "Seated Cable Row", "Leg Press",
@@ -508,6 +509,41 @@ export const STAPLES: readonly string[] = [
   "Dumbbell Row", "Dips", "Barbell Lunge", "Bulgarian Split Squat",
   "Barbell Curl", "Cable Tricep Pushdown", "Leg Curl", "Leg Extension",
   "Standing Calf Raise", "Dumbbell Lateral Raise", "Hanging Leg Raise",
+
+  /**
+   * ENOUGH DISTINCT STAPLES TO ANCHOR EVERY DAY A MUSCLE IS TRAINED.
+   *
+   * The rule that a session opens on a staple, and the rule that a week does
+   * not repeat a lift, were in direct conflict — and the conflict was invisible
+   * until lib/movement-key.ts made "Bench Press" and "Dumbbell Bench Press" one
+   * lift rather than two. Counted by MOVEMENT rather than by catalogue row, the
+   * list above held exactly one staple each for biceps, calves, core and
+   * glutes, and two for chest and triceps.
+   *
+   * A full-body three-day week trains chest three times and a six-day one
+   * trains it six times. With two chest staples the engine could satisfy
+   * "opens on a staple" only by repeating one, which is how an athlete got a
+   * bench press on Monday and the dumbbell bench press on Tuesday.
+   *
+   * These are the additions that make the two rules satisfiable: every group
+   * now has at least three distinct movements worth building a session on.
+   * Appended rather than interleaved, so the classics above still outrank them
+   * — a chest day still opens on a bench press when one is available.
+   */
+  // chest — was bench press and incline only
+  "Decline Bench Press", "Push Ups", "Chest Press",
+  // biceps — was one curl
+  "Hammer Curl", "Preacher Curl", "Incline Dumbbell Curl",
+  // triceps — was dips and a pushdown
+  "Lying Tricep Extension", "Cable Overhead Tricep Extension",
+  // calves — was the standing raise alone, which is half the muscle
+  "Seated Calf Raise", "Donkey Calf Raise", "Machine Calf Raise",
+  // core — was the hanging leg raise alone
+  "Plank", "Cable Crunch", "Ab Wheel Rollout", "Russian Twist",
+  // glutes — was the hip thrust alone
+  "Glute Bridge", "Cable Pull Through", "Glute Ham Raise", "Glute Kickback",
+  // shoulders — three already, but a six-day week can want more
+  "Arnold Press", "Face Pull", "Upright Row",
 ];
 
 export const IMPORTED_EXERCISES: Exercise[] = build(`${RAW}${STAPLE_RAW}`);

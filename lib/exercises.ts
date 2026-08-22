@@ -681,11 +681,101 @@ export const EXERCISES: Exercise[] = [
     muscles: ["Rotator cuff", "Shoulders"], tempo: "3 × 30s",
     cues: ["Lie on the sore side, elbow at 90° in front of you", "Use the other hand to rotate the forearm gently down", "A stretch at the back of the shoulder, never a pinch at the front"],
     why: "Restores the internal rotation that overhead and throwing athletes lose, which is what starts the shoulder impinging." },
+
+  // ===========================================================================
+  // ONE MOVEMENT PER SLOT IS NOT A CHOICE.
+  //
+  // An audit of the generated blocks found back-to-back days repeating a lift,
+  // and chasing it here found the cause: the vertical press, the vertical pull,
+  // the horizontal pull and the plyometric each had exactly ONE entry at the
+  // secondary slot. With one option, "not the same as yesterday" has no answer
+  // to give, and the engine correctly gave the repeat.
+  //
+  // A DELIBERATELY SMALL ADDITION. A first pass added thirty movements across
+  // every thin cell and it was measurably worse: sport tags act as a ±8 on the
+  // ranking, so sport-neutral additions outranked the sport-tagged classics and
+  // a footballer's block came out anchored on a box squat with no pulling in
+  // it at all. These are the four cells that actually repeated, two movements
+  // each, and every one carries the same `sports` as the lift it varies so the
+  // ordering it sits in is unchanged.
+  // ===========================================================================
+  { id: "seated_db_press", name: "Seated dumbbell press", category: "Strength", demo: "press", equipment: "Dumbbells",
+    muscles: ["Shoulders", "Triceps"], tempo: "2s down · press up",
+    cues: ["Back flat against the pad, ribs down", "Lower until the elbows are just below shoulder height", "Press without banging the dumbbells together"],
+    why: "Shoulder volume with the lower back supported, so the set ends when the shoulders are done.",
+    sports: ["gym"] },
+  { id: "arnold_press", name: "Arnold press", category: "Strength", demo: "press", equipment: "Dumbbells",
+    muscles: ["Shoulders", "Triceps"], tempo: "Rotate · press · reverse",
+    cues: ["Start with palms facing you at chin height", "Rotate as you press, finishing palms forward", "Reverse the rotation on the way down"],
+    why: "Takes the shoulder through its full rotation under load, which a straight press never does.",
+    sports: ["gym"] },
+  { id: "chin_up", name: "Chin-up", category: "Strength", demo: "pull", equipment: "Bar",
+    muscles: ["Lats", "Biceps"], tempo: "Controlled up · slow down",
+    cues: ["Palms toward you, hands about shoulder width", "Pull the elbows into the ribs", "Full hang at the bottom of every rep"],
+    why: "More biceps than a pull-up and easier to accumulate reps on, which is what builds a back.",
+    sports: ["gym"] },
+  { id: "single_arm_pulldown", name: "Single-arm lat pulldown", category: "Strength", demo: "pull", equipment: "Cable",
+    muscles: ["Lats", "Biceps"], tempo: "2s down · 2s up",
+    cues: ["Let the shoulder rise fully at the top", "Drive the elbow down to the hip", "Keep the torso still — no twisting to finish"],
+    why: "Finds and fixes a side-to-side difference that a two-handed pulldown hides completely.",
+    sports: ["gym"] },
+  { id: "chest_supported_row", name: "Chest-supported row", category: "Strength", demo: "pull", equipment: "Dumbbells + bench",
+    muscles: ["Upper back", "Lats", "Rear delts"], tempo: "2s up · 2s down",
+    cues: ["Chest stays on the pad the whole set", "Row to the bottom of the ribs", "Squeeze the shoulder blades, then let them travel"],
+    why: "All the back work of a barbell row with none of the load on the lower back.",
+    sports: ["weightlifting", "gym", "rugby"] },
+  { id: "seated_cable_row", name: "Seated cable row", category: "Strength", demo: "pull", equipment: "Cable",
+    muscles: ["Upper back", "Lats", "Biceps"], tempo: "2s in · 2s out",
+    cues: ["Sit tall — the torso does not rock", "Pull to the navel, elbows past the ribs", "Let the shoulder blades stretch forward at the front"],
+    why: "The easiest horizontal pull to load precisely, and the full range at the front is what builds the back.",
+    sports: ["weightlifting", "gym", "rugby"] },
+  { id: "suitcase_carry", name: "Suitcase carry", category: "Strength", demo: "plank", equipment: "Dumbbell",
+    muscles: ["Core", "Obliques", "Grip"], tempo: "Steady walk",
+    cues: ["One weight, one side, shoulders level", "Do not lean away from the weight", "Walk tall and slow"],
+    why: "The trunk has to resist bending sideways for the whole walk, which is what it does when you are shoved.",
+    sports: ["gym", "weightlifting", "rugby"] },
+  { id: "front_rack_carry", name: "Front-rack carry", category: "Strength", demo: "plank", equipment: "Kettlebells",
+    muscles: ["Core", "Shoulders", "Upper back"], tempo: "Steady walk",
+    cues: ["Elbows tucked in front of the ribs", "Ribs down, breathe through the walk", "Stop when the posture goes, not when the arms do"],
+    why: "Loads the trunk and upper back in the upright position everything else is done from.",
+    sports: ["gym", "weightlifting", "rugby"] },
+  { id: "walking_lunge", name: "Walking lunge", category: "Strength", demo: "lunge", equipment: "Dumbbells",
+    muscles: ["Quads", "Glutes", "Hamstrings"], tempo: "Controlled · no pause",
+    cues: ["Long step — a short one puts it all on the knee", "Back knee to just above the floor", "Push through the front heel to stand into the next step"],
+    why: "Single-leg strength through a long range, which is most of what sprinting and cutting ask for.",
+    sports: ["weightlifting", "gym", "rugby"] },
+  { id: "reverse_lunge", name: "Reverse lunge", category: "Strength", demo: "lunge", equipment: "Dumbbells",
+    muscles: ["Glutes", "Quads"], tempo: "Step back · drive up",
+    cues: ["Step back rather than forward", "Keep the front shin close to vertical", "Return without touching the back foot down for balance"],
+    why: "The knee-friendliest lunge there is, so single-leg work can continue through a grumbling knee.",
+    sports: ["weightlifting", "gym", "rugby"] },
+  { id: "hurdle_hops", name: "Hurdle hops", category: "Power", demo: "jump", equipment: "Hurdles",
+    muscles: ["Calves", "Quads", "Glutes"], tempo: "Fast ground contact",
+    cues: ["Low hurdles — height is not the point", "Land on the balls of the feet, knees soft", "Off the floor again as fast as you land"],
+    why: "Builds the stiff, fast ground contact that turns leg strength into speed." },
+  { id: "bounds", name: "Single-leg bounds", category: "Power", demo: "jump", equipment: "None",
+    muscles: ["Glutes", "Hamstrings", "Calves"], tempo: "Maximal · full recovery",
+    cues: ["Drive for distance, not height", "Land on the same leg and absorb it", "Full rest between sets — this is speed work"],
+    why: "The single-leg power a sprint stride is made of, and it exposes a side that cannot take the load." },
 ];
 
 // Fuller "how to perform it" write-ups — setup, execution, what to feel and the
 // most common mistake. Merged onto EXERCISES below so components can show depth.
 const DESCRIPTIONS: Record<string, string> = {
+  // --- Depth: the four slots that had one movement each ---------------------
+  suitcase_carry: "Pick up one heavy dumbbell in one hand, stand tall with the shoulders level, and walk. The weight will try to bend you sideways and the whole job is refusing to let it — without leaning the other way to compensate, which is the usual cheat. Walk slowly for the prescribed distance, then swap sides. It trains the trunk to resist sideways bending, which is exactly what it does when somebody puts a shoulder into you.",
+  front_rack_carry: "Clean two kettlebells to the front rack, elbows tucked in front of the ribs and the bells resting on the forearms. Pull the ribs down, breathe, and walk tall. The set ends when the posture goes — ribs flaring or the shoulders rounding forward — not when the arms get tired. It loads the trunk and upper back in the upright posture that everything else in the gym is performed from.",
+  walking_lunge: "Hold a dumbbell in each hand and take a long step forward — a short step puts the whole thing on the front knee. Lower until the back knee is just above the floor, keeping the torso upright, then push through the front heel to stand straight into the next step. Do not touch the back foot down to steady yourself. Range is the point: a shallow lunge trains almost nothing that a squat has not already covered.",
+  reverse_lunge: "From standing, step backward and lower until the back knee is just off the floor, keeping the front shin close to vertical. Push through the front foot to return to standing without touching the back foot down for balance. Stepping back rather than forward keeps the shear off the front knee, which is why this is usually the last lunge somebody loses and the first one they get back.",
+  seated_db_press: "Sit with the back flat against an upright pad, dumbbells at shoulder height with the palms forward. Pull the ribs down so the lower back is not arched, then press overhead without letting the weights clatter together at the top. Lower until the elbows are just below shoulder height. Sitting removes the trunk from the equation, which is the point: the set should end because the shoulders are finished, not because you have started leaning back.",
+  arnold_press: "Start seated with the dumbbells at chin height, palms facing you and elbows in front. As you press, rotate the palms outward so they finish facing forward at lockout. Reverse the rotation exactly on the way down. The rotation is the exercise — rushing it makes this an ordinary press with a wiggle. Keep the weight lighter than a straight press because the mid-range position with the arm rotating is genuinely harder on the shoulder.",
+  chin_up: "Palms toward you, hands about shoulder width, full hang to start. Pull by driving the elbows down into the ribs until the chin clears the bar, then lower slowly to a complete hang. Do not kip. The biceps take a bigger share here than in a pull-up, which is why most people can do more of them — use that to accumulate the pulling volume a back actually needs rather than grinding singles on a harder variation.",
+  single_arm_pulldown: "Kneel or sit at a high cable with one handle. Let the working shoulder rise fully at the top so the lat is stretched, then drive the elbow down toward the hip and let the shoulder blade travel with it. Return slowly to the full stretch. Keep the torso square — twisting to finish the rep is the mistake, and it is also the tell that the weight is too heavy for the side you are testing.",
+  chest_supported_row: "Set an incline bench at about forty-five degrees and lie chest-down with a dumbbell in each hand. Row to the bottom of the ribs, letting the shoulder blades pull together at the top, then lower until the arms are straight and the blades have travelled forward again. The chest stays on the pad for every rep — the moment you start peeling off it to move the weight, you have turned a back exercise into a lower-back one.",
+  seated_cable_row: "Sit tall with a slight knee bend and the feet braced. Start with the arms straight and the shoulder blades allowed to travel forward — that stretch is half the exercise. Pull to the navel with the elbows going past the ribs, then return slowly and let the blades stretch again. Rocking the torso back and forth is the common fault; it moves more weight and trains less back, and it is hard on the discs.",
+  hurdle_hops: "Set a line of low hurdles — height is not the point and a hurdle you have to tuck for ruins the rhythm. Hop over them continuously, landing on the balls of the feet with soft knees and leaving the floor again as quickly as you land. Listen: loud landings mean force you are not absorbing. Stop the set when the contacts get slow, because after that you are training endurance rather than power.",
+  bounds: "From a jog, push off one leg for maximum DISTANCE rather than height, land on the same leg, absorb it, and go again. Five to eight contacts a side, with full rest between sets — this is speed work and a tired bound is a useless bound. Aim for a tall posture and a full hip extension on each push. If one side covers noticeably less ground than the other, that is worth knowing before a sprint finds it for you.",
+
   // --- Rehab how-tos -------------------------------------------------------
   // Setup, execution, what to feel, and the mistake that matters. Rehab cues
   // have to be more specific than training cues: "keep good form" on a Nordic

@@ -90,7 +90,7 @@ export const LIFT_VARIANTS: LiftVariant[] = [
   },
   {
     key: "incline_bench", label: "Incline bench press", base: "bench", factor: 0.82,
-    aliases: ["incline bench press", "incline barbell bench press", "incline bench", "close grip incline bench press"],
+    aliases: ["incline bench press", "incline barbell bench press", "incline bench", "incline barbell press", "close grip incline bench press"],
     why: "The shoulder does more of the work and the chest less; roughly four fifths of a flat bench.",
   },
   {
@@ -132,7 +132,7 @@ export const LIFT_VARIANTS: LiftVariant[] = [
   // --- Overhead press --------------------------------------------------------
   {
     key: "db_shoulder_press", label: "Dumbbell shoulder press", base: "ohp", factor: 0.85, perHand: true,
-    aliases: ["dumbbell shoulder press", "seated dumbbell shoulder press", "db shoulder press", "dumbbell overhead press", "dumbbell military press"],
+    aliases: ["dumbbell shoulder press", "seated dumbbell shoulder press", "seated dumbbell press", "db shoulder press", "dumbbell overhead press", "dumbbell military press"],
     why: "Two dumbbells overhead run about 85% of a barbell — each arm balances its own load.",
   },
 
@@ -156,7 +156,7 @@ export const LIFT_VARIANTS: LiftVariant[] = [
   // --- Deadlift --------------------------------------------------------------
   {
     key: "trap_bar_deadlift", label: "Trap bar deadlift", base: "deadlift", factor: 1.05,
-    aliases: ["trap bar deadlift", "hex bar deadlift", "trap bar dead lift"],
+    aliases: ["trap bar deadlift", "trap-bar deadlift", "hex bar deadlift", "hex-bar deadlift", "trap bar dead lift"],
     why: "The load sits in line with you rather than in front, so most people pull slightly more.",
   },
   {
@@ -250,7 +250,7 @@ export const REFUSED: { pattern: RegExp; why: string }[] = [
     why: "Posterior-chain accessories with no bodyweight standard — the load is set by leverage and by what the machine allows.",
   },
   {
-    pattern: /yates row|meadows row|renegade row|bench pull|upright row|chest supported|seated cable row|dumbbell row|high pull/i,
+    pattern: /yates row|meadows row|renegade row|bench pull|upright row|chest.?supported|seated cable row|dumbbell row|high pull/i,
     why: "Row variants whose torso angle and support change the load far more than strength does. The barbell row is the one with a standard.",
   },
   {

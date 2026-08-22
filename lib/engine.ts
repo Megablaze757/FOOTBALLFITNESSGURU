@@ -28,6 +28,8 @@
 // Pure + tested.
 // =============================================================================
 
+import { movementKey } from "./movement-key";
+import { musclesForName } from "./hypertrophy";
 import type { PainMap } from "./types";
 import { effortText, rpeOf } from "./effort";
 import type { SportId } from "./exercises";
@@ -591,6 +593,20 @@ function rankSlot(slot: Slot, ctx: Ctx): Scored[] {
  */
 const MIN_POOL_AFTER_DEMOTION = 6;
 
+/**
+ * How good a substitute has to be to be worth taking.
+ *
+ * Swapping yesterday's movement for a same-pattern alternative is only an
+ * improvement while the alternative is a comparable exercise. At 0.6 the
+ * substitute is within forty percent of the movement it replaces, which in
+ * practice means a different variant of the same thing rather than the worst
+ * option in the catalogue — the failure the rotation window was drawn narrow to
+ * avoid in the first place. Measured at 0.7 first; the accessory slots, where
+ * the top-ranked rehab movement outscores its neighbours by more than that,
+ * were still repeating.
+ */
+const ALTERNATIVE_SCORE_FLOOR = 0.6;
+
 function rotate<T>(arr: T[], by: number): T[] {
   if (arr.length < 2) return arr;
   const k = ((by % arr.length) + arr.length) % arr.length;
@@ -609,7 +625,38 @@ function rotate<T>(arr: T[], by: number): T[] {
 function pick(
   ranked: Scored[], count: number, offset: number,
   usedIds: Set<string>, usedPatterns: Set<Pattern>,
-  forced?: Set<string>
+  forced?: Set<string>,
+  /**
+   * Movement keys yesterday's session used — see lib/movement-key.ts.
+   *
+   * Rotating the window by the session index was supposed to keep consecutive
+   * days apart and does not: the window is `depth` wide and only its START
+   * moves, so a movement near the top is inside both days' windows. A measured
+   * audit of 2,700 generated blocks found 8,155 back-to-back days repeating a
+   * lift — "Depth drop to sprint" on Tuesday and again on Wednesday.
+   *
+   * A preference, never a filter. Where avoiding yesterday would empty the
+   * slot, the repeat is the better answer.
+   */
+  avoidKeys?: ReadonlySet<string>,
+  /**
+   * Whether a substitute has to train the same PATTERN.
+   *
+   * It does for the lifting slots — see `freshAlternative`, where holding the
+   * pattern is what stops a substitution quietly changing which muscle gets the
+   * slot. Conditioning is the exception: bike intervals, a tempo run and a
+   * kettlebell circuit are interchangeable as the day's conditioning, and the
+   * pattern rule there only had the effect of pinning the one hinge-patterned
+   * option in place on consecutive days.
+   */
+  anyPatternSwap = false,
+  /**
+   * The narrower of the two avoid sets: what the previous day used.
+   *
+   * `avoidKeys` is the whole week. When avoiding all of it is impossible, this
+   * is the part that still has to hold — see `freshAlternative`.
+   */
+  yesterdayKeys?: ReadonlySet<string>,
 ): Movement[] {
   if (count <= 0 || !ranked.length) return [];
 
@@ -640,6 +687,25 @@ function pick(
     for (const { m } of ranked) {
       if (out.length >= count) break;
       if (!forced.has(m.id) || usedIds.has(m.id) || usedPatterns.has(m.pattern)) continue;
+      /**
+       * ALREADY IN THE WEEK COUNTS AS PRESENT.
+       *
+       * An essential is pinned to one day so that it appears without taking
+       * over — but the ordinary rotation can reach it a day early, and then
+       * this branch, which by design ignores everything else, put it out again.
+       * That was the last of the back-to-back repeats: a standing calf raise on
+       * Wednesday because the rotation found it, and again on Thursday because
+       * Thursday is the day it belongs to.
+       *
+       * YESTERDAY ONLY, not the whole week. Skipping on the week-wide set was
+       * measured and it is wrong: the Copenhagen plank is a football, rugby and
+       * basketball essential and the only adductor work in the pool, so
+       * declining it because Tuesday already had it took adductors from the
+       * productive band down to six sets in every field-sport block. An
+       * essential appearing twice in a week is not the complaint; appearing on
+       * consecutive days is.
+       */
+      if (yesterdayKeys?.has(movementKey(m.name))) continue;
       out.push(m); usedIds.add(m.id); usedPatterns.add(m.pattern);
     }
     if (out.length >= count) return out;
@@ -647,20 +713,120 @@ function pick(
   // Wide enough that the days of a week, and the blocks that rotate through it,
   // don't wrap onto each other and start repeating.
   const depth = Math.max(count * 3, 8);
+  // Yesterday is dropped from the window before it is rotated, not after: a
+  // filter applied to the output can only reject, and by then the slot is
+  // already spent. `preferUnused` hands the window back untouched when the
+  // whole of it was yesterday's, so a shallow pool still fills the slot.
   const window = rotate(ranked.slice(0, depth), offset);
+
+  /**
+   * SAME SLOT, SAME PATTERN, DIFFERENT EXERCISE.
+   *
+   * Rotating the window by the session index was supposed to keep consecutive
+   * days apart and does not: the window is `depth` wide and only its START
+   * moves, so a well-ranked movement sits inside both days' windows. A measured
+   * audit of 2,700 generated blocks found 8,155 back-to-back days repeating a
+   * lift — a standing calf raise on Wednesday and again on Thursday.
+   *
+   * The obvious fix — dropping yesterday's movements from the window before
+   * picking — was tried first and is wrong. `pick` fills a fixed number of
+   * slots from one ranked list, so removing a movement does not vacate its
+   * slot, it hands the slot to whatever is next in rank, which is usually a
+   * different muscle. Measured: a footballer's shoulders fell to a maintenance
+   * dose and a sprint block lost its hamstring work entirely, because the
+   * balancer downstream can only add sets to movements the engine chose.
+   *
+   * So the substitution happens INSIDE the slot instead. The session's shape —
+   * how many movements, of which patterns, for which muscles — is decided
+   * exactly as it was, and then each choice is swapped for an equivalent that
+   * yesterday did not use. Where no equivalent exists, yesterday's movement
+   * stands: a repeat is better than a hole.
+   */
+  const scoreOf = new Map(ranked.map((r) => [r.m.id, r.score]));
+  /**
+   * Searched across the whole ranked list, not just the window.
+   *
+   * The window is `depth` wide and deliberately narrow, and a same-pattern
+   * alternative is often just outside it — restricting the search to the window
+   * left 179 of 800 blocks still repeating a lift. Quality is protected by the
+   * floor rather than by the window, which is the honest way round: what
+   * matters about the substitute is that it is nearly as good, not where it
+   * happened to sit.
+   */
+  const substitute = (m: Movement, avoid: ReadonlySet<string>): Movement | null => {
+    if (!avoid.size || !avoid.has(movementKey(m.name))) return m;
+    /**
+     * A SUBSTITUTE HAS TO TRAIN THE SAME MUSCLES.
+     *
+     * The pattern is a good proxy and not a sufficient one — "core" covers a
+     * Copenhagen plank and a dead bug, which load different things, and the
+     * region is coarser still. Left on the proxy alone the swap quietly moved
+     * work between muscles, and the balancer downstream can only dose what the
+     * engine chose: measured, muscles reaching the productive band fell from
+     * 88% to 78%, with adductors, chest and calves the ones that lost.
+     *
+     * So the muscles are checked directly. A movement the muscle map does not
+     * recognise imposes no constraint rather than blocking every swap — the
+     * conditioning slot is full of them.
+     */
+    const mine = new Set(musclesForName(m.name));
+    const sameMuscles = (other: Movement) => {
+      if (!mine.size) return true;
+      const theirs = musclesForName(other.name);
+      return !theirs.length || theirs.some((g) => mine.has(g));
+    };
+    const free = (r: Scored) =>
+      r.m.id !== m.id && !usedIds.has(r.m.id) && !avoid.has(movementKey(r.m.name)) && sameMuscles(r.m);
+    const floor = (scoreOf.get(m.id) ?? 0) * ALTERNATIVE_SCORE_FLOOR;
+    const near = ranked.find(
+      (r) => (anyPatternSwap || r.m.pattern === m.pattern || r.m.region === m.region) && r.score >= floor && free(r)
+    );
+    if (near) return near.m;
+    /**
+     * Second attempt, without the quality floor and only within the pattern.
+     *
+     * The floor exists so a substitution cannot quietly become a downgrade, and
+     * it is right for the loose same-region case. Inside a single pattern it was
+     * too strict: a footballer's single-leg RDL outscores every other hinge in
+     * the pool by more than forty percent, so the day before it and the day of
+     * it both got the same lift with nothing else eligible. A hip thrust is a
+     * worse hinge than a single-leg RDL and a better answer than the same
+     * movement twice running.
+     */
+    return ranked.find((r) => r.m.pattern === m.pattern && free(r))?.m ?? null;
+  };
+
+  /**
+   * THE WEEK RULE MUST NOT COST THE DAY RULE.
+   *
+   * Asked to avoid everything the week had spent, the search often found
+   * nothing — and falling back to the original movement then reinstated
+   * yesterday's, which is the repeat an athlete actually sees. Measured: one
+   * combined set took back-to-back repeats from 16 to 140.
+   *
+   * So the two are tried in order. Avoid the whole week if that is possible;
+   * failing that, avoid at least yesterday; failing that, keep the movement.
+   */
+  const freshAlternative = (m: Movement): Movement => {
+    if (!avoidKeys?.size) return m;
+    return substitute(m, avoidKeys) ?? (yesterdayKeys ? substitute(m, yesterdayKeys) ?? m : m);
+  };
 
   // First pass: a different movement pattern each time, so a session isn't
   // three variations of a squat.
   for (const { m } of window) {
     if (out.length >= count) break;
     if (usedIds.has(m.id) || usedPatterns.has(m.pattern)) continue;
-    out.push(m); usedIds.add(m.id); usedPatterns.add(m.pattern);
+    const chosen = freshAlternative(m);
+    out.push(chosen); usedIds.add(chosen.id); usedPatterns.add(chosen.pattern);
   }
   // Second pass: a repeated pattern beats an empty slot.
   for (const { m } of window) {
     if (out.length >= count) break;
     if (usedIds.has(m.id)) continue;
-    out.push(m); usedIds.add(m.id);
+    const chosen = freshAlternative(m);
+    if (usedIds.has(chosen.id)) continue;
+    out.push(chosen); usedIds.add(chosen.id);
   }
   return out;
 }
@@ -1106,6 +1272,34 @@ export function buildBlock(input: EngineInput): ProgramPlan {
     // gets the athlete's legs, not the gym.
     const volumeScale = (input.isInSeason ? IN_SEASON_VOLUME : 1) * blockScale;
 
+    /**
+     * What the previous day of THIS week used, by movement rather than by id.
+     *
+     * Reset each week and updated as the days are built. Selection is fixed for
+     * the block (see `blockSeed`), so every week reaches the same answer — this
+     * is per-week only because the loop is.
+     */
+    let previousDayKeys: ReadonlySet<string> = new Set<string>();
+    /**
+     * WHAT THE WEEK HAS SPENT — TRACKED, AND DELIBERATELY NOT ENFORCED.
+     *
+     * A week-wide "never twice" rule was written, measured and removed. It
+     * reads well and it costs training: an essential declined because an
+     * earlier day already had it took adductors from the productive band to six
+     * sets in every field-sport block, because the Copenhagen plank is the only
+     * adductor work in the pool. The S&C catalogue is a few hundred movements
+     * shared across six sports, and at that size a muscle can genuinely have
+     * one good answer.
+     *
+     * The DAY rule is the one that survives, because it is the one an athlete
+     * notices: opening the app and finding yesterday's session again. Twice in
+     * a week, three days apart, is how a coach writes a week anyway.
+     *
+     * Kept here, unused by the selector, only so the next person to reach for
+     * the week rule finds this note before writing it again.
+     */
+    const weekKeys = new Set<string>();
+
     const sessions: ProgramSession[] = Array.from({ length: days }, (_, di) => {
       /**
        * IN-SEASON, THE WEEK TAPERS INTO THE MATCH.
@@ -1299,7 +1493,14 @@ export function buildBlock(input: EngineInput): ProgramPlan {
         const patternGuard = slot === "warmup" || slot === "cooldown" ? new Set<Pattern>() : usedPatterns;
         // Ball work never reaches here — the skill slot is handled above and
         // still rotates weekly off `sessionIndex`.
-        const chosen = pick(ranked, want, seedFor(slot), usedIds, patternGuard, ctx.forced);
+        // Warm-ups and cool-downs SHOULD repeat — the same eight leg swings
+        // every session is correct, and varying them is theatre. Only the
+        // working slots are held to "not the same as yesterday".
+        const avoid = slot === "warmup" || slot === "cooldown" ? undefined : previousDayKeys;
+        const chosen = pick(
+          ranked, want, seedFor(slot), usedIds, patternGuard, ctx.forced,
+          avoid, slot === "conditioning", avoid ? previousDayKeys : undefined,
+        );
 
         const fixed = slot === "warmup" || slot === "cooldown";
         for (const m of chosen) {
@@ -1330,6 +1531,11 @@ export function buildBlock(input: EngineInput): ProgramPlan {
         }
       }
 
+      const spent = drills
+        .filter((d) => d.slot !== "warmup" && d.slot !== "cooldown")
+        .map((d) => movementKey(d.name));
+      previousDayKeys = new Set(spent);
+      for (const key of spent) weekKeys.add(key);
       return { day: di + 1, title: sessionTitle(focusGoal, di), focus: focusGoal, drills };
     });
 

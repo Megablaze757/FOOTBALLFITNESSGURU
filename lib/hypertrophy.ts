@@ -19,6 +19,7 @@
 // Pure + dependency-free: runs in the browser, unit-tested, no network.
 // =============================================================================
 
+import { movementKey, preferUnused } from "./movement-key";
 import type { PainMap } from "./types";
 import { effortText } from "./effort";
 import type { Exercise } from "./exercises";
@@ -532,6 +533,11 @@ const WEEK_PROGRESSION = [
 ];
 
 /** Sets/reps for a movement, by role and week. */
+/** "core" -> "Core". Only used for a day renamed after what survived the filters. */
+function titleCase(label: string): string {
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
 function prescribe(compound: boolean, weekIndex: number): { sets: number; reps: number } {
   const baseSets = compound ? 4 : 3;
   const baseReps = compound ? 8 : 12;
@@ -743,6 +749,19 @@ function pickForSession(
    * rather than variety as a side effect.
    */
   anchored: (g: MuscleGroup) => number,
+  /**
+   * Movement keys the block has already spent, and the ones yesterday used.
+   *
+   * `blockKeys` is every lift already in this week — a week must not contain a
+   * machine shrug AND a dumbbell shrug, which is one exercise written twice.
+   * `yesterday` is the narrower rule that an athlete actually notices: nothing
+   * from the previous day, whatever else is available.
+   *
+   * Both are PREFERENCES, applied through `preferUnused`, so a shallow pool
+   * still yields a movement rather than a hole. See lib/movement-key.ts.
+   */
+  blockKeys: Set<string>,
+  yesterday: ReadonlySet<string>,
 ): Movement[] {
   const usable = (g: MuscleGroup) => {
     const joint = GROUP_JOINT[g];
@@ -834,8 +853,69 @@ function pickForSession(
      */
     if (nth === 0) {
       const staples = from.filter((m) => STAPLE_RANK.has(m.ex.name.toLowerCase()));
-      if (staples.length) from = staples;
+      /**
+       * A STAPLE, AND NOT THE SAME STAPLE TWICE.
+       *
+       * Narrowing to staples unconditionally put "Dips" at the top of both push
+       * days of a six-day week: it is the only COMPOUND triceps staple there
+       * is, so the list the variety preference below runs on had one member and
+       * nothing to prefer. The same shape appears wherever a group's staples
+       * are mostly isolation.
+       *
+       * So the narrowing holds while a fresh staple exists, and holds anyway on
+       * a group's FIRST appearance — the opening lift of a block is worth more
+       * than the variety. Only on a repeat exposure with every staple spent
+       * does the list widen, and then the preference below picks the best
+       * unused compound instead of prescribing the same lift twice.
+       */
+      const spent = (m: Movement) => blockKeys.has(movementKey(m.ex.name));
+      if (staples.length) {
+        const freshStaples = staples.filter((m) => !spent(m));
+        if (freshStaples.length || anchored(g) === 0) from = freshStaples.length ? freshStaples : staples;
+      }
+      /**
+       * A FRESH STAPLE BEATS A FRESH COMPOUND THAT IS NOT ONE.
+       *
+       * Core is the case that shows it. Its only compound staple is the ab
+       * wheel rollout, so a six-day week spends it on the first legs day and
+       * the second one anchored on a dumbbell side bend — a compound by the
+       * classifier and not a movement anybody builds core work on, while a
+       * plank and a hanging leg raise sat unused because they are isolation.
+       *
+       * Returning false here hands the group back to the caller, which tries
+       * `take(g, false)` next and gets the staple. Only ever on a repeat
+       * exposure: the first time a group is trained it still opens on its best
+       * compound, staple or not.
+       */
+      if (wantCompound && anchored(g) > 0 && !staples.some((m) => !spent(m))) {
+        const freshIsolationStaple = POOL.some(
+          (m) => m.group === g && !m.compound && !taken.has(m.ex.id) && !spent(m)
+            && STAPLE_RANK.has(m.ex.name.toLowerCase())
+            && !isExcluded(constraints, GROUP_REGION[g], m.ex.name)
+        );
+        if (freshIsolationStaple) return false;
+      }
     }
+    /**
+     * NOT THE SAME LIFT AS YESTERDAY, AND NOT TWICE IN ONE WEEK.
+     *
+     * The pool is de-duplicated by catalogue id, which asks a narrower question
+     * than the one that matters: Bench Press, Dumbbell Bench Press and Smith
+     * Machine Bench Press are three rows and one exercise. An audit of 2,700
+     * generated blocks found 4,464 weeks containing a pair of them, and 8,155
+     * back-to-back days repeating a lift.
+     *
+     * AFTER the staple narrowing, not before. Applied first it emptied the
+     * staple list on a full-body week's third chest day and dropped the anchor
+     * onto a decline push-up — trading one property the block depends on for
+     * another. Narrowing to staples and then preferring an unused one keeps
+     * both: the session opens on a real lift, and not on yesterday's.
+     *
+     * Yesterday first, because that is the one an athlete opens the app and
+     * sees. Then the rest of the week. Neither can empty the list.
+     */
+    from = preferUnused(from, yesterday, (m) => m.ex.name);
+    from = preferUnused(from, blockKeys, (m) => m.ex.name);
     // The FIRST movement for a group is its anchor and is chosen by rank, not
     // by rotation — see `anchored`. Everything after it strides through the
     // pool, so a group with four slots gets four different movements rather
@@ -845,6 +925,7 @@ function pickForSession(
       : (offset + nth * 3) % from.length;
     const pick = from[index];
     taken.add(pick.ex.id);
+    blockKeys.add(movementKey(pick.ex.name));
     chosen.push(pick);
     count.set(g, (count.get(g) ?? 0) + 1);
     const region = regionOfMovement(g, pick.ex.name);
@@ -1049,13 +1130,18 @@ export function buildHypertrophyProgram(input: HypertrophyInput): ProgramPlan {
   const anchoredSoFar = new Map<MuscleGroup, number>();
   // One region map for the whole block — see `regions` in pickForSession.
   const regionsSoFar = new Map<MuscleGroup, Set<string>>();
+  // Every lift the week has spent, by movement rather than by catalogue row.
+  const keysSoFar = new Set<string>();
+  let previousDayKeys: ReadonlySet<string> = new Set<string>();
   const blockMovements = split.map((day, di) => {
     // Rank offset carried into the next block, so block two opens on different
     // lifts trained the same way — variety between blocks, never inside one.
     const anchored = (g: MuscleGroup) => (anchoredSoFar.get(g) ?? 0) + (block - 1);
     const picked = pickForSession(
       day.groups, di + (block - 1) * 7, pain, input.constraints, frequency, weeklyTarget, regionsSoFar, anchored,
+      keysSoFar, previousDayKeys,
     );
+    previousDayKeys = new Set(picked.map((m) => movementKey(m.ex.name)));
     for (const g of new Set(picked.map((m) => m.group))) {
       anchoredSoFar.set(g, (anchoredSoFar.get(g) ?? 0) + 1);
     }
@@ -1076,6 +1162,34 @@ export function buildHypertrophyProgram(input: HypertrophyInput): ProgramPlan {
       const drills = movements.map((m, mi) =>
         drillFrom(m, wi, blockScale * seasonScale, loadFor(m, wi, input.oneRepMax), mi === 0));
       const covered = [...new Set(movements.map((m) => GROUP_LABEL[m.group]))];
+      /**
+       * THE TITLE HAS TO DESCRIBE WHAT IS IN THE SESSION.
+       *
+       * Reported by an athlete: "it said it was a lower body day but didn't
+       * give a single lower body exercise". Reproduced — write "I don't train
+       * legs" in the notes, or report a knee at 8/10, and the split still calls
+       * day two "Lower" while every leg group has been filtered out of it. The
+       * day was correct; only its name was a lie, which is the worse of the two
+       * because it is the part the athlete reads.
+       *
+       * `day.name` is what the SPLIT intended. When none of the groups it is
+       * named for survived the filters, the name is dropped and the session is
+       * called after what it actually trains. A day that lost some of its
+       * groups but not all of them keeps its name — an upper day without biceps
+       * is still an upper day.
+       */
+      const trained = new Set(movements.map((m) => m.group));
+      /**
+       * Core does not define a day, it rides along with one.
+       *
+       * `LEGS` and `LOWER` both carry core deliberately — push/pull/legs has
+       * nowhere else to put it — so asking "did ANY of this day's groups
+       * survive" answered yes for a legs day reduced to nothing but an ab wheel
+       * rollout, and the title still read "Lower".
+       */
+      const defining = day.groups.filter((g) => g !== "core");
+      const intended = !defining.length || defining.some((g) => trained.has(g));
+      const heading = intended ? day.name : covered.length ? titleCase(covered[0]) : "Recovery";
       // A finisher, and the only aerobic work a bodybuilding split had. Without
       // it "gym + build muscle" — the most common pair in the app — was the one
       // combination that could never prescribe a run, however much someone
@@ -1086,7 +1200,7 @@ export function buildHypertrophyProgram(input: HypertrophyInput): ProgramPlan {
       if (finisher && drills.length) drills.push(finisher);
       return {
         day: di + 1,
-        title: `Day ${di + 1} · ${day.name}${covered.length ? ` — ${covered.join(", ")}` : ""}`,
+        title: `Day ${di + 1} · ${heading}${covered.length ? ` — ${covered.join(", ")}` : ""}`,
         focus: "strength",
         drills,
       };

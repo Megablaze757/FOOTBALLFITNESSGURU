@@ -267,6 +267,23 @@ const META: Record<string, MovementMeta> = {
   gk_distribution: { slot: "skill", pattern: "skill", targets: ["skill"], load: { groin: 2 }, level: 1, prog: "skill", dose: d(4, 10, REST.short), region: "skill" },
   gk_crosses: { slot: "skill", pattern: "skill", targets: ["skill"], load: { shoulder: 1, wrist: 2 }, level: 2, prog: "skill", dose: d(4, 8, REST.moderate), region: "skill" },
   gk_one_v_one: { slot: "skill", pattern: "skill", targets: ["skill"], load: { wrist: 1 }, level: 3, prog: "skill", dose: d(4, 6, REST.moderate), region: "skill" },
+
+  // --- Depth for the slots that held one movement each ----------------------
+  seated_db_press: { slot: "secondary", pattern: "push_v", targets: ["strength"], load: { shoulder: 2, elbow: 1, wrist: 1 }, level: 1, prog: "load", dose: d(3, 10, REST.moderate, { rpe: 7 }), region: "shoulders" },
+  arnold_press: { slot: "secondary", pattern: "push_v", targets: ["strength"], load: { shoulder: 2, elbow: 1, wrist: 1 }, level: 2, prog: "load", dose: d(3, 10, REST.moderate, { rpe: 7 }), region: "shoulders" },
+  chin_up: { slot: "secondary", pattern: "pull_v", targets: ["strength"], load: { shoulder: 1, elbow: 2, wrist: 1 }, level: 2, prog: "reps", dose: d(3, 8, REST.moderate, { rpe: 8 }), region: "back" },
+  single_arm_pulldown: { slot: "secondary", pattern: "pull_v", targets: ["strength"], load: { shoulder: 1, elbow: 1, wrist: 1 }, level: 1, prog: "load", dose: d(3, 12, REST.moderate, { unit: "each side", rpe: 7 }), region: "back" },
+  chest_supported_row: { slot: "secondary", pattern: "pull_h", targets: ["strength"], load: { shoulder: 1, elbow: 1, wrist: 1 }, level: 1, prog: "load", dose: d(3, 12, REST.moderate, { rpe: 7 }), region: "back" },
+  seated_cable_row: { slot: "secondary", pattern: "pull_h", targets: ["strength"], load: { elbow: 1, wrist: 1, lower_back: 1 }, level: 1, prog: "load", dose: d(3, 12, REST.moderate, { rpe: 7 }), region: "back" },
+  suitcase_carry: { slot: "accessory", pattern: "carry", targets: ["strength"], load: { wrist: 3, elbow: 1, lower_back: 2 }, level: 1, prog: "load", dose: d(3, 25, REST.moderate, { unit: "metres", rpe: 7 }), region: "core" },
+  // targets is ["strength"] alone, not ["strength", "endurance"]. Tagging a
+  // carry as endurance work scored it 10 against an endurance goal, which put
+  // it into the slot a rugby player's conditioning run had been filling.
+  front_rack_carry: { slot: "accessory", pattern: "carry", targets: ["strength"], load: { shoulder: 2, wrist: 2, lower_back: 2 }, level: 2, prog: "load", dose: d(3, 25, REST.moderate, { unit: "metres", rpe: 7 }), region: "core" },
+  walking_lunge: { slot: "secondary", pattern: "lunge", targets: ["strength"], load: { knee: 2, hip: 1, quad: 2, glute: 2, groin: 1 }, level: 1, prog: "load", dose: d(3, 10, REST.moderate, { unit: "each side", rpe: 7 }), region: "legs" },
+  reverse_lunge: { slot: "secondary", pattern: "lunge", targets: ["strength", "injury_recovery"], load: { knee: 1, hip: 1, quad: 1, glute: 2 }, level: 1, prog: "load", dose: d(3, 10, REST.moderate, { unit: "each side", rpe: 7 }), region: "legs" },
+  hurdle_hops: { slot: "secondary", pattern: "jump", targets: ["speed", "strength"], load: { ankle: 2, calf: 3, knee: 2, glute: 1 }, level: 2, prog: "reps", dose: d(4, 8, REST.full, { rpe: 7 }), region: "impact" },
+  bounds: { slot: "secondary", pattern: "jump", targets: ["speed"], load: { ankle: 2, calf: 2, hamstring: 2, glute: 2, knee: 1 }, level: 3, prog: "reps", dose: d(4, 6, REST.full, { unit: "each side", rpe: 8 }), region: "impact" },
 };
 
 /** Free-text equipment on the exercise -> the enum the engine filters on. */
