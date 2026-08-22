@@ -22,10 +22,10 @@ import Link from "next/link";
 // was labelled differently here than everywhere else.
 const LINKS: { href: string; label: string; icon: string }[] = [
   { href: "/home", label: "Home", icon: "🏠" },
-  { href: "/coach", label: "My plan", icon: "🧠" },
-  { href: "/journal", label: "Check in", icon: "📝" },
+  { href: "/coach", label: "Training", icon: "🧠" },
+  { href: "/journal", label: "Today's log", icon: "📝" },
   { href: "/nutrition", label: "Food", icon: "🍽️" },
-  { href: "/injury", label: "Injury", icon: "🩹" },
+  { href: "/injury", label: "Recovery", icon: "🩹" },
   { href: "/library", label: "Exercises", icon: "📚" },
 ];
 

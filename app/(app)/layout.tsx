@@ -5,6 +5,7 @@ import { CoachBubble } from "@/components/CoachBubble";
 import { useRouter } from "next/navigation";
 import { useSession, UserProvider } from "@/lib/auth";
 import { TabBar } from "@/components/TabBar";
+import { AppHeader } from "@/components/AppHeader";
 import { SideNav } from "@/components/SideNav";
 import { SuspendedGate } from "@/components/SuspendedGate";
 import { LoadErrorBanner } from "@/components/LoadErrorBanner";
@@ -38,6 +39,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <div className="flex min-h-screen">
         <SideNav />
         <div className="min-w-0 flex-1">
+          {/* Phone only. Home and Profile belong to no domain tab, and the
+              wordmark is where people already look for the way back. */}
+          <AppHeader />
           {/* overflow-x:clip, not hidden. Both stop the page sliding sideways
               when one child overflows, but `hidden` makes this a scroll
               container — which breaks `position: sticky` inside it and lets a
@@ -45,7 +49,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               This is the backstop; the individual overflows are still worth
               fixing, but no single card should be able to make the whole app
               slide left and right on a phone. */}
-          <main className="no-scrollbar mx-auto w-full max-w-5xl px-5 pb-28 pt-8 [overflow-x:clip] lg:px-10 lg:pb-14 lg:pt-12">
+          <main className="no-scrollbar mx-auto w-full max-w-5xl px-5 pb-28 pt-6 [overflow-x:clip] lg:px-10 lg:pb-14 lg:pt-12">
             {children}
           </main>
         </div>

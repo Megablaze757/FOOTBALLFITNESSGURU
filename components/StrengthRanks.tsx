@@ -79,7 +79,7 @@ export function StrengthRanks({
           bodyweight, so they mean the same thing at 60kg as at 100kg.
         </p>
         <div className="mt-3 grid grid-cols-2 gap-2">
-          <Link href="/journal" className="btn-ghost">Daily check-in</Link>
+          <Link href="/journal" className="btn-ghost">Today&apos;s log</Link>
           <Link href="/body" className="btn-ghost">Weigh in</Link>
         </div>
       </section>

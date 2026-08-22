@@ -65,7 +65,7 @@ export default function ReportPage() {
       <div className="animate-fade-up space-y-5">
         <header className="flex items-center justify-between">
           <h1 className="text-3xl font-extrabold tracking-tight">Weekly report</h1>
-          <BackLink href="/dashboard" label="Progress" />
+          <BackLink href="/dashboard" label="Performance" />
         </header>
         <div className="card">
           <EmptyState
@@ -102,7 +102,7 @@ export default function ReportPage() {
   return (
     <div className="animate-fade-up space-y-5">
       <header className="no-print flex items-center justify-between">
-        <BackLink href="/dashboard" label="Progress" />
+        <BackLink href="/dashboard" label="Performance" />
         <button onClick={() => window.print()} className="btn-primary w-auto px-5">Save as PDF</button>
       </header>
 

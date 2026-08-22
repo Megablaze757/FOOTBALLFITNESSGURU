@@ -30,7 +30,7 @@ export default function BenchmarksPage() {
   return (
     <div className="animate-fade-up mx-auto max-w-3xl space-y-5">
       <header className="flex flex-col">
-        <BackLink href="/dashboard" label="Progress" />
+        <BackLink href="/dashboard" label="Performance" />
         <h1 className="text-3xl font-extrabold tracking-tight">Benchmarks</h1>
         <p className="mt-1 text-sm text-slate-400">Test the same lifts and sprints now and then, so progress is measured rather than guessed.</p>
       </header>

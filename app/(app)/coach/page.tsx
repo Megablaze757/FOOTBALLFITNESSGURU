@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { SectionNav } from "@/components/SectionNav";
 import { createClient } from "@/lib/supabase/client";
 import { Icon, type IconName } from "@/components/Icon";
 import { ConfirmButton } from "@/components/ConfirmButton";
@@ -154,7 +155,7 @@ export default function CoachPage() {
     return (
       <div className="animate-fade-up">
         <header className="mb-5">
-          <h1 className="text-3xl font-extrabold tracking-tight">My plan</h1>
+          <h1 className="text-3xl font-extrabold tracking-tight">Training</h1>
           <p className="mt-1 max-w-prose text-sm text-slate-400">
             Your four-week training block — what to do, in what order, and how it progresses.
           </p>
@@ -171,7 +172,7 @@ export default function CoachPage() {
     return (
       <div className="animate-fade-up">
         <header className="mb-5">
-          <h1 className="text-3xl font-extrabold tracking-tight">My plan</h1>
+          <h1 className="text-3xl font-extrabold tracking-tight">Training</h1>
           <p className="mt-1 max-w-prose text-sm text-slate-400">
             Your four-week training block — what to do, in what order, and how it progresses.
           </p>
@@ -506,7 +507,7 @@ function GoalBuilder({ painMap, painNote, latestBench, sport, initialPositions, 
   return (
     <div className="animate-fade-up space-y-5">
       <header>
-        <h1 className="text-3xl font-extrabold tracking-tight">My plan</h1>
+        <h1 className="text-3xl font-extrabold tracking-tight">Training</h1>
         <p className="mt-1 text-sm text-slate-400">A few quick questions and I&apos;ll build a program around you.</p>
       </header>
 
@@ -1387,9 +1388,10 @@ function ActiveProgram({
           <button onClick={() => setActionError(null)} className="tap-target ml-2 text-xs text-slate-400 hover:text-pitch-400">Dismiss</button>
         </div>
       )}
-      <header className="flex items-start justify-between">
+      <header className="space-y-4">
+        <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-3xl font-extrabold tracking-tight">My plan</h1>
+          <h1 className="text-3xl font-extrabold tracking-tight">Training</h1>
           <p className="mt-1 text-sm capitalize text-pitch-400">
             {adaptiveGoals.map((g) => goalLabel(g.type)).join(" + ")} · Block {program.block}
           </p>
@@ -1437,6 +1439,10 @@ function ActiveProgram({
           </ConfirmButton>
           {deleteError && <span className="max-w-[12rem] text-right text-[10px] text-readiness-red">{deleteError}</span>}
         </div>
+        </div>
+        {/* Exercises, video analysis and the daily log are all part of training
+            and none of them had a link outside the old "More" sheet. */}
+        <SectionNav section="/coach" />
       </header>
 
       {/* Today's session and today's recommended drills used to sit stacked with

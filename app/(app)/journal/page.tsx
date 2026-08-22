@@ -174,11 +174,13 @@ export default function JournalPage() {
   return (
     <div className="animate-fade-up mx-auto max-w-2xl">
       <header className="mb-5">
-        {/* Heading stays "Check in" even when done — it must match the nav
-            label that leads here, which a test enforces. The done state is
-            carried by the card below, not by renaming the page out from under
-            the person who just tapped "Check in" to find it. */}
-        <h1 className="text-3xl font-extrabold tracking-tight">Check in</h1>
+        {/* "Today's log", not "Check in". Nobody outside the product called
+            it a check-in: the thing you do here is write down how today went —
+            sleep, soreness, mood, and the session if you trained. The heading
+            stays the same when done, because it must match the nav label that
+            leads here (a test enforces it) and because renaming the page out
+            from under the person who just tapped it helps no one. */}
+        <h1 className="text-3xl font-extrabold tracking-tight">Today&apos;s log</h1>
         <p className="mt-1 text-sm text-slate-400">
           {done ? "You're done for today — here's what it means." : "Log how your body feels today."}
         </p>

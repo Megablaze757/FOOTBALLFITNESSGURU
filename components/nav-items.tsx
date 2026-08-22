@@ -1,113 +1,121 @@
-// Shared navigation model + icons, used by both the mobile TabBar and the
-// desktop SideNav so the two stay in sync.
+// Shared navigation model + icons, used by the mobile TabBar, the mobile
+// AppHeader, the desktop SideNav and the per-section link rows.
 //
-// "Stats" and "Progress" used to be two entries pointing at two pages that
-// answered the same question — and no one could reasonably guess which held
-// injury risk and which held their squat history. They are one page with two
-// tabs now, and one entry in the nav.
+// FOUR TABS, NO "MORE".
+//
+// The bar had grown to five tabs plus a More sheet, and the sheet held seven
+// destinations — /library, /train, /essentials and /history had no other link
+// anywhere in the app, so four features existed only behind a "…" button. A
+// menu of everything you didn't have room for is not navigation; it is the
+// place features go to stop being used.
+//
+// The replacement is four domains that between them describe the whole product
+// — Training, Food, Recovery, Performance — with everything else surfaced ON
+// the domain it belongs to, via SECTION_LINKS. Home and Profile move to a
+// persistent top bar, so they are one tap from anywhere rather than two.
+// Ask coach is the floating bubble and is not a destination at all.
+//
+// The rule this file now enforces (in lib/nav.test.ts): every destination is
+// reachable in at most two taps, and nothing is reachable ONLY from a sheet.
 
 // LABELS SAY WHAT YOU GET, NOT WHAT WE CALL IT INTERNALLY.
 //
-// The old set could not be guessed by anyone who hadn't built it. "Train" was
-// video analysis, while the place you actually train was "Coach". "Journal"
-// was a daily check-in, not a diary. "Playbook" and "Library" both sounded
-// like reference material and one of them was the exercise list. Five of the
-// ten labels required you to already know the answer.
-//
 // Routes are deliberately unchanged — they're bookmarked, linked from emails
 // and baked into a static export, and renaming them buys nothing a label
-// doesn't. So /coach reads "My plan" and /train reads "Video analysis", which
-// is the wrong way round from the URLs and the right way round for a person.
+// doesn't. So /coach reads "Training", /dashboard reads "Performance" and
+// /injury reads "Recovery", which is the wrong way round from the URLs and the
+// right way round for a person.
 export const NAV_ITEMS = [
   { href: "/home", label: "Home", icon: "home" },
-  { href: "/coach", label: "My plan", icon: "coach" },
-  // Its own destination, not the third tab of My plan. It was given four facts
-  // there and could not see the rehab plan somebody was asking about; it now
-  // carries a full briefing, and a page you arrive at with a question already
-  // formed should not be reached by browsing into a training block first.
-  { href: "/ask", label: "Ask coach", icon: "chat" },
-  { href: "/journal", label: "Check in", icon: "journal" },
-  { href: "/dashboard", label: "Progress", icon: "stats" },
-  { href: "/train", label: "Video analysis", icon: "train" },
+  // The four domains, in the order the tab bar shows them.
+  { href: "/coach", label: "Training", icon: "coach" },
+  { href: "/nutrition", label: "Food", icon: "nutrition" },
+  // "Recovery", not "Injury". The page has always covered mobility and rehab
+  // as well as acute pain, and a tab you only tap when something already hurts
+  // is a tab most people never tap. The injury triage card is still the first
+  // thing on it and still says the word.
+  { href: "/injury", label: "Recovery", icon: "injury" },
+  { href: "/dashboard", label: "Performance", icon: "stats" },
+  // Reached from the section rows on those four, and from the top bar.
+  { href: "/journal", label: "Today's log", icon: "journal" },
   { href: "/library", label: "Exercises", icon: "library" },
-  { href: "/nutrition", label: "Nutrition", icon: "nutrition" },
-  // Its own destination, not the third tab of Guides. Two rounds of "still can't
-  // find the injury stuff" is the answer to whether a deep link was enough.
-  { href: "/injury", label: "Injury", icon: "injury" },
+  { href: "/train", label: "Video analysis", icon: "train" },
   { href: "/essentials", label: "Guides", icon: "playbook" },
   { href: "/rewards", label: "Rewards", icon: "trophy" },
+  { href: "/history", label: "History", icon: "history" },
   { href: "/profile", label: "Profile", icon: "profile" },
 ] as const;
 
-// The four you'd touch on a normal day, plus More.
-//
-// Was Home / Coach / Journal / Playbook / Train — two of the five primary tabs
-// were reference content and video analysis, while Progress was buried in the
-// sheet. The daily loop is: see the plan, do it, check in, watch it move.
-// `short` is the tab-bar label; `label` is used everywhere the space is real
-// (the More sheet, the sidebar). SIX tabs on a 320px phone gives each one 45px,
-// and at that width "Check in" and "Progress" rendered edge to edge with no
-// gutter between them — the bar read as "Check in Progress", one phrase. The
-// labels weren't wrong, there just wasn't room for them side by side.
-//
-// So the tab bar gets the shortest form that still says what it is, and the
-// full wording survives in the two places that can fit it. "Plan" and "Check"
-// are what you'd say out loud anyway.
+/**
+ * The bottom bar. Exactly four, and no fifth slot to be tempted by.
+ *
+ * `short` is the tab-bar label; `label` is used everywhere the space is real.
+ * At four tabs a 320px phone gives each one about 72px, which is why the
+ * shortening that five tabs forced ("Plan", "Check") is no longer needed —
+ * every one of these renders in full.
+ */
 export const MOBILE_NAV = [
-  { href: "/home", label: "Home", short: "Home", icon: "home" },
-  { href: "/coach", label: "My plan", short: "Plan", icon: "coach" },
-  { href: "/journal", label: "Check in", short: "Check", icon: "journal" },
-  // FOOD TAKES PROGRESS'S SLOT, and the swap is the daily loop against the
-  // review surface. Home's Today card is check in / train / eat — three actions
-  // you take — and eating was the only one of them behind the More sheet, which
-  // is a poor place for the one paid feature with a job every single day.
-  //
-  // Progress is where you go to reflect, not to act, and Home now carries the
-  // parts of it you'd want daily: readiness, the streak, rank. It stays one tap
-  // away in More.
-  //
-  // Not Injury: that was promoted here after being reported unfindable twice,
-  // and "open More, then look" is no way to reach it when something hurts.
-  // "Food", not "Nutrition" — six slots on a 320px phone give each about 45px.
-  { href: "/nutrition", label: "Nutrition", short: "Food", icon: "nutrition" },
-  // Promoted out of the More sheet. Told twice it was unfindable, and "open
-  // More, then look" is not findable when something hurts — which is the one
-  // moment this page exists for.
-  //
-  // That makes five tabs plus More, one more than I originally allowed myself.
-  // The label had to shrink to "Injury" to fit: at six slots a 343px phone gives
-  // each about 57px, which "Injury" clears and "Injury & mobility" does not.
-  // Mobility is named in the page's own lead and has its own section there —
-  // a short label people can find beats a complete one they can't.
-  { href: "/injury", label: "Injury", short: "Injury", icon: "injury" },
+  { href: "/coach", label: "Training", short: "Training", icon: "coach" },
+  { href: "/nutrition", label: "Food", short: "Food", icon: "nutrition" },
+  { href: "/injury", label: "Recovery", short: "Recovery", icon: "injury" },
+  { href: "/dashboard", label: "Performance", short: "Progress", icon: "stats" },
 ] as const;
 
 /**
- * Shown only to coaches, appended by SideNav and the mobile More sheet.
+ * Always visible, above the content, on every app screen.
+ *
+ * Home and Profile were the two destinations that fit no domain — Home is a
+ * view of all four and Profile is none of them — and both had ended up in the
+ * More sheet, which is how you make the page people open first take two taps.
+ * A top bar costs one row of height and makes them one tap from everywhere.
+ */
+export const HEADER_NAV = [
+  { href: "/home", label: "Home", icon: "home" },
+  { href: "/profile", label: "Profile", icon: "profile" },
+] as const;
+
+/**
+ * Everything else, shown ON the tab it belongs to.
+ *
+ * These render as a row of chips directly under each section's heading (see
+ * components/SectionNav.tsx), which is the "no More section" rule in practice:
+ * a feature lives next to the thing it is about, not in a drawer of leftovers.
+ *
+ * Keyed by route so a page can ask for its own row without repeating itself.
+ */
+export const SECTION_LINKS: Record<string, readonly { href: string; label: string; icon: string }[]> = {
+  "/coach": [
+    { href: "/journal", label: "Today's log", icon: "journal" },
+    { href: "/library", label: "Exercises", icon: "library" },
+    { href: "/train", label: "Video analysis", icon: "train" },
+  ],
+  "/nutrition": [
+    { href: "/journal", label: "Today's log", icon: "journal" },
+    { href: "/library?tab=meals", label: "Recipes", icon: "library" },
+    { href: "/essentials", label: "Guides", icon: "playbook" },
+  ],
+  "/injury": [
+    { href: "/journal", label: "Today's log", icon: "journal" },
+    { href: "/essentials", label: "Guides", icon: "playbook" },
+  ],
+  "/dashboard": [
+    { href: "/history", label: "History", icon: "history" },
+    { href: "/rewards", label: "Rewards", icon: "trophy" },
+    { href: "/train", label: "Video analysis", icon: "train" },
+  ],
+};
+
+/**
+ * Shown only to coaches, appended by SideNav and linked from Profile.
  *
  * /squad is the whole coach product — roster, readiness at a glance, assigning
- * programs, team exercises, per-athlete analytics — and it had no navigation
- * entry whatsoever. The only route in was a link on the Profile page, so a coach
- * set their role and then had to guess where their squad had gone.
+ * programs, team exercises, per-athlete analytics.
  *
  * Not in NAV_ITEMS because most users are athletes, and a permanent tab that
  * opens onto a "coaches only" wall is worse than no tab at all.
  */
 export const COACH_NAV = [
   { href: "/squad", label: "My squad", icon: "squad" },
-] as const;
-
-// Everything else. Reached from the mobile "More" sheet.
-export const MOBILE_MORE = [
-  { href: "/ask", label: "Ask coach", icon: "chat" },
-  { href: "/dashboard", label: "Progress", icon: "stats" },
-  { href: "/train", label: "Video analysis", icon: "train" },
-  { href: "/library", label: "Exercises", icon: "library" },
-  // Injury lives in MOBILE_NAV now, as a primary tab, so it must not also be
-  // here — a route in both lists reads as two different places.
-  { href: "/essentials", label: "Guides", icon: "playbook" },
-  { href: "/rewards", label: "Rewards", icon: "trophy" },
-  { href: "/profile", label: "Profile", icon: "profile" },
 ] as const;
 
 export function NavIcon({ name, active, size = 22 }: { name: string; active: boolean; size?: number }) {
@@ -135,8 +143,6 @@ export function NavIcon({ name, active, size = 22 }: { name: string; active: boo
       return <svg {...common}><path d="M4 4v16" /><path d="M8 4v16" /><rect x="12" y="4" width="8" height="16" rx="1" transform="rotate(6 16 12)" /></svg>;
     case "profile":
       return <svg {...common}><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 4-6 8-6s8 2 8 6" /></svg>;
-    case "more":
-      return <svg {...common}><circle cx="5" cy="12" r="1.6" fill={stroke} /><circle cx="12" cy="12" r="1.6" fill={stroke} /><circle cx="19" cy="12" r="1.6" fill={stroke} /></svg>;
     case "trophy":
       return <svg {...common}><path d="M8 4h8v4a4 4 0 0 1-8 0V4z" /><path d="M8 5H5v2a3 3 0 0 0 3 3M16 5h3v2a3 3 0 0 1-3 3" /><path d="M12 12v4M9 20h6M10 20l.5-4M14 20l-.5-4" /></svg>;
     case "playbook":

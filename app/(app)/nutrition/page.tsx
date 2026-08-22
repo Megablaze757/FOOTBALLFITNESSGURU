@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { SectionNav } from "@/components/SectionNav";
 import { BackLink } from "@/components/BackLink";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -425,11 +426,16 @@ function NutritionTabs({ userId, today, log, targets, coachTargets, stats, prefs
 
 function Header() {
   return (
-    <header className="flex flex-col">
-        <BackLink href="/dashboard" label="Progress" />
-        <h1 className="text-3xl font-extrabold tracking-tight">Nutrition</h1>
+    /* No BackLink. This was reached from Progress once; it is one of four
+       primary tabs now, and "back to Performance" from a top-level destination
+       is a link to somewhere you did not come from. */
+    <header className="flex flex-col gap-3">
+      <div>
+        <h1 className="text-3xl font-extrabold tracking-tight">Food</h1>
         <p className="mt-1 text-sm text-slate-400">What to eat today, worked out from your body and how much you are training.</p>
-      </header>
+      </div>
+      <SectionNav section="/nutrition" />
+    </header>
   );
 }
 

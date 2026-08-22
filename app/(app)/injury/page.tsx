@@ -15,6 +15,7 @@ import { getExercise, type Exercise, type SportId } from "@/lib/exercises";
 import { ExerciseModal } from "@/components/ExerciseDetail";
 import { InjuryPlanner } from "@/components/InjuryPlanner";
 import Link from "next/link";
+import { SectionNav } from "@/components/SectionNav";
 import { ProtocolCard } from "@/components/ProtocolCard";
 import { currentPain, painAgeNote, daysBetween, PAIN_FRESH_DAYS } from "@/lib/pain";
 import { todayLocal } from "@/lib/day";
@@ -137,13 +138,14 @@ export default function InjuryPage() {
 
   const header = (
     <header>
-      <h1 className="text-3xl font-extrabold tracking-tight">Injury</h1>
-      {/* The lead used to open "Something hurting?" and then the card directly
-          below it asked the same thing. The page title plus the card's own
-          heading say it; this says what else is here. */}
+      <h1 className="text-3xl font-extrabold tracking-tight">Recovery</h1>
+      {/* "Recovery" is the tab, so the lead has to carry the word "injury" —
+          this page was reported unfindable twice under a narrower name, and the
+          fix was never the title on its own. The triage card directly below
+          still asks "Something hurting?" in as many words. */}
       <p className="mt-1 max-w-prose text-sm text-slate-400">
-        A staged plan to load an injury safely, the rehab guides behind it, and the mobility
-        warm-up that prevents most of it.
+        Injury and rehab: a staged plan to load an injury safely, the guides behind it, and the
+        mobility warm-up that prevents most of it.
       </p>
       {/* SAY THAT THE DISCOUNT IS HAPPENING. Pain now fades out of the
           programme if it is not re-reported (lib/pain.ts), which is right —
@@ -153,10 +155,11 @@ export default function InjuryPage() {
         <p className="mt-2 flex flex-wrap items-center gap-x-2 text-xs text-amber-500/90">
           {data.painNote}
           <Link href="/journal" className="font-semibold text-pitch-400 underline-offset-2 hover:underline">
-            Check in
+            Today&apos;s log
           </Link>
         </p>
       )}
+      <div className="mt-4"><SectionNav section="/injury" /></div>
     </header>
   );
 

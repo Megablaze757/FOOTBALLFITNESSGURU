@@ -67,8 +67,29 @@ export default function LibraryPage() {
    */
   const [q, setQ] = useState("");
   useEffect(() => {
-    const seed = new URLSearchParams(window.location.search).get("q");
+    const params = new URLSearchParams(window.location.search);
+    const seed = params.get("q");
     if (seed) setQ(seed);
+    // ?tab=meals lands on the recipes, so the Food page's "Recipes" chip can
+    // point here honestly rather than dropping you on the exercise list and
+    // asking you to find the tab yourself.
+    if (params.get("tab") === "meals") setTab("meals");
+  }, []);
+
+  /**
+   * The tab survives leaving the page and coming back.
+   *
+   * Reported as the library "resetting" — it is one route with two very
+   * different catalogues, and every arrival put you on the movements whether
+   * that was where you left off or not. Written with `replaceState` so it does
+   * not stack a history entry per tap: Back still leaves the library.
+   */
+  const selectTab = useCallback((next: (typeof LIBRARY_TABS)[number]["id"]) => {
+    setTab(next);
+    const url = new URL(window.location.href);
+    if (next === "moves") url.searchParams.delete("tab");
+    else url.searchParams.set("tab", next);
+    window.history.replaceState(null, "", url.toString());
   }, []);
   const [open, setOpen] = useState<Exercise | null>(null);
   const [custom, setCustom] = useState<Exercise[]>([]);
@@ -174,7 +195,7 @@ export default function LibraryPage() {
 
   const header = (
     <header>
-      <h1 className="text-3xl font-extrabold tracking-tight">Library</h1>
+      <h1 className="text-3xl font-extrabold tracking-tight">Exercises</h1>
       <p className="mt-1 text-sm text-slate-400">
         {tab === "moves"
           ? `Look up any movement — how to do it, what it works, and when to use it. ${EXERCISES.length} in total.`
@@ -221,7 +242,7 @@ export default function LibraryPage() {
     <div className="animate-fade-up space-y-4">
       {header}
 
-      <Tabs tabs={LIBRARY_TABS} active={tab} onChange={setTab} label="Library sections" />
+      <Tabs tabs={LIBRARY_TABS} active={tab} onChange={selectTab} label="Library sections" />
 
       <TabPanel id={tab}>
       {/* Unmounted rather than hidden. Every exercise card carries an animated

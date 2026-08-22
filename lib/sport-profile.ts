@@ -90,16 +90,16 @@ export type DashboardStat =
 
 // Every sport gets the same seven destinations; only the order changes.
 const TOOL: Record<string, SportTool> = {
-  plan: { href: "/coach", title: "My plan", icon: "barbell", tint: "#e3b53f" },
+  plan: { href: "/coach", title: "Training", icon: "barbell", tint: "#e3b53f" },
   exercises: { href: "/library", title: "Exercises", icon: "book", tint: "#38bdf8" },
   video: { href: "/train", title: "Video analysis", icon: "video", tint: "#c084fc" },
-  nutrition: { href: "/nutrition", title: "Nutrition", icon: "plate", tint: "#4ade80" },
+  nutrition: { href: "/nutrition", title: "Food", icon: "plate", tint: "#4ade80" },
   guides: { href: "/essentials", title: "Guides", icon: "target", tint: "#fb923c" },
-  progress: { href: "/dashboard", title: "Progress", icon: "chart", tint: "#5fd3c4" },
+  progress: { href: "/dashboard", title: "Performance", icon: "chart", tint: "#5fd3c4" },
   // Its own page now, not a deep link into a tab. See app/(app)/injury.
   // Red, and the only tile that gets it. Reserved so the one destination you
   // reach because something hurts is the one your eye lands on first.
-  injury: { href: "/injury", title: "Injury", icon: "plaster", tint: "#fb5d6b" },
+  injury: { href: "/injury", title: "Recovery", icon: "plaster", tint: "#fb5d6b" },
 };
 
 const order = (...keys: (keyof typeof TOOL)[]) => keys.map((k) => TOOL[k]);

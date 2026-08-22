@@ -165,7 +165,7 @@ export function TodayCard({ quests, level, sessionTitle, sessionSub, kcalLeft, r
  * carried by the control — the label just has to name the thing.
  */
 const SHORT_LABEL: Record<string, string> = {
-  checkin: "Check in",
+  checkin: "Today's log",
   train: "Train",
   nutrition: "Eat",
 };
