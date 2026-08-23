@@ -271,8 +271,15 @@ export default function LibraryPage() {
           the run entries themselves ("Easy run", "Tempo runs") were rows you
           could open to be told to go for a run.
           Both now live on Guides, which is the page for reference. */}
+      {/* ?tab=running, NOT bare /essentials.
+          The card promises "Zones 1-5, and what each run type is for" and used
+          to land on the position guide — the page's default tab — with the
+          running one two taps away behind a scroller. A link that arrives
+          somewhere other than what it advertised reads as a broken link, and
+          the athlete's next move is to go back rather than to look around.
+          The page has read ?tab= since it was built; this simply says which. */}
       <Link
-        href="/essentials"
+        href="/essentials?tab=running"
         className="card card-hover flex items-center gap-3 p-4 text-sm"
       >
         <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-sky-400/10 text-sky-300">

@@ -42,7 +42,10 @@ test("the library filters them out and says where they went", () => {
   const page = read("../app/(app)/library/page.tsx");
   assert.match(page, /!isRunEntry\(e\)/, "the list no longer excludes runs");
   assert.match(page, /Running is in Guides/, "nothing tells a runner where the zones went");
-  assert.match(page, /href="\/essentials"/, "the pointer does not link anywhere");
+  // Matched loosely at the front so the query string can carry the tab: the
+  // exact-match version passed while the link landed on the wrong guide, which
+  // is the whole bug the test below now pins.
+  assert.match(page, /href="\/essentials/, "the pointer does not link anywhere");
 });
 
 test("the zone guide moved rather than being deleted", () => {
@@ -58,3 +61,21 @@ test("the count on the page is the number of rows you can scroll", () => {
   const library = read("../app/(app)/library/page.tsx");
   assert.match(library, /MOVEMENT_COUNT/, "the heading still counts entries it does not show");
 });
+
+test("the running card lands on the running guide, not on the page it lives in", () => {
+  // It said "Zones 1-5, and what each run type is for" and linked to bare
+  // /essentials, which opens the POSITION tab — so the one thing the card
+  // promised was two taps further on, behind a horizontal scroller. A link that
+  // arrives somewhere other than what it advertised reads as broken, and the
+  // next move is Back rather than a look around.
+  const library = readFileSync(new URL("../app/(app)/library/page.tsx", import.meta.url), "utf8");
+  assert.match(library, /href="\/essentials\?tab=running"/);
+
+  // And the page has to still honour it — the two halves of this live in
+  // different files and only agree by convention.
+  const guides = readFileSync(new URL("../app/(app)/essentials/page.tsx", import.meta.url), "utf8");
+  assert.match(guides, /const wanted = new URLSearchParams\(window\.location\.search\)\.get\("tab"\)/);
+  assert.match(guides, /TABS\.some\(\(t\) => t\.id === wanted\)/);
+  assert.match(guides, /\{ id: "running", label: "Running"/, "there is no running tab to land on");
+});
+
