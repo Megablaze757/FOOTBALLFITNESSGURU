@@ -185,9 +185,27 @@ async function get(url, tries = 4) {
   return null;
 }
 
-async function search(name) {
-  const q = encodeURIComponent(`${name} proper form technique`);
-  const res = await get(`https://www.youtube.com/results?search_query=${q}`);
+/**
+ * The phrasings, tried in order until one yields a candidate that survives.
+ *
+ * One query was leaving good videos on the table, and not because they did not
+ * exist. "Proper form technique" is how a coach titles a video; "how to" and
+ * "tutorial" and the bare name are how plenty of others do, and YouTube ranks
+ * each phrasing quite differently — the diagnostic showed exercises with a
+ * dozen candidates where every one failed a gate under the first query and a
+ * clean tutorial appeared under the second.
+ *
+ * It is also cheap insurance against the search itself: results rotate between
+ * runs, so a single query is a single roll of the dice per exercise.
+ */
+const QUERIES = [
+  (name) => `${name} proper form technique`,
+  (name) => `how to ${name}`,
+  (name) => `${name} exercise tutorial`,
+];
+
+async function searchOnce(query) {
+  const res = await get(`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`);
   if (!res) return [];
   const html = await res.text();
   const start = html.indexOf("var ytInitialData = ");
@@ -217,6 +235,21 @@ async function search(name) {
   };
   walk(data);
   return out;
+}
+
+/** Every phrasing's results, in order, de-duplicated by video id. */
+async function search(name) {
+  const seen = new Set();
+  const all = [];
+  for (const build of QUERIES) {
+    for (const c of await searchOnce(build(name))) {
+      if (seen.has(c.id)) continue;
+      seen.add(c.id);
+      all.push(c);
+    }
+    await sleep(700);
+  }
+  return all;
 }
 
 const seconds = (t) => t.split(":").reduce((a, p) => a * 60 + Number(p), 0);

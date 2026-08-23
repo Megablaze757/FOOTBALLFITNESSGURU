@@ -136,3 +136,31 @@ test("the classes that carry the floor still carry it", () => {
   const pad = css.indexOf(".tap-pad {");
   assert.ok(pad > 0 && /@apply relative/.test(css.slice(pad, pad + 120)), "tap-pad is not a positioning context");
 });
+
+test("nothing that covers the screen sits under the tab bar", () => {
+  /**
+   * "Ask coach bubble not properly loaded."
+   *
+   * It had loaded. The tab bar is `z-[60]` and the coach sheet was `z-50`, so
+   * the nav rendered ON TOP of it — covering the composer completely and
+   * slicing the suggestion chips in half. A sheet you can read but not type
+   * into looks broken in a way that is very hard to describe, which is why it
+   * was reported as a loading failure.
+   *
+   * Three more overlays had the same fault and nobody had hit them yet: the
+   * meal swap sheet, delete-account, and the confirm dialog (which TIED with
+   * the bar at z-[60], so which one won was down to DOM order).
+   *
+   * The rule is a rule, not four coincidences: a full-screen overlay outranks
+   * the furniture it covers.
+   */
+  const TAB_BAR = 60;
+  const offenders: string[] = [];
+  for (const file of [...walk("components"), ...walk("app")]) {
+    const src = readFileSync(file, "utf8");
+    for (const [, raw] of src.matchAll(/fixed inset-0 z-\[?(\d+)\]?/g)) {
+      if (Number(raw) <= TAB_BAR) offenders.push(`${file.split("/").slice(-1)[0]} z-${raw}`);
+    }
+  }
+  assert.deepEqual(offenders, [], `these overlays render under the tab bar (z-${TAB_BAR})`);
+});

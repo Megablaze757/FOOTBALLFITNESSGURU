@@ -50,7 +50,23 @@ test("the conversation gets the screen", () => {
   const rendered = chat.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
   assert.ok(!/max-h-72/.test(rendered), "the chat is back in a 288px box");
   assert.match(chat, /min-h-\[calc\(100dvh-14rem\)\]/, "the chat no longer fills the page");
-  assert.match(chat, /flex-1 space-y-3 overflow-y-auto/, "the message list does not take the free space");
+  assert.match(chat, /flex flex-1 flex-col overflow-y-auto/, "the message list does not take the free space");
+  /**
+   * AND IT FILLS FROM THE BOTTOM, like every chat anybody has used.
+   *
+   * Taking the free space was only half of it. With the messages flowing from
+   * the top, the coach's opening line sat at the ceiling with two thirds of a
+   * phone of nothing under it — reported as "not properly loaded", because an
+   * expanse of empty dark above a composer looks like a screen that gave up
+   * rather than one waiting for a question.
+   *
+   * `mt-auto` on the inner column and NOT `justify-end` on the scroller: with
+   * justify-end, content that overflows runs off the top past the scroll origin
+   * and cannot be scrolled back to in several engines.
+   */
+  assert.match(chat, /<div className="mt-auto space-y-3 px-4 py-4">/, "the conversation floats at the top of the panel");
+  assert.ok(!/justify-end[^"]*overflow-y-auto|overflow-y-auto[^"]*justify-end/.test(rendered),
+    "justify-end on the scroller makes overflow unreachable");
   // dvh, not vh: on iOS the address bar makes vh taller than the visible page,
   // which would push the composer under it.
   assert.ok(!/min-h-\[calc\(100vh/.test(chat), "vh puts the composer behind Safari's address bar");

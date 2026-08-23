@@ -69,7 +69,7 @@ export function DeleteAccount({ email }: { email: string }) {
 
       {open && (
         <Portal>
-          <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-4 backdrop-blur-sm sm:items-center">
+          <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/70 p-4 backdrop-blur-sm sm:items-center">
             <div className="w-full max-w-md rounded-3xl border border-white/10 bg-ink-900 p-6">
               <h2 className="text-xl font-extrabold tracking-tight">Delete your account?</h2>
               <p className="mt-2 text-sm text-slate-400">

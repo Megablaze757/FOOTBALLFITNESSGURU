@@ -282,3 +282,31 @@ test("the finder refuses on channel, movement and shape — not just on a match"
   // A parsed id is not a playing id.
   assert.match(finder, /oembed/, "nothing verifies the id resolves");
 });
+
+test("a movement under another name gets the same video, and nothing else does", () => {
+  /**
+   * The alias map is one line of code and the most dangerous thing in this
+   * file. Pointing a name at a video is a claim that they are the same
+   * movement, and the whole matcher exists to refuse exactly that claim when it
+   * is not true — so the test is as much about what must NOT resolve.
+   */
+  for (const [alias, real] of [
+    ["Military press", "Barbell overhead press"],
+    ["Shoulder press", "Barbell overhead press"],
+    ["Sled leg press", "Leg press"],
+    ["Single leg squat", "Pistol squat"],
+  ]) {
+    assert.equal(formGuide(alias)?.videoId, formGuide(real)?.videoId, `${alias} does not follow ${real}`);
+    assert.equal(formGuide(alias)?.kind, "video");
+  }
+
+  // Grip and stance variants are DIFFERENT EXERCISES and must keep searching
+  // rather than borrow the parent movement's video.
+  for (const notAnAlias of [
+    "Close grip lat pulldown", "Reverse grip lat pulldown", "One arm lat pulldown",
+    "Split squat", "Reverse grip bench press", "Wide grip bench press",
+  ]) {
+    assert.equal(formGuide(notAnAlias)?.kind, "search",
+      `${notAnAlias} was quietly given another exercise's video`);
+  }
+});

@@ -247,6 +247,67 @@ const CURATED: Record<string, string> = {
   "z press": "https://www.youtube.com/watch?v=0fHdnBH9Gdo", // Buff Dudes Workouts
   "zercher squat": "https://www.youtube.com/watch?v=Da75bVCfTNo", // Buff Dudes
   "zottman curl": "https://www.youtube.com/watch?v=D7bMA4WEKMI", // Buff Dudes Workouts
+
+  // --- A second sweep, after the channel list and the implement rule were
+  //     found to be refusing good videos rather than bad ones. Five more were
+  //     dropped by hand for the same reason as before: "How 100 Bodyweight
+  //     Squats Changes the Human Physique" and "Deficit Deadlifts | Benefits,
+  //     Who Should Use Them" are about whether to do the lift, not how.
+  "belt squat": "https://www.youtube.com/watch?v=h_ok0J0y5j4", // Juggernaut Training Systems
+  "bent over row": "https://www.youtube.com/watch?v=FWJR5Ve8bnQ", // Max Euceda
+  "bicycle crunch": "https://www.youtube.com/watch?v=1we3bh9uhqY", // Tone and Tighten
+  "burpees": "https://www.youtube.com/watch?v=mUYJqe_sJFE", // Minus The Gym
+  "cable upright row": "https://www.youtube.com/watch?v=DU1vCuZkNkg", // Jim Stoppani, PhD
+  "close grip push up": "https://www.youtube.com/watch?v=G2mlaEfpEIM", // Howcast
+  "diamond push ups": "https://www.youtube.com/watch?v=kGhDnFwMY3E", // Minus The Gym
+  "dumbbell clean and press": "https://www.youtube.com/watch?v=8G-jnVP_f2s", // Live Lean TV Daily Exercises
+  "dumbbell high pull": "https://www.youtube.com/watch?v=eO-UIN-qTOQ", // Live Lean TV Daily Exercises
+  "dumbbell romanian deadlift": "https://www.youtube.com/watch?v=FQKfr1YDhEk", // ScottHermanFitness
+  "dumbbell side bend": "https://www.youtube.com/watch?v=dL9ZzqtQI5c", // Howcast
+  "dumbbell tricep extension": "https://www.youtube.com/watch?v=_gsUck-7M74", // Howcast
+  "hang clean": "https://www.youtube.com/watch?v=QCQuZITCnPk", // TOROKHTIY
+  "horizontal leg press": "https://www.youtube.com/watch?v=QQEW__B5y9I", // Fitness Lab
+  "incline bench press": "https://www.youtube.com/watch?v=VFbjmiAAwJE", // Jim Stoppani, PhD
+  "incline dumbbell bench press": "https://www.youtube.com/watch?v=IP4oeKh1Sd4", // Max Euceda
+  "jm press": "https://www.youtube.com/watch?v=hOCW9cE-GJg", // elitefts
+  "lying leg raise": "https://www.youtube.com/watch?v=xqTh6NqbAtM", // HASfit
+  "machine seated crunch": "https://www.youtube.com/watch?v=CNHS2OoUi30", // Live Lean TV Daily Exercises
+  "meadows row": "https://www.youtube.com/watch?v=G-jU1aPVhnY", // mountaindog1
+  "mountain climbers": "https://www.youtube.com/watch?v=De3Gl-nC7IQ", // Nick Tumminello - Trainer of Trainers
+  "preacher curl": "https://www.youtube.com/watch?v=vngli9UR6Hw", // Jim Stoppani, PhD
+  "scissor kicks": "https://www.youtube.com/watch?v=bUJnyVsa3Ak", // FitnessBlender
+  "seated dip machine": "https://www.youtube.com/watch?v=Zg0tT27iYuY", // Fitness Lab
+  "seated dumbbell shoulder press": "https://www.youtube.com/watch?v=rO_iEImwHyo", // Max Euceda
+  "sit ups": "https://www.youtube.com/watch?v=s3PPU_2z9qo", // Live Lean TV
+  "smith machine shrug": "https://www.youtube.com/watch?v=g00nZdE6_Ro", // Live Lean TV Daily Exercises
+  "snatch pull": "https://www.youtube.com/watch?v=hi9M6V83j9U", // TOROKHTIY
+  "standing cable crunch": "https://www.youtube.com/watch?v=vFV78ASgsak", // Jim Stoppani, PhD
+  "thruster": "https://www.youtube.com/watch?v=Zvt5-mugUco", // Bodybuilding.com
+  "wrist curl": "https://www.youtube.com/watch?v=NoO4ol8Zw2I", // Jim Stoppani, PhD
+  "yates row": "https://www.youtube.com/watch?v=ryxwNKu23OQ", // Geoffrey Verity Schofield
+};
+
+/**
+ * The same movement under another name.
+ *
+ * DELIBERATELY TINY, and it must stay that way. The temptation is to point
+ * "Close Grip Lat Pulldown" at the lat pulldown video, "Reverse Grip Bench
+ * Press" at the bench press, "Split Squat" at the Bulgarian — and every one of
+ * those would be showing somebody a DIFFERENT exercise while claiming it is a
+ * guide to theirs. That is the exact failure the matcher refuses ninety times
+ * over; doing it by hand here would be worse, not better, because a
+ * hand-written map looks deliberate.
+ *
+ * So the bar is: could the two names sit on the same video's title without
+ * anybody blinking? A military press IS the barbell overhead press. A sled leg
+ * press IS the leg press. A single leg squat IS the pistol squat. Nothing that
+ * needs a "well, roughly" goes here.
+ */
+const SAME_MOVEMENT: Record<string, string> = {
+  "shoulder press": "barbell overhead press",
+  "military press": "barbell overhead press",
+  "sled leg press": "leg press",
+  "single leg squat": "pistol squat",
 };
 
 /**
@@ -263,7 +324,8 @@ export function formGuide(name: string): FormGuide | null {
   const clean = name.trim().replace(/\s+/g, " ");
   if (!clean) return null;
 
-  const chosen = CURATED[clean.toLowerCase()];
+  const key = clean.toLowerCase();
+  const chosen = CURATED[key] ?? CURATED[SAME_MOVEMENT[key] ?? ""];
   if (chosen) {
     return { url: chosen, kind: "video", label: "Watch Form Guide", videoId: idOf(chosen) ?? undefined };
   }

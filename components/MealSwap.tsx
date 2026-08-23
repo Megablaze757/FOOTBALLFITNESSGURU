@@ -121,7 +121,7 @@ export function MealSwap({ target, prefs, starred = [], basket, onPick, onClose 
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-0 sm:items-center sm:p-6"
+      className="fixed inset-0 z-[100] flex items-end justify-center bg-black/70 p-0 sm:items-center sm:p-6"
       role="dialog"
       aria-modal="true"
       aria-label={`Swap ${target.dayName} ${target.slot.toLowerCase()}`}

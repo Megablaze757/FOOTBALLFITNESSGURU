@@ -99,7 +99,13 @@ export function CoachBubble() {
 
       {open && (
         <Portal>
-          <div className="fixed inset-0 z-50 flex flex-col justify-end bg-ink-900/70 backdrop-blur-sm sm:items-end sm:justify-end sm:p-6">
+          {/* ABOVE THE TAB BAR, WHICH IS z-[60].
+              This was z-50, so the nav rendered ON TOP of the sheet: it covered
+              the composer completely and sliced the top off the suggestion
+              chips, which is why the panel looked like it had failed to load
+              rather than like it was behind something. A full-screen sheet has
+              to outrank the furniture it covers. */}
+          <div className="fixed inset-0 z-[70] flex flex-col justify-end bg-ink-900/70 backdrop-blur-sm sm:items-end sm:justify-end sm:p-6">
             {/* Tapping the dimmed page closes it — the gesture everybody tries
                 first, and the one a sheet without it swallows. */}
             <button

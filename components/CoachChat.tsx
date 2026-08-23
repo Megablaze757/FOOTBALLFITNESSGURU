@@ -165,7 +165,15 @@ export function CoachChat({ context, briefing, suggestions, storageKey, userId, 
         )}
       </header>}
 
-      <div ref={listRef} className="no-scrollbar flex-1 space-y-3 overflow-y-auto px-4 py-4">
+      {/* THE CONVERSATION SITS ON THE BOTTOM, like every chat anybody has used.
+          Filling from the top left the opening line stranded at the ceiling
+          with two thirds of a phone of empty space under it, which reads as a
+          screen that has not finished loading rather than as a chat waiting for
+          a question. `mt-auto` on the inner column rather than `justify-end` on
+          the scroller: the latter makes overflowing content unreachable above
+          the scroll origin in some engines. */}
+      <div ref={listRef} className="no-scrollbar flex flex-1 flex-col overflow-y-auto">
+        <div className="mt-auto space-y-3 px-4 py-4">
         {/* THE COACH SPEAKS FIRST. An empty chat with a blinking cursor asks
             somebody to think of a question, which is the hardest part. */}
         {messages.length === 0 && (
@@ -199,6 +207,7 @@ export function CoachChat({ context, briefing, suggestions, storageKey, userId, 
             </div>
           </div>
         )}
+        </div>
       </div>
 
       {/* KEPT WITHIN REACH, not deleted on the first message. The old row
