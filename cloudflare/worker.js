@@ -200,6 +200,94 @@ function escapeAttr(s) {
 }
 __name(escapeAttr, "escapeAttr");
 
+// src/email-layout.ts
+function escapeHtml2(s) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+__name(escapeHtml2, "escapeHtml");
+function escapeAttr2(s) {
+  return escapeHtml2(s).replace(/"/g, "&quot;");
+}
+__name(escapeAttr2, "escapeAttr");
+function ctaButton2(href, label) {
+  return `<tr><td style="padding-bottom:12px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+      <tr><td align="center" bgcolor="#e3b53f" style="background:#e3b53f;border-radius:999px;">
+        <a href="${escapeAttr2(href)}" style="display:block;padding:17px 20px;font-size:18px;font-weight:800;color:#0b0f0d;text-decoration:none;letter-spacing:-0.01em;">${escapeHtml2(label)}</a>
+      </td></tr>
+    </table>
+  </td></tr>`;
+}
+__name(ctaButton2, "ctaButton");
+function emailHead(subject, preheader) {
+  return `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
+<title>${escapeHtml2(subject)}</title>
+<style>
+  :root { color-scheme: light dark; supported-color-schemes: light dark; }
+  @media (prefers-color-scheme: dark) {
+    .pa-bg    { background-color: #0b0f0d !important; }
+    .pa-card  { background-color: #121714 !important; }
+    .pa-h     { color: #f1f5f3 !important; }
+    .pa-gold  { color: #e3b53f !important; }
+    .pa-body  { color: #9fb0a8 !important; }
+    .pa-muted { color: #6b7a73 !important; }
+    .pa-tile  { background-color: #1a201c !important; }
+    .pa-rule  { border-color: rgba(255,255,255,0.09) !important; }
+    .pa-chip  { background-color: #1e1c14 !important; border-color: #4a3d17 !important; color: #e3b53f !important; }
+  }
+</style>
+</head>
+<body bgcolor="#eef1ec" style="margin:0;padding:0;background-color:#eef1ec;">
+${preheaderBlock(preheader)}
+<table role="presentation" class="pa-bg" width="100%" cellpadding="0" cellspacing="0" bgcolor="#eef1ec" style="background-color:#eef1ec;padding:20px 12px;">
+<tr><td align="center">
+<table role="presentation" class="pa-card" width="100%" cellpadding="0" cellspacing="0" bgcolor="#ffffff" style="max-width:560px;background-color:#ffffff;border-radius:20px;padding:30px 26px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">`;
+}
+__name(emailHead, "emailHead");
+function preheaderBlock(text) {
+  return `<div style="display:none;max-height:0;overflow:hidden;opacity:0;">${escapeHtml2(text)}</div>`;
+}
+__name(preheaderBlock, "preheaderBlock");
+function emailFoot() {
+  return `</table></td></tr></table></body></html>`;
+}
+__name(emailFoot, "emailFoot");
+function emailBrand() {
+  return `<tr><td style="padding-bottom:20px;">
+    <span class="pa-h" style="font-size:18px;font-weight:800;letter-spacing:-0.01em;color:#0e1411;">
+      <span class="pa-gold" style="color:#8a6510;">&#9670;</span> PocketAthlete
+    </span>
+  </td></tr>`;
+}
+__name(emailBrand, "emailBrand");
+function renderEmail(subject, shell) {
+  const eyebrow = shell.eyebrow ? `<tr><td class="pa-gold" style="font-size:12px;font-weight:800;letter-spacing:0.16em;text-transform:uppercase;color:#8a6510;padding-bottom:8px;">${escapeHtml2(shell.eyebrow)}</td></tr>` : "";
+  const heading = `<tr><td class="pa-h" style="font-size:26px;line-height:1.18;font-weight:800;letter-spacing:-0.02em;color:#0e1411;padding-bottom:12px;">${escapeHtml2(shell.heading)}</td></tr>`;
+  const paragraphs = shell.paragraphs.filter((p) => p.trim() !== "").map((p) => `<tr><td class="pa-body" style="font-size:16px;line-height:1.55;color:#495751;padding-bottom:18px;">${escapeHtml2(p).replaceAll("\n", "<br>")}</td></tr>`).join("");
+  const cta = shell.cta ? ctaButton2(shell.cta.href, shell.cta.label) : "";
+  const note = shell.note ? `<tr><td class="pa-muted" align="center" style="font-size:13px;line-height:1.5;color:#5d6860;padding-bottom:20px;">${escapeHtml2(shell.note)}</td></tr>` : "";
+  const footer = shell.footerHtml ? `<tr><td class="pa-muted pa-rule" style="border-top:1px solid #e4e8e3;padding-top:20px;font-size:12px;line-height:1.5;color:#5d6860;">${shell.footerHtml}</td></tr>` : "";
+  return emailHead(subject, shell.preheader) + emailBrand() + eyebrow + heading + paragraphs + cta + note + footer + emailFoot();
+}
+__name(renderEmail, "renderEmail");
+function renderText(shell) {
+  const lines = [shell.heading.toUpperCase(), "", ...shell.paragraphs.filter((p) => p.trim() !== "")];
+  if (shell.cta)
+    lines.push("", `${shell.cta.label.replace(/\s*→\s*$/, "")}: ${shell.cta.href}`);
+  if (shell.note)
+    lines.push("", shell.note);
+  if (shell.footerHtml) {
+    const text = shell.footerHtml.replace(/<a [^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/g, "$2: $1").replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/\s+/g, " ").trim();
+    if (text)
+      lines.push("", "\u2014", text);
+  }
+  return lines.join("\n");
+}
+__name(renderText, "renderText");
+
 // ../lib/affiliate.ts
 var MAX_LEVEL = 2;
 var DEFAULT_RATES = {
@@ -723,7 +811,7 @@ function overBudget(state) {
   return json({ error: `${reason} The on-device coach still works, and your allowance resets \u2014 upgrade for more.` }, 429);
 }
 __name(overBudget, "overBudget");
-var WORKER_VERSION = "2026-08-23.6";
+var WORKER_VERSION = "2026-08-23.7";
 var ATTEMPT_TIMEOUT_MS = {
   groq: 1e4,
   openrouter: 2e4,
@@ -2512,14 +2600,26 @@ async function createTrialEndingReminders(env) {
   }
 }
 __name(createTrialEndingReminders, "createTrialEndingReminders");
-function escapeHtml2(value) {
+function escapeHtml3(value) {
   return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#39;");
 }
-__name(escapeHtml2, "escapeHtml");
+__name(escapeHtml3, "escapeHtml");
 function appLink(env, path) {
   return `${(env.APP_URL || "https://pocketathlete.com").replace(/\/$/, "")}${path.startsWith("/") ? path : `/${path}`}`;
 }
 __name(appLink, "appLink");
+var NOTIFICATION_EYEBROW = {
+  check_in_reminder: "Daily check-in",
+  workout_reminder: "Today's session",
+  weekly_summary: "Your week",
+  program_assigned: "New block",
+  program_deadline: "Block ending",
+  milestone: "Milestone",
+  trial_ending: "Your trial",
+  billing: "Billing",
+  coach_request: "Coach request",
+  general: "PocketAthlete"
+};
 async function emailStatus(req, env) {
   const user = await authUser(req, env);
   if (!user)
@@ -2592,11 +2692,23 @@ async function emailTest(req, env) {
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to))
     return json({ error: "that is not an email address" }, 400);
   const when = (/* @__PURE__ */ new Date()).toISOString();
+  const shell = {
+    preheader: "The sending pipeline works \u2014 this went through the real sender.",
+    eyebrow: "Admin test",
+    heading: "It works",
+    paragraphs: [
+      "This went through the same sender your reminders and weekly summaries use, so if it arrived, they will too."
+    ],
+    cta: { href: appLink(env, "/home"), label: "Open PocketAthlete \u2192" },
+    note: "Nobody else was emailed.",
+    footerHtml: `Sent ${escapeHtml3(when)} by Worker ${escapeHtml3(WORKER_VERSION)}.`
+  };
   const result = await email(
     env,
     to,
     "PocketAthlete \u2014 test email",
-    `<h2>It works</h2><p>This is a test from the PocketAthlete admin dashboard.</p><p style="color:#64748b;font-size:12px">Sent ${escapeHtml2(when)} by Worker ${escapeHtml2(WORKER_VERSION)}.</p>`
+    renderEmail("PocketAthlete \u2014 test email", shell),
+    renderText(shell)
   );
   await logEmail(env, user.id, "admin_test", result);
   return result.ok ? json({ ok: true, to, provider: env.GAS_EMAIL_URL ? "gmail" : "resend", providerId: result.providerId ?? null }) : json({ ok: false, to, error: result.error ?? "the provider did not accept the message" }, 502);
@@ -2653,13 +2765,17 @@ async function emailNotifications(env) {
     }
     const link = appLink(env, notification.href ?? "/home");
     const settings = appLink(env, "/profile");
-    const body = escapeHtml2(notification.body ?? "").replaceAll("\n", "<br>");
-    const result = await email(
-      env,
-      address,
-      notification.title.replace(/[\r\n]+/g, " "),
-      `<h2>${escapeHtml2(notification.title)}</h2><p>${body}</p><p><a href="${link}">Open PocketAthlete \u2192</a></p><p style="color:#64748b;font-size:12px">${notification.email_category === "essential" ? "This is an essential account or billing notice." : `Change training email choices in <a href="${settings}">Notification settings</a>.`}</p>`
-    );
+    const title = notification.title.replace(/[\r\n]+/g, " ");
+    const body = (notification.body ?? "").trim();
+    const shell = {
+      preheader: body.split("\n")[0] || title,
+      eyebrow: NOTIFICATION_EYEBROW[notification.kind] ?? "PocketAthlete",
+      heading: title,
+      paragraphs: body ? [body] : [],
+      cta: { href: link, label: "Open PocketAthlete \u2192" },
+      footerHtml: notification.email_category === "essential" ? "This is an essential account or billing notice, so it is sent whatever your email preferences say." : `You are getting this because training emails are on. <a href="${settings}" style="color:#8a6510;">Change that in your profile</a>.`
+    };
+    const result = await email(env, address, title, renderEmail(title, shell), renderText(shell));
     await logEmail(env, notification.user_id, `notification_${notification.kind}`, result);
     if (result.ok)
       completed.push(notification.id);
@@ -2700,7 +2816,7 @@ function replyAddress(env) {
   return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(bare) ? bare : "";
 }
 __name(replyAddress, "replyAddress");
-async function email(env, to, subject, html) {
+async function email(env, to, subject, html, text) {
   try {
     const gasUrl = conf(env, "GAS_EMAIL_URL");
     const resendKey = conf(env, "RESEND_API_KEY");
@@ -2715,7 +2831,8 @@ async function email(env, to, subject, html) {
           subject,
           html,
           from,
-          replyTo: replyAddress(env)
+          replyTo: replyAddress(env),
+          ...text ? { text } : {}
         })
       });
       const payload2 = await response2.json().catch(() => ({}));
@@ -2731,6 +2848,7 @@ async function email(env, to, subject, html) {
         to,
         subject,
         html,
+        ...text ? { text } : {},
         ...replyAddress(env) ? { reply_to: replyAddress(env) } : {}
       })
     });

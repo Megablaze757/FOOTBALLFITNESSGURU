@@ -16,6 +16,7 @@
 // =============================================================================
 
 import { launchEmail } from "./launch-email";
+import { renderEmail, renderText, type EmailShell } from "./email-layout";
 
 // =============================================================================
 // PocketAthlete API — a single Cloudflare Worker for the app's server-side needs:
@@ -505,7 +506,7 @@ function overBudget(state: BudgetState): Response {
 // nobody is watching a spinner and the budget can be what the work actually
 // needs. Callers pass their own client-side timeout to match.
 // Bump on every paste into the Cloudflare dashboard. GET /health reports it.
-const WORKER_VERSION = "2026-08-23.6";
+const WORKER_VERSION = "2026-08-23.7";
 
 const CHAIN_BUDGET_MS = 55_000;
 /**
@@ -3244,6 +3245,31 @@ function appLink(env: Env, path: string): string {
  * Reports WHETHER each secret is present, never its value. A boolean cannot
  * leak a key.
  */
+/**
+ * The small uppercase label above each notification's heading.
+ *
+ * It says what KIND of message this is before the athlete reads a word of it —
+ * a nudge, a summary, something about money — which is the difference between
+ * an inbox they scan and one they open. Keyed by notifications.kind; the ten
+ * values are pinned by the check constraint in migration 0091.
+ *
+ * Falls back to the product name rather than to nothing: an unknown kind should
+ * still look like it came from us, and a new kind added in SQL must not be able
+ * to ship a heading with an empty label floating above it.
+ */
+const NOTIFICATION_EYEBROW: Record<string, string> = {
+  check_in_reminder: "Daily check-in",
+  workout_reminder: "Today's session",
+  weekly_summary: "Your week",
+  program_assigned: "New block",
+  program_deadline: "Block ending",
+  milestone: "Milestone",
+  trial_ending: "Your trial",
+  billing: "Billing",
+  coach_request: "Coach request",
+  general: "PocketAthlete",
+};
+
 async function emailStatus(req: Request, env: Env): Promise<Response> {
   const user = await authUser(req, env);
   if (!user) return json({ error: "unauthorized" }, 401);
@@ -3352,9 +3378,22 @@ async function emailTest(req: Request, env: Env): Promise<Response> {
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) return json({ error: "that is not an email address" }, 400);
 
   const when = new Date().toISOString();
+  // Sent through the same shell as everything else, deliberately: a test that
+  // looks nothing like the real thing proves the pipeline and tells you nothing
+  // about what lands in an athlete's inbox. This is the rehearsal.
+  const shell: EmailShell = {
+    preheader: "The sending pipeline works — this went through the real sender.",
+    eyebrow: "Admin test",
+    heading: "It works",
+    paragraphs: [
+      "This went through the same sender your reminders and weekly summaries use, so if it arrived, they will too.",
+    ],
+    cta: { href: appLink(env, "/home"), label: "Open PocketAthlete →" },
+    note: "Nobody else was emailed.",
+    footerHtml: `Sent ${escapeHtml(when)} by Worker ${escapeHtml(WORKER_VERSION)}.`,
+  };
   const result = await email(env, to, "PocketAthlete — test email",
-    `<h2>It works</h2><p>This is a test from the PocketAthlete admin dashboard.</p>` +
-    `<p style="color:#64748b;font-size:12px">Sent ${escapeHtml(when)} by Worker ${escapeHtml(WORKER_VERSION)}.</p>`);
+    renderEmail("PocketAthlete — test email", shell), renderText(shell));
   await logEmail(env, user.id, "admin_test", result);
 
   return result.ok
@@ -3422,13 +3461,31 @@ async function emailNotifications(env: Env): Promise<void> {
     }
     const link = appLink(env, notification.href ?? "/home");
     const settings = appLink(env, "/profile");
-    const body = escapeHtml(notification.body ?? "").replaceAll("\n", "<br>");
-    const result = await email(env, address, notification.title.replace(/[\r\n]+/g, " "),
-      `<h2>${escapeHtml(notification.title)}</h2><p>${body}</p>` +
-      `<p><a href="${link}">Open PocketAthlete →</a></p>` +
-      `<p style="color:#64748b;font-size:12px">${notification.email_category === "essential"
-        ? "This is an essential account or billing notice."
-        : `Change training email choices in <a href="${settings}">Notification settings</a>.`}</p>`);
+    const title = notification.title.replace(/[\r\n]+/g, " ");
+    const body = (notification.body ?? "").trim();
+    /**
+     * THE SAME SHELL AS EVERY OTHER EMAIL.
+     *
+     * This was an h2, a p and a naked link — Times New Roman on white, with the
+     * product's name nowhere on it. It is the message an athlete gets when
+     * their block is ready or their trial is ending, and for most of them it is
+     * the only thing they ever see of us outside the app.
+     *
+     * The preheader is the BODY, not the title: the inbox already shows the
+     * title as the subject, and repeating it there spends both lines saying one
+     * thing.
+     */
+    const shell: EmailShell = {
+      preheader: body.split("\n")[0] || title,
+      eyebrow: NOTIFICATION_EYEBROW[notification.kind] ?? "PocketAthlete",
+      heading: title,
+      paragraphs: body ? [body] : [],
+      cta: { href: link, label: "Open PocketAthlete →" },
+      footerHtml: notification.email_category === "essential"
+        ? "This is an essential account or billing notice, so it is sent whatever your email preferences say."
+        : `You are getting this because training emails are on. <a href="${settings}" style="color:#8a6510;">Change that in your profile</a>.`,
+    };
+    const result = await email(env, address, title, renderEmail(title, shell), renderText(shell));
     await logEmail(env, notification.user_id, `notification_${notification.kind}`, result);
     if (result.ok) completed.push(notification.id);
   }
@@ -3496,7 +3553,16 @@ function replyAddress(env: Env): string {
   return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(bare) ? bare : "";
 }
 
-async function email(env: Env, to: string, subject: string, html: string): Promise<EmailResult> {
+/**
+ * Send one email.
+ *
+ * `text` is the plain-text alternative and is worth insisting on: an HTML mail
+ * with no text part scores worse in every spam filter, and it is what a watch,
+ * a screen reader and a text-only client actually show. These emails had none
+ * at all — the Worker sent `html` and nothing else — which for a training
+ * reminder read on a wrist is most of the point missed.
+ */
+async function email(env: Env, to: string, subject: string, html: string, text?: string): Promise<EmailResult> {
   try {
     // Read through `conf`, not off `env` directly — see the note there. A
     // Worker that cannot find a variable somebody has definitely set is worse
@@ -3512,6 +3578,7 @@ async function email(env: Env, to: string, subject: string, html: string): Promi
           secret: conf(env, "GAS_EMAIL_SECRET"), to, subject, html,
           from,
           replyTo: replyAddress(env),
+          ...(text ? { text } : {}),
         }),
       });
       const payload = await response.json().catch(() => ({})) as { id?: string; error?: string; message?: string };
@@ -3526,6 +3593,7 @@ async function email(env: Env, to: string, subject: string, html: string): Promi
       body: JSON.stringify({
         from: from || "PocketAthlete <noreply@example.com>",
         to, subject, html,
+        ...(text ? { text } : {}),
         ...(replyAddress(env) ? { reply_to: replyAddress(env) } : {}),
       }),
     });
