@@ -2,9 +2,8 @@
 
 import { useState } from "react";
 import type { DrillItem } from "@/lib/types";
-import { getExercise, demoImplement } from "@/lib/exercises";
+import { getExercise } from "@/lib/exercises";
 import { ExerciseModal } from "@/components/ExerciseDetail";
-import { ExerciseDemo } from "@/components/ExerciseDemo";
 import { exerciseMuscles } from "@/lib/muscle-volume";
 
 // Drill program with local completion state + progress bar. Each drill opens its
@@ -53,11 +52,6 @@ export function DrillChecklist({ drills }: { drills: DrillItem[] }) {
                 className="min-h-[44px] flex flex-1 items-center gap-3 text-left disabled:cursor-default"
                 disabled={!ex}
               >
-                {ex && (
-                  <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-white/10 bg-black/40">
-                    <ExerciseDemo pattern={ex.demo} implement={demoImplement(ex)} muscles={muscles} name={ex.name} className="h-9 w-7" />
-                  </span>
-                )}
                 <span className="min-w-0 flex-1">
                   <span className={`block text-sm font-medium text-slate-100 ${done[d.id] ? "line-through" : ""}`}>{d.name}</span>
                   <span className="block text-xs text-slate-500">{d.sets} × {d.reps} · {d.targets}</span>

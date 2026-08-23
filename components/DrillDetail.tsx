@@ -1,9 +1,6 @@
 "use client";
 
 import { getExerciseByName } from "@/lib/exercises";
-import { formGuide, NO_GUIDE } from "@/lib/form-guide";
-import { artFor } from "@/lib/exercise-art";
-import { FormGuideEmbed } from "@/components/FormGuideEmbed";
 import { howToFor, type HowTo } from "@/lib/how-to";
 import { ExerciseVisual } from "@/components/ExerciseVisual";
 import { ExerciseModal, Sheet } from "@/components/ExerciseDetail";
@@ -31,7 +28,7 @@ const NEEDS_LABEL = {
 export function HowToCard({ how }: { how: HowTo }) {
   return (
     <div className="space-y-4">
-      <ExerciseVisual pattern={how.demo} implement={how.implement} muscles={how.muscles} name={how.name} />
+      <ExerciseVisual muscles={how.muscles} name={how.name} />
       <div className="min-w-0">
         <span className="chip text-pitch-400">{how.tag}</span>
         <h3 className="mt-2 break-words text-2xl font-extrabold leading-tight text-slate-100">{how.name}</h3>
@@ -44,71 +41,6 @@ export function HowToCard({ how }: { how: HowTo }) {
           </div>
         )}
       </div>
-
-      {/* WATCH IT FIRST, IF YOU HAVE NEVER SEEN IT.
-          Above the written method on purpose: somebody who does not recognise
-          the name is not going to be helped by three lines of cues, and the
-          rest of this sheet is written for somebody who does. */}
-      {(() => {
-        const guide = formGuide(how.name);
-        if (!guide) return <p className="text-center text-xs text-slate-500">{NO_GUIDE}</p>;
-
-        /**
-         * THE VIDEO CARRIES MORE WEIGHT WHERE THERE IS NO PICTURE.
-         *
-         * Roughly a hundred and twenty movements have no photograph or
-         * illustration — the sport-specific work no anatomy library covers —
-         * and on those the drawn figure is the only thing above the fold. A
-         * figure is a reminder for somebody who knows the movement and nearly
-         * nothing for somebody who does not, which is exactly who taps into a
-         * detail sheet.
-         *
-         * So on those the guide gets a line of explanation and the whole width
-         * of the sheet; where there IS a picture it stays the compact button it
-         * was, because the picture has already done that job. Same link either
-         * way — this is emphasis, not a different feature.
-         *
-         * `kind` matters too: a chosen video and a YouTube search are different
-         * promises, and saying which one is behind the tap is the difference
-         * between a link that under-delivers and one that says what it is.
-         */
-        /**
-         * A CHOSEN VIDEO PLAYS HERE; A SEARCH STILL LEAVES.
-         *
-         * Eighteen movements have a video somebody picked and checked, and
-         * those now play in place — nothing of YouTube's loads until the tap,
-         * see FormGuideEmbed. The rest resolve to a search, and there is no
-         * iframe for a list of results, so they keep the link out.
-         *
-         * The two look different because they ARE different, and a link that
-         * pretends to be a player is worse than one that says it is a link.
-         */
-        if (guide.videoId) return <FormGuideEmbed videoId={guide.videoId} title={how.name} />;
-
-        const illustrated = artFor(how.name) !== null;
-        return (
-          <a
-            href={guide.url}
-            target="_blank"
-            rel="noreferrer"
-            className={illustrated
-              ? "tap-target flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-pitch-400 px-4 text-sm font-bold text-ink-900 transition hover:bg-pitch-300"
-              : "tap-target flex w-full items-center gap-3 rounded-xl bg-pitch-400 px-4 py-3 text-left text-ink-900 transition hover:bg-pitch-300"}
-          >
-            <span aria-hidden className={illustrated ? "" : "text-lg"}>▶</span>
-            {illustrated ? guide.label : (
-              <span className="min-w-0 flex-1">
-                <span className="block text-sm font-bold">{guide.label}</span>
-                <span className="block text-xs font-medium text-ink-900/70">
-                  {illustrated
-                    ? "Search YouTube for a demonstration of this movement."
-                    : "No illustration for this one — watch it done before you try it."}
-                </span>
-              </span>
-            )}
-          </a>
-        );
-      })()}
 
       {/* WHAT YOU NEED, BEFORE HOW TO DO IT. Kit and space is the first reason
           a drill gets skipped, and finding out you needed six cones after

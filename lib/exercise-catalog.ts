@@ -35,6 +35,20 @@ export function equipmentOf(name: string): string {
    */
   if (n.includes("barbell")) return "Barbell";
   if (n.includes("landmine")) return "Landmine";
+  /**
+   * UNLOADED BY NAME, WHERE THE LOADED VERSION IS ITS OWN ENTRY.
+   *
+   * "Squat Jump" fell through to the Barbell catch-all below, on the strength
+   * of the word "squat" — so a plyometric a footballer does in a car park was
+   * excluded from a bodyweight-only programme and offered to somebody with a
+   * rack. Same for the plain lunges and the plain split squat, each of which
+   * has "Barbell ..." and "Dumbbell ..." siblings in the list: the bare name is
+   * the unloaded one precisely BECAUSE the loaded ones are spelled out.
+   *
+   * This has to stay above the catch-all, which is why it is here rather than
+   * appended to it.
+   */
+  if (/^(?:squat jump|squat thrust|single leg squat|split squat|lunge|reverse lunge|walking lunge|side lunge)$/.test(n)) return "Bodyweight";
   if (/push ups?|pull ups?|chin ups?|dips?|sit ups?|crunch|burpee|muscle ups?|plank|pistol|handstand|jumping jack|mountain climber|flutter|scissor|superman|russian twist|glute bridge|bodyweight|inverted row|toes to bar|hanging|leg raise|nordic|sissy|ab wheel|good morning|archer|clap|ring/.test(n)) return "Bodyweight";
   if (/bench press|squat|deadlift|barbell|clean|snatch|jerk|row|press|curl|shrug|lunge|hip thrust|rack pull|thruster|pull through|calf raise/.test(n)) return "Barbell";
   return "Other";

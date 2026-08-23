@@ -4,7 +4,6 @@ import { useState } from "react";
 import { SLOT_LABEL, restText, type ProgramDrill, type Slot } from "@/lib/engine";
 import { howToFor } from "@/lib/how-to";
 import { KIND_LABEL, kindOf, isWorkingSet } from "@/lib/session-shape";
-import { ExerciseDemo } from "@/components/ExerciseDemo";
 import { SwapSheet } from "@/components/SwapSheet";
 import { Icon, type IconName } from "@/components/Icon";
 
@@ -166,14 +165,6 @@ function DrillCard({ drill, onPick, rehab, slot }: { drill: Drill; onPick?: (nam
           : "border-pitch-400/10 bg-pitch-400/[0.025]"
       } ${pickable ? "hover:border-white/20 hover:bg-white/[0.06]" : ""}`}
     >
-      <span className={`grid h-14 w-12 shrink-0 place-items-center overflow-hidden rounded-xl border bg-black/40 ${
-        rehab ? "border-orange-400/25" : "border-white/10"
-      }`}>
-        {how
-          ? <ExerciseDemo pattern={how.demo} implement={how.implement} muscles={how.muscles} name={how.name} className="h-12 w-10" />
-          : <span className="text-lg text-slate-600">·</span>}
-      </span>
-
       <span className="min-w-0 flex-1">
         {/* WHAT KIND OF EXERCISE THIS IS, next to what it trains.
             The session no longer carries three strength headings, so the tier

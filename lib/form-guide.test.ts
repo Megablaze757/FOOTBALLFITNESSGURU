@@ -1,52 +1,24 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { formGuide, NO_GUIDE, curatedCount } from "./form-guide";
 import { EXERCISES } from "./exercises";
 
 /**
- * "The how-to images look worse than before. Use video links only."
+ * "Remove all images just do the videos."
  *
- * The images were not worse — the FRAME was. ExerciseDemo always drew pose `a`,
- * and `a` is usually somebody standing up: a squat, a hinge, a lunge, a lateral
- * shuffle and a ball drill all begin from the same neutral stand, so five of
- * eleven patterns drew an identical figure and a library grid of three hundred
- * exercises was three hundred copies of one standing person. See `still` in
- * components/ExerciseDemo.tsx.
+ * The drawings went first and the licensed artwork went with them. Both were
+ * the same bet — that two still frames can teach a movement — and it does not
+ * pay: a still cannot show a bar path, a tempo, where the hips go first, or
+ * what a rounded back looks like from the side, which is the whole content of
+ * "good form". Twelve megabytes of illustration shipped to say less than a
+ * thirty-second clip.
  *
- * The videos are the other half. A drawing tells a squat from a hinge at a
- * glance in a long list; it cannot show a bar path, a tempo, or what a rounded
- * back looks like from the side, and those are what a form guide is for.
+ * So there is one visual now and it moves. These tests hold the two promises
+ * that replaced the pictures: that a movement with a chosen video plays it in
+ * place, and that a movement without one says so instead of dressing a search
+ * up as an answer.
  */
-
-test("no two movement patterns draw the same picture", () => {
-  // THE ACTUAL COMPLAINT, as a test. If a pattern's still frame is identical to
-  // another's, the figure is decoration — and decoration taking up a third of
-  // every card reads as broken.
-  const demo = readFileSync(new URL("../components/ExerciseDemo.tsx", import.meta.url), "utf8");
-  const stills = [...demo.matchAll(/\n  (\w+): \{[\s\S]*?still: "(a|b)",\n  \},/g)]
-    .map(([block, pattern, key]) => ({ pattern, key, block }));
-  assert.ok(stills.length >= 11, `only found ${stills.length} patterns with a named still frame`);
-
-  const drawn = new Map<string, string>();
-  for (const { pattern, key, block } of stills) {
-    const frame = block.match(new RegExp(`${key}: \\{([\\s\\S]*?)\\},`))?.[1] ?? "";
-    const joints = frame.replace(/\s|\/\/[^\n]*/g, "");
-    const already = drawn.get(joints);
-    assert.ok(!already, `${pattern} draws exactly the same figure as ${already}`);
-    drawn.set(joints, pattern);
-  }
-});
-
-test("the still is the frame that identifies the movement", () => {
-  const demo = readFileSync(new URL("../components/ExerciseDemo.tsx", import.meta.url), "utf8");
-  // The ones whose start position is a plain stand must not show the start.
-  for (const pattern of ["squat", "hinge", "lunge", "jump", "press"]) {
-    const block = demo.match(new RegExp(`\\n  ${pattern}: \\{[\\s\\S]*?\\n  \\},`))?.[0] ?? "";
-    assert.match(block, /still: "b"/, `${pattern} still draws its starting position`);
-  }
-  assert.match(demo, /const still = pose\[pose\.still\]/, "the component ignores the chosen frame");
-});
 
 test("a staple lift has a chosen video, not a search", () => {
   // These are the lifts where the failure mode is an injury rather than a
@@ -90,18 +62,38 @@ test("a name too thin to search says so rather than pretending", () => {
   assert.match(NO_GUIDE, /No video guide available/);
 });
 
-test("both how-to surfaces offer it, and label it the same", () => {
-  for (const file of ["../components/ExerciseDetail.tsx", "../components/DrillDetail.tsx"]) {
+test("one component answers \"how does this go?\", and every surface uses it", () => {
+  // It used to be answered twice — once by the picture at the top of the sheet
+  // and once by a button beside the title — which is how the sheet ended up
+  // showing a drawing, a "Watch Form Guide" link and a player all at once.
+  const watch = readFileSync(new URL("../components/ExerciseWatch.tsx", import.meta.url), "utf8");
+  assert.match(watch, /formGuide\(/, "the shared component does not consult the guide list");
+  assert.match(watch, /if \(guide\?\.videoId\) return <FormGuideEmbed/, "a chosen video does not play in place");
+  assert.match(watch, /\{NO_GUIDE\}/, "it shows nothing when there is no guide");
+  assert.match(watch, /target="_blank"/, "the search does not open away from the app");
+  assert.match(watch, /rel="noreferrer"/, "the search leaks the referrer");
+
+  // Every surface that used to draw a figure now goes through it.
+  for (const file of ["../components/ExerciseVisual.tsx", "../components/WorkoutPlayer.tsx", "../components/InjuryPlanner.tsx"]) {
     const src = readFileSync(new URL(file, import.meta.url), "utf8");
-    assert.match(src, /formGuide\(/, `${file} does not offer a form guide`);
-    assert.match(src, /\{guide\.label\}/, `${file} writes its own label`);
-    assert.match(src, /\{NO_GUIDE\}/, `${file} shows nothing when there is no guide`);
-    assert.match(src, /target="_blank"/, `${file} navigates away from the app`);
-    assert.match(src, /rel="noreferrer"/, `${file} leaks the referrer`);
+    assert.match(src, /<ExerciseWatch/, `${file} lost its way to watch the movement`);
   }
-  // "Visit ›" promises nothing and could be a shop.
-  const card = readFileSync(new URL("../components/ExerciseDetail.tsx", import.meta.url), "utf8");
-  assert.ok(!/>\s*Visit <span aria-hidden>›<\/span>/.test(card), "the unlabelled button is back");
+});
+
+test("the pictures are gone, not just hidden", () => {
+  /**
+   * A component nobody renders is a component somebody re-renders. The whole
+   * point of the change was to stop shipping stills, so the test is that the
+   * still machinery does not exist rather than that it is currently unused.
+   */
+  const root = new URL("../", import.meta.url);
+  for (const gone of ["components/ExerciseDemo.tsx", "lib/exercise-art.ts", "scripts/build-exercise-art.mjs", "public/exercise-art"]) {
+    assert.ok(!existsSync(new URL(gone, root)), `${gone} is still here`);
+  }
+  for (const file of ["components/ExerciseVisual.tsx", "components/DrillDetail.tsx", "components/ExerciseDetail.tsx", "components/SessionDrills.tsx", "components/DrillChecklist.tsx", "app/(app)/library/page.tsx"]) {
+    const src = readFileSync(new URL(file, root), "utf8");
+    assert.ok(!/ExerciseDemo|ExerciseSteps|artFor|exercise-art/.test(src), `${file} still draws a figure`);
+  }
 });
 
 test("a curated link that has rotted is removed, not left promising", () => {
@@ -142,19 +134,20 @@ test("the checker reads the list rather than a copy of it", () => {
   assert.match(script, /process\.exit\(1\)/, "a dead link does not fail the run");
 });
 
-test("the video is the main event where there is no picture", () => {
-  // About 120 movements have neither a photograph nor an illustration — the
-  // sport-specific work no anatomy library covers. On those the drawn figure is
-  // the only thing above the fold, and a figure is a reminder for somebody who
-  // knows the movement and nearly nothing for somebody who does not.
-  const sheet = readFileSync(new URL("../components/DrillDetail.tsx", import.meta.url), "utf8");
-  assert.match(sheet, /const illustrated = artFor\(how\.name\) !== null;/);
-  assert.match(sheet, /No illustration for this one — watch it done before you try it\./);
-  // It still distinguishes a chosen video from a search — more strongly than it
-  // did, now that one plays in place and the other leaves. The old assertion
-  // matched the label that used to carry that difference; the difference itself
-  // is the early return above it.
-  assert.match(sheet, /if \(guide\.videoId\) return <FormGuideEmbed/);
+test("a movement with no chosen video says so, rather than faking one", () => {
+  /**
+   * This is the honesty the pictures used to break. A panel styled like a
+   * player that turns out to be a YouTube search is worse than a link that
+   * admits what it is: the athlete taps expecting a demonstration, gets a
+   * results page, and stops trusting the play button that IS real.
+   *
+   * So the two states are deliberately different shapes — a solid poster with
+   * a filled play button against a dashed border with an outlined one.
+   */
+  const watch = readFileSync(new URL("../components/ExerciseWatch.tsx", import.meta.url), "utf8");
+  assert.match(watch, /Find a demonstration/, "the search state does not say what it is");
+  assert.match(watch, /opens a YouTube search/, "the search state pretends to be a video");
+  assert.match(watch, /border-dashed/, "the search state is dressed as a player");
 });
 
 test("the exercises where bad form hurts somebody are taught by a physio", () => {
@@ -229,11 +222,18 @@ test("the embed is a real control, and the video is named", () => {
   assert.match(embed, /tap-target/, "the play control is under the 44px floor");
 });
 
-test("the sheet plays a chosen video and links out for a search", () => {
+test("the sheet asks once, not three times", () => {
+  /**
+   * The detail sheet used to carry the question in three places at once: a
+   * picture at the top, a "Watch Form Guide" button beside the title, and then
+   * the player. Moving the answer into ExerciseWatch is only an improvement if
+   * the duplicates actually went, so this checks they did.
+   */
   const sheet = readFileSync(new URL("../components/DrillDetail.tsx", import.meta.url), "utf8");
-  assert.match(sheet, /if \(guide\.videoId\) return <FormGuideEmbed videoId=\{guide\.videoId\} title=\{how\.name\} \/>;/);
-  // And the copy no longer promises a chosen demonstration for a search.
-  assert.ok(!/A demonstration we picked for this movement/.test(sheet),
-    "a search still claims to be a video somebody chose");
+  assert.match(sheet, /<ExerciseVisual muscles=\{how\.muscles\} name=\{how\.name\} \/>/);
+  assert.ok(!/formGuide\(|FormGuideEmbed/.test(sheet), "the sheet still answers it a second time itself");
+
+  const card = readFileSync(new URL("../components/ExerciseDetail.tsx", import.meta.url), "utf8");
+  assert.ok(!/\{guide\.label\}/.test(card), "the duplicate button beside the title is back");
 });
 

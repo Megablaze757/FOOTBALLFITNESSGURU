@@ -8,11 +8,9 @@ import { useCurrentUser } from "@/lib/auth";
 import { useTier } from "@/lib/use-tier";
 import { can } from "@/lib/subscription";
 import { FeatureLock } from "@/components/FeatureLock";
-import { EXERCISES, EXERCISE_CATEGORIES, SPORTS, DIFFICULTIES, EQUIPMENT_BUCKETS, getExercisesForSport, demoImplement, rowToExercise, exerciseEquip, withinLevel, type Exercise, type ExerciseCategory, type SportId, type Difficulty, isRunEntry } from "@/lib/exercises";
+import { EXERCISES, EXERCISE_CATEGORIES, SPORTS, DIFFICULTIES, EQUIPMENT_BUCKETS, getExercisesForSport, rowToExercise, exerciseEquip, withinLevel, type Exercise, type ExerciseCategory, type SportId, type Difficulty, isRunEntry } from "@/lib/exercises";
 import { latestMetrics } from "@/lib/benchmarks";
-import { ExerciseDemo } from "@/components/ExerciseDemo";
 import { ExerciseModal } from "@/components/ExerciseDetail";
-import { exerciseMuscles } from "@/lib/muscle-volume";
 import { CustomExerciseForm } from "@/components/CustomExerciseForm";
 import { Tabs, TabPanel } from "@/components/Tabs";
 import { MealLibrary } from "@/components/MealLibrary";
@@ -41,11 +39,6 @@ const MOVEMENT_COUNT = EXERCISES.filter((e) => !isRunEntry(e)).length;
 
 const DIFF_COLOR: Record<Difficulty, string> = { easy: "#34d399", medium: "#e3b53f", advanced: "#fb5d6b" };
 const DIFF_LABEL: Record<Difficulty, string> = { easy: "Beginner", medium: "Intermediate", advanced: "Advanced" };
-
-function demoMuscles(ex: Exercise): string[] {
-  const { primary, secondary } = exerciseMuscles(ex.name, ex.muscles);
-  return [primary, ...secondary].filter((muscle): muscle is string => !!muscle);
-}
 
 export default function LibraryPage() {
   const user = useCurrentUser();
@@ -370,9 +363,6 @@ export default function LibraryPage() {
                 onClick={() => setOpen(ex)}
                 className="card card-hover flex items-center gap-3 border-l-4 border-l-pitch-400/60 p-3 text-left"
               >
-                <span className="grid h-14 w-12 shrink-0 place-items-center overflow-hidden rounded-xl border border-white/10 bg-black/40">
-                  <ExerciseDemo pattern={ex.demo} implement={demoImplement(ex)} muscles={demoMuscles(ex)} name={ex.name} className="h-11 w-9" />
-                </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-bold text-slate-100">{ex.name}</span>
                   <span className="truncate text-xs text-slate-400">{ex.category}</span>
@@ -395,9 +385,6 @@ export default function LibraryPage() {
             onClick={() => setOpen(ex)}
             className="card card-hover flex items-center gap-4 p-4 text-left"
           >
-            <span className="grid h-20 w-16 shrink-0 place-items-center overflow-hidden rounded-2xl border border-white/10 bg-black/40">
-              <ExerciseDemo pattern={ex.demo} implement={demoImplement(ex)} muscles={demoMuscles(ex)} name={ex.name} className="h-16 w-12" />
-            </span>
             <span className="min-w-0 flex-1">
               <span className="flex items-center gap-1.5">
                 {ex.difficulty && <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: DIFF_COLOR[ex.difficulty] }} title={DIFF_LABEL[ex.difficulty]} />}

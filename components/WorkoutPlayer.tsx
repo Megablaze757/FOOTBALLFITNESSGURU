@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { howToFor, type HowTo } from "@/lib/how-to";
-import { ExerciseSteps } from "@/components/ExerciseDemo";
+import { ExerciseWatch } from "@/components/ExerciseWatch";
 import { Confetti } from "@/components/Confetti";
 import { exerciseMeasure, measureLabel, type ExerciseMeasure } from "@/lib/exercise-measure";
 
@@ -298,9 +298,14 @@ export function WorkoutPlayer({ title, drills, activeRest, onComplete, onClose }
           </div>
         ) : step ? (
           <div className="animate-fade-up w-full max-w-sm">
+            {/* MID-SET, THIS IS A REMINDER RATHER THAN A LESSON — but it is
+                still the video, because the drawn figure it replaced could not
+                answer the question anybody asks with a bar in their hands
+                ("am I doing this right?"). Nothing loads until it is tapped,
+                so carrying it here costs the player nothing. */}
             {how && (
-              <div className="mx-auto mb-5 grid h-48 w-full max-w-sm place-items-center overflow-hidden rounded-3xl border border-white/10 bg-slate-100 shadow-card">
-                <ExerciseSteps pattern={how.demo} implement={how.implement} muscles={how.muscles} name={how.name} className="h-full w-full" />
+              <div className="mx-auto mb-5 w-full max-w-sm">
+                <ExerciseWatch name={how.name} />
               </div>
             )}
             <div className="chip mx-auto text-pitch-400">

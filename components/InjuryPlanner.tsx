@@ -12,7 +12,7 @@ import type { PainMap } from "@/lib/types";
 import type { SportId } from "@/lib/exercises";
 import { findExercise } from "@/lib/exercise-match";
 import { genericHowTo } from "@/lib/how-to";
-import { ExerciseDemo } from "@/components/ExerciseDemo";
+import { ExerciseWatch } from "@/components/ExerciseWatch";
 import { ExerciseDetailCard } from "@/components/ExerciseDetail";
 
 interface Stage {
@@ -594,15 +594,15 @@ function Step({ n, title, done, children }: {
  * was "No demo for this one" — a dose with no instruction, on the one screen
  * where somebody is already hurt and least able to improvise.
  *
- * A figure, and a plain note that says outright this is general guidance. The
- * same honest card the check-in draws for a movement somebody typed in
- * themselves — see genericHowTo.
+ * A way to WATCH it, and a plain note that says outright this is general
+ * guidance. The same honest card the check-in draws for a movement somebody
+ * typed in themselves — see genericHowTo.
  */
 function GenericRehabCard({ name }: { name: string }) {
   const how = genericHowTo(name);
   return (
     <div className="space-y-2 border-t border-white/[0.08] p-3">
-      <ExerciseDemo pattern={how.demo} implement={how.implement} muscles={how.muscles} name={name} className="h-28" />
+      <ExerciseWatch name={name} />
       <p className="text-[11px] leading-relaxed text-slate-400">
         This one is not in the exercise library, so there is no step-by-step for it.
         Follow the note above, keep it slow, and stop if it hurts rather than pushing through.

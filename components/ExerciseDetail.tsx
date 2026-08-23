@@ -63,31 +63,13 @@ export function ExerciseDetailCard({ ex, sets, reps }: { ex: Exercise; sets?: nu
 
   return (
     <div className="space-y-4">
-      <ExerciseVisual
-        pattern={ex.demo}
-        implement={demoImplement(ex)}
-        muscles={activatedMuscles}
-        name={ex.name}
-        videoUrl={ex.video_url}
-      />
+      <ExerciseVisual muscles={activatedMuscles} name={ex.name} videoUrl={ex.video_url} />
 
       <div className="flex min-w-0 items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <span className="chip text-pitch-400">{ex.category}</span>
           <h3 className="mt-2 break-words text-2xl font-extrabold leading-tight text-slate-100">{ex.name}</h3>
         </div>
-        {guide ? (
-          <a
-            href={guide.url}
-            target="_blank"
-            rel="noreferrer"
-            className="tap-target inline-flex min-h-[44px] shrink-0 items-center gap-2 rounded-full bg-pitch-400 px-5 text-sm font-bold text-ink-900 transition hover:bg-pitch-300"
-          >
-            <span aria-hidden>▶</span> {guide.label}
-          </a>
-        ) : (
-          <span className="shrink-0 text-xs text-slate-500">{NO_GUIDE}</span>
-        )}
       </div>
 
       <p className="text-sm leading-relaxed text-slate-400">{ex.why}</p>
