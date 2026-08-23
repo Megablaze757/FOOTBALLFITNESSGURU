@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { formGuide, NO_GUIDE, curatedCount } from "./form-guide";
 import { EXERCISES } from "./exercises";
+import { IMPORTED_EXERCISES } from "./exercise-catalog";
 
 /**
  * "Remove all images just do the videos."
@@ -29,7 +30,7 @@ test("a staple lift has a chosen video, not a search", () => {
     assert.equal(guide?.kind, "video", `${lift} falls back to a search`);
     assert.match(guide!.url, /^https:\/\/www\.youtube\.com\/watch\?v=/);
   }
-  assert.ok(curatedCount() >= 10);
+  assert.ok(curatedCount() >= 140, `only ${curatedCount()} curated guides`);
 });
 
 test("everything else still has somewhere to go", () => {
@@ -163,20 +164,21 @@ test("the exercises where bad form hurts somebody are taught by a physio", () =>
 });
 
 test("the curated list grew, and every entry is a well-formed watch url", () => {
-  // Eighteen against the original twelve. The shape is checked here; whether
-  // each is still LIVE is scripts/check-form-guides.mjs, because that needs the
-  // network and a suite that fails when YouTube hiccups teaches people to
-  // ignore red.
+  // A hundred and forty-four against the original twelve. The shape is checked
+  // here; whether each is still LIVE is scripts/check-form-guides.mjs, because
+  // that needs the network and a suite that fails when YouTube hiccups teaches
+  // people to ignore red.
   const src = readFileSync(new URL("./form-guide.ts", import.meta.url), "utf8");
   const block = src.slice(src.indexOf("const CURATED"), src.indexOf("};", src.indexOf("const CURATED")));
   const urls = [...block.matchAll(/"(https:\/\/[^"]+)"/g)].map((m) => m[1]);
-  assert.ok(urls.length >= 17, `only ${urls.length} curated guides`);
+  assert.ok(urls.length >= 140, `only ${urls.length} curated guides`);
   for (const url of urls) {
     assert.match(url, /^https:\/\/www\.youtube\.com\/watch\?v=[\w-]{11}$/, url);
   }
   // No duplicate id under two names by accident — the nordic curl has two keys
   // ON PURPOSE, because the catalogue spells it both ways.
-  const keys = [...block.matchAll(/"([a-z ]+)":\s*"https/g)].map((m) => m[1]);
+  const keys = [...block.matchAll(/"([^"]+)":\s*"https/g)].map((m) => m[1]);
+  assert.equal(keys.length, urls.length, "a key was missed by the duplicate check");
   assert.equal(new Set(keys).size, keys.length, "a name is curated twice");
 });
 
@@ -237,3 +239,42 @@ test("the sheet asks once, not three times", () => {
   assert.ok(!/\{guide\.label\}/.test(card), "the duplicate button beside the title is back");
 });
 
+
+test("most of the gym catalogue plays a video, not a search", () => {
+  /**
+   * The pictures are gone, so this number is the whole promise. When it was
+   * eighteen a search was the normal case and a chosen video was the exception;
+   * the removal is only an improvement if that is the other way round.
+   */
+  const withVideo = IMPORTED_EXERCISES.filter((ex) => formGuide(ex.name)?.videoId).length;
+  const share = withVideo / IMPORTED_EXERCISES.length;
+  assert.ok(share > 0.5, `only ${withVideo} of ${IMPORTED_EXERCISES.length} movements play in place`);
+});
+
+test("the finder refuses on channel, movement and shape — not just on a match", () => {
+  /**
+   * The gates are the difference between a curated list and the first search
+   * result, and every one of them was added because it caught something real:
+   *
+   *   - the channel gate, because vouching for who is talking is the entire
+   *     value of a chosen link over a search;
+   *   - the implement gate HARD in both directions, because a title omits the
+   *     implement when it is the obvious one — soft matching gave our Dumbbell
+   *     Bench Press a barbell demonstration and our Floor Press a dumbbell one;
+   *   - the bodyweight gate, because "Squat Jump" and "Dumbbell Jump Squat"
+   *     have identical word sets and one of them is loaded;
+   *   - the shape gate, because a Short and a ninety-minute podcast are both
+   *     the wrong kind of video however right the title is.
+   *
+   * A future loosening of any of them should have to delete a line here.
+   */
+  const finder = readFileSync(new URL("../scripts/find-form-guides.mjs", import.meta.url), "utf8");
+  assert.match(finder, /TEACHERS\.some\(\(t\) => c\.channel\.toLowerCase\(\)\.includes\(t\)\)/, "any channel will do");
+  assert.match(finder, /NOT_A_DEMO\.test\(c\.title\)/, "an assessment or a podcast still counts");
+  assert.match(finder, /secs < 40 \|\| secs > 20 \* 60/, "a Short or a podcast still counts");
+  assert.match(finder, /FORM\.some\(\(d\) => mineSet\.has\(d\) !== theirs\.has\(d\)\)/, "a word that changes the movement no longer refuses");
+  assert.match(finder, /if \(bodyweight && theirKit\.length\) continue;/, "a bodyweight movement can be taught with a weight again");
+  assert.match(finder, /mineKit\.length !== theirKit\.length \|\| !mineKit\.every/, "the implement rule went soft again");
+  // A parsed id is not a playing id.
+  assert.match(finder, /oembed/, "nothing verifies the id resolves");
+});

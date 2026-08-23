@@ -1,23 +1,31 @@
 // =============================================================================
 // "Watch Form Guide" — where to actually SEE the movement.
 //
-// A drawn figure says which shape the movement is; it cannot say what the bar
-// path looks like, how fast the rep should be, or what a rounded back looks
-// like from the side. Those are the things a form guide is for, and they are
-// the things a still cannot carry. So the figures stay as what they are good at
-// — telling a squat from a hinge at a glance, in a list of three hundred — and
-// the teaching links out to video.
+// This is the app's ONLY answer to "how does this go?". It used to be the
+// second answer, behind a drawn figure and, for about half the gym catalogue,
+// a licensed illustration or photograph. Those are gone: a still cannot show a
+// bar path, a tempo, where the hips go first, or what a rounded back looks like
+// from the side, which is the whole content of "good form". See
+// components/ExerciseWatch.tsx.
 //
-// WHY NOT EMBED. Every video platform's embed is a third-party iframe with its
-// own cookies and its own tracking, on a page that otherwise sets none, and it
-// would need a CSP exception for every host. A link opens the athlete's own
-// app, already signed in, at full quality, and costs this page nothing.
+// EMBEDDED, BUT NOT LOADED. A curated guide plays in place. It costs nothing
+// until it is asked for — no iframe, no thumbnail, no request to YouTube of any
+// kind until somebody taps play, and then `youtube-nocookie.com` rather than
+// the domain that sets a tracking cookie on arrival. See FormGuideEmbed. A
+// search cannot be embedded, because there is no iframe for a list of results,
+// so those still link out and the UI says which one it is.
 //
-// CURATED WHERE IT MATTERS, SEARCH EVERYWHERE ELSE. Hand-picking three hundred
-// videos is a job nobody finishes and a set of links that rots — channels get
-// deleted, videos get made private. The lifts an athlete is most likely to hurt
-// themselves on are worth pinning by hand; for everything else a search on the
-// exact movement name is more useful than one stale link, and it cannot 404.
+// CURATED WIDELY NOW, SEARCH FOR THE REST. This list was eighteen entries and
+// the comment here said it was deliberately short — that hand-picking three
+// hundred videos is a job nobody finishes and a set of links that rots. The
+// first half of that was true and is no longer, because scripts/find-form-
+// guides.mjs does the finding; the second half is still true, which is why
+// scripts/check-form-guides.mjs exists and why it prints each TITLE rather than
+// just a status. A curated link that has rotted is worse than a search that
+// always works: it promises a chosen answer and delivers an apology page.
+//
+// Everything that has no entry falls back to a search on the exact movement
+// name, which cannot 404.
 //
 // Pure + tested.
 // =============================================================================
@@ -45,17 +53,40 @@ function idOf(url: string): string | null {
 }
 
 /**
- * Hand-picked guides, keyed by lowercased movement name.
+ * Curated guides, keyed by lowercased movement name.
  *
- * ONLY CHANNELS THAT TEACH. Each of these is a lift where the failure mode is
- * an injury rather than a wasted set, and where the difference between a good
- * demonstration and a bad one is somebody's back.
+ * ONLY CHANNELS THAT TEACH. Every entry is from a coach, a physio or a
+ * federation — the list is in scripts/find-form-guides.mjs — because the whole
+ * value of a chosen link over a search is that somebody vouched for who is
+ * talking. An unknown channel is refused however good the title looks.
  *
- * Kept deliberately short. A long list is a long list of links to re-check, and
- * a dead curated link is worse than a search that always works — it promises a
- * chosen answer and delivers a removed video.
+ * EVERY URL WAS FETCHED BEFORE IT WAS WRITTEN DOWN, and the TITLE and CHANNEL
+ * read back. A video id that resolves can point at anything, so "it returns
+ * 200" is not the check. The pairing is refused outright when a word that
+ * CHANGES the movement is on one side only — an upright row is a shoulder
+ * exercise and a bent-over row is a back one — and when the implement differs,
+ * which is stricter than it sounds: a title omits the implement when it is the
+ * obvious one, so "How to Bench Press" is a claim to be barbell, not a blank.
+ * Soft matching duly gave our Dumbbell Bench Press a barbell demonstration.
+ *
+ * The generated list was then read line by line. Three entries were changed by
+ * hand afterwards, all the same failure: the video was a good video about the
+ * WRONG QUESTION. "Get BIG Biceps By Doing Chin-Ups" and "The Benefits of the
+ * Reverse Grip Bench Press" argue that you should do the lift; neither shows
+ * anybody how, so both fall back to a search. "Which Triceps Pushdown is Best"
+ * is a comparison, and a straight guide to the same movement had already
+ * matched under another name, so both keys point at it.
+ *
+ * Run `node scripts/check-form-guides.mjs` before adding to the list, and every
+ * few months after.
  */
 const CURATED: Record<string, string> = {
+  /**
+   * THE FIRST TEN, PICKED BY HAND before any of this was scripted. Kept
+   * separate because they are the lifts where the failure mode is an injury
+   * rather than a wasted set, and because a human chose each one for that
+   * reason rather than because it cleared a filter.
+   */
   "barbell back squat": "https://www.youtube.com/watch?v=bEv6CCg2BC8",
   "barbell front squat": "https://www.youtube.com/watch?v=uYumuL_G_V0",
   "barbell deadlift": "https://www.youtube.com/watch?v=op9kVnSso6Q",
@@ -68,47 +99,155 @@ const CURATED: Record<string, string> = {
   "bulgarian split squat": "https://www.youtube.com/watch?v=2C-uNgKwPLE",
 
   /**
-   * ADDED AFTER CHECKING EACH ONE AGAINST YOUTUBE, not from memory.
+   * THE REHAB WORK, and the reason the physio channels are on the trusted list.
    *
-   * Every url below was fetched through the oembed endpoint before it was
-   * written down, and the TITLE and CHANNEL were read back — a video id that
-   * resolves can point at anything, so "it returns 200" is not the check. The
-   * two that had rotted were removed the same way. `scripts/check-form-guides.mjs`
-   * is that check, kept so it can be re-run rather than repeated by hand.
+   * A nordic curl and a Copenhagen plank are prescribed to PREVENT a hamstring
+   * tear and a groin strain. A demonstration that gets them wrong does the
+   * opposite of the exercise's job, which is why these are worth being fussy
+   * about — and why both point at a rehab channel rather than at whichever
+   * video ranked first.
    *
-   * Chosen for who is teaching where the exercise can hurt somebody. The two
-   * physio-led ones are not a coincidence: a nordic curl and a Copenhagen plank
-   * are prescribed to PREVENT a hamstring tear and a groin strain, and a
-   * demonstration that gets them wrong does the opposite of the job.
+   * They are also the two that had ROTTED when the list was first checked live,
+   * unnoticed, while the button still said "Watch Form Guide".
    */
   "nordic curl": "https://www.youtube.com/watch?v=_e9vFU9-tkc",          // E3 Rehab
   "nordic hamstring curl": "https://www.youtube.com/watch?v=_e9vFU9-tkc", // E3 Rehab
   "copenhagen plank": "https://www.youtube.com/watch?v=YRRnnZsRs9U",      // E3 Rehab
+
   "lat pulldown": "https://www.youtube.com/watch?v=SALxEARiMkw",          // ATHLEAN-X
   "seated cable row": "https://www.youtube.com/watch?v=7o2oolbmzeI",      // ScottHermanFitness
   "kettlebell swing": "https://www.youtube.com/watch?v=h-A7HiTNZ5c",      // Colossus Fitness
   "dips": "https://www.youtube.com/watch?v=yN6Q1UI_xkE",                  // Jeff Nippard
   "dumbbell shoulder press": "https://www.youtube.com/watch?v=qEwKCR5JCog", // ScottHermanFitness
-};
 
-/**
- * TWO ENTRIES WERE ONCE REMOVED FROM THE LIST ABOVE, and the reason is the
- * reason every url in it is checked before it goes in.
- *
- * "nordic hamstring curl" and "copenhagen plank" both pointed at videos that
- * had been taken down — checked live, both 404. A dead curated link is worse
- * than a search that always works: the button says "Watch Form Guide", the
- * athlete taps it expecting a chosen answer, and gets YouTube's apology page.
- * Both fall back to a search now, which is the honest behaviour.
- *
- * They are also the two exercises on the list where the failure mode is a torn
- * hamstring or a groin strain rather than a wasted set — the ones most worth
- * curating, and the ones nobody noticed had rotted.
- *
- * Run `node scripts/check-form-guides.mjs` before adding to the list, and every
- * few months after. It checks each link is still live and prints the title, so
- * a link that resolves to a DIFFERENT video is visible too.
- */
+  // --- Found by scripts/find-form-guides.mjs, verified, then read line by line.
+  "ab wheel rollout": "https://www.youtube.com/watch?v=vncVOEtMhpk", // Criticalbench
+  "arnold press": "https://www.youtube.com/watch?v=ris9tKqMwgU", // ATHLEAN-X™
+  "back extension": "https://www.youtube.com/watch?v=H8Swl1N-uis", // Squat University
+  "barbell calf raise": "https://www.youtube.com/watch?v=czMLq4MsPiE", // MuscleWiki
+  "barbell curl": "https://www.youtube.com/watch?v=QZEqB6wUPxQ", // ScottHermanFitness
+  "barbell front raise": "https://www.youtube.com/watch?v=Ofo2DQdT7DA", // ScottHermanFitness
+  "barbell glute bridge": "https://www.youtube.com/watch?v=0od5lwWMGV8", // ScottHermanFitness
+  "barbell hack squat": "https://www.youtube.com/watch?v=EdtaJRBqwes", // Buff Dudes
+  "barbell lunge": "https://www.youtube.com/watch?v=NcDtORTfVNQ", // Colossus Fitness
+  "barbell pullover": "https://www.youtube.com/watch?v=ezRNDsGBTm4", // Mind Pump TV
+  "barbell reverse lunge": "https://www.youtube.com/watch?v=R-g5yPNYv2k", // Bodybuilding.com
+  "barbell shrug": "https://www.youtube.com/watch?v=jTVbilkxSAk", // ScottHermanFitness
+  "behind the neck press": "https://www.youtube.com/watch?v=uD9kYAi7lHs", // Mind Pump TV
+  "bench dips": "https://www.youtube.com/watch?v=jdFzYGmvDyg", // ATHLEAN-X™
+  "box squat": "https://www.youtube.com/watch?v=rRihE4weYg4", // Squat University
+  "cable bicep curl": "https://www.youtube.com/watch?v=2MUEL4nL6hA", // Colossus Fitness
+  "cable chest fly": "https://www.youtube.com/watch?v=hrh0K1Oo7Yc", // Colossus Fitness
+  "cable crunch": "https://www.youtube.com/watch?v=3qjoXDTuyOE", // Bodybuilding.com
+  "cable fly": "https://www.youtube.com/watch?v=JUDTGZh4rhg", // ATHLEAN-X™
+  "cable hammer curl": "https://www.youtube.com/watch?v=VY4walmoM-I", // Buff Dudes Workouts
+  "cable kickback": "https://www.youtube.com/watch?v=5jJNfIlKTmg", // Colossus Fitness
+  "cable lateral raise": "https://www.youtube.com/watch?v=qitQHqNZbeM", // Colossus Fitness
+  "cable overhead tricep extension": "https://www.youtube.com/watch?v=GzmlxvSFE7A", // Colossus Fitness
+  "cable pull through": "https://www.youtube.com/watch?v=DbSF7ipBh5Y", // Colossus Fitness
+  "cable tricep pushdown": "https://www.youtube.com/watch?v=_w-HpW70nSQ", // ScottHermanFitness
+  "chest press": "https://www.youtube.com/watch?v=xUm0BiZCWlQ", // ScottHermanFitness
+  "clean": "https://www.youtube.com/watch?v=wR5k7OFliro", // Garage Strength
+  "clean and jerk": "https://www.youtube.com/watch?v=bNCXgyosXlc", // Catalyst Athletics
+  "clean and press": "https://www.youtube.com/watch?v=V-4qJEbTpI8", // Starting Strength
+  "clean high pull": "https://www.youtube.com/watch?v=2Qv8pEnprpU", // Catalyst Athletics
+  "clean pull": "https://www.youtube.com/watch?v=xx8WkFrST2Y", // Catalyst Athletics
+  "close grip bench press": "https://www.youtube.com/watch?v=UYJsFzqdgK4", // ScottHermanFitness
+  "crunches": "https://www.youtube.com/watch?v=zkQWXbAP9l0", // ATHLEAN-X™
+  "decline bench press": "https://www.youtube.com/watch?v=FFyGwcLnDYc", // Colossus Fitness
+  "decline dumbbell bench press": "https://www.youtube.com/watch?v=Pf1nDoqx_1A", // Bodybuilding.com
+  "decline push up": "https://www.youtube.com/watch?v=SKPab2YC8BE", // ScottHermanFitness
+  "decline sit up": "https://www.youtube.com/watch?v=QhGU5cmNZds", // ScottHermanFitness
+  "donkey calf raise": "https://www.youtube.com/watch?v=Jk_fDd57e98", // Buff Dudes Workouts
+  "dumbbell bench press": "https://www.youtube.com/watch?v=SzcSrpVr0GA", // ATHLEAN-X™
+  "dumbbell concentration curl": "https://www.youtube.com/watch?v=Jvj2wV0vOYU", // ScottHermanFitness
+  "dumbbell curl": "https://www.youtube.com/watch?v=yTWO2th-RIY", // ATHLEAN-X™
+  "dumbbell deadlift": "https://www.youtube.com/watch?v=HMcXQyEqJ7A", // Colossus Fitness
+  "dumbbell floor press": "https://www.youtube.com/watch?v=Bx4QPVH-J1g", // Colossus Fitness
+  "dumbbell fly": "https://www.youtube.com/watch?v=QENKPHhQVi4", // Mind Pump TV
+  "dumbbell front raise": "https://www.youtube.com/watch?v=-t7fuZ0KhDA", // ScottHermanFitness
+  "dumbbell front squat": "https://www.youtube.com/watch?v=MJao9o7ROs0", // Bodybuilding.com
+  "dumbbell lateral raise": "https://www.youtube.com/watch?v=Y29xKcze8Ik", // Physique Development
+  "dumbbell lunge": "https://www.youtube.com/watch?v=D7KaRcUTQeE", // ScottHermanFitness
+  "dumbbell pullover": "https://www.youtube.com/watch?v=Q8l6ykgnmPM", // Colossus Fitness
+  "dumbbell reverse fly": "https://www.youtube.com/watch?v=d1QEddtoOq0", // Colossus Fitness
+  "dumbbell row": "https://www.youtube.com/watch?v=gfUg6qWohTk", // ATHLEAN-X™
+  "dumbbell shrug": "https://www.youtube.com/watch?v=8L6zjxBwVzM", // Colossus Fitness
+  "dumbbell squat": "https://www.youtube.com/watch?v=v_c67Omje48", // Bodybuilding.com
+  "dumbbell tricep kickback": "https://www.youtube.com/watch?v=XuH2W_R5YoA", // Colossus Fitness
+  "dumbbell upright row": "https://www.youtube.com/watch?v=K0dYqPCaO14", // Buff Dudes Workouts
+  "ez bar curl": "https://www.youtube.com/watch?v=5NsFLGUf0Fo", // Colossus Fitness
+  "face pull": "https://www.youtube.com/watch?v=ljgqer1ZpXg", // ATHLEAN-X™
+  "floor press": "https://www.youtube.com/watch?v=vAFw7EPL4eM", // Buff Dudes Workouts
+  "flutter kicks": "https://www.youtube.com/watch?v=ANVdMDaYRts", // ScottHermanFitness
+  "glute bridge": "https://www.youtube.com/watch?v=E3Kt5qUYWfY", // Conor Harris
+  "glute ham raise": "https://www.youtube.com/watch?v=owGSST60JWE", // FitnessFAQs
+  "glute kickback": "https://www.youtube.com/watch?v=dJa_Nf4zdik", // Jeff Nippard
+  "good morning": "https://www.youtube.com/watch?v=y_o_GeEClWs", // Renaissance Periodization
+  "hack squat": "https://www.youtube.com/watch?v=0tn5K9NlCfo", // Bodybuilding.com
+  "hammer curl": "https://www.youtube.com/watch?v=BRVDS6HVR9Q", // Buff Dudes Workouts
+  "hanging knee raise": "https://www.youtube.com/watch?v=X-ACS9vpRyU", // ScottHermanFitness
+  "hanging leg raise": "https://www.youtube.com/watch?v=Pr1ieGZ5atk", // ATHLEAN-X™
+  "hip adduction": "https://www.youtube.com/watch?v=GmRSV_n2E_0", // ScottHermanFitness
+  "hip extension": "https://www.youtube.com/watch?v=GFqfIInCuUQ", // Physique Development
+  "incline dumbbell curl": "https://www.youtube.com/watch?v=DCe8f6vMe9A", // ATHLEAN-X™
+  "incline dumbbell fly": "https://www.youtube.com/watch?v=idAvu2HvqSQ", // ScottHermanFitness
+  "inverted row": "https://www.youtube.com/watch?v=11F_O_sZ1Z4", // Buff Dudes Workouts
+  "landmine press": "https://www.youtube.com/watch?v=-mYbyc48wAk", // Colossus Fitness
+  "landmine squat": "https://www.youtube.com/watch?v=hJ6XnlQ3yBU", // Bret Contreras Glute Guy
+  "leg curl": "https://www.youtube.com/watch?v=jobEeklwrrs", // Renaissance Periodization
+  "leg extension": "https://www.youtube.com/watch?v=ljO4jkwv8wQ", // Jeff Nippard
+  "leg press": "https://www.youtube.com/watch?v=K5n2vg3oZa4", // Colossus Fitness
+  "lunge": "https://www.youtube.com/watch?v=3XDriUn0udo", // Mind Pump TV
+  "lying leg curl": "https://www.youtube.com/watch?v=vl5nUdE9mWM", // Physique Development
+  "lying tricep extension": "https://www.youtube.com/watch?v=4re6CJ0XNF8", // Bodybuilding.com
+  "machine lateral raise": "https://www.youtube.com/watch?v=NNAs8jx_zJI", // Colossus Fitness
+  "machine shoulder press": "https://www.youtube.com/watch?v=3R14MnZbcpw", // Colossus Fitness
+  "one arm push ups": "https://www.youtube.com/watch?v=JiHkxqbhNuw", // Bodybuilding.com
+  "overhead squat": "https://www.youtube.com/watch?v=TUtBNkk_lio", // Mind Pump TV
+  "pause squat": "https://www.youtube.com/watch?v=JkwJ3LlFE7M", // Juggernaut Training Systems
+  "pendlay row": "https://www.youtube.com/watch?v=axoeDmW0oAY", // Jeff Nippard
+  "pike push up": "https://www.youtube.com/watch?v=DG-NcMnfZ_0", // FitnessFAQs
+  "pistol squat": "https://www.youtube.com/watch?v=vq5-vdgJc0I", // Squat University
+  "plank": "https://www.youtube.com/watch?v=A2b2EmIg0dA", // E3 Rehab
+  "power snatch": "https://www.youtube.com/watch?v=uyY_ySdN6OU", // Starting Strength
+  "push jerk": "https://www.youtube.com/watch?v=Om7vLD6x8W0", // Catalyst Athletics
+  "push press": "https://www.youtube.com/watch?v=yklSQG1_Ovc", // Catalyst Athletics
+  "push ups": "https://www.youtube.com/watch?v=i9sTjhN4Z3M", // Mind Pump TV
+  "rack pull": "https://www.youtube.com/watch?v=aAjN8zS7Idg", // Buff Dudes Workouts
+  "reverse barbell curl": "https://www.youtube.com/watch?v=didEQUuieRQ", // ScottHermanFitness
+  "russian twist": "https://www.youtube.com/watch?v=fCHFQTBqm-U", // Colossus Fitness
+  "safety bar squat": "https://www.youtube.com/watch?v=B3LpibMixF0", // Juggernaut Training Systems
+  "seated calf raise": "https://www.youtube.com/watch?v=6O5hh1rBtx8", // Colossus Fitness
+  "seated leg curl": "https://www.youtube.com/watch?v=ELOCsoDSmrg", // ScottHermanFitness
+  "side crunch": "https://www.youtube.com/watch?v=CMJA332bfs0", // ScottHermanFitness
+  "side lunge": "https://www.youtube.com/watch?v=liFeq7swKfc", // Mind Pump TV
+  "single leg press": "https://www.youtube.com/watch?v=x4vaHXRfKrg", // Colossus Fitness
+  "single leg romanian deadlift": "https://www.youtube.com/watch?v=Zfr6wizR8rs", // Squat University
+  "sissy squat": "https://www.youtube.com/watch?v=Kwcpzy1C6UE", // FitnessFAQs
+  "skull crushers": "https://www.youtube.com/watch?v=d_KZxkY_0cM", // ScottHermanFitness
+  "smith machine bench press": "https://www.youtube.com/watch?v=z_r6hDOYtO0", // ScottHermanFitness
+  "smith machine squat": "https://www.youtube.com/watch?v=fEuYM-miK5U", // Renaissance Periodization
+  "snatch": "https://www.youtube.com/watch?v=0GIumbHwfh8", // Garage Strength
+  "snatch deadlift": "https://www.youtube.com/watch?v=GP6VNoIZyF4", // Alan Thrall (Untamed Strength)
+  "spider curl": "https://www.youtube.com/watch?v=CITtSuda0Fg", // ScottHermanFitness
+  "split jerk": "https://www.youtube.com/watch?v=P7p9TLBA1lA", // Sonny Webster
+  "spoto press": "https://www.youtube.com/watch?v=wgd4zSPmwZM", // Juggernaut Training Systems
+  "standing calf raise": "https://www.youtube.com/watch?v=SVtg-1loH4c", // Colossus Fitness
+  "standing leg curl": "https://www.youtube.com/watch?v=Z053-kKjesQ", // ScottHermanFitness
+  "stiff leg deadlift": "https://www.youtube.com/watch?v=AH7gaaT_tU8", // Alan Thrall (Untamed Strength)
+  "straight arm pulldown": "https://www.youtube.com/watch?v=WDOV2PDpkiU", // Colossus Fitness
+  "sumo deadlift": "https://www.youtube.com/watch?v=Ov1AyFVEZws", // Juggernaut Training Systems
+  "superman": "https://www.youtube.com/watch?v=UXUGfiNL1lI", // Colossus Fitness
+  "t bar row": "https://www.youtube.com/watch?v=j3Igk5nyZE4", // ScottHermanFitness
+  "tate press": "https://www.youtube.com/watch?v=IgSjoXbpy1M", // ScottHermanFitness
+  "tricep pushdown": "https://www.youtube.com/watch?v=_w-HpW70nSQ", // ScottHermanFitness
+  "upright row": "https://www.youtube.com/watch?v=p6kSTMid-S8", // Colossus Fitness
+  "walking lunge": "https://www.youtube.com/watch?v=Pbmj6xPo-Hw", // Buff Dudes Workouts
+  "z press": "https://www.youtube.com/watch?v=0fHdnBH9Gdo", // Buff Dudes Workouts
+  "zercher squat": "https://www.youtube.com/watch?v=Da75bVCfTNo", // Buff Dudes
+  "zottman curl": "https://www.youtube.com/watch?v=D7bMA4WEKMI", // Buff Dudes Workouts
+};
 
 /**
  * Names too thin to search usefully.
