@@ -260,8 +260,19 @@ nudges, deadline reminders and a Monday weekly summary. Pick one:
    services competing over the same SPF record, which is the usual cause of
    "why is my mail going to spam". A subdomain keeps the two independent.
 2. Add the DKIM/SPF records Resend gives you to that subdomain in Spaceship DNS.
-3. `npx wrangler secret put RESEND_API_KEY`, and set `REMINDER_FROM` in
-   `wrangler.toml` vars to e.g. `PocketAthlete <coach@send.pocketathlete.com>`.
+3. `npx wrangler secret put RESEND_API_KEY`, and set `REMINDER_FROM` to e.g.
+   `PocketAthlete <coach@send.pocketathlete.com>`.
+4. Set `REPLY_TO` to the mailbox you actually read — `info@pocketathlete.com`.
+   The From address is on a send-only subdomain by design, so without this an
+   athlete who hits reply is writing to a mailbox nobody opens. It falls back to
+   the From address, which is the wrong answer, quietly.
+
+**Setting these by pasting?** `wrangler.toml` is NOT applied when you paste
+`worker.js` into the Cloudflare dashboard — only `wrangler deploy` reads it. Add
+`REMINDER_FROM` and `REPLY_TO` under the Worker's own **Settings → Variables**,
+then Deploy. A missing `REMINDER_FROM` sends from `noreply@example.com`, which
+Resend rejects even with a valid key. The admin email screen lists the variable
+names the running Worker can actually see, and the host that answered.
 
 **Option B — Google Apps Script (free, uses your Gmail)**
 1. Open https://script.google.com → New project, paste in `google-apps-script/Code.gs`.

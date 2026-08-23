@@ -10,7 +10,7 @@
  *     Copy the /exec URL → set it as GAS_EMAIL_URL in the Worker.
  *  4. The first send will prompt you to authorize Gmail access (one time).
  *
- * The Cloudflare Worker POSTs JSON: { secret, to, subject, html, from }.
+ * The Cloudflare Worker POSTs JSON: { secret, to, subject, html, from, replyTo }.
  * Gmail free accounts can send ~100 emails/day; Workspace ~1500/day.
  */
 
@@ -25,12 +25,17 @@ function doPost(e) {
     if (!body.to || !body.subject) {
       return json_({ ok: false, error: "to and subject required" });
     }
-    MailApp.sendEmail({
+    var options = {
       to: body.to,
       subject: body.subject,
       htmlBody: body.html || "",
       name: (body.from || "Apex").replace(/<.*>/, "").trim() || "Apex",
-    });
+    };
+    // Gmail sends from YOUR address, so a reply already reaches you — but the
+    // Worker may name a different mailbox, and the two senders must behave the
+    // same or a reply lands somewhere else depending on which one was on.
+    if (body.replyTo) options.replyTo = body.replyTo;
+    MailApp.sendEmail(options);
     return json_({ ok: true });
   } catch (err) {
     return json_({ ok: false, error: String(err) });

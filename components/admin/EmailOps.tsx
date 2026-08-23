@@ -42,6 +42,8 @@ interface Status {
   crons?: string[]; note?: string;
   /** The host that answered — not necessarily the Worker you have open. */
   host?: string;
+  /** Where a reply to one of these emails would land. */
+  replyTo?: string | null;
   /** Names of the variables this Worker was actually handed. Never values. */
   configuredVars?: string[];
   /** Names that exist but are empty — the cause that looks like success. */
@@ -136,6 +138,7 @@ export function EmailOps() {
             <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-400 sm:grid-cols-3">
               <Fact label="Provider" value={status.provider ?? "none"} />
               <Fact label="From" value={status.from ?? "not set"} />
+              <Fact label="Replies go to" value={status.replyTo ?? "nowhere"} />
               <Fact label="Gmail secret" value={status.gmailSecretSet ? "set" : "not set"} />
               <Fact label="Resend fallback" value={status.resendFallback ? "set" : "not set"} />
               <Fact label="Service role" value={status.serviceRoleSet ? "set" : "not set"} />

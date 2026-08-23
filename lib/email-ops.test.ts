@@ -182,3 +182,41 @@ test("the admin screen shows the names when something is wrong", () => {
   assert.match(ui, /Set but empty:/);
 });
 
+test("a reply reaches a mailbox somebody opens", () => {
+  // Resend wants a domain of its own — sending from the root alongside a
+  // mailbox provider puts two services on one SPF record, which is how mail
+  // ends up in spam — so the From address lives on a subdomain that exists
+  // only to send. Nobody reads it. Without a reply-to, an athlete who hits
+  // reply on a nudge writes to a void and never finds out.
+  const worker = readFileSync(new URL("../cloudflare/src/index.ts", import.meta.url), "utf8");
+  assert.match(worker, /function replyAddress\(env: Env\): string/);
+  // Both senders, or a reply lands somewhere different depending on which
+  // provider happened to be configured.
+  assert.match(worker, /reply_to: replyAddress\(env\)/, "Resend sends no reply-to");
+  assert.match(worker, /replyTo: replyAddress\(env\)/, "the Apps Script sender sends no reply-to");
+  const gas = readFileSync(new URL("../google-apps-script/Code.gs", import.meta.url), "utf8");
+  assert.match(gas, /if \(body\.replyTo\) options\.replyTo = body\.replyTo;/);
+});
+
+test("the reply address falls back to the sender, and is bare", () => {
+  // A display name in a reply-to is not an address. Some providers accept
+  // "PocketAthlete <x@y.com>" there and some reject the whole send, so the
+  // angle brackets come off before it goes anywhere.
+  const worker = readFileSync(new URL("../cloudflare/src/index.ts", import.meta.url), "utf8");
+  const fn = worker.slice(worker.indexOf("function replyAddress"), worker.indexOf("async function email("));
+  assert.match(fn, /env\.REPLY_TO/);
+  assert.match(fn, /env\.REMINDER_FROM/, "there is no fallback, so an unset REPLY_TO means no reply-to at all");
+  assert.match(fn, /<\(\[\^>\]\+\)>/, "a display name is passed through as if it were an address");
+  // Nothing usable means the field is omitted rather than sent empty.
+  assert.match(worker, /\.\.\.\(replyAddress\(env\) \? \{ reply_to: replyAddress\(env\) \} : \{\}\)/);
+});
+
+test("the status says where a reply would land", () => {
+  // "Our emails send" and "somebody sees the answers" are two different claims,
+  // and only one of them was on the screen.
+  const worker = readFileSync(new URL("../cloudflare/src/index.ts", import.meta.url), "utf8");
+  assert.match(worker, /replyTo: replyAddress\(env\) \|\| null/);
+  const ui = readFileSync(new URL("../components/admin/EmailOps.tsx", import.meta.url), "utf8");
+  assert.match(ui, /label="Replies go to"/);
+});
+

@@ -92,6 +92,19 @@ export interface Env {
   // Email
   RESEND_API_KEY: string;
   REMINDER_FROM: string;
+  /**
+   * Where a reply should land. Optional; falls back to REMINDER_FROM's address.
+   *
+   * WHY IT IS SEPARATE FROM THE SENDER. Resend wants a domain of its own —
+   * sending from the root alongside a mailbox provider puts two services on one
+   * SPF record, which is the usual cause of mail going to spam — so the From
+   * address ends up on a subdomain like send.pocketathlete.com. Nobody reads a
+   * mailbox on a subdomain that exists only to send. So the athlete who hits
+   * reply on a nudge is writing to a void, and never finds out.
+   *
+   * Set this to the mailbox a person actually opens.
+   */
+  REPLY_TO: string;
   GAS_EMAIL_URL: string;     // Google Apps Script web-app URL (preferred email sender)
   GAS_EMAIL_SECRET: string;  // shared secret the GAS script checks
   VAPID_PUBLIC_KEY: string;  // base64url P-256 point; must match NEXT_PUBLIC_VAPID_PUBLIC_KEY
@@ -462,7 +475,7 @@ function overBudget(state: BudgetState): Response {
 // nobody is watching a spinner and the budget can be what the work actually
 // needs. Callers pass their own client-side timeout to match.
 // Bump on every paste into the Cloudflare dashboard. GET /health reports it.
-const WORKER_VERSION = "2026-08-23.2";
+const WORKER_VERSION = "2026-08-23.3";
 
 const CHAIN_BUDGET_MS = 55_000;
 /**
@@ -3252,6 +3265,10 @@ async function emailStatus(req: Request, env: Env): Promise<Response> {
     provider,
     configured: provider !== null,
     from: env.REMINDER_FROM || null,
+    // Where a reply lands. Worth showing because the sending address is usually
+    // on a subdomain nobody reads, and "our emails work" is not the same claim
+    // as "somebody sees the answers".
+    replyTo: replyAddress(env) || null,
     // The Gmail sender checks a shared secret. Configured without it, every
     // send is rejected by the script and logged as a failure with a message
     // nobody would connect to a missing variable.
@@ -3379,13 +3396,32 @@ async function emailNotifications(env: Env): Promise<void> {
 // Preferred sender is a Google Apps Script web app (free, uses your Gmail)
 // when configured; Resend is the fallback. A provider's error status is not a
 // successful send — failed rows remain pending for the next cron run.
+/**
+ * The address a reply should go to, bare — no display name.
+ *
+ * Empty when neither is set, so the payload simply omits it rather than sending
+ * an empty reply-to, which some providers treat as an address and others reject.
+ */
+function replyAddress(env: Env): string {
+  const explicit = (env.REPLY_TO || "").trim();
+  if (explicit) return explicit.replace(/^.*</, "").replace(/>.*$/, "").trim();
+  const from = (env.REMINDER_FROM || "").trim();
+  const inAngles = from.match(/<([^>]+)>/);
+  const bare = (inAngles ? inAngles[1] : from).trim();
+  return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(bare) ? bare : "";
+}
+
 async function email(env: Env, to: string, subject: string, html: string): Promise<EmailResult> {
   try {
     if (env.GAS_EMAIL_URL) {
       const response = await fetch(env.GAS_EMAIL_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ secret: env.GAS_EMAIL_SECRET || "", to, subject, html, from: env.REMINDER_FROM || "" }),
+        body: JSON.stringify({
+          secret: env.GAS_EMAIL_SECRET || "", to, subject, html,
+          from: env.REMINDER_FROM || "",
+          replyTo: replyAddress(env),
+        }),
       });
       const payload = await response.json().catch(() => ({})) as { id?: string; error?: string; message?: string };
       return response.ok
@@ -3396,7 +3432,11 @@ async function email(env: Env, to: string, subject: string, html: string): Promi
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from: env.REMINDER_FROM || "PocketAthlete <noreply@example.com>", to, subject, html }),
+      body: JSON.stringify({
+        from: env.REMINDER_FROM || "PocketAthlete <noreply@example.com>",
+        to, subject, html,
+        ...(replyAddress(env) ? { reply_to: replyAddress(env) } : {}),
+      }),
     });
     const payload = await response.json().catch(() => ({})) as { id?: string; message?: string; name?: string };
     return response.ok

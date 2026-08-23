@@ -697,7 +697,7 @@ function overBudget(state) {
   return json({ error: `${reason} The on-device coach still works, and your allowance resets \u2014 upgrade for more.` }, 429);
 }
 __name(overBudget, "overBudget");
-var WORKER_VERSION = "2026-08-23.2";
+var WORKER_VERSION = "2026-08-23.3";
 var ATTEMPT_TIMEOUT_MS = {
   groq: 1e4,
   openrouter: 2e4,
@@ -2524,6 +2524,10 @@ async function emailStatus(req, env) {
     provider,
     configured: provider !== null,
     from: env.REMINDER_FROM || null,
+    // Where a reply lands. Worth showing because the sending address is usually
+    // on a subdomain nobody reads, and "our emails work" is not the same claim
+    // as "somebody sees the answers".
+    replyTo: replyAddress(env) || null,
     // The Gmail sender checks a shared secret. Configured without it, every
     // send is rejected by the script and logged as a failure with a message
     // nobody would connect to a missing variable.
@@ -2628,13 +2632,30 @@ async function emailNotifications(env) {
   console.log(`notifications: emailed ${completed.length} of ${rows.length}`);
 }
 __name(emailNotifications, "emailNotifications");
+function replyAddress(env) {
+  const explicit = (env.REPLY_TO || "").trim();
+  if (explicit)
+    return explicit.replace(/^.*</, "").replace(/>.*$/, "").trim();
+  const from = (env.REMINDER_FROM || "").trim();
+  const inAngles = from.match(/<([^>]+)>/);
+  const bare = (inAngles ? inAngles[1] : from).trim();
+  return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(bare) ? bare : "";
+}
+__name(replyAddress, "replyAddress");
 async function email(env, to, subject, html) {
   try {
     if (env.GAS_EMAIL_URL) {
       const response2 = await fetch(env.GAS_EMAIL_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ secret: env.GAS_EMAIL_SECRET || "", to, subject, html, from: env.REMINDER_FROM || "" })
+        body: JSON.stringify({
+          secret: env.GAS_EMAIL_SECRET || "",
+          to,
+          subject,
+          html,
+          from: env.REMINDER_FROM || "",
+          replyTo: replyAddress(env)
+        })
       });
       const payload2 = await response2.json().catch(() => ({}));
       return response2.ok ? { ok: true, providerId: payload2.id } : { ok: false, error: payload2.error ?? payload2.message ?? `Gmail sender returned ${response2.status}` };
@@ -2644,7 +2665,13 @@ async function email(env, to, subject, html) {
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from: env.REMINDER_FROM || "PocketAthlete <noreply@example.com>", to, subject, html })
+      body: JSON.stringify({
+        from: env.REMINDER_FROM || "PocketAthlete <noreply@example.com>",
+        to,
+        subject,
+        html,
+        ...replyAddress(env) ? { reply_to: replyAddress(env) } : {}
+      })
     });
     const payload = await response.json().catch(() => ({}));
     return response.ok ? { ok: true, providerId: payload.id } : { ok: false, error: payload.message ?? payload.name ?? `Resend returned ${response.status}` };
