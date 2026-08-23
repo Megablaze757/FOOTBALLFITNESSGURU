@@ -4468,4 +4468,468 @@ export const MEALS: Meal[] = [
     tip: "Mango is sweet enough to cover the flavour of pea protein, which is the one thing people give up on it for. Frozen, so it is always in and always ripe.",
     method: "Whisk pea protein into almond milk, mash in softened frozen mango, and top with chopped cashews.",
   },
+
+  // ===========================================================================
+  // THE BUDGET SHELF
+  //
+  // "A budget meal plan should be £50." It was £56 for a 58kg athlete cutting
+  // and £58 for a 95kg athlete building, and leaning harder on price did not
+  // help — it just bought a worse week. The cause was not the scoring and not
+  // the prices. Of 256 recipes, exactly TWO cost under £1.60 a serving and
+  // carried 30g of protein. There was nothing cheap to choose, so "cheaper"
+  // could only ever mean "less food", and the protein floor correctly refused
+  // that week every time. The ladder was searching an empty shelf.
+  //
+  // So this is the shelf. Every dish here is built on protein that is cheap per
+  // gram rather than per pack — red lentils at ~£1.04 per 100g of protein, oats
+  // at £1.45, beans at £2.40, eggs, tinned sardines and mackerel, tofu, thighs
+  // rather than breast — and leans on the cupboard, because the shopping list
+  // charges a whole pack for anything perishable and pro-rata for anything that
+  // keeps. A tin used twice this week costs half as much as a tin used once.
+  //
+  // CHEAP IS NOT THE SAME AS GRIM, and a plan people skip saves nothing. These
+  // are seasoned like the rest of the book: harissa, gochujang, garlic, ginger,
+  // chilli, lemon, smoked paprika. Dhal, chilli, bolognese and a traybake are
+  // cheap because of what they are made of, not because something was left out.
+  // ===========================================================================
+  {
+    id: "budget_pb_protein_porridge", name: "Peanut butter & banana porridge", slot: "Breakfast", minutes: 8,
+    items: [
+      { foodId: "oats", qty: 80 }, { foodId: "milk", qty: 300 }, { foodId: "whey_protein", qty: 25 },
+      { foodId: "peanut_butter", qty: 20 }, { foodId: "banana", qty: 1 },
+    ],
+    steps: [
+      "Oats and milk in a pan on a medium heat, stirring now and then, until it thickens — 5 minutes, no longer.",
+      "Off the heat first, THEN the protein powder. Straight into a boiling pan and it turns to rubber.",
+      "Half the banana mashed through, the rest sliced on top.",
+      "Peanut butter dropped on in a spoonful and half stirred through, so you get sweet and salty in different mouthfuls rather than one beige one.",
+    ],
+    tip: "The cheapest 45g of protein in the book. Oats, milk and peanut butter all keep, so the only thing you can run out of is bananas.",
+    method: "Simmer oats in milk until thick, stir protein in off the heat, and finish with mashed banana and peanut butter.",
+  },
+  {
+    id: "budget_chilli_eggs_beans", name: "Chilli eggs & beans on toast", slot: "Breakfast", minutes: 10,
+    items: [
+      { foodId: "eggs", qty: 3 }, { foodId: "beans_baked", qty: 200 }, { foodId: "wholemeal_bread", qty: 80 },
+      { foodId: "chilli_fresh", qty: 5 }, { foodId: "garlic", qty: 5 }, { foodId: "olive_oil", qty: 8 },
+    ],
+    steps: [
+      "Beans into a small pan with the crushed garlic and half the sliced chilli. Low heat, lid off — you want them to thicken, not just warm.",
+      "Eggs fried in the oil on a high heat, spooning the hot oil over the whites until the edges are lacy and brown.",
+      "Toast under the beans, eggs on top, the rest of the chilli over.",
+      "Black pepper, and eat it before the toast gives up.",
+    ],
+    tip: "Garlic and chilli is the whole difference between this and beans on toast. Ten seconds of work.",
+    method: "Simmer beans with garlic and chilli, fry eggs hard in hot oil, and stack both on toast.",
+  },
+  {
+    id: "budget_pb_overnight_oats", name: "Peanut butter & banana overnight oats", slot: "Breakfast", minutes: 5,
+    items: [
+      { foodId: "oats", qty: 60 }, { foodId: "greek_yoghurt", qty: 250 }, { foodId: "peanut_butter", qty: 20 },
+      { foodId: "banana", qty: 1 }, { foodId: "seeds_mixed", qty: 10 }, { foodId: "honey", qty: 8 },
+    ],
+    steps: [
+      "Oats, yoghurt and a splash of water in a jar — the water matters, or it sets solid overnight.",
+      "Peanut butter and honey stirred through in ribbons rather than mixed smooth.",
+      "Lid on, fridge, overnight.",
+      "Banana and seeds on in the morning, not the night before, unless you like grey banana.",
+    ],
+    tip: "Made in the two minutes after dinner, it is the reason you eat breakfast at all on a 6am start.",
+    method: "Stir oats into yoghurt with water, ripple through peanut butter and honey, chill overnight, and top with banana and seeds.",
+  },
+  {
+    id: "budget_masala_eggs", name: "Masala scrambled eggs on toast", slot: "Breakfast", minutes: 12,
+    items: [
+      { foodId: "eggs", qty: 3 }, { foodId: "cottage_cheese", qty: 80 }, { foodId: "onion", qty: 50 },
+      { foodId: "tomatoes_fresh", qty: 80 }, { foodId: "chilli_fresh", qty: 5 }, { foodId: "spice_mix", qty: 4 },
+      { foodId: "wholemeal_bread", qty: 80 }, { foodId: "olive_oil", qty: 8 },
+    ],
+    steps: [
+      "Onion into the oil on a medium heat until soft and just colouring, 5 minutes.",
+      "Chilli and spices in for thirty seconds, then the chopped tomatoes until they collapse.",
+      "Eggs beaten with the cottage cheese and poured in. Low heat, and stop stirring — fold it over itself every few seconds instead.",
+      "Off the heat while it still looks slightly underdone. It carries on cooking in the pan.",
+      "Onto toast.",
+    ],
+    tip: "Cottage cheese in the eggs adds 9g of protein and, more usefully, keeps them soft even if you overcook them.",
+    method: "Soften onion, bloom spices, collapse tomatoes, then fold in eggs beaten with cottage cheese.",
+  },
+  {
+    id: "budget_tuna_lemon_pasta", name: "Tuna, sweetcorn & lemon pasta", slot: "Lunch", minutes: 14,
+    items: [
+      { foodId: "pasta", qty: 100 }, { foodId: "tuna_tin", qty: 145 }, { foodId: "sweetcorn", qty: 100 },
+      { foodId: "greek_yoghurt", qty: 50 }, { foodId: "lemon", qty: 0.5 }, { foodId: "garlic", qty: 6 },
+      { foodId: "chilli_fresh", qty: 4 },
+    ],
+    steps: [
+      "Pasta on. Keep a mugful of the water before you drain it.",
+      "Tuna, sweetcorn, yoghurt, crushed garlic, lemon juice and chilli in the empty pan off the heat.",
+      "Drained pasta in, then splashes of the cooking water until it goes from claggy to glossy.",
+      "Lemon zest over the top. It is the difference between this and student food.",
+    ],
+    tip: "Yoghurt instead of mayo: same job, a third of the calories and 5g more protein.",
+    method: "Toss hot pasta through tuna, sweetcorn, yoghurt, garlic and lemon, loosening with pasta water.",
+  },
+  {
+    id: "budget_red_lentil_dhal", name: "Red lentil dhal with rice", slot: "Lunch", minutes: 30,
+    items: [
+      { foodId: "red_lentils", qty: 110 }, { foodId: "rice", qty: 70 }, { foodId: "tomatoes_tin", qty: 200 },
+      { foodId: "onion", qty: 70 }, { foodId: "garlic", qty: 8 }, { foodId: "ginger", qty: 8 },
+      { foodId: "spice_mix", qty: 8 }, { foodId: "stock_cubes", qty: 5 }, { foodId: "olive_oil", qty: 10 },
+    ],
+    steps: [
+      "Onion into the oil until genuinely soft — 8 minutes. Rushing this is why dhal tastes flat.",
+      "Garlic, ginger and spices in for a minute, until the pan smells of it.",
+      "Lentils, tomatoes, stock and 400ml water. Simmer 20 minutes, stirring occasionally so the bottom does not catch.",
+      "Rice on when the lentils go in — they finish together.",
+      "Beat it hard with the spoon at the end. That is what turns it from lentils in liquid into dhal.",
+    ],
+    tip: "The cheapest real meal here and it reheats better than it cooks. Make double.",
+    method: "Soften onion, bloom garlic, ginger and spices, simmer lentils with tomatoes and stock, then beat smooth and serve with rice.",
+  },
+  {
+    id: "budget_jacket_tuna", name: "Jacket potato with tuna & sweetcorn", slot: "Lunch", minutes: 12,
+    items: [
+      { foodId: "potatoes", qty: 350 }, { foodId: "tuna_tin", qty: 145 }, { foodId: "sweetcorn", qty: 80 },
+      { foodId: "greek_yoghurt", qty: 50 }, { foodId: "cheddar", qty: 20 }, { foodId: "lemon", qty: 0.5 },
+    ],
+    steps: [
+      "Potato pricked all over and microwaved 8-10 minutes, turning once.",
+      "Straight into a hot oven or air fryer for 5 minutes if you have it — that is the only way to get crisp skin off a microwave.",
+      "Tuna, sweetcorn, yoghurt and lemon mixed while it cooks.",
+      "Split, fluffed with a fork, filled, cheese over the top to melt.",
+    ],
+    tip: "50g of protein for well under a pound. Potatoes are the cheapest thing in the shop and everyone forgets them.",
+    method: "Microwave then crisp a jacket potato, and fill with tuna mixed through yoghurt, sweetcorn and lemon.",
+  },
+  {
+    id: "budget_sardines_toast", name: "Sardines on toast with garlic tomatoes", slot: "Lunch", minutes: 10,
+    items: [
+      { foodId: "sardines_tin", qty: 120 }, { foodId: "wholemeal_bread", qty: 90 },
+      { foodId: "tomatoes_fresh", qty: 100 }, { foodId: "garlic", qty: 6 }, { foodId: "lemon", qty: 0.5 },
+      { foodId: "chilli_fresh", qty: 4 },
+    ],
+    steps: [
+      "Tomatoes halved and into a hot dry pan, cut side down, until they blister and slump.",
+      "Garlic and chilli in for the last thirty seconds only — any longer and the garlic turns bitter.",
+      "Toast, then rub the cut face of a raw garlic clove over it while it is still hot.",
+      "Sardines on, tomatoes over, lemon squeezed hard over the lot.",
+    ],
+    tip: "A tin of sardines is 25g of protein for under a pound and keeps in the cupboard for years. The lemon is not optional.",
+    method: "Blister tomatoes with garlic and chilli, pile onto garlic-rubbed toast with sardines, and finish with lemon.",
+  },
+  {
+    id: "budget_harissa_chickpeas", name: "Harissa chickpeas with feta", slot: "Lunch", minutes: 15,
+    items: [
+      { foodId: "chickpeas", qty: 240 }, { foodId: "harissa", qty: 20 }, { foodId: "feta", qty: 40 },
+      { foodId: "spinach", qty: 60 }, { foodId: "onion", qty: 60 }, { foodId: "garlic", qty: 6 },
+      { foodId: "pitta", qty: 60 }, { foodId: "olive_oil", qty: 10 }, { foodId: "lemon", qty: 0.5 },
+    ],
+    steps: [
+      "Onion in the oil until soft, then garlic for a minute.",
+      "Drained chickpeas in with the harissa and a splash of water. Press about a third of them flat with the back of the spoon — that is what thickens the sauce.",
+      "Spinach in at the end, stirred until it just collapses.",
+      "Feta crumbled over off the heat, lemon squeezed over, warm pitta to scoop.",
+    ],
+    tip: "Crushing some of the chickpeas is the whole trick. Do not skip it or it is a bowl of loose chickpeas.",
+    method: "Soften onion and garlic, simmer chickpeas in harissa while crushing some to thicken, wilt spinach, and finish with feta and lemon.",
+  },
+  {
+    id: "budget_lentil_bolognese", name: "Red lentil bolognese", slot: "Dinner", minutes: 35,
+    items: [
+      { foodId: "red_lentils", qty: 120 }, { foodId: "pasta", qty: 100 }, { foodId: "passata", qty: 300 },
+      { foodId: "onion", qty: 70 }, { foodId: "carrots", qty: 80 }, { foodId: "garlic", qty: 8 },
+      { foodId: "stock_cubes", qty: 5 }, { foodId: "olive_oil", qty: 10 },
+    ],
+    steps: [
+      "Onion and carrot chopped small and into the oil on a medium heat for 10 minutes. Small matters — this is the base and you should not be able to pick pieces out later.",
+      "Garlic for a minute.",
+      "Lentils, passata, stock and 300ml water. Simmer 20-25 minutes until the lentils have gone soft and the sauce has stopped being watery.",
+      "Season harder than you think. Lentils take a lot of salt.",
+      "Pasta on for the last 10 minutes.",
+    ],
+    tip: "Nobody misses the mince, and it costs about a fifth as much. Freezes in portions.",
+    method: "Soften a fine onion and carrot base, add garlic, then simmer lentils in passata and stock until thick, and serve over pasta.",
+  },
+  {
+    id: "budget_beef_black_bean_chilli", name: "Beef & black bean chilli", slot: "Dinner", minutes: 35,
+    items: [
+      { foodId: "beef_mince_5", qty: 150 }, { foodId: "black_beans", qty: 200 }, { foodId: "tomatoes_tin", qty: 200 },
+      { foodId: "rice", qty: 70 }, { foodId: "onion", qty: 60 }, { foodId: "garlic", qty: 8 },
+      { foodId: "spice_mix", qty: 8 }, { foodId: "chilli_fresh", qty: 5 }, { foodId: "stock_cubes", qty: 4 },
+    ],
+    steps: [
+      "Mince into a dry hot pan and left alone until one side is properly browned before you break it up. Stirring it from the start steams it grey.",
+      "Onion and garlic in with the fat that has rendered out, then the spices and chilli.",
+      "Tomatoes, beans and stock. Simmer 20 minutes uncovered until it thickens.",
+      "Rice on when the tomatoes go in.",
+      "Taste for salt and heat at the end, not the start.",
+    ],
+    tip: "Half the mince of a normal chilli and twice the beans — cheaper, more fibre, and you cannot tell once it has simmered.",
+    method: "Brown mince hard, soften onion and garlic in the fat, bloom spices, then simmer with tomatoes, beans and stock and serve over rice.",
+  },
+  {
+    id: "budget_paprika_chicken_traybake", name: "Paprika chicken thigh traybake", slot: "Dinner", minutes: 40,
+    items: [
+      { foodId: "chicken_thigh", qty: 180 }, { foodId: "potatoes", qty: 300 }, { foodId: "peppers", qty: 100 },
+      { foodId: "onion", qty: 70 }, { foodId: "garlic", qty: 10 }, { foodId: "spice_mix", qty: 8 },
+      { foodId: "olive_oil", qty: 12 }, { foodId: "lemon", qty: 0.5 },
+    ],
+    steps: [
+      "Oven as hot as it goes. Potatoes cut small — 2cm, no bigger, or the chicken is done before they are.",
+      "Everything tossed together in the tray with the oil and spices. One layer, not a pile, or it steams.",
+      "Roast 25 minutes, then turn it all over and give it another 10-15 until the potato edges are dark.",
+      "Lemon squeezed over the hot tray so it lifts the spice off the bottom.",
+    ],
+    tip: "Thighs, not breast: cheaper per gram of protein, and they do not go dry in a hot oven. One tray, one wash-up.",
+    method: "Toss thighs, potatoes, peppers and onion with oil and paprika, roast hot in a single layer, and finish with lemon.",
+  },
+  {
+    id: "budget_gochujang_tofu_noodles", name: "Gochujang tofu noodles", slot: "Dinner", minutes: 18,
+    items: [
+      { foodId: "tofu", qty: 200 }, { foodId: "noodles", qty: 100 }, { foodId: "peas_frozen", qty: 80 },
+      { foodId: "gochujang", qty: 20 }, { foodId: "soy_sauce", qty: 15 }, { foodId: "garlic", qty: 8 },
+      { foodId: "ginger", qty: 8 }, { foodId: "olive_oil", qty: 10 },
+    ],
+    steps: [
+      "Tofu pressed between two plates with something heavy on top for 10 minutes. Wet tofu will not brown, and unbrowned tofu is why people say they don't like tofu.",
+      "Cubed and fried hard in the oil, undisturbed, until each face is properly golden.",
+      "Garlic and ginger in for thirty seconds, then gochujang and soy with a splash of water to make a sauce.",
+      "Noodles and peas straight in from the pan they cooked in, tossed until everything is coated.",
+    ],
+    tip: "Pressing the tofu is the only step that matters. Everything else is 5 minutes.",
+    method: "Press and hard-fry tofu, build a gochujang and soy sauce with garlic and ginger, and toss through noodles and peas.",
+  },
+  {
+    id: "budget_mackerel_crushed_potatoes", name: "Mackerel with crushed potatoes & peas", slot: "Dinner", minutes: 25,
+    items: [
+      { foodId: "mackerel_tin", qty: 250 }, { foodId: "potatoes", qty: 350 }, { foodId: "peas_frozen", qty: 100 },
+      { foodId: "lemon", qty: 0.5 }, { foodId: "garlic", qty: 6 }, { foodId: "olive_oil", qty: 10 },
+    ],
+    steps: [
+      "Potatoes boiled whole in well-salted water until a knife slides in, about 18 minutes.",
+      "Peas in for the last 2 minutes of the same pan.",
+      "Drained, then crushed roughly with a fork and the oil, crushed garlic and lemon juice. Rough, not mashed — you want edges.",
+      "Mackerel flaked through with its tomato sauce, folded twice only so it stays in pieces.",
+    ],
+    tip: "60g of protein, one pan, and the whole thing comes out of the cupboard except the potatoes.",
+    method: "Boil potatoes with peas, crush roughly with oil, garlic and lemon, and fold tinned mackerel through.",
+  },
+  {
+    id: "budget_butter_bean_chorizo", name: "Butter bean & chorizo stew", slot: "Dinner", minutes: 25,
+    items: [
+      { foodId: "butter_beans", qty: 400 }, { foodId: "chorizo", qty: 40 }, { foodId: "tomatoes_tin", qty: 200 },
+      { foodId: "onion", qty: 70 }, { foodId: "garlic", qty: 8 }, { foodId: "spice_mix", qty: 5 },
+      { foodId: "spinach", qty: 60 }, { foodId: "wholemeal_bread", qty: 60 },
+    ],
+    steps: [
+      "Chorizo diced small into a cold dry pan, then the heat on. Starting cold renders the fat out instead of burning the outside.",
+      "Onion into the red fat until soft, then garlic and paprika.",
+      "Tomatoes and drained beans in. Simmer 12 minutes, crushing a few beans against the side to thicken it.",
+      "Spinach folded through at the end, bread for the bottom of the bowl.",
+    ],
+    tip: "40g of chorizo flavours the whole pan — this is a bean stew with chorizo in it, not the other way round, which is why it is cheap.",
+    method: "Render diced chorizo from cold, soften onion in the fat, simmer beans and tomatoes while crushing some to thicken, then wilt in spinach.",
+  },
+  {
+    id: "budget_egg_bean_hash", name: "Smoky bean & egg hash", slot: "Dinner", minutes: 22,
+    items: [
+      { foodId: "potatoes", qty: 300 }, { foodId: "kidney_beans", qty: 240 }, { foodId: "eggs", qty: 2 },
+      { foodId: "onion", qty: 60 }, { foodId: "peppers", qty: 80 }, { foodId: "garlic", qty: 8 },
+      { foodId: "spice_mix", qty: 6 }, { foodId: "olive_oil", qty: 12 },
+    ],
+    steps: [
+      "Potatoes diced 1.5cm and parboiled 6 minutes — this is what stops a hash being raw in the middle and burnt outside.",
+      "Drained and fried hard in the oil with the onion and peppers until the edges catch. Do not stir often.",
+      "Garlic, paprika and the drained beans in, tossed through.",
+      "Two wells made in the pan, an egg cracked into each, lid on for 4 minutes until the whites set.",
+    ],
+    tip: "Everything but the eggs and potatoes comes out of a tin or the spice shelf. Under a pound a portion.",
+    method: "Parboil then hard-fry diced potatoes with onion and peppers, add garlic, paprika and beans, then poach eggs in wells under a lid.",
+  },
+  {
+    id: "budget_banana_pb_shake", name: "Banana peanut butter shake", slot: "Snack", minutes: 3,
+    items: [
+      { foodId: "milk", qty: 350 }, { foodId: "whey_protein", qty: 25 }, { foodId: "banana", qty: 1 },
+      { foodId: "peanut_butter", qty: 15 }, { foodId: "oats", qty: 20 },
+    ],
+    steps: [
+      "Everything in a blender for 30 seconds.",
+      "No blender: mash the banana to a paste first, then shake the rest in a bottle. The oats will settle — drink it fast.",
+    ],
+    tip: "The oats are what turn a shake into something that holds you until dinner.",
+    method: "Blend milk, protein, banana, peanut butter and oats until smooth.",
+  },
+  {
+    id: "budget_cottage_cheese_oatcakes", name: "Cottage cheese & chilli oatcakes", slot: "Snack", minutes: 3,
+    items: [
+      { foodId: "cottage_cheese", qty: 200 }, { foodId: "oatcakes", qty: 40 },
+      { foodId: "chilli_fresh", qty: 4 }, { foodId: "tomatoes_fresh", qty: 80 }, { foodId: "lemon", qty: 0.5 },
+    ],
+    steps: [
+      "Cottage cheese spooned onto the oatcakes.",
+      "Tomatoes and chilli chopped fine, scattered over with a squeeze of lemon and plenty of black pepper.",
+    ],
+    tip: "22g of protein in three minutes, and the chilli and lemon are what stop cottage cheese tasting of nothing.",
+    method: "Top oatcakes with cottage cheese, chopped tomato, chilli, lemon and pepper.",
+  },
+  // --- CHEAP *PER CALORIE*, not just per pound. -----------------------------
+  //
+  // The shelf above fixed the wrong half of the problem for an athlete cutting.
+  // Lentils, oats and potatoes are the cheapest protein in the shop per pound
+  // and among the worst per calorie — a 58kg athlete on 128g of protein and
+  // 1,600 kcal cannot get there on dhal, because the planner scales the portion
+  // down to fit her day and the protein goes down with it. Her week stayed at
+  // £56 while a 78kg athlete's fell £4.
+  //
+  // These are the other axis: tuna, greek yoghurt, whey, chicken breast and cod
+  // are all above 0.17g of protein per calorie AND under £3.60 per 100g of it.
+  // Starch is a garnish here rather than the base, which is what makes them
+  // work in a deficit.
+  {
+    id: "budget_tuna_bean_salad", name: "Tuna, bean & chilli salad", slot: "Lunch", minutes: 8,
+    items: [
+      { foodId: "tuna_tin", qty: 145 }, { foodId: "kidney_beans", qty: 150 },
+      { foodId: "tomatoes_fresh", qty: 120 }, { foodId: "onion", qty: 40 },
+      { foodId: "lemon", qty: 0.5 }, { foodId: "chilli_fresh", qty: 5 }, { foodId: "olive_oil", qty: 6 },
+    ],
+    steps: [
+      "Red onion sliced as thin as you can and left in the lemon juice for 5 minutes. It goes pink and loses the raw bite — this is the step that makes it taste made rather than assembled.",
+      "Everything else in on top, tuna flaked in last so it stays in chunks.",
+      "Oil, plenty of black pepper, tossed once.",
+    ],
+    tip: "47g of protein for about 400 calories. Nothing here needs a hob, and only the tomatoes are perishable.",
+    method: "Quick-pickle sliced onion in lemon juice, then fold through tuna, beans, tomatoes and chilli with oil and pepper.",
+  },
+  {
+    id: "budget_yoghurt_whey_pot", name: "Berry protein yoghurt", slot: "Breakfast", minutes: 3,
+    items: [
+      { foodId: "greek_yoghurt", qty: 300 }, { foodId: "whey_protein", qty: 20 },
+      { foodId: "berries_frozen", qty: 100 }, { foodId: "seeds_mixed", qty: 10 },
+    ],
+    steps: [
+      "Protein whisked into a couple of spoons of the yoghurt first, to a smooth paste, before the rest goes in. Straight into the tub and it stays lumpy.",
+      "Berries in from frozen and left two minutes — they bleed into the yoghurt and chill it at the same time.",
+      "Seeds over.",
+    ],
+    tip: "45g of protein under 350 calories. The one breakfast that works on a hard cut.",
+    method: "Whisk protein into a little yoghurt to a paste, fold through the rest with frozen berries, and top with seeds.",
+  },
+  {
+    id: "budget_cottage_cheese_bowl", name: "Cottage cheese with tomato & chilli", slot: "Snack", minutes: 4,
+    items: [
+      { foodId: "cottage_cheese", qty: 250 }, { foodId: "tomatoes_fresh", qty: 120 },
+      { foodId: "chilli_fresh", qty: 5 }, { foodId: "lemon", qty: 0.5 }, { foodId: "oatcakes", qty: 30 },
+    ],
+    steps: [
+      "Tomatoes and chilli chopped small and salted for a minute so they release some juice.",
+      "Spooned over the cottage cheese with the juice, lemon and a lot of black pepper.",
+      "Oatcakes to scoop.",
+    ],
+    tip: "Salting the tomatoes first is the whole recipe. Without it this is cottage cheese with things on it.",
+    method: "Salt chopped tomato and chilli briefly, spoon over cottage cheese with lemon and pepper, and scoop with oatcakes.",
+  },
+  {
+    id: "budget_lemon_chicken_chickpea", name: "Lemon chicken & chickpea salad", slot: "Lunch", minutes: 16,
+    items: [
+      { foodId: "chicken_breast", qty: 150 }, { foodId: "chickpeas", qty: 140 },
+      { foodId: "cucumber", qty: 80 }, { foodId: "tomatoes_fresh", qty: 100 },
+      { foodId: "lemon", qty: 0.5 }, { foodId: "garlic", qty: 6 }, { foodId: "olive_oil", qty: 8 },
+      { foodId: "spice_mix", qty: 4 },
+    ],
+    steps: [
+      "Chicken flattened to an even thickness with the heel of your hand — thin end and thick end cook at different speeds and that is why chicken goes dry.",
+      "Rubbed with the spices and half the oil, then 4 minutes a side in a hot pan. Rested 3 minutes before slicing.",
+      "Chickpeas, cucumber and tomato tossed with the rest of the oil, lemon and crushed garlic.",
+      "Chicken sliced across the grain over the top, resting juices poured over.",
+    ],
+    tip: "Resting it is free and it is the difference between juicy and sawdust.",
+    method: "Flatten, spice and pan-fry chicken, rest it, and serve sliced over lemon-dressed chickpeas, cucumber and tomato.",
+  },
+  {
+    id: "budget_cod_garlic_greens", name: "Garlic cod with potatoes & greens", slot: "Dinner", minutes: 25,
+    items: [
+      { foodId: "white_fish", qty: 220 }, { foodId: "potatoes", qty: 220 }, { foodId: "broccoli", qty: 150 },
+      { foodId: "garlic", qty: 10 }, { foodId: "lemon", qty: 0.5 }, { foodId: "olive_oil", qty: 10 },
+      { foodId: "chilli_fresh", qty: 4 },
+    ],
+    steps: [
+      "Potatoes halved and boiled 15 minutes; broccoli in for the last 4.",
+      "Cod patted properly dry — wet fish steams and falls apart — then into a hot pan with half the oil, 3-4 minutes without touching it, then 2 on the other side.",
+      "Fish out. Garlic and chilli into the same pan off the heat with the rest of the oil and the lemon, swirled into a rough dressing.",
+      "Poured over the fish and the drained veg while everything is hot.",
+    ],
+    tip: "Frozen cod is the cheapest way to buy a dense, lean protein, and it goes straight from freezer to pan.",
+    method: "Boil potatoes with broccoli, pan-fry dried cod hard on both sides, and dress everything with a warm garlic, chilli and lemon oil.",
+  },
+  {
+    id: "budget_turkey_lettuce_bowl", name: "Chilli turkey rice bowl", slot: "Dinner", minutes: 20,
+    items: [
+      { foodId: "turkey_mince", qty: 170 }, { foodId: "rice", qty: 50 }, { foodId: "peppers", qty: 100 },
+      { foodId: "onion", qty: 60 }, { foodId: "garlic", qty: 8 }, { foodId: "ginger", qty: 6 },
+      { foodId: "soy_sauce", qty: 15 }, { foodId: "gochujang", qty: 15 }, { foodId: "olive_oil", qty: 8 },
+    ],
+    steps: [
+      "Rice on first — a small portion on purpose, this is a bowl of turkey with rice in it.",
+      "Turkey into a very hot pan with the oil and left to catch before breaking up. Turkey breast has no fat to save it, so colour is where the flavour has to come from.",
+      "Onion and peppers in, then garlic and ginger for a minute.",
+      "Soy and gochujang with a splash of water, tossed until everything is glossy.",
+    ],
+    tip: "Turkey breast mince is 0.23g of protein per calorie — the leanest thing in the shop that is not a powder.",
+    method: "Brown turkey mince hard, add peppers, onion, garlic and ginger, glaze with soy and gochujang, and serve over a small portion of rice.",
+  },
+  // --- CHEAP *PER CALORIE*, for the other end. --------------------------------
+  //
+  // A 95kg athlete building eats 4,270 kcal a day — close to 30,000 a week — and
+  // his bill barely moved when the shelf above arrived, because his problem is
+  // not protein per pound, it is sheer volume. Oats are 2,370 kcal per £1, pasta
+  // and rice about 1,580, and nothing else in the shop is close. These are big
+  // on purpose.
+  {
+    id: "budget_bulk_oats", name: "Big overnight oats with peanut butter", slot: "Breakfast", minutes: 5,
+    items: [
+      { foodId: "oats", qty: 120 }, { foodId: "milk", qty: 400 }, { foodId: "whey_protein", qty: 25 },
+      { foodId: "peanut_butter", qty: 30 }, { foodId: "banana", qty: 1 }, { foodId: "honey", qty: 12 },
+    ],
+    steps: [
+      "Oats and milk in the biggest jar you own — this looks like too much until it swells overnight.",
+      "Protein whisked into the milk BEFORE the oats go in, or it clumps against them.",
+      "Peanut butter and honey rippled through rather than mixed.",
+      "Banana sliced on in the morning.",
+    ],
+    tip: "A thousand calories and 55g of protein for well under a pound. If you are struggling to eat enough, this is the meal that fixes it.",
+    method: "Whisk protein into milk, stir in oats, ripple through peanut butter and honey, chill overnight and top with banana.",
+  },
+  {
+    id: "budget_bulk_pasta_bake", name: "Mince & tomato pasta bake", slot: "Dinner", minutes: 40,
+    items: [
+      { foodId: "pasta", qty: 150 }, { foodId: "beef_mince_5", qty: 130 }, { foodId: "passata", qty: 300 },
+      { foodId: "cheddar", qty: 30 }, { foodId: "onion", qty: 70 }, { foodId: "garlic", qty: 8 },
+      { foodId: "spice_mix", qty: 5 }, { foodId: "stock_cubes", qty: 4 },
+    ],
+    steps: [
+      "Mince browned hard in a dry pan, left alone until one side has colour.",
+      "Onion and garlic in after, then passata, stock and paprika. Simmer 15 minutes.",
+      "Pasta boiled two minutes SHORT of the packet time — it finishes in the oven and nobody wants it mushy.",
+      "Mixed together, cheese over, 15 minutes in a hot oven until the top is blistered.",
+    ],
+    tip: "Makes two portions easily. The second one reheats better than the first ate.",
+    method: "Brown mince, simmer with onion, garlic and passata, fold through undercooked pasta, top with cheese and bake.",
+  },
+  {
+    id: "budget_bulk_thigh_curry", name: "Chicken thigh & chickpea curry", slot: "Dinner", minutes: 35,
+    items: [
+      { foodId: "chicken_thigh", qty: 200 }, { foodId: "rice", qty: 120 }, { foodId: "chickpeas", qty: 200 },
+      { foodId: "curry_paste", qty: 30 }, { foodId: "tomatoes_tin", qty: 200 }, { foodId: "onion", qty: 80 },
+      { foodId: "garlic", qty: 8 }, { foodId: "ginger", qty: 8 }, { foodId: "olive_oil", qty: 10 },
+    ],
+    steps: [
+      "Thighs browned in the oil in a hot pan and set aside. They do not need to be cooked through — they go back in.",
+      "Onion in the same pan until soft, then garlic, ginger and the curry paste for a minute until it darkens.",
+      "Tomatoes, chickpeas, the chicken back in and 150ml water. Simmer 20 minutes with the lid off.",
+      "Rice on when the chicken goes back in.",
+    ],
+    tip: "Thighs cost a third less than breast, carry the sauce better and cannot dry out. Use them.",
+    method: "Brown thighs, soften onion, fry off curry paste with garlic and ginger, then simmer with tomatoes and chickpeas and serve with rice.",
+  },
 ];

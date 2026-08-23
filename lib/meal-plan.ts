@@ -1401,6 +1401,29 @@ export function buildWeek(
    */
   const SERVING_COST_WEIGHT = 4.5;
   const servingCostWeight = (thrifty ? SERVING_COST_WEIGHT : 0) * costPressure;
+
+  /**
+   * PRESSURE MUST NOT BE SPENDABLE ON PROTEIN.
+   *
+   * Both money terms above scale with `costPressure` and PROTEIN_WEIGHT did
+   * not, so every step up the budget ladder made food nine, then twenty-seven
+   * times louder than nutrition. The search duly found cheaper weeks by buying
+   * less protein: a 58kg athlete on a 128g target was offered a £32 week whose
+   * worst day carried 76g, and `feedsThem` threw every one of them out. The
+   * ladder looked like it was failing to find savings. It was finding nothing
+   * BUT savings, in the one currency it was not allowed to spend.
+   *
+   * This is the same failure the `fit` split above was written for, one level
+   * up: when two things live in one number, the cheaper one always pays.
+   * Raising the protein term in step means pressure now has to find cheap
+   * PROTEIN — lentils, eggs, tinned fish, beans — instead of cheap calories,
+   * which is what a budget plan is supposed to mean.
+   *
+   * Scaled by the square root rather than linearly: matching pressure exactly
+   * would freeze the trade-off and the ladder would return the same week at
+   * every rung, which is just a slower way of not searching.
+   */
+  const proteinWeight = PROTEIN_WEIGHT * (thrifty ? Math.sqrt(costPressure) : 1);
   /**
    * Budget mode does not pay for variety.
    *
@@ -1626,7 +1649,7 @@ export function buildWeek(
          * Keeping them in one number meant variety could only be bought by
          * spending whichever was cheapest, which was always the nutrition.
          */
-        const fit = proteinShortfall(meal, proteinPerKcalOn(dayIndex)) * PROTEIN_WEIGHT
+        const fit = proteinShortfall(meal, proteinPerKcalOn(dayIndex)) * proteinWeight
           // How far this meal's own calories sit from what this slot should
           // carry, so a big athlete is offered big meals rather than a small
           // one scaled past the point of sense.
@@ -1977,7 +2000,75 @@ export function buildWeek(
     };
   };
 
-  return DAYS.map(buildDay);
+  return DAYS.map(buildDay).map((day) => topUpProtein(day, targets, thrifty));
+}
+
+/**
+ * Trade a day's carbs for its protein when the day lands just short.
+ *
+ * WHY THIS EXISTS. A 58kg athlete cutting was handed a £55.73 week when a
+ * £50.33 one was sitting right there, and the only thing wrong with the cheaper
+ * week was ONE day, short of its protein floor BY 0.2 GRAMS. `feedsThem` threw
+ * the whole week away — correctly, on its own terms — and the search reported
+ * that £50 could not be done. Five pounds a week, lost to two tenths of a gram
+ * on a Thursday.
+ *
+ * Rejecting a week for one bad day is the wrong move when the day is fixable,
+ * and it is fixable: every day here has a protein-dense meal and a starchy one,
+ * and the portions are already scaled. So the dense meal goes up and the least
+ * dense comes down by the calories it gained. The day's energy is unchanged,
+ * which is what a cutting athlete actually cares about, and the trolley barely
+ * moves because these are portions of food already on the list rather than new
+ * food.
+ *
+ * DELIBERATELY SMALL AND ONLY WHEN ASKED. It runs on budget plans only, and
+ * only on a day already under the floor — this is a repair, not a lever, and it
+ * must never quietly re-portion a plan nobody complained about. It works within
+ * the same 0.55-1.6 clamp as everything else, so it cannot invent a portion
+ * nobody would plate, and if one pass is not enough the day stays short and
+ * `feedsThem` still refuses it.
+ */
+function topUpProtein(day: PlannedDay, targets: PlanTargets, thrifty: boolean): PlannedDay {
+  if (!thrifty || day.meals.length < 2) return day;
+  const floor = targets.protein * BUDGET_PROTEIN_FLOOR;
+  if (day.macros.protein >= floor) return day;
+
+  const byDensity = [...day.meals].sort((a, b) => proteinDensity(b.meal) - proteinDensity(a.meal));
+  const up = byDensity[0];
+  const down = byDensity[byDensity.length - 1];
+  // Raising and lowering the same dish is not a trade, it is a rounding error.
+  if (up === down || proteinDensity(up.meal) <= proteinDensity(down.meal)) return day;
+
+  const step = 0.05;
+  let best = day;
+  let upScale = up.scale;
+  let downScale = down.scale;
+  for (let i = 0; i < 12; i++) {
+    const nextUp = Math.round((upScale + step) * 20) / 20;
+    if (nextUp > 1.6) break;
+    // Come down by the calories that went up, so the day's energy holds.
+    const gained = mealMacros(up.meal, nextUp).kcal - mealMacros(up.meal, up.scale).kcal;
+    const perStep = mealMacros(down.meal, step).kcal;
+    const nextDown = Math.round((downScale - (perStep > 0 ? gained / (perStep / step) : 0)) * 20) / 20;
+    if (nextDown < 0.55) break;
+    upScale = nextUp;
+    downScale = nextDown;
+
+    const meals = day.meals.map((m) => {
+      const scale = m === up ? upScale : m === down ? downScale : m.scale;
+      return scale === m.scale ? m : { ...m, scale, macros: mealMacros(m.meal, scale) };
+    });
+    const macros = meals.reduce(
+      (t, m) => ({
+        kcal: t.kcal + m.macros.kcal, protein: t.protein + m.macros.protein,
+        carbs: t.carbs + m.macros.carbs, fats: t.fats + m.macros.fats,
+      }),
+      { kcal: 0, protein: 0, carbs: 0, fats: 0 }
+    );
+    best = { ...day, meals, macros };
+    if (macros.protein >= floor) break;
+  }
+  return best;
 }
 
 // --- shopping list -----------------------------------------------------------
@@ -2149,7 +2240,20 @@ export interface BudgetedWeek {
  * week collapses onto the same four cheap dinners and the protein floor starts
  * rejecting the results anyway.
  */
-const BUDGET_PRESSURE = [1, 2, 3.5, 6];
+/**
+ * The rungs the budget search tries, in order.
+ *
+ * FINER AT THE BOTTOM, because that is where the answer is. With [1, 2, 3.5, 6]
+ * a 58kg athlete cutting got £55.86 at rung one and £50.33 at rung two, and the
+ * £50.33 week missed her protein floor on a single day BY 0.2 GRAMS. There was
+ * a perfectly good week between those two rungs and the ladder stepped straight
+ * over it.
+ *
+ * The steps above 3.5 stay coarse on purpose: by then the planner is already
+ * choosing the cheapest thing that clears the floor, and the extra rungs buy
+ * pennies while costing a full week's build each.
+ */
+const BUDGET_PRESSURE = [1, 1.35, 1.7, 2, 2.4, 3, 3.5, 4.5, 6, 8, 12];
 
 /** No day may fall below this share of its protein target, however cheap it is. */
 const BUDGET_PROTEIN_FLOOR = 0.9;

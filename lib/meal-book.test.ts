@@ -185,3 +185,37 @@ test("a snack is a snack, not a batch", () => {
     assert.ok(kcal <= 600, `${meal.name} is ${Math.round(kcal)} kcal for one snack`);
   }
 });
+
+test("a counted ingredient is counted, not weighed", () => {
+  /**
+   * THE BUG THIS EXISTS FOR. Most of the food table is per 100g, and seven
+   * entries — eggs, bananas, lemons, apples, avocados, wraps, tortillas — are
+   * priced and measured PER ITEM. Writing `{ foodId: "banana", qty: 100 }` in a
+   * new recipe reads exactly like the 100g of oats above it and means a hundred
+   * bananas. Three recipes went in that way: one breakfast came to 10,166 kcal,
+   * and nothing complained, because every individual number in the file looked
+   * completely ordinary.
+   *
+   * A calorie ceiling catches it where a units check cannot. There is no way to
+   * tell a legitimate `qty: 3` (three eggs) from a mistaken one by inspection —
+   * but no real serving of anything is four thousand calories, and every one of
+   * these mistakes lands orders of magnitude past that.
+   */
+  for (const meal of MEALS) {
+    const macros = mealMacros(meal);
+    assert.ok(macros.kcal < 2000,
+      `${meal.id} is ${macros.kcal.toFixed(0)} kcal for one serving — a counted ingredient measured in grams?`);
+    // The other direction: a real meal is not 40 kcal.
+    assert.ok(macros.kcal > 80, `${meal.id} is only ${macros.kcal.toFixed(0)} kcal`);
+  }
+
+  // And the counted ones specifically: nobody eats twelve of anything here.
+  const counted = new Set(FOODS.filter((f) => f.unit === "each").map((f) => f.id));
+  for (const meal of MEALS) {
+    for (const item of meal.items) {
+      if (!counted.has(item.foodId)) continue;
+      assert.ok(item.qty <= 8,
+        `${meal.id} uses ${item.qty} × ${item.foodId} — that food is counted per item, not per gram`);
+    }
+  }
+});
