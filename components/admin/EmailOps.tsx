@@ -50,6 +50,22 @@ interface Status {
   blankVars?: string[];
 }
 
+/** The exact names the Worker reads. Anything else is not an email provider. */
+const EMAIL_VARS = ["RESEND_API_KEY", "GAS_EMAIL_URL", "GAS_EMAIL_SECRET"];
+
+/**
+ * Variables that look like they were MEANT to be one of those.
+ *
+ * "I set the Resend key" and "the Worker has no Resend key" are both true when
+ * the name is RESEND_KEY, and the athlete of this story is the founder at
+ * midnight reading a list of fifteen names that all look plausible. Matching on
+ * the distinctive word rather than on edit distance: RESEND_KEY, RESEND_APIKEY
+ * and RESEND_API all share the part somebody typed on purpose.
+ */
+function nearMisses(names: string[] = []): string[] {
+  return names.filter((n) => !EMAIL_VARS.includes(n) && /resend|^gas_|_gas_/i.test(n));
+}
+
 const STATUS_TONE: Record<string, string> = {
   sent: "text-readiness-green", delivered: "text-readiness-green",
   failed: "text-readiness-red", bounced: "text-readiness-red", complained: "text-readiness-red",
@@ -178,6 +194,21 @@ export function EmailOps() {
                 Shown only when something is wrong, because on a working setup
                 it is a wall of text nobody needs. Names only — a name cannot
                 leak a key, and every one of these is in the repo already. */}
+            {/* A NEAR MISS IS THE COMMONEST CAUSE AND THE HARDEST TO SEE.
+                The name is right there in the dashboard, it reads correctly,
+                and RESEND_KEY is not RESEND_API_KEY. Nobody spots that by
+                staring at a list of fifteen names — but a machine comparing
+                them takes no time at all, so it should be the one to look. */}
+            {!status.configured && nearMisses(status.configuredVars).length > 0 && (
+              <p className="rounded-xl border border-readiness-yellow/30 bg-readiness-yellow/[0.06] p-3 text-xs leading-relaxed text-readiness-yellow">
+                This Worker has {nearMisses(status.configuredVars).map((n) => <code key={n} className="font-mono">{n}</code>).reduce((all, el, i) => i ? [...all, ", ", el] : [el], [] as React.ReactNode[])}
+                {" "}— close, but not a name the Worker looks for. It wants exactly{" "}
+                <code className="font-mono">RESEND_API_KEY</code>, or{" "}
+                <code className="font-mono">GAS_EMAIL_URL</code> +{" "}
+                <code className="font-mono">GAS_EMAIL_SECRET</code>. Rename it and deploy.
+              </p>
+            )}
+
             {(!status.configured || (status.blankVars ?? []).length > 0) && status.configuredVars && (
               <details className="rounded-xl border border-white/10 bg-white/[0.02] p-3 text-xs">
                 <summary className="tap-target flex cursor-pointer items-center font-semibold text-slate-300">

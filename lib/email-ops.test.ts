@@ -220,3 +220,17 @@ test("the status says where a reply would land", () => {
   assert.match(ui, /label="Replies go to"/);
 });
 
+test("a name that nearly matches is called out, not left in the list", () => {
+  // The commonest cause and the hardest to see. RESEND_KEY is not
+  // RESEND_API_KEY, it reads correctly in the dashboard, and nobody spots it by
+  // scanning fifteen plausible names at midnight. A machine comparing them
+  // takes no time, so the machine should be the one to look.
+  const ui = readFileSync(new URL("../components/admin/EmailOps.tsx", import.meta.url), "utf8");
+  assert.match(ui, /const EMAIL_VARS = \["RESEND_API_KEY", "GAS_EMAIL_URL", "GAS_EMAIL_SECRET"\]/);
+  assert.match(ui, /function nearMisses\(names: string\[\] = \[\]\): string\[\]/);
+  assert.match(ui, /nearMisses\(status\.configuredVars\)\.length > 0/);
+  // Only when nothing is configured — a working setup with a stray RESEND_FOO
+  // variable does not need telling off.
+  assert.match(ui, /!status\.configured && nearMisses/);
+});
+
