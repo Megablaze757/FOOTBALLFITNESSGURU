@@ -482,13 +482,80 @@ export interface PlannedDay {
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
 const cheapest = (a: Meal, b: Meal) => mealCost(a) - mealCost(b);
-function mealCost(meal: Meal): number {
+
+/**
+ * What a serving of this meal costs the WEEK.
+ *
+ * THIS WAS PRO-RATA AND THAT IS WHY A CHEAP WEEK WAS NOT CHEAP. Charging every
+ * ingredient at qty/packSize prices a splash of coconut milk at 17p — and then
+ * the shopping list buys the whole £1.20 carton, because you cannot buy 57ml of
+ * coconut milk and the rest of it goes off. Measured on a "keep it cheap" week
+ * for a 78kg athlete, the pro-rata view understated the milk line by 16x, the
+ * coconut milk by 7x and the avocado by 2x. Those three lines and the ones like
+ * them are most of what makes a budget week expensive, and the planner could
+ * not see any of them.
+ *
+ * So a serving is priced the way `shoppingList` will charge it:
+ *
+ *   - anything that KEEPS is pro-rata, because the rest of the bag is still in
+ *     the cupboard on Monday and next week's plan will use it;
+ *   - anything perishable costs the whole packs it forces, because the leftover
+ *     is not next week's, it is the bin.
+ *
+ * The same rule as `ongoingCost`, which is the number the athlete is judged
+ * against — and a planner optimising a different cost from the one it is
+ * marked on is a planner that cannot be told it is wrong. Shared by
+ * `ongoingPackCost` so the two definitions cannot drift.
+ *
+ * DELIBERATELY NOT BASKET-AWARE, and deliberately over-charging a perishable
+ * used by six meals. This term answers "is this dish dear" — see
+ * SERVING_COST_WEIGHT, where the reasoning is set out — and `marginalCost` is
+ * the term that knows what is already in the trolley. Making both basket-aware
+ * is the lock-in this file has had to fix twice.
+ */
+function mealCost(meal: Meal, scale = 1): number {
   let c = 0;
   for (const it of meal.items) {
     const f = FOOD_BY_ID[it.foodId];
-    if (f) c += (it.qty / f.packSize) * f.packPrice;
+    if (f) c += ongoingPackCost(f, it.qty * scale);
   }
   return c;
+}
+
+/**
+ * The portion this meal would actually be served in this slot.
+ *
+ * WHY THE COST TERMS HAVE TO KNOW. Meals are scored as written and then scaled
+ * to land the day on its calorie target, so a 400 kcal bowl in a 700 kcal slot
+ * is bought at 1.6 servings and costs 1.6 servings. Scored at 1.0 it looked
+ * like the cheapest thing on the list.
+ *
+ * That is why leaning harder on price used to make the shop DEARER: cost
+ * outbids `sizeMismatch` first, so pressure picked small cheap meals, and the
+ * scaling step then bought half as much again of each of them. Every step of
+ * the ladder spent more money looking for a saving.
+ *
+ * Same clamp as the scaling step itself — see the note on `scale` there — so
+ * the price quoted here is the price that gets paid.
+ */
+function servedScale(meal: Meal, slotKcal: number): number {
+  const kcal = mealMacros(meal).kcal;
+  if (slotKcal <= 0 || kcal <= 0) return 1;
+  return Math.round(Math.min(1.6, Math.max(0.55, slotKcal / kcal)) * 20) / 20;
+}
+
+/**
+ * What `qty` of a food costs in an ordinary week.
+ *
+ * The one definition of "what this actually costs", used by the planner when it
+ * scores a meal and by the shopping list when it prices the week. They were two
+ * expressions of the same idea and they disagreed, which is the whole bug.
+ */
+function ongoingPackCost(food: Food, qty: number, unitPrice = food.packPrice): number {
+  if (qty <= 0) return 0;
+  return food.keeps
+    ? (qty / food.packSize) * unitPrice
+    : Math.ceil(qty / food.packSize) * unitPrice;
 }
 
 function bySlot(slot: Slot, prefs: MealPrefs): Meal[] {
@@ -1220,7 +1287,28 @@ export function buildWeek(
    * file has refused four times now. 1.5/6 saves the most and takes the worst
    * budget day down to 71% of target; nobody ticked a box asking for that.
    */
-  const costWeight = (thrifty ? 2 : 1) * costPressure;
+  /**
+   * RE-SWEPT AT 1.5 once a serving was priced the way the week is charged.
+   *
+   * The pairing below was chosen against a pro-rata serving cost, and that cost
+   * was wrong — see `mealCost`. Re-running the same 48-combination sweep with
+   * the corrected definition, and scoring it on `ongoingTotal` (what the
+   * athlete is judged against) rather than the till total:
+   *
+   *      pair    dearer   avg weekly saving   budget days under 90% protein
+   *    1.5/2.5     0/48              £16.61                            0%
+   *    1.5/3.5     0/48              £17.99                            0%
+   *    1.5/4.5     0/48              £20.60                            0%
+   *      2/3.5     0/48              £18.10                          0.9%
+   *      2/4.5     0/48              £18.48                            0%
+   *      3/4.5     0/48              £19.00                          4.5%
+   *
+   * 1.5/4.5 — clean on both constraints and £2.12 a week better than the pair
+   * it replaces. Going the other way on this weight (3) buys its last pound out
+   * of the protein target, which is the trade this file has now refused five
+   * times.
+   */
+  const costWeight = (thrifty ? 1.5 : 1) * costPressure;
   /**
    * AND IT HAS TO WEIGHT WHAT A DISH COSTS, not only what it adds today.
    *
@@ -1516,8 +1604,8 @@ export function buildWeek(
           // it wins ties and near-ties. Deliberately a nudge and not an
           // override: "I like eggs" should mean eggs turn up regularly, not
           // eggs at every meal, and the repeat penalty still applies on top.
-          score: marginalCost(meal, basket) * costWeight
-            + mealCost(meal) * servingCostWeight
+          score: marginalCost(meal, basket, servedScale(meal, slotKcal(slot, dayIndex))) * costWeight
+            + mealCost(meal, servedScale(meal, slotKcal(slot, dayIndex))) * servingCostWeight
             - (isFavourite(meal, favourites) ? FAVOURITE_BONUS : 0)
             - (starred.has(meal.id) ? STARRED_BONUS : 0)
             // What the faff is worth to somebody who said "keep it simple".
@@ -1942,7 +2030,8 @@ export function shoppingList(week: PlannedDay[], pricing: PricingOptions = {}): 
       used: Math.min(1, qty / (packs * food.packSize)),
       // Perishables cost what they cost. Anything that keeps is charged for
       // what the week eats, because the rest is still in the cupboard on Monday.
-      ongoingCost: Math.round((food.keeps ? (qty / food.packSize) * unitPrice : packs * unitPrice) * 100) / 100,
+      // Same function the planner scores with — see `ongoingPackCost`.
+      ongoingCost: Math.round(ongoingPackCost(food, qty, unitPrice) * 100) / 100,
     });
   }
   lines.sort((a, b) => a.food.name.localeCompare(b.food.name));
@@ -2049,7 +2138,14 @@ export function planWithinBudget(
     : null;
 
   const baseline = build(1);
-  if (budget == null) {
+
+  /**
+   * NOTHING ASKED FOR — the ordinary plan, untouched.
+   *
+   * Somebody who never mentions money must get the same week they would have
+   * got before this function existed.
+   */
+  if (budget == null && !prefs.budget) {
     return {
       ...baseline, budget: null, met: true, note: null,
       weeklyCost: baseline.list.ongoingTotal,
@@ -2080,9 +2176,40 @@ export function planWithinBudget(
     // not the cheapest thing the search happened to start from.
     if (!feedsThem(attempt.days, reference, targets)) continue;
     if (!best || attempt.list.ongoingTotal < best.list.ongoingTotal) best = attempt;
-    if (attempt.list.ongoingTotal <= budget) {
+    // With a ceiling, stop at the first week under it — pressure is spent in
+    // variety and slot fit, and there is no reason to spend more of either than
+    // the number actually requires. With only the tick there is no line to
+    // stop at, so the loop runs on and `best` keeps the cheapest.
+    if (budget != null && attempt.list.ongoingTotal <= budget) {
       return { ...attempt, budget, met: true, ...costs(attempt.list), note: metNote(attempt.list, budget) };
     }
+  }
+
+  /**
+   * THE TICK ON ITS OWN IS A QUESTION TOO, and it used to be answered with a
+   * sort order.
+   *
+   * "Keep it cheap" set `thrifty`, which reorders the candidate list and
+   * doubles a weight — one pass, at pressure 1 — while the whole ladder that
+   * actually finds savings was reachable only by typing a number into a
+   * separate box. Most people tick the box and type nothing.
+   *
+   * So the tick searches the same ladder and keeps the cheapest week that still
+   * passes the protein floor. Measured across nine athlete/diet combinations
+   * that is £4 to £17 a week, and the floor is what stops it becoming £39 of
+   * pasta for a 58kg athlete on 64% of her protein — the search offers that
+   * week and `feedsThem` refuses it.
+   */
+  if (budget == null) {
+    const cheapest = best ?? baseline;
+    return {
+      ...cheapest, budget: null, met: true, ...costs(cheapest.list),
+      note: `An ordinary week comes to £${cheapest.list.ongoingTotal.toFixed(2)}`
+        + `, about £${cheapest.list.ongoingCostPerMeal.toFixed(2)} a meal.`
+        + (cheapest.list.total > cheapest.list.ongoingTotal
+          ? ` The first shop is £${cheapest.list.total.toFixed(2)} because it also stocks the cupboard.`
+          : ""),
+    };
   }
 
   const fallback = best ?? { days: reference, list: shoppingList(reference, pricing) };

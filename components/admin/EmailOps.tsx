@@ -40,6 +40,10 @@ interface Status {
   version?: string; provider: string | null; configured: boolean; from: string | null;
   gmailSecretSet?: boolean; resendFallback?: boolean; serviceRoleSet?: boolean;
   crons?: string[]; note?: string;
+  /** Names of the variables this Worker was actually handed. Never values. */
+  configuredVars?: string[];
+  /** Names that exist but are empty — the cause that looks like success. */
+  blankVars?: string[];
 }
 
 const STATUS_TONE: Record<string, string> = {
@@ -135,6 +139,37 @@ export function EmailOps() {
               <Fact label="Service role" value={status.serviceRoleSet ? "set" : "not set"} />
               <Fact label="Runs at" value={(status.crons ?? []).join(", ") || "—"} />
             </dl>
+
+            {/* WHAT THE WORKER WAS ACTUALLY HANDED.
+                "I set the key and it still says I haven't" is not one problem,
+                it is four — added but never deployed, added to a different
+                Worker or a preview environment, a typo in the NAME, or set to
+                an empty value. They are indistinguishable from a boolean, and
+                all four are obvious from the list of names.
+
+                Shown only when something is wrong, because on a working setup
+                it is a wall of text nobody needs. Names only — a name cannot
+                leak a key, and every one of these is in the repo already. */}
+            {(!status.configured || (status.blankVars ?? []).length > 0) && status.configuredVars && (
+              <details className="rounded-xl border border-white/10 bg-white/[0.02] p-3 text-xs">
+                <summary className="tap-target flex cursor-pointer items-center font-semibold text-slate-300">
+                  What this Worker can see ({status.configuredVars.length} variables)
+                </summary>
+                <p className="mt-2 text-slate-500">
+                  Read live from the running Worker, not from the repo. If the name you set is not
+                  in this list, it did not reach this Worker — check you pressed Deploy, and that
+                  you are looking at the same Worker the app calls.
+                </p>
+                <p className="mt-2 break-words font-mono text-[11px] text-slate-400">
+                  {status.configuredVars.join("  ")}
+                </p>
+                {(status.blankVars ?? []).length > 0 && (
+                  <p className="mt-2 break-words font-mono text-[11px] text-readiness-yellow">
+                    Set but empty: {status.blankVars!.join("  ")}
+                  </p>
+                )}
+              </details>
+            )}
           </div>
         ) : (
           <p className="text-sm text-slate-500">Checking…</p>

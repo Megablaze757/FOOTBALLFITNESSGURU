@@ -143,3 +143,42 @@ test("no migration is skipped between 0089 and this one", () => {
   }
   assert.match(ui, /Run migration 0095/, "the UI does not say what to do when the function is missing");
 });
+
+test("the status says which variables the Worker can actually see", () => {
+  // "I set RESEND_API_KEY and it still says I haven't" is four problems, not
+  // one: added but never deployed, added to a different Worker or a preview
+  // environment, a typo in the NAME, or present with an empty value. A boolean
+  // per secret cannot tell them apart, and the dashboard shows none of them —
+  // so the Worker lists the names it was handed. `env` is a plain object at
+  // runtime, which makes this the ground truth rather than a report of what
+  // wrangler.toml says.
+  const worker = readFileSync(new URL("../cloudflare/src/index.ts", import.meta.url), "utf8");
+  const body = worker.slice(worker.indexOf("async function emailStatus"), worker.indexOf("async function emailTest"));
+  assert.match(body, /const names = Object\.keys\(vars\)\.filter\(\(k\) => typeof vars\[k\] === "string"\)/);
+  assert.match(body, /configuredVars: names\.filter\(\(k\) => \(vars\[k\] as string\)\.trim\(\) !== ""\)/);
+  // Present-and-empty is the cause that looks like success from the dashboard,
+  // so it is listed separately rather than silently counted as absent.
+  assert.match(body, /blankVars: names\.filter\(\(k\) => \(vars\[k\] as string\)\.trim\(\) === ""\)/);
+});
+
+test("it reports names and never values", () => {
+  // The whole reason this is safe. A name cannot leak a key, and every one of
+  // these names is in the repo already; a value would put a live secret in an
+  // HTTP response and in the browser's network tab.
+  const worker = readFileSync(new URL("../cloudflare/src/index.ts", import.meta.url), "utf8");
+  const body = worker.slice(worker.indexOf("async function emailStatus"), worker.indexOf("async function emailTest"));
+  assert.ok(!/Object\.entries\(vars\)/.test(body), "emailStatus iterates values");
+  assert.ok(!/vars\[k\](?!\s+as string\)\.trim)/.test(body.replace(/typeof vars\[k\]/g, "")),
+    "a variable's value is read for something other than emptiness");
+});
+
+test("the admin screen shows the names when something is wrong", () => {
+  // On a working setup it is a wall of text nobody needs; on a broken one it is
+  // the answer. Shown when nothing is configured, or when a variable exists
+  // with an empty value.
+  const ui = readFileSync(new URL("../components/admin/EmailOps.tsx", import.meta.url), "utf8");
+  assert.match(ui, /!status\.configured \|\| \(status\.blankVars \?\? \[\]\)\.length > 0/);
+  assert.match(ui, /What this Worker can see/);
+  assert.match(ui, /Set but empty:/);
+});
+

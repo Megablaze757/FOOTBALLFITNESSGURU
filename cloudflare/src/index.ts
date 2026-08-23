@@ -462,7 +462,7 @@ function overBudget(state: BudgetState): Response {
 // nobody is watching a spinner and the budget can be what the work actually
 // needs. Callers pass their own client-side timeout to match.
 // Bump on every paste into the Cloudflare dashboard. GET /health reports it.
-const WORKER_VERSION = "2026-08-21.1";
+const WORKER_VERSION = "2026-08-23.1";
 
 const CHAIN_BUDGET_MS = 55_000;
 /**
@@ -3207,7 +3207,33 @@ async function emailStatus(req: Request, env: Env): Promise<Response> {
   if (!(await isAdmin(env, user.id))) return json({ error: "forbidden" }, 403);
 
   const provider = env.GAS_EMAIL_URL ? "gmail" : env.RESEND_API_KEY ? "resend" : null;
+
+  /**
+   * WHAT THIS WORKER WAS ACTUALLY HANDED, BY NAME.
+   *
+   * "I set RESEND_API_KEY and it says I haven't" has four causes, and the
+   * dashboard shows none of them:
+   *
+   *   1. the variable was added but the deploy was never pressed;
+   *   2. it went onto a different Worker, or a preview environment;
+   *   3. the NAME has a typo — RESEND_KEY, RESEND_APIKEY, a trailing space;
+   *   4. it exists with an EMPTY value, which is falsy and therefore reads
+   *      exactly like absent.
+   *
+   * All four are identical from inside the Worker and all four are obvious the
+   * moment it lists the names it was given. `env` is a plain object at runtime,
+   * so this is the ground truth — not what wrangler.toml says, not what the
+   * repo says, what is live.
+   *
+   * NAMES ONLY, NEVER VALUES, and the names are all in this file already. A
+   * name cannot leak a key. `blank` is listed separately because "present and
+   * empty" is the one cause that looks like success in the dashboard.
+   */
+  const vars = env as unknown as Record<string, unknown>;
+  const names = Object.keys(vars).filter((k) => typeof vars[k] === "string");
   return json({
+    configuredVars: names.filter((k) => (vars[k] as string).trim() !== "").sort(),
+    blankVars: names.filter((k) => (vars[k] as string).trim() === "").sort(),
     version: WORKER_VERSION,
     provider,
     configured: provider !== null,

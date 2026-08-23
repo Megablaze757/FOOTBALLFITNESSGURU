@@ -103,9 +103,27 @@ export function ShoppingList({ list, seed, store, onStore, onCorrectPrice }: {
                 : `${done} of ${total} in the basket · ~£${remainingCost.toFixed(2)} left to buy`}
             </p>
           </div>
-          <div className="flex shrink-0 flex-col items-end gap-1">
-            <span className="text-lg font-extrabold text-pitch-400">~£{list.total.toFixed(2)}</span>
-            <button onClick={copy} className="tap-target text-xs text-slate-400 hover:text-pitch-400">
+          {/* THE HEADLINE IS WHAT A WEEK COSTS, NOT WHAT THIS TRIP COSTS.
+              It was `list.total` — the till with a bare cupboard, which buys a
+              whole £3.50 bottle of oil to use 165ml of it, a £3 jar of spices
+              for four pinches and a bag of rice for two dinners. Repeated over
+              every keeps line that overstates the week by a third: a "keep it
+              cheap" plan that genuinely costs £48 a week was announcing itself
+              at £72, and £100 for the athletes with the biggest targets.
+
+              That is the number somebody reads to decide whether they can
+              afford to eat like this, and it was the wrong one — the right one
+              was already computed and printed in grey at the bottom of the
+              card. So they swap places. The till total is still here, because
+              it is the number at the checkout on Saturday, and it is still the
+              one the progress line counts down. */}
+          <div className="flex shrink-0 flex-col items-end">
+            <span className="text-lg font-extrabold text-pitch-400">~£{list.ongoingTotal.toFixed(2)}</span>
+            <span className="text-[11px] text-slate-500">a week</span>
+            {list.total > list.ongoingTotal + 1 && (
+              <span className="mt-1 text-[11px] text-slate-500">~£{list.total.toFixed(2)} this shop</span>
+            )}
+            <button onClick={copy} className="tap-target mt-1 text-xs text-slate-400 hover:text-pitch-400">
               {copied ? "Copied ✓" : "Copy"}
             </button>
           </div>
@@ -250,18 +268,17 @@ export function ShoppingList({ list, seed, store, onStore, onCorrectPrice }: {
         <p className="text-[11px] leading-relaxed text-slate-500">
           {list.ongoingTotal < list.total - 1 && (
             <>
-              {/* THE HONEST WEEKLY NUMBER. The total above is what the till
-                  charges with a bare cupboard — it buys a whole £3.50 bottle of
-                  oil to use 165ml. Repeated over the oil, spices, honey and
-                  peanut butter that overstated a week by around a quarter, and
-                  it is the figure someone deciding whether they can afford to
-                  eat like this was reading. */}
-              About <strong className="text-slate-300">£{list.ongoingTotal.toFixed(2)}</strong> of this
-              is food you&rsquo;ll actually eat this week — the rest is cupboard and freezer
-              stock that lasts, so a normal week runs nearer £{list.ongoingCostPerMeal.toFixed(2)} a meal.{" "}
+              {/* WHY THE TWO NUMBERS DIFFER, now that both are shown above.
+                  The gap is not a discount — it is the oil, the spices, the
+                  rice and the peanut butter, which this shop buys whole and
+                  the next three weeks eat for nothing. */}
+              The first shop is dearer because it stocks the cupboard: oil,
+              spices and dry goods that last for weeks. Once they&rsquo;re in,
+              a week runs about £{list.ongoingCostPerMeal.toFixed(2)} a meal
+              rather than £{list.costPerMeal.toFixed(2)}.{" "}
             </>
           )}
-          ~£{list.costPerMeal.toFixed(2)} a meal across {list.mealsPlanned} meals. Estimated {shop.name}
+          {list.mealsPlanned} meals. Estimated {shop.name}
           prices, reviewed {PRICES_REVIEWED} — not live, so your basket will differ. Tap
           &ldquo;fix price&rdquo; on anything that&rsquo;s wrong and we&rsquo;ll use your number from then on.
         </p>

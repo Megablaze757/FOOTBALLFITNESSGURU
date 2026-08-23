@@ -697,7 +697,7 @@ function overBudget(state) {
   return json({ error: `${reason} The on-device coach still works, and your allowance resets \u2014 upgrade for more.` }, 429);
 }
 __name(overBudget, "overBudget");
-var WORKER_VERSION = "2026-08-21.1";
+var WORKER_VERSION = "2026-08-23.1";
 var ATTEMPT_TIMEOUT_MS = {
   groq: 1e4,
   openrouter: 2e4,
@@ -2501,7 +2501,11 @@ async function emailStatus(req, env) {
   if (!await isAdmin(env, user.id))
     return json({ error: "forbidden" }, 403);
   const provider = env.GAS_EMAIL_URL ? "gmail" : env.RESEND_API_KEY ? "resend" : null;
+  const vars = env;
+  const names = Object.keys(vars).filter((k) => typeof vars[k] === "string");
   return json({
+    configuredVars: names.filter((k) => vars[k].trim() !== "").sort(),
+    blankVars: names.filter((k) => vars[k].trim() === "").sort(),
     version: WORKER_VERSION,
     provider,
     configured: provider !== null,
