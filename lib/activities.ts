@@ -42,6 +42,10 @@ export interface Activity {
  */
 export const ACTIVITIES: Activity[] = [
   { id: "cycling", label: "Cycling", emoji: "🚴", intensity: 6 },
+  // Separate from cycling on purpose: a studio class is a fixed 45 minutes at
+  // an effort somebody else chooses, and athletes log it by that name. It was
+  // being typed in by hand, which is the signal that a chip is missing.
+  { id: "spin", label: "Spin", emoji: "🚴‍♀️", intensity: 7 },
   { id: "swimming", label: "Swimming", emoji: "🏊", intensity: 6 },
   { id: "padel", label: "Padel", emoji: "🎾", intensity: 6 },
   { id: "tennis", label: "Tennis", emoji: "🎾", intensity: 6 },

@@ -15,6 +15,17 @@
 // =============================================================================
 
 export const IMPORTED_HOWTO: Record<string, string> = {
+  // --- the ones athletes typed in themselves ---------------------------------
+  // Off a report of custom log entries, which is the most honest gap list there
+  // is: somebody wanted the exercise, could not find it, and wrote it anyway.
+  // A row that opens onto "what it's for" instead of how to do it is worse than
+  // the search that failed to find it.
+  x_incline_bicep_curl: "Set a bench to about forty-five degrees, sit back into it and let the arms hang straight down behind the line of your body. That hanging start is the whole exercise — it holds the long head of the biceps at length, which a standing curl never does. Curl without letting the elbows travel forward, squeeze at the top, and lower all the way until the arm is straight again. It will feel much harder than a standing curl at the same weight; go lighter and do not cheat the bottom half.",
+  x_rear_delt_fly: "Hinge at the hips until your chest is close to facing the floor, with a soft knee and a flat back. Hold a light pair of dumbbells hanging under your shoulders, then sweep the arms apart in a wide arc, leading with the elbows rather than the hands. Stop when the arms are level with the shoulders — going higher hands the work to the traps. Lower under control. The weight that works here is far lighter than people expect, because the rear delt is small and every extra kilo recruits the back instead.",
+  x_cable_chest_fly: "Set the pulleys at shoulder height, take a handle in each hand and stand a stride in front of the stack so there is tension before you start. Keep a soft, fixed elbow throughout — the angle should not change — and bring the hands all the way together in front of the chest rather than just inward. Let the chest stretch as the arms open behind you. The cable is the point: at the top of a dumbbell fly the weight is almost resting against gravity, and here it never stops pulling.",
+  x_single_arm_tricep_extension: "Hold one dumbbell overhead with the upper arm vertical and beside your head. Lower the weight behind your head, not out to the side, keeping the upper arm still — only the elbow moves. Extend back to lockout without swinging or letting the shoulder drift forward. Working one arm at a time is deliberate: with two hands the stronger side quietly takes more of the load and you never find out, which is exactly how an imbalance survives months of training.",
+  x_skull_crushers: "Lie on a flat bench holding an EZ bar or dumbbells with the arms straight above the chest. Keep the elbows tucked in and pointing at the ceiling — they should not flare or drift back — and bend at the elbow to lower the weight to your forehead or just past it. Press back up, stopping just short of full lockout so the triceps stay loaded. Because the arms stay overhead the long head is worked at length, which a pushdown does not reach.",
+
   // --- Horizontal press ------------------------------------------------------
   // --- the lifts the programme is anchored on -------------------------------
   // Added with the staple lifts themselves. These are now the first movement of

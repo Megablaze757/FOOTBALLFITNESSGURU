@@ -332,3 +332,14 @@ test("two sessions in a day carry more load than either one alone", () => {
   const day = { drills: [], total_minutes: both.minutes, intensity: both.intensity };
   assert.ok(sessionLoad(day as never) > sessionLoad(morning as never), "the afternoon added nothing");
 });
+
+test("spin is its own chip, not a note under cycling", () => {
+  // Somebody logged "Spin" by hand, which is the signal that a chip is missing.
+  // It is separate from cycling on purpose: a studio class is a fixed
+  // three quarters of an hour at an effort somebody else picks.
+  const spin = matchActivity("Spin");
+  assert.equal(spin?.id, "spin");
+  assert.ok(spin!.intensity > (matchActivity("Cycling")?.intensity ?? 0),
+    "a spin class is not scored harder than a bike ride");
+});
+

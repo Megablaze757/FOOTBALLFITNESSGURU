@@ -222,7 +222,11 @@ export const REFUSED: { pattern: RegExp; why: string }[] = [
     why: "The pin height changes the lift completely, and nobody records it.",
   },
   {
-    pattern: /curl|lateral raise|front raise|fly|extension|shrug|pullover|face pull|kickback|calf raise|pushdown|squat thrust/i,
+    // "Skull crushers" is a lying triceps extension by its common name, and the
+    // common name is what athletes type — so the pattern has to know it, or the
+    // one exercise everybody calls by a nickname falls out of the isolation
+    // rule and reads as an oversight.
+    pattern: /curl|lateral raise|front raise|fly|extension|shrug|pullover|face pull|kickback|calf raise|pushdown|squat thrust|skull ?crusher/i,
     why: "Isolation work has no published bodyweight standard, and its load is set by the muscle's leverage rather than by the athlete's strength in any comparable way.",
   },
   {

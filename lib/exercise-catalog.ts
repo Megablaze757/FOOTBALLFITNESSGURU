@@ -123,6 +123,21 @@ const COACHING: Record<string, { cues: string[]; why: string }> = {
   "barbell curl": { cues: ["Elbows fixed, no swinging", "Curl to a full contraction", "Control the negative"], why: "Lets you load the biceps heavier than dumbbells." },
 
   /**
+   * THE ONES ATHLETES TYPED IN THEMSELVES.
+   *
+   * Off a report of custom entries in the log, which is the most honest gap
+   * list there is: somebody wanted the exercise, could not find it, and wrote
+   * it anyway. Each gets real cues rather than a sentence about what it builds
+   * — an entry with no how-to is a row that opens onto nothing, which is worse
+   * than the search that failed to find it.
+   */
+  "incline bicep curl": { cues: ["Lie back so the arms hang behind you", "Do not let the elbows drift forward", "Stretch fully at the bottom"], why: "Sit back on an inclined bench and let the arms hang behind the body, then curl without the elbows travelling forward. That start position holds the long head of the biceps at length, which a standing curl never does — it is the stretch, not the squeeze, doing the work here." },
+  "rear delt fly": { cues: ["Hinge until the chest faces the floor", "Lead with the elbows, not the hands", "Stop level with the shoulders"], why: "Hinge until the chest faces the floor and sweep the arms apart, leading with the elbows and stopping level with the shoulders. It trains the back of the shoulder, which no pressing movement reaches and which every hour at a desk quietly shortens." },
+  "cable chest fly": { cues: ["Soft, fixed elbow throughout", "Bring the hands together, not just in", "Let the chest stretch at the back"], why: "Hold a soft, fixed elbow and bring the hands all the way together rather than just inward. The cable keeps tension on the chest through the whole arc, including the top, where a dumbbell fly is very nearly resting against gravity." },
+  "single arm tricep extension": { cues: ["Upper arm still, beside your head", "Lower behind the head, not to the side", "Lock out without swinging"], why: "Keep the upper arm beside the head and lower behind it rather than out to the side, then lock out without swinging. Working one arm at a time stops the stronger side carrying the weaker one, which is exactly what a two-handed version hides." },
+  "skull crushers": { cues: ["Elbows in and pointing at the ceiling", "Lower to the forehead or just past it", "Stop short of locking out to keep tension"], why: "Lie back, keep the elbows tucked and pointing at the ceiling, and lower the bar to the forehead or just past it. Because the arms stay overhead the long head of the triceps is loaded at length, which pushdowns never manage." },
+
+  /**
    * THE LIFTS THE PROGRAMME IS BUILT ON.
    *
    * Fourteen of the twenty-seven staples had no coaching at all, including
@@ -447,6 +462,12 @@ Mountain Climbers|Core
 Donkey Calf Raise|Legs
 Superman|Core
 Scissor Kicks|Core
+
+Incline Bicep Curl|Biceps
+Rear Delt Fly|Shoulders
+Cable Chest Fly|Chest
+Single Arm Tricep Extension|Triceps
+Skull Crushers|Triceps
 `;
 
 /**

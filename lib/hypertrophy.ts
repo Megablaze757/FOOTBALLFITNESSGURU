@@ -780,6 +780,14 @@ function pickForSession(
   const chosen: Movement[] = [];
   const taken = new Set<string>();
   const count = new Map<MuscleGroup, number>();
+  /**
+   * Regions trained TODAY, as against `regions`, which spans the block.
+   *
+   * Separate maps because they are different strengths of rule — see the note
+   * where they are used. This one starts empty every session, which is the
+   * whole point: it cannot silently fill up and stop mattering.
+   */
+  const sessionRegions = new Map<MuscleGroup, Set<string>>();
 
   const take = (g: MuscleGroup, wantCompound: boolean): boolean => {
     /**
@@ -835,13 +843,55 @@ function pickForSession(
      */
     const applyRegion = nth > 0 || !wantCompound || anchored(g) > 0;
     const seen = applyRegion ? regions.get(g) : undefined;
-    const varied = seen && seen.size
-      ? candidates.filter((m) => {
-          const r = regionOfMovement(g, m.ex.name);
-          return r === null || !seen.has(r);
-        })
-      : candidates;
-    let from = varied.length ? varied : candidates;
+
+    /**
+     * TODAY'S REGIONS ARE A HARDER RULE THAN THE BLOCK'S.
+     *
+     * `regions` spans the whole block and only ever grows, so by the third or
+     * fourth day every region of a two-region group — hamstrings are knee and
+     * hip, triceps are long and lateral — is already in it. The filter then
+     * matched nothing, fell through to the unfiltered list, and the session
+     * could pick two movements for the same head. "Same part of the muscle is
+     * worked twice": not a missing rule, a rule that had stopped binding.
+     *
+     * So the two are separated. Within a session, a region already trained is
+     * avoided FIRST and hardest — a chest day with two incline presses is
+     * wasted work whatever happened on Monday. Across the block it stays a
+     * preference, because a four-day week has more slots than any group has
+     * distinct regions and refusing to repeat across days would empty the pool.
+     *
+     * Both still fall back rather than leaving a slot unfilled: a group with
+     * two regions and three sets has to repeat one, and the honest order is
+     * fresh-in-session, then fresh-in-block, then whatever is best.
+     */
+    const today = sessionRegions.get(g);
+    const freeOf = (set: Set<string> | undefined) => (m: Movement) => {
+      if (!set || !set.size) return true;
+      const r = regionOfMovement(g, m.ex.name);
+      return r === null || !set.has(r);
+    };
+    /**
+     * NOT THE SAME LIFT UNDER A SECOND NAME, WHATEVER ELSE IS TRUE.
+     *
+     * "Cable Leg Extension" and "Leg Extension" are one exercise typed twice,
+     * and this is the one rule with no fallback: everything below prefers,
+     * narrows and then widens again when a preference cannot be satisfied, and
+     * a rule that widens is a rule a week can walk around. Tightening the
+     * region filter above was enough to make it — 84 of the sampled weeks came
+     * back with that pair in them.
+     *
+     * Applied to `candidates` rather than after the preferences, so no later
+     * fallback can put a twin back. A group whose every remaining option is a
+     * twin gets nothing rather than a duplicate; the slot going unfilled is
+     * visible, and the same lift billed twice is not.
+     */
+    const fresh = candidates.filter((m) => !blockKeys.has(movementKey(m.ex.name)));
+    const pool = fresh.length ? fresh : candidates.filter((m) => !taken.has(m.ex.id));
+
+    const newToday = applyRegion ? pool.filter(freeOf(today)) : pool;
+    const newBoth = newToday.filter(freeOf(seen));
+    const varied = newBoth.length ? newBoth : newToday;
+    let from = varied.length ? varied : pool;
     /**
      * AN ANCHOR IS ALWAYS A STAPLE WHEN ONE IS ELIGIBLE.
      *
@@ -935,6 +985,9 @@ function pickForSession(
       const set = regions.get(g) ?? new Set<string>();
       set.add(region);
       regions.set(g, set);
+      const mine = sessionRegions.get(g) ?? new Set<string>();
+      mine.add(region);
+      sessionRegions.set(g, mine);
     }
     return true;
   };

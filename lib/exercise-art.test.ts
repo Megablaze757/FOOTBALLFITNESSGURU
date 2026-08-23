@@ -161,3 +161,17 @@ test("the key describes the picture it sits under", () => {
   // colours that are not on screen is worse than no key.
   assert.match(demo, /\{!art && <span className="h-2 w-2 shrink-0 rounded-full" style=\{\{ background: activationColour\("primary"\) \}\} \/>\}/);
 });
+
+test("the exercises athletes typed in by hand are in the catalogue", () => {
+  // These six came off a report of what people logged as custom entries, which
+  // is the most honest gap list there is: somebody wanted the exercise, could
+  // not find it, and typed it anyway. Five are lifts; "Spin" is an activity and
+  // belongs with padel and cycling, not in a list of gym movements.
+  const names = new Set(IMPORTED_EXERCISES.map((e) => e.name));
+  for (const name of [
+    "Incline Bicep Curl", "Rear Delt Fly", "Cable Chest Fly",
+    "Single Arm Tricep Extension", "Skull Crushers",
+  ]) {
+    assert.ok(names.has(name), `${name} is still missing from the library`);
+  }
+});
