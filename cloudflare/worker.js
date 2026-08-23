@@ -697,7 +697,7 @@ function overBudget(state) {
   return json({ error: `${reason} The on-device coach still works, and your allowance resets \u2014 upgrade for more.` }, 429);
 }
 __name(overBudget, "overBudget");
-var WORKER_VERSION = "2026-08-23.4";
+var WORKER_VERSION = "2026-08-23.5";
 var ATTEMPT_TIMEOUT_MS = {
   groq: 1e4,
   openrouter: 2e4,
@@ -2500,7 +2500,7 @@ async function emailStatus(req, env) {
     return json({ error: "unauthorized" }, 401);
   if (!await isAdmin(env, user.id))
     return json({ error: "forbidden" }, 403);
-  const provider = env.GAS_EMAIL_URL ? "gmail" : env.RESEND_API_KEY ? "resend" : null;
+  const provider = conf(env, "GAS_EMAIL_URL") ? "gmail" : conf(env, "RESEND_API_KEY") ? "resend" : null;
   const vars = env;
   const names = Object.keys(vars).filter((k) => typeof vars[k] === "string");
   return json({
@@ -2539,7 +2539,7 @@ async function emailStatus(req, env) {
     version: WORKER_VERSION,
     provider,
     configured: provider !== null,
-    from: env.REMINDER_FROM || null,
+    from: conf(env, "REMINDER_FROM") || null,
     // Where a reply lands. Worth showing because the sending address is usually
     // on a subdomain nobody reads, and "our emails work" is not the same claim
     // as "somebody sees the answers".
@@ -2547,9 +2547,9 @@ async function emailStatus(req, env) {
     // The Gmail sender checks a shared secret. Configured without it, every
     // send is rejected by the script and logged as a failure with a message
     // nobody would connect to a missing variable.
-    gmailSecretSet: !!env.GAS_EMAIL_SECRET,
-    resendFallback: !!env.RESEND_API_KEY,
-    serviceRoleSet: !!env.SUPABASE_SERVICE_ROLE_KEY,
+    gmailSecretSet: !!conf(env, "GAS_EMAIL_SECRET"),
+    resendFallback: !!conf(env, "RESEND_API_KEY"),
+    serviceRoleSet: !!conf(env, "SUPABASE_SERVICE_ROLE_KEY"),
     crons: ["0 8 * * *", "0 19 * * *"],
     note: provider ? "Sending through " + (provider === "gmail" ? "the Gmail Apps Script" : "Resend") + "." : "No email provider is set on this Worker. Set GAS_EMAIL_URL + GAS_EMAIL_SECRET, or RESEND_API_KEY."
   });
@@ -2648,11 +2648,27 @@ async function emailNotifications(env) {
   console.log(`notifications: emailed ${completed.length} of ${rows.length}`);
 }
 __name(emailNotifications, "emailNotifications");
+function conf(env, name) {
+  const vars = env;
+  const exact = vars[name];
+  if (typeof exact === "string" && exact.trim() !== "")
+    return exact.trim();
+  const wanted = name.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  for (const key of Object.keys(vars)) {
+    const value = vars[key];
+    if (typeof value !== "string" || value.trim() === "")
+      continue;
+    if (key.toUpperCase().replace(/[^A-Z0-9]/g, "") === wanted)
+      return value.trim();
+  }
+  return "";
+}
+__name(conf, "conf");
 function replyAddress(env) {
-  const explicit = (env.REPLY_TO || "").trim();
+  const explicit = conf(env, "REPLY_TO");
   if (explicit)
     return explicit.replace(/^.*</, "").replace(/>.*$/, "").trim();
-  const from = (env.REMINDER_FROM || "").trim();
+  const from = conf(env, "REMINDER_FROM");
   const inAngles = from.match(/<([^>]+)>/);
   const bare = (inAngles ? inAngles[1] : from).trim();
   return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(bare) ? bare : "";
@@ -2660,29 +2676,32 @@ function replyAddress(env) {
 __name(replyAddress, "replyAddress");
 async function email(env, to, subject, html) {
   try {
-    if (env.GAS_EMAIL_URL) {
-      const response2 = await fetch(env.GAS_EMAIL_URL, {
+    const gasUrl = conf(env, "GAS_EMAIL_URL");
+    const resendKey = conf(env, "RESEND_API_KEY");
+    const from = conf(env, "REMINDER_FROM");
+    if (gasUrl) {
+      const response2 = await fetch(gasUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          secret: env.GAS_EMAIL_SECRET || "",
+          secret: conf(env, "GAS_EMAIL_SECRET"),
           to,
           subject,
           html,
-          from: env.REMINDER_FROM || "",
+          from,
           replyTo: replyAddress(env)
         })
       });
       const payload2 = await response2.json().catch(() => ({}));
       return response2.ok ? { ok: true, providerId: payload2.id } : { ok: false, error: payload2.error ?? payload2.message ?? `Gmail sender returned ${response2.status}` };
     }
-    if (!env.RESEND_API_KEY)
+    if (!resendKey)
       return { ok: false, error: "No email provider is configured" };
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
-      headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },
+      headers: { Authorization: `Bearer ${resendKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        from: env.REMINDER_FROM || "PocketAthlete <noreply@example.com>",
+        from: from || "PocketAthlete <noreply@example.com>",
         to,
         subject,
         html,

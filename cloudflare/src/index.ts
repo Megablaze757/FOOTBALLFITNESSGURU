@@ -475,7 +475,7 @@ function overBudget(state: BudgetState): Response {
 // nobody is watching a spinner and the budget can be what the work actually
 // needs. Callers pass their own client-side timeout to match.
 // Bump on every paste into the Cloudflare dashboard. GET /health reports it.
-const WORKER_VERSION = "2026-08-23.4";
+const WORKER_VERSION = "2026-08-23.5";
 
 const CHAIN_BUDGET_MS = 55_000;
 /**
@@ -3219,7 +3219,10 @@ async function emailStatus(req: Request, env: Env): Promise<Response> {
   if (!user) return json({ error: "unauthorized" }, 401);
   if (!(await isAdmin(env, user.id))) return json({ error: "forbidden" }, 403);
 
-  const provider = env.GAS_EMAIL_URL ? "gmail" : env.RESEND_API_KEY ? "resend" : null;
+  // THE SAME READ THE SENDER USES. These disagreeing is what made the last bug
+  // unfindable: the status said no provider while the variable list showed one,
+  // because they asked the question two different ways.
+  const provider = conf(env, "GAS_EMAIL_URL") ? "gmail" : conf(env, "RESEND_API_KEY") ? "resend" : null;
 
   /**
    * WHAT THIS WORKER WAS ACTUALLY HANDED, BY NAME.
@@ -3280,7 +3283,7 @@ async function emailStatus(req: Request, env: Env): Promise<Response> {
     version: WORKER_VERSION,
     provider,
     configured: provider !== null,
-    from: env.REMINDER_FROM || null,
+    from: conf(env, "REMINDER_FROM") || null,
     // Where a reply lands. Worth showing because the sending address is usually
     // on a subdomain nobody reads, and "our emails work" is not the same claim
     // as "somebody sees the answers".
@@ -3288,9 +3291,9 @@ async function emailStatus(req: Request, env: Env): Promise<Response> {
     // The Gmail sender checks a shared secret. Configured without it, every
     // send is rejected by the script and logged as a failure with a message
     // nobody would connect to a missing variable.
-    gmailSecretSet: !!env.GAS_EMAIL_SECRET,
-    resendFallback: !!env.RESEND_API_KEY,
-    serviceRoleSet: !!env.SUPABASE_SERVICE_ROLE_KEY,
+    gmailSecretSet: !!conf(env, "GAS_EMAIL_SECRET"),
+    resendFallback: !!conf(env, "RESEND_API_KEY"),
+    serviceRoleSet: !!conf(env, "SUPABASE_SERVICE_ROLE_KEY"),
     crons: ["0 8 * * *", "0 19 * * *"],
     note: provider
       ? "Sending through " + (provider === "gmail" ? "the Gmail Apps Script" : "Resend") + "."
@@ -3413,15 +3416,51 @@ async function emailNotifications(env: Env): Promise<void> {
 // when configured; Resend is the fallback. A provider's error status is not a
 // successful send — failed rows remain pending for the next cron run.
 /**
+ * A configuration value, looked up the way a human means it.
+ *
+ * WHY THIS IS NOT AN EXACT PROPERTY READ. These names are typed into a web form
+ * by a person, and a name pasted out of a README or a chat window arrives with
+ * a trailing space more often than anybody would guess. `env["RESEND_API_KEY "]`
+ * is a different property from `env.RESEND_API_KEY`, so the variable is
+ * unmistakably present — the dashboard lists it, `Object.keys` reports it, it
+ * renders identically — and the code sees nothing at all. Every screen tells
+ * the truth and they contradict each other, which is the worst kind of bug to
+ * be handed: there is nothing to notice.
+ *
+ * So the exact name wins, and if there is no exact match the keys are compared
+ * with case and every non-alphanumeric character removed. RESEND_API_KEY,
+ * "RESEND_API_KEY " and "resend api key" are then the same name, which is what
+ * the person typing them believed all along.
+ *
+ * DELIBERATELY NOT FUZZY. RESEND_KEY still does not match RESEND_API_KEY, and
+ * should not: that is a different name, not the same name spelled untidily, and
+ * quietly accepting it would mean nobody ever learns which one the Worker
+ * wants. Odd names are still reported by /email-status — forgiving them here
+ * and hiding them there would trade one silent failure for another.
+ */
+function conf(env: Env, name: string): string {
+  const vars = env as unknown as Record<string, unknown>;
+  const exact = vars[name];
+  if (typeof exact === "string" && exact.trim() !== "") return exact.trim();
+  const wanted = name.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  for (const key of Object.keys(vars)) {
+    const value = vars[key];
+    if (typeof value !== "string" || value.trim() === "") continue;
+    if (key.toUpperCase().replace(/[^A-Z0-9]/g, "") === wanted) return value.trim();
+  }
+  return "";
+}
+
+/**
  * The address a reply should go to, bare — no display name.
  *
  * Empty when neither is set, so the payload simply omits it rather than sending
  * an empty reply-to, which some providers treat as an address and others reject.
  */
 function replyAddress(env: Env): string {
-  const explicit = (env.REPLY_TO || "").trim();
+  const explicit = conf(env, "REPLY_TO");
   if (explicit) return explicit.replace(/^.*</, "").replace(/>.*$/, "").trim();
-  const from = (env.REMINDER_FROM || "").trim();
+  const from = conf(env, "REMINDER_FROM");
   const inAngles = from.match(/<([^>]+)>/);
   const bare = (inAngles ? inAngles[1] : from).trim();
   return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(bare) ? bare : "";
@@ -3429,13 +3468,19 @@ function replyAddress(env: Env): string {
 
 async function email(env: Env, to: string, subject: string, html: string): Promise<EmailResult> {
   try {
-    if (env.GAS_EMAIL_URL) {
-      const response = await fetch(env.GAS_EMAIL_URL, {
+    // Read through `conf`, not off `env` directly — see the note there. A
+    // Worker that cannot find a variable somebody has definitely set is worse
+    // than one that never had it.
+    const gasUrl = conf(env, "GAS_EMAIL_URL");
+    const resendKey = conf(env, "RESEND_API_KEY");
+    const from = conf(env, "REMINDER_FROM");
+    if (gasUrl) {
+      const response = await fetch(gasUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          secret: env.GAS_EMAIL_SECRET || "", to, subject, html,
-          from: env.REMINDER_FROM || "",
+          secret: conf(env, "GAS_EMAIL_SECRET"), to, subject, html,
+          from,
           replyTo: replyAddress(env),
         }),
       });
@@ -3444,12 +3489,12 @@ async function email(env: Env, to: string, subject: string, html: string): Promi
         ? { ok: true, providerId: payload.id }
         : { ok: false, error: payload.error ?? payload.message ?? `Gmail sender returned ${response.status}` };
     }
-    if (!env.RESEND_API_KEY) return { ok: false, error: "No email provider is configured" };
+    if (!resendKey) return { ok: false, error: "No email provider is configured" };
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
-      headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },
+      headers: { Authorization: `Bearer ${resendKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        from: env.REMINDER_FROM || "PocketAthlete <noreply@example.com>",
+        from: from || "PocketAthlete <noreply@example.com>",
         to, subject, html,
         ...(replyAddress(env) ? { reply_to: replyAddress(env) } : {}),
       }),

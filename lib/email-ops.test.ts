@@ -77,18 +77,22 @@ test("the config check can only be answered by the Worker, and it is", () => {
   const body = worker.slice(worker.indexOf("async function emailStatus"), worker.indexOf("async function emailTest"))
     .replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
   for (const secret of ["GAS_EMAIL_SECRET", "RESEND_API_KEY", "SUPABASE_SERVICE_ROLE_KEY"]) {
-    const uses = [...body.matchAll(new RegExp(`env\\.${secret}`, "g"))];
+    // Matched on `conf(env, "X")` as well as `env.X`: the email path moved to a
+    // tolerant lookup so a name pasted with a trailing space still resolves,
+    // and the rule being enforced here — a secret's VALUE never reaches the
+    // client — is about what comes back, not about how it was read.
+    const uses = [...body.matchAll(new RegExp(`(?:env\\.${secret}|conf\\(env, "${secret}"\\))`, "g"))];
     assert.ok(uses.length > 0, `emailStatus says nothing about ${secret}`);
     for (const use of uses) {
-      // Either coerced on the way out (`!!env.X`) or used as a condition
-      // (`env.X ? … : …`). Anything else is the value itself reaching a client.
+      // Either coerced on the way out (`!!x`) or used as a condition
+      // (`x ? … : …`). Anything else is the value itself reaching a client.
       const before = body.slice(Math.max(0, use.index! - 2), use.index!);
       const after = body.slice(use.index! + use[0].length, use.index! + use[0].length + 2);
       assert.ok(before === "!!" || after.trimStart().startsWith("?"),
         `emailStatus returns ${secret} without coercing it to a boolean`);
     }
   }
-  assert.match(body, /gmailSecretSet: !!env\.GAS_EMAIL_SECRET/);
+  assert.match(body, /gmailSecretSet: !!conf\(env, "GAS_EMAIL_SECRET"\)/);
 });
 
 test("the test email goes through the real sender", () => {
@@ -211,8 +215,8 @@ test("the reply address falls back to the sender, and is bare", () => {
   // angle brackets come off before it goes anywhere.
   const worker = readFileSync(new URL("../cloudflare/src/index.ts", import.meta.url), "utf8");
   const fn = worker.slice(worker.indexOf("function replyAddress"), worker.indexOf("async function email("));
-  assert.match(fn, /env\.REPLY_TO/);
-  assert.match(fn, /env\.REMINDER_FROM/, "there is no fallback, so an unset REPLY_TO means no reply-to at all");
+  assert.match(fn, /conf\(env, "REPLY_TO"\)/);
+  assert.match(fn, /conf\(env, "REMINDER_FROM"\)/, "there is no fallback, so an unset REPLY_TO means no reply-to at all");
   assert.match(fn, /<\(\[\^>\]\+\)>/, "a display name is passed through as if it were an address");
   // Nothing usable means the field is omitted rather than sent empty.
   assert.match(worker, /\.\.\.\(replyAddress\(env\) \? \{ reply_to: replyAddress\(env\) \} : \{\}\)/);
@@ -274,5 +278,53 @@ test("the odd-name check accepts every name the Worker actually uses", () => {
     const name = line.trim().replace(/\??:$/, "");
     assert.match(name, /^[A-Za-z][A-Za-z0-9_]*$/, `${name} would be flagged as an odd name`);
   }
+});
+
+test("a variable is found even when its name was pasted untidily", () => {
+  /**
+   * The bug this closes: a secret named "RESEND_API_KEY " with a trailing
+   * space. env["RESEND_API_KEY "] is a different property from
+   * env.RESEND_API_KEY, so the variable is unmistakably present — the dashboard
+   * lists it, Object.keys reports it, it renders identically — and the code
+   * sees nothing. Every screen tells the truth and they contradict each other,
+   * which leaves nothing to notice.
+   *
+   * These names are typed into a web form by a person. The lookup should be as
+   * forgiving as the person was reasonable.
+   */
+  const worker = readFileSync(new URL("../cloudflare/src/index.ts", import.meta.url), "utf8");
+  assert.match(worker, /function conf\(env: Env, name: string\): string/);
+  const fn = worker.slice(worker.indexOf("function conf(env: Env"), worker.indexOf("* The address a reply should go to"));
+  // Exact first, so a correctly named variable never loses to a scan.
+  assert.match(fn, /const exact = vars\[name\];/);
+  assert.match(fn, /toUpperCase\(\)\.replace\(\/\[\^A-Z0-9\]\/g, ""\)/);
+});
+
+test("forgiving the spelling does not forgive a different name", () => {
+  // RESEND_KEY is not RESEND_API_KEY spelled untidily, it is a different name.
+  // Accepting it would mean nobody ever learns which one the Worker wants.
+  const norm = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  assert.equal(norm("RESEND_API_KEY "), norm("RESEND_API_KEY"));
+  assert.equal(norm("resend api key"), norm("RESEND_API_KEY"));
+  assert.notEqual(norm("RESEND_KEY"), norm("RESEND_API_KEY"));
+  assert.notEqual(norm("RESEND_API"), norm("RESEND_API_KEY"));
+});
+
+test("the status and the sender ask the same question", () => {
+  // Them disagreeing is what made this unfindable: the status reported no
+  // provider while its own variable list showed one, because the two read the
+  // environment in different ways.
+  const worker = readFileSync(new URL("../cloudflare/src/index.ts", import.meta.url), "utf8");
+  const status = worker.slice(worker.indexOf("async function emailStatus"), worker.indexOf("async function emailTest"));
+  const senderAt = worker.indexOf("async function email(env: Env");
+  const sender = worker.slice(senderAt, worker.indexOf("\nasync function", senderAt + 10));
+  for (const body of [status, sender]) {
+    assert.match(body, /conf\(env, "RESEND_API_KEY"\)/);
+    assert.match(body, /conf\(env, "GAS_EMAIL_URL"\)/);
+  }
+  // And nothing on the email path reads a raw property any more.
+  const code = (sender + status).replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  assert.ok(!/env\.RESEND_API_KEY/.test(code), "the email path still reads env.RESEND_API_KEY directly");
+  assert.ok(!/env\.GAS_EMAIL_URL/.test(code), "the email path still reads env.GAS_EMAIL_URL directly");
 });
 
