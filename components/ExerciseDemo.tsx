@@ -16,9 +16,45 @@ type XY = [number, number];
 interface Joints {
   head: XY; neck: XY; hip: XY;
   lHand: XY; rHand: XY;
+  /**
+   * ARMS BEND. THEY DID NOT.
+   *
+   * Legs had a knee from the first version and arms went shoulder-straight-to-
+   * hand, so every figure in the app had two rigid poles hanging off it. On a
+   * squat that reads as stiff; on a run, where the hands sit on opposite sides
+   * of the body, the two straight segments cross the chest and the whole thing
+   * reads as somebody falling over rather than running. That is the "they all
+   * look like this" — one missing joint, in three hundred pictures.
+   *
+   * Optional, and derived when absent: `elbowFor` puts it at the midpoint of
+   * shoulder-to-hand pushed away from the torso, which is what an arm does. So
+   * every pose gains a bend without being rewritten, and the poses where the
+   * bend IS the movement — a run's tucked arms, a curl, a row — state it.
+   */
+  lElbow?: XY; rElbow?: XY;
   lKnee: XY; rKnee: XY;
   lAnkle: XY; rAnkle: XY;
   ball?: XY;
+}
+
+/**
+ * Where the elbow goes when a pose does not say.
+ *
+ * Perpendicular to the shoulder-hand line, away from the body's midline, by a
+ * fraction of that line's length — a long reach bends a little, a hand near the
+ * chest bends a lot, which is roughly what an elbow does. Never zero: a
+ * perfectly straight arm is the thing this exists to stop.
+ */
+function elbowFor(shoulder: XY, hand: XY, awayFrom: number): XY {
+  const dx = hand[0] - shoulder[0];
+  const dy = hand[1] - shoulder[1];
+  const length = Math.max(1, Math.hypot(dx, dy));
+  const side = shoulder[0] >= awayFrom ? 1 : -1;
+  // Perpendicular, pointing outward from the torso.
+  const nx = (-dy / length) * side;
+  const ny = (dx / length) * side;
+  const bend = Math.min(6, 2 + length * 0.16);
+  return [shoulder[0] + dx / 2 + nx * bend, shoulder[1] + dy / 2 + ny * bend];
 }
 
 const STAND: Joints = {
@@ -33,6 +69,8 @@ function shift(j: Joints, dx: number): Joints {
   return {
     head: m(j.head), neck: m(j.neck), hip: m(j.hip),
     lHand: m(j.lHand), rHand: m(j.rHand),
+    lElbow: j.lElbow ? m(j.lElbow) : undefined,
+    rElbow: j.rElbow ? m(j.rElbow) : undefined,
     lKnee: m(j.lKnee), rKnee: m(j.rKnee),
     lAnkle: m(j.lAnkle), rAnkle: m(j.rAnkle),
     ball: j.ball ? m(j.ball) : undefined,
@@ -96,9 +134,28 @@ const POSES: Record<DemoPattern, { a: Joints; b: Joints; still: PoseKey }> = {
     still: "a",
   },
   run: {
-    a: { head: [50, 15], neck: [50, 30], hip: [50, 62], lHand: [64, 50], rHand: [38, 70],
+    /**
+     * A STRIDE, NOT A PERSON MID-FALL.
+     *
+     * Running is the pattern the missing elbow ruined most. The hands sit on
+     * opposite sides of the body — that is what an arm swing IS — so two
+     * straight shoulder-to-hand segments crossed the chest and drew an X over
+     * the torso. The figure read as somebody toppling forward, which is what
+     * "all these movement exercises look like this" was pointing at.
+     *
+     * Runners hold about ninety degrees at the elbow and swing from the
+     * shoulder, hands travelling from hip to chest and never crossing the
+     * midline. So the elbows are stated: tucked in near the ribs, one arm
+     * driving forward while the opposite leg does, which is also the thing that
+     * makes a still frame read as motion rather than as a stance.
+     *
+     * Slight forward lean at the head and hips, because upright is walking.
+     */
+    a: { head: [53, 14], neck: [52, 29], hip: [49, 62],
+      lElbow: [60, 46], lHand: [58, 33], rElbow: [40, 48], rHand: [40, 62],
       lKnee: [48, 80], rKnee: [56, 96], lAnkle: [46, 96], rAnkle: [66, 114] },
-    b: { head: [50, 15], neck: [50, 30], hip: [50, 62], lHand: [38, 70], rHand: [64, 50],
+    b: { head: [53, 14], neck: [52, 29], hip: [49, 62],
+      lElbow: [60, 48], lHand: [60, 62], rElbow: [40, 46], rHand: [42, 33],
       lKnee: [44, 96], rKnee: [52, 80], lAnkle: [34, 114], rAnkle: [54, 96] },
     // mid-stride, which is recognisable at either end.
     still: "a",
@@ -145,17 +202,27 @@ const POSES: Record<DemoPattern, { a: Joints; b: Joints; still: PoseKey }> = {
     still: "a",
   },
   press: {
-    a: { head: [50, 16], neck: [50, 30], hip: [50, 64], lHand: [39, 34], rHand: [61, 34],
+    // Racked at the shoulders the elbows are under the hands and out to the
+    // side; overhead they are almost locked. Without them both frames were the
+    // same straight arm at two heights.
+    a: { head: [50, 16], neck: [50, 30], hip: [50, 64],
+      lElbow: [34, 46], lHand: [39, 34], rElbow: [66, 46], rHand: [61, 34],
       lKnee: [45, 90], rKnee: [55, 90], lAnkle: [45, 118], rAnkle: [55, 118] },
-    b: { head: [50, 16], neck: [50, 30], hip: [50, 64], lHand: [44, 4], rHand: [56, 4],
+    b: { head: [50, 16], neck: [50, 30], hip: [50, 64],
+      lElbow: [42, 18], lHand: [44, 4], rElbow: [58, 18], rHand: [56, 4],
       lKnee: [45, 90], rKnee: [55, 90], lAnkle: [45, 118], rAnkle: [55, 118] },
     // locked out overhead. Arms at the shoulders is a stand holding something.
     still: "b",
   },
   pull: {
-    a: { head: [50, 26], neck: [50, 40], hip: [50, 74], lHand: [42, 8], rHand: [58, 8],
+    // Hanging: arms nearly straight, elbows barely off the line. At the top
+    // they are bent hard and flared wide, which is the movement — a chin over a
+    // bar with straight arms is a person standing on something.
+    a: { head: [50, 26], neck: [50, 40], hip: [50, 74],
+      lElbow: [43, 24], lHand: [42, 8], rElbow: [57, 24], rHand: [58, 8],
       lKnee: [48, 98], rKnee: [52, 98], lAnkle: [48, 120], rAnkle: [52, 120] },
-    b: { head: [50, 12], neck: [50, 26], hip: [50, 60], lHand: [42, 8], rHand: [58, 8],
+    b: { head: [50, 12], neck: [50, 26], hip: [50, 60],
+      lElbow: [34, 24], lHand: [42, 8], rElbow: [66, 24], rHand: [58, 8],
       lKnee: [48, 84], rKnee: [52, 84], lAnkle: [48, 106], rAnkle: [52, 106] },
     // hanging at full stretch — the position that says pull-up.
     still: "a",
@@ -220,8 +287,37 @@ function strongest(...levels: (Activation | undefined)[]): Activation | undefine
   return levels.includes("primary") ? "primary" : levels.includes("secondary") ? "secondary" : undefined;
 }
 
-const activationColour = (level: Activation) => level === "primary" ? "#ef4444" : "#f59e0b";
+/**
+ * The body when it is not doing anything in particular. One flat slate, so the
+ * coloured parts are the only thing the eye is asked to notice.
+ */
+const LIMB_FILL = "#8fa0b3";
+const TORSO_FILL = "#7d90a6";
 
+/**
+ * A WORKING MUSCLE, NOT A WOUND.
+ *
+ * Primary was #ef4444 — the same red the app uses for a red readiness score and
+ * for an injury flag — painted over a limb with a glow behind it. Every
+ * exercise card looked like a diagram of somebody hurt. These are the app's own
+ * gold and its dimmer sibling: the colour already means "this is the bit that
+ * matters" everywhere else in the product.
+ */
+const activationColour = (level: Activation) => level === "primary" ? "#e3b53f" : "#b98c5a";
+
+/**
+ * One limb.
+ *
+ * WAS FOUR STROKES: a dark casing, a diagonal chrome gradient, a white bevel
+ * offset by a pixel, and — when the muscle worked — a red line laid over the
+ * top with a glow filter. Chrome tubes with a red stripe painted on them. On a
+ * card the size of a thumbnail the gradient reads as noise and the red reads as
+ * an injury, which is the opposite of what it means.
+ *
+ * Now two: a dark casing and a flat fill. When a muscle is working, the limb
+ * ITSELF takes the colour rather than wearing a stripe — the same way an
+ * anatomy chart shades a muscle rather than drawing on it.
+ */
 function Segment({ from, to, width, activation }: {
   from: XY;
   to: XY;
@@ -230,17 +326,12 @@ function Segment({ from, to, width, activation }: {
 }) {
   return (
     <g>
-      <line x1={from[0]} y1={from[1]} x2={to[0]} y2={to[1]} stroke="#263241" strokeWidth={width + 3} strokeLinecap="round" />
-      <line x1={from[0]} y1={from[1]} x2={to[0]} y2={to[1]} stroke="url(#figure-surface)" strokeWidth={width} strokeLinecap="round" />
-      <line x1={from[0] - 1} y1={from[1]} x2={to[0] - 1} y2={to[1]} stroke="#ffffff" strokeOpacity={0.24} strokeWidth={1.5} strokeLinecap="round" />
-      {activation && (
-        <line
-          x1={from[0]} y1={from[1]} x2={to[0]} y2={to[1]}
-          stroke={activationColour(activation)} strokeWidth={Math.max(4, width - 3)}
-          strokeLinecap="round" strokeOpacity={activation === "primary" ? 0.95 : 0.72}
-          filter="url(#activation-glow)"
-        />
-      )}
+      <line x1={from[0]} y1={from[1]} x2={to[0]} y2={to[1]} stroke="#1f2937" strokeWidth={width + 3} strokeLinecap="round" />
+      <line
+        x1={from[0]} y1={from[1]} x2={to[0]} y2={to[1]}
+        stroke={activation ? activationColour(activation) : LIMB_FILL}
+        strokeWidth={width} strokeLinecap="round"
+      />
     </g>
   );
 }
@@ -266,6 +357,8 @@ function Figure({ j, pattern, implement, muscles, bench = false, className, labe
   const rShoulder = point(j.neck, -9);
   const lHip = point(j.hip, 6);
   const rHip = point(j.hip, -6);
+  const lElbow = j.lElbow ?? elbowFor(lShoulder, j.lHand, j.neck[0]);
+  const rElbow = j.rElbow ?? elbowFor(rShoulder, j.rHand, j.neck[0]);
   const torsoPath = `M ${lShoulder[0]} ${lShoulder[1]} Q ${point(j.neck, 12)[0]} ${point(j.neck, 12)[1]} ${lHip[0]} ${lHip[1]} Q ${j.hip[0]} ${j.hip[1] + 3} ${rHip[0]} ${rHip[1]} Q ${point(j.neck, -12)[0]} ${point(j.neck, -12)[1]} ${rShoulder[0]} ${rShoulder[1]} Z`;
   const torsoAngle = Math.atan2(dy, dx) * 180 / Math.PI - 90;
   const chestCentre: XY = [j.neck[0] + dx * 0.34, j.neck[1] + dy * 0.34];
@@ -286,25 +379,10 @@ function Figure({ j, pattern, implement, muscles, bench = false, className, labe
       aria-label={label}
     >
       <defs>
-        <linearGradient id="figure-surface" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#f1f5f9" />
-          <stop offset="0.42" stopColor="#94a3b8" />
-          <stop offset="0.72" stopColor="#64748b" />
-          <stop offset="1" stopColor="#334155" />
-        </linearGradient>
-        <radialGradient id="figure-head" cx="32%" cy="24%" r="72%">
-          <stop offset="0" stopColor="#ffffff" />
-          <stop offset="0.45" stopColor="#aeb9c7" />
-          <stop offset="1" stopColor="#445164" />
-        </radialGradient>
         <filter id="figure-shadow" x="-40%" y="-40%" width="180%" height="190%">
           <feDropShadow dx="1.5" dy="2.5" stdDeviation="2" floodColor="#0f172a" floodOpacity="0.5" />
         </filter>
-        <filter id="activation-glow" x="-80%" y="-80%" width="260%" height="260%">
-          <feGaussianBlur stdDeviation="1.4" result="blur" />
-          <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
-        </filter>
-      </defs>
+</defs>
 
       <ellipse cx={(j.lAnkle[0] + j.rAnkle[0]) / 2} cy={groundY} rx={25} ry={3.5} fill="#0f172a" opacity={0.16} />
       {pattern === "pull" ? (
@@ -329,39 +407,46 @@ function Figure({ j, pattern, implement, muscles, bench = false, className, labe
         <Segment from={j.lKnee} to={j.lAnkle} width={8} activation={zones.calves} />
         <Segment from={j.rKnee} to={j.rAnkle} width={8} activation={zones.calves} />
 
-        <path d={torsoPath} fill="url(#figure-surface)" stroke="#263241" strokeWidth={2.5} strokeLinejoin="round" />
-        <path d={torsoPath} fill="none" stroke="#ffffff" strokeOpacity={0.2} strokeWidth={1.2} />
-        {torsoActivation && (
-          <ellipse
-            cx={chestCentre[0]} cy={chestCentre[1]} rx={8.5} ry={6.5}
-            transform={`rotate(${torsoAngle} ${chestCentre[0]} ${chestCentre[1]})`}
-            fill={activationColour(torsoActivation)} opacity={torsoActivation === "primary" ? 0.92 : 0.7}
-            filter="url(#activation-glow)"
-          />
-        )}
-        {zones.core && (
-          <ellipse
-            cx={coreCentre[0]} cy={coreCentre[1]} rx={6.5} ry={8}
-            transform={`rotate(${torsoAngle} ${coreCentre[0]} ${coreCentre[1]})`}
-            fill={activationColour(zones.core)} opacity={zones.core === "primary" ? 0.92 : 0.68}
-            filter="url(#activation-glow)"
-          />
-        )}
-        {zones.hips && (
-          <ellipse cx={j.hip[0]} cy={j.hip[1]} rx={8} ry={5.5} fill={activationColour(zones.hips)} opacity={zones.hips === "primary" ? 0.92 : 0.68} filter="url(#activation-glow)" />
-        )}
+        <path
+          d={torsoPath}
+          fill={torsoActivation ? activationColour(torsoActivation) : TORSO_FILL}
+          stroke="#1f2937" strokeWidth={2.5} strokeLinejoin="round"
+        />
+        {/* THE BLOBS ARE GONE.
+            Three glowing ellipses were floated over the torso for chest, core
+            and hips — at thumbnail size they are splodges, and with the glow
+            filter behind them they bleed past the body's outline and look like
+            bruises. The torso and the limbs now carry the colour themselves,
+            which is how an anatomy chart does it: shade the muscle, do not draw
+            a light on top of it.
 
-        <Segment from={lShoulder} to={j.lHand} width={8} activation={armActivation} />
-        <Segment from={rShoulder} to={j.rHand} width={8} activation={armActivation} />
+            Core is the one zone with no limb of its own, so it keeps a shape —
+            flat, inside the outline, no filter. */}
+        {zones.core && !torsoActivation && (
+          <ellipse
+            cx={coreCentre[0]} cy={coreCentre[1]} rx={6} ry={7.5}
+            transform={`rotate(${torsoAngle} ${coreCentre[0]} ${coreCentre[1]})`}
+            fill={activationColour(zones.core)} opacity={0.85}
+          />
+        )}
+        {/* Upper arm and forearm, the way the legs have always been drawn.
+            A single shoulder-to-hand segment is a pole, and two poles on a
+            figure is what made every exercise look like the same exercise. */}
+        <Segment from={lShoulder} to={lElbow} width={8} activation={armActivation} />
+        <Segment from={lElbow} to={j.lHand} width={7} activation={armActivation} />
+        <Segment from={rShoulder} to={rElbow} width={8} activation={armActivation} />
+        <Segment from={rElbow} to={j.rHand} width={7} activation={armActivation} />
+        {/* Shoulder caps, flat and sized to the joint — they used to be glowing
+            discs wider than the arm they sat on. */}
         {zones.shoulders && (
           <>
-            <circle cx={lShoulder[0]} cy={lShoulder[1]} r={5.5} fill={activationColour(zones.shoulders)} opacity={0.9} filter="url(#activation-glow)" />
-            <circle cx={rShoulder[0]} cy={rShoulder[1]} r={5.5} fill={activationColour(zones.shoulders)} opacity={0.9} filter="url(#activation-glow)" />
+            <circle cx={lShoulder[0]} cy={lShoulder[1]} r={5} fill={activationColour(zones.shoulders)} stroke="#1f2937" strokeWidth={1.6} />
+            <circle cx={rShoulder[0]} cy={rShoulder[1]} r={5} fill={activationColour(zones.shoulders)} stroke="#1f2937" strokeWidth={1.6} />
           </>
         )}
 
         <Segment from={j.head} to={j.neck} width={6} />
-        <circle cx={j.head[0]} cy={j.head[1]} r={8.5} fill="url(#figure-head)" stroke="#263241" strokeWidth={2.2} />
+        <circle cx={j.head[0]} cy={j.head[1]} r={8} fill={LIMB_FILL} stroke="#1f2937" strokeWidth={2.2} />
 
         {j.ball && <circle cx={j.ball[0]} cy={j.ball[1]} r={7} fill="#e9b949" stroke="#7c5c11" strokeWidth={2} />}
 
