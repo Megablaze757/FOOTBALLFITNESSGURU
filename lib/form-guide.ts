@@ -52,11 +52,34 @@ const CURATED: Record<string, string> = {
   "pull ups": "https://www.youtube.com/watch?v=eGo4IYlbE5g",
   "barbell hip thrust": "https://www.youtube.com/watch?v=xDmFkJxPzeM",
   "bulgarian split squat": "https://www.youtube.com/watch?v=2C-uNgKwPLE",
+
+  /**
+   * ADDED AFTER CHECKING EACH ONE AGAINST YOUTUBE, not from memory.
+   *
+   * Every url below was fetched through the oembed endpoint before it was
+   * written down, and the TITLE and CHANNEL were read back — a video id that
+   * resolves can point at anything, so "it returns 200" is not the check. The
+   * two that had rotted were removed the same way. `scripts/check-form-guides.mjs`
+   * is that check, kept so it can be re-run rather than repeated by hand.
+   *
+   * Chosen for who is teaching where the exercise can hurt somebody. The two
+   * physio-led ones are not a coincidence: a nordic curl and a Copenhagen plank
+   * are prescribed to PREVENT a hamstring tear and a groin strain, and a
+   * demonstration that gets them wrong does the opposite of the job.
+   */
+  "nordic curl": "https://www.youtube.com/watch?v=_e9vFU9-tkc",          // E3 Rehab
+  "nordic hamstring curl": "https://www.youtube.com/watch?v=_e9vFU9-tkc", // E3 Rehab
+  "copenhagen plank": "https://www.youtube.com/watch?v=YRRnnZsRs9U",      // E3 Rehab
+  "lat pulldown": "https://www.youtube.com/watch?v=SALxEARiMkw",          // ATHLEAN-X
+  "seated cable row": "https://www.youtube.com/watch?v=7o2oolbmzeI",      // ScottHermanFitness
+  "kettlebell swing": "https://www.youtube.com/watch?v=h-A7HiTNZ5c",      // Colossus Fitness
+  "dips": "https://www.youtube.com/watch?v=yN6Q1UI_xkE",                  // Jeff Nippard
+  "dumbbell shoulder press": "https://www.youtube.com/watch?v=qEwKCR5JCog", // ScottHermanFitness
 };
 
 /**
- * TWO ENTRIES WERE REMOVED FROM THE LIST ABOVE, and the reason is the reason
- * the list is short.
+ * TWO ENTRIES WERE ONCE REMOVED FROM THE LIST ABOVE, and the reason is the
+ * reason every url in it is checked before it goes in.
  *
  * "nordic hamstring curl" and "copenhagen plank" both pointed at videos that
  * had been taken down — checked live, both 404. A dead curated link is worse

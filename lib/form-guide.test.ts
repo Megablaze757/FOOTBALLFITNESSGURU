@@ -118,9 +118,11 @@ test("a curated link that has rotted is removed, not left promising", () => {
    * next one findable — it prints each title too, because an id that still
    * resolves can point at something else entirely.
    */
+  // Both are curated again — with DIFFERENT videos, checked live through the
+  // oembed endpoint with the title and channel read back before they were
+  // written down. The dead ids are what must never come back.
   for (const name of ["Nordic hamstring curl", "Copenhagen plank"]) {
-    const guide = formGuide(name);
-    assert.equal(guide?.kind, "search", `${name} is curated again — was the replacement checked?`);
+    assert.equal(formGuide(name)?.kind, "video", `${name} lost its guide`);
   }
   const src = readFileSync(new URL("./form-guide.ts", import.meta.url), "utf8");
   assert.ok(!src.includes("1ge2yiG3fzc") && !src.includes("RS3aDCDwLnQ"), "a dead id is back in the list");
@@ -151,5 +153,35 @@ test("the video is the main event where there is no picture", () => {
   // And it says which kind of link it is: a chosen video and a search are
   // different promises.
   assert.match(sheet, /guide\.kind === "video"/);
+});
+
+test("the exercises where bad form hurts somebody are taught by a physio", () => {
+  // A nordic curl and a Copenhagen plank are prescribed to PREVENT a hamstring
+  // tear and a groin strain. A demonstration that gets them wrong does the
+  // opposite of the job, which is why these two are the ones worth being fussy
+  // about — and why both point at the same rehab channel rather than at
+  // whichever video ranked first.
+  const src = readFileSync(new URL("./form-guide.ts", import.meta.url), "utf8");
+  assert.match(src, /"nordic hamstring curl": "https:\/\/www\.youtube\.com\/watch\?v=_e9vFU9-tkc"/);
+  assert.match(src, /"copenhagen plank": "https:\/\/www\.youtube\.com\/watch\?v=YRRnnZsRs9U"/);
+  assert.match(src, /E3 Rehab/);
+});
+
+test("the curated list grew, and every entry is a well-formed watch url", () => {
+  // Eighteen against the original twelve. The shape is checked here; whether
+  // each is still LIVE is scripts/check-form-guides.mjs, because that needs the
+  // network and a suite that fails when YouTube hiccups teaches people to
+  // ignore red.
+  const src = readFileSync(new URL("./form-guide.ts", import.meta.url), "utf8");
+  const block = src.slice(src.indexOf("const CURATED"), src.indexOf("};", src.indexOf("const CURATED")));
+  const urls = [...block.matchAll(/"(https:\/\/[^"]+)"/g)].map((m) => m[1]);
+  assert.ok(urls.length >= 17, `only ${urls.length} curated guides`);
+  for (const url of urls) {
+    assert.match(url, /^https:\/\/www\.youtube\.com\/watch\?v=[\w-]{11}$/, url);
+  }
+  // No duplicate id under two names by accident — the nordic curl has two keys
+  // ON PURPOSE, because the catalogue spells it both ways.
+  const keys = [...block.matchAll(/"([a-z ]+)":\s*"https/g)].map((m) => m[1]);
+  assert.equal(new Set(keys).size, keys.length, "a name is curated twice");
 });
 
