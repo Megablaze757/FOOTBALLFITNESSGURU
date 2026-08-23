@@ -613,6 +613,50 @@ function packCost(foodId: string, qty: number): number {
   return Math.ceil(qty / f.packSize) * f.packPrice;
 }
 
+/**
+ * The trolley as it stands, from meals already planned.
+ *
+ * Exported so the swap sheet can ask what a change would cost. Swapping one
+ * dinner is the athlete's main lever on the shop once the week is built, and
+ * until now it was the only one they had to pull blind: the sheet ranked
+ * alternatives by how well they fit the slot and said nothing at all about
+ * money, so somebody who had just told the app they were on a budget picked
+ * their replacement with no idea whether it was the £1 option or the £4 one.
+ */
+export function basketOf(meals: { meal: Meal; scale?: number }[]): Basket {
+  const basket: Basket = new Map();
+  for (const m of meals) addToBasket(m.meal, basket, m.scale ?? 1);
+  return basket;
+}
+
+/**
+ * What adding this meal does to an ORDINARY WEEK's bill.
+ *
+ * The sibling of `marginalCost`, and the difference is which question is being
+ * asked. `marginalCost` prices whole packs because it is the planner's "do not
+ * open a new cupboard line for one pinch" signal. This one prices the way the
+ * athlete is charged — keeps pro-rata, perishables by the pack, see
+ * `ongoingPackCost` — because it answers "does this swap cost me anything",
+ * and a bag of rice you will finish over three weeks does not cost a whole bag
+ * to use once.
+ *
+ * Both read zero for a pack already in the basket, which is the honest answer:
+ * a second meal using the spinach you have already bought is free.
+ */
+export function ongoingMarginalCost(meal: Meal, basket: Basket, scale = 1): number {
+  let delta = 0;
+  const after = new Map(basket);
+  for (const it of meal.items) {
+    const food = FOOD_BY_ID[it.foodId];
+    if (!food) continue;
+    const have = after.get(it.foodId) ?? 0;
+    const want = have + it.qty * scale;
+    delta += ongoingPackCost(food, want) - ongoingPackCost(food, have);
+    after.set(it.foodId, want);
+  }
+  return delta;
+}
+
 export function marginalCost(meal: Meal, basket: Basket, scale = 1): number {
   let delta = 0;
   const after = new Map(basket);

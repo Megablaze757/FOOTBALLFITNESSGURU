@@ -140,6 +140,29 @@ export function EmailOps() {
               <Fact label="Runs at" value={(status.crons ?? []).join(", ") || "—"} />
             </dl>
 
+            {/* TWO EMAIL PATHS, AND ONLY ONE OF THEM IS THIS ONE.
+                "Password resets and confirmations arrive, so email works" is
+                the reasonable conclusion and the wrong one: those come from
+                Supabase Auth over SMTP and never touch this Worker. They will
+                keep arriving with no provider set here at all — which makes
+                them evidence of nothing, and makes this the single easiest
+                place in the product to lose an afternoon.
+
+                Said HERE rather than in DEPLOY.md, where it has been all along,
+                because this is the screen somebody reads while believing the
+                opposite. */}
+            {!status.configured && (
+              <p className="rounded-xl border border-white/10 bg-white/[0.02] p-3 text-xs leading-relaxed text-slate-400">
+                <strong className="text-slate-300">Sign-up and password-reset emails are a different path.</strong>{" "}
+                Those are sent by Supabase Auth over SMTP and never reach this Worker, so they keep
+                working whatever it says here. This line is only about reminders, the weekly summary
+                and the launch announcement, which the Worker sends over HTTP — Cloudflare cannot open
+                an SMTP connection, which is why the two are split. A Resend key in Supabase&rsquo;s SMTP
+                settings is not a key on this Worker: it needs adding under the Worker&rsquo;s own
+                Settings → Variables, then deployed.
+              </p>
+            )}
+
             {/* WHAT THE WORKER WAS ACTUALLY HANDED.
                 "I set the key and it still says I haven't" is not one problem,
                 it is four — added but never deployed, added to a different

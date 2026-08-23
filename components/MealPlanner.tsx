@@ -7,7 +7,7 @@ import { ConfirmButton } from "@/components/ConfirmButton";
 import { recordChanged } from "@/lib/data-events";
 import {
   effectiveMealPrefs, planTargets, planWithinBudget, shoppingList, unmetSlots, dislikedFoodIds, favouriteFoodIds,
-  swapKey, slotTargetKcal, type MealSwaps,
+  swapKey, slotTargetKcal, basketOf, type MealSwaps,
   ACTIVITY_LEVELS, DIET_GOALS, DIET_PATTERNS, AVOIDANCES, DEFAULT_PREFS, mergePrefs,
   type BodyStats, type Sex, type ActivityLevel, type DietGoal, type PlannedDay, type PlanTargets,
   type MealPrefs, type DietPattern, type Avoidance,
@@ -17,6 +17,7 @@ import { SUPERMARKETS, type StoreId, type PriceOverrides } from "@/lib/food-db";
 import type { TargetContext } from "@/lib/nutrition";
 import { Recipe } from "@/components/Recipe";
 import { MealSwap, type SwapTarget } from "@/components/MealSwap";
+import { cookRating } from "@/lib/recipe-difficulty";
 import { FOOD_BY_ID as FOOD_LOOKUP } from "@/lib/food-db";
 import { ShoppingList } from "@/components/ShoppingList";
 import { NumberInput } from "@/components/NumberInput";
@@ -244,6 +245,30 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
    * scored against, and a patched day would leave the list disagreeing with the
    * plan.
    */
+  /**
+   * The week's trolley WITHOUT the meal being swapped out.
+   *
+   * So the sheet can say what each alternative does to the shop — the athlete's
+   * main lever on cost once the plan exists, and until now the one they pulled
+   * blind. Most alternatives come out at "same", which is the useful part: the
+   * ingredients are already being bought for another day, so changing your mind
+   * about Thursday is usually free.
+   *
+   * Excluding the outgoing meal matters. Leave it in and it pays for its own
+   * ingredients twice — its own pack is already in the basket, so it scores
+   * zero while every alternative pays full price, and the sheet would tell an
+   * athlete on a budget that nothing is ever worth changing.
+   */
+  const swapBasket = useMemo(() => {
+    if (!swapping || !week?.length) return undefined;
+    return basketOf(week.flatMap((day, di) =>
+      day.meals.filter((pm, mi) => {
+        if (di !== swapping.dayIndex) return true;
+        const nth = day.meals.slice(0, mi).filter((x) => x.meal.slot === pm.meal.slot).length;
+        return !(pm.meal.slot === swapping.slot && nth === swapping.nth);
+      })));
+  }, [swapping, week]);
+
   async function applySwap(mealId: string) {
     if (!swapping || seed === null) return;
     const next = { ...swaps, [swapKey(swapping.dayIndex, swapping.slot, swapping.nth)]: mealId };
@@ -770,6 +795,37 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
                         {starred.includes(pm.meal.id) && (
                           <span className="text-amber-400" title="Starred — the planner picks this more often" aria-label="Starred">★</span>
                         )}
+                        {/* HOW MUCH OF YOU IT NEEDS, on the row rather than
+                            inside the recipe.
+                            `cookRating` has existed since the cooking-level
+                            preference was added and was rendered in exactly one
+                            place — the swap sheet — so the athlete could FILTER
+                            for easy recipes but could not SEE which of the ones
+                            they had been given were easy. The decision it
+                            supports is made while scanning the week on a Sunday
+                            ("which night am I too tired to cook?"), and that
+                            is this row.
+
+                            Only the two that carry information. Everything is
+                            "medium" by default and a badge on every row is
+                            wallpaper — it stops being read, and takes the
+                            "involved" ones down with it. */}
+                        {(() => {
+                          const rating = cookRating(pm.meal);
+                          if (rating.level === "medium") return null;
+                          return (
+                            <span
+                              title={rating.blurb}
+                              className={`rounded px-1 text-[10px] font-bold normal-case ${
+                                rating.level === "easy"
+                                  ? "bg-white/[0.07] text-slate-400"
+                                  : "bg-amber-400/10 text-amber-300/90"
+                              }`}
+                            >
+                              {rating.label}
+                            </span>
+                          );
+                        })()}
                       </span>
                       <span className="block text-sm font-bold text-slate-100">{pm.meal.name}</span>
                     </span>

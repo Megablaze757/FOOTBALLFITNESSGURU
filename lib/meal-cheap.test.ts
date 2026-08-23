@@ -18,6 +18,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
   buildWeek, shoppingList, planWithinBudget, planTargets, mealMacros,
+  basketOf, ongoingMarginalCost,
   DEFAULT_PREFS, FOODS, MEALS, type MealPrefs, type DietPattern,
 } from "./meal-plan";
 
@@ -156,4 +157,60 @@ test("the shopping list leads with what a week costs, not what this trip costs",
   assert.match(header, /a week/);
   // The till total is still there — it is the number at the checkout.
   assert.match(header, /list\.total\.toFixed\(2\)\}.{0,20}this shop/s);
+});
+
+// --- the levers the athlete has once the week exists ---------------------------
+
+test("swapping a meal says what it does to the week's shop", () => {
+  // Swapping is the main lever on cost once the plan is built, and it was the
+  // one the athlete pulled blind: the sheet ranked alternatives by slot fit and
+  // said nothing about money, so somebody who had just ticked "keep it cheap"
+  // chose their replacement with no idea whether it was the £1 option or the £4
+  // one.
+  const sheet = readFileSync(new URL("../components/MealSwap.tsx", import.meta.url), "utf8");
+  assert.match(sheet, /ongoingMarginalCost\(meal, basket, scale\)/);
+  // Quoted as a DIFFERENCE against the meal being replaced. A bare price is a
+  // number to hold in your head; a difference is the answer.
+  assert.match(sheet, /const currentCost = useMemo/);
+  assert.match(sheet, /cost < currentCost - 0\.05/);
+  assert.match(sheet, /"same"/, "options that change nothing do not say so");
+  // The weekly cost, not the till — the same number the headline now shows.
+  assert.ok(!/[^g]marginalCost\(meal, basket/.test(sheet), "the swap sheet prices the till instead of the week");
+});
+
+test("the swap prices exclude the meal being replaced", () => {
+  // Leave it in the basket and its own packs are already paid for, so it scores
+  // zero while every alternative pays full price — and the sheet tells an
+  // athlete on a budget that nothing is ever worth changing.
+  const planner = readFileSync(new URL("../components/MealPlanner.tsx", import.meta.url), "utf8");
+  const fn = planner.slice(planner.indexOf("const swapBasket = useMemo"), planner.indexOf("async function applySwap"));
+  assert.match(fn, /return !\(pm\.meal\.slot === swapping\.slot && nth === swapping\.nth\)/);
+  assert.match(fn, /basketOf\(/);
+});
+
+test("an already-bought ingredient makes a swap free, and the maths says so", () => {
+  // The non-obvious, useful half: most alternatives cost nothing, because their
+  // ingredients are in the trolley for another day. A costing that could not
+  // show that would push a budget shopper toward monotony for no saving.
+  const meal = MEALS.find((m) => m.items.length > 0)!;
+  const empty = basketOf([]);
+  const already = basketOf([{ meal, scale: 1 }]);
+  const fresh = ongoingMarginalCost(meal, empty);
+  assert.ok(fresh > 0, "a meal added to an empty trolley costs nothing");
+  assert.ok(ongoingMarginalCost(meal, already) < fresh,
+    "a second serving costs the same as the first, so nothing is ever shared");
+});
+
+test("the plan says which meals are easy, not only the swap sheet", () => {
+  // `cookRating` existed from the day the cooking-level preference was added
+  // and was rendered in exactly one place, so an athlete could FILTER for easy
+  // recipes but never SEE which of the ones they had been given were easy. The
+  // decision it supports — "which night am I too tired to cook?" — is made
+  // while scanning the week.
+  const planner = readFileSync(new URL("../components/MealPlanner.tsx", import.meta.url), "utf8");
+  assert.match(planner, /import \{ cookRating \} from "@\/lib\/recipe-difficulty"/);
+  assert.match(planner, /const rating = cookRating\(pm\.meal\)/);
+  // Not on every row: "medium" is the default and a badge on all 28 is
+  // wallpaper, which takes the "involved" ones down with it.
+  assert.match(planner, /if \(rating\.level === "medium"\) return null;/);
 });

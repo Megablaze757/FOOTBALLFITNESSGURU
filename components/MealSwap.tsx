@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import {
-  MEALS, mealAllowed, mealMacros, recipeSteps,
+  MEALS, mealAllowed, mealMacros, recipeSteps, ongoingMarginalCost,
   type Meal, type MealPrefs, type Slot,
 } from "@/lib/meal-plan";
 import { cookRating } from "@/lib/recipe-difficulty";
@@ -40,11 +40,29 @@ export interface SwapTarget {
   slotKcal: number;
 }
 
-export function MealSwap({ target, prefs, starred = [], onPick, onClose }: {
+export function MealSwap({ target, prefs, starred = [], basket, onPick, onClose }: {
   target: SwapTarget;
   prefs: MealPrefs;
   /** Dishes the athlete starred, so the Starred chip means something here too. */
   starred?: string[];
+  /**
+   * The rest of the week's trolley, so each option can be priced against it.
+   *
+   * WITHOUT IT THIS SHEET IS A BUDGET FEATURE'S BLIND SPOT. Swapping a meal is
+   * the athlete's main lever on the shop once the week is built, and the sheet
+   * ranked by slot fit and said nothing about money — so somebody who had just
+   * told the app they were on a budget chose their replacement with no idea
+   * whether it was the £1 option or the £4 one.
+   *
+   * It has to be the rest of the week and not the whole week, or the meal being
+   * replaced pays for its own ingredients twice and every alternative looks
+   * dear by comparison.
+   *
+   * Optional: the library opens this sheet with no week behind it, and a
+   * missing basket means the prices are simply not shown rather than shown
+   * wrong.
+   */
+  basket?: Map<string, number>;
   onPick: (mealId: string) => void;
   onClose: () => void;
 }) {
@@ -61,7 +79,14 @@ export function MealSwap({ target, prefs, starred = [], onPick, onClose }: {
       // at a sensible portion for this slot" rather than raw calorie distance.
       const ratio = target.slotKcal > 0 ? macros.kcal / target.slotKcal : 1;
       const fit = ratio < 0.55 ? 0.55 / ratio : ratio > 1.6 ? ratio / 1.6 : 1;
-      return { meal, macros, fit };
+      // Priced at the portion it would be served in, for the same reason the
+      // planner does: a meal scaled to 1.6 costs 1.6 servings, and quoting the
+      // recipe price would understate exactly the swaps that cost the most.
+      const scale = target.slotKcal > 0 && macros.kcal > 0
+        ? Math.round(Math.min(1.6, Math.max(0.55, target.slotKcal / macros.kcal)) * 20) / 20
+        : 1;
+      const cost = basket ? ongoingMarginalCost(meal, basket, scale) : null;
+      return { meal, macros, fit, cost };
     });
     // Search now covers ingredients as well as names — "chickpeas" is a
     // reasonable thing to want from a swap list, and matching only the title
@@ -69,7 +94,24 @@ export function MealSwap({ target, prefs, starred = [], onPick, onClose }: {
     const filtered = scored.filter((s) =>
       matchesQuery(s.meal, q, (id) => FOOD_BY_ID[id]?.name) && passesFilters(s.meal, filters, starred));
     return filtered.sort((a, b) => a.fit - b.fit || b.macros.protein - a.macros.protein);
-  }, [target, prefs, q, filters, starred]);
+  }, [target, prefs, q, filters, starred, basket]);
+
+  /**
+   * What the meal being replaced costs, so the others can be quoted against it.
+   *
+   * A price on its own ("£2.40") is a number the athlete has to hold in their
+   * head and compare; a difference ("80p more") is the answer. And most of
+   * these come out at nothing, which is the useful, non-obvious fact: the
+   * ingredients are already in the trolley for another day.
+   */
+  const currentCost = useMemo(() => {
+    if (!basket) return null;
+    const kcal = mealMacros(target.current).kcal;
+    const scale = target.slotKcal > 0 && kcal > 0
+      ? Math.round(Math.min(1.6, Math.max(0.55, target.slotKcal / kcal)) * 20) / 20
+      : 1;
+    return ongoingMarginalCost(target.current, basket, scale);
+  }, [target, basket]);
 
   /** Every option for this slot, ignoring the search and chips. */
   const poolSize = useMemo(
@@ -151,7 +193,7 @@ export function MealSwap({ target, prefs, starred = [], onPick, onClose }: {
             clear, and only when there is something to scroll. Same 7rem as
             ExerciseModal, which solved this once already. */}
         <ul className="min-h-0 flex-1 divide-y divide-white/[0.05] overflow-y-auto pb-28 sm:pb-0">
-          {options.map(({ meal, macros, fit }) => {
+          {options.map(({ meal, macros, fit, cost }) => {
             // "Fits" is not a score anyone should have to interpret. It becomes
             // one word, and only when it's a warning.
             const stretch = fit > 1.25 ? (macros.kcal > target.slotKcal ? "big for this slot" : "small for this slot") : null;
@@ -174,6 +216,23 @@ export function MealSwap({ target, prefs, starred = [], onPick, onClose }: {
                       </span>
                     )}
                   </span>
+                  {/* WHAT IT DOES TO THE WEEK, not what it costs in isolation.
+                      Rounded to 10p and silent inside that, because a 4p
+                      difference is noise dressed as information — and "same
+                      price" is the answer for most of the list, since the
+                      ingredients are already being bought for another day. */}
+                  {cost != null && currentCost != null && (
+                    <span className={`shrink-0 self-center text-xs tabular-nums ${
+                      cost < currentCost - 0.05 ? "text-pitch-400"
+                        : cost > currentCost + 0.05 ? "text-slate-400" : "text-slate-600"
+                    }`}>
+                      {cost < currentCost - 0.05
+                        ? `−£${(currentCost - cost).toFixed(2)}`
+                        : cost > currentCost + 0.05
+                          ? `+£${(cost - currentCost).toFixed(2)}`
+                          : "same"}
+                    </span>
+                  )}
                   <span className="shrink-0 self-center text-xs font-bold text-pitch-400">Use</span>
                 </button>
               </li>
