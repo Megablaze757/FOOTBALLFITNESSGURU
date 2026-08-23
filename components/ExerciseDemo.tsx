@@ -1,5 +1,5 @@
 import type { DemoPattern, Implement } from "@/lib/exercises";
-import { artFor, ART_CREDIT } from "@/lib/exercise-art";
+import { artFor, ART_SOURCES } from "@/lib/exercise-art";
 
 // Asset-free demonstration: a stick figure in the two key positions of a
 // movement, shown as START and FINISH side by side — the way a coaching book
@@ -499,8 +499,9 @@ export function ExerciseSteps({ pattern, implement = "none", muscles = [], name,
   /**
    * REAL ARTWORK WHEN WE HAVE IT, the drawn figure when we do not.
    *
-   * Everkinetic's anatomical illustrations cover the common lifts — bench,
-   * squat, row, curl, press — which is most of what an athlete actually opens.
+   * Two libraries between them cover 56% of the gym catalogue. Everkinetic's
+   * illustrations take the classic lifts; photographs from free-exercise-db
+   * take the ones nobody drew — cleans, snatches, rack pulls, pistol squats.
    * Nothing covers a cone weave, a Copenhagen plank or a resisted sprint start,
    * so the figure stays and had to be worth keeping.
    *
@@ -576,7 +577,7 @@ export function ExerciseSteps({ pattern, implement = "none", muscles = [], name,
           the artwork. */}
       {art && (
         <div className="shrink-0 px-1 pt-1 text-center text-[8px] uppercase tracking-wide text-slate-400 sm:text-[9px]">
-          Art: {ART_CREDIT.work} · {ART_CREDIT.licence}
+          {ART_SOURCES[art.from].work} · {ART_SOURCES[art.from].licence}
         </div>
       )}
     </div>

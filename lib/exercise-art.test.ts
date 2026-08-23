@@ -13,7 +13,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, existsSync } from "node:fs";
-import { EXERCISE_ART, ART_CREDIT, artFor } from "./exercise-art";
+import { EXERCISE_ART, ART_SOURCES, artFor } from "./exercise-art";
 import { IMPORTED_EXERCISES } from "./exercise-catalog";
 
 const root = new URL("../", import.meta.url);
@@ -73,11 +73,27 @@ test("the pairs that started this are still refused", () => {
   // exercise from the one on the card.
   //
   //   Dumbbell Row      -> Dumbbell Upright Rows   back vs shoulders
-  //   Plank             -> Side Plank              front vs lateral
   //   Wall Ball         -> Ball Wall Circles       two nouns, one exercise apart
-  for (const name of ["Dumbbell Row", "Wall Ball", "Plank"]) {
+  for (const name of ["Dumbbell Row", "Wall Ball"]) {
     assert.equal(EXERCISE_ART[name], undefined, `${name} was paired with something it is not`);
   }
+});
+
+test("a refusal is about the candidate, not about the exercise", () => {
+  /**
+   * "Plank" belongs on the list above and no longer is, which is the rule
+   * working rather than failing.
+   *
+   * The only plank Everkinetic has is a SIDE plank — a different exercise, so
+   * the pair was refused and the card kept the drawn figure. The photograph set
+   * has an actual plank, so now it gets one. Nothing about the rule changed;
+   * the pool of candidates did.
+   *
+   * Worth pinning, because the tempting "fix" when coverage looks low is to
+   * relax the threshold until the wrong picture gets in. The answer is another
+   * library, not a lower bar.
+   */
+  assert.equal(EXERCISE_ART["Plank"]?.from, "free-exercise-db");
 });
 
 test("a plain movement may be illustrated holding the usual implement", () => {
@@ -95,17 +111,35 @@ test("a plain movement may be illustrated holding the usual implement", () => {
    * sides naming different kit is still refused, so a dumbbell lunge is never
    * drawn with a barbell.
    */
-  assert.equal(EXERCISE_ART["Lunge"], "lunge");
-  assert.equal(EXERCISE_ART["Dumbbell Lunge"], "dumbbell-lunge");
+  assert.equal(EXERCISE_ART["Lunge"]?.key, "lunge");
+  assert.equal(EXERCISE_ART["Dumbbell Lunge"]?.key, "dumbbell-lunge");
+});
+
+test("both libraries are used, and the drawn one is preferred", () => {
+  // Everkinetic first because it is drawn: one consistent figure, vector, sharp
+  // at any size. The photographs fill what no illustrator covered rather than
+  // competing with it — so a lift that exists in both is illustrated.
+  const from = Object.values(EXERCISE_ART).map((e) => e.from);
+  const drawn = from.filter((f) => f === "everkinetic").length;
+  const shot = from.filter((f) => f === "free-exercise-db").length;
+  assert.ok(drawn > 50 && shot > 40, `${drawn} illustrated, ${shot} photographed`);
+  assert.equal(EXERCISE_ART["Bench Press"]?.from, "everkinetic");
+  assert.equal(EXERCISE_ART["Bench Press"]?.ext, "svg");
+  // Nobody illustrated a clean and jerk.
+  assert.equal(EXERCISE_ART["Clean and Jerk"]?.from, "free-exercise-db");
+  assert.equal(EXERCISE_ART["Clean and Jerk"]?.ext, "jpg");
 });
 
 test("the licence is honoured in the app, not only in a comment", () => {
   // CC BY-SA asks for credit. It also binds ADAPTATIONS, which is why the
   // pipeline copies files and never edits them.
-  assert.equal(ART_CREDIT.licence, "CC BY-SA 4.0");
-  assert.match(ART_CREDIT.source, /github\.com\/everkinetic\/data/);
-  assert.ok(ART_CREDIT.author.length > 0);
-  assert.match(demo, /Art: \{ART_CREDIT\.work\} · \{ART_CREDIT\.licence\}/, "the credit never renders");
+  assert.equal(ART_SOURCES.everkinetic.licence, "CC BY-SA 4.0");
+  assert.match(ART_SOURCES.everkinetic.source, /github\.com\/everkinetic\/data/);
+  assert.equal(ART_SOURCES["free-exercise-db"].licence, "Public domain");
+  for (const s of Object.values(ART_SOURCES)) assert.ok(s.author.length > 0 && s.licenceUrl.startsWith("http"));
+  // The credit names the library the picture on THIS card came from — one
+  // blanket credit under a photograph from the other set is a false statement.
+  assert.match(demo, /\{ART_SOURCES\[art\.from\]\.work\} · \{ART_SOURCES\[art\.from\]\.licence\}/, "the credit never renders");
   assert.match(script, /copyFileSync/, "the pipeline transforms the art rather than copying it");
 });
 
