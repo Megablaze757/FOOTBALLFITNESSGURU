@@ -4,7 +4,6 @@ import { useState } from "react";
 import type { DrillItem } from "@/lib/types";
 import { getExercise } from "@/lib/exercises";
 import { ExerciseModal } from "@/components/ExerciseDetail";
-import { exerciseMuscles } from "@/lib/muscle-volume";
 
 // Drill program with local completion state + progress bar. Each drill opens its
 // coached exercise detail (animated demo + cues) when tapped.
@@ -35,8 +34,6 @@ export function DrillChecklist({ drills }: { drills: DrillItem[] }) {
       <ul className="space-y-2">
         {drills.map((d) => {
           const ex = getExercise(d.id);
-          const target = ex ? exerciseMuscles(ex.name, ex.muscles) : null;
-          const muscles = target ? [target.primary, ...target.secondary].filter((muscle): muscle is string => !!muscle) : [];
           return (
             <li key={d.id} className={`card flex items-center gap-3 p-4 transition ${done[d.id] ? "opacity-50" : ""}`}>
               <input

@@ -23,9 +23,8 @@
 //   2. THE MOVEMENT. Every word of our name that is not the implement has to be
 //      in the title, and a word that CHANGES the movement disqualifies the pair
 //      when only one side has it. This is the same rule as the art matcher
-//      (see scripts/build-exercise-art.mjs) and it exists for the same reason:
 //      "Dumbbell Row" and "Dumbbell Upright Row" share three words out of four
-//      and are different exercises.
+//      and are different exercises, and a fuzzy matcher pairs them confidently.
 //   3. THE SHAPE. Between forty seconds and twenty minutes, so a Short and a
 //      ninety-minute podcast both fall out. A form guide has a length.
 //
@@ -68,7 +67,11 @@ const TEACHERS = [
   "redefining strength", "hybrid performance", "garage strength", "westside barbell",
 ];
 
-/** Words that CHANGE THE MOVEMENT — see scripts/build-exercise-art.mjs. */
+/**
+ * Words that CHANGE THE MOVEMENT. Present on one side and not the other, the
+ * pair is refused however well the rest of the words line up: an upright row is
+ * a shoulder exercise and a bent-over row is a back one.
+ */
 const FORM = [
   "upright", "concentration", "incline", "decline", "preacher", "hammer", "reverse", "sumo", "spider",
   "front", "overhead", "behind", "neck", "seated", "standing", "lying", "kneeling", "side", "wall",
@@ -108,12 +111,12 @@ const FORM = [
 const NOT_A_DEMO = /\b(assessment|screen(ing)?|podcast|reaction|q ?& ?a|compilation|motivation|transformation|challenge|full workout|day in the life|physique update)\b|\b(worth it|bad for your|should you|dangerous|overrated|underrated|myth)\b|\bpain\b(?![ -]free)/i;
 
 /**
- * The implement, which here is a HARD test in both directions.
+ * The implement, which is a HARD test in both directions.
  *
- * The art matcher next door treats this softly, because it pairs our names
- * against a library whose titles always spell the implement out, and refusing
- * "Bent Over Row" against "Bent Over Row with Barbell" cost two dozen good
- * matches. That reasoning does not survive the move to YouTube.
+ * The obvious rule is the soft one — only refuse when both sides name kit and
+ * the kit differs — on the grounds that our names only say the implement when
+ * it is not the obvious one. That reasoning does not survive contact with
+ * YouTube titles.
  *
  * A title omits the implement when it is the OBVIOUS one — "How to Bench
  * Press" is the barbell — so silence is not "unspecified", it is a claim. Soft

@@ -383,7 +383,7 @@ export default function LibraryPage() {
           <button
             key={ex.id}
             onClick={() => setOpen(ex)}
-            className="card card-hover flex items-center gap-4 p-4 text-left"
+            className="card card-hover group flex items-center gap-4 p-4 text-left"
           >
             <span className="min-w-0 flex-1">
               <span className="flex items-center gap-1.5">
@@ -392,6 +392,10 @@ export default function LibraryPage() {
               </span>
               <span className="mt-1 block truncate font-bold text-slate-100">{ex.name}</span>
             </span>
+            {/* THE ROW USED TO CARRY A DRAWING OF THE MOVEMENT, which at least
+                said "there is something to open here". Text alone does not, and
+                what is behind the tap is now a video — so the row says so. */}
+            <span aria-hidden className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-white/10 text-xs text-slate-500 transition group-hover:text-pitch-400">▶</span>
           </button>
         ))}
       </div>
