@@ -3,6 +3,7 @@
 import { getExerciseByName } from "@/lib/exercises";
 import { formGuide, NO_GUIDE } from "@/lib/form-guide";
 import { artFor } from "@/lib/exercise-art";
+import { FormGuideEmbed } from "@/components/FormGuideEmbed";
 import { howToFor, type HowTo } from "@/lib/how-to";
 import { ExerciseVisual } from "@/components/ExerciseVisual";
 import { ExerciseModal, Sheet } from "@/components/ExerciseDetail";
@@ -71,6 +72,19 @@ export function HowToCard({ how }: { how: HowTo }) {
          * promises, and saying which one is behind the tap is the difference
          * between a link that under-delivers and one that says what it is.
          */
+        /**
+         * A CHOSEN VIDEO PLAYS HERE; A SEARCH STILL LEAVES.
+         *
+         * Eighteen movements have a video somebody picked and checked, and
+         * those now play in place — nothing of YouTube's loads until the tap,
+         * see FormGuideEmbed. The rest resolve to a search, and there is no
+         * iframe for a list of results, so they keep the link out.
+         *
+         * The two look different because they ARE different, and a link that
+         * pretends to be a player is worse than one that says it is a link.
+         */
+        if (guide.videoId) return <FormGuideEmbed videoId={guide.videoId} title={how.name} />;
+
         const illustrated = artFor(how.name) !== null;
         return (
           <a
@@ -86,8 +100,8 @@ export function HowToCard({ how }: { how: HowTo }) {
               <span className="min-w-0 flex-1">
                 <span className="block text-sm font-bold">{guide.label}</span>
                 <span className="block text-xs font-medium text-ink-900/70">
-                  {guide.kind === "video"
-                    ? "A demonstration we picked for this movement."
+                  {illustrated
+                    ? "Search YouTube for a demonstration of this movement."
                     : "No illustration for this one — watch it done before you try it."}
                 </span>
               </span>

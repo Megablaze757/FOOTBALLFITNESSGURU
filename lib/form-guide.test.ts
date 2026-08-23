@@ -150,9 +150,11 @@ test("the video is the main event where there is no picture", () => {
   const sheet = readFileSync(new URL("../components/DrillDetail.tsx", import.meta.url), "utf8");
   assert.match(sheet, /const illustrated = artFor\(how\.name\) !== null;/);
   assert.match(sheet, /No illustration for this one — watch it done before you try it\./);
-  // And it says which kind of link it is: a chosen video and a search are
-  // different promises.
-  assert.match(sheet, /guide\.kind === "video"/);
+  // It still distinguishes a chosen video from a search — more strongly than it
+  // did, now that one plays in place and the other leaves. The old assertion
+  // matched the label that used to carry that difference; the difference itself
+  // is the early return above it.
+  assert.match(sheet, /if \(guide\.videoId\) return <FormGuideEmbed/);
 });
 
 test("the exercises where bad form hurts somebody are taught by a physio", () => {
@@ -183,5 +185,55 @@ test("the curated list grew, and every entry is a well-formed watch url", () => 
   // ON PURPOSE, because the catalogue spells it both ways.
   const keys = [...block.matchAll(/"([a-z ]+)":\s*"https/g)].map((m) => m[1]);
   assert.equal(new Set(keys).size, keys.length, "a name is curated twice");
+});
+
+test("a curated guide carries its id, a search does not", () => {
+  // There is no iframe for a list of search results, so "all of them as
+  // embeds" can only ever mean the curated ones. The id is what tells the two
+  // apart in the UI.
+  const chosen = formGuide("Bench press");
+  assert.equal(chosen?.kind, "video");
+  assert.match(chosen!.videoId ?? "", /^[\w-]{11}$/);
+  assert.ok(chosen!.url.includes(chosen!.videoId!), "the id is not the one in the url");
+
+  const searched = formGuide("Cone weave dribble");
+  assert.equal(searched?.kind, "search");
+  assert.equal(searched?.videoId, undefined, "a search was given a video id");
+});
+
+test("nothing of YouTube's loads until somebody asks to watch", () => {
+  /**
+   * An iframe per card costs a third-party document, its scripts and its
+   * cookies on every render — before anybody has asked for a video. On a
+   * library page of twenty rows that is twenty YouTube sessions loaded to show
+   * twenty rectangles.
+   *
+   * So the poster is ours, including the still: a thumbnail fetched from
+   * img.youtube.com would be a request, which is the thing being avoided.
+   */
+  const embed = readFileSync(new URL("../components/FormGuideEmbed.tsx", import.meta.url), "utf8");
+  assert.match(embed, /const \[playing, setPlaying\] = useState\(false\)/);
+  assert.match(embed, /if \(playing\) \{/, "the iframe is not behind the tap");
+  const idle = embed.slice(embed.indexOf("return (", embed.indexOf("</div>\n    );")));
+  assert.ok(!/img\.youtube\.com|i\.ytimg\.com/.test(idle), "the idle poster fetches a thumbnail from YouTube");
+  // The domain that does not set a tracking cookie until playback.
+  assert.match(embed, /youtube-nocookie\.com/);
+  assert.ok(!embed.includes("https://www.youtube.com/embed/"), "the cookie-setting domain is back");
+});
+
+test("the embed is a real control, and the video is named", () => {
+  const embed = readFileSync(new URL("../components/FormGuideEmbed.tsx", import.meta.url), "utf8");
+  assert.match(embed, /aria-label=\{`Play the form guide for \$\{title\}`\}/);
+  assert.match(embed, /title=\{`\$\{title\} — form guide`\}/, "the iframe has no title for a screen reader");
+  assert.match(embed, /allowFullScreen/);
+  assert.match(embed, /tap-target/, "the play control is under the 44px floor");
+});
+
+test("the sheet plays a chosen video and links out for a search", () => {
+  const sheet = readFileSync(new URL("../components/DrillDetail.tsx", import.meta.url), "utf8");
+  assert.match(sheet, /if \(guide\.videoId\) return <FormGuideEmbed videoId=\{guide\.videoId\} title=\{how\.name\} \/>;/);
+  // And the copy no longer promises a chosen demonstration for a search.
+  assert.ok(!/A demonstration we picked for this movement/.test(sheet),
+    "a search still claims to be a video somebody chose");
 });
 

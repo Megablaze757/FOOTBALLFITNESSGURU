@@ -28,6 +28,20 @@ export interface FormGuide {
   kind: "video" | "search";
   /** What the control should say. */
   label: string;
+  /**
+   * The YouTube id, for the ones that can be played in place.
+   *
+   * Only ever set when `kind` is "video". A search has no id — there is no such
+   * thing as an embedded list of results — which is why "switch it all to
+   * iframes" can only ever mean the curated ones. Everything else keeps a link
+   * out, and that is the difference the UI has to show rather than paper over.
+   */
+  videoId?: string;
+}
+
+/** The id out of a watch url, or null if it is not one. */
+function idOf(url: string): string | null {
+  return url.match(/[?&]v=([\w-]{11})/)?.[1] ?? null;
 }
 
 /**
@@ -111,7 +125,9 @@ export function formGuide(name: string): FormGuide | null {
   if (!clean) return null;
 
   const chosen = CURATED[clean.toLowerCase()];
-  if (chosen) return { url: chosen, kind: "video", label: "Watch Form Guide" };
+  if (chosen) {
+    return { url: chosen, kind: "video", label: "Watch Form Guide", videoId: idOf(chosen) ?? undefined };
+  }
 
   if (UNSEARCHABLE.test(clean)) return null;
 
