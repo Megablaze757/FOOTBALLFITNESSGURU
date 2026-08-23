@@ -7,109 +7,23 @@ import { daysAgoLocal } from "@/lib/day";
 import { RangeToggle } from "@/components/admin/RangeToggle";
 
 /**
- * The two tables support gets asked about, and could not see.
- *
- * WEIGHTS: "my weight is wrong" is unanswerable from the outside. Bodyweight is
- * written from two places — the check-in and /body — and read by four, so the
- * first question is always "which number, recorded when, and by which screen".
- * Both sources are listed here, together, because the disagreement between them
- * IS the usual bug.
+ * What support can see, which is deliberately very little.
  *
  * CUSTOM EXERCISES: an athlete adding a movement is telling you the library is
  * missing it. Thirty people adding "Copenhagen plank" is a catalogue entry
  * waiting to be written, and until now nobody could see that happening. The
- * count is the signal, so the list is grouped by name rather than by row.
+ * count is the signal, so the list is grouped by name rather than by row. It is
+ * about the CATALOGUE, not about the person — the name is here only so the
+ * count means something.
  *
- * READ-ONLY, and narrow on purpose. A name, a number, a date. Not a check-in,
- * not a pain map, not a message.
+ * THERE WAS A WEIGHT TABLE HERE and it is gone. It listed every athlete's
+ * bodyweight against their name, from both the check-in and the scale, so that
+ * support could answer "my weight is wrong". That is a real question and this
+ * was a real answer to it, and it still was not worth an internal screen that
+ * shows what everybody in the app weighs. Migration 0096 drops the read policy
+ * that fed it, because deleting a component while leaving the grant open is not
+ * a privacy fix, it is a privacy fix you cannot see failing.
  */
-
-interface WeightRow {
-  user_id: string; kg: number; on: string; source: "check-in" | "weigh-in";
-}
-
-const RANGES = [7, 30, 90] as const;
-
-export function WeightLogs() {
-  const [days, setDays] = useState<(typeof RANGES)[number]>(30);
-  const [who, setWho] = useState("");
-
-  const { data, loading } = useAsync(async () => {
-    const supabase = createClient();
-    const since = daysAgoLocal(days);
-    const [checkIns, weighIns, names] = await Promise.all([
-      supabase.from("daily_check_ins").select("user_id, check_in_date, weight_kg")
-        .not("weight_kg", "is", null).gte("check_in_date", since)
-        .order("check_in_date", { ascending: false }).limit(400),
-      supabase.from("body_logs").select("user_id, log_date, weight_kg")
-        .not("weight_kg", "is", null).gte("log_date", since)
-        .order("log_date", { ascending: false }).limit(400),
-      supabase.from("profiles").select("id, full_name").limit(1000),
-    ]);
-    const byId = new Map(((names.data ?? []) as { id: string; full_name: string | null }[])
-      .map((p) => [p.id, p.full_name ?? "—"]));
-    const rows: WeightRow[] = [
-      ...((checkIns.data ?? []) as { user_id: string; check_in_date: string; weight_kg: number }[])
-        .map((r) => ({ user_id: r.user_id, kg: Number(r.weight_kg), on: r.check_in_date, source: "check-in" as const })),
-      ...((weighIns.data ?? []) as { user_id: string; log_date: string; weight_kg: number }[])
-        .map((r) => ({ user_id: r.user_id, kg: Number(r.weight_kg), on: r.log_date, source: "weigh-in" as const })),
-    ].sort((a, b) => b.on.localeCompare(a.on));
-    return { rows, byId, error: checkIns.error?.message ?? weighIns.error?.message ?? null };
-  }, [days], `admin-weights:${days}`);
-
-  const shown = useMemo(() => {
-    const needle = who.trim().toLowerCase();
-    if (!needle) return data?.rows ?? [];
-    return (data?.rows ?? []).filter((r) =>
-      (data?.byId.get(r.user_id) ?? "").toLowerCase().includes(needle) || r.user_id.startsWith(needle));
-  }, [who, data]);
-
-  return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-end gap-2">
-        <label className="block flex-1">
-          <span className="field-label">Filter by name or user id</span>
-          <input value={who} onChange={(e) => setWho(e.target.value)} placeholder="all athletes" className="field" />
-        </label>
-        <RangeToggle value={days} options={RANGES} onChange={setDays} />
-      </div>
-
-      {data?.error ? (
-        <p className="text-sm text-readiness-yellow">
-          {/permission|policy|row-level/i.test(data.error)
-            ? "Run migration 0095 — admins cannot read body_logs yet."
-            : data.error}
-        </p>
-      ) : loading ? (
-        <p className="py-2 text-center text-sm text-slate-500">Loading…</p>
-      ) : shown.length === 0 ? (
-        <p className="py-2 text-center text-sm text-slate-500">No weights recorded in this window.</p>
-      ) : (
-        <div className="max-h-96 overflow-auto">
-          <table className="w-full min-w-[440px] text-left text-sm">
-            <thead className="sticky top-0 bg-ink-900 text-xs uppercase tracking-wide text-slate-500">
-              <tr><th className="py-2 pr-3">Athlete</th><th className="py-2 pr-3">Weight</th><th className="py-2 pr-3">Date</th><th className="py-2">Where from</th></tr>
-            </thead>
-            <tbody className="divide-y divide-white/[0.06]">
-              {shown.slice(0, 200).map((r, i) => (
-                <tr key={`${r.user_id}-${r.on}-${r.source}-${i}`}>
-                  <td className="py-2 pr-3 text-xs text-slate-300">{data?.byId.get(r.user_id) ?? r.user_id.slice(0, 8)}</td>
-                  <td className="py-2 pr-3 text-sm font-semibold tabular-nums text-slate-100">{r.kg} kg</td>
-                  <td className="py-2 pr-3 text-xs tabular-nums text-slate-400">{r.on}</td>
-                  <td className="py-2 text-xs text-slate-500">{r.source}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-      <p className="text-[11px] text-slate-500">
-        Both sources, interleaved. Where the same day appears twice, the weigh-in is the one the app uses —
-        the scale is the instrument and the check-in slider is memory. See lib/bodyweight.ts.
-      </p>
-    </div>
-  );
-}
 
 export function CustomExerciseLog() {
   const { data, loading } = useAsync(async () => {

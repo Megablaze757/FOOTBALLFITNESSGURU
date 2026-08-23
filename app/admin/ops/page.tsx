@@ -5,7 +5,7 @@ import { useAsync } from "@/lib/use-async";
 import { LaunchToggle } from "@/components/admin/LaunchToggle";
 import { WaitlistAnnounce } from "@/components/admin/WaitlistAnnounce";
 import { EmailOps } from "@/components/admin/EmailOps";
-import { WeightLogs, CustomExerciseLog } from "@/components/admin/DataLogs";
+import { CustomExerciseLog } from "@/components/admin/DataLogs";
 import { AdminShell, AdminArea, Drawer } from "@/components/admin/AdminShell";
 import type { Video } from "@/lib/types";
 
@@ -40,10 +40,15 @@ export default function AdminOps() {
         <EmailOps />
       </AdminArea>
 
+      {/* NO BODYWEIGHT HERE, DELIBERATELY.
+          This used to carry a table of every athlete's weight against their
+          name. It was built to answer "my weight is wrong" and it answered it —
+          but the cost of being able to answer that question was an admin screen
+          that listed what every user in the app weighs, which is not ours to
+          look at. Support can ask the athlete. See migration 0096: the read
+          policy behind this table is dropped too, because a removed component
+          and a live grant is a privacy fix in appearance only. */}
       <AdminArea title="Data" note="Read-only, for answering 'my number is wrong'">
-        <Drawer summary="Weight logs">
-          <WeightLogs />
-        </Drawer>
         <Drawer summary="Exercises athletes added themselves">
           <CustomExerciseLog />
         </Drawer>
