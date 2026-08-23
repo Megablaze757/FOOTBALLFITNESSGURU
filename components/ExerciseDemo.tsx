@@ -1,4 +1,5 @@
 import type { DemoPattern, Implement } from "@/lib/exercises";
+import { artFor, ART_CREDIT } from "@/lib/exercise-art";
 
 // Asset-free demonstration: a stick figure in the two key positions of a
 // movement, shown as START and FINISH side by side — the way a coaching book
@@ -495,10 +496,24 @@ export function ExerciseDemo({ pattern, implement = "none", muscles = [], name, 
 export function ExerciseSteps({ pattern, implement = "none", muscles = [], name, className = "" }: {
   pattern: DemoPattern; implement?: Implement; muscles?: readonly string[]; name?: string; className?: string;
 }) {
+  /**
+   * REAL ARTWORK WHEN WE HAVE IT, the drawn figure when we do not.
+   *
+   * Everkinetic's anatomical illustrations cover the common lifts — bench,
+   * squat, row, curl, press — which is most of what an athlete actually opens.
+   * Nothing covers a cone weave, a Copenhagen plank or a resisted sprint start,
+   * so the figure stays and had to be worth keeping.
+   *
+   * Deliberately not a hard swap of the whole component: the frame, the A/B
+   * markers, the light board and the muscle legend are the same either way, so
+   * a session with four illustrated lifts and one drawn drill still reads as
+   * one set of cards rather than two.
+   */
+  const art = name ? artFor(name) : null;
   const { pose, bench } = poseFor(pattern, name);
-  const frames: { j: Joints; marker: string; label: string }[] = [
-    { j: pose.a, marker: "A", label: "Start" },
-    { j: pose.b, marker: "B", label: "Finish" },
+  const frames: { j: Joints; marker: string; label: string; src?: string }[] = [
+    { j: pose.a, marker: "A", label: "Start", src: art?.start },
+    { j: pose.b, marker: "B", label: "Finish", src: art?.end },
   ];
   return (
     // The light coaching-board treatment deliberately separates this from the
@@ -506,12 +521,22 @@ export function ExerciseSteps({ pattern, implement = "none", muscles = [], name,
     // red is the primary mover and amber is assistance, in both key positions.
     <div className={`flex flex-col overflow-hidden rounded-2xl bg-slate-100 p-2 sm:p-3 ${className}`}>
       <div className="flex min-h-0 flex-1 items-stretch justify-center gap-2 sm:gap-3">
-        {frames.map(({ j, marker, label }) => (
+        {frames.map(({ j, marker, label, src }) => (
           <div key={label} className="relative flex min-h-0 min-w-0 flex-1 flex-col items-center overflow-hidden rounded-xl bg-gradient-to-br from-white to-slate-200 px-2 pb-2 pt-8 shadow-sm">
             <span className="absolute left-2 top-2 grid h-6 w-6 place-items-center rounded-full bg-pitch-400 text-[11px] font-black text-ink-900 shadow-sm" aria-hidden>
               {marker}
             </span>
-            <Figure
+            {src ? (
+              // eslint-disable-next-line @next/next/no-img-element -- a static
+              // SVG in /public with known dimensions; next/image would add a
+              // loader and a layout wrapper for no benefit on a 25KB vector.
+              <img
+                src={src}
+                alt={`${name} — ${label.toLowerCase()} position`}
+                loading="lazy"
+                className="min-h-0 w-full flex-1 object-contain"
+              />
+            ) : <Figure
               j={j}
               pattern={pattern}
               implement={implement}
@@ -519,25 +544,39 @@ export function ExerciseSteps({ pattern, implement = "none", muscles = [], name,
               bench={bench}
               className="min-h-0 w-full flex-1"
               label={`${name ?? pattern} ${label.toLowerCase()} position`}
-            />
+            />}
             <span className="mt-1 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
               {label}
             </span>
           </div>
         ))}
       </div>
+      {/* THE KEY DESCRIBES THE PICTURE ABOVE IT, so it changes with the picture.
+          The dots said red-is-primary, amber-is-assisting — which was the drawn
+          figure's own palette, and is now gold. On a photographed anatomical
+          illustration it describes nothing at all: those are shaded by the
+          artist, not by us. A key to colours that are not on screen is worse
+          than no key, so the illustrated cards just name the muscles. */}
       {muscles.length > 0 && (
         <div className="flex min-w-0 shrink-0 items-center justify-center gap-3 overflow-hidden px-1 pt-2 text-[9px] font-bold uppercase tracking-wide text-slate-600 sm:text-[10px]">
           <span className="flex min-w-0 items-center gap-1.5">
-            <span className="h-2 w-2 shrink-0 rounded-full bg-red-500 shadow-[0_0_7px_rgba(239,68,68,0.65)]" />
+            {!art && <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: activationColour("primary") }} />}
             <span className="truncate">{muscles[0]}</span>
           </span>
           {muscles.length > 1 && (
             <span className="flex min-w-0 items-center gap-1.5">
-              <span className="h-2 w-2 shrink-0 rounded-full bg-amber-500 shadow-[0_0_7px_rgba(245,158,11,0.55)]" />
+              {!art && <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: activationColour("secondary") }} />}
               <span className="truncate">{muscles.slice(1, 4).join(" · ")}</span>
             </span>
           )}
+        </div>
+      )}
+      {/* REQUIRED BY THE LICENCE, and small on purpose — CC BY-SA asks for
+          credit, not for a billboard. Shown only on the cards that actually use
+          the artwork. */}
+      {art && (
+        <div className="shrink-0 px-1 pt-1 text-center text-[8px] uppercase tracking-wide text-slate-400 sm:text-[9px]">
+          Art: {ART_CREDIT.work} · {ART_CREDIT.licence}
         </div>
       )}
     </div>
