@@ -1211,7 +1211,7 @@ export const MEALS: Meal[] = [
   {
     id: "vg_pb_overnight_oats", name: "Peanut butter overnight oats", slot: "Breakfast", minutes: 4,
     items: [
-      { foodId: "oats", qty: 80 }, { foodId: "soy_milk", qty: 300 }, { foodId: "pea_protein", qty: 25 },
+      { foodId: "oats", qty: 80 }, { foodId: "oat_milk", qty: 300 }, { foodId: "pea_protein", qty: 25 },
       { foodId: "peanut_butter", qty: 25 }, { foodId: "banana", qty: 1 },
     ],
     steps: [
@@ -4931,5 +4931,394 @@ export const MEALS: Meal[] = [
     ],
     tip: "Thighs cost a third less than breast, carry the sauce better and cannot dry out. Use them.",
     method: "Brown thighs, soften onion, fry off curry paste with garlic and ginger, then simmer with tomatoes and chickpeas and serve with rice.",
+  },
+
+  // ===========================================================================
+  // WHAT THE BOOK WAS SHORT OF
+  //
+  // Counted rather than guessed. Two gaps stood out and neither was "more
+  // dinners":
+  //
+  //   THREE QUICK DINNERS out of ninety-two. "Under 15 min" is a filter people
+  //   tap at seven o'clock on a Tuesday with nothing in them, and it returned
+  //   three options — which is the same as returning none, except it looks like
+  //   the feature works. Everything in this first group is on the table in
+  //   fifteen minutes and most of it comes out of the cupboard.
+  //
+  //   VEGAN, WHICH COULD EAT 127 OF 283. A vegan athlete was choosing from
+  //   under half the book, so the same dozen dishes came round again and again
+  //   and the variety machinery had nothing to work with. The second and third
+  //   groups are vegan, and several of the quick dinners are too.
+  //
+  //   HIGH-PROTEIN SNACKS, sixteen of fifty-five. A snack slot is a third of a
+  //   day's protein for somebody eating five times, and most of what was there
+  //   was fruit and nuts.
+  // ===========================================================================
+  {
+    id: "q_harissa_chickpea_stew", name: "15-minute harissa chickpea stew", slot: "Dinner", minutes: 15,
+    items: [
+      { foodId: "chickpeas", qty: 400 }, { foodId: "tomatoes_tin", qty: 200 }, { foodId: "harissa", qty: 25 },
+      { foodId: "spinach", qty: 80 }, { foodId: "onion", qty: 70 }, { foodId: "garlic", qty: 8 },
+      { foodId: "olive_oil", qty: 12 }, { foodId: "pitta", qty: 60 }, { foodId: "lemon", qty: 0.5 },
+    ],
+    steps: [
+      "Onion into the oil on a high heat — higher than feels right, you have fifteen minutes and you want colour, not translucence.",
+      "Garlic and harissa in for a minute, stirred constantly so the paste toasts instead of catching.",
+      "Tomatoes and drained chickpeas, then crush about a third of the chickpeas against the side of the pan. That is what turns it from soup into stew.",
+      "Eight minutes at a hard simmer, lid off.",
+      "Spinach folded in until it collapses, lemon over, pitta warmed on top of the pan while it finishes.",
+    ],
+    tip: "The whole thing is one pan and a tin opener, and it is better the next day.",
+    method: "Colour onion hard, toast harissa with garlic, simmer chickpeas and tomatoes while crushing some to thicken, then wilt in spinach and finish with lemon.",
+  },
+  {
+    id: "q_white_bean_garlic_greens", name: "Garlic butter beans with greens", slot: "Dinner", minutes: 12,
+    items: [
+      { foodId: "butter_beans", qty: 500 }, { foodId: "kale", qty: 150 }, { foodId: "garlic", qty: 12 },
+      { foodId: "chilli_fresh", qty: 5 }, { foodId: "lemon", qty: 0.5 }, { foodId: "olive_oil", qty: 8 },
+      { foodId: "wholemeal_bread", qty: 40 }, { foodId: "stock_cubes", qty: 4 },
+      { foodId: "peas_frozen", qty: 120 },
+    ],
+    steps: [
+      "Garlic sliced thin — not crushed — into cold oil, then the heat on low. It should sizzle gently and go pale gold, never brown.",
+      "Chilli in, then the drained beans and a splash of stock. Crush a handful against the pan.",
+      "Kale on top, lid on, three minutes to steam.",
+      "Stir it all together, lemon squeezed over, and eat it with toast dragged through the bottom of the pan.",
+    ],
+    tip: "Starting the garlic in cold oil is the difference between sweet and bitter. It takes no longer.",
+    method: "Sweat sliced garlic from cold in oil, add chilli and beans with stock, steam kale on top, and finish with lemon.",
+  },
+  {
+    id: "q_curried_chickpea_wrap", name: "Curried chickpea wraps", slot: "Dinner", minutes: 10,
+    items: [
+      { foodId: "chickpeas", qty: 300 }, { foodId: "curry_paste", qty: 25 }, { foodId: "coconut_yoghurt", qty: 80 },
+      { foodId: "tortilla_wrap", qty: 2 }, { foodId: "spinach", qty: 40 }, { foodId: "cucumber", qty: 80 },
+      { foodId: "lemon", qty: 0.5 }, { foodId: "onion", qty: 40 },
+    ],
+    steps: [
+      "Chickpeas drained and mashed roughly with a fork — half smooth, half whole, so it holds together without turning to paste.",
+      "Curry paste, half the yoghurt and the lemon stirred through. Taste it now; this is the only chance.",
+      "Rest of the yoghurt thinned with a splash of water for drizzling.",
+      "Wraps warmed 20 seconds in a dry pan, then filled with the chickpeas, spinach, cucumber and sliced onion.",
+    ],
+    tip: "No cooking at all beyond warming the wrap. Makes a packed lunch that survives a bag.",
+    method: "Roughly mash chickpeas with curry paste, yoghurt and lemon, and fill warmed wraps with it alongside spinach, cucumber and onion.",
+  },
+  {
+    id: "q_tuna_bean_pasta", name: "Tuna & white bean pasta", slot: "Dinner", minutes: 14,
+    items: [
+      { foodId: "pasta", qty: 110 }, { foodId: "tuna_tin", qty: 145 }, { foodId: "butter_beans", qty: 200 },
+      { foodId: "garlic", qty: 8 }, { foodId: "chilli_fresh", qty: 4 }, { foodId: "lemon", qty: 0.5 },
+      { foodId: "olive_oil", qty: 12 }, { foodId: "spinach", qty: 60 },
+    ],
+    steps: [
+      "Pasta on. Save a mug of the water.",
+      "Garlic and chilli gently in the oil in the empty pan while the pasta drains — thirty seconds, no more.",
+      "Beans in and crushed lightly, then the tuna, then the spinach on top to wilt.",
+      "Pasta back in with splashes of the water until it turns glossy rather than dry. Lemon over.",
+    ],
+    tip: "Beans and pasta together is the cheapest way to make a small tin of tuna feed somebody properly.",
+    method: "Cook pasta, soften garlic and chilli in oil, crush in beans with tuna and spinach, then loosen with pasta water and finish with lemon.",
+  },
+  {
+    id: "q_black_bean_quesadilla", name: "Black bean & cheese quesadillas", slot: "Dinner", minutes: 12,
+    items: [
+      { foodId: "black_beans", qty: 240 }, { foodId: "tortilla_wrap", qty: 2 }, { foodId: "cheddar", qty: 50 },
+      { foodId: "spice_mix", qty: 5 }, { foodId: "onion", qty: 50 }, { foodId: "peppers", qty: 80 },
+      { foodId: "garlic", qty: 6 }, { foodId: "olive_oil", qty: 8 },
+    ],
+    steps: [
+      "Onion and pepper in the oil on a high heat until the edges catch, then garlic and spices for thirty seconds.",
+      "Beans in and mashed roughly with the spoon so the filling holds rather than falls out.",
+      "Wrap in a dry pan, filling over half of it, cheese on, folded over.",
+      "Two minutes a side, pressed flat with a spatula, until it is properly crisp and the cheese has gone.",
+    ],
+    tip: "Pressing it matters. A quesadilla that has not been squashed is a folded wrap.",
+    method: "Fry onion and pepper hard with spices, mash in black beans, fold into a tortilla with cheese and crisp both sides in a dry pan.",
+  },
+  {
+    id: "q_mackerel_couscous", name: "Mackerel & lemon couscous", slot: "Dinner", minutes: 10,
+    items: [
+      { foodId: "mackerel_tin", qty: 250 }, { foodId: "couscous", qty: 90 }, { foodId: "stock_cubes", qty: 4 },
+      { foodId: "cucumber", qty: 80 }, { foodId: "tomatoes_fresh", qty: 100 }, { foodId: "lemon", qty: 0.5 },
+      { foodId: "olive_oil", qty: 10 }, { foodId: "spinach", qty: 40 },
+    ],
+    steps: [
+      "Couscous in a bowl, boiling stock poured over to a centimetre above it, plate on top, five minutes. Do not stir it.",
+      "Fork it through with the oil and lemon while it is hot — that is when it takes the flavour.",
+      "Cucumber and tomato chopped in, spinach folded through to wilt on the residual heat.",
+      "Mackerel flaked over with its sauce, folded twice only.",
+    ],
+    tip: "Ten minutes, no hob, 60g of protein. The one to know for the evening you got in at nine.",
+    method: "Steep couscous in hot stock under a plate, fork through oil and lemon, stir in salad and wilted spinach, and flake tinned mackerel over.",
+  },
+  {
+    id: "q_gochujang_rice_noodles", name: "Gochujang tofu rice noodles", slot: "Dinner", minutes: 14,
+    items: [
+      { foodId: "tofu", qty: 200 }, { foodId: "rice_noodles", qty: 100 }, { foodId: "gochujang", qty: 20 },
+      { foodId: "soy_sauce", qty: 12 }, { foodId: "peanut_butter", qty: 15 }, { foodId: "garlic", qty: 8 },
+      { foodId: "ginger", qty: 8 }, { foodId: "broccoli", qty: 120 }, { foodId: "olive_oil", qty: 10 },
+    ],
+    steps: [
+      "Rice noodles in a bowl of just-boiled water while you cook — they need no pan.",
+      "Tofu patted dry, cubed, and fried hard in the oil without moving it until each face is gold.",
+      "Broccoli in with a splash of water and a lid for two minutes.",
+      "Gochujang, soy and peanut butter loosened with a couple of spoons of the noodle water, poured in and tossed with the drained noodles.",
+    ],
+    tip: "Peanut butter in the sauce is what makes it cling. Without it the gochujang slides off.",
+    method: "Soak rice noodles off the heat, hard-fry tofu, steam broccoli, then toss everything through a gochujang, soy and peanut sauce.",
+  },
+  {
+    id: "q_chorizo_bean_skillet", name: "Chorizo & bean skillet", slot: "Dinner", minutes: 15,
+    items: [
+      { foodId: "chorizo", qty: 50 }, { foodId: "kidney_beans", qty: 240 }, { foodId: "tomatoes_tin", qty: 200 },
+      { foodId: "peppers", qty: 100 }, { foodId: "onion", qty: 60 }, { foodId: "garlic", qty: 8 },
+      { foodId: "spice_mix", qty: 5 }, { foodId: "wholemeal_bread", qty: 60 },
+    ],
+    steps: [
+      "Chorizo into a cold dry pan, heat on. It renders instead of burning, and the red fat is the whole flavour base.",
+      "Peppers and onion into that fat on a high heat until they blister at the edges.",
+      "Garlic and paprika, then tomatoes and drained beans. Eight minutes, uncovered, until it thickens.",
+      "Bread toasted and torn into the bowl underneath.",
+    ],
+    tip: "Fifty grams of chorizo flavours the whole pan. Any more and it is a chorizo dish that costs three times as much.",
+    method: "Render chorizo from cold, blister peppers and onion in the fat, then simmer with garlic, paprika, tomatoes and beans.",
+  },
+  {
+    id: "q_halloumi_couscous", name: "Halloumi & harissa couscous", slot: "Dinner", minutes: 15,
+    items: [
+      { foodId: "halloumi", qty: 100 }, { foodId: "couscous", qty: 90 }, { foodId: "chickpeas", qty: 150 },
+      { foodId: "harissa", qty: 18 }, { foodId: "stock_cubes", qty: 4 }, { foodId: "spinach", qty: 60 },
+      { foodId: "lemon", qty: 0.5 }, { foodId: "olive_oil", qty: 8 },
+    ],
+    steps: [
+      "Couscous under hot stock with a plate over it, five minutes, untouched.",
+      "Halloumi sliced 1cm and into a dry hot pan — it releases its own fat. Do not move it until it lifts away cleanly on its own.",
+      "Harissa stirred into the forked couscous with the oil, lemon, chickpeas and spinach.",
+      "Halloumi on top while it still squeaks.",
+    ],
+    tip: "Halloumi sticks until it is ready and then releases itself. Prising it early is why it tears.",
+    method: "Steep couscous in stock, dry-fry halloumi until it releases, and fork harissa, chickpeas, spinach and lemon through the couscous.",
+  },
+  {
+    id: "v_peanut_tofu_bowl", name: "Peanut tofu rice bowl", slot: "Lunch", minutes: 18,
+    items: [
+      { foodId: "tofu", qty: 200 }, { foodId: "rice", qty: 80 }, { foodId: "peanut_butter", qty: 25 },
+      { foodId: "soy_sauce", qty: 15 }, { foodId: "lemon", qty: 0.5 }, { foodId: "garlic", qty: 6 },
+      { foodId: "ginger", qty: 6 }, { foodId: "carrots", qty: 80 }, { foodId: "cucumber", qty: 80 },
+      { foodId: "chilli_fresh", qty: 4 },
+    ],
+    steps: [
+      "Rice on.",
+      "Tofu pressed while it cooks, then cubed and fried hard until gold on at least three faces.",
+      "Peanut butter, soy, lemon, grated garlic and ginger whisked with 3 tablespoons of hot water into a pourable sauce.",
+      "Carrot and cucumber cut into matchsticks — raw and cold against the hot rice is the point of the bowl.",
+      "Assembled, sauce over, chilli on top.",
+    ],
+    tip: "The sauce keeps a week in a jar and turns any leftover vegetable into lunch.",
+    method: "Fry pressed tofu until golden, whisk a peanut, soy, lemon, garlic and ginger sauce, and build a bowl over rice with raw carrot and cucumber.",
+  },
+  {
+    id: "v_lentil_tahini_salad", name: "Lentil, tahini & lemon salad", slot: "Lunch", minutes: 25,
+    items: [
+      { foodId: "red_lentils", qty: 110 }, { foodId: "tahini", qty: 14 }, { foodId: "lemon", qty: 0.5 },
+      { foodId: "cucumber", qty: 100 }, { foodId: "tomatoes_fresh", qty: 120 }, { foodId: "onion", qty: 50 },
+      { foodId: "spinach", qty: 80 }, { foodId: "olive_oil", qty: 5 }, { foodId: "spice_mix", qty: 4 },
+      { foodId: "seeds_mixed", qty: 10 }, { foodId: "peas_frozen", qty: 120 },
+    ],
+    steps: [
+      "Lentils simmered in plenty of salted water for 15 minutes — you want them holding their shape, so start testing at twelve.",
+      "Drained and spread out to cool for a few minutes. Dressing hot lentils makes them soak it up and go claggy.",
+      "Tahini whisked with the lemon and a few spoons of cold water. It will seize and go pale before it loosens — keep going, that is normal.",
+      "Everything tossed together with the oil, spices and seeds.",
+    ],
+    tip: "Tahini and lemon is the dressing that makes any pulse taste like a dish rather than a side.",
+    method: "Simmer lentils until just tender, cool briefly, and toss with a loosened tahini-lemon dressing, raw salad and seeds.",
+  },
+  {
+    id: "v_black_bean_tacos", name: "Smoky black bean tacos", slot: "Dinner", minutes: 16,
+    items: [
+      { foodId: "black_beans", qty: 400 }, { foodId: "corn_tortilla", qty: 3 }, { foodId: "avocado", qty: 0.25 },
+      { foodId: "spice_mix", qty: 6 }, { foodId: "onion", qty: 60 }, { foodId: "garlic", qty: 8 },
+      { foodId: "lemon", qty: 0.5 }, { foodId: "chilli_fresh", qty: 5 }, { foodId: "olive_oil", qty: 5 },
+      { foodId: "tomatoes_fresh", qty: 100 }, { foodId: "spinach", qty: 60 },
+    ],
+    steps: [
+      "Onion in the oil on high until it takes colour at the edges, then garlic and smoked paprika.",
+      "Beans in with a splash of water, mashed about half, cooked down 5 minutes until thick enough to sit on a tortilla without running off.",
+      "Tomato, chilli and lemon chopped together with a pinch of salt for a rough salsa.",
+      "Tortillas warmed in a dry pan until they puff, then filled with the beans, salsa and sliced avocado.",
+    ],
+    tip: "Warm the tortillas last and eat immediately — they go leathery within a minute of coming off the heat.",
+    method: "Fry onion and smoked paprika, cook down mashed black beans, and fill warmed corn tortillas with them, a raw salsa and avocado.",
+  },
+  {
+    id: "v_edamame_quinoa_bowl", name: "Edamame, quinoa & sesame bowl", slot: "Lunch", minutes: 20,
+    items: [
+      { foodId: "quinoa", qty: 90 }, { foodId: "edamame", qty: 150 }, { foodId: "tahini", qty: 20 },
+      { foodId: "soy_sauce", qty: 12 }, { foodId: "lemon", qty: 0.5 }, { foodId: "carrots", qty: 80 },
+      { foodId: "cucumber", qty: 80 }, { foodId: "seeds_mixed", qty: 12 }, { foodId: "ginger", qty: 6 },
+    ],
+    steps: [
+      "Quinoa rinsed properly in a sieve first — the coating on it is genuinely bitter and one rinse removes it.",
+      "Simmered 15 minutes, then lid on off the heat for 5. The little white tails should have uncurled.",
+      "Edamame in from frozen for the last two minutes of the boil.",
+      "Tahini, soy, lemon and grated ginger whisked with water into a dressing, poured over while the quinoa is warm.",
+      "Raw carrot and cucumber and the seeds on last.",
+    ],
+    tip: "Rinsing quinoa is the step everybody skips and the reason people think they do not like it.",
+    method: "Rinse and simmer quinoa, boil edamame with it briefly, and dress warm with tahini, soy, lemon and ginger before adding raw veg and seeds.",
+  },
+  {
+    id: "v_tofu_scramble", name: "Turmeric tofu scramble on toast", slot: "Breakfast", minutes: 12,
+    items: [
+      { foodId: "tofu", qty: 200 }, { foodId: "spice_mix", qty: 5 }, { foodId: "wholemeal_bread", qty: 80 },
+      { foodId: "spinach", qty: 60 }, { foodId: "tomatoes_fresh", qty: 80 }, { foodId: "onion", qty: 40 },
+      { foodId: "olive_oil", qty: 10 }, { foodId: "garlic", qty: 5 },
+    ],
+    steps: [
+      "Tofu crumbled between your fingers rather than chopped — uneven pieces are what makes it read as scrambled egg.",
+      "Onion softened in the oil, garlic and turmeric in for thirty seconds.",
+      "Tofu in and left to sit for a minute at a time between stirs, so some of it browns instead of all of it steaming.",
+      "Tomato and spinach in at the end, cooked only until the spinach goes.",
+      "Onto toast.",
+    ],
+    tip: "Crumbled by hand, browned in patches, seasoned hard. Diced and stirred constantly it tastes of nothing.",
+    method: "Crumble tofu by hand, fry with onion, garlic and turmeric until patched brown, then fold in tomato and spinach and serve on toast.",
+  },
+  {
+    id: "v_mango_coconut_oats", name: "Mango & coconut overnight oats", slot: "Breakfast", minutes: 5,
+    items: [
+      { foodId: "oats", qty: 80 }, { foodId: "oat_milk", qty: 300 }, { foodId: "pea_protein", qty: 25 },
+      { foodId: "mango_frozen", qty: 100 }, { foodId: "coconut_yoghurt", qty: 80 }, { foodId: "seeds_mixed", qty: 12 },
+    ],
+    steps: [
+      "Pea protein whisked into the soy milk first — into the oats it clumps and stays clumped.",
+      "Oats and coconut yoghurt stirred in, jar in the fridge overnight.",
+      "Mango in from frozen in the morning; two minutes and it softens enough to mash into the top.",
+      "Seeds over.",
+    ],
+    tip: "Mango is sweet enough to cover pea protein, which is the one thing people give up on it for.",
+    method: "Whisk pea protein into soy milk, stir through oats and coconut yoghurt overnight, and top with softened frozen mango and seeds.",
+  },
+  {
+    id: "s_yoghurt_tahini_date", name: "Tahini date yoghurt", slot: "Snack", minutes: 3,
+    items: [
+      { foodId: "greek_yoghurt", qty: 250 }, { foodId: "tahini", qty: 15 }, { foodId: "dates", qty: 25 },
+      { foodId: "seeds_mixed", qty: 10 },
+    ],
+    steps: [
+      "Tahini rippled through the yoghurt, not stirred in — you want streaks of it.",
+      "Dates chopped small and scattered with the seeds.",
+    ],
+    tip: "Tastes like a dessert and carries 28g of protein. Dates are sweet enough that it needs nothing else.",
+    method: "Ripple tahini through Greek yoghurt and top with chopped dates and seeds.",
+  },
+  {
+    id: "s_hummus_edamame_pitta", name: "Hummus & edamame pitta", slot: "Snack", minutes: 5,
+    items: [
+      { foodId: "hummus", qty: 60 }, { foodId: "edamame", qty: 100 }, { foodId: "pitta", qty: 30 },
+      { foodId: "lemon", qty: 0.5 }, { foodId: "chilli_fresh", qty: 4 },
+    ],
+    steps: [
+      "Edamame from frozen into boiling water for three minutes, then drained and salted well.",
+      "Pitta toasted until it puffs, torn into strips.",
+      "Hummus spread thick, edamame over, lemon and chilli on top.",
+    ],
+    tip: "Salting edamame the moment it drains is the difference — do it cold and it just sits on the outside.",
+    method: "Boil and salt edamame, toast pitta, and pile both onto thickly spread hummus with lemon and chilli.",
+  },
+  {
+    id: "s_mackerel_oatcakes", name: "Mackerel & lemon oatcakes", slot: "Snack", minutes: 4,
+    items: [
+      { foodId: "mackerel_tin", qty: 125 }, { foodId: "oatcakes", qty: 40 }, { foodId: "lemon", qty: 0.5 },
+      { foodId: "cucumber", qty: 60 }, { foodId: "chilli_fresh", qty: 3 },
+    ],
+    steps: [
+      "Mackerel flaked with a fork, lemon squeezed straight into it and mixed through with plenty of pepper.",
+      "Piled onto the oatcakes with cucumber and chilli.",
+    ],
+    tip: "Half a tin is 24g of protein and about forty pence. The lemon is what stops it tasting tinned.",
+    method: "Flake tinned mackerel with lemon and pepper and pile onto oatcakes with cucumber and chilli.",
+  },
+  {
+    id: "s_pb_banana_rice_cakes", name: "Peanut butter & banana rice cakes", slot: "Snack", minutes: 3,
+    items: [
+      { foodId: "rice_cakes", qty: 40 }, { foodId: "peanut_butter", qty: 30 },
+      { foodId: "banana", qty: 1 }, { foodId: "seeds_mixed", qty: 10 },
+    ],
+    steps: [
+      "Peanut butter spread while the rice cakes are dry — anything wet and they go soft immediately.",
+      "Banana sliced over, seeds pressed in so they stay put.",
+    ],
+    tip: "Assemble it when you are going to eat it. Made in advance this is cardboard within the hour.",
+    method: "Spread peanut butter on rice cakes and top with sliced banana and seeds.",
+  },
+  {
+    id: "s_cottage_cheese_pineapple", name: "Whipped cottage cheese & berries", slot: "Snack", minutes: 4,
+    items: [
+      { foodId: "cottage_cheese", qty: 250 }, { foodId: "berries_frozen", qty: 100 },
+      { foodId: "almonds", qty: 15 }, { foodId: "lemon", qty: 0.5 },
+    ],
+    steps: [
+      "Cottage cheese blitzed or beaten hard with a fork for a minute until the curds break down and it goes smooth.",
+      "Berries in from frozen with the lemon, left two minutes to bleed.",
+      "Almonds chopped over.",
+    ],
+    tip: "Whipping it is the whole thing. Most people who say they hate cottage cheese mean they hate the texture.",
+    method: "Beat cottage cheese smooth, fold in frozen berries with lemon, and top with chopped almonds.",
+  },
+  // --- THE ATHLETE WITH ALMOST NOTHING. ---------------------------------------
+  //
+  // A vegan who also avoids soy is the hardest person in this app to feed, and
+  // the numbers say why: of the soy-free vegan pool, ZERO lunches and ZERO
+  // dinners cleared the 0.079g of protein per calorie a 60kg woman cutting
+  // actually needs. The best were 0.077 and 0.078 — near-misses, every single
+  // day, for four weeks.
+  //
+  // Pulses cannot fix it. Red lentils are the densest thing available at 0.071
+  // g/kcal and beans are 0.069, so no arrangement of them clears the bar; the
+  // ceiling is the ingredient, not the recipe. Pea protein is 0.213, and
+  // stirring it into a spiced soup or dhal is a thing vegan athletes genuinely
+  // do rather than a trick invented here — unflavoured, off the heat, into
+  // something already strongly seasoned, it disappears.
+  //
+  // Said plainly in the tips, because somebody who does not need this should
+  // not be handed a bowl of soup with powder in it and no explanation.
+  {
+    id: "v_high_protein_lentil_soup", name: "Spiced lentil & pea soup", slot: "Lunch", minutes: 28,
+    items: [
+      { foodId: "red_lentils", qty: 85 }, { foodId: "peas_frozen", qty: 180 }, { foodId: "spinach", qty: 120 },
+      { foodId: "pea_protein", qty: 30 }, { foodId: "onion", qty: 70 }, { foodId: "garlic", qty: 10 },
+      { foodId: "ginger", qty: 8 }, { foodId: "spice_mix", qty: 8 }, { foodId: "stock_cubes", qty: 6 },
+      { foodId: "lemon", qty: 0.5 }, { foodId: "olive_oil", qty: 6 },
+    ],
+    steps: [
+      "Onion in the oil until soft, then garlic, ginger and spices for a minute — until the kitchen smells of cumin, not before.",
+      "Lentils and 700ml stock, simmered 18 minutes until they have collapsed.",
+      "Peas and spinach in for the last three, then blitzed or beaten smooth.",
+      "OFF THE HEAT, and only then the pea protein, whisked in a ladleful at a time. Into a boiling pot it goes grainy and stays grainy.",
+      "Lemon in at the end, and taste for salt — it will need more than you expect.",
+    ],
+    tip: "The protein is there because a soy-free vegan cutting has almost nothing that clears their protein density, and this does. Unflavoured, off the heat, into something this well spiced, you will not find it.",
+    method: "Soften onion with garlic, ginger and spices, simmer lentils in stock, add peas and spinach, blend, then whisk pea protein in off the heat with lemon.",
+  },
+  {
+    id: "v_protein_dhal_bowl", name: "Thick dhal bowl with greens", slot: "Dinner", minutes: 30,
+    items: [
+      { foodId: "red_lentils", qty: 95 }, { foodId: "tomatoes_tin", qty: 250 }, { foodId: "peas_frozen", qty: 170 },
+      { foodId: "spinach", qty: 150 }, { foodId: "pea_protein", qty: 30 }, { foodId: "onion", qty: 70 },
+      { foodId: "garlic", qty: 10 }, { foodId: "ginger", qty: 8 }, { foodId: "spice_mix", qty: 9 },
+      { foodId: "stock_cubes", qty: 5 }, { foodId: "lemon", qty: 0.5 }, { foodId: "olive_oil", qty: 6 },
+    ],
+    steps: [
+      "Onion properly soft first — eight minutes. Every flat dhal is a rushed onion.",
+      "Garlic, ginger and spices for a minute, then the lentils, tomatoes, stock and 400ml water.",
+      "Twenty minutes at a low simmer, stirred now and then so the bottom does not catch.",
+      "Peas and spinach in for three minutes, then beat it hard with the spoon — that is what makes it dhal rather than lentils in liquid.",
+      "Off the heat, pea protein whisked in a bit at a time, then the lemon.",
+    ],
+    tip: "No rice on purpose: the rice is what drops the protein per calorie below what a cutting athlete needs. Eat it as a bowl, thick enough to stand a spoon in.",
+    method: "Soften onion, bloom garlic, ginger and spices, simmer lentils with tomatoes, stir in peas and spinach, beat thick, then whisk in pea protein off the heat with lemon.",
   },
 ];

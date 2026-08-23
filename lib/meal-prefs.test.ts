@@ -104,14 +104,44 @@ test("budget mode is cheaper for every athlete, not just one", () => {
     { sex: "male", age: 35, heightCm: 190, weightKg: 95, activity: "high", goal: "build" },
     { sex: "female", age: 19, heightCm: 172, weightKg: 68, activity: "high", goal: "build" },
   ];
+  /**
+   * JUDGED ON THE WEEK, WHICH IS WHAT THE TICK PROMISES.
+   *
+   * This measured `.total` — the first shop, with a bare cupboard — because
+   * when it was written that was what the planner optimised. It is not any
+   * more: the planner was moved onto `ongoingTotal` precisely because
+   * optimising the till was making the WEEK dearer, and the card now headlines
+   * the weekly figure with the till underneath it.
+   *
+   * So the till going up is no longer automatically a fault. A 60kg
+   * pescatarian cutting pays £2.15 more at the checkout and £8.55 less for the
+   * week, because the extra is a bag of lentils and a jar of paste that are
+   * still there on Monday. Failing that is failing the fix.
+   *
+   * The original bug is still caught, and by the stricter of the two: it was
+   * five salmon dinners and three of prawns, which was dearer on BOTH counts.
+   * The till is still checked, with the standing cupboard cost allowed for —
+   * but only where the week actually got cheaper, so "spend more, save
+   * nothing" cannot pass.
+   */
   const dearer: string[] = [];
   for (const body of bodies) {
     for (const d of DIET_PATTERNS) {
       const t = planTargets(body);
       const p = prefs({ pattern: d.id });
-      const normal = shoppingList(buildWeek(t, 0, p)).total;
-      const cheap = shoppingList(buildWeek(t, 0, { ...p, budget: true })).total;
-      if (cheap > normal) dearer.push(`${body.goal}/${d.id}: £${cheap} vs £${normal}`);
+      const normal = shoppingList(buildWeek(t, 0, p));
+      const cheap = shoppingList(buildWeek(t, 0, { ...p, budget: true }));
+      if (cheap.ongoingTotal > normal.ongoingTotal) {
+        dearer.push(`${body.goal}/${d.id}: the WEEK is £${cheap.ongoingTotal.toFixed(2)} vs £${normal.ongoingTotal.toFixed(2)}`);
+        continue;
+      }
+      // Stocking the cupboard is allowed to cost a few pounds up front; buying
+      // a fortune of it is not.
+      const stocked = cheap.total - normal.total;
+      const saved = normal.ongoingTotal - cheap.ongoingTotal;
+      if (stocked > 0 && stocked > saved) {
+        dearer.push(`${body.goal}/${d.id}: £${stocked.toFixed(2)} more at the till to save £${saved.toFixed(2)} a week`);
+      }
     }
   }
   assert.deepEqual(dearer, [], `budget mode came out dearer:\n  ${dearer.join("\n  ")}`);
