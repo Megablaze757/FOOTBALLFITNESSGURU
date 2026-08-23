@@ -697,7 +697,7 @@ function overBudget(state) {
   return json({ error: `${reason} The on-device coach still works, and your allowance resets \u2014 upgrade for more.` }, 429);
 }
 __name(overBudget, "overBudget");
-var WORKER_VERSION = "2026-08-23.3";
+var WORKER_VERSION = "2026-08-23.4";
 var ATTEMPT_TIMEOUT_MS = {
   groq: 1e4,
   openrouter: 2e4,
@@ -2506,6 +2506,22 @@ async function emailStatus(req, env) {
   return json({
     configuredVars: names.filter((k) => vars[k].trim() !== "").sort(),
     blankVars: names.filter((k) => vars[k].trim() === "").sort(),
+    /**
+     * NAMES THAT ARE NOT WHAT THEY LOOK LIKE.
+     *
+     * The failure that cost an afternoon: a variable named "RESEND_API_KEY "
+     * with a trailing space. `Object.keys` reports it, so it appears in the
+     * list above and renders identically to the real thing — while
+     * `env.RESEND_API_KEY` finds nothing, because that is a different name. The
+     * dashboard shows no difference either. Copy-pasting a name out of a README
+     * or a chat window is how it gets there, and a lookalike character from a
+     * non-Latin keyboard layout does the same thing.
+     *
+     * Anything that is not plain A-Z, 0-9 and underscore is suspect: a leading
+     * or trailing space, a lowercase letter, a hyphen, a Cyrillic Е. The UI
+     * quotes these so the whitespace has edges.
+     */
+    oddVars: Object.keys(vars).filter((k) => !/^[A-Za-z][A-Za-z0-9_]*$/.test(k)).sort(),
     /**
      * WHICH WORKER ACTUALLY ANSWERED THIS.
      *

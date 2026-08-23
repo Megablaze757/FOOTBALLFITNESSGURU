@@ -48,6 +48,8 @@ interface Status {
   configuredVars?: string[];
   /** Names that exist but are empty — the cause that looks like success. */
   blankVars?: string[];
+  /** Names carrying a space or a lookalike character — they read correctly and are not. */
+  oddVars?: string[];
 }
 
 /** The exact names the Worker reads. Anything else is not an email provider. */
@@ -194,6 +196,23 @@ export function EmailOps() {
                 Shown only when something is wrong, because on a working setup
                 it is a wall of text nobody needs. Names only — a name cannot
                 leak a key, and every one of these is in the repo already. */}
+            {/* A NAME THAT IS NOT WHAT IT LOOKS LIKE.
+                "RESEND_API_KEY " with a trailing space appears in the list
+                above, renders identically, and is a different name — so the
+                variable is definitely there and the code definitely cannot see
+                it. Nothing on the Cloudflare screen shows the difference
+                either. Quoted here so the whitespace has edges. */}
+            {(status.oddVars ?? []).length > 0 && (
+              <p className="rounded-xl border border-readiness-red/30 bg-readiness-red/[0.06] p-3 text-xs leading-relaxed text-readiness-red">
+                These names carry a space or a character that is not a plain letter:{" "}
+                {status.oddVars!.map((n) => <code key={n} className="font-mono">&quot;{n}&quot;</code>)
+                  .reduce((all, el, i) => i ? [...all, ", ", el] : [el], [] as React.ReactNode[])}.
+                They read correctly and are not the same name — the Worker looks one up by exact
+                spelling and finds nothing. Delete each one and add it back, typing the NAME by
+                hand rather than pasting it.
+              </p>
+            )}
+
             {/* A NEAR MISS IS THE COMMONEST CAUSE AND THE HARDEST TO SEE.
                 The name is right there in the dashboard, it reads correctly,
                 and RESEND_KEY is not RESEND_API_KEY. Nobody spots that by

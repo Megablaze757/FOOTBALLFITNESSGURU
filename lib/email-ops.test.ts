@@ -68,7 +68,14 @@ test("the config check can only be answered by the Worker, and it is", () => {
   assert.match(worker, /async function emailStatus/);
   // Booleans only. A boolean cannot leak a key — so every secret this reports
   // on must be coerced, and none may be returned raw.
-  const body = worker.slice(worker.indexOf("async function emailStatus"), worker.indexOf("async function emailTest"));
+  // COMMENTS STRIPPED FIRST. The rule is about what reaches a client, and a
+  // comment reaches nobody — this fired on a note explaining that
+  // `env.RESEND_API_KEY` finds nothing when the variable is named with a
+  // trailing space, which is documentation of the exact bug the surrounding
+  // code exists to catch. A test that cannot tell code from prose makes the
+  // prose disappear.
+  const body = worker.slice(worker.indexOf("async function emailStatus"), worker.indexOf("async function emailTest"))
+    .replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
   for (const secret of ["GAS_EMAIL_SECRET", "RESEND_API_KEY", "SUPABASE_SERVICE_ROLE_KEY"]) {
     const uses = [...body.matchAll(new RegExp(`env\\.${secret}`, "g"))];
     assert.ok(uses.length > 0, `emailStatus says nothing about ${secret}`);
@@ -232,5 +239,40 @@ test("a name that nearly matches is called out, not left in the list", () => {
   // Only when nothing is configured — a working setup with a stray RESEND_FOO
   // variable does not need telling off.
   assert.match(ui, /!status\.configured && nearMisses/);
+});
+
+test("a name that is not what it looks like is called out", () => {
+  /**
+   * THE ONE THAT COST AN AFTERNOON. A variable named "RESEND_API_KEY " with a
+   * trailing space: Object.keys reports it, so it appears in the list of what
+   * the Worker can see and renders identically to the real thing — while
+   * env.RESEND_API_KEY finds nothing, because that is a different name.
+   *
+   * Every screen agreed the variable was there and the code could not see it,
+   * and neither statement was wrong. Nothing in the Cloudflare dashboard shows
+   * the difference either.
+   */
+  const worker = readFileSync(new URL("../cloudflare/src/index.ts", import.meta.url), "utf8");
+  assert.match(worker, /oddVars: Object\.keys\(vars\)\.filter\(\(k\) => !\/\^\[A-Za-z\]\[A-Za-z0-9_\]\*\$\/\.test\(k\)\)/);
+  const ui = readFileSync(new URL("../components/admin/EmailOps.tsx", import.meta.url), "utf8");
+  assert.match(ui, /\(status\.oddVars \?\? \[\]\)\.length > 0/);
+  // Quoted, so whitespace has edges. An unquoted name with a trailing space
+  // renders exactly like one without.
+  assert.match(ui, /&quot;\{n\}&quot;/);
+  // Shown whatever else is configured: a stray odd name is worth knowing about
+  // even on a Worker that is currently sending fine.
+  assert.ok(!/!status\.configured && \(status\.oddVars/.test(ui), "the odd-name warning is gated on failure");
+});
+
+test("the odd-name check accepts every name the Worker actually uses", () => {
+  // A checker that flags the legitimate names is a checker nobody reads twice.
+  const worker = readFileSync(new URL("../cloudflare/src/index.ts", import.meta.url), "utf8");
+  const declared = worker.slice(worker.indexOf("interface Env"), worker.indexOf("const CORS"))
+    .match(/^\s{2}([A-Za-z_][A-Za-z0-9_]*)\??:/gm) ?? [];
+  assert.ok(declared.length > 10, `only found ${declared.length} env names — has the interface moved?`);
+  for (const line of declared) {
+    const name = line.trim().replace(/\??:$/, "");
+    assert.match(name, /^[A-Za-z][A-Za-z0-9_]*$/, `${name} would be flagged as an odd name`);
+  }
 });
 
