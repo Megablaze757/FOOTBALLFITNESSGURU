@@ -462,7 +462,7 @@ function overBudget(state: BudgetState): Response {
 // nobody is watching a spinner and the budget can be what the work actually
 // needs. Callers pass their own client-side timeout to match.
 // Bump on every paste into the Cloudflare dashboard. GET /health reports it.
-const WORKER_VERSION = "2026-08-23.1";
+const WORKER_VERSION = "2026-08-23.2";
 
 const CHAIN_BUDGET_MS = 55_000;
 /**
@@ -3234,6 +3234,20 @@ async function emailStatus(req: Request, env: Env): Promise<Response> {
   return json({
     configuredVars: names.filter((k) => (vars[k] as string).trim() !== "").sort(),
     blankVars: names.filter((k) => (vars[k] as string).trim() === "").sort(),
+    /**
+     * WHICH WORKER ACTUALLY ANSWERED THIS.
+     *
+     * The remaining way to set a secret correctly and still be told it is
+     * missing: set it on a different Worker from the one the app calls.
+     * NEXT_PUBLIC_API_URL is compiled into a static export, so the app talks to
+     * whatever host was baked in at build time — which is not necessarily the
+     * Worker whose dashboard is open in the other tab. Nothing on either screen
+     * says so, and the two look identical from here.
+     *
+     * Read off the request, so it is where the reply came from rather than
+     * where anything believes it came from.
+     */
+    host: new URL(req.url).host,
     version: WORKER_VERSION,
     provider,
     configured: provider !== null,

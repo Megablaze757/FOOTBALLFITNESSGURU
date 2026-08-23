@@ -697,7 +697,7 @@ function overBudget(state) {
   return json({ error: `${reason} The on-device coach still works, and your allowance resets \u2014 upgrade for more.` }, 429);
 }
 __name(overBudget, "overBudget");
-var WORKER_VERSION = "2026-08-23.1";
+var WORKER_VERSION = "2026-08-23.2";
 var ATTEMPT_TIMEOUT_MS = {
   groq: 1e4,
   openrouter: 2e4,
@@ -2506,6 +2506,20 @@ async function emailStatus(req, env) {
   return json({
     configuredVars: names.filter((k) => vars[k].trim() !== "").sort(),
     blankVars: names.filter((k) => vars[k].trim() === "").sort(),
+    /**
+     * WHICH WORKER ACTUALLY ANSWERED THIS.
+     *
+     * The remaining way to set a secret correctly and still be told it is
+     * missing: set it on a different Worker from the one the app calls.
+     * NEXT_PUBLIC_API_URL is compiled into a static export, so the app talks to
+     * whatever host was baked in at build time — which is not necessarily the
+     * Worker whose dashboard is open in the other tab. Nothing on either screen
+     * says so, and the two look identical from here.
+     *
+     * Read off the request, so it is where the reply came from rather than
+     * where anything believes it came from.
+     */
+    host: new URL(req.url).host,
     version: WORKER_VERSION,
     provider,
     configured: provider !== null,

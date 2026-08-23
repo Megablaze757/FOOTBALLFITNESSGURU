@@ -40,6 +40,8 @@ interface Status {
   version?: string; provider: string | null; configured: boolean; from: string | null;
   gmailSecretSet?: boolean; resendFallback?: boolean; serviceRoleSet?: boolean;
   crons?: string[]; note?: string;
+  /** The host that answered — not necessarily the Worker you have open. */
+  host?: string;
   /** Names of the variables this Worker was actually handed. Never values. */
   configuredVars?: string[];
   /** Names that exist but are empty — the cause that looks like success. */
@@ -179,9 +181,12 @@ export function EmailOps() {
                   What this Worker can see ({status.configuredVars.length} variables)
                 </summary>
                 <p className="mt-2 text-slate-500">
-                  Read live from the running Worker, not from the repo. If the name you set is not
-                  in this list, it did not reach this Worker — check you pressed Deploy, and that
-                  you are looking at the same Worker the app calls.
+                  Read live from{" "}
+                  <strong className="text-slate-300">{status.host ?? "the running Worker"}</strong>, which is
+                  the host that answered — not necessarily the Worker you have open in another tab.
+                  If the name you set is not in this list, it did not reach <em>this</em> Worker:
+                  check you pressed Deploy, that the active deployment is the newest version, and
+                  that this host is the one you edited.
                 </p>
                 <p className="mt-2 break-words font-mono text-[11px] text-slate-400">
                   {status.configuredVars.join("  ")}
