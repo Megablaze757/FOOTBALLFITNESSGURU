@@ -328,3 +328,32 @@ test("the status and the sender ask the same question", () => {
   assert.ok(!/env\.GAS_EMAIL_URL/.test(code), "the email path still reads env.GAS_EMAIL_URL directly");
 });
 
+test("the public health route says whether email can send, and never how", () => {
+  /**
+   * "Is the key actually reaching the code" took a day to answer through
+   * screenshots of an admin screen, and the answer was one unauthenticated GET
+   * away from anybody trying to help. A provider name is not a secret.
+   */
+  const worker = readFileSync(new URL("../cloudflare/src/index.ts", import.meta.url), "utf8");
+  const health = worker.slice(worker.indexOf('pathname.endsWith("/health")'), worker.indexOf('return json({ error: "not found" }, 404)'));
+  assert.match(health, /email: conf\(env, "GAS_EMAIL_URL"\) \? "gmail" : conf\(env, "RESEND_API_KEY"\) \? "resend" : null/);
+  // A public route must never carry a value, and must not enumerate the
+  // Worker's whole configuration either — that stays behind the admin gate.
+  const code = health.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  assert.ok(!/configuredVars|blankVars|oddVars/.test(code), "the public route lists every variable name");
+  assert.ok(!/RESEND_API_KEY\b(?!")/.test(code.replace(/conf\(env, "[A-Z_]+"\)/g, "")), "a raw secret reaches the public route");
+});
+
+test("a binding bound the wrong way is named as such, not reported as missing", () => {
+  // Cloudflare's Secrets Store binds an object with an async get(), not a
+  // string. A Worker reading it as text sees nothing while the dashboard shows
+  // the secret present and correct — the same shape as a name with a trailing
+  // space, one layer down, and needing the opposite fix from "it is missing".
+  const worker = readFileSync(new URL("../cloudflare/src/index.ts", import.meta.url), "utf8");
+  const health = worker.slice(worker.indexOf('pathname.endsWith("/health")'), worker.indexOf('return json({ error: "not found" }, 404)'));
+  assert.match(health, /emailBindings: \["RESEND_API_KEY", "GAS_EMAIL_URL", "REMINDER_FROM"\]/);
+  for (const kind of ["missing", "empty", "text", "secret-store"]) {
+    assert.match(health, new RegExp(`"${kind}"`), `the binding kinds do not distinguish ${kind}`);
+  }
+});
+

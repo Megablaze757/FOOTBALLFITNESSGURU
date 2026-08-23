@@ -180,6 +180,36 @@ export default {
           // hardcoded true — advertising vision we can't do is how photos
           // reached a text-only model and got answered anyway.
           vision: vision.length ? vision.map((r) => `${r.provider}/${r.model}`) : false,
+          /**
+           * WHETHER EMAIL CAN SEND, on the one route nobody has to log in for.
+           *
+           * A provider NAME, never a key, and no variable names — this route is
+           * public. It exists because "is the key actually reaching the code"
+           * took a day to answer through screenshots of an admin screen, and
+           * the answer was always one GET away from anybody helping.
+           *
+           * Same `conf` the sender uses, so it cannot report a provider the
+           * sender would not find.
+           */
+          email: conf(env, "GAS_EMAIL_URL") ? "gmail" : conf(env, "RESEND_API_KEY") ? "resend" : null,
+          /**
+           * How each email variable is BOUND, by kind — never its value.
+           *
+           * "missing" and "secret-store" look identical from every screen and
+           * need opposite fixes. Cloudflare's Secrets Store binds an object
+           * with an async get(), not a string, so a Worker reading it as text
+           * sees nothing while the dashboard shows the secret present and
+           * correct. That is this whole bug's shape, one layer down.
+           */
+          emailBindings: ["RESEND_API_KEY", "GAS_EMAIL_URL", "REMINDER_FROM"].map((name) => {
+            const raw = (env as unknown as Record<string, unknown>)[name];
+            const kind = raw === undefined ? "missing"
+              : typeof raw === "string" ? (raw.trim() === "" ? "empty" : "text")
+              : typeof raw === "object" && raw !== null && typeof (raw as { get?: unknown }).get === "function"
+                ? "secret-store"
+                : typeof raw;
+            return `${name}:${kind}`;
+          }),
         });
       }
       return json({ error: "not found" }, 404);
@@ -475,7 +505,7 @@ function overBudget(state: BudgetState): Response {
 // nobody is watching a spinner and the budget can be what the work actually
 // needs. Callers pass their own client-side timeout to match.
 // Bump on every paste into the Cloudflare dashboard. GET /health reports it.
-const WORKER_VERSION = "2026-08-23.5";
+const WORKER_VERSION = "2026-08-23.6";
 
 const CHAIN_BUDGET_MS = 55_000;
 /**
