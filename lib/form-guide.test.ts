@@ -30,7 +30,7 @@ test("a staple lift has a chosen video, not a search", () => {
     assert.equal(guide?.kind, "video", `${lift} falls back to a search`);
     assert.match(guide!.url, /^https:\/\/www\.youtube\.com\/watch\?v=/);
   }
-  assert.ok(curatedCount() >= 140, `only ${curatedCount()} curated guides`);
+  assert.ok(curatedCount() >= 190, `only ${curatedCount()} curated guides`);
 });
 
 test("everything else still has somewhere to go", () => {
@@ -171,7 +171,7 @@ test("the curated list grew, and every entry is a well-formed watch url", () => 
   const src = readFileSync(new URL("./form-guide.ts", import.meta.url), "utf8");
   const block = src.slice(src.indexOf("const CURATED"), src.indexOf("};", src.indexOf("const CURATED")));
   const urls = [...block.matchAll(/"(https:\/\/[^"]+)"/g)].map((m) => m[1]);
-  assert.ok(urls.length >= 140, `only ${urls.length} curated guides`);
+  assert.ok(urls.length >= 190, `only ${urls.length} curated guides`);
   for (const url of urls) {
     assert.match(url, /^https:\/\/www\.youtube\.com\/watch\?v=[\w-]{11}$/, url);
   }
@@ -248,7 +248,7 @@ test("most of the gym catalogue plays a video, not a search", () => {
    */
   const withVideo = IMPORTED_EXERCISES.filter((ex) => formGuide(ex.name)?.videoId).length;
   const share = withVideo / IMPORTED_EXERCISES.length;
-  assert.ok(share > 0.5, `only ${withVideo} of ${IMPORTED_EXERCISES.length} movements play in place`);
+  assert.ok(share > 0.7, `only ${withVideo} of ${IMPORTED_EXERCISES.length} movements play in place`);
 });
 
 test("the finder refuses on channel, movement and shape — not just on a match", () => {
@@ -271,6 +271,17 @@ test("the finder refuses on channel, movement and shape — not just on a match"
   const finder = readFileSync(new URL("../scripts/find-form-guides.mjs", import.meta.url), "utf8");
   assert.match(finder, /TEACHERS\.some\(\(t\) => c\.channel\.toLowerCase\(\)\.includes\(t\)\)/, "any channel will do");
   assert.match(finder, /NOT_A_DEMO\.test\(c\.title\)/, "an assessment or a podcast still counts");
+  // THE ONE THAT MATTERS MOST. "Jump Squats Are a Poor Exercise Choice" passed
+  // every other gate for our Squat Jump — right channel, right words, right
+  // length — and would have told an athlete that the exercise their own
+  // programme prescribed is a bad one. A guide that argues about WHETHER is not
+  // a guide, and this class of title is the only one where a wrong match
+  // undermines the plan rather than the rep.
+  assert.match(finder, /poor exercise\|waste of time/, "a video that argues against the exercise can be chosen as its guide");
+  assert.match(finder, /pros \(&\|and\) cons/, "a pros-and-cons discussion counts as a demonstration again");
+  // Built as one regex on purpose: `/a/ || /b/` evaluates to /a/ and silently
+  // discards every pattern after the first, which is exactly what happened.
+  assert.match(finder, /const NOT_A_DEMO = new RegExp\(\[/, "the filter is a chain of || again, so only the first half runs");
   assert.match(finder, /secs < 40 \|\| secs > 20 \* 60/, "a Short or a podcast still counts");
   assert.match(finder, /FORM\.some\(\(d\) => mineSet\.has\(d\) !== theirs\.has\(d\)\)/, "a word that changes the movement no longer refuses");
   assert.match(finder, /if \(bodyweight && theirKit\.length\) continue;/, "a bodyweight movement can be taught with a weight again");
@@ -300,13 +311,26 @@ test("a movement under another name gets the same video, and nothing else does",
     assert.equal(formGuide(alias)?.kind, "video");
   }
 
-  // Grip and stance variants are DIFFERENT EXERCISES and must keep searching
-  // rather than borrow the parent movement's video.
-  for (const notAnAlias of [
-    "Close grip lat pulldown", "Reverse grip lat pulldown", "One arm lat pulldown",
-    "Split squat", "Reverse grip bench press", "Wide grip bench press",
+  /**
+   * Grip and stance variants are DIFFERENT EXERCISES and must never borrow the
+   * parent movement's video.
+   *
+   * Not "must be a search" — that was the first version of this and it was
+   * wrong, because it failed the moment Split Squat got a guide of its OWN (E3
+   * Rehab, matched on the name, entirely correct). What must never happen is a
+   * variant silently resolving to the video for the lift it is a variant of.
+   */
+  for (const [variant, parent] of [
+    ["Close grip lat pulldown", "Lat pulldown"],
+    ["Reverse grip lat pulldown", "Lat pulldown"],
+    ["One arm lat pulldown", "Lat pulldown"],
+    ["Split squat", "Bulgarian split squat"],
+    ["Reverse grip bench press", "Bench press"],
+    ["Wide grip bench press", "Bench press"],
   ]) {
-    assert.equal(formGuide(notAnAlias)?.kind, "search",
-      `${notAnAlias} was quietly given another exercise's video`);
+    const id = formGuide(variant)?.videoId;
+    if (!id) continue; // a search is fine; borrowing is not
+    assert.notEqual(id, formGuide(parent)?.videoId,
+      `${variant} was quietly given ${parent}'s video`);
   }
 });

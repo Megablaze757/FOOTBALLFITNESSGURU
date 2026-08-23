@@ -285,6 +285,34 @@ const CURATED: Record<string, string> = {
   "thruster": "https://www.youtube.com/watch?v=Zvt5-mugUco", // Bodybuilding.com
   "wrist curl": "https://www.youtube.com/watch?v=NoO4ol8Zw2I", // Jim Stoppani, PhD
   "yates row": "https://www.youtube.com/watch?v=ryxwNKu23OQ", // Geoffrey Verity Schofield
+
+  // --- A third sweep, once the finder tried more than one phrasing per
+  //     movement. Twelve of the thirty-two it returned were dropped by hand,
+  //     and one of those is the reason the finder now refuses a whole class
+  //     of title: "Jump Squats Are a Poor Exercise Choice" passed every gate
+  //     for our Squat Jump. Tapping Watch Form Guide on an exercise your own
+  //     programme set you, and being told by an expert that it is a bad
+  //     exercise, is worse than getting nothing.
+  "archer push ups": "https://www.youtube.com/watch?v=ZLWko5aP1FM", // Minus The Gym
+  "cheat curl": "https://www.youtube.com/watch?v=nYH4ziK1TEU", // Garage Strength
+  "close grip dumbbell bench press": "https://www.youtube.com/watch?v=ai38JOlGtZM", // Jim Stoppani, PhD
+  "decline dumbbell fly": "https://www.youtube.com/watch?v=J6f2WctUduQ", // Ignore Limits
+  "dumbbell thruster": "https://www.youtube.com/watch?v=SnHdBY_sK6M", // Howcast
+  "handstand push ups": "https://www.youtube.com/watch?v=IQvCU0kLvds", // FitnessFAQs
+  "hang power clean": "https://www.youtube.com/watch?v=efHjodEVf9w", // Catalyst Athletics
+  "hip abduction": "https://www.youtube.com/watch?v=2b97cvyH9sE", // ScottHermanFitness
+  "incline cable curl": "https://www.youtube.com/watch?v=CxXEXInM_L0", // Jim Stoppani, PhD
+  "incline hammer curl": "https://www.youtube.com/watch?v=FdzmJiIHIPw", // mountaindog1
+  "incline push up": "https://www.youtube.com/watch?v=bXsbK9UPu3c", // Howcast
+  "log press": "https://www.youtube.com/watch?v=NHnW3xIW334", // elitefts
+  "machine shrug": "https://www.youtube.com/watch?v=q5f7ByER6dE", // Colossus Fitness
+  "pin squat": "https://www.youtube.com/watch?v=3GjKE-OkLyY", // Catalyst Athletics
+  "renegade row": "https://www.youtube.com/watch?v=eGhLfe0feEs", // Mind Pump TV
+  "reverse lunge": "https://www.youtube.com/watch?v=AVJSd7M_ugY", // mountaindog1
+  "seated shoulder press": "https://www.youtube.com/watch?v=YNK3eQVevIs", // Buff Dudes Workouts
+  "side leg raise": "https://www.youtube.com/watch?v=izV5th7AQHM", // Howcast
+  "split squat": "https://www.youtube.com/watch?v=4bNQITw0VdY", // E3 Rehab
+  "vertical leg press": "https://www.youtube.com/watch?v=Nxl8X6zjsrc", // Fitness Lab
 };
 
 /**

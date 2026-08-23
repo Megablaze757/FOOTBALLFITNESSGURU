@@ -133,7 +133,26 @@ const FORM = [
  * Note what is NOT here: "mistakes". "9 Smith Machine Squat Mistakes and How to
  * Fix Them" teaches the lift by way of the errors, which is a form guide.
  */
-const NOT_A_DEMO = /\b(assessment|screen(ing)?|podcast|reaction|q ?& ?a|compilation|motivation|transformation|challenge|full workout|day in the life|physique update)\b|\b(worth it|bad for your|should you|dangerous|overrated|underrated|myth)\b|\bpain\b(?![ -]free)/i;
+const NOT_A_DEMO = new RegExp([
+  // Not this kind of video at all.
+  String.raw`\b(assessment|screen(ing)?|podcast|reaction|q ?& ?a|compilation|motivation|transformation|challenge|full workout|day in the life|physique update)\b`,
+  // The argument rather than the lesson.
+  String.raw`\b(worth it|bad for your|should you|dangerous|overrated|underrated|myth)\b`,
+  // THE VERDICT, NOT THE METHOD — and the worst thing this ever produced.
+  // "Jump Squats Are a Poor Exercise Choice" cleared every other gate for our
+  // Squat Jump: right channel, right words, right length. An athlete taps
+  // "Watch Form Guide" on an exercise their own programme prescribed and is
+  // told by an expert that it is a bad exercise. That is worse than no video
+  // and worse than the wrong one, because it undermines the plan rather than
+  // the rep. Same shape either way round: "Why I Don't Strict Curl", "The Pros
+  // & Cons of the Jefferson Deadlift", "Incline VS. Flat". All arguing about
+  // whether; none showing how.
+  String.raw`\b(poor exercise|waste of time|pointless|why i (don'?t|never)|pros (&|and) cons|instead of|is (better|worse) than)\b`,
+  String.raw`\bvs\.?\b`,
+  // Qualified because "How To PROPERLY Upright Row (PAIN FREE)" is exactly the
+  // video we want and "Wrist and Forearm Pain with Curls" is not.
+  String.raw`\bpain\b(?![ -]free)`,
+].join("|"), "i");
 
 /**
  * The implement, which is a HARD test in both directions.
