@@ -52,9 +52,26 @@ const CURATED: Record<string, string> = {
   "pull ups": "https://www.youtube.com/watch?v=eGo4IYlbE5g",
   "barbell hip thrust": "https://www.youtube.com/watch?v=xDmFkJxPzeM",
   "bulgarian split squat": "https://www.youtube.com/watch?v=2C-uNgKwPLE",
-  "nordic hamstring curl": "https://www.youtube.com/watch?v=1ge2yiG3fzc",
-  "copenhagen plank": "https://www.youtube.com/watch?v=RS3aDCDwLnQ",
 };
+
+/**
+ * TWO ENTRIES WERE REMOVED FROM THE LIST ABOVE, and the reason is the reason
+ * the list is short.
+ *
+ * "nordic hamstring curl" and "copenhagen plank" both pointed at videos that
+ * had been taken down — checked live, both 404. A dead curated link is worse
+ * than a search that always works: the button says "Watch Form Guide", the
+ * athlete taps it expecting a chosen answer, and gets YouTube's apology page.
+ * Both fall back to a search now, which is the honest behaviour.
+ *
+ * They are also the two exercises on the list where the failure mode is a torn
+ * hamstring or a groin strain rather than a wasted set — the ones most worth
+ * curating, and the ones nobody noticed had rotted.
+ *
+ * Run `node scripts/check-form-guides.mjs` before adding to the list, and every
+ * few months after. It checks each link is still live and prints the title, so
+ * a link that resolves to a DIFFERENT video is visible too.
+ */
 
 /**
  * Names too thin to search usefully.

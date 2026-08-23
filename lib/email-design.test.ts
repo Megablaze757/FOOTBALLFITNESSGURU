@@ -136,3 +136,47 @@ test("the launch email keeps its own copy, on purpose", () => {
   const launch = readFileSync(new URL("../cloudflare/src/launch-email.ts", import.meta.url), "utf8");
   assert.ok(!launch.includes("./email-layout"), "the generated module now imports, so the sync check will fail");
 });
+
+test("a list in the notification stays a list", () => {
+  // Half of what writes a notification writes a list — the week's numbers, the
+  // session's lifts. Flattened to one blob with <br> between the lines, a
+  // weekly summary reads as a paragraph that happens to contain digits.
+  const html = renderEmail("x", {
+    ...SAMPLE,
+    paragraphs: ["- Back squat, 4 × 6\n- Romanian deadlift, 3 × 8\n- Leg curl, 3 × 12"],
+  });
+  assert.match(html, /&bull;/, "the bullets were dropped");
+  assert.ok(!html.includes("- Back squat"), "the marker is still in the text as a hyphen");
+  assert.equal((html.match(/Back squat|Romanian deadlift|Leg curl/g) ?? []).length, 3);
+});
+
+test("a run of label-and-value becomes a table", () => {
+  const html = renderEmail("x", {
+    ...SAMPLE,
+    paragraphs: ["Sessions: 4\nTotal load: 11,240kg\nStreak: 6 weeks"],
+  });
+  assert.match(html, /align="right"/, "the values are not set against the labels");
+  assert.match(html, /font-weight:800;color:#0e1411;border-top/, "the value is not the emphasised half");
+});
+
+test("prose with a colon in it is left as prose", () => {
+  // The rule that turns lines into a table has to know when not to. "One thing:
+  // you skipped Tuesday" is a sentence, and a sentence in a stat row looks like
+  // a bug in the data rather than a bug in the layout.
+  const html = renderEmail("x", {
+    ...SAMPLE,
+    paragraphs: ["One thing to watch: you skipped Tuesday and the block assumes four days.\nIt will even out if you train Saturday."],
+  });
+  assert.ok(!html.includes('align="right"'), "a sentence was rendered as a stat row");
+});
+
+test("the last thing on the card says who it is from", () => {
+  // It opened with the wordmark and ended on a grey sentence about email
+  // preferences, so the final impression of every reminder was an unsubscribe
+  // note.
+  const html = renderEmail("x", SAMPLE);
+  const footer = html.slice(html.lastIndexOf("border-top:1px solid #e4e8e3"));
+  assert.match(footer, /PocketAthlete/);
+  assert.ok(footer.indexOf("PocketAthlete") < footer.indexOf(SAMPLE.footerHtml!.slice(0, 12)),
+    "the signature comes after the small print");
+});

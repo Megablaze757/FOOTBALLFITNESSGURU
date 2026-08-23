@@ -2,6 +2,7 @@
 
 import { getExerciseByName } from "@/lib/exercises";
 import { formGuide, NO_GUIDE } from "@/lib/form-guide";
+import { artFor } from "@/lib/exercise-art";
 import { howToFor, type HowTo } from "@/lib/how-to";
 import { ExerciseVisual } from "@/components/ExerciseVisual";
 import { ExerciseModal, Sheet } from "@/components/ExerciseDetail";
@@ -49,17 +50,49 @@ export function HowToCard({ how }: { how: HowTo }) {
           rest of this sheet is written for somebody who does. */}
       {(() => {
         const guide = formGuide(how.name);
-        return guide ? (
+        if (!guide) return <p className="text-center text-xs text-slate-500">{NO_GUIDE}</p>;
+
+        /**
+         * THE VIDEO CARRIES MORE WEIGHT WHERE THERE IS NO PICTURE.
+         *
+         * Roughly a hundred and twenty movements have no photograph or
+         * illustration — the sport-specific work no anatomy library covers —
+         * and on those the drawn figure is the only thing above the fold. A
+         * figure is a reminder for somebody who knows the movement and nearly
+         * nothing for somebody who does not, which is exactly who taps into a
+         * detail sheet.
+         *
+         * So on those the guide gets a line of explanation and the whole width
+         * of the sheet; where there IS a picture it stays the compact button it
+         * was, because the picture has already done that job. Same link either
+         * way — this is emphasis, not a different feature.
+         *
+         * `kind` matters too: a chosen video and a YouTube search are different
+         * promises, and saying which one is behind the tap is the difference
+         * between a link that under-delivers and one that says what it is.
+         */
+        const illustrated = artFor(how.name) !== null;
+        return (
           <a
             href={guide.url}
             target="_blank"
             rel="noreferrer"
-            className="tap-target flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-pitch-400 px-4 text-sm font-bold text-ink-900 transition hover:bg-pitch-300"
+            className={illustrated
+              ? "tap-target flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-pitch-400 px-4 text-sm font-bold text-ink-900 transition hover:bg-pitch-300"
+              : "tap-target flex w-full items-center gap-3 rounded-xl bg-pitch-400 px-4 py-3 text-left text-ink-900 transition hover:bg-pitch-300"}
           >
-            <span aria-hidden>▶</span> {guide.label}
+            <span aria-hidden className={illustrated ? "" : "text-lg"}>▶</span>
+            {illustrated ? guide.label : (
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-bold">{guide.label}</span>
+                <span className="block text-xs font-medium text-ink-900/70">
+                  {guide.kind === "video"
+                    ? "A demonstration we picked for this movement."
+                    : "No illustration for this one — watch it done before you try it."}
+                </span>
+              </span>
+            )}
           </a>
-        ) : (
-          <p className="text-center text-xs text-slate-500">{NO_GUIDE}</p>
         );
       })()}
 

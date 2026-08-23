@@ -136,6 +136,53 @@ export interface EmailShell {
 }
 
 /**
+ * ONE PARAGRAPH OF PROSE, OR THE SHAPE THE MESSAGE WAS ALREADY IN.
+ *
+ * The notification body is written by whatever created the notification, and a
+ * good half of them are lists — the week's numbers, the session's lifts, three
+ * things to do before Saturday. Rendered as one blob with <br> between the
+ * lines, a weekly summary reads as a paragraph that happens to contain
+ * digits, which is the difference between a report and a message.
+ *
+ * So the shape it arrived in survives:
+ *
+ *   "- thing" or "• thing"   a real list, with the app's gold for the marker
+ *   "Label: value"           a two-column row, the value in tabular figures
+ *   anything else            a paragraph
+ *
+ * Detected rather than declared, because the Worker does not control what
+ * wrote the notification and a flag nobody sets is a feature nobody gets.
+ */
+function block(text: string): string {
+  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+  const cell = (inner: string) =>
+    `<tr><td class="pa-body" style="font-size:16px;line-height:1.55;color:#495751;padding-bottom:18px;">${inner}</td></tr>`;
+
+  if (lines.length > 1 && lines.every((l) => /^[-•*]\s+/.test(l))) {
+    const items = lines.map((l) => l.replace(/^[-•*]\s+/, "")).map((l) =>
+      `<tr>
+        <td width="18" valign="top" class="pa-gold" style="font-size:16px;line-height:1.55;color:#8a6510;">&bull;</td>
+        <td valign="top" class="pa-body" style="font-size:16px;line-height:1.55;color:#495751;padding-bottom:6px;">${escapeHtml(l)}</td>
+      </tr>`).join("");
+    return cell(`<table role="presentation" cellpadding="0" cellspacing="0" width="100%">${items}</table>`);
+  }
+
+  // Every line a "Label: value", and a value short enough to be one — a
+  // sentence with a colon in it is prose, not a table.
+  const pairs = lines.map((l) => l.match(/^([^:]{1,28}):\s*(.{1,24})$/));
+  if (lines.length > 1 && pairs.every(Boolean)) {
+    const rows = pairs.map((m) =>
+      `<tr>
+        <td class="pa-body pa-rule" style="font-size:15px;line-height:1.5;color:#495751;border-top:1px solid #e4e8e3;padding:9px 0;">${escapeHtml(m![1])}</td>
+        <td align="right" class="pa-h pa-rule" style="font-size:15px;line-height:1.5;font-weight:800;color:#0e1411;border-top:1px solid #e4e8e3;padding:9px 0;">${escapeHtml(m![2])}</td>
+      </tr>`).join("");
+    return cell(`<table role="presentation" cellpadding="0" cellspacing="0" width="100%">${rows}</table>`);
+  }
+
+  return cell(escapeHtml(text).replaceAll("\n", "<br>"));
+}
+
+/**
  * Render an ordinary transactional email.
  *
  * Everything the app sends outside the launch announcement goes through here:
@@ -152,17 +199,27 @@ export function renderEmail(subject: string, shell: EmailShell): string {
   // shout; this is a message about your Tuesday.
   const heading = `<tr><td class="pa-h" style="font-size:26px;line-height:1.18;font-weight:800;letter-spacing:-0.02em;color:#0e1411;padding-bottom:12px;">${escapeHtml(shell.heading)}</td></tr>`;
 
-  const paragraphs = shell.paragraphs
-    .filter((p) => p.trim() !== "")
-    .map((p) => `<tr><td class="pa-body" style="font-size:16px;line-height:1.55;color:#495751;padding-bottom:18px;">${escapeHtml(p).replaceAll("\n", "<br>")}</td></tr>`)
-    .join("");
+  const paragraphs = shell.paragraphs.filter((p) => p.trim() !== "").map(block).join("");
 
   const cta = shell.cta ? ctaButton(shell.cta.href, shell.cta.label) : "";
   const note = shell.note
     ? `<tr><td class="pa-muted" align="center" style="font-size:13px;line-height:1.5;color:#5d6860;padding-bottom:20px;">${escapeHtml(shell.note)}</td></tr>`
     : "";
+  /**
+   * The last thing on the screen says who it is from.
+   *
+   * The card opened with the wordmark and ended on a grey sentence about email
+   * preferences, so the final impression of every reminder was an unsubscribe
+   * note. A signature costs one line and is the difference between a message
+   * and a system notice.
+   */
   const footer = shell.footerHtml
-    ? `<tr><td class="pa-muted pa-rule" style="border-top:1px solid #e4e8e3;padding-top:20px;font-size:12px;line-height:1.5;color:#5d6860;">${shell.footerHtml}</td></tr>`
+    ? `<tr><td class="pa-rule" style="border-top:1px solid #e4e8e3;padding-top:20px;">
+        <div class="pa-h" style="font-size:14px;font-weight:800;letter-spacing:-0.01em;color:#0e1411;padding-bottom:6px;">
+          <span class="pa-gold" style="color:#8a6510;">&#9670;</span> PocketAthlete
+        </div>
+        <div class="pa-muted" style="font-size:12px;line-height:1.5;color:#5d6860;">${shell.footerHtml}</div>
+      </td></tr>`
     : "";
 
   return emailHead(subject, shell.preheader) + emailBrand()

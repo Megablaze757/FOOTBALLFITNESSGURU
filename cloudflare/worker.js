@@ -263,13 +263,39 @@ function emailBrand() {
   </td></tr>`;
 }
 __name(emailBrand, "emailBrand");
+function block(text) {
+  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+  const cell = /* @__PURE__ */ __name((inner) => `<tr><td class="pa-body" style="font-size:16px;line-height:1.55;color:#495751;padding-bottom:18px;">${inner}</td></tr>`, "cell");
+  if (lines.length > 1 && lines.every((l) => /^[-•*]\s+/.test(l))) {
+    const items = lines.map((l) => l.replace(/^[-•*]\s+/, "")).map((l) => `<tr>
+        <td width="18" valign="top" class="pa-gold" style="font-size:16px;line-height:1.55;color:#8a6510;">&bull;</td>
+        <td valign="top" class="pa-body" style="font-size:16px;line-height:1.55;color:#495751;padding-bottom:6px;">${escapeHtml2(l)}</td>
+      </tr>`).join("");
+    return cell(`<table role="presentation" cellpadding="0" cellspacing="0" width="100%">${items}</table>`);
+  }
+  const pairs = lines.map((l) => l.match(/^([^:]{1,28}):\s*(.{1,24})$/));
+  if (lines.length > 1 && pairs.every(Boolean)) {
+    const rows = pairs.map((m) => `<tr>
+        <td class="pa-body pa-rule" style="font-size:15px;line-height:1.5;color:#495751;border-top:1px solid #e4e8e3;padding:9px 0;">${escapeHtml2(m[1])}</td>
+        <td align="right" class="pa-h pa-rule" style="font-size:15px;line-height:1.5;font-weight:800;color:#0e1411;border-top:1px solid #e4e8e3;padding:9px 0;">${escapeHtml2(m[2])}</td>
+      </tr>`).join("");
+    return cell(`<table role="presentation" cellpadding="0" cellspacing="0" width="100%">${rows}</table>`);
+  }
+  return cell(escapeHtml2(text).replaceAll("\n", "<br>"));
+}
+__name(block, "block");
 function renderEmail(subject, shell) {
   const eyebrow = shell.eyebrow ? `<tr><td class="pa-gold" style="font-size:12px;font-weight:800;letter-spacing:0.16em;text-transform:uppercase;color:#8a6510;padding-bottom:8px;">${escapeHtml2(shell.eyebrow)}</td></tr>` : "";
   const heading = `<tr><td class="pa-h" style="font-size:26px;line-height:1.18;font-weight:800;letter-spacing:-0.02em;color:#0e1411;padding-bottom:12px;">${escapeHtml2(shell.heading)}</td></tr>`;
-  const paragraphs = shell.paragraphs.filter((p) => p.trim() !== "").map((p) => `<tr><td class="pa-body" style="font-size:16px;line-height:1.55;color:#495751;padding-bottom:18px;">${escapeHtml2(p).replaceAll("\n", "<br>")}</td></tr>`).join("");
+  const paragraphs = shell.paragraphs.filter((p) => p.trim() !== "").map(block).join("");
   const cta = shell.cta ? ctaButton2(shell.cta.href, shell.cta.label) : "";
   const note = shell.note ? `<tr><td class="pa-muted" align="center" style="font-size:13px;line-height:1.5;color:#5d6860;padding-bottom:20px;">${escapeHtml2(shell.note)}</td></tr>` : "";
-  const footer = shell.footerHtml ? `<tr><td class="pa-muted pa-rule" style="border-top:1px solid #e4e8e3;padding-top:20px;font-size:12px;line-height:1.5;color:#5d6860;">${shell.footerHtml}</td></tr>` : "";
+  const footer = shell.footerHtml ? `<tr><td class="pa-rule" style="border-top:1px solid #e4e8e3;padding-top:20px;">
+        <div class="pa-h" style="font-size:14px;font-weight:800;letter-spacing:-0.01em;color:#0e1411;padding-bottom:6px;">
+          <span class="pa-gold" style="color:#8a6510;">&#9670;</span> PocketAthlete
+        </div>
+        <div class="pa-muted" style="font-size:12px;line-height:1.5;color:#5d6860;">${shell.footerHtml}</div>
+      </td></tr>` : "";
   return emailHead(subject, shell.preheader) + emailBrand() + eyebrow + heading + paragraphs + cta + note + footer + emailFoot();
 }
 __name(renderEmail, "renderEmail");
@@ -811,7 +837,7 @@ function overBudget(state) {
   return json({ error: `${reason} The on-device coach still works, and your allowance resets \u2014 upgrade for more.` }, 429);
 }
 __name(overBudget, "overBudget");
-var WORKER_VERSION = "2026-08-23.7";
+var WORKER_VERSION = "2026-08-23.8";
 var ATTEMPT_TIMEOUT_MS = {
   groq: 1e4,
   openrouter: 2e4,
