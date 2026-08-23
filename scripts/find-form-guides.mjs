@@ -65,6 +65,31 @@ const TEACHERS = [
   "mind pump", "picturefit", "criticalbench", "critical bench", "ignore limits",
   "rehab science", "movement system", "conor harris", "precision movement",
   "redefining strength", "hybrid performance", "garage strength", "westside barbell",
+  /**
+   * ADDED WHEN THE LIST WAS ASKED TO COVER THE WHOLE CATALOGUE.
+   *
+   * The diagnostic (--why) said the channel gate was the single biggest cause
+   * of a movement having no guide: Sit Ups had fourteen candidates and thirteen
+   * were refused on channel alone, several of them plainly instructional. A bar
+   * that says "a channel I already listed" is not the same bar as "a channel
+   * that teaches", and it was quietly the first one.
+   *
+   * These are coaching, rehab and gym-chain channels that publish instructional
+   * content. The gate still exists and still refuses the montage accounts — it
+   * just no longer refuses a good tutorial for being from someone I had not
+   * thought of.
+   */
+  "live lean tv", "howcast", "sports rehab expert", "puregym", "fitness lab",
+  "jim stoppani", "john meadows", "mountaindog", "nick tumminello", "eric cressey",
+  "physiotutors", "bob & brad", "tone and tighten", "saturday strength", "alex leonidas",
+  "renaissance woman", "stephanie buttermore", "natacha oceane", "geoffrey verity schofield",
+  "house of hypertrophy", "flow high performance", "aliakbar rahimi", "max euceda",
+  "kboges", "hampton liu", "minus the gym", "school of calisthenics", "gymnastics bodies",
+  "strength side", "tom merrick", "the bioneer", "athlete x", "vitruvian physique",
+  "gvs", "greg doucette", "brian alsruhe", "alan roberts", "elitefts",
+  "barbend", "power monkey fitness", "the ready state", "kelly starrett", "team usa weightlifting",
+  "torokhtiy", "weightlifting house", "mash elite", "lift big eat big", "juggernautai",
+  "muscleandstrength", "muscle & strength", "anabolic aliens", "fitnessblender", "hasfit",
 ];
 
 /**
@@ -196,6 +221,70 @@ async function search(name) {
 
 const seconds = (t) => t.split(":").reduce((a, p) => a * 60 + Number(p), 0);
 
+/**
+ * Which gate refused a candidate, or null if it survived. Split out from
+ * `choose` so the two can never disagree about the rules — a diagnostic that
+ * reports a different reason to the one that fired is worse than none.
+ */
+/**
+ * What the catalogue says this movement is done with, when the name does not
+ * say. `equipmentOf` is the app's own answer, so this cannot drift from what
+ * the engine believes.
+ */
+const DERIVED = {
+  Barbell: ["barbell"], Dumbbell: ["dumbbell"], Cable: ["cable"], Machine: ["machine"],
+  "Smith machine": ["smith"], Kettlebell: ["kettlebell"], "EZ bar": ["ez"],
+};
+function derivedKit(name) {
+  return DERIVED[equipmentOf(name)] ?? [];
+}
+
+/**
+ * SILENCE MEANS DIFFERENT THINGS ON THE TWO SIDES, which is what the previous
+ * rule got wrong in both directions at once.
+ *
+ * When OUR name states the implement it is because that is the non-obvious
+ * variant — "Dumbbell Bench Press" exists to be distinguished from the bench
+ * press — so the title has to state it too. Soft matching there gave us a
+ * barbell demonstration for a dumbbell lift.
+ *
+ * When our name is SILENT the implement is the default one, and a title is
+ * equally entitled to leave the default unsaid. Requiring an exact match there
+ * refused ScottHerman's "Incline Barbell Bench Press" for our Incline Bench
+ * Press — the right video, refused for being more specific than we were.
+ */
+function kitOk(expected, stated, theirKit) {
+  if (!theirKit.length) return !stated;
+  if (!expected.length) return false;
+  return theirKit.every((k) => expected.includes(k));
+}
+
+export function refusal(name, c) {
+  const mine = words(name);
+  const mineSet = new Set(mine);
+  const mineKit = IMPLEMENT.filter((k) => mineSet.has(k));
+  const core = mine.filter((w) => !IMPLEMENT.includes(w));
+  const bodyweight = equipmentOf(name) === "Bodyweight";
+
+  if (!TEACHERS.some((t) => c.channel.toLowerCase().includes(t))) return "channel";
+  if (NOT_A_DEMO.test(c.title)) return "not-a-demo";
+  const secs = seconds(c.length);
+  if (secs < 40 || secs > 20 * 60) return "length";
+
+  const theirs = new Set(words(c.title));
+  const missing = core.filter((w) => !theirs.has(w));
+  if (missing.length) return `missing:${missing.join("+")}`;
+  const form = FORM.filter((d) => mineSet.has(d) !== theirs.has(d));
+  if (form.length) return `form:${form.join("+")}`;
+  const theirKit = IMPLEMENT.filter((k) => theirs.has(k));
+  if (bodyweight && theirKit.length) return `loaded:${theirKit.join("+")}`;
+  const expected = mineKit.length ? mineKit : derivedKit(name);
+  if (!kitOk(expected, mineKit.length > 0, theirKit)) {
+    return `kit:${expected.join("+") || "none"}/${theirKit.join("+") || "none"}`;
+  }
+  return null;
+}
+
 /** The first candidate that survives every gate, or null. */
 export function choose(name, candidates) {
   const mine = words(name);
@@ -216,6 +305,8 @@ export function choose(name, candidates) {
    * catalogue's own answer rather than a second list to keep in step.
    */
   const bodyweight = equipmentOf(name) === "Bodyweight";
+  const expected = mineKit.length ? mineKit : derivedKit(name);
+  const stated = mineKit.length > 0;
 
   for (const c of candidates) {
     if (!TEACHERS.some((t) => c.channel.toLowerCase().includes(t))) continue;
@@ -228,7 +319,7 @@ export function choose(name, candidates) {
     if (FORM.some((d) => mineSet.has(d) !== theirs.has(d))) continue;
     const theirKit = IMPLEMENT.filter((k) => theirs.has(k));
     if (bodyweight && theirKit.length) continue;
-    if (mineKit.length !== theirKit.length || !mineKit.every((k) => theirKit.includes(k))) continue;
+    if (!kitOk(expected, stated, theirKit)) continue;
 
     return c;
   }
@@ -242,6 +333,28 @@ async function verify(id) {
   return res.json();
 }
 
+/**
+ * `--why`: for each name given, print what the top candidates were and which
+ * gate refused each. A coverage number tells you the rules are too strict; only
+ * this tells you WHICH rule, and whether loosening it would be honest.
+ */
+async function why(names) {
+  for (const name of names) {
+    const candidates = await search(name);
+    console.log(`\n${name}  (${candidates.length} candidates)`);
+    const tally = new Map();
+    for (const c of candidates) {
+      const r = refusal(name, c) ?? "PASSED";
+      tally.set(r.split(":")[0], (tally.get(r.split(":")[0]) ?? 0) + 1);
+    }
+    console.log("  gates: " + [...tally].map(([k, v]) => `${k}=${v}`).join(" "));
+    for (const c of candidates.slice(0, 6)) {
+      console.log(`  ${(refusal(name, c) ?? "PASSED").padEnd(22)} ${c.channel} — ${c.title}`);
+    }
+    await sleep(1200);
+  }
+}
+
 async function main() {
   const src = readFileSync("lib/form-guide.ts", "utf8");
   const block = src.slice(src.indexOf("const CURATED"), src.indexOf("};", src.indexOf("const CURATED")));
@@ -250,7 +363,13 @@ async function main() {
   const cat = readFileSync("lib/exercise-catalog.ts", "utf8");
   const names = [...new Set([...cat.matchAll(/^([A-Z][^|\n]+)\|/gm)].map((m) => m[1].trim()))];
 
-  const filters = process.argv.slice(2).map((s) => s.toLowerCase());
+  const argv = process.argv.slice(2);
+  if (argv[0] === "--why") {
+    const names = readFileSync(argv[1], "utf8").split("\n").map((l) => l.trim()).filter(Boolean);
+    await why(names);
+    return;
+  }
+  const filters = argv.map((s) => s.toLowerCase());
   const todo = names
     .filter((n) => !already.has(n.toLowerCase()))
     .filter((n) => !filters.length || filters.some((f) => n.toLowerCase().includes(f)));

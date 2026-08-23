@@ -274,7 +274,11 @@ test("the finder refuses on channel, movement and shape — not just on a match"
   assert.match(finder, /secs < 40 \|\| secs > 20 \* 60/, "a Short or a podcast still counts");
   assert.match(finder, /FORM\.some\(\(d\) => mineSet\.has\(d\) !== theirs\.has\(d\)\)/, "a word that changes the movement no longer refuses");
   assert.match(finder, /if \(bodyweight && theirKit\.length\) continue;/, "a bodyweight movement can be taught with a weight again");
-  assert.match(finder, /mineKit\.length !== theirKit\.length \|\| !mineKit\.every/, "the implement rule went soft again");
+  // Both directions of the kit rule now live in one helper, so this pins the
+  // helper rather than the call: silence from the title is only acceptable when
+  // OUR name was silent too.
+  assert.match(finder, /if \(!theirKit\.length\) return !stated;/, "a title that names no implement is accepted for a named one");
+  assert.match(finder, /return theirKit\.every\(\(k\) => expected\.includes\(k\)\);/, "the implement rule went soft again");
   // A parsed id is not a playing id.
   assert.match(finder, /oembed/, "nothing verifies the id resolves");
 });
