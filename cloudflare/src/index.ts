@@ -98,14 +98,6 @@ export interface Env {
   VAPID_PRIVATE_KEY: string; // base64url 'd' of the same key pair — secret
   VAPID_SUBJECT: string;     // mailto: contact, required by the push services
   AI_DAILY_LIMIT: string;       // max LLM calls per user per day (default 40)
-  /**
-   * THE WHOLE APP'S MONTHLY AI BILL, in USD. See APP_BUDGET_USD.
-   *
-   * A var rather than a constant because it is a business decision that moves
-   * with revenue, and it has to be changeable from the Cloudflare dashboard
-   * without a repaste.
-   */
-  MONTHLY_BUDGET_USD: string;
   TRIAL_DAYS: string;           // free-trial length in days (default 14; 0 disables)
   PAID_PROMPT_PER_M: string;    // USD per million prompt tokens on the paid model
   PAID_COMPLETION_PER_M: string; // USD per million completion tokens
@@ -145,7 +137,6 @@ export default {
       // Admin email tooling. See emailStatus for why this cannot be answered
       // from the app: the provider key is a Worker secret and secrets cannot be
       // read back out, so only the Worker knows whether email can send at all.
-      if (pathname.endsWith("/ai-status")) return await aiStatus(req, env);
       if (pathname.endsWith("/email-status")) return await emailStatus(req, env);
       if (pathname.endsWith("/email-test")) return await emailTest(req, env);
       if (pathname.endsWith("/email-retry")) return await emailRetry(req, env);
@@ -359,69 +350,7 @@ const TIER_BUDGET: Record<string, number> = {
 // Belt and braces: whatever a tier lookup says, nobody gets past this.
 const HARD_CEILING_USD = 10;
 
-/**
- * WHAT THE WHOLE APP MAY SPEND ON AI IN A MONTH, in USD.
- *
- * $94 is £74 at the 0.79 rate the cost page uses (lib/costs.ts), and £74 is
- * what is left of a £100-a-month all-in bill after the £25 of fixed platform
- * cost that arrives whether anybody uses the app or not — Supabase £20,
- * Cloudflare £4, the domain £1. So the whole thing lands just UNDER £100 rather
- * than just over it, which is the difference between a limit and a target.
- *
- * TIER_BUDGET above is a per-user control and cannot bound the bill: every
- * signup brings its own allowance, so the total is users x budget and has no
- * maximum. Five hundred subscribers can authorise $1,500 a month without one of
- * them going over their own limit. Free accounts are the worse half — $0.40 of
- * allowance each and no revenue behind it — so a burst of signups is a bill
- * with no income beside it.
- *
- * Override with MONTHLY_BUDGET_USD in the Cloudflare dashboard. Set it to what
- * you are actually willing to pay this month, not what you expect to pay.
- */
-const APP_BUDGET_USD = 94;
-
-/**
- * The fraction of the app budget at which PAID models stop being used.
- *
- * Not the same as switching the app off, and this is the whole design. The
- * ladder already carries three providers whose rungs bill nothing — Groq,
- * OpenRouter's `:free` slugs, NVIDIA — so a budget that is running out has a
- * setting between "fine" and "off": keep answering, stop paying for it. The
- * athlete may wait a few seconds longer; nothing they can see stops working.
- *
- * At three quarters rather than at the line, because the last quarter is the
- * headroom that keeps a busy day from crossing it in an hour.
- */
-const FREE_ONLY_ABOVE = 0.75;
-
-interface BudgetState {
-  allowed: boolean;
-  spent: number;
-  callsToday: number;
-  budget: number;
-  /** The whole app's spend this month, and its ceiling — both USD. */
-  appSpent: number;
-  appBudget: number;
-  /** False once the app is into the last quarter of its budget: free rungs only. */
-  paidAllowed: boolean;
-  /**
-   * Whether the database answered with an app-wide figure at all.
-   *
-   * The Worker and the SQL are both applied by hand, in either order, so a
-   * Worker can be live against a database that has not had 0096 yet. It reads
-   * no total, treats it as nothing spent, and the ceiling does not bite — which
-   * is the right way round (the per-user caps still hold, and failing the other
-   * way would take the app's AI down for a missing migration) but it must not
-   * be invisible. /ai-status reports this.
-   */
-  appSpendKnown: boolean;
-}
-
-/** A numeric env var, ignoring the empty string and anything unparseable. */
-function envNum(v: string | undefined, fallback: number): number {
-  const n = Number(v);
-  return v !== undefined && v !== "" && Number.isFinite(n) && n >= 0 ? n : fallback;
-}
+interface BudgetState { allowed: boolean; spent: number; callsToday: number; budget: number }
 
 async function svcRpc(env: Env, fn: string, body: unknown): Promise<Response> {
   return fetch(`${env.SUPABASE_URL}/rest/v1/rpc/${fn}`, {
@@ -459,45 +388,27 @@ async function tierOf(env: Env, userId: string): Promise<string> {
  */
 async function checkBudget(env: Env, userId: string): Promise<BudgetState> {
   const dailyLimit = Number(env.AI_DAILY_LIMIT || "40");
-  const appBudget = envNum(env.MONTHLY_BUDGET_USD, APP_BUDGET_USD);
-  const denied = (budget: number): BudgetState => ({
-    allowed: false, spent: 0, callsToday: 0, budget,
-    appSpent: 0, appBudget, paidAllowed: false, appSpendKnown: false,
-  });
-  if (!env.SUPABASE_SERVICE_ROLE_KEY) return denied(0);
+  if (!env.SUPABASE_SERVICE_ROLE_KEY) {
+    return { allowed: false, spent: 0, callsToday: 0, budget: 0 };
+  }
   const tier = await tierOf(env, userId);
   const budget = Math.min(TIER_BUDGET[tier] ?? TIER_BUDGET.bronze, HARD_CEILING_USD);
   try {
     const r = await svcRpc(env, "check_ai_budget", {
       p_user: userId, p_budget: budget, p_daily_limit: dailyLimit,
     });
-    if (!r.ok) return denied(budget);
-    const rows = (await r.json()) as
-      { allowed: boolean; spent: number; calls_today: number; app_spent?: number }[];
+    if (!r.ok) return { allowed: false, spent: 0, callsToday: 0, budget };
+    const rows = (await r.json()) as { allowed: boolean; spent: number; calls_today: number }[];
     const row = rows?.[0];
-    if (!row) return denied(budget);
-    /**
-     * `app_spent` arrives only from a database that has had migration 0096.
-     * Absent, the app-wide ceiling does not bite — deliberately, and reported
-     * by /ai-status rather than assumed away. The two halves of this are pasted
-     * by hand in whichever order, and taking every athlete's AI away because
-     * the SQL has not been run yet is a worse failure than a ceiling that is
-     * not yet enforcing. The per-user caps hold either way.
-     */
-    const appSpendKnown = row.app_spent !== undefined && row.app_spent !== null;
-    const appSpent = Number(row.app_spent) || 0;
+    if (!row) return { allowed: false, spent: 0, callsToday: 0, budget };
     return {
-      allowed: row.allowed === true && !(appSpendKnown && appSpent >= appBudget),
+      allowed: row.allowed === true,
       spent: Number(row.spent) || 0,
       callsToday: Number(row.calls_today) || 0,
       budget,
-      appSpent,
-      appBudget,
-      paidAllowed: !appSpendKnown || appSpent < appBudget * FREE_ONLY_ABOVE,
-      appSpendKnown,
     };
   } catch {
-    return denied(budget);
+    return { allowed: false, spent: 0, callsToday: 0, budget };
   }
 }
 
@@ -513,21 +424,10 @@ function overBudget(state: BudgetState): Response {
   // Deliberately no figures: the budget is denominated in what the models cost
   // us, and showing an athlete "$0.40 of $0.40" both confuses (the app is priced
   // in pounds) and publishes our margins.
-  //
-  // The app-wide ceiling gets its own wording because it is not the athlete's
-  // doing, and telling somebody who has barely used the app that they are out
-  // of allowance is a lie they will reasonably complain about.
-  const reason = state.appSpendKnown && state.appSpent >= state.appBudget
-    ? "AI coaching is paused for the rest of the month."
-    : state.spent >= state.budget
+  const reason = state.spent >= state.budget
     ? "You've used this month's AI coaching allowance."
     : "You've hit today's AI coaching limit.";
-  const tail = state.appSpendKnown && state.appSpent >= state.appBudget
-    // No upsell here. Paying more does not buy a way past a ceiling that is not
-    // theirs, and offering one would be selling something we cannot deliver.
-    ? "The on-device coach still works, and everything else in the app is unaffected."
-    : "The on-device coach still works, and your allowance resets — upgrade for more.";
-  return json({ error: `${reason} ${tail}` }, 429);
+  return json({ error: `${reason} The on-device coach still works, and your allowance resets — upgrade for more.` }, 429);
 }
 
 // --- AI via OpenRouter -----------------------------------------------------
@@ -562,7 +462,7 @@ function overBudget(state: BudgetState): Response {
 // nobody is watching a spinner and the budget can be what the work actually
 // needs. Callers pass their own client-side timeout to match.
 // Bump on every paste into the Cloudflare dashboard. GET /health reports it.
-const WORKER_VERSION = "2026-08-22.1";
+const WORKER_VERSION = "2026-08-21.1";
 
 const CHAIN_BUDGET_MS = 55_000;
 /**
@@ -1037,14 +937,6 @@ async function complete(
     validate?: (text: string) => boolean; json?: boolean;
     /** Gold's "priority AI": skip the free rungs entirely. */
     priority?: boolean;
-    /**
-     * The app is near its monthly ceiling: use only rungs that bill nothing.
-     *
-     * Not "fail" — the ladder has three providers that cost nothing, so a
-     * budget running out has a setting between fine and off. See
-     * FREE_ONLY_ABOVE.
-     */
-    freeOnly?: boolean;
     /** A `data:image/…` URL. Its presence switches to the vision ladder. */
     image?: string | null;
   }
@@ -1083,28 +975,13 @@ async function complete(
     return { text, model: `${rung.provider}/${rung.model}`, cost: 0 };
   };
 
-  const full = opts.image ? visionChain(env) : modelChain(env);
-  /**
-   * Free means PRICED AT ZERO, which is the same question the spend accounting
-   * asks — not a list of provider names. A list would go stale the day Groq
-   * starts billing and GROQ_PROMPT_PER_M is set, and it would go stale
-   * silently, which is how a ceiling stops being a ceiling.
-   */
-  const billsNothing = (r: Rung) => {
-    const price = modelPrice(env, r);
-    return price.prompt === 0 && price.completion === 0;
-  };
-  const chain = opts.freeOnly ? full.filter(billsNothing) : full;
+  const chain = opts.image ? visionChain(env) : modelChain(env);
   if (!chain.length) {
-    // Three different fixes, so three different messages. With a photo in hand
-    // the useful thing to know is that nothing on the ladder can SEE; at the
-    // ceiling it is that the ladder was fine and the money was not.
+    // Distinguished from "no provider configured": with a photo in hand, the
+    // useful thing to know is that nothing on the ladder can SEE, which is a
+    // different fix from having no key at all.
     throw Object.assign(
-      new Error(
-        opts.freeOnly && full.length
-          ? "monthly AI budget reached — no free model is configured to fall back to"
-          : opts.image ? "no vision model configured" : "no AI provider configured"
-      ),
+      new Error(opts.image ? "no vision model configured" : "no AI provider configured"),
       { cost: 0 }
     );
   }
@@ -1159,11 +1036,7 @@ async function complete(
   // free rungs are rate-limited shared capacity with no SLA, so skipping them
   // is the difference between a program in ~3s and one that sometimes takes 15
   // or falls back to the on-device engine. It costs about half a penny.
-  // Priority is "skip the free rungs" and freeOnly is "use nothing else", so
-  // together they are a chain of no rungs at all. The ceiling wins: a paid
-  // subscriber gets a slower answer, which is a far smaller broken promise than
-  // no answer.
-  const free = opts.priority && !opts.freeOnly ? [] : orChain.filter(isFree);
+  const free = opts.priority ? [] : orChain.filter(isFree);
   const paid = orChain.filter((r) => !isFree(r));
 
   // The free rungs are RACED, not queued. Trying them one after another means
@@ -1208,8 +1081,6 @@ async function meteredComplete(
   opts: {
     system: string; user: string; maxTokens: number;
     validate?: (text: string) => boolean; json?: boolean; image?: string | null;
-    /** Passed from the caller's BudgetState — see FREE_ONLY_ABOVE. */
-    freeOnly?: boolean;
   }
 ): Promise<{ text: string; model: string }> {
   try {
@@ -1218,7 +1089,7 @@ async function meteredComplete(
     // the rate-limited free models they'd just paid to avoid — while comped
     // beta accounts kept the fast path. Asking "did they pay?" survives the
     // next pricing change too.
-    const priority = !opts.freeOnly && meetsTier(await tierOf(env, userId), "silver");
+    const priority = meetsTier(await tierOf(env, userId), "silver");
     const { text, model, cost } = await complete(env, { ...opts, priority });
     await recordSpend(env, userId, cost);
     return { text, model };
@@ -1264,7 +1135,6 @@ async function coachChat(req: Request, env: Env): Promise<Response> {
     : fallback;
   const history = coachHistory(body.history);
   const { text, model } = await meteredComplete(env, u.id, {
-    freeOnly: !budget.paidAllowed,
     system: sys,
     user:
       `ATHLETE BRIEFING (current source of truth):\n${ctx}\n\n` +
@@ -1354,7 +1224,6 @@ async function generateProgram(req: Request, env: Env): Promise<Response> {
     "`constraints` so they can see you followed it. " +
     "No prose outside the JSON.";
   const { text, model } = await meteredComplete(env, u.id, {
-    freeOnly: !budget.paidAllowed,
     system: sys,
     user:
       `Sport: ${sport || "football"}\n` +
@@ -1587,7 +1456,6 @@ async function estimateFood(req: Request, env: Env): Promise<Response> {
    * empty array for a picture too dark to read instead of guessing at it.
    */
   const { text: raw, model } = await meteredComplete(env, u.id, {
-    freeOnly: !budget.paidAllowed,
     system: sys,
     user: photo
       ? meal
@@ -1983,7 +1851,6 @@ async function injuryPlan(req: Request, env: Env): Promise<Response> {
     "No prose outside the JSON.";
 
   const { text, model } = await meteredComplete(env, u.id, {
-    freeOnly: !budget.paidAllowed,
     system: sys,
     user:
       `Sport: ${sport || "general"}\nArea: ${area || "unspecified"}\n` +
@@ -2094,7 +1961,6 @@ async function generateContent(req: Request, env: Env): Promise<Response> {
     `Facts you may use (and nothing else):\n${allowed.map((f) => `- ${f}`).join("\n") || "- (none supplied)"}`;
 
   const { text, model } = await meteredComplete(env, u.id, {
-    freeOnly: !budget.paidAllowed,
     system: sys, user, maxTokens: 1200, json: true,
     validate: (t) => {
       try {
@@ -2156,7 +2022,6 @@ async function generateChallenges(req: Request, env: Env): Promise<Response> {
     `Last 7 days — ${Object.entries(activity ?? {}).map(([k, v]) => `${k}: ${v}`).join(", ") || "no activity"}`;
 
   const { text, model } = await meteredComplete(env, u.id, {
-    freeOnly: !budget.paidAllowed,
     system: sys,
     user: ctx,
     maxTokens: 600,
@@ -3317,59 +3182,6 @@ function escapeHtml(value: string): string {
 
 function appLink(env: Env, path: string): string {
   return `${(env.APP_URL || "https://pocketathlete.com").replace(/\/$/, "")}${path.startsWith("/") ? path : `/${path}`}`;
-}
-
-/**
- * WHAT THE APP HAS SPENT THIS MONTH, AND HOW CLOSE THAT IS TO THE CEILING.
- *
- * The ceiling is the one control that can quietly stop working: it lives in the
- * Worker (MONTHLY_BUDGET_USD) and reads a figure the database only returns once
- * migration 0096 has been applied, and both halves are pasted by hand. Missing
- * either one, the app carries on exactly as before — which is the right
- * behaviour and an awful thing to have no way of noticing.
- *
- * `appSpendKnown: false` is therefore the single most useful field here: it
- * means the ceiling is not enforcing anything.
- *
- * Admin-gated, unlike /health, because this is revenue and cost. /health has to
- * stay open — the app reads it to find out whether the server can see photos.
- */
-async function aiStatus(req: Request, env: Env): Promise<Response> {
-  const user = await authUser(req, env);
-  if (!user) return json({ error: "unauthorized" }, 401);
-  if (!(await isAdmin(env, user.id))) return json({ error: "forbidden" }, 403);
-
-  // Costs one RPC and answers with the caller's own figures, so what is
-  // reported here is what the enforcement is actually reading.
-  const state = await checkBudget(env, user.id);
-  const chain = modelChain(env);
-  const priced = chain.filter((r) => {
-    const price = modelPrice(env, r);
-    return price.prompt > 0 || price.completion > 0;
-  });
-
-  return json({
-    version: WORKER_VERSION,
-    appSpent: +state.appSpent.toFixed(4),
-    appBudget: state.appBudget,
-    /** False = migration 0096 has not been applied and the ceiling is not enforcing. */
-    appSpendKnown: state.appSpendKnown,
-    /** False = paid rungs are switched off right now; the app is on free models. */
-    paidAllowed: state.paidAllowed,
-    freeOnlyAbove: +(state.appBudget * FREE_ONLY_ABOVE).toFixed(2),
-    // Which rungs cost money, so "we are on free models" can be checked rather
-    // than believed. A ladder with no free rung would go dark at the ceiling
-    // instead of slowing down, and that is worth knowing BEFORE it happens.
-    paidModels: priced.map((r) => `${r.provider}/${r.model}`),
-    freeModels: chain.filter((r) => !priced.includes(r)).map((r) => `${r.provider}/${r.model}`),
-    note: !state.appSpendKnown
-      ? "The app-wide ceiling is NOT enforcing: apply migration 0096 to Supabase."
-      : state.appSpent >= state.appBudget
-        ? "At the ceiling. AI calls are refused until the 1st; the on-device engine still serves."
-        : state.paidAllowed
-          ? "Under budget. The full ladder is in use."
-          : "Near the ceiling — paid models are switched off, free models only.",
-  });
 }
 
 /**
