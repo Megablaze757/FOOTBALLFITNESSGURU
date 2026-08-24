@@ -10,6 +10,8 @@ import { MiniBars } from "@/components/MiniBars";
 import type { BodyLog } from "@/lib/types";
 import { daysAgoLocal, todayLocal } from "@/lib/day";
 import { weightSeries, weightProvenance } from "@/lib/bodyweight";
+import { WeightHistory } from "@/components/WeightHistory";
+import type { DietGoal } from "@/lib/weight-trend";
 
 export default function BodyPage() {
   const user = useCurrentUser();
@@ -42,9 +44,16 @@ export default function BodyPage() {
       const { data: s } = await supabase.storage.from("photos").createSignedUrl(r.photo_path!, 600);
       if (s) signed[r.id] = s.signedUrl;
     }
+    // The cut / maintain / build goal, which is the only thing that can say
+    // whether a drop is good news. Without it the trend shows the number and
+    // no colour, which is the honest default.
+    const { data: profile } = await supabase
+      .from("profiles").select("diet_goal").eq("id", user.id).maybeSingle();
+
     return {
       rows, signed,
       checkIns: (checkIns ?? []).map((r) => ({ date: r.check_in_date as string, kg: r.weight_kg as number })),
+      dietGoal: ((profile as { diet_goal?: string } | null)?.diet_goal ?? null) as DietGoal | null,
     };
   }, [user.id], `body:${user.id}`);
 
@@ -89,6 +98,20 @@ export default function BodyPage() {
             </div>
             <MiniBars data={bars} color="#e3b53f" unit=" kg" emptyLabel="Add a weight below and this fills in. Two entries a week is enough to see a trend." />
           </div>
+          {/* WHICH WAY IT IS GOING, AND A WAY BACK FROM A TYPO.
+              Both were missing: the page drew the bars and printed today's
+              number, and a weight once typed was permanent. */}
+          <WeightHistory
+            userId={user.id}
+            series={weights}
+            today={today}
+            dietGoal={data?.dietGoal ?? null}
+            /* Which weigh-in rows hold more than a weight, so removing one
+               knows whether to null the column or drop the row. */
+            bodyLogExtras={new Set(rows.filter((r) => r.body_fat_pct != null || r.photo_path).map((r) => r.log_date))}
+            onChanged={reload}
+          />
+
           {bfSeries.length > 0 && (
             <div className="card p-5">
               <h2 className="field-label">Body fat over time</h2>
