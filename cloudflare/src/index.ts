@@ -38,8 +38,8 @@ import { splitCommission, estimateStripeFee } from "../../lib/affiliate";
 // what an athlete's readiness is built from, so it should be the code the unit
 // tests cover rather than a second copy that drifts.
 import { parseOuraSleep, parseIngestPayload } from "../../lib/biometrics";
-import { checkinReminderDue, checkinReminderSince } from "../../lib/checkin-reminder";
-import { currentStreak, isStreakMilestone, goalAchieved, metricLabel } from "../../lib/milestones";
+import { checkinReminderDue, checkinReminderSince, daysBetween } from "../../lib/checkin-reminder";
+import { currentStreak, isStreakMilestone, goalAchieved, metricLabel, STREAK_MILESTONES } from "../../lib/milestones";
 
 export interface Env {
   // AI
@@ -509,7 +509,7 @@ function overBudget(state: BudgetState): Response {
 // nobody is watching a spinner and the budget can be what the work actually
 // needs. Callers pass their own client-side timeout to match.
 // Bump on every paste into the Cloudflare dashboard. GET /health reports it.
-const WORKER_VERSION = "2026-08-24.1";
+const WORKER_VERSION = "2026-08-24.2";
 
 const CHAIN_BUDGET_MS = 55_000;
 /**
@@ -3059,8 +3059,13 @@ async function sendDailyReminders(env: Env): Promise<void> {
     rows.push({
       user_id: profile.id,
       kind: "check_in_reminder",
-      title: "Your daily check-in",
-      body: "Log sleep, fatigue and soreness to refresh today's readiness score.",
+      title: "Your daily log",
+      // Prose, then figures. The gap is the reason this email exists, so it is
+      // the thing worth putting a number on — "log your check-in" to somebody
+      // who has been away a fortnight reads like nothing noticed.
+      body: "Log sleep, fatigue and soreness to refresh today's readiness score.\n\n"
+        + `Days since your last log: ${last ? daysBetween(last, today) : "\u2014"}\n`
+        + `Last logged: ${last ?? "not yet"}`,
       href: "/journal",
       dedupe_key: `check-in:${today}`,
       show_in_app: inApp,
@@ -3249,7 +3254,10 @@ async function sendMilestoneNotifications(env: Env): Promise<void> {
       user_id: profile.id,
       kind: "streak_milestone",
       title: `${streak} days in a row`,
-      body: `You have checked in ${streak} days running. That consistency is what makes the trends worth reading.`,
+      body: "That consistency is what makes the trends worth reading — a run this long is the "
+        + "hardest part of the whole thing, and it is done.\n\n"
+        + `Current streak: ${streak} days\n`
+        + `Next milestone: ${STREAK_MILESTONES.find((n) => n > streak) ?? "you have them all"}`,
       href: "/progress",
       dedupe_key: `streak:${streak}`,
       show_in_app: profile.in_app_training_reminders !== false,
@@ -3270,7 +3278,9 @@ async function sendMilestoneNotifications(env: Env): Promise<void> {
       user_id: program.user_id,
       kind: "goal_reached",
       title: `You hit your ${label} goal`,
-      body: `Your latest ${label} is ${current}, past the ${program.target_value} you were training for.`,
+      body: `You set out to reach this at the start of the block, and the last test says you are there.\n\n`
+        + `Your ${label}: ${current}\n`
+        + `The target: ${program.target_value}`,
       href: "/coach",
       dedupe_key: `goal:${program.id}:${program.target_metric}`,
       show_in_app: profile.in_app_training_reminders !== false,
@@ -3379,17 +3389,57 @@ function appLink(env: Env, path: string): string {
  * to ship a heading with an empty label floating above it.
  */
 const NOTIFICATION_EYEBROW: Record<string, string> = {
-  check_in_reminder: "Daily check-in",
+  check_in_reminder: "Today's log",
   workout_reminder: "Today's session",
   weekly_summary: "Your week",
   program_assigned: "New block",
   program_deadline: "Block ending",
   milestone: "Milestone",
+  streak_milestone: "Streak",
+  goal_reached: "Goal reached",
   trial_ending: "Your trial",
   billing: "Billing",
   coach_request: "Coach request",
   general: "PocketAthlete",
 };
+
+/**
+ * WHAT THE BUTTON SAYS.
+ *
+ * Every one of these emails said "Open PocketAthlete →", whatever it was about
+ * and wherever it pointed — a check-in reminder linking to /journal, a finished
+ * block linking to /coach and a billing notice all offering the same
+ * destination-free sentence. A button is the one part of an email people read
+ * before deciding whether to act, and "open the app" asks them to work out what
+ * for.
+ *
+ * Falls back to the destination rather than to the old wording, so a kind
+ * nobody has added a label for still says where it goes.
+ */
+const NOTIFICATION_CTA: Record<string, string> = {
+  check_in_reminder: "Log today →",
+  workout_reminder: "Log the session →",
+  weekly_summary: "See the week →",
+  program_assigned: "See the block →",
+  program_deadline: "Open your block →",
+  milestone: "See your progress →",
+  streak_milestone: "See your progress →",
+  goal_reached: "See the block →",
+  trial_ending: "Choose a plan →",
+  billing: "Open billing →",
+  coach_request: "Open your squad →",
+};
+
+/** "Open your progress →" from an href, when the kind has no label of its own. */
+function ctaForHref(href: string): string {
+  const page = href.replace(/^\/+/, "").split(/[?#/]/)[0];
+  const named: Record<string, string> = {
+    journal: "Log today →", coach: "Open your block →", progress: "See your progress →",
+    nutrition: "Open your food →", profile: "Open your profile →", squad: "Open your squad →",
+    report: "Open your report →", body: "Open your body log →", plans: "Choose a plan →",
+  };
+  return named[page] ?? "Open PocketAthlete →";
+}
 
 async function emailStatus(req: Request, env: Env): Promise<Response> {
   const user = await authUser(req, env);
@@ -3600,8 +3650,22 @@ async function emailNotifications(env: Env): Promise<void> {
       preheader: body.split("\n")[0] || title,
       eyebrow: NOTIFICATION_EYEBROW[notification.kind] ?? "PocketAthlete",
       heading: title,
-      paragraphs: body ? [body] : [],
-      cta: { href: link, label: "Open PocketAthlete →" },
+      /**
+       * A BLANK LINE STARTS A NEW BLOCK, which is what lets a reminder carry
+       * figures instead of only sentences.
+       *
+       * `block()` renders a run of "Label: value" lines as a two-column table
+       * with the numbers in tabular figures — the same weight the launch email
+       * gets from its stat tile — but only when every line in the block is a
+       * pair. Passing the whole body as one paragraph meant a message with one
+       * sentence and two numbers fell back to prose and the numbers read as
+       * part of the sentence.
+       */
+      paragraphs: body ? body.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean) : [],
+      cta: {
+        href: link,
+        label: NOTIFICATION_CTA[notification.kind] ?? ctaForHref(notification.href ?? "/home"),
+      },
       footerHtml: notification.email_category === "essential"
         ? "This is an essential account or billing notice, so it is sent whatever your email preferences say."
         : `You are getting this because training emails are on. <a href="${settings}" style="color:#8a6510;">Change that in your profile</a>.`,

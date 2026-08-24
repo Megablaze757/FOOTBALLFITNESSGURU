@@ -180,3 +180,57 @@ test("the last thing on the card says who it is from", () => {
   assert.ok(footer.indexOf("PocketAthlete") < footer.indexOf(SAMPLE.footerHtml!.slice(0, 12)),
     "the signature comes after the small print");
 });
+
+test("the button says where it goes, not \"open the app\"", () => {
+  /**
+   * Every one of these emails said "Open PocketAthlete →" — a check-in
+   * reminder pointing at /journal, a finished block pointing at /coach and a
+   * billing notice, all offering the same destination-free sentence. The
+   * button is the one part people read before deciding whether to act, and
+   * "open the app" makes them work out what for.
+   */
+  assert.match(worker, /const NOTIFICATION_CTA: Record<string, string> = \{/);
+  // Every kind that has an eyebrow has a button label to go with it: a message
+  // worth naming is a message worth aiming.
+  const eyebrows = worker.slice(worker.indexOf("const NOTIFICATION_EYEBROW"), worker.indexOf("const NOTIFICATION_CTA"));
+  const ctas = worker.slice(worker.indexOf("const NOTIFICATION_CTA"), worker.indexOf("function ctaForHref"));
+  for (const [, kind] of eyebrows.matchAll(/^\s{2}(\w+):/gm)) {
+    if (kind === "general") continue; // the catch-all has no destination of its own
+    assert.match(ctas, new RegExp(`\\b${kind}:`), `${kind} has an eyebrow but no button label`);
+  }
+  // And an unlabelled kind still names its destination rather than falling
+  // back to the old wording.
+  assert.match(worker, /journal: "Log today →"/);
+  // Scoped to the notification sender. The ADMIN TEST still says "Open
+  // PocketAthlete" and should: it links to /home and is a rehearsal of the
+  // pipeline, not a message about anything in particular.
+  const sender = worker.slice(worker.indexOf("async function emailNotifications"));
+  assert.ok(!/label: "Open PocketAthlete →"/.test(sender),
+    "the destination-free button is back on real notifications");
+});
+
+test("a reminder can carry figures, not just sentences", () => {
+  /**
+   * `block()` renders a run of "Label: value" lines as a two-column table with
+   * the numbers in tabular figures — the same weight the launch email gets from
+   * its stat tile. It only fires when EVERY line of the block is a pair, so a
+   * body passed as one paragraph could never use it: one sentence plus two
+   * numbers fell through to prose and the numbers read as part of the sentence.
+   */
+  assert.match(worker, /body\.split\(\/\\n\\s\*\\n\/\)/, "the body is still one undivided paragraph");
+
+  // The three that have a number worth showing, show it.
+  assert.match(worker, /Days since your last log: /);
+  assert.match(worker, /Current streak: \$\{streak\} days/);
+  assert.match(worker, /The target: \$\{program\.target_value\}/);
+
+  // And it actually renders as a table rather than as prose.
+  const shell = {
+    preheader: "p", eyebrow: "Today's log", heading: "Your daily log",
+    paragraphs: ["Some prose about logging.", "Days since your last log: 3\nLast logged: 2026-08-21"],
+    cta: { href: "https://example.com/journal", label: "Log today →" },
+  };
+  const html = renderEmail("Your daily log", shell);
+  assert.match(html, /border-top:1px solid #e4e8e3;padding:9px 0/, "the figures did not become a stat table");
+  assert.match(html, />Log today →</);
+});

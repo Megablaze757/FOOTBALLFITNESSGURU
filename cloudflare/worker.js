@@ -923,7 +923,7 @@ function overBudget(state) {
   return json({ error: `${reason} The on-device coach still works, and your allowance resets \u2014 upgrade for more.` }, 429);
 }
 __name(overBudget, "overBudget");
-var WORKER_VERSION = "2026-08-24.1";
+var WORKER_VERSION = "2026-08-24.2";
 var ATTEMPT_TIMEOUT_MS = {
   groq: 1e4,
   openrouter: 2e4,
@@ -2533,8 +2533,14 @@ async function sendDailyReminders(env) {
     rows.push({
       user_id: profile.id,
       kind: "check_in_reminder",
-      title: "Your daily check-in",
-      body: "Log sleep, fatigue and soreness to refresh today's readiness score.",
+      title: "Your daily log",
+      // Prose, then figures. The gap is the reason this email exists, so it is
+      // the thing worth putting a number on — "log your check-in" to somebody
+      // who has been away a fortnight reads like nothing noticed.
+      body: `Log sleep, fatigue and soreness to refresh today's readiness score.
+
+Days since your last log: ${last ? daysBetween(last, today) : "\u2014"}
+Last logged: ${last ?? "not yet"}`,
       href: "/journal",
       dedupe_key: `check-in:${today}`,
       show_in_app: inApp,
@@ -2715,7 +2721,10 @@ async function sendMilestoneNotifications(env) {
       user_id: profile.id,
       kind: "streak_milestone",
       title: `${streak} days in a row`,
-      body: `You have checked in ${streak} days running. That consistency is what makes the trends worth reading.`,
+      body: `That consistency is what makes the trends worth reading \u2014 a run this long is the hardest part of the whole thing, and it is done.
+
+Current streak: ${streak} days
+Next milestone: ${STREAK_MILESTONES.find((n) => n > streak) ?? "you have them all"}`,
       href: "/progress",
       dedupe_key: `streak:${streak}`,
       show_in_app: profile.in_app_training_reminders !== false,
@@ -2735,7 +2744,10 @@ async function sendMilestoneNotifications(env) {
       user_id: program.user_id,
       kind: "goal_reached",
       title: `You hit your ${label} goal`,
-      body: `Your latest ${label} is ${current}, past the ${program.target_value} you were training for.`,
+      body: `You set out to reach this at the start of the block, and the last test says you are there.
+
+Your ${label}: ${current}
+The target: ${program.target_value}`,
       href: "/coach",
       dedupe_key: `goal:${program.id}:${program.target_metric}`,
       show_in_app: profile.in_app_training_reminders !== false,
@@ -2806,17 +2818,48 @@ function appLink(env, path) {
 }
 __name(appLink, "appLink");
 var NOTIFICATION_EYEBROW = {
-  check_in_reminder: "Daily check-in",
+  check_in_reminder: "Today's log",
   workout_reminder: "Today's session",
   weekly_summary: "Your week",
   program_assigned: "New block",
   program_deadline: "Block ending",
   milestone: "Milestone",
+  streak_milestone: "Streak",
+  goal_reached: "Goal reached",
   trial_ending: "Your trial",
   billing: "Billing",
   coach_request: "Coach request",
   general: "PocketAthlete"
 };
+var NOTIFICATION_CTA = {
+  check_in_reminder: "Log today \u2192",
+  workout_reminder: "Log the session \u2192",
+  weekly_summary: "See the week \u2192",
+  program_assigned: "See the block \u2192",
+  program_deadline: "Open your block \u2192",
+  milestone: "See your progress \u2192",
+  streak_milestone: "See your progress \u2192",
+  goal_reached: "See the block \u2192",
+  trial_ending: "Choose a plan \u2192",
+  billing: "Open billing \u2192",
+  coach_request: "Open your squad \u2192"
+};
+function ctaForHref(href) {
+  const page = href.replace(/^\/+/, "").split(/[?#/]/)[0];
+  const named = {
+    journal: "Log today \u2192",
+    coach: "Open your block \u2192",
+    progress: "See your progress \u2192",
+    nutrition: "Open your food \u2192",
+    profile: "Open your profile \u2192",
+    squad: "Open your squad \u2192",
+    report: "Open your report \u2192",
+    body: "Open your body log \u2192",
+    plans: "Choose a plan \u2192"
+  };
+  return named[page] ?? "Open PocketAthlete \u2192";
+}
+__name(ctaForHref, "ctaForHref");
 async function emailStatus(req, env) {
   const user = await authUser(req, env);
   if (!user)
@@ -2968,8 +3011,22 @@ async function emailNotifications(env) {
       preheader: body.split("\n")[0] || title,
       eyebrow: NOTIFICATION_EYEBROW[notification.kind] ?? "PocketAthlete",
       heading: title,
-      paragraphs: body ? [body] : [],
-      cta: { href: link, label: "Open PocketAthlete \u2192" },
+      /**
+       * A BLANK LINE STARTS A NEW BLOCK, which is what lets a reminder carry
+       * figures instead of only sentences.
+       *
+       * `block()` renders a run of "Label: value" lines as a two-column table
+       * with the numbers in tabular figures — the same weight the launch email
+       * gets from its stat tile — but only when every line in the block is a
+       * pair. Passing the whole body as one paragraph meant a message with one
+       * sentence and two numbers fell back to prose and the numbers read as
+       * part of the sentence.
+       */
+      paragraphs: body ? body.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean) : [],
+      cta: {
+        href: link,
+        label: NOTIFICATION_CTA[notification.kind] ?? ctaForHref(notification.href ?? "/home")
+      },
       footerHtml: notification.email_category === "essential" ? "This is an essential account or billing notice, so it is sent whatever your email preferences say." : `You are getting this because training emails are on. <a href="${settings}" style="color:#8a6510;">Change that in your profile</a>.`
     };
     const result = await email(env, address, title, renderEmail(title, shell), renderText(shell));
