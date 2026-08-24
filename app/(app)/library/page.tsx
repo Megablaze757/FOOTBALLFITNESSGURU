@@ -11,6 +11,8 @@ import { FeatureLock } from "@/components/FeatureLock";
 import { EXERCISES, EXERCISE_CATEGORIES, SPORTS, DIFFICULTIES, EQUIPMENT_BUCKETS, getExercisesForSport, rowToExercise, exerciseEquip, withinLevel, type Exercise, type ExerciseCategory, type SportId, type Difficulty, isRunEntry } from "@/lib/exercises";
 import { latestMetrics } from "@/lib/benchmarks";
 import { ExerciseModal } from "@/components/ExerciseDetail";
+import { WhatIfLiftSheet } from "@/components/WhatIfLiftSheet";
+import { resolveLift } from "@/lib/strength-standards";
 import { CustomExerciseForm } from "@/components/CustomExerciseForm";
 import { Tabs, TabPanel } from "@/components/Tabs";
 import { MealLibrary } from "@/components/MealLibrary";
@@ -44,6 +46,17 @@ export default function LibraryPage() {
   const user = useCurrentUser();
   const { tier, loading: tierLoading } = useTier();
   const [tab, setTab] = useState<(typeof LIBRARY_TABS)[number]["id"]>("moves");
+  /**
+   * THE STRENGTH CALCULATOR HAD ONE DOOR, AND IT WAS THE WRONG ONE.
+   *
+   * It lived behind a 24px calculator icon next to an exercise you had already
+   * logged in Today's Log — so to find out what your bench is worth you first
+   * had to log a bench. "What would 100kg for 5 be?" is a question you ask
+   * before you lift, and the page people ask it on is the one full of lifts.
+   *
+   * null closed, "" open with nothing chosen, a name open and pre-filled.
+   */
+  const [calc, setCalc] = useState<string | null>(null);
   const [sport, setSport] = useState<SportId | "all">("all");
   const [cat, setCat] = useState<ExerciseCategory | "All">("All");
   const [level, setLevel] = useState<Difficulty>("advanced");
@@ -271,6 +284,25 @@ export default function LibraryPage() {
           somewhere other than what it advertised reads as a broken link, and
           the athlete's next move is to go back rather than to look around.
           The page has read ?tab= since it was built; this simply says which. */}
+      {/* Same shape as the Running pointer below it, deliberately: these are the
+          two things on this page that are not a movement you scroll to. */}
+      <button
+        type="button"
+        onClick={() => setCalc("")}
+        className="card card-hover flex w-full items-center gap-3 p-4 text-left text-sm"
+      >
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-pitch-400/10 text-pitch-400">
+          <Icon name="calculator" size={18} />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block font-semibold text-slate-100">Strength calculator</span>
+          <span className="block text-xs text-slate-400">
+            A weight and the reps you got it for — what that is worth as a one-rep max, and where it ranks.
+          </span>
+        </span>
+        <span className="shrink-0 text-slate-600">›</span>
+      </button>
+
       <Link
         href="/essentials?tab=running"
         className="card card-hover flex items-center gap-3 p-4 text-sm"
@@ -440,11 +472,28 @@ export default function LibraryPage() {
         </button>
       )}
 
-      {open && <ExerciseModal ex={open} onClose={() => {
-        setOpen(null);
-        void createClient().from("profiles").select("saved_exercises").eq("id", user.id).maybeSingle()
-          .then(({ data }) => setSavedIds(new Set(((data?.saved_exercises ?? []) as string[]))));
-      }} />}
+      {open && <ExerciseModal
+        ex={open}
+        /* ONLY ON A LIFT THAT CAN ACTUALLY BE RANKED. resolveLift returns null
+           for a plank or a ladder drill, and offering to rank one would be a
+           button that opens a sheet with nothing to say. */
+        action={resolveLift(open.name) ? (
+          <button
+            type="button"
+            onClick={() => { const name = open.name; setOpen(null); setCalc(name); }}
+            className="btn-ghost w-full"
+          >
+            Where does my {open.name.toLowerCase()} rank?
+          </button>
+        ) : null}
+        onClose={() => {
+          setOpen(null);
+          void createClient().from("profiles").select("saved_exercises").eq("id", user.id).maybeSingle()
+            .then(({ data }) => setSavedIds(new Set(((data?.saved_exercises ?? []) as string[]))));
+        }}
+      />}
+
+      {calc !== null && <WhatIfLiftSheet initialExercise={calc} onClose={() => setCalc(null)} />}
       </div>
       )}
       </TabPanel>

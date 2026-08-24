@@ -223,10 +223,22 @@ export function Sheet({ label, children, onClose }: { label: string; children: R
   );
 }
 
-export function ExerciseModal({ ex, sets, reps, onClose }: { ex: Exercise; sets?: number; reps?: number; onClose: () => void }) {
+/**
+ * `action` is a slot, not a feature.
+ *
+ * The library needed "check where this lift ranks" on the movement you are
+ * already looking at, and the calculator that answers it imports this file for
+ * its own Sheet — so building the button in here would make the import
+ * circular. A caller-supplied node keeps the dependency pointing one way and
+ * keeps this component ignorant of what the button does.
+ */
+export function ExerciseModal({ ex, sets, reps, action, onClose }: {
+  ex: Exercise; sets?: number; reps?: number; action?: React.ReactNode; onClose: () => void;
+}) {
   return (
     <Sheet label={ex.name} onClose={onClose}>
       <ExerciseDetailCard ex={ex} sets={sets} reps={reps} />
+      {action && <div className="mt-3">{action}</div>}
     </Sheet>
   );
 }
