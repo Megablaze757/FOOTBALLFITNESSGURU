@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { CoachBubble } from "@/components/CoachBubble";
+import { FeatureTip } from "@/components/FeatureTip";
 import { HomeBubble } from "@/components/HomeBubble";
 import { useRouter } from "next/navigation";
 import { useSession, UserProvider } from "@/lib/auth";
@@ -65,6 +66,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             phone a thumb held one-handed cannot reach. Bottom left, opposite the
             coach, so neither is tapped by accident. */}
         <HomeBubble />
+        {/* POINTS AT ONE THING THIS ATHLETE HAS NOT FOUND, then never again.
+            Mounted once here rather than per page because a tip belongs to a
+            control, and controls move between pages; lib/tips.ts decides
+            whether there is anything worth pointing at, which is almost always
+            "no". Renders nothing at all when the anchor is missing. */}
+        <FeatureTip />
         {/* One place that tells the truth when a query fails, instead of
             twenty-five pages rendering an empty list as if it were an answer. */}
         <LoadErrorBanner />

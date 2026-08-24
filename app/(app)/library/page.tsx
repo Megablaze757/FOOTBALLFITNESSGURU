@@ -288,6 +288,7 @@ export default function LibraryPage() {
           two things on this page that are not a movement you scroll to. */}
       <button
         type="button"
+        data-tip="strength-calculator"
         onClick={() => setCalc("")}
         className="card card-hover flex w-full items-center gap-3 p-4 text-left text-sm"
       >

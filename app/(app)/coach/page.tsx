@@ -1696,7 +1696,7 @@ function ActiveProgram({
                   Readiness {readiness.status}
                 </span>
               )}
-              <button type="button" onClick={() => setEditingSession((editing) => !editing)}
+              <button type="button" data-tip="customise-session" onClick={() => setEditingSession((editing) => !editing)}
                 className={`tap-target rounded-xl px-2 text-sm ${editingSession ? "bg-pitch-400/10 text-pitch-400" : "text-slate-500 hover:bg-white/[0.05] hover:text-slate-300"}`}
                 aria-label={editingSession ? "Finish editing session" : "Edit session"} aria-pressed={editingSession}>
                 {editingSession ? "Done" : "⋮"}

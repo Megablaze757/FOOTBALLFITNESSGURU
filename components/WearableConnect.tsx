@@ -66,7 +66,7 @@ export function WearableConnect({ userId }: { userId: string }) {
 
   return (
     <div className="card p-5">
-      <h2 className="field-label !mb-1">🔗 Connect a wearable</h2>
+      <h2 data-tip="connect-wearable" className="field-label !mb-1">🔗 Connect a wearable</h2>
       <p className="mb-3 text-xs text-slate-400">
         So last night&apos;s sleep and HRV are already there when you open the app, instead of being typed in.
       </p>

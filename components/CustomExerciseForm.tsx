@@ -106,7 +106,7 @@ export function CustomExerciseForm({ coachId, onAdded, scope = "team" }: {
   }
 
   if (!open) {
-    return <button onClick={() => setOpen(true)} className="btn-ghost">{words.cta}</button>;
+    return <button data-tip="add-exercise" onClick={() => setOpen(true)} className="btn-ghost">{words.cta}</button>;
   }
 
   return (

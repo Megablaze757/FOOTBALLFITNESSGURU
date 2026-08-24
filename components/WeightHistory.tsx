@@ -49,7 +49,7 @@ export function WeightHistory({ userId, series, today, dietGoal, bodyLogExtras, 
   return (
     <div className="card space-y-4 p-5">
       <div className="flex items-baseline justify-between gap-3">
-        <h2 className="field-label !mb-0">Trend</h2>
+        <h2 data-tip="weight-trend" className="field-label !mb-0">Trend</h2>
         <span className="text-xs text-slate-500">
           {trend.entries.length} entr{trend.entries.length === 1 ? "y" : "ies"}
         </span>
