@@ -262,22 +262,75 @@ test("and applies it to the session that is displayed, played and logged", () =>
     "the rehabbed session is not what the page actually uses");
 });
 
-test("swaps are applied first, so the rehab plan gets the last word", () => {
+test("the three overlays run in the one order that is correct", () => {
   /**
-   * Order matters and it is not arbitrary. A swap is a preference the athlete
-   * set, possibly weeks ago; the rehab stage is a live medical constraint. Run
-   * the other way round, a swap could quietly reintroduce the exact movement
-   * the plan had just removed — the plan consulted, then overruled.
+   * Order matters and none of it is arbitrary.
+   *
+   *   applyEdit   the athlete's own arrangement, keyed by PRESCRIBED name
+   *   applySwaps  their substitutions, which replace a prescribed name
+   *   rehab       a live medical constraint, which gets the last word
+   *
+   * Edits first, because an edit names the drill the plan prescribed and a swap
+   * replaces that name — the other way round and the order would be keyed
+   * against a name the plan never contained.
+   *
+   * Rehab last, because a swap is a preference set possibly weeks ago and a
+   * rehab stage is true today. Run it earlier and a swap could quietly
+   * reintroduce the exact movement the plan had just removed — the plan
+   * consulted, then overruled.
+   *
+   * THIS TEST USED TO ANCHOR ON `applySwaps(todaySession.drills`, which stopped
+   * being the chain the moment a third overlay was added in front of it. It now
+   * asserts each pass reads the PREVIOUS one's output, so inserting a fourth
+   * cannot make it pass by accident.
    */
   const src = coachPage();
-  // Both anchored on the CALL, not the identifier: the import line names
-  // applyRehabToSession at the top of the file and would make any ordering
-  // check pass or fail for the wrong reason.
-  const swapAt = src.indexOf("applySwaps(todaySession.drills");
+  const editAt = src.search(/applyEdit\(todaySession,/);
+  const swapAt = src.indexOf("applySwaps(arranged.drills");
   const rehabAt = src.search(/applyRehabToSession</);
-  assert.ok(swapAt > 0, "the swap overlay is no longer applied to today's session");
+
+  assert.ok(editAt > 0, "the athlete's arrangement is no longer applied to today's session");
+  assert.ok(swapAt > editAt, "the swaps no longer run after the arrangement");
   assert.ok(rehabAt > swapAt, "the rehab filter no longer runs after the swaps");
+  // Anchored on each CALL rather than the identifier: the import lines name all
+  // three at the top of the file.
   assert.match(src, /applyRehabToSession<[^>]*>\(\s*swapped,/, "the rehab pass is not reading the swapped session");
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE PLAN IS GENERATED, SO CUSTOMISING IT CANNOT WRITE INTO IT.
+ *
+ * saveDrillOrder used to sort the generated drills into the athlete's order and
+ * save the whole plan back to `programs.plan`. That works exactly until the
+ * plan is regenerated — a new block, a rebuild after an injury, a settings
+ * change — and then their ordering is gone with no trace it existed and no way
+ * to ask for the original back.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("customising a session writes an overlay, never the plan", () => {
+  const src = coachPage();
+
+  /**
+   * Scoped to the functions that CUSTOMISE. A season switch and a new block
+   * legitimately replace `programs.plan` — they are rebuilds, not edits, and
+   * the whole point of the overlay is that it survives them.
+   */
+  const CUSTOMISERS = ["saveEdits", "saveDrillOrder", "takeOutDrill", "putBackDrill", "resetArrangement"];
+  for (const name of CUSTOMISERS) {
+    const start = src.indexOf(`async function ${name}(`);
+    assert.ok(start > 0, `${name} is gone — this test needs updating with it`);
+    // To the next top-level function declaration, which is where its body ends.
+    const after = src.slice(start + 1);
+    const end = after.search(/\n  (?:async )?function |\n  const \w+ = \(/);
+    const body = end === -1 ? after : after.slice(0, end);
+    assert.ok(
+      !/\.update\(\{[^}]*\bplan\s*:/.test(body),
+      `${name} writes back into programs.plan — a regenerated block would discard it`,
+    );
+  }
+
+  assert.match(src, /\.update\(\{ edits: next \}\)/, "the arrangement is not persisted as an overlay");
 });
 
 test("the athlete is told what their plan changed about today", () => {

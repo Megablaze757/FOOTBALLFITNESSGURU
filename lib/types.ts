@@ -265,6 +265,15 @@ export interface Program {
    * deleting a key. See migration 0086 and lib/exercise-match.ts.
    */
   swaps?: Record<string, string> | null;
+  /**
+   * Per-session arrangement: what moved, what is out, what was added.
+   *
+   * Beside `swaps` rather than inside it, and for the same reason it exists at
+   * all — a swap says WHAT to do instead, this says in what ORDER and WHETHER.
+   * Both are overlays so a regenerated block never silently discards the
+   * athlete's work. See migration 0101 and lib/program-edit.ts.
+   */
+  edits?: import("./program-edit").ProgramEdits | null;
   /** Ordered objectives. Additive: goal_type remains the backwards-compatible anchor. */
   goals?: import("./program-preferences").GoalPreference[] | null;
   /** Custom rotation and advanced generation controls used to build this block. */

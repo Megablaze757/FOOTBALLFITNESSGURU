@@ -25,7 +25,7 @@ import { Icon, type IconName } from "@/components/Icon";
  * `compact` keeps the old dense rows for the four-week calendar, where the
  * question is "what does week 3 look like" and twelve cards a day would bury it.
  */
-export function SessionDrills({ drills, onPick, onSwap, onReorder, editMode = false, compact = false }: {
+export function SessionDrills({ drills, onPick, onSwap, onReorder, onRemove, removeWarning, editMode = false, compact = false }: {
   drills: Drill[];
   /** Optional: open the exercise detail. Every non-empty drill has a card. */
   onPick?: (name: string) => void;
@@ -37,11 +37,24 @@ export function SessionDrills({ drills, onPick, onSwap, onReorder, editMode = fa
   onSwap?: (prescribed: string, to: string | null) => void | Promise<void>;
   /** Persist a move in the parent. HTML drag is enhanced by tap-friendly arrows. */
   onReorder?: (from: number, to: number) => void | Promise<void>;
+  /**
+   * Take a drill out of the session. Called with the PRESCRIBED name, like
+   * onSwap, because that is the name the overlay is keyed by.
+   *
+   * Never offered for rehab work — the same reason a swap is not. Removing a
+   * stage-two isometric is leaving the protocol, and that is a conversation
+   * with a physio rather than a tap.
+   */
+  onRemove?: (prescribed: string) => void | Promise<void>;
+  /** What removing it costs, in the athlete's words. Null when it is free. */
+  removeWarning?: (prescribed: string) => string | null;
   editMode?: boolean;
   /** Dense text rows rather than cards. For the week-at-a-glance calendar. */
   compact?: boolean;
 }) {
   const [swapping, setSwapping] = useState<string | null>(null);
+  // Two taps to remove: the first shows what it costs, the second does it.
+  const [confirming, setConfirming] = useState<string | null>(null);
   const [dragging, setDragging] = useState<number | null>(null);
   const grouped = groupBySlot(drills);
 
@@ -111,7 +124,31 @@ export function SessionDrills({ drills, onPick, onSwap, onReorder, editMode = fa
                       ⇄
                     </button>
                   )}
+                  {editMode && onRemove && !d.rehab && (
+                    <button
+                      onClick={() => (confirming === prescribed ? void onRemove(prescribed) : setConfirming(prescribed))}
+                      aria-label={`Remove ${d.name}`}
+                      className={`tap-target shrink-0 px-1.5 text-xs transition ${
+                        confirming === prescribed ? "text-readiness-red" : "text-slate-600 hover:text-readiness-red"
+                      }`}
+                    >
+                      {confirming === prescribed ? "✓" : "×"}
+                    </button>
+                  )}
                 </div>
+                {/* SAY WHAT IT COSTS BEFORE THEY TAP AGAIN, not after. Taking
+                    out the only main lift leaves a day with no hard work in it,
+                    and that is not obvious from a list of nine rows. */}
+                {editMode && onRemove && confirming === prescribed && (
+                  <p className="mt-1 flex items-center gap-2 pl-1 text-[11px] text-slate-400">
+                    <span className="min-w-0 flex-1">
+                      {removeWarning?.(prescribed) ?? "Tap again to take it out. You can put it back."}
+                    </span>
+                    <button onClick={() => setConfirming(null)} className="tap-target chip shrink-0 text-slate-300">
+                      Keep it
+                    </button>
+                  </p>
+                )}
                 {editMode && onSwap && open && (
                   <div className="mt-1.5">
                     <SwapSheet

@@ -45,6 +45,11 @@ import { Tabs, TabPanel } from "@/components/Tabs";
 import { CoachChat } from "@/components/CoachChat";
 import { ProgramCalendar } from "@/components/ProgramCalendar";
 import { SessionDrills } from "@/components/SessionDrills";
+import {
+  applyEdit, moveDrill, removeDrill as removeFromEdit, restoreDrill, resetSession,
+  isEdited, orderWarnings, removeWarning as removeCost, sessionKey,
+  type ProgramEdits,
+} from "@/lib/program-edit";
 import { ExercisePicker } from "@/components/ExercisePicker";
 import { DrillModal } from "@/components/DrillDetail";
 import { sessionLength } from "@/lib/session-time";
@@ -1034,8 +1039,26 @@ function ActiveProgram({
    * changes, and `swappedFrom` keeps what was asked for so the row can say so
    * and offer to put it back.
    */
+  /**
+   * THEIR OWN ARRANGEMENT FIRST — what moved, what is out, what they added.
+   *
+   * Before swaps, because an edit names the PRESCRIBED drill and a swap
+   * substitutes for it. Doing it the other way round would key the order
+   * against a name the plan never contained.
+   *
+   * An overlay for the same reason swaps are one, and the reason is sharper
+   * here: this used to write straight back into `programs.plan`, so every
+   * regenerated block — a new block, a rebuild after an injury, a settings
+   * change — silently threw the athlete's ordering away, and nothing could
+   * tell afterwards which parts of the plan were theirs. See migration 0101.
+   */
+  const edits = (program.edits ?? {}) as ProgramEdits;
+  const editKey = nextSession ? sessionKey(nextSession.w, nextSession.s.day) : "";
+  const sessionEdit = edits[editKey];
+  const arranged = todaySession ? applyEdit(todaySession, sessionEdit) : null;
+
   const swaps = (program.swaps ?? {}) as SwapMap;
-  const swapped = todaySession ? applySwaps(todaySession.drills, swaps) : [];
+  const swapped = arranged ? applySwaps(arranged.drills, swaps) : [];
 
   /**
    * …and then their rehab plan, which gets the LAST word.
@@ -1079,32 +1102,73 @@ function ActiveProgram({
     onChange();
   }
 
-  async function saveDrillOrder(from: number, to: number) {
-    if (!nextSession || from === to) return;
-    const visible = [...sessionDrills];
-    const [moved] = visible.splice(from, 1);
-    visible.splice(to, 0, moved);
-    // Rehab additions are not part of the programme row. Preserve them in the
-    // live view but only persist the prescribed exercises they sit around.
-    const order = new Map(
-      visible.filter((drill) => !drill.rehab).map((drill, index) => [drill.swappedFrom ?? drill.name, index]),
-    );
-    const nextPlan = {
-      ...plan,
-      weeks: plan.weeks.map((week) => week.week !== nextSession.w ? week : {
-        ...week,
-        sessions: week.sessions.map((session) => session.day !== nextSession.s.day ? session : {
-          ...session,
-          drills: [...session.drills].sort((a, b) =>
-            (order.get(a.name) ?? Number.MAX_SAFE_INTEGER) - (order.get(b.name) ?? Number.MAX_SAFE_INTEGER)),
-        }),
-      }),
-    };
-    const { error: reorderError } = await createClient().from("programs").update({ plan: nextPlan }).eq("id", program.id);
-    if (reorderError) { setActionError(`Couldn't save that exercise order: ${reorderError.message}`); return; }
+  /**
+   * Persist the arrangement as an overlay.
+   *
+   * IT USED TO REWRITE `programs.plan`, sorting the generated drills into the
+   * athlete's order and saving the whole plan back. That works exactly until
+   * the plan is regenerated, which it is — and then their ordering is gone with
+   * no trace it ever existed and no way to ask for the original back. The rules
+   * live in lib/program-edit.ts so they can be tested rather than trusted.
+   */
+  async function saveEdits(next: ProgramEdits) {
+    const { error: editError } = await createClient()
+      .from("programs").update({ edits: next }).eq("id", program.id);
+    if (editError) {
+      setActionError(
+        /column|schema cache/i.test(editError.message)
+          ? "Run migration 0101 — customising a session needs the edits column."
+          : `Couldn't save that change: ${editError.message}`,
+      );
+      return;
+    }
     recordChanged("program");
     onChange();
   }
+
+  async function saveDrillOrder(from: number, to: number) {
+    if (!nextSession || from === to) return;
+    /**
+     * Ordered against the PRESCRIBED names, and rehab work is left out of it.
+     *
+     * Rehab drills are added by lib/rehab-plan.ts on the way to the screen —
+     * they are not in `programs.plan` at all — so naming them in an order that
+     * gets applied to the plan's own drills would be ordering against rows that
+     * do not exist there.
+     */
+    const prescribed = sessionDrills
+      .filter((drill) => !drill.rehab)
+      .map((drill) => ({ ...drill, name: drill.swappedFrom ?? drill.name }));
+    const fromName = sessionDrills[from]?.swappedFrom ?? sessionDrills[from]?.name;
+    const toName = sessionDrills[to]?.swappedFrom ?? sessionDrills[to]?.name;
+    const pFrom = prescribed.findIndex((d) => d.name === fromName);
+    const pTo = prescribed.findIndex((d) => d.name === toName);
+    if (pFrom < 0 || pTo < 0) return;
+
+    await saveEdits({ ...edits, [editKey]: moveDrill(prescribed, pFrom, pTo, sessionEdit) });
+  }
+
+  async function takeOutDrill(prescribed: string) {
+    if (!nextSession || !arranged) return;
+    await saveEdits({ ...edits, [editKey]: removeFromEdit(arranged.drills, prescribed, sessionEdit) });
+  }
+
+  async function putBackDrill(prescribed: string) {
+    if (!nextSession) return;
+    await saveEdits({ ...edits, [editKey]: restoreDrill(prescribed, sessionEdit) });
+  }
+
+  async function resetArrangement() {
+    if (!nextSession) return;
+    await saveEdits(resetSession(edits, editKey));
+  }
+
+  /** Names they have taken out that the engine is still prescribing. */
+  const takenOut = (sessionEdit?.removed ?? []).filter((name) =>
+    (todaySession?.drills ?? []).some((d) => d.name === name));
+
+  /** What this arrangement costs, in their terms. Warnings, never refusals. */
+  const arrangementWarnings = arranged ? orderWarnings(arranged.drills) : [];
 
   const bench = (program.target_metric && program.target_value != null && program.baseline_value != null)
     ? benchmarkProgress(program.target_metric, program.baseline_value, program.target_value, latestBench[program.target_metric] ?? program.baseline_value)
@@ -1750,8 +1814,47 @@ function ActiveProgram({
                 onPick={(name) => setShowing(name)}
                 onSwap={editingSession ? saveSwap : undefined}
                 onReorder={editingSession ? saveDrillOrder : undefined}
+                onRemove={editingSession ? takeOutDrill : undefined}
+                removeWarning={(name) => (arranged ? removeCost(arranged.drills, name) : null)}
                 editMode={editingSession}
               />
+
+              {/* WHAT THIS ARRANGEMENT COSTS, and never a refusal.
+                  Squats before accessories is not decoration — the heavy
+                  compound goes first because that is when you can produce
+                  force. But an athlete moving something has a reason the app
+                  cannot see: a busy rack, a shoulder that needs longer, a
+                  training partner. Blocking the move treats coaching as
+                  physics; saying nothing pretends the order was arbitrary. */}
+              {editingSession && arrangementWarnings.length > 0 && (
+                <ul className="mt-3 space-y-1 rounded-xl border border-amber-400/25 bg-amber-500/[0.06] px-3 py-2 text-[11px] leading-relaxed text-amber-100/90">
+                  {arrangementWarnings.map((warning) => <li key={warning}>· {warning}</li>)}
+                </ul>
+              )}
+
+              {/* PUT BACK is the other half of remove. Without it, taking
+                  something out is a decision you can never revisit — and the
+                  overlay already holds everything needed to undo it. */}
+              {editingSession && takenOut.length > 0 && (
+                <div className="mt-3 rounded-xl bg-white/[0.03] px-3 py-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Taken out</span>
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    {takenOut.map((name) => (
+                      <button key={name} onClick={() => void putBackDrill(name)} className="chip text-slate-300">
+                        {name} <span className="text-pitch-400">+ put back</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Reset is deleting a key, so what comes back is exactly what
+                  the engine wrote — not an approximation of it. */}
+              {editingSession && isEdited(sessionEdit) && (
+                <button onClick={() => void resetArrangement()} className="tap-target mt-3 text-xs font-semibold text-slate-400 hover:text-slate-200">
+                  Reset this session to the original
+                </button>
+              )}
             </div>}
             <button onClick={() => setPlaying(true)} className="btn-primary mt-4">
               ▶ {todaySession.kind === "active_rest" ? "Start active rest" : "Start guided session"}
