@@ -40,7 +40,7 @@ export default function JournalPage() {
       supabase.from("daily_check_ins").select("*").eq("user_id", user.id).eq("check_in_date", today).maybeSingle(),
       supabase.from("training_logs").select("*").eq("user_id", user.id).eq("log_date", today).maybeSingle(),
       supabase.from("biometrics").select("*").eq("user_id", user.id).eq("metric_date", today).maybeSingle(),
-      supabase.from("profiles").select("sport, distance_unit").eq("id", user.id).maybeSingle(),
+      supabase.from("profiles").select("sport, distance_unit, sex, birth_year").eq("id", user.id).maybeSingle(),
       supabase.from("programs").select("plan, completed_sessions, swaps").eq("user_id", user.id).eq("status", "active").maybeSingle(),
       /**
        * The dates for the streak AND the weights for the burn estimate.
@@ -125,6 +125,13 @@ export default function JournalPage() {
       // The most recent weight anybody recorded, for the burn estimate on days
       // they did not type one. See lib/bodyweight.ts for why this is resolved
       // rather than read from a column.
+      // Both feed the Keytel calorie estimate: the same heart rate is different
+      // work in a different body, which is why it needs more than the beats.
+      sex: (profile as { sex?: string | null } | null)?.sex === "female" ? "female" as const
+        : (profile as { sex?: string | null } | null)?.sex === "male" ? "male" as const : null,
+      age: (profile as { birth_year?: number | null } | null)?.birth_year
+        ? new Date().getUTCFullYear() - Number((profile as { birth_year?: number | null }).birth_year)
+        : null,
       weightKg: latestBodyweight({
         checkIns: ((recent ?? []) as { check_in_date: string; weight_kg: number | null }[])
           .map((r) => ({ date: r.check_in_date, kg: r.weight_kg })),
@@ -210,6 +217,8 @@ export default function JournalPage() {
           streak={data?.streak ?? 0}
           acwr={data?.acwr ?? null}
           weightKg={data?.weightKg ?? null}
+          sex={data?.sex ?? null}
+          age={data?.age ?? null}
           editing={editing}
           onEdit={() => setEditing((v) => !v)}
           onAddTraining={() => {

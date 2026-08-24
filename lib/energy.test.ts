@@ -1,7 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { sessionBurn, metFor, metCalories, burnRangeLabel, burnBasisNote } from "./energy";
+import {
+  sessionBurn, metFor, metCalories, burnRangeLabel, burnBasisNote, keytelCaloriesPerMinute,
+} from "./energy";
 
 test("a run is costed from the distance, because that is the part we know", () => {
   /**
@@ -119,4 +121,54 @@ test("it never reaches the calorie target", () => {
   assert.ok(!/from "\.\/energy"/.test(nutrition), "nutrition.ts imports the burn estimator");
   const plan = readFileSync(new URL("./meal-plan.ts", import.meta.url), "utf8");
   assert.ok(!/from "\.\/energy"/.test(plan), "meal-plan.ts imports the burn estimator");
+});
+
+test("a heart rate beats everything else, including a distance", () => {
+  /**
+   * Every other method here infers effort from what the session WAS and how
+   * hard it felt. This one reads what the athlete's heart actually did, so it
+   * is checked first — including ahead of the distance, which is otherwise the
+   * strongest signal available.
+   */
+  const withHr = sessionBurn({
+    weightKg: 70, minutes: 50, distanceKm: 10, avgHr: 155, sex: "male", age: 24,
+  })!;
+  assert.equal(withHr.basis, "heart-rate");
+  assert.equal(withHr.confidence, "good");
+});
+
+test("it makes lifting knowable, which is the whole point of it", () => {
+  // Activity-based estimates for resistance work disagree by two or three
+  // times. A heart rate collapses that to the same band a run gets.
+  const guessed = sessionBurn({ weightKg: 80, minutes: 60, strength: true })!;
+  const measured = sessionBurn({ weightKg: 80, minutes: 60, strength: true, avgHr: 130, sex: "male", age: 30 })!;
+  assert.equal(measured.basis, "heart-rate");
+  const guessedBand = (guessed.high - guessed.low) / guessed.mid;
+  const measuredBand = (measured.high - measured.low) / measured.mid;
+  assert.ok(measuredBand < guessedBand / 2, "a measured session is no better than a guessed one");
+});
+
+test("the Keytel numbers land where the literature says", () => {
+  // A 70kg 25-year-old man at 150bpm burns roughly 13-14 kcal/min.
+  const male = keytelCaloriesPerMinute("male", 150, 70, 25);
+  assert.ok(male > 12 && male < 15, `got ${male.toFixed(1)} kcal/min`);
+  // A 60kg 25-year-old woman at 150bpm is nearer 9-10.
+  const female = keytelCaloriesPerMinute("female", 150, 60, 25);
+  assert.ok(female > 8 && female < 11, `got ${female.toFixed(1)} kcal/min`);
+  // Same heart rate, different bodies, different work — which is why it needs
+  // sex, age and weight rather than just the beats.
+  assert.ok(male > female);
+});
+
+test("the regression going negative at rest is not a calorie refund", () => {
+  // Keytel is fitted to exercise intensities and drops below zero at rest.
+  assert.equal(keytelCaloriesPerMinute("female", 40, 60, 25), 0);
+  // And an implausible or missing reading falls through to the other methods
+  // rather than being trusted.
+  const resting = sessionBurn({ weightKg: 70, minutes: 60, avgHr: 45, sex: "male", age: 24, activityId: "cycling" })!;
+  assert.equal(resting.basis, "activity", "a 45bpm session average was treated as real");
+  const noSex = sessionBurn({ weightKg: 70, minutes: 60, avgHr: 150, age: 24, activityId: "cycling" })!;
+  assert.equal(noSex.basis, "activity", "Keytel ran without knowing which equation to use");
+  const noAge = sessionBurn({ weightKg: 70, minutes: 60, avgHr: 150, sex: "male", activityId: "cycling" })!;
+  assert.equal(noAge.basis, "activity");
 });

@@ -977,6 +977,33 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
           </span>
         </label>
       )}
+
+      {/* THE ONE CASE THAT HAD NOWHERE TO PUT A HEART RATE.
+          There were already two of these fields and between them they covered
+          runners (always) and everyone else who logged a run. So the athlete
+          with no HR box was the one lifting — which is the single session type
+          where an activity-based calorie estimate is worthless and a measured
+          one is not. See lib/energy.ts.
+
+          Gated so exactly one HR input is ever on screen: this is the third
+          field for one value, and three ways to enter the same number is worse
+          than none. */}
+      {sport !== "running" && !value.run_type && (
+        <label className="block">
+          <span className="field-label">
+            Average heart rate <span className="normal-case tracking-normal text-slate-600">(optional)</span>
+          </span>
+          <NumberInput
+            min={30} max={250}
+            value={value.avg_hr ?? null}
+            onChange={(v) => update({ avg_hr: v })}
+            placeholder="From your watch, e.g. 146" className="field"
+          />
+          <span className="mt-1 block text-xs text-slate-500">
+            If your watch recorded one, the calorie estimate becomes a measurement rather than a guess.
+          </span>
+        </label>
+      )}
     </div>
   );
 }

@@ -59,7 +59,35 @@ const STRENGTH_MET = 5.0;
  */
 const KCAL_PER_KG_PER_KM = 1.03;
 
-export type BurnBasis = "distance" | "activity" | "strength" | "duration";
+export type BurnBasis = "heart-rate" | "distance" | "activity" | "strength" | "duration";
+
+/**
+ * Calories per minute from average heart rate — Keytel et al. (2005).
+ *
+ * THE ONLY METHOD HERE THAT MEASURES THE ATHLETE rather than the activity.
+ * Everything else infers effort from what the session was and how hard they
+ * said it felt; this reads what their heart actually did, which is why it is
+ * the one path that works for LIFTING — the case where activity-based estimates
+ * disagree with each other by two or three times.
+ *
+ * Published as kJ/min, hence the 4.184. Validated against indirect calorimetry
+ * across a wide range of fitness, and the reason it needs sex, age and weight
+ * is that the same heart rate means different work in different bodies.
+ *
+ * Clamped at zero: the regression goes negative at rest, which is arithmetic
+ * rather than a claim that sitting down earns calories back.
+ */
+export function keytelCaloriesPerMinute(
+  sex: "male" | "female",
+  avgHr: number,
+  kg: number,
+  age: number,
+): number {
+  const kj = sex === "female"
+    ? -20.4022 + 0.4472 * avgHr - 0.1263 * kg + 0.074 * age
+    : -55.0969 + 0.6309 * avgHr + 0.1988 * kg + 0.2017 * age;
+  return Math.max(0, kj / 4.184);
+}
 
 export interface BurnEstimate {
   low: number;
@@ -82,6 +110,16 @@ export interface BurnInput {
   distanceKm?: number | null;
   /** True when this was lifting rather than a named activity. */
   strength?: boolean;
+  /**
+   * Average heart rate for the session, when a watch recorded one.
+   *
+   * Beats every other input here, including distance: it measures the athlete
+   * rather than the activity, so it is the only path that makes a lifting
+   * session as knowable as a run.
+   */
+  avgHr?: number | null;
+  sex?: "male" | "female" | null;
+  age?: number | null;
 }
 
 /**
@@ -93,6 +131,7 @@ export interface BurnInput {
  * to say so.
  */
 const SPREAD: Record<BurnBasis, number> = {
+  "heart-rate": 0.12,
   distance: 0.12,
   activity: 0.2,
   duration: 0.28,
@@ -100,7 +139,7 @@ const SPREAD: Record<BurnBasis, number> = {
 };
 
 const CONFIDENCE: Record<BurnBasis, BurnEstimate["confidence"]> = {
-  distance: "good", activity: "fair", duration: "rough", strength: "rough",
+  "heart-rate": "good", distance: "good", activity: "fair", duration: "rough", strength: "rough",
 };
 
 /**
@@ -140,6 +179,29 @@ export function sessionBurn(input: BurnInput): BurnEstimate | null {
 
   let mid: number;
   let basis: BurnBasis;
+
+  const hr = Number(input.avgHr);
+  const age = Number(input.age);
+  if (
+    Number.isFinite(hr) && hr >= 60 && hr <= 220
+    && (input.sex === "male" || input.sex === "female")
+    && Number.isFinite(age) && age > 0 && minutes > 0
+  ) {
+    // Measured beats inferred, so this is checked before the distance.
+    const perMinute = keytelCaloriesPerMinute(input.sex, hr, kg, age);
+    if (perMinute > 0) {
+      mid = perMinute * minutes;
+      basis = "heart-rate";
+      const spread = SPREAD[basis];
+      return {
+        low: Math.round((mid * (1 - spread)) / 10) * 10,
+        mid: Math.round(mid / 10) * 10,
+        high: Math.round((mid * (1 + spread)) / 10) * 10,
+        basis,
+        confidence: CONFIDENCE[basis],
+      };
+    }
+  }
 
   if (km > 0) {
     // Distance beats everything else available, and does not need an RPE.
@@ -185,6 +247,7 @@ export function burnRangeLabel(estimate: BurnEstimate | null): string | null {
 export function burnBasisNote(estimate: BurnEstimate | null): string | null {
   if (!estimate) return null;
   return {
+    "heart-rate": "From your average heart rate — the most reliable estimate there is.",
     distance: "From the distance you ran — the most reliable estimate here.",
     activity: "From the activity and how hard you rated it.",
     strength: "Lifting is the hardest to estimate; treat this as a wide guess.",
@@ -206,7 +269,10 @@ export function burnBasisNote(estimate: BurnEstimate | null): string | null {
  * which is the case for a plain gym session.
  */
 export function dayBurn(
-  sessions: { activityId?: string | null; minutes: number; intensity?: number | null; distanceKm?: number | null }[],
+  sessions: {
+    activityId?: string | null; minutes: number; intensity?: number | null; distanceKm?: number | null;
+    avgHr?: number | null; sex?: "male" | "female" | null; age?: number | null;
+  }[],
   fallback: BurnInput,
 ): BurnEstimate | null {
   const parts = sessions

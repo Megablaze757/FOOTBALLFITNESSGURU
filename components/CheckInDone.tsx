@@ -38,12 +38,17 @@ export function CheckInDone({
   onEdit,
   onAddTraining,
   weightKg,
+  sex,
+  age,
 }: {
   checkIn: Partial<CheckInInput>;
   training: TrainingLog | null;
   streak: number;
   /** Profile bodyweight, for the days they did not type one into the log. */
   weightKg?: number | null;
+  /** Both needed by the Keytel equation — the same heart rate is different work in different bodies. */
+  sex?: "male" | "female" | null;
+  age?: number | null;
   /** Acute:chronic load ratio — must be the same value Home scores with. */
   acwr: number | null;
   editing: boolean;
@@ -78,6 +83,10 @@ export function CheckInDone({
       activityId: matchActivity(d.name)?.id ?? null,
       minutes: activityMinutes(d),
       intensity: d.effort ?? training?.intensity ?? null,
+      // Only when there is one session to attribute it to.
+      avgHr: sessions <= 1 ? training?.avg_hr ?? null : null,
+      sex,
+      age,
     })),
     {
       weightKg: checkIn.weight_kg ?? weightKg ?? null,
@@ -85,6 +94,13 @@ export function CheckInDone({
       intensity: training?.intensity ?? null,
       distanceKm: training?.distance_km ?? null,
       strength: (training?.drills ?? []).some((d) => !isActivityDrill(d)),
+      // A measured heart rate outranks everything above it — see lib/energy.ts.
+      // It is on the DAY's log rather than per drill, so it only applies when
+      // the whole day was one session; a day of spin plus padel has one HR
+      // reading and two activities, and attributing it to both would double it.
+      avgHr: sessions <= 1 ? training?.avg_hr ?? null : null,
+      sex,
+      age,
     },
   );
 
