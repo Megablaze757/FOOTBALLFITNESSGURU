@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { invokeAI } from "@/lib/api";
 import { useAsync } from "@/lib/use-async";
 import { syncHealth, daysSinceSync } from "@/lib/biometrics";
+import { appleShortcutUrl } from "@/lib/apple-shortcut";
 
 /**
  * Connect a wearable so it uploads on its own.
@@ -107,7 +108,9 @@ export function WearableConnect({ userId }: { userId: string }) {
             detail={
               data?.ingestToken
                 ? "Set up. Your Shortcut sends to the app whenever you like."
-                : "One link and a two-minute Shortcut on your iPhone — then your sleep is there every morning."
+                : appleShortcutUrl()
+                  ? "Add our ready-made Shortcut, paste one link, and your sleep is there every morning."
+                  : "One link and a two-minute Shortcut on your iPhone — then your sleep is there every morning."
             }
             onClick={() => setOpen(open === "apple" ? null : "apple")}
             action={data?.ingestToken ? "Show setup" : "Set up"}
@@ -387,12 +390,84 @@ function AppleSetup({ token, onDone }: { token: string | null; onDone: () => voi
     }
   }
 
+  /**
+   * THE READY-MADE SHORTCUT, WHEN THERE IS ONE.
+   *
+   * The guide below is correct and people could not finish it. Every step in it
+   * serves the transport — which Health sample, which sort order, which unit a
+   * duration is in — and none of it is anything an athlete should have to learn
+   * to see last night's sleep in their log. A shortcut somebody else already
+   * built removes all of it: tap, paste, done.
+   *
+   * Null until the link is published (docs/APPLE-SHORTCUT.md), and null is not
+   * a broken state — it is the hand-built guide, which is what everybody has
+   * been using. Nothing here is removed, only demoted.
+   */
+  const shortcut = appleShortcutUrl();
+
+  /**
+   * The link, its share fallback and its copy-failed note, as one thing.
+   *
+   * It sits on its own in the hand-built guide and inside step one of the
+   * ready-made one, and those are the same widget — the difference is only
+   * where it belongs in the order.
+   */
+  /**
+   * WHICH LINK GOES ON THE CLIPBOARD DEPENDS ON WHO ASSEMBLES THE URL.
+   *
+   * Hand-built, the athlete types nothing: they paste a link that already ends
+   * `&sleep=` and drop the Health variable on the end, so the trailing key is
+   * doing real work. The ready-made shortcut builds the whole query itself —
+   * sleep, HRV and resting HR — from a base it is handed, and a dangling
+   * `&sleep=` pasted into that would land in the middle of the URL it builds.
+   */
+  const linkToCopy = shortcut ? personalLink : sleepOnly;
+
+  const linkBlock = (
+    <>
+          {/* ONE LINK, NOT A URL AND A HEADER.
+              Copying two values into two different places in the Shortcuts UI
+              was where people lost their place. Copy gives you the link with
+              `&sleep=` already on the end, so the next thing to do is obvious
+              from what is on the clipboard. */}
+          <div className="mb-3">
+            <Copyable
+              label="Your link"
+              value={linkToCopy}
+              copied={copied === "link"}
+              onCopy={() => copy("link", linkToCopy)}
+              secret={!reveal}
+              onReveal={() => setReveal((v) => !v)}
+              revealed={reveal}
+            />
+            {canShare && (
+              <button
+                onClick={() => share(linkToCopy)}
+                className="tap-target mt-1.5 w-full rounded-xl border border-white/10 py-2 text-xs font-semibold text-slate-200 hover:bg-white/5"
+              >
+                Share the link instead ↗
+              </button>
+            )}
+            {copyFailed && (
+              /* Said plainly, with the way out. Safari refuses the clipboard
+                 often enough on a phone that this is a normal path, not an
+                 error state — so it reads as an instruction rather than a
+                 failure. */
+              <p className="mt-1.5 rounded-lg bg-amber-500/10 px-2.5 py-2 text-[11px] leading-relaxed text-amber-300">
+                Your browser blocked the copy. The full link is shown above — press and hold it,
+                choose <b>Select&nbsp;All</b>, then <b>Copy</b>.
+              </p>
+            )}
+          </div>
+    </>
+  );
+
   return (
     <li className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-3">
       <p className="mb-2 text-xs text-slate-400">
         Apple doesn&apos;t let a website read Health directly — the data never leaves your phone unless you
         send it. A <span className="text-slate-200">Shortcut</span> can, and it can run itself every morning.
-        It is four taps and one paste.
+        {shortcut ? " We built you one." : " It is four taps and one paste."}
       </p>
 
       {!shown ? (
@@ -414,6 +489,11 @@ function AppleSetup({ token, onDone }: { token: string | null; onDone: () => voi
               built now would post into nothing. The link below is still yours and will keep working once
               it is live — but do not spend the two minutes until this notice has gone.
             </p>
+          ) : shortcut ? (
+            <p className="mb-3 rounded-xl bg-white/[0.03] px-3 py-2 text-xs text-slate-300">
+              Two taps and one paste, on your <b>iPhone</b>. Nothing to build — the Shortcut is already
+              made, you just tell it where to send your numbers.
+            </p>
           ) : (
             <p className="mb-3 rounded-xl bg-white/[0.03] px-3 py-2 text-xs text-slate-300">
               Three steps, about two minutes, once. After that it sends by itself every morning and you
@@ -421,163 +501,68 @@ function AppleSetup({ token, onDone }: { token: string | null; onDone: () => voi
             </p>
           )}
 
-          {/* ONE LINK, NOT A URL AND A HEADER.
-              Copying two values into two different places in the Shortcuts UI
-              was where people lost their place. Copy gives you the link with
-              `&sleep=` already on the end, so the next thing to do is obvious
-              from what is on the clipboard. */}
-          <div className="mb-3">
-            <Copyable
-              label="Your link"
-              value={sleepOnly}
-              copied={copied === "link"}
-              onCopy={() => copy("link", sleepOnly)}
-              secret={!reveal}
-              onReveal={() => setReveal((v) => !v)}
-              revealed={reveal}
-            />
-            {canShare && (
-              <button
-                onClick={() => share(sleepOnly)}
-                className="tap-target mt-1.5 w-full rounded-xl border border-white/10 py-2 text-xs font-semibold text-slate-200 hover:bg-white/5"
-              >
-                Share the link instead ↗
-              </button>
-            )}
-            {copyFailed && (
-              /* Said plainly, with the way out. Safari refuses the clipboard
-                 often enough on a phone that this is a normal path, not an
-                 error state — so it reads as an instruction rather than a
-                 failure. */
-              <p className="mt-1.5 rounded-lg bg-amber-500/10 px-2.5 py-2 text-[11px] leading-relaxed text-amber-300">
-                Your browser blocked the copy. The full link is shown above — press and hold it,
-                choose <b>Select&nbsp;All</b>, then <b>Copy</b>.
-              </p>
-            )}
-          </div>
-
-          <ol className="space-y-3 text-xs text-slate-400">
-            <Step n={1} title="Open Shortcuts and start a new one">
-              It&apos;s the app with the two coloured squares — already on your phone. Tap
-              <b className="text-slate-200"> + </b> in the top right.
-            </Step>
-            <Step n={2} title="Find last night's sleep">
-              Search <b className="text-slate-200">Find Health Samples</b> and tap it. Set
-              <b className="text-slate-200"> Sleep Analysis</b>, sort by
-              <b className="text-slate-200"> Start Date</b>, and — this one matters —
-              order <b className="text-slate-200">Latest First</b> with the limit on and set to
-              <b className="text-slate-200"> 1</b>. Then add
-              <b className="text-slate-200"> Get Details of Health Sample</b> and choose
-              <b className="text-slate-200"> Duration</b>.
-              <span className="mt-1 block text-slate-500">
-                Latest First and a limit of 1 is what makes it last night. On Oldest First it sends the
-                oldest night in the window instead — it will run, and report the wrong night, every day.
-              </span>
-            </Step>
-            {/* PASTE INTO A TEXT ACTION, NOT INTO THE URL FIELD.
-                This used to say "add Get Contents of URL and paste your link".
-                That field is a URL field, and on iOS tapping it often opens it
-                for editing without placing a cursor — so the long-press Paste
-                menu never appears and the athlete is left holding a link the
-                app will not accept. Reported as "it won't let me paste the
-                url", and the guide had no other route to offer.
-
-                A Text action is a plain multi-line box: paste always works
-                there, the variable is easier to drop on the end because you can
-                see the whole string, and Get Contents of URL takes the Text as
-                its input. One extra action, and it removes the only step in
-                this guide that can refuse you. */}
-            {/* THE ACTUAL CAUSE, FOUND ON THE THIRD ATTEMPT.
-                Reported three times as "it won't let me paste the url", and it
-                was never the URL: the link the app copies is 115 characters
-                with no whitespace in it, verified against the exact template.
-                The space arrives from the DURATION. iOS renders a Health
-                sample's duration as "7 hr 32 min", so the moment that variable
-                is dropped after `&sleep=` the field contains spaces — and
-                Shortcuts will not accept a URL with a space in it.
-
-                Two earlier notes here blamed the clipboard and then an iOS
-                privacy setting. Both were guesses, one of them sent somebody
-                looking for a setting that does not exist on their phone, and
-                neither would have helped. This one is checkable: paste the
-                link on its own and it is accepted; add the variable and it is
-                not. */}
-            <li className="rounded-xl border border-amber-400/25 bg-amber-500/[0.06] px-3 py-2.5 text-xs leading-relaxed text-amber-100/90">
-              <b className="text-amber-200">If Shortcuts refuses the URL, it is the space.</b> Health gives a
-              duration as <span className="font-mono">7 hr 32 min</span>, and a URL cannot contain spaces — so
-              the moment you drop that variable in, the field is rejected. The link itself is fine.
-              <span className="mt-1 block">
-                Fix it by tapping the <b className="text-amber-200">Duration</b> variable after you insert it and
-                setting it to <b className="text-amber-200">Hours</b> — that gives a plain number like 7.53.
-              </span>
-              <span className="mt-1 block text-amber-100/60">
-                Building the URL in a Text action, as below, is what makes this easy to see and to fix — the
-                whole string stays visible while you edit it.
-              </span>
-            </li>
-
-            <Step n={3} title="Paste your link into a Text box">
-              Search <b className="text-slate-200">Text</b> and tap it — a plain empty box. Tap inside it and
-              paste. Your link already ends with <code className="text-slate-300">&amp;sleep=</code>, so put the
-              cursor right at the end and tap the <b className="text-slate-200">Duration</b> variable above the
-              keyboard. Then tap that variable once more and set it to
-              <b className="text-slate-200"> Hours</b>, so it goes in as a number rather than
-              <span className="font-mono"> 7 hr 32 min</span>.
-              <span className="mt-1 block text-slate-500">
-                Use a Text box rather than pasting into the URL field directly — the URL field often will not
-                offer you a Paste option, and this one always does.
-              </span>
-            </Step>
-            <Step n={4} title="Send it">
-              Add <b className="text-slate-200">Get Contents of URL</b>. It will pick up the
-              <b className="text-slate-200"> Text</b> above it automatically — if it does not, tap the URL field
-              once and choose the <b className="text-slate-200">Text</b> variable. That is the whole shortcut:
-              no headers, no JSON, nothing to switch on.
-            </Step>
-          </ol>
-
-          {/* TEST IT BEFORE AUTOMATING IT.
-              Somebody who schedules a shortcut they have never run finds out it
-              was broken a week later, if at all. The endpoint answers with the
-              numbers it saved for exactly this. */}
-          <p className="mt-3 rounded-xl border border-white/[0.08] bg-white/[0.02] px-3 py-2 text-xs text-slate-400">
-            <b className="text-slate-200">Now tap Play.</b> It should answer with the hours it read back.
-            If it does, today&apos;s sleep is already in today&apos;s log.
-          </p>
+          {shortcut ? (
+            <ol className="space-y-3 text-xs text-slate-400">
+              {/* COPY FIRST, DELIBERATELY. Shortcuts asks for the link while it
+                  is installing, and a phone that gets asked for something it
+                  does not have yet means backing out of the install, going
+                  back to Safari, and starting again. */}
+              <Step n={1} title="Copy your link">
+                <div className="mt-1.5">{linkBlock}</div>
+                The Shortcut asks for this while it installs, so get it onto the clipboard first.
+              </Step>
+              <Step n={2} title="Add the Shortcut">
+                <a
+                  href={shortcut}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="btn-primary mt-1.5 mb-1.5 inline-block !py-2 text-xs"
+                >
+                  Add the Shortcut ↗
+                </a>
+                <span className="block">
+                  Shortcuts opens and asks for your link — paste it — then tap
+                  <b className="text-slate-200"> Add Shortcut</b>. That is the whole setup.
+                </span>
+                <span className="mt-1 block text-slate-500">
+                  Tap this on the iPhone itself. On a laptop the link opens a preview page that cannot
+                  install anything.
+                </span>
+              </Step>
+              <Step n={3} title="Run it once">
+                Tap it in your Shortcuts list. The first run asks permission to read Health —
+                <b className="text-slate-200"> Allow</b> it — and then it answers with the hours it read
+                back. If it does, today&apos;s sleep is already in today&apos;s log.
+              </Step>
+            </ol>
+          ) : (
+            <>
+              {linkBlock}
+              <ManualBuild />
+            </>
+          )}
 
           <p className="mt-3 text-xs text-slate-500">
-            <b className="text-slate-400">Then make it run itself:</b> name it, go to the
+            <b className="text-slate-400">Then make it run itself:</b> go to the
             <b className="text-slate-300"> Automation</b> tab → <b className="text-slate-300">+</b> →
             <b className="text-slate-300"> Time of Day</b> → 8am, daily, and pick it. Turn
             <b className="text-slate-300"> Ask Before Running</b> off, or it will sit there waiting for you.
           </p>
 
-          {/* THE OPTIONAL HALF, KEPT OUT OF THE WAY.
-              HRV and resting heart rate sharpen readiness; sleep is what the
-              check-in actually consumes. Putting all three in the main guide is
-              what made this a five-step job, and a working sleep sync is worth
-              more than an abandoned complete one. */}
-          <details className="mt-3">
-            <summary className="tap-target cursor-pointer list-none text-xs font-semibold text-slate-400 hover:text-slate-200">
-              Add HRV and resting heart rate too <span className="text-slate-600">(optional, one more minute)</span>
-            </summary>
-            <div className="mt-2 space-y-2 text-xs text-slate-500">
-              <p>
-                Two more <b className="text-slate-300">Find Health Samples</b> actions before the last step —
-                one <b className="text-slate-300">Heart Rate Variability</b>, one
-                <b className="text-slate-300"> Resting Heart Rate</b> — each followed by
-                <b className="text-slate-300"> Get Details of Health Sample → Value</b>.
-              </p>
-              <p>
-                Then at the end of the URL type <code className="text-slate-300">&amp;hrv=</code> and tap the HRV
-                value, then <code className="text-slate-300">&amp;rhr=</code> and tap the resting HR value.
-              </p>
-              <p>
-                These are what let readiness compare today against your own normal rather than a
-                textbook. Sleep on its own still works.
-              </p>
-            </div>
-          </details>
+          {/* THE HAND-BUILT ROUTE, KEPT AND DEMOTED.
+              It is the only route on a phone that cannot install from iCloud,
+              and it is the one to read when the ready-made shortcut does
+              something unexpected — the steps say what it is actually doing. */}
+          {shortcut && (
+            <details className="mt-3">
+              <summary className="tap-target cursor-pointer list-none text-xs font-semibold text-slate-500 hover:text-slate-300">
+                Rather build it yourself? <span className="text-slate-600">(five minutes, same result)</span>
+              </summary>
+              <div className="mt-2">
+                <ManualBuild />
+              </div>
+            </details>
+          )}
 
           <details className="mt-2">
             <summary className="tap-target cursor-pointer list-none text-xs font-semibold text-slate-500 hover:text-slate-300">
@@ -616,6 +601,140 @@ function AppleSetup({ token, onDone }: { token: string | null; onDone: () => voi
         </>
       )}
     </li>
+  );
+}
+
+/**
+ * Building the Shortcut by hand, action by action.
+ *
+ * THIS IS THE FALLBACK NOW, not the front door — see appleShortcutUrl(). It is
+ * kept in full and unchanged because it is still the only route for a phone
+ * that will not install from iCloud, and because it is the honest description
+ * of what the ready-made shortcut does. Nobody should have to take that on
+ * trust.
+ *
+ * Static text only, deliberately: it renders identically inline and inside a
+ * <details>, so demoting it took no rewriting and no props.
+ */
+function ManualBuild() {
+  return (
+    <>
+      <ol className="space-y-3 text-xs text-slate-400">
+        <Step n={1} title="Open Shortcuts and start a new one">
+          It&apos;s the app with the two coloured squares — already on your phone. Tap
+          <b className="text-slate-200"> + </b> in the top right.
+        </Step>
+        <Step n={2} title="Find last night's sleep">
+          Search <b className="text-slate-200">Find Health Samples</b> and tap it. Set
+          <b className="text-slate-200"> Sleep Analysis</b>, sort by
+          <b className="text-slate-200"> Start Date</b>, and — this one matters —
+          order <b className="text-slate-200">Latest First</b> with the limit on and set to
+          <b className="text-slate-200"> 1</b>. Then add
+          <b className="text-slate-200"> Get Details of Health Sample</b> and choose
+          <b className="text-slate-200"> Duration</b>.
+          <span className="mt-1 block text-slate-500">
+            Latest First and a limit of 1 is what makes it last night. On Oldest First it sends the
+            oldest night in the window instead — it will run, and report the wrong night, every day.
+          </span>
+        </Step>
+        {/* PASTE INTO A TEXT ACTION, NOT INTO THE URL FIELD.
+            This used to say "add Get Contents of URL and paste your link".
+            That field is a URL field, and on iOS tapping it often opens it
+            for editing without placing a cursor — so the long-press Paste
+            menu never appears and the athlete is left holding a link the
+            app will not accept. Reported as "it won't let me paste the
+            url", and the guide had no other route to offer.
+
+            A Text action is a plain multi-line box: paste always works
+            there, the variable is easier to drop on the end because you can
+            see the whole string, and Get Contents of URL takes the Text as
+            its input. One extra action, and it removes the only step in
+            this guide that can refuse you. */}
+        {/* THE ACTUAL CAUSE, FOUND ON THE THIRD ATTEMPT.
+            Reported three times as "it won't let me paste the url", and it
+            was never the URL: the link the app copies is 115 characters
+            with no whitespace in it, verified against the exact template.
+            The space arrives from the DURATION. iOS renders a Health
+            sample's duration as "7 hr 32 min", so the moment that variable
+            is dropped after `&sleep=` the field contains spaces — and
+            Shortcuts will not accept a URL with a space in it.
+
+            Two earlier notes here blamed the clipboard and then an iOS
+            privacy setting. Both were guesses, one of them sent somebody
+            looking for a setting that does not exist on their phone, and
+            neither would have helped. This one is checkable: paste the
+            link on its own and it is accepted; add the variable and it is
+            not. */}
+        <li className="rounded-xl border border-amber-400/25 bg-amber-500/[0.06] px-3 py-2.5 text-xs leading-relaxed text-amber-100/90">
+          <b className="text-amber-200">If Shortcuts refuses the URL, it is the space.</b> Health gives a
+          duration as <span className="font-mono">7 hr 32 min</span>, and a URL cannot contain spaces — so
+          the moment you drop that variable in, the field is rejected. The link itself is fine.
+          <span className="mt-1 block">
+            Fix it by tapping the <b className="text-amber-200">Duration</b> variable after you insert it and
+            setting it to <b className="text-amber-200">Hours</b> — that gives a plain number like 7.53.
+          </span>
+          <span className="mt-1 block text-amber-100/60">
+            Building the URL in a Text action, as below, is what makes this easy to see and to fix — the
+            whole string stays visible while you edit it.
+          </span>
+        </li>
+
+        <Step n={3} title="Paste your link into a Text box">
+          Search <b className="text-slate-200">Text</b> and tap it — a plain empty box. Tap inside it and
+          paste. Your link already ends with <code className="text-slate-300">&amp;sleep=</code>, so put the
+          cursor right at the end and tap the <b className="text-slate-200">Duration</b> variable above the
+          keyboard. Then tap that variable once more and set it to
+          <b className="text-slate-200"> Hours</b>, so it goes in as a number rather than
+          <span className="font-mono"> 7 hr 32 min</span>.
+          <span className="mt-1 block text-slate-500">
+            Use a Text box rather than pasting into the URL field directly — the URL field often will not
+            offer you a Paste option, and this one always does.
+          </span>
+        </Step>
+        <Step n={4} title="Send it">
+          Add <b className="text-slate-200">Get Contents of URL</b>. It will pick up the
+          <b className="text-slate-200"> Text</b> above it automatically — if it does not, tap the URL field
+          once and choose the <b className="text-slate-200">Text</b> variable. That is the whole shortcut:
+          no headers, no JSON, nothing to switch on.
+        </Step>
+      </ol>
+
+      {/* TEST IT BEFORE AUTOMATING IT.
+          Somebody who schedules a shortcut they have never run finds out it
+          was broken a week later, if at all. The endpoint answers with the
+          numbers it saved for exactly this. */}
+      <p className="mt-3 rounded-xl border border-white/[0.08] bg-white/[0.02] px-3 py-2 text-xs text-slate-400">
+        <b className="text-slate-200">Now tap Play.</b> It should answer with the hours it read back.
+        If it does, today&apos;s sleep is already in today&apos;s log.
+      </p>
+
+      {/* THE OPTIONAL HALF, KEPT OUT OF THE WAY.
+          HRV and resting heart rate sharpen readiness; sleep is what the
+          check-in actually consumes. Putting all three in the main guide is
+          what made this a five-step job, and a working sleep sync is worth
+          more than an abandoned complete one. */}
+      <details className="mt-3">
+        <summary className="tap-target cursor-pointer list-none text-xs font-semibold text-slate-400 hover:text-slate-200">
+          Add HRV and resting heart rate too <span className="text-slate-600">(optional, one more minute)</span>
+        </summary>
+        <div className="mt-2 space-y-2 text-xs text-slate-500">
+          <p>
+            Two more <b className="text-slate-300">Find Health Samples</b> actions before the last step —
+            one <b className="text-slate-300">Heart Rate Variability</b>, one
+            <b className="text-slate-300"> Resting Heart Rate</b> — each followed by
+            <b className="text-slate-300"> Get Details of Health Sample → Value</b>.
+          </p>
+          <p>
+            Then at the end of the URL type <code className="text-slate-300">&amp;hrv=</code> and tap the HRV
+            value, then <code className="text-slate-300">&amp;rhr=</code> and tap the resting HR value.
+          </p>
+          <p>
+            These are what let readiness compare today against your own normal rather than a
+            textbook. Sleep on its own still works.
+          </p>
+        </div>
+      </details>
+    </>
   );
 }
 
@@ -677,10 +796,13 @@ function Step({ n, title, children }: { n: number; title: string; children: Reac
       <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-pitch-400/15 text-[10px] font-extrabold text-pitch-400">
         {n}
       </span>
-      <span className="min-w-0 flex-1">
+      {/* div, not span: a step's body can hold the copy widget, and that is a
+          <div>. Nesting one inside a <span> is invalid HTML and browsers fix it
+          by closing the span early, which drops the step's own layout. */}
+      <div className="min-w-0 flex-1">
         <span className="block text-xs font-bold text-slate-200">{title}</span>
-        <span className="mt-0.5 block leading-relaxed">{children}</span>
-      </span>
+        <div className="mt-0.5 leading-relaxed">{children}</div>
+      </div>
     </li>
   );
 }
