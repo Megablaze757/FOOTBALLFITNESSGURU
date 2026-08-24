@@ -110,7 +110,7 @@ export function WearableConnect({ userId }: { userId: string }) {
                 ? "Set up. Your Shortcut sends to the app whenever you like."
                 : appleShortcutUrl()
                   ? "Add our ready-made Shortcut, paste one link, and your sleep is there every morning."
-                  : "One link and a two-minute Shortcut on your iPhone — then your sleep is there every morning."
+                  : "Optional. You can type your sleep in below — this is for never typing it again."
             }
             onClick={() => setOpen(open === "apple" ? null : "apple")}
             action={data?.ingestToken ? "Show setup" : "Set up"}
@@ -464,10 +464,29 @@ function AppleSetup({ token, onDone }: { token: string | null; onDone: () => voi
 
   return (
     <li className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-3">
+      {/* ═══════════════════════════════════════════════════════════════
+          THE ESCAPE HATCH GOES FIRST, and it is the most important change
+          this panel has had.
+
+          Reported twice as "still far too complicated", and both times the
+          answer given was a better guide. That was the wrong answer. Sleep is
+          ONE NUMBER and there is a box for it a few inches down this same page
+          — so for most people the correct amount of Shortcut-building is none,
+          and a screen that opens with four steps has told them the opposite
+          before they have read a word.
+
+          Setting it up is worth it, once, for somebody who will otherwise type
+          a number every morning for a year. It is not worth it for anybody
+          else, and saying so is what makes the rest of this readable.
+          ═══════════════════════════════════════════════════════════════ */}
+      <p className="mb-2 rounded-xl bg-white/[0.03] px-3 py-2 text-xs leading-relaxed text-slate-300">
+        <b className="text-slate-100">You don&apos;t need this.</b> Sleep is one number, and there is a box
+        for it further down this page. Set this up only if you would rather never type it again.
+      </p>
       <p className="mb-2 text-xs text-slate-400">
-        Apple doesn&apos;t let a website read Health directly — the data never leaves your phone unless you
-        send it. A <span className="text-slate-200">Shortcut</span> can, and it can run itself every morning.
-        {shortcut ? " We built you one." : " It is four taps and one paste."}
+        Apple doesn&apos;t let a website read Health — the data never leaves your phone unless you send it.
+        A <span className="text-slate-200">Shortcut</span> can, and it can run itself every morning.
+        {shortcut ? " We built you one." : ""}
       </p>
 
       {!shown ? (
@@ -543,10 +562,11 @@ function AppleSetup({ token, onDone }: { token: string | null; onDone: () => voi
           )}
 
           <p className="mt-3 text-xs text-slate-500">
-            <b className="text-slate-400">Then make it run itself:</b> go to the
-            <b className="text-slate-300"> Automation</b> tab → <b className="text-slate-300">+</b> →
-            <b className="text-slate-300"> Time of Day</b> → 8am, daily, and pick it. Turn
-            <b className="text-slate-300"> Ask Before Running</b> off, or it will sit there waiting for you.
+            <b className="text-slate-400">Then make it run itself:</b> Shortcuts →
+            <b className="text-slate-300"> Automation</b> → <b className="text-slate-300">+</b> →
+            <b className="text-slate-300"> Time of Day</b> → 8am daily → pick it, and turn
+            <b className="text-slate-300"> Ask Before Running</b> off. (Named differently on some versions —
+            look for anything about asking or confirming before it runs.)
           </p>
 
           {/* THE HAND-BUILT ROUTE, KEPT AND DEMOTED.
@@ -564,14 +584,18 @@ function AppleSetup({ token, onDone }: { token: string | null; onDone: () => voi
             </details>
           )}
 
+          {/* ONE DISCLOSURE, NOT THREE. A POST alternative, the accepted field
+              names and the token controls were three separate blocks of small
+              grey text under a guide people already said was too long — and
+              every one of them is for somebody who is not stuck. */}
           <details className="mt-2">
             <summary className="tap-target cursor-pointer list-none text-xs font-semibold text-slate-500 hover:text-slate-300">
-              Prefer a POST with a header?
+              More options
             </summary>
             <div className="mt-2 space-y-2 text-xs text-slate-500">
               <p>
-                Still supported, and it keeps the token out of the URL. POST to
-                <code className="ml-1 break-all text-slate-400">{shown.url}</code> with an
+                <b className="text-slate-400">Prefer a POST?</b> Still supported, and it keeps the token out
+                of the URL. POST to <code className="break-all text-slate-400">{shown.url}</code> with an
                 <code className="ml-1 text-slate-400">Authorization: Bearer …</code> header and a JSON body of
                 <code className="ml-1 text-slate-400">sleepHours</code>,
                 <code className="ml-1 text-slate-400">hrv</code>,
@@ -580,15 +604,14 @@ function AppleSetup({ token, onDone }: { token: string | null; onDone: () => voi
               <button onClick={() => copy("Header", `Bearer ${shown.token}`)} className="chip text-pitch-400">
                 {copied === "Header" ? "Copied" : "Copy the header value"}
               </button>
+              <p>
+                Field names are flexible — <span className="text-slate-400">sleep</span>,
+                <span className="text-slate-400"> sleepHours</span> and
+                <span className="text-slate-400"> restingHeartRate</span> all work, and minutes or hours are
+                both understood. Anything you type in yourself is never overwritten by a sync.
+              </p>
             </div>
           </details>
-
-          <p className="mt-3 text-xs text-slate-500">
-            Field names are flexible — <span className="text-slate-400">sleep</span>,
-            <span className="text-slate-400"> sleepHours</span> and
-            <span className="text-slate-400"> restingHeartRate</span> all work, and minutes or hours are
-            both understood. Anything you type in yourself is never overwritten by a sync.
-          </p>
 
           <button onClick={mint} disabled={busy} className="tap-target mt-3 text-xs font-semibold text-slate-400 hover:text-slate-200">
             {busy ? "Creating…" : "Create a new token (stops the old one working)"}
@@ -619,118 +642,99 @@ function AppleSetup({ token, onDone }: { token: string | null; onDone: () => voi
 function ManualBuild() {
   return (
     <>
+      {/* ═══════════════════════════════════════════════════════════════
+          WE CANNOT DESCRIBE SOMEBODY ELSE'S APP AND STAY RIGHT.
+
+          Reported as "their Shortcuts app looks different to the instructions",
+          and it will keep being reported, because it is true: Apple moves
+          buttons, renames panels and redraws the editor between iOS versions,
+          and this app is used across several of them at once. A guide written
+          as "tap the button in the top right" is wrong for somebody on the day
+          it is written and wrong for everybody eventually.
+
+          What does NOT move is the NAME of an action. "Find Health Samples" is
+          searchable in every version of Shortcuts that has it. So the steps
+          below name things to search for and values to set, and say as little
+          as possible about where anything sits on screen — and the note says
+          outright that the screen may not match, so a mismatch reads as
+          expected rather than as the guide being broken.
+          ═══════════════════════════════════════════════════════════════ */}
+      <p className="mb-3 rounded-xl border border-white/[0.08] bg-white/[0.02] px-3 py-2 text-[11px] leading-relaxed text-slate-400">
+        <b className="text-slate-300">Your Shortcuts app may not look like this.</b> Apple moves things
+        between iOS versions. The <b className="text-slate-300">names</b> below do not change — search for
+        each one in the action list and you will find it, wherever the buttons have moved to.
+      </p>
+
       <ol className="space-y-3 text-xs text-slate-400">
-        <Step n={1} title="Open Shortcuts and start a new one">
-          It&apos;s the app with the two coloured squares — already on your phone. Tap
-          <b className="text-slate-200"> + </b> in the top right.
-        </Step>
-        <Step n={2} title="Find last night's sleep">
-          Search <b className="text-slate-200">Find Health Samples</b> and tap it. Set
-          <b className="text-slate-200"> Sleep Analysis</b>, sort by
-          <b className="text-slate-200"> Start Date</b>, and — this one matters —
-          order <b className="text-slate-200">Latest First</b> with the limit on and set to
-          <b className="text-slate-200"> 1</b>. Then add
-          <b className="text-slate-200"> Get Details of Health Sample</b> and choose
-          <b className="text-slate-200"> Duration</b>.
+        {/* THREE STEPS, NOT FOUR. "Open Shortcuts and tap +" was a numbered
+            step of its own, which spends a third of the guide on opening an
+            app. It is now the first half of a sentence. */}
+        <Step n={1} title="Read last night's sleep">
+          Open <b className="text-slate-200">Shortcuts</b>, start a new one, and search for
+          <b className="text-slate-200"> Find Health Samples</b>. Set it to
+          <b className="text-slate-200"> Sleep Analysis</b>, <b className="text-slate-200">Latest First</b>,
+          limit <b className="text-slate-200">1</b>.
           <span className="mt-1 block text-slate-500">
-            Latest First and a limit of 1 is what makes it last night. On Oldest First it sends the
-            oldest night in the window instead — it will run, and report the wrong night, every day.
+            Latest First with a limit of 1 is what makes it last night. On Oldest First it runs every day and
+            reports the wrong night.
           </span>
         </Step>
-        {/* PASTE INTO A TEXT ACTION, NOT INTO THE URL FIELD.
-            This used to say "add Get Contents of URL and paste your link".
-            That field is a URL field, and on iOS tapping it often opens it
-            for editing without placing a cursor — so the long-press Paste
-            menu never appears and the athlete is left holding a link the
-            app will not accept. Reported as "it won't let me paste the
-            url", and the guide had no other route to offer.
 
-            A Text action is a plain multi-line box: paste always works
-            there, the variable is easier to drop on the end because you can
-            see the whole string, and Get Contents of URL takes the Text as
-            its input. One extra action, and it removes the only step in
-            this guide that can refuse you. */}
-        {/* THE ACTUAL CAUSE, FOUND ON THE THIRD ATTEMPT.
-            Reported three times as "it won't let me paste the url", and it
-            was never the URL: the link the app copies is 115 characters
-            with no whitespace in it, verified against the exact template.
-            The space arrives from the DURATION. iOS renders a Health
-            sample's duration as "7 hr 32 min", so the moment that variable
-            is dropped after `&sleep=` the field contains spaces — and
-            Shortcuts will not accept a URL with a space in it.
-
-            Two earlier notes here blamed the clipboard and then an iOS
-            privacy setting. Both were guesses, one of them sent somebody
-            looking for a setting that does not exist on their phone, and
-            neither would have helped. This one is checkable: paste the
-            link on its own and it is accepted; add the variable and it is
-            not. */}
-        <li className="rounded-xl border border-amber-400/25 bg-amber-500/[0.06] px-3 py-2.5 text-xs leading-relaxed text-amber-100/90">
-          <b className="text-amber-200">If Shortcuts refuses the URL, it is the space.</b> Health gives a
-          duration as <span className="font-mono">7 hr 32 min</span>, and a URL cannot contain spaces — so
-          the moment you drop that variable in, the field is rejected. The link itself is fine.
-          <span className="mt-1 block">
-            Fix it by tapping the <b className="text-amber-200">Duration</b> variable after you insert it and
-            setting it to <b className="text-amber-200">Hours</b> — that gives a plain number like 7.53.
-          </span>
-          <span className="mt-1 block text-amber-100/60">
-            Building the URL in a Text action, as below, is what makes this easy to see and to fix — the
-            whole string stays visible while you edit it.
-          </span>
-        </li>
-
-        <Step n={3} title="Paste your link into a Text box">
-          Search <b className="text-slate-200">Text</b> and tap it — a plain empty box. Tap inside it and
-          paste. Your link already ends with <code className="text-slate-300">&amp;sleep=</code>, so put the
-          cursor right at the end and tap the <b className="text-slate-200">Duration</b> variable above the
-          keyboard. Then tap that variable once more and set it to
-          <b className="text-slate-200"> Hours</b>, so it goes in as a number rather than
-          <span className="font-mono"> 7 hr 32 min</span>.
+        <Step n={2} title="Turn it into a number">
+          Search for <b className="text-slate-200">Get Details of Health Sample</b> and choose
+          <b className="text-slate-200"> Duration</b>. Then tap the
+          <b className="text-slate-200"> Duration</b> variable it produces and set its unit to
+          <b className="text-slate-200"> Hours</b>.
+          {/* THE ONE STEP EVERYBODY GETS STUCK ON, now stated where it happens
+              rather than as a separate amber warning further down. Reported
+              three times as "it won't let me paste the url", and it was never
+              the URL: Health renders a duration as "7 hr 32 min", and a URL
+              cannot contain a space. */}
           <span className="mt-1 block text-slate-500">
-            Use a Text box rather than pasting into the URL field directly — the URL field often will not
-            offer you a Paste option, and this one always does.
+            This is the step everyone misses. Health gives a duration as{" "}
+            <span className="font-mono">7 hr 32 min</span>, and a URL cannot contain spaces — set it to Hours
+            and you get <span className="font-mono">7.53</span> instead.
           </span>
         </Step>
-        <Step n={4} title="Send it">
-          Add <b className="text-slate-200">Get Contents of URL</b>. It will pick up the
-          <b className="text-slate-200"> Text</b> above it automatically — if it does not, tap the URL field
-          once and choose the <b className="text-slate-200">Text</b> variable. That is the whole shortcut:
-          no headers, no JSON, nothing to switch on.
+
+        <Step n={3} title="Send it">
+          Search for <b className="text-slate-200">Text</b> — a plain empty box — and paste your link into it.
+          It already ends with <code className="text-slate-300">&amp;sleep=</code>, so put the cursor on the
+          end and insert the <b className="text-slate-200">Duration</b> variable there. Then search for
+          <b className="text-slate-200"> Get Contents of URL</b>, which picks the Text up on its own.
+          <span className="mt-1 block text-slate-500">
+            A Text box rather than pasting into the URL field directly — the URL field often will not offer
+            you a Paste option, and this one always does.
+          </span>
         </Step>
       </ol>
 
-      {/* TEST IT BEFORE AUTOMATING IT.
-          Somebody who schedules a shortcut they have never run finds out it
-          was broken a week later, if at all. The endpoint answers with the
-          numbers it saved for exactly this. */}
       <p className="mt-3 rounded-xl border border-white/[0.08] bg-white/[0.02] px-3 py-2 text-xs text-slate-400">
-        <b className="text-slate-200">Now tap Play.</b> It should answer with the hours it read back.
-        If it does, today&apos;s sleep is already in today&apos;s log.
+        <b className="text-slate-200">Now tap Play.</b> It should answer with the hours it read back. If it
+        does, today&apos;s sleep is already in today&apos;s log.
       </p>
 
-      {/* THE OPTIONAL HALF, KEPT OUT OF THE WAY.
-          HRV and resting heart rate sharpen readiness; sleep is what the
-          check-in actually consumes. Putting all three in the main guide is
-          what made this a five-step job, and a working sleep sync is worth
-          more than an abandoned complete one. */}
+      {/* HRV AND RESTING HEART RATE ARE THE OPTIONAL HALF, and putting them in
+          the main guide is what made this a five-step job. A working sleep sync
+          is worth more than an abandoned complete one. */}
       <details className="mt-3">
         <summary className="tap-target cursor-pointer list-none text-xs font-semibold text-slate-400 hover:text-slate-200">
-          Add HRV and resting heart rate too <span className="text-slate-600">(optional, one more minute)</span>
+          Add HRV and resting heart rate <span className="text-slate-600">(optional, one more minute)</span>
         </summary>
         <div className="mt-2 space-y-2 text-xs text-slate-500">
           <p>
-            Two more <b className="text-slate-300">Find Health Samples</b> actions before the last step —
-            one <b className="text-slate-300">Heart Rate Variability</b>, one
+            Two more <b className="text-slate-300">Find Health Samples</b> before the last step — one
+            <b className="text-slate-300"> Heart Rate Variability</b>, one
             <b className="text-slate-300"> Resting Heart Rate</b> — each followed by
             <b className="text-slate-300"> Get Details of Health Sample → Value</b>.
           </p>
           <p>
-            Then at the end of the URL type <code className="text-slate-300">&amp;hrv=</code> and tap the HRV
-            value, then <code className="text-slate-300">&amp;rhr=</code> and tap the resting HR value.
+            Then on the end of the Text, type <code className="text-slate-300">&amp;hrv=</code> and insert the
+            HRV value, then <code className="text-slate-300">&amp;rhr=</code> and insert the resting HR value.
           </p>
           <p>
-            These are what let readiness compare today against your own normal rather than a
-            textbook. Sleep on its own still works.
+            These are what let readiness compare today against your own normal rather than a textbook. Sleep
+            on its own still works.
           </p>
         </div>
       </details>

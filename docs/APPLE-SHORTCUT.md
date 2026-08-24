@@ -4,10 +4,15 @@ The Apple Health setup has two routes, and this document is about switching the
 good one on.
 
 **Today (no link published):** the athlete builds a Shortcut by hand from the
-five-step guide inside the app. It works, and people do not finish it. Every
+three-step guide inside the app. It works, and people do not finish it. Every
 step in it is about the transport — which Health sample, which sort order,
 which unit a duration is in — and none of it is anything a footballer should
 have to learn to see last night's sleep in their log.
+
+The panel now opens by saying they do not need it at all: sleep is one number
+and there is a box for it further down the same page. That is the honest
+default, and it is what makes the rest of the panel readable for the people who
+genuinely do want to stop typing.
 
 **Once the link is published:** they copy one link, tap **Add the Shortcut**,
 paste, and tap Add. Two taps and one paste. The hand-built guide stays, demoted
