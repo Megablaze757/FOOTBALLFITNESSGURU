@@ -533,6 +533,33 @@ function sleepToHours(n) {
 }
 __name(sleepToHours, "sleepToHours");
 
+// ../lib/checkin-reminder.ts
+var CHECKIN_REMINDER_GAP_DAYS = 3;
+var CHECKIN_REMINDER_STOP_DAYS = 30;
+function daysBetween(from, to) {
+  const a = Date.parse(`${from}T00:00:00Z`);
+  const b = Date.parse(`${to}T00:00:00Z`);
+  if (!Number.isFinite(a) || !Number.isFinite(b))
+    return 0;
+  return Math.round((b - a) / 864e5);
+}
+__name(daysBetween, "daysBetween");
+function checkinReminderDue(lastCheckIn, joined, today) {
+  const anchor = lastCheckIn ?? joined;
+  const gap = daysBetween(anchor, today);
+  if (gap < CHECKIN_REMINDER_GAP_DAYS)
+    return false;
+  if (gap > CHECKIN_REMINDER_STOP_DAYS)
+    return false;
+  return gap % CHECKIN_REMINDER_GAP_DAYS === 0;
+}
+__name(checkinReminderDue, "checkinReminderDue");
+function checkinReminderSince(today) {
+  const t = Date.parse(`${today}T00:00:00Z`);
+  return new Date(t - CHECKIN_REMINDER_STOP_DAYS * 864e5).toISOString().slice(0, 10);
+}
+__name(checkinReminderSince, "checkinReminderSince");
+
 // src/index.ts
 var CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -837,7 +864,7 @@ function overBudget(state) {
   return json({ error: `${reason} The on-device coach still works, and your allowance resets \u2014 upgrade for more.` }, 429);
 }
 __name(overBudget, "overBudget");
-var WORKER_VERSION = "2026-08-23.8";
+var WORKER_VERSION = "2026-08-24.1";
 var ATTEMPT_TIMEOUT_MS = {
   groq: 1e4,
   openrouter: 2e4,
@@ -2374,7 +2401,7 @@ __name(approveDueCommissions, "approveDueCommissions");
 async function reminderProfiles(env) {
   const r = await supa(
     env,
-    "profiles?select=id,health_data_consent_at,in_app_training_reminders,email_weekly_summary,email_checkin_reminders,email_workout_reminders,email_milestones,email_program_reminders"
+    "profiles?select=id,created_at,health_data_consent_at,in_app_training_reminders,email_weekly_summary,email_checkin_reminders,email_workout_reminders,email_milestones,email_program_reminders"
   );
   if (!r.ok)
     throw new Error(`profiles for reminders: ${r.status}`);
@@ -2418,16 +2445,31 @@ __name(queueNotifications, "queueNotifications");
 async function sendDailyReminders(env) {
   const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
   const [doneResponse, profiles] = await Promise.all([
-    supa(env, `daily_check_ins?check_in_date=eq.${today}&select=user_id`),
+    // The whole window the rule can read, not just today — a lapsed athlete and
+    // one who has never checked in look identical through a one-day query, and
+    // they are owed different things.
+    supa(env, `daily_check_ins?check_in_date=gte.${checkinReminderSince(today)}&select=user_id,check_in_date`),
     reminderProfiles(env)
   ]);
   if (!doneResponse.ok)
     throw new Error(`daily check-ins for reminders: ${doneResponse.status}`);
   const done = await doneResponse.json();
-  const checked = new Set((done ?? []).map((row2) => row2.user_id));
+  const lastCheckIn = /* @__PURE__ */ new Map();
+  for (const row2 of done ?? []) {
+    const held = lastCheckIn.get(row2.user_id);
+    if (!held || row2.check_in_date > held)
+      lastCheckIn.set(row2.user_id, row2.check_in_date);
+  }
   const rows = [];
   for (const profile of profiles.values()) {
-    if (checked.has(profile.id) || !wants(profile, "checkin"))
+    if (!wants(profile, "checkin"))
+      continue;
+    const last = lastCheckIn.get(profile.id) ?? null;
+    if (last === today)
+      continue;
+    const inApp = profile.in_app_training_reminders !== false;
+    const email2 = emailEnabled(profile, "checkin") && checkinReminderDue(last, profile.created_at.slice(0, 10), today);
+    if (!inApp && !email2)
       continue;
     rows.push({
       user_id: profile.id,
@@ -2436,8 +2478,8 @@ async function sendDailyReminders(env) {
       body: "Log sleep, fatigue and soreness to refresh today's readiness score.",
       href: "/journal",
       dedupe_key: `check-in:${today}`,
-      show_in_app: profile.in_app_training_reminders !== false,
-      email_category: "checkin"
+      show_in_app: inApp,
+      email_category: email2 ? "checkin" : "none"
     });
   }
   await queueNotifications(env, rows);

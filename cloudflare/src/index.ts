@@ -38,6 +38,7 @@ import { splitCommission, estimateStripeFee } from "../../lib/affiliate";
 // what an athlete's readiness is built from, so it should be the code the unit
 // tests cover rather than a second copy that drifts.
 import { parseOuraSleep, parseIngestPayload } from "../../lib/biometrics";
+import { checkinReminderDue, checkinReminderSince } from "../../lib/checkin-reminder";
 
 export interface Env {
   // AI
@@ -506,7 +507,7 @@ function overBudget(state: BudgetState): Response {
 // nobody is watching a spinner and the budget can be what the work actually
 // needs. Callers pass their own client-side timeout to match.
 // Bump on every paste into the Cloudflare dashboard. GET /health reports it.
-const WORKER_VERSION = "2026-08-23.8";
+const WORKER_VERSION = "2026-08-24.1";
 
 const CHAIN_BUDGET_MS = 55_000;
 /**
@@ -2957,6 +2958,7 @@ type EmailCategory = "none" | "checkin" | "workout" | "weekly" | "milestone" | "
 
 interface ReminderProfile {
   id: string;
+  created_at: string;
   health_data_consent_at: string | null;
   in_app_training_reminders: boolean;
   email_weekly_summary: boolean;
@@ -2979,7 +2981,7 @@ interface NotificationInput {
 
 async function reminderProfiles(env: Env): Promise<Map<string, ReminderProfile>> {
   const r = await supa(env,
-    "profiles?select=id,health_data_consent_at,in_app_training_reminders,email_weekly_summary,email_checkin_reminders," +
+    "profiles?select=id,created_at,health_data_consent_at,in_app_training_reminders,email_weekly_summary,email_checkin_reminders," +
     "email_workout_reminders,email_milestones,email_program_reminders");
   if (!r.ok) throw new Error(`profiles for reminders: ${r.status}`);
   const rows = (await r.json()) as ReminderProfile[];
@@ -3012,18 +3014,46 @@ async function queueNotifications(env: Env, rows: NotificationInput[]): Promise<
   return r.ok;
 }
 
+/**
+ * THE NUDGE IS DAILY; THE EMAIL IS NOT.
+ *
+ * Both used to fire on any morning somebody had not checked in yet, which is
+ * right for a notification inside an app they chose to open and wrong for mail:
+ * an athlete who checks in most days got a message for being an hour late, and
+ * one who had stopped got one every morning indefinitely.
+ *
+ * So the in-app card still appears the same day, and the email waits for a real
+ * absence — see lib/checkin-reminder.ts, which also decides how long to keep
+ * trying. `email_category: "none"` is what turns the email off while leaving
+ * the card on; pending_notification_emails() skips those rows.
+ */
 async function sendDailyReminders(env: Env): Promise<void> {
   const today = new Date().toISOString().slice(0, 10);
   const [doneResponse, profiles] = await Promise.all([
-    supa(env, `daily_check_ins?check_in_date=eq.${today}&select=user_id`),
+    // The whole window the rule can read, not just today — a lapsed athlete and
+    // one who has never checked in look identical through a one-day query, and
+    // they are owed different things.
+    supa(env, `daily_check_ins?check_in_date=gte.${checkinReminderSince(today)}&select=user_id,check_in_date`),
     reminderProfiles(env),
   ]);
   if (!doneResponse.ok) throw new Error(`daily check-ins for reminders: ${doneResponse.status}`);
-  const done = (await doneResponse.json()) as { user_id: string }[];
-  const checked = new Set((done ?? []).map((row) => row.user_id));
+  const done = (await doneResponse.json()) as { user_id: string; check_in_date: string }[];
+  const lastCheckIn = new Map<string, string>();
+  for (const row of done ?? []) {
+    const held = lastCheckIn.get(row.user_id);
+    if (!held || row.check_in_date > held) lastCheckIn.set(row.user_id, row.check_in_date);
+  }
+
   const rows: NotificationInput[] = [];
   for (const profile of profiles.values()) {
-    if (checked.has(profile.id) || !wants(profile, "checkin")) continue;
+    if (!wants(profile, "checkin")) continue;
+    const last = lastCheckIn.get(profile.id) ?? null;
+    if (last === today) continue; // today is already done; there is nothing to ask for
+    const inApp = profile.in_app_training_reminders !== false;
+    const email = emailEnabled(profile, "checkin")
+      && checkinReminderDue(last, profile.created_at.slice(0, 10), today);
+    // A row that shows nowhere and sends nothing is a row nobody asked for.
+    if (!inApp && !email) continue;
     rows.push({
       user_id: profile.id,
       kind: "check_in_reminder",
@@ -3031,8 +3061,8 @@ async function sendDailyReminders(env: Env): Promise<void> {
       body: "Log sleep, fatigue and soreness to refresh today's readiness score.",
       href: "/journal",
       dedupe_key: `check-in:${today}`,
-      show_in_app: profile.in_app_training_reminders !== false,
-      email_category: "checkin",
+      show_in_app: inApp,
+      email_category: email ? "checkin" : "none",
     });
   }
   await queueNotifications(env, rows);
