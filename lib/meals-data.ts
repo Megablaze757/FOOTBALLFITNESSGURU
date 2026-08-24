@@ -5321,4 +5321,324 @@ export const MEALS: Meal[] = [
     tip: "No rice on purpose: the rice is what drops the protein per calorie below what a cutting athlete needs. Eat it as a bowl, thick enough to stand a spoon in.",
     method: "Soften onion, bloom garlic, ginger and spices, simmer lentils with tomatoes, stir in peas and spinach, beat thick, then whisk in pea protein off the heat with lemon.",
   },
+
+  // ===========================================================================
+  // THE SECOND COUNT
+  //
+  // After the last batch the headline gaps were closed and two narrower ones
+  // were left, both of which only show up when you filter the way an actual
+  // person does:
+  //
+  //   A VEGAN WITH NO TIME had six quick lunches and four quick dinners. The
+  //   "under 15 min" chip and the vegan chip together emptied the library, and
+  //   that is precisely the combination somebody taps on a weeknight.
+  //
+  //   A VEGAN'S SNACKS were 29 recipes carrying six with real protein. The
+  //   snack slot is a third of the day for somebody eating five times, so that
+  //   is not a garnish — it is where their protein target was being lost.
+  // ===========================================================================
+  {
+    id: "qv_chickpea_coconut_curry", name: "10-minute chickpea coconut curry", slot: "Dinner", minutes: 12,
+    items: [
+      { foodId: "chickpeas", qty: 400 }, { foodId: "coconut_milk", qty: 120 }, { foodId: "curry_paste", qty: 30 },
+      { foodId: "spinach", qty: 100 }, { foodId: "peas_frozen", qty: 100 }, { foodId: "onion", qty: 60 },
+      { foodId: "garlic", qty: 8 }, { foodId: "lemon", qty: 0.5 }, { foodId: "olive_oil", qty: 8 },
+    ],
+    steps: [
+      "Onion into the oil on high, then the curry paste and garlic after two minutes — fry the paste properly, it should darken and smell toasted.",
+      "Coconut milk and a splash of water in, bubbled hard for two minutes so it thickens rather than sits thin.",
+      "Chickpeas and peas in, a third of the chickpeas crushed against the pan.",
+      "Spinach folded through at the end, lemon over.",
+    ],
+    tip: "Frying the paste is the entire difference. Tipping it in with the liquid gives you warm coconut milk with spices floating in it.",
+    method: "Fry onion, then curry paste and garlic, thicken coconut milk, add chickpeas and peas with some crushed, and wilt in spinach.",
+  },
+  {
+    id: "qv_smoky_black_bean_soup", name: "Smoky black bean soup", slot: "Lunch", minutes: 14,
+    items: [
+      { foodId: "black_beans", qty: 400 }, { foodId: "tomatoes_tin", qty: 200 }, { foodId: "spice_mix", qty: 8 },
+      { foodId: "onion", qty: 70 }, { foodId: "garlic", qty: 10 }, { foodId: "stock_cubes", qty: 5 },
+      { foodId: "lemon", qty: 0.5 }, { foodId: "olive_oil", qty: 8 }, { foodId: "corn_tortilla", qty: 2 },
+      { foodId: "chilli_fresh", qty: 4 },
+    ],
+    steps: [
+      "Onion in the oil on high for three minutes, garlic and smoked paprika for one.",
+      "Beans, tomatoes and 300ml stock in. Simmer eight minutes.",
+      "Half of it blitzed or mashed and stirred back — that is what gives it body without cream.",
+      "Lemon and chilli in at the end. Tortillas torn and toasted dry in a pan for dipping.",
+    ],
+    tip: "Blending half is the trick with any bean soup: blend it all and it is baby food, blend none and it is beans in water.",
+    method: "Soften onion with garlic and smoked paprika, simmer beans and tomatoes in stock, blend half back in, and finish with lemon and chilli.",
+  },
+  {
+    id: "qv_peanut_rice_noodles", name: "Peanut & lime rice noodles", slot: "Lunch", minutes: 12,
+    items: [
+      { foodId: "rice_noodles", qty: 100 }, { foodId: "tofu", qty: 180 }, { foodId: "peanut_butter", qty: 30 },
+      { foodId: "soy_sauce", qty: 15 }, { foodId: "lemon", qty: 0.5 }, { foodId: "garlic", qty: 6 },
+      { foodId: "carrots", qty: 80 }, { foodId: "cucumber", qty: 80 }, { foodId: "chilli_fresh", qty: 4 },
+      { foodId: "olive_oil", qty: 8 },
+    ],
+    steps: [
+      "Rice noodles in a bowl of boiled water — they need no pan and no attention.",
+      "Tofu cubed and fried hard in the oil while they soften.",
+      "Peanut butter, soy, lemon and grated garlic whisked with 3 tablespoons of hot water into a pourable sauce.",
+      "Noodles drained and tossed with the sauce, tofu, raw carrot and cucumber, chilli on top.",
+    ],
+    tip: "Eaten cold from the fridge the next day this is better than it was hot.",
+    method: "Soak rice noodles, hard-fry tofu, whisk a peanut-soy-lemon sauce, and toss everything with raw carrot and cucumber.",
+  },
+  {
+    id: "qv_butter_bean_toast", name: "Smashed butter beans on toast", slot: "Lunch", minutes: 9,
+    items: [
+      { foodId: "butter_beans", qty: 400 }, { foodId: "wholemeal_bread", qty: 80 }, { foodId: "garlic", qty: 8 },
+      { foodId: "lemon", qty: 0.5 }, { foodId: "olive_oil", qty: 10 }, { foodId: "chilli_fresh", qty: 4 },
+      { foodId: "tomatoes_fresh", qty: 120 }, { foodId: "spinach", qty: 50 },
+    ],
+    steps: [
+      "Beans into a pan with the oil, sliced garlic and a splash of water, on a medium heat.",
+      "Smashed with a fork straight in the pan — roughly, some whole, some paste.",
+      "Spinach stirred through until it collapses, lemon and chilli in.",
+      "Onto thick toast with the tomatoes chopped over and a lot of black pepper.",
+    ],
+    tip: "Nine minutes, one pan, 30g of protein, and everything but the bread and tomatoes lives in the cupboard.",
+    method: "Warm butter beans with garlic and oil, smash roughly in the pan, wilt in spinach, and pile onto toast with lemon, chilli and tomato.",
+  },
+  {
+    id: "qv_edamame_ginger_bowl", name: "Ginger edamame rice bowl", slot: "Dinner", minutes: 15,
+    items: [
+      { foodId: "edamame", qty: 200 }, { foodId: "rice", qty: 80 }, { foodId: "soy_sauce", qty: 15 },
+      { foodId: "ginger", qty: 10 }, { foodId: "garlic", qty: 8 }, { foodId: "sweetcorn", qty: 80 },
+      { foodId: "spinach", qty: 80 }, { foodId: "seeds_mixed", qty: 12 }, { foodId: "olive_oil", qty: 8 },
+      { foodId: "chilli_fresh", qty: 4 },
+    ],
+    steps: [
+      "Rice on.",
+      "Edamame from frozen straight into a hot dry pan with the oil — let them blister and char in places before anything else goes in.",
+      "Ginger, garlic and chilli for thirty seconds, then soy and a splash of water to make it glossy.",
+      "Sweetcorn and spinach in at the very end, seeds over the bowl.",
+    ],
+    tip: "Blistering the edamame instead of boiling them is what makes this a dish rather than a side.",
+    method: "Blister frozen edamame in a hot pan, add ginger, garlic, chilli and soy, then fold in sweetcorn and spinach and serve over rice.",
+  },
+  {
+    id: "qv_harissa_chickpea_pitta", name: "Harissa chickpea pitta", slot: "Lunch", minutes: 8,
+    items: [
+      { foodId: "chickpeas", qty: 300 }, { foodId: "harissa", qty: 20 }, { foodId: "hummus", qty: 60 },
+      { foodId: "pitta", qty: 70 }, { foodId: "cucumber", qty: 80 }, { foodId: "tomatoes_fresh", qty: 100 },
+      { foodId: "lemon", qty: 0.5 }, { foodId: "spinach", qty: 40 },
+    ],
+    steps: [
+      "Chickpeas drained and tossed with the harissa and lemon — no pan needed at all, but two minutes in a hot dry frying pan makes them much better if you have it.",
+      "Pitta toasted until it puffs, then split.",
+      "Hummus inside, chickpeas in, salad stuffed after so it does not go soggy at the bottom.",
+    ],
+    tip: "Eight minutes and no cooking. The one for a lunchbox that has to survive until one o'clock.",
+    method: "Toss chickpeas with harissa and lemon, warm pitta, and fill with hummus, the chickpeas and salad.",
+  },
+  {
+    id: "sv_pea_protein_pb_shake", name: "Peanut butter protein shake", slot: "Snack", minutes: 3,
+    items: [
+      { foodId: "soy_milk", qty: 350 }, { foodId: "pea_protein", qty: 30 },
+      { foodId: "peanut_butter", qty: 20 }, { foodId: "banana", qty: 1 },
+    ],
+    steps: [
+      "Everything blended for thirty seconds.",
+      "No blender: mash the banana to a paste first or you will be chewing it.",
+    ],
+    tip: "Peanut butter is what makes pea protein taste like something. On its own it is chalk.",
+    method: "Blend soy milk, pea protein, peanut butter and banana until smooth.",
+  },
+  {
+    id: "sv_chilli_edamame_pot", name: "Chilli garlic edamame", slot: "Snack", minutes: 6,
+    items: [
+      { foodId: "edamame", qty: 200 }, { foodId: "soy_sauce", qty: 10 }, { foodId: "garlic", qty: 6 },
+      { foodId: "chilli_fresh", qty: 5 }, { foodId: "olive_oil", qty: 6 }, { foodId: "lemon", qty: 0.5 },
+    ],
+    steps: [
+      "Edamame from frozen into a hot pan with the oil, left to blister in patches.",
+      "Garlic and chilli in for the last thirty seconds only, then soy and lemon off the heat.",
+      "Eaten hot with your fingers, pods and all if they have them.",
+    ],
+    tip: "22g of protein in six minutes. Salt them the second they come off the heat.",
+    method: "Blister frozen edamame in oil, toss with garlic, chilli, soy and lemon off the heat.",
+  },
+  {
+    id: "sv_chickpea_tahini_dip", name: "Chickpea, tahini & lemon dip", slot: "Snack", minutes: 5,
+    items: [
+      { foodId: "chickpeas", qty: 200 }, { foodId: "tahini", qty: 18 }, { foodId: "lemon", qty: 0.5 },
+      { foodId: "garlic", qty: 6 }, { foodId: "oatcakes", qty: 20 }, { foodId: "olive_oil", qty: 4 },
+      { foodId: "spice_mix", qty: 3 },
+    ],
+    steps: [
+      "Chickpeas, tahini, lemon, garlic and a few spoons of cold water blitzed or mashed hard.",
+      "COLD water, not warm — it is what makes tahini go pale and whip up rather than stay heavy.",
+      "Oil and paprika over the top, oatcakes to scoop.",
+    ],
+    tip: "Better than shop hummus for about a third of the price, and it takes five minutes.",
+    method: "Blitz chickpeas with tahini, lemon, garlic and cold water, and serve with oil, paprika and oatcakes.",
+  },
+  {
+    id: "sv_almond_protein_pot", name: "Almond & cinnamon protein pot", slot: "Snack", minutes: 3,
+    items: [
+      { foodId: "coconut_yoghurt", qty: 200 }, { foodId: "pea_protein", qty: 32 },
+      { foodId: "almonds", qty: 20 }, { foodId: "berries_frozen", qty: 80 }, { foodId: "spice_mix", qty: 2 },
+    ],
+    steps: [
+      "Protein whisked into a couple of spoons of the yoghurt to a paste first, then the rest folded in.",
+      "Berries in from frozen, left two minutes to bleed and chill it.",
+      "Almonds chopped over with a pinch of cinnamon.",
+    ],
+    tip: "The paste-first step is not optional with any protein powder. Straight into the tub it stays lumpy forever.",
+    method: "Whisk pea protein into a little coconut yoghurt, fold through the rest with frozen berries, and top with almonds and cinnamon.",
+  },
+  {
+    id: "s_yoghurt_pb_protein", name: "Peanut butter yoghurt pot", slot: "Snack", minutes: 3,
+    items: [
+      { foodId: "greek_yoghurt", qty: 250 }, { foodId: "peanut_butter", qty: 20 },
+      { foodId: "banana", qty: 1 }, { foodId: "seeds_mixed", qty: 10 },
+    ],
+    steps: [
+      "Peanut butter loosened with a spoon of the yoghurt before it goes in, or it sits in a lump at the bottom.",
+      "Rippled through, banana sliced on, seeds over.",
+    ],
+    tip: "32g of protein, three minutes, no cooking. The default when you have not planned anything.",
+    method: "Loosen peanut butter with a little yoghurt, ripple through the rest, and top with banana and seeds.",
+  },
+  {
+    id: "s_tuna_cucumber_boats", name: "Tuna & lemon cucumber boats", slot: "Snack", minutes: 5,
+    items: [
+      { foodId: "tuna_tin", qty: 145 }, { foodId: "cucumber", qty: 200 }, { foodId: "greek_yoghurt", qty: 50 },
+      { foodId: "lemon", qty: 0.5 }, { foodId: "chilli_fresh", qty: 3 }, { foodId: "onion", qty: 30 },
+    ],
+    steps: [
+      "Cucumber halved lengthways and the seeds scraped out with a teaspoon to make a trough.",
+      "Tuna mixed with the yoghurt, lemon, finely chopped onion and chilli.",
+      "Spooned in and cut into lengths.",
+    ],
+    tip: "40g of protein and almost no calories — the snack for the evening before a weigh-in.",
+    method: "Hollow cucumber halves, fill with tuna mixed through yoghurt, lemon, onion and chilli, and slice.",
+  },
+  {
+    id: "veg_halloumi_chickpea_salad", name: "Halloumi, chickpea & lemon salad", slot: "Lunch", minutes: 14,
+    items: [
+      { foodId: "halloumi", qty: 90 }, { foodId: "chickpeas", qty: 240 }, { foodId: "cucumber", qty: 100 },
+      { foodId: "tomatoes_fresh", qty: 120 }, { foodId: "spinach", qty: 60 }, { foodId: "lemon", qty: 0.5 },
+      { foodId: "olive_oil", qty: 8 }, { foodId: "onion", qty: 40 }, { foodId: "seeds_mixed", qty: 10 },
+    ],
+    steps: [
+      "Halloumi sliced and into a dry hot pan. Leave it — it sticks until it is ready and then lets go by itself.",
+      "Onion sliced thin into the lemon juice while it cooks, to take the raw edge off.",
+      "Chickpeas, cucumber, tomato and spinach tossed with the oil and the lemony onion.",
+      "Halloumi on top while it still squeaks, seeds over.",
+    ],
+    tip: "Cook the halloumi last. Off the heat for more than two minutes it goes from squeaky to rubbery.",
+    method: "Dry-fry halloumi, quick-pickle onion in lemon, toss chickpeas and salad with it, and top with the hot cheese and seeds.",
+  },
+  {
+    id: "veg_feta_lentil_bowl", name: "Feta, lentil & roast pepper bowl", slot: "Lunch", minutes: 25,
+    items: [
+      { foodId: "red_lentils", qty: 100 }, { foodId: "feta", qty: 50 }, { foodId: "peppers", qty: 150 },
+      { foodId: "spinach", qty: 80 }, { foodId: "lemon", qty: 0.5 }, { foodId: "olive_oil", qty: 10 },
+      { foodId: "garlic", qty: 8 }, { foodId: "spice_mix", qty: 5 }, { foodId: "seeds_mixed", qty: 12 },
+    ],
+    steps: [
+      "Peppers cut into wide strips, tossed in half the oil and spices, and roasted hot for 20 minutes until the edges blacken.",
+      "Lentils simmered 15 minutes in salted water — just holding their shape, so start testing at twelve.",
+      "Drained and dressed while warm with the rest of the oil, lemon and crushed garlic.",
+      "Spinach folded through to wilt, peppers on, feta crumbled over, seeds last.",
+    ],
+    tip: "Dress the lentils warm and they take the flavour. Cold, the dressing just sits on top.",
+    method: "Roast spiced peppers hard, simmer lentils, dress them warm with oil, lemon and garlic, and top with spinach, peppers, feta and seeds.",
+  },
+  {
+    id: "veg_egg_chickpea_salad", name: "Egg & chickpea chopped salad", slot: "Lunch", minutes: 12,
+    items: [
+      { foodId: "eggs", qty: 3 }, { foodId: "chickpeas", qty: 200 }, { foodId: "greek_yoghurt", qty: 60 },
+      { foodId: "cucumber", qty: 100 }, { foodId: "tomatoes_fresh", qty: 100 }, { foodId: "onion", qty: 40 },
+      { foodId: "lemon", qty: 0.5 }, { foodId: "spice_mix", qty: 3 }, { foodId: "spinach", qty: 60 },
+    ],
+    steps: [
+      "Eggs into already-boiling water for 8 minutes, then straight into cold — that is what makes them peel.",
+      "Everything else chopped small and tossed with the yoghurt, lemon and paprika while they cool.",
+      "Eggs quartered on top rather than mixed in, so they stay whole.",
+    ],
+    tip: "Into boiling water, not cold. Started cold they peel in flakes and take half the white with them.",
+    method: "Boil eggs 8 minutes and cool fast, toss chopped chickpeas and salad with yoghurt, lemon and paprika, and quarter the eggs over.",
+  },
+  {
+    id: "q_prawn_chilli_noodles", name: "Chilli garlic prawn noodles", slot: "Dinner", minutes: 12,
+    items: [
+      { foodId: "prawns", qty: 180 }, { foodId: "rice_noodles", qty: 100 }, { foodId: "garlic", qty: 12 },
+      { foodId: "chilli_fresh", qty: 6 }, { foodId: "soy_sauce", qty: 15 }, { foodId: "lemon", qty: 0.5 },
+      { foodId: "peas_frozen", qty: 100 }, { foodId: "olive_oil", qty: 10 }, { foodId: "spinach", qty: 60 },
+    ],
+    steps: [
+      "Noodles in a bowl of boiled water.",
+      "Garlic and chilli into the oil on a medium heat for thirty seconds — this is a garlic dish, so do not let it brown.",
+      "Prawns in on high. They take ninety seconds and are ruined at three minutes; the moment they turn opaque they are done.",
+      "Peas, spinach, drained noodles, soy and lemon in and tossed once.",
+    ],
+    tip: "Everything is prepped before the pan gets hot. Once the prawns go in there is no time to chop anything.",
+    method: "Soak noodles, soften garlic and chilli in oil, flash-fry prawns, then toss with peas, spinach, noodles, soy and lemon.",
+  },
+  {
+    id: "q_masala_omelette_beans", name: "Masala omelette with beans", slot: "Dinner", minutes: 12,
+    items: [
+      { foodId: "eggs", qty: 4 }, { foodId: "beans_baked", qty: 200 }, { foodId: "onion", qty: 50 },
+      { foodId: "tomatoes_fresh", qty: 80 }, { foodId: "chilli_fresh", qty: 5 }, { foodId: "spice_mix", qty: 4 },
+      { foodId: "spinach", qty: 60 }, { foodId: "olive_oil", qty: 10 }, { foodId: "wholemeal_bread", qty: 60 },
+    ],
+    steps: [
+      "Beans warming in a small pan while you work.",
+      "Onion, tomato, chilli and spices beaten straight into the eggs — no frying them first, this is a masala omelette not a filled one.",
+      "Into a hot oiled pan, spinach scattered over the wet top, then left alone on a medium heat until the edges lift.",
+      "Folded once, out, beans alongside, toast underneath.",
+    ],
+    tip: "Beating the vegetables into the egg rather than frying them first is the whole method, and it saves a pan.",
+    method: "Beat onion, tomato, chilli and spices into the eggs, cook as one omelette with spinach on top, and serve with warmed beans and toast.",
+  },
+  {
+    id: "q_salmon_couscous", name: "Lemon salmon with herby couscous", slot: "Dinner", minutes: 15,
+    items: [
+      { foodId: "salmon_fillet", qty: 150 }, { foodId: "couscous", qty: 80 }, { foodId: "stock_cubes", qty: 4 },
+      { foodId: "peas_frozen", qty: 100 }, { foodId: "spinach", qty: 60 }, { foodId: "lemon", qty: 0.5 },
+      { foodId: "olive_oil", qty: 8 }, { foodId: "garlic", qty: 6 },
+    ],
+    steps: [
+      "Couscous under hot stock with a plate over it. Five minutes, untouched.",
+      "Salmon skin-side down in a hot dry pan, pressed flat for the first ten seconds so the skin does not curl. Four minutes, then one on the flesh side.",
+      "Peas and spinach stirred into the forked couscous with the oil, garlic and lemon — the residual heat cooks them.",
+      "Salmon on top, resting juices poured over.",
+    ],
+    tip: "Pressing the fillet flat for ten seconds is why restaurant salmon has crisp skin and yours does not.",
+    method: "Steep couscous in stock, pan-fry salmon skin-side down pressed flat, and fork peas, spinach, garlic and lemon through the couscous.",
+  },
+  {
+    id: "sv_protein_oat_bites", name: "Peanut & date protein bites", slot: "Snack", minutes: 8,
+    items: [
+      { foodId: "oats", qty: 45 }, { foodId: "pea_protein", qty: 30 }, { foodId: "peanut_butter", qty: 28 },
+      { foodId: "dates", qty: 30 }, { foodId: "seeds_mixed", qty: 10 },
+    ],
+    steps: [
+      "Dates chopped as small as you can be bothered to — they are the glue, and big pieces mean it will not hold.",
+      "Everything squashed together in a bowl with a splash of water, a teaspoon at a time, until it just clumps. Too much and it will not firm up.",
+      "Rolled into balls and fridged for twenty minutes.",
+    ],
+    tip: "Written as the portion you eat, not the batch it makes. Double it and it keeps a fortnight.",
+    method: "Chop dates fine, work everything together with a little water until it clumps, roll and chill.",
+  },
+  {
+    id: "sv_edamame_hummus_bowl", name: "Spiced edamame & hummus bowl", slot: "Snack", minutes: 6,
+    items: [
+      { foodId: "edamame", qty: 220 }, { foodId: "hummus", qty: 55 }, { foodId: "pitta", qty: 25 },
+      { foodId: "spice_mix", qty: 3 }, { foodId: "lemon", qty: 0.5 }, { foodId: "chilli_fresh", qty: 4 },
+    ],
+    steps: [
+      "Edamame from frozen into boiling water for three minutes, drained and salted immediately while the surface is still wet.",
+      "Tossed with the paprika, lemon and chilli.",
+      "Piled onto the hummus with toasted pitta to scoop.",
+    ],
+    tip: "Salt them the second they drain. Do it cold and it just falls off.",
+    method: "Boil and salt edamame, toss with paprika, lemon and chilli, and serve over hummus with toasted pitta.",
+  },
 ];

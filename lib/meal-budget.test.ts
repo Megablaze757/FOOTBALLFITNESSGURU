@@ -93,23 +93,43 @@ test("a cheap week is still a week's food", () => {
 test("food wins over the budget when the two cannot both be had", () => {
   /**
    * THE CASE THAT DECIDES WHETHER THIS FEATURE IS HONEST. A 95kg athlete
-   * cutting needs 209g of protein a day, and their ordinary £88 week just about
-   * delivers it. Every cheaper week the planner can build for them comes back
-   * at 76-82% of that — a fifth of their protein, for £13. So the search
-   * refuses all of them and hands back the week they would have had, with the
-   * price on it.
+   * cutting needs 209g of protein a day. Asked for a £60 week, the search must
+   * never answer with an underfed one just because its number is closer —
+   * serving a £75 week at 78% of their protein because £75 beats £88 is the
+   * failure this whole feature exists to prevent, dressed up as success.
    *
-   * The alternative — serving the £75 week because the number was £60 and £75
-   * is closer — is the failure this whole feature exists to prevent, dressed up
-   * as success.
+   * WHAT THIS USED TO ASSERT, and why it does not any more. The original test
+   * pinned the exact outcome: every cheaper week came back at 76-82% of target,
+   * so the search refused all of them and handed back the ordinary £88 one. The
+   * budget shelf, the protein-aware pressure weighting and the per-day top-up
+   * changed that — there is now a £67.60 week whose WORST day is 90% of target,
+   * every day clear of the floor. Still over the £60 asked for, still `met:
+   * false`, and £21 cheaper than the week they would otherwise have got.
+   *
+   * Pinning "the ordinary week is returned" would now be pinning the planner's
+   * failure to find anything. So this asserts the promise instead: whatever
+   * comes back is honest about missing the number, and feeds them.
    */
   const targets = planTargets(ATHLETES[2].body);
   const open = planWithinBudget(targets, 0, DEFAULT_PREFS);
   const capped = planWithinBudget(targets, 0, mergePrefs(DEFAULT_PREFS, { weeklyBudget: 60 }));
+
+  // The budget was not met, and the result says so rather than rounding to yes.
   assert.equal(capped.met, false);
-  assert.equal(capped.weeklyCost, open.weeklyCost, "a cheaper week was accepted for this athlete");
-  assert.deepEqual(proteinOf(capped.days), proteinOf(open.days), "the returned week is not the one they would have had");
   assert.match(capped.note ?? "", /feeds you properly/);
+  assert.ok(capped.weeklyCost > 60, "a week under the budget was reported as not meeting it");
+
+  // AND IT FEEDS THEM. Every day clears the floor the search is judged on.
+  for (const day of capped.days) {
+    if (day.meals.length === 0) continue;
+    const share = day.macros.protein / targets.protein;
+    assert.ok(share >= 0.9,
+      `${day.day} came back at ${Math.round(share * 100)}% of protein target for the sake of the budget`);
+  }
+
+  // Never dearer than doing nothing: the fallback is always available.
+  assert.ok(capped.weeklyCost <= open.weeklyCost + 0.01,
+    `the capped week (£${capped.weeklyCost}) costs more than the ordinary one (£${open.weeklyCost})`);
 });
 
 test("the budget is judged on an ordinary week, not the first shop", () => {

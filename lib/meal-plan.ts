@@ -1419,11 +1419,17 @@ export function buildWeek(
    * PROTEIN — lentils, eggs, tinned fish, beans — instead of cheap calories,
    * which is what a budget plan is supposed to mean.
    *
-   * Scaled by the square root rather than linearly: matching pressure exactly
+   * Scaled by pressure^0.65 rather than linearly: matching pressure exactly
    * would freeze the trade-off and the ladder would return the same week at
    * every rung, which is just a slower way of not searching.
+   *
+   * The exponent was swept at 0.5, 0.65, 0.8 and 1.0 against the three
+   * reference athletes. 0.5 left a 58kg athlete cutting at £51.36; 0.65 takes
+   * her to £48.12 and costs a 95kg athlete building £0.99. Above 0.65 she gets
+   * DEARER again — protein starts being bought where it was not needed — so
+   * this is a measured minimum rather than "more is better".
    */
-  const proteinWeight = PROTEIN_WEIGHT * (thrifty ? Math.sqrt(costPressure) : 1);
+  const proteinWeight = PROTEIN_WEIGHT * (thrifty ? Math.pow(costPressure, 0.65) : 1);
   /**
    * Budget mode does not pay for variety.
    *
@@ -2033,43 +2039,56 @@ function topUpProtein(day: PlannedDay, targets: PlanTargets, thrifty: boolean): 
   const floor = targets.protein * BUDGET_PROTEIN_FLOOR;
   if (day.macros.protein >= floor) return day;
 
-  const byDensity = [...day.meals].sort((a, b) => proteinDensity(b.meal) - proteinDensity(a.meal));
-  const up = byDensity[0];
-  const down = byDensity[byDensity.length - 1];
-  // Raising and lowering the same dish is not a trade, it is a rounding error.
-  if (up === down || proteinDensity(up.meal) <= proteinDensity(down.meal)) return day;
+  const total = (meals: PlannedDay["meals"]) => meals.reduce(
+    (t, m) => ({
+      kcal: t.kcal + m.macros.kcal, protein: t.protein + m.macros.protein,
+      carbs: t.carbs + m.macros.carbs, fats: t.fats + m.macros.fats,
+    }),
+    { kcal: 0, protein: 0, carbs: 0, fats: 0 },
+  );
 
   const step = 0.05;
-  let best = day;
-  let upScale = up.scale;
-  let downScale = down.scale;
-  for (let i = 0; i < 12; i++) {
-    const nextUp = Math.round((upScale + step) * 20) / 20;
-    if (nextUp > 1.6) break;
-    // Come down by the calories that went up, so the day's energy holds.
-    const gained = mealMacros(up.meal, nextUp).kcal - mealMacros(up.meal, up.scale).kcal;
-    const perStep = mealMacros(down.meal, step).kcal;
-    const nextDown = Math.round((downScale - (perStep > 0 ? gained / (perStep / step) : 0)) * 20) / 20;
-    if (nextDown < 0.55) break;
-    upScale = nextUp;
-    downScale = nextDown;
+  let meals = day.meals;
 
-    const meals = day.meals.map((m) => {
-      const scale = m === up ? upScale : m === down ? downScale : m.scale;
+  /**
+   * WORKS THROUGH THE DAY, not just its best dish.
+   *
+   * The first version raised the single densest meal and lowered the single
+   * least dense, which fixed the 0.2g misses it was written for and then stalled
+   * — one dish reaches the 1.6 cap in a handful of steps and the day is still
+   * short. So it walks the pairs: densest against least dense, and when either
+   * runs out of room it takes the next one in. Same clamp, same rule, more of
+   * the day available to it.
+   */
+  for (let pass = 0; pass < 40; pass++) {
+    const now = total(meals);
+    if (now.protein >= floor) break;
+
+    const order = meals.map((m, i) => ({ i, d: proteinDensity(m.meal) })).sort((a, b) => b.d - a.d);
+    const up = order.find(({ i }) => meals[i].scale + step <= 1.6);
+    const down = [...order].reverse().find(({ i }) => meals[i].scale - step >= 0.55 && i !== up?.i);
+    // Nothing left to trade, or the trade would swap a dish for a denser one,
+    // which takes protein OUT of the day.
+    if (!up || !down || up.d <= down.d) break;
+
+    const upScale = Math.round((meals[up.i].scale + step) * 20) / 20;
+    // Come down by the calories that went up, so the day's energy holds.
+    const gained = mealMacros(meals[up.i].meal, upScale).kcal - meals[up.i].macros.kcal;
+    const perUnit = mealMacros(meals[down.i].meal, 1).kcal;
+    const downScale = Math.round(
+      (meals[down.i].scale - (perUnit > 0 ? gained / perUnit : step)) * 20,
+    ) / 20;
+    if (downScale < 0.55) break;
+
+    meals = meals.map((m, i) => {
+      const scale = i === up.i ? upScale : i === down.i ? downScale : m.scale;
       return scale === m.scale ? m : { ...m, scale, macros: mealMacros(m.meal, scale) };
     });
-    const macros = meals.reduce(
-      (t, m) => ({
-        kcal: t.kcal + m.macros.kcal, protein: t.protein + m.macros.protein,
-        carbs: t.carbs + m.macros.carbs, fats: t.fats + m.macros.fats,
-      }),
-      { kcal: 0, protein: 0, carbs: 0, fats: 0 }
-    );
-    best = { ...day, meals, macros };
-    if (macros.protein >= floor) break;
   }
-  return best;
+
+  return meals === day.meals ? day : { ...day, meals, macros: total(meals) };
 }
+
 
 // --- shopping list -----------------------------------------------------------
 
