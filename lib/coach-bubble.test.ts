@@ -93,5 +93,5 @@ test("the chat fills the sheet rather than measuring the viewport", () => {
 test("the wait says what it is waiting for", () => {
   // A bare spinner makes "reading your whole training history" look like the
   // app being slow.
-  assert.match(bubble, /Reading your block, today&apos;s check-in and your lifts…/);
+  assert.match(bubble, /Reading your block, today&apos;s log and your lifts…/);
 });

@@ -208,7 +208,7 @@ export function ProgressPanel({ userId }: { userId: string }) {
             <h2 className="field-label !mb-0">Training volume</h2>
             <span className="text-[11px] text-slate-500">Last {WINDOW_DAYS} days</span>
           </div>
-          {hasTraining ? <MiniBars data={t.volume} color="#e3b53f" unit=" reps" /> : <Empty label="Log training in your daily check-in." />}
+          {hasTraining ? <MiniBars data={t.volume} color="#e3b53f" unit=" reps" /> : <Empty label="Log training in today's log." />}
         </div>
 
         {t.drillFrequency.length > 0 && (

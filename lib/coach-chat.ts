@@ -31,7 +31,7 @@ export function localCoachAnswer(question: string, ctx: ChatContext): string {
   if (/pain|sore|hurt|knee|ankle|hamstring|injur/.test(q)) {
     return ctx.soreAreas.length
       ? `You've flagged soreness in your ${ctx.soreAreas.join(" / ")}, so I'm swapping high-impact work for lower-load options and keeping intensity in check. If pain is sharp (7+/10) or lingers, see a physio before loading it.`
-      : "No soreness flagged today, so we can train freely. Log any pain in your daily check-in and I'll adapt the plan automatically.";
+      : "No soreness flagged today, so we can train freely. Log any pain in today's log and I'll adapt the plan automatically.";
   }
 
   if (/ready|readiness|recover|rest|tired|fatigue/.test(q)) {

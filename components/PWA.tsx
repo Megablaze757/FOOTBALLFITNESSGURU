@@ -158,7 +158,7 @@ function InstallPrompt() {
       </div>
       <p className="mt-1 text-xs text-slate-400">
         {guide.possible
-          ? "Opens like an app, works without signal, and can remind you to check in."
+          ? "Opens like an app, works without signal, and can remind you to log the day."
           : guide.steps[0]}
       </p>
 

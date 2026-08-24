@@ -602,7 +602,7 @@ function Greeting({ name, sub, streak = 0 }: { name: string; sub: string; streak
         <p className="mt-1 text-sm text-slate-400">{sub}</p>
       </div>
       {streak > 0 && (
-        <span className="chip text-pitch-400" title="Consecutive check-in days">🔥 {streak}-day streak</span>
+        <span className="chip text-pitch-400" title="Consecutive days logged">🔥 {streak}-day streak</span>
       )}
     </header>
   );

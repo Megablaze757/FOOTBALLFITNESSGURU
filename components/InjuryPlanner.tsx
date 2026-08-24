@@ -425,7 +425,7 @@ export function InjuryPlanner({ sport, hurt, onHurtChange, description, onDescri
                         )}
                         {stage === i + 1 && (
                           <span className="text-[11px] text-slate-600">
-                            These exercises are in your check-in, and the coach knows you are here.
+                            These exercises are in today's log, and the coach knows you are here.
                           </span>
                         )}
                       </div>
@@ -472,7 +472,7 @@ export function InjuryPlanner({ sport, hurt, onHurtChange, description, onDescri
           <BodyMap value={hurt} onChange={onHurtChange} mode="select" />
           {seeded && (
             <p className="mt-2 text-center text-xs text-slate-500">
-              Carried over from your last check-in — tap to change.
+              Carried over from your last log — tap to change.
             </p>
           )}
         </Step>

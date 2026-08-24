@@ -542,7 +542,7 @@ function AppleSetup({ token, onDone }: { token: string | null; onDone: () => voi
               numbers it saved for exactly this. */}
           <p className="mt-3 rounded-xl border border-white/[0.08] bg-white/[0.02] px-3 py-2 text-xs text-slate-400">
             <b className="text-slate-200">Now tap Play.</b> It should answer with the hours it read back.
-            If it does, today&apos;s sleep is already on your check-in.
+            If it does, today&apos;s sleep is already in today&apos;s log.
           </p>
 
           <p className="mt-3 text-xs text-slate-500">

@@ -143,7 +143,9 @@ export function weightAgeDays(w: Bodyweight | null, today: string): number | nul
 export function weightProvenance(w: Bodyweight | null, today: string): string | null {
   if (!w) return null;
   const age = weightAgeDays(w, today);
-  const where = w.source === "weigh-in" ? "weigh-in" : w.source === "check-in" ? "check-in" : "profile";
+  // The union value stays "check-in" — it is a stored discriminator, not copy.
+  // What the athlete READS is the page they typed it on, which is now the log.
+  const where = w.source === "weigh-in" ? "weigh-in" : w.source === "check-in" ? "daily log" : "profile";
   if (age == null) return `from your ${where}`;
   if (age === 0) return `from today's ${where}`;
   if (age === 1) return `from yesterday's ${where}`;

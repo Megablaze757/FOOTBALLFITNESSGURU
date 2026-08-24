@@ -17,7 +17,7 @@ export function TrendChart({ series }: { series: TrendPoint[] }) {
   if (series.length < 2) {
     return (
       <p className="rounded-2xl bg-white/[0.04] px-4 py-8 text-center text-sm text-slate-500">
-        Log at least two check-ins to see trends.
+        Log at least two days to see trends.
       </p>
     );
   }

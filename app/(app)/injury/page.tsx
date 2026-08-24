@@ -204,7 +204,7 @@ export default function InjuryPage() {
         <FeatureLock
           capability="injury_plan"
           title="The injury planner is part of Pro"
-          blurb="Tell it where it hurts and get a staged plan that loads the area back to full — with the rehab protocol behind every stage, and your training built around it rather than paused. You can still log pain on your daily check-in."
+          blurb="Tell it where it hurts and get a staged plan that loads the area back to full — with the rehab protocol behind every stage, and your training built around it rather than paused. You can still log pain in your daily log."
         />
       </div>
     );
@@ -221,7 +221,7 @@ export default function InjuryPage() {
    * One list with a reason attached removes the overlap by construction.
    */
   const relevantProtocols = RECOVERY_INJURY.flatMap((p) => {
-    if (fromCheckIn.some((i) => i.id === p.id)) return [{ p, reason: "from your check-in" }];
+    if (fromCheckIn.some((i) => i.id === p.id)) return [{ p, reason: "from your log" }];
     if (matched.some((m) => m.id === p.id)) return [{ p, reason: "matches what you said" }];
     return [];
   });

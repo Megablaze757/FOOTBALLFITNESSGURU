@@ -66,7 +66,7 @@ function friendly(key?: string): string {
     home: "dashboard",
     history: "progress",
     nutrition: "nutrition",
-    journal: "check-in",
+    journal: "today's log",
     coach: "program",
     squad: "squad",
     benchmarks: "personal bests",

@@ -59,7 +59,7 @@ export function WeekStrip({ days, sessions, minutes, accent, complete }: {
               a habit waiting to start. */}
           <p className="mt-0.5 text-xs text-slate-500">
             {sessions === 0
-              ? "Log a session in your check-in and these fill in."
+              ? "Log a session in today's log and these fill in."
               : `${sessions} session${sessions === 1 ? "" : "s"}${
                   minutes > 0 ? ` · ${hours > 0 ? `${hours}h ` : ""}${mins}m` : ""
                 }`}

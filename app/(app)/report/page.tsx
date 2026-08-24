@@ -71,8 +71,8 @@ export default function ReportPage() {
           <EmptyState
             icon="📄"
             title="Not enough logged for a report yet"
-            body="The report is built entirely from your check-ins — nothing on it is estimated. A few days of them and there's a one-page summary here to show a coach, physio or parent."
-            action={{ label: "Check in now", href: "/journal" }}
+            body="The report is built entirely from your daily logs — nothing on it is estimated. A few days of them and there's a one-page summary here to show a coach, physio or parent."
+            action={{ label: "Log today", href: "/journal" }}
           />
         </div>
       </div>
@@ -134,7 +134,7 @@ export default function ReportPage() {
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Kpi label="Sessions" value={`${report.sessions}`} />
-          <Kpi label="Check-ins" value={`${report.checkIns}/7`} />
+          <Kpi label="Days logged" value={`${report.checkIns}/7`} />
           {/* The ratio on its own is a number nobody can act on, and the
               acronym is worse. The zone is the answer — the same wording
               Progress uses, so the two pages don't describe the same figure in

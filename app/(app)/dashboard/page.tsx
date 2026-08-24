@@ -181,7 +181,7 @@ export default function DashboardPage() {
         {tab === "recovery" ? (
           <>
             <div className="card p-8 text-center text-sm text-slate-400">
-              No check-ins yet. Log a few days to unlock recovery trends and injury risk.
+              Nothing logged yet. Log a few days to unlock recovery trends and injury risk.
             </div>
             <BenchmarksLink />
           </>
@@ -429,7 +429,7 @@ export default function DashboardPage() {
                 <Wk label="Sessions" value={`${report.sessions}`} />
               )}
               {/* Was "3/7" here too — same failing-score framing fixed on Home. */}
-              <Wk label="Check-ins" value={`${report.checkIns}`} />
+              <Wk label="Days logged" value={`${report.checkIns}`} />
               <Wk label="Load" value={report.loadTrend === "up" ? "↗" : report.loadTrend === "down" ? "↘" : "→"} />
             </div>
             <p className="mt-3 text-sm text-slate-200">🏆 {report.topWin}</p>

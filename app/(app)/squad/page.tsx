@@ -205,7 +205,7 @@ export default function SquadPage() {
           <EmptyState
             icon="👥"
             title="No athletes yet"
-            body="Invite one by email using the box above. Once they accept you'll see their readiness, check-in streak and training load here — and they'll see nothing of yours."
+            body="Invite one by email using the box above. Once they accept you'll see their readiness, logging streak and training load here — and they'll see nothing of yours."
           />
         </div>
       ) : (
@@ -272,7 +272,7 @@ function Header() {
     <header className="flex flex-col">
         <BackLink href="/profile" label="Profile" />
         <h1 className="text-3xl font-extrabold tracking-tight">Squad</h1>
-        <p className="mt-1 text-sm text-slate-400">Who is fit, who is carrying something, and who has stopped checking in.</p>
+        <p className="mt-1 text-sm text-slate-400">Who is fit, who is carrying something, and who has stopped logging.</p>
       </header>
   );
 }

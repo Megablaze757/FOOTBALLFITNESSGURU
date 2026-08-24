@@ -132,7 +132,7 @@ export function PushToggle() {
     <div className="mb-4 rounded-2xl bg-white/[0.03] p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="text-sm font-medium text-slate-200">Morning check-in reminder</div>
+          <div className="text-sm font-medium text-slate-200">Morning log reminder</div>
           <p className="mt-0.5 text-xs text-slate-500">
             {state === "needs-install"
               ? "Add PocketAthlete to your home screen first — iPhone only allows notifications for installed apps."

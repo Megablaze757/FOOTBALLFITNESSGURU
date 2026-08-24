@@ -135,7 +135,7 @@ export function CoachBubble() {
                     {/* Said out loud, because the wait is the coach READING —
                         it is loading your block, your check-in and your lifts,
                         and a bare spinner makes that look like slowness. */}
-                    <p className="text-xs text-slate-500">Reading your block, today&apos;s check-in and your lifts…</p>
+                    <p className="text-xs text-slate-500">Reading your block, today&apos;s log and your lifts…</p>
                   </div>
                 ) : (
                   <CoachChat

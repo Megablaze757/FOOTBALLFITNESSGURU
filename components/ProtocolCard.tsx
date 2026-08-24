@@ -26,7 +26,7 @@ export function ProtocolCard({ p, relevant, reason, onOpenExercise }: {
   p: RecoveryProtocol;
   /** Matches what they told us — gets an accent and a badge, not an open body. */
   relevant?: boolean;
-  /** Why it's relevant, e.g. "from your check-in". Shown on the badge. */
+  /** Why it's relevant, e.g. "from your log". Shown on the badge. */
   reason?: string;
   onOpenExercise?: (ex: Exercise) => void;
 }) {

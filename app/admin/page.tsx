@@ -140,7 +140,7 @@ export default function AdminOverview() {
 
         <div className="mt-3 grid grid-cols-3 gap-3">
           <Metric label="Active today" value={m?.dau ?? 0} />
-          <Metric label="Check-ins" value={m?.check_ins_today ?? 0} />
+          <Metric label="Logged today" value={m?.check_ins_today ?? 0} />
           <Metric label="Total users" value={m?.total_users ?? 0} />
         </div>
 

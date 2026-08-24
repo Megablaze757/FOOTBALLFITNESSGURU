@@ -10,7 +10,7 @@ import { Portal } from "@/components/Portal";
  * Delete your account, for real.
  *
  * The privacy policy promises this, so it has to work rather than deactivate.
- * Everything goes: check-ins, programs, training history, videos, body photos.
+ * Everything goes: daily logs, programs, training history, videos, body photos.
  *
  * Two deliberate pieces of friction, because there is no undo and no backup we
  * can restore from:
@@ -56,7 +56,7 @@ export function DeleteAccount({ email }: { email: string }) {
       <div className="mt-8 rounded-2xl border border-readiness-red/20 bg-readiness-red/[0.03] p-4">
         <div className="text-sm font-semibold text-slate-200">Delete account</div>
         <p className="mt-1 text-xs text-slate-500">
-          Permanently deletes your account and everything in it — check-ins, programs,
+          Permanently deletes your account and everything in it — daily logs, programs,
           training history, videos and photos. This cannot be undone.
         </p>
         <button
@@ -76,7 +76,7 @@ export function DeleteAccount({ email }: { email: string }) {
                 This is permanent. We will delete:
               </p>
               <ul className="mt-2 space-y-1 text-sm text-slate-400">
-                <li>• every check-in and readiness score</li>
+                <li>• every daily log and readiness score</li>
                 <li>• your programs and training history</li>
                 <li>• uploaded videos and body photos</li>
                 <li>• your place on every leaderboard</li>

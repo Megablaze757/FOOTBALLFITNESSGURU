@@ -86,7 +86,7 @@ function Inner() {
       {readiness ? (
         <div className="card p-6 pt-8"><ReadinessGauge score={readiness.score} status={readiness.status} /></div>
       ) : (
-        <div className="card px-4 py-6 text-center text-sm text-slate-500">No check-in today.</div>
+        <div className="card px-4 py-6 text-center text-sm text-slate-500">Nothing logged today.</div>
       )}
 
       <div className="grid grid-cols-2 gap-3">

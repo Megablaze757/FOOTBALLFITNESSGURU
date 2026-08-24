@@ -200,7 +200,7 @@ export function ProfileForm({ profile, email }: { profile: Profile; email: strin
           <span className="min-w-0">
             <span className="block text-sm font-medium text-slate-200">Show me on leaderboards</span>
             <span className="mt-0.5 block text-xs text-slate-500">
-              Your <b>username</b> and weekly activity — check-ins, sleep score, minutes trained.
+              Your <b>username</b> and weekly activity — days logged, sleep score, minutes trained.
               Never your real name, injuries, weight or body composition. Turn this off and you
               disappear from every board, including your squad&apos;s.
             </span>
@@ -220,7 +220,7 @@ export function ProfileForm({ profile, email }: { profile: Profile; email: strin
         <div className="space-y-3">
           <EmailChoice label="Training reminders in the app" checked={inAppReminders} onChange={setInAppReminders} />
           <div className="border-t border-white/[0.07] pt-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Email</div>
-          <EmailChoice label="Daily check-in reminder" checked={emailCheckins} onChange={setEmailCheckins} />
+          <EmailChoice label="Daily log reminder" checked={emailCheckins} onChange={setEmailCheckins} />
           <EmailChoice label="Workout logging reminder" checked={emailWorkouts} onChange={setEmailWorkouts} />
           <EmailChoice label="Weekly training summary" checked={emailWeekly} onChange={setEmailWeekly} />
           <EmailChoice label="Streaks and goal milestones" checked={emailMilestones} onChange={setEmailMilestones} />

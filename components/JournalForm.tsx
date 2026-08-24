@@ -129,7 +129,7 @@ export function JournalForm({ initial, initialTraining, sport, distanceUnit = "k
    * wanting to record a match day, once, silently converted their daily
    * ten-second habit into the dozen-interaction form quick mode exists to
    * replace. Nothing told them it had happened and the only way back was
-   * spotting a small "Use the quick check-in" link.
+   * spotting a small "Use the quick version" link.
    *
    * A per-day action is not a preference. "I need the match-day fields today"
    * says nothing about tomorrow, and the cost of guessing wrong is the thing
@@ -558,7 +558,7 @@ export function JournalForm({ initial, initialTraining, sport, distanceUnit = "k
         <ReadinessGauge score={result.score} status={result.status} />
         {queued && (
           <p className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-left text-xs text-slate-400">
-            📡 You&apos;re offline — this check-in is saved on your phone and will upload
+            📡 You&apos;re offline — today&apos;s log is saved on your phone and will upload
             automatically when you&apos;re back on signal. Your streak is safe.
           </p>
         )}
@@ -840,7 +840,7 @@ export function JournalForm({ initial, initialTraining, sport, distanceUnit = "k
             onClick={() => chooseMode(false)}
             className="tap-target shrink-0 text-xs font-semibold text-slate-400 hover:text-pitch-400"
           >
-            Use the quick check-in
+            Use the quick version
           </button>
         </div>
         <BodyMap value={painMap} onChange={setPainMap} />
@@ -897,7 +897,7 @@ export function JournalForm({ initial, initialTraining, sport, distanceUnit = "k
       {error && <p className="text-sm text-readiness-red">{error}</p>}
 
       <button type="submit" disabled={saving} className="btn-primary">
-        {saving ? "Saving…" : "Submit check-in"}
+        {saving ? "Saving…" : "Save today's log"}
       </button>
 
       {/* SAY THAT IT IS BEING KEPT.

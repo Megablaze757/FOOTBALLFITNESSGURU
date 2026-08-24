@@ -44,7 +44,7 @@ const FEATURES = [
 const STEPS = [
   { n: "01", title: "Get your plan", body: "A four-week block around your sport, your position and the days you can actually train — Base, Build, Peak, Deload." },
   { n: "02", title: "Train it", body: "Every session laid out with sets, reps, rest and how to do each movement. Tick them off as you go." },
-  { n: "03", title: "Check in when you can", body: "Three taps — how you slept, how the body feels, whether anything hurts. It retunes today's session. Skip it and everything still works." },
+  { n: "03", title: "Log the day when you can", body: "Three taps — how you slept, how the body feels, whether anything hurts. It retunes today's session. Skip it and everything still works." },
   { n: "04", title: "See what's actually working", body: "Benchmarks, training load and per-lift progress in one place, so you can tell real progress from just being busy." },
 ];
 
@@ -122,11 +122,11 @@ const FAQ = [
   },
   {
     q: "I've abandoned three fitness apps already.",
-    a: "Fair. The daily check-in is three taps and the app says outright that skipping it costs you nothing — the plan, the library and the analysis all work without it. There are no streaks to break and nothing nags you.",
+    a: "Fair. The daily log is three taps and the app says outright that skipping it costs you nothing — the plan, the library and the analysis all work without it. There are no streaks to break and nothing nags you.",
   },
   {
     q: "What do I get without paying?",
-    a: "The check-in and readiness score, the full exercise library with how-to for every movement, every skill drill, the position guides and the leaderboards. Free forever, no card.",
+    a: "The daily log and readiness score, the full exercise library with how-to for every movement, every skill drill, the position guides and the leaderboards. Free forever, no card.",
   },
   {
     q: "Do my videos get uploaded somewhere?",

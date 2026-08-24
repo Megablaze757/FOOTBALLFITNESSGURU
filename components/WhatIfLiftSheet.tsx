@@ -137,7 +137,7 @@ export function WhatIfLiftSheet({ initialExercise = "", onClose }: {
                     {rank.nextTier && rank.toNextKg != null ? ` · about ${rank.toNextKg}kg to ${rank.nextTier.name}` : " · top tier"}
                   </p>
                 ) : resolved ? (
-                  <p className="mt-1 text-xs text-slate-400">Add a bodyweight in Check in or Body to see the bodyweight-relative strength rating.</p>
+                  <p className="mt-1 text-xs text-slate-400">Add a bodyweight in today&apos;s log or Body to see the bodyweight-relative strength rating.</p>
                 ) : (
                   <p className="mt-1 text-xs text-slate-400">This movement has no published strength standard, so the honest result is the estimated 1RM only.</p>
                 )}

@@ -30,7 +30,7 @@ const FAQ = [
   },
   {
     q: "What do I get without paying?",
-    a: "The daily check-in and readiness score, the full exercise library, every skill drill, the position guides and the leaderboards. Free covers tracking and looking things up; paid is the training plan built around you.",
+    a: "The daily log and readiness score, the full exercise library, every skill drill, the position guides and the leaderboards. Free covers tracking and looking things up; paid is the training plan built around you.",
   },
   {
     q: "Is there a higher tier?",

@@ -130,7 +130,7 @@ test("all six email types the spec asks for have a category", () => {
 test("every category can be switched off, and the switch is honoured", () => {
   const form = readFileSync(new URL("../components/ProfileForm.tsx", import.meta.url), "utf8");
   for (const [column, label] of [
-    ["email_checkin_reminders", "Daily check-in reminder"],
+    ["email_checkin_reminders", "Daily log reminder"],
     ["email_workout_reminders", "Workout logging reminder"],
     ["email_weekly_summary", "Weekly training summary"],
     ["email_milestones", "Streaks and goal milestones"],

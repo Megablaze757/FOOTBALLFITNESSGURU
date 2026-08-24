@@ -179,7 +179,7 @@ export function CoachChat({ context, briefing, suggestions, storageKey, userId, 
         {messages.length === 0 && (
           <Bubble role="coach">
             Ask me anything about your training, your recovery or your food — I have already read
-            your block, today&apos;s check-in and every lift you have ranked.
+            your block, today&apos;s log and every lift you have ranked.
           </Bubble>
         )}
 

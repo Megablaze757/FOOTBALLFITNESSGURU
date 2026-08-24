@@ -135,7 +135,7 @@ export default function OnboardingPage() {
             </p>
             <div className="mt-8 space-y-3">
               <button onClick={() => finish("/coach")} disabled={saving} className="btn-primary">🏋️ Build my first program</button>
-              <button onClick={() => finish("/journal")} disabled={saving} className="btn-ghost">📝 Start with a check-in</button>
+              <button onClick={() => finish("/journal")} disabled={saving} className="btn-ghost">📝 Start with today&apos;s log</button>
             </div>
           </div>
         )}

@@ -181,7 +181,7 @@ export default function CoachPage() {
         <FeatureLock
           capability="program"
           title="Training programs are part of Pro"
-          blurb="Four-week blocks built around your sport, your position and how recovered you are — progressing Base, Build, Peak, Deload. Your check-ins, readiness and the full drill library stay free."
+          blurb="Four-week blocks built around your sport, your position and how recovered you are — progressing Base, Build, Peak, Deload. Your daily logs, readiness and the full drill library stay free."
         />
       </div>
     );

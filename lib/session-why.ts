@@ -135,8 +135,8 @@ export function sessionWhy(input: SessionWhyInput): SessionWhy {
     lines.push({
       icon: "note",
       text: input.readiness === "Red"
-        ? "Today's check-in said recover, so this is not the session the block prescribed."
-        : "Today's check-in said ease off, so this is a set lighter than prescribed.",
+        ? "Today's log said recover, so this is not the session the block prescribed."
+        : "Today's log said ease off, so this is a set lighter than prescribed.",
     });
   }
   if (input.isInSeason) {

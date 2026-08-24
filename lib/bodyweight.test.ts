@@ -109,9 +109,12 @@ test("age is measured in whole days and never negative", () => {
 test("provenance says where the number came from and how old it is", () => {
   const on = (date: string | null, source: "check-in" | "weigh-in" | "profile" = "check-in") =>
     weightProvenance({ kg: 80, date, source }, "2026-08-15");
-  assert.equal(on("2026-08-15"), "from today's check-in");
-  assert.equal(on("2026-08-14"), "from yesterday's check-in");
-  assert.equal(on("2026-08-10"), "from your check-in 5 days ago");
+  // "daily log", not "check-in": the source union still says check-in because
+  // it is a stored discriminator, but what the athlete reads is the page they
+  // actually typed the number on.
+  assert.equal(on("2026-08-15"), "from today's daily log");
+  assert.equal(on("2026-08-14"), "from yesterday's daily log");
+  assert.equal(on("2026-08-10"), "from your daily log 5 days ago");
   assert.equal(on("2026-08-10", "weigh-in"), "from your weigh-in 5 days ago");
   assert.match(on("2026-07-15") ?? "", /weeks ago/);
   assert.match(on("2026-05-15") ?? "", /months ago/);

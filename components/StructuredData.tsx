@@ -57,7 +57,7 @@ export function StructuredData() {
             acceptedAnswer: {
               "@type": "Answer",
               text:
-                "You check in each morning with your sleep, soreness and fatigue. It scores your " +
+                "You log each morning: sleep, soreness and fatigue. It scores your " +
                 "readiness, adjusts that day's session, and builds four-week training blocks around " +
                 "your sport, your position and the equipment you have.",
             },

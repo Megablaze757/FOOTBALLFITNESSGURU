@@ -99,7 +99,7 @@ export default function AskCoachPage() {
           What can it see?
         </summary>
         <p className="mt-1.5">
-          Your current block and next session, today&apos;s readiness and check-in, anything
+          Your current block and next session, today&apos;s readiness and log, anything
           you have marked as sore along with the rehab protocol for it, your calorie and protein
           targets against what you have logged, and every lift it has ranked. It cannot see anything
           you have not recorded — if it says a number is missing, that is why.
