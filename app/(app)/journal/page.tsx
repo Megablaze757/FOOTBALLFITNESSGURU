@@ -7,6 +7,7 @@ import { useAsync } from "@/lib/use-async";
 import { JournalForm } from "@/components/JournalForm";
 import { CheckInDone } from "@/components/CheckInDone";
 import { checkInStreak, computeACWR } from "@/lib/load";
+import { latestBodyweight } from "@/lib/bodyweight";
 import { readinessFor } from "@/lib/readiness";
 import { adjustForReadiness, type ReadinessStatus } from "@/lib/engine";
 import { applySwaps, type SwapMap } from "@/lib/exercise-match";
@@ -41,7 +42,16 @@ export default function JournalPage() {
       supabase.from("biometrics").select("*").eq("user_id", user.id).eq("metric_date", today).maybeSingle(),
       supabase.from("profiles").select("sport, distance_unit").eq("id", user.id).maybeSingle(),
       supabase.from("programs").select("plan, completed_sessions, swaps").eq("user_id", user.id).eq("status", "active").maybeSingle(),
-      supabase.from("daily_check_ins").select("check_in_date").eq("user_id", user.id).gte("check_in_date", since60),
+      /**
+       * The dates for the streak AND the weights for the burn estimate.
+       *
+       * One query rather than two: every estimate in lib/energy.ts scales with
+       * bodyweight, and on a day somebody did not type one there has to be a
+       * recent figure to fall back on or the number is decorative. `profiles`
+       * has no weight column — it lives here and in body_logs, which is what
+       * lib/bodyweight.ts exists to reconcile.
+       */
+      supabase.from("daily_check_ins").select("check_in_date, weight_kg").eq("user_id", user.id).gte("check_in_date", since60),
       /**
        * The SAME query Home runs for ACWR, on purpose.
        *
@@ -112,6 +122,13 @@ export default function JournalPage() {
     return {
       existing,
       streak: checkInStreak(((recent ?? []) as { check_in_date: string }[]).map((r) => r.check_in_date)),
+      // The most recent weight anybody recorded, for the burn estimate on days
+      // they did not type one. See lib/bodyweight.ts for why this is resolved
+      // rather than read from a column.
+      weightKg: latestBodyweight({
+        checkIns: ((recent ?? []) as { check_in_date: string; weight_kg: number | null }[])
+          .map((r) => ({ date: r.check_in_date, kg: r.weight_kg })),
+      })?.kg ?? null,
       acwr: computeACWR((recentTraining ?? []) as unknown as TrainingLog[]).ratio,
       // The same 28 days the ACWR is built from, handed on so the form can
       // pre-fill a drill with what it actually was last time. No extra query —
@@ -192,6 +209,7 @@ export default function JournalPage() {
           training={data?.training ?? null}
           streak={data?.streak ?? 0}
           acwr={data?.acwr ?? null}
+          weightKg={data?.weightKg ?? null}
           editing={editing}
           onEdit={() => setEditing((v) => !v)}
           onAddTraining={() => {

@@ -6,6 +6,7 @@ import type { CheckInInput, TrainingLog, ReadinessStatus } from "@/lib/types";
 import { assessReadiness } from "@/lib/readiness";
 import { hasTrainingContent } from "@/lib/load";
 import { describeSets, warmupSetsOf } from "@/lib/training-sets";
+import { dayBurn, burnRangeLabel, burnBasisNote } from "@/lib/energy";
 
 const STATUS_COLOR: Record<ReadinessStatus, string> = {
   Green: "#34d399",
@@ -36,10 +37,13 @@ export function CheckInDone({
   editing,
   onEdit,
   onAddTraining,
+  weightKg,
 }: {
   checkIn: Partial<CheckInInput>;
   training: TrainingLog | null;
   streak: number;
+  /** Profile bodyweight, for the days they did not type one into the log. */
+  weightKg?: number | null;
   /** Acute:chronic load ratio — must be the same value Home scores with. */
   acwr: number | null;
   editing: boolean;
@@ -60,6 +64,29 @@ export function CheckInDone({
    * is the thing the load numbers are actually reacting to.
    */
   const sessions = (training?.drills ?? []).filter(isActivityDrill).length;
+
+  /**
+   * WHAT THE DAY COST, estimated per session rather than for the day as a lump.
+   *
+   * Weight comes from today's entry when they gave one and from the profile
+   * otherwise; with neither there is no estimate, which is the honest outcome —
+   * every method here scales with bodyweight and guessing it would make the
+   * number decorative.
+   */
+  const burn = dayBurn(
+    (training?.drills ?? []).filter(isActivityDrill).map((d) => ({
+      activityId: matchActivity(d.name)?.id ?? null,
+      minutes: activityMinutes(d),
+      intensity: d.effort ?? training?.intensity ?? null,
+    })),
+    {
+      weightKg: checkIn.weight_kg ?? weightKg ?? null,
+      minutes: training?.total_minutes ?? null,
+      intensity: training?.intensity ?? null,
+      distanceKm: training?.distance_km ?? null,
+      strength: (training?.drills ?? []).some((d) => !isActivityDrill(d)),
+    },
+  );
 
   const sleep = checkIn.sleep_quality ?? null;
   const fatigue = checkIn.fatigue_score ?? null;
@@ -126,6 +153,17 @@ export function CheckInDone({
                   : training?.distance_km ? `, ${training.distance_km} km` : ""}
               </span>
             </div>
+            {/* WHAT IT PROBABLY COST, as a range.
+                A single figure would be a precision nobody has: without a
+                heart-rate trace the honest spread is a fifth either way, and on
+                lifting it is nearer a half. See lib/energy.ts — which is also
+                why this is shown and never added to the calorie target. */}
+            {burn && (
+              <p className="pl-5 text-xs text-slate-500">
+                <span className="font-semibold text-slate-400">~{burnRangeLabel(burn)}</span>
+                {" burned · "}{burnBasisNote(burn)}
+              </p>
+            )}
             {training?.notes && <p className="pl-5 text-xs text-slate-500">{training.notes}</p>}
             {(training?.drills ?? []).length > 0 && (
               <ul className="space-y-1 pl-5 text-xs text-slate-400">
