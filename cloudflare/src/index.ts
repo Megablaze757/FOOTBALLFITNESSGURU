@@ -138,6 +138,7 @@ export default {
       if (pathname.endsWith("/estimate-food")) return await estimateFood(req, env);
       if (pathname.endsWith("/generate-challenges")) return await generateChallenges(req, env);
       if (pathname.endsWith("/generate-content")) return await generateContent(req, env);
+      if (pathname.endsWith("/draft-exercise")) return await draftExercise(req, env);
       if (pathname.endsWith("/injury-plan")) return await injuryPlan(req, env);
       if (pathname.endsWith("/create-checkout")) return await createCheckout(req, env);
       if (pathname.endsWith("/billing-portal")) return await billingPortal(req, env);
@@ -509,7 +510,7 @@ function overBudget(state: BudgetState): Response {
 // nobody is watching a spinner and the budget can be what the work actually
 // needs. Callers pass their own client-side timeout to match.
 // Bump on every paste into the Cloudflare dashboard. GET /health reports it.
-const WORKER_VERSION = "2026-08-24.2";
+const WORKER_VERSION = "2026-08-24.3";
 
 const CHAIN_BUDGET_MS = 55_000;
 /**
@@ -2040,6 +2041,105 @@ async function generateContent(req: Request, env: Env): Promise<Response> {
     // proof, whoever is posting should know that's what it does.
     rejected: flagged.length,
   });
+}
+
+/**
+ * Fill in an exercise somebody added, so an admin can decide whether to publish it.
+ *
+ * WHAT ARRIVES IS A NAME AND NOT MUCH ELSE. The library's "add your own" form
+ * asks for a name, a category and a movement pattern, because asking an athlete
+ * mid-session for three coaching cues and a how-to is how you get zero
+ * exercises added. So the gap between what somebody typed and what belongs in
+ * front of four hundred people is exactly the detail this writes.
+ *
+ * IT DOES NOT PICK THE VIDEO, and that is deliberate rather than an omission.
+ * An eleven-character YouTube id is the perfect shape for a model to invent: it
+ * is trivial to imitate and impossible to guess, so a hallucinated one looks
+ * completely real until it 404s in front of an athlete. It returns a SEARCH
+ * instead; a human runs it, watches the clip, and pastes the link. See
+ * parseYouTubeId in lib/exercise-review.ts, which is the only way an id gets in.
+ *
+ * A DRAFT IS NOT A PUBLICATION. Nothing here writes to the database — it
+ * answers with fields the admin edits and then chooses to save. The model is
+ * doing the typing, not the reviewing.
+ */
+async function draftExercise(req: Request, env: Env): Promise<Response> {
+  const u = await authUser(req, env);
+  if (!u) return json({ error: "unauthorized" }, 401);
+  if (!(await isAdmin(env, u.id))) return json({ error: "admins only" }, 403);
+  const budget = await checkBudget(env, u.id);
+  if (!budget.allowed) return overBudget(budget);
+
+  const { name, category, sport, equipment, note } = (await req.json()) as {
+    name?: string; category?: string; sport?: string; equipment?: string; note?: string;
+  };
+  if (!name || !name.trim()) return json({ error: "name required" }, 400);
+
+  const sys =
+    "You are a strength and conditioning coach writing one entry for an exercise library used by " +
+    "serious amateur athletes. Output ONLY valid minified JSON with these keys: " +
+    "{category:string,demo:string,difficulty:string,equipment:string,muscles:string[]," +
+    "cues:string[],tempo:string,why:string,description:string,videoSearch:string}. " +
+    // The enums are checked again on the client (normaliseDraft), because an
+    // out-of-range category does not fail loudly — it makes the exercise
+    // invisible to every filter on the library page.
+    "category MUST be one of: Speed, Agility, Power, Strength, Mobility, Rehab, Recovery, Endurance, Skill. " +
+    "demo MUST be one of: squat, hinge, lunge, jump, press, pull, plank, run, lateral, ball, bike. " +
+    "difficulty MUST be one of: easy, medium, advanced. " +
+    "muscles: 2-4 muscles worked, most-loaded first, plain names like 'Glutes', 'Adductors', 'Lats'. " +
+    "cues: 3 coaching cues, each under 12 words, each an INSTRUCTION you could shout across a gym " +
+    "('Knees track over the middle toe'), never a description of the exercise. " +
+    "tempo: a short prescription like '3s down · explode up' or 'Hold 20-30s'. " +
+    "why: ONE sentence, under 25 words, on what it gives the athlete on the pitch or under the bar. " +
+    "description: 80-150 words teaching the movement — set-up, the rep itself, what the common error " +
+    "is and how it feels when it is right. Plain paragraphs, no markdown, no numbered list. " +
+    "videoSearch: a YouTube search that would find a good form guide, e.g. 'copenhagen plank technique'. " +
+    // The rules that stop this producing something that reads well and is wrong.
+    "RULES: British English. Speak to the athlete as 'you'. " +
+    "NEVER invent a video URL, video id, link, study, statistic or source — you are not asked for one. " +
+    "NEVER make a medical claim: this does not diagnose, treat, cure or prevent injury, and a rehab " +
+    "movement is described as what it loads, not what it heals. " +
+    "NEVER promise a specific result or timescale. " +
+    "If the name is ambiguous, write the most standard interpretation and say which one in the first " +
+    "line of description. If the name is not an exercise at all, return " +
+    '{"error":"not an exercise"} and nothing else. ' +
+    "No prose outside the JSON.";
+
+  const user =
+    `Exercise name: ${String(name).slice(0, 120)}\n` +
+    `Category the author chose: ${String(category || "unspecified").slice(0, 40)}\n` +
+    `Sport: ${String(sport || "any").slice(0, 40)}\n` +
+    `Equipment the author named: ${String(equipment || "unspecified").slice(0, 60)}\n` +
+    `Author's own note: ${String(note || "(none)").slice(0, 400)}`;
+
+  const { text, model } = await meteredComplete(env, u.id, {
+    system: sys, user, maxTokens: 900, json: true,
+    validate: (t) => {
+      try {
+        const p = JSON.parse(t) as { cues?: unknown; description?: unknown; error?: unknown };
+        if (typeof p.error === "string") return true;   // a refusal is a valid answer
+        return Array.isArray(p.cues) && typeof p.description === "string" && p.description.length > 40;
+      } catch { return false; }
+    },
+  });
+
+  let draft: Record<string, unknown>;
+  try {
+    draft = JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    return json({ error: "the model returned something unusable — try again" }, 502);
+  }
+  // "Bulgarian split squat" is an exercise; "asdf" is not, and drafting cues
+  // for it would produce three plausible sentences about nothing.
+  if (typeof draft.error === "string") return json({ error: "that does not read as an exercise" }, 422);
+
+  // Same filter generateContent uses. A prompt is a request; this is a rule.
+  const prose = [draft.why, draft.description].filter((v) => typeof v === "string").join(" ");
+  if (BANNED_CLAIM.test(prose)) {
+    return json({ error: "the draft made a claim it cannot support — try again" }, 502);
+  }
+
+  return json({ draft, model });
 }
 
 async function generateChallenges(req: Request, env: Env): Promise<Response> {

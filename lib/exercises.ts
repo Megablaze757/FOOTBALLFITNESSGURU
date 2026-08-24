@@ -66,6 +66,15 @@ export interface Exercise {
   imported?: boolean;   // true for the bulk gym-database entries
   difficulty?: Difficulty;
   video_url?: string;   // optional real demo clip (falls back to the animation)
+  /**
+   * A chosen YouTube guide, for an entry the curated list does not cover.
+   *
+   * form-guide.ts maps a NAME to a clip, which works for the compiled
+   * catalogue and cannot work for an exercise somebody added last week — there
+   * is nothing to have curated. A published custom entry carries its own id,
+   * picked and watched by whoever reviewed it. See lib/exercise-review.ts.
+   */
+  youtubeId?: string;
 }
 
 export const EXERCISES: Exercise[] = [
@@ -1082,7 +1091,19 @@ export function rowToExercise(r: {
   id: string; name: string; category?: string; sport?: string | null; demo?: string;
   equipment?: string | null; muscles?: string[] | null; cues?: string[] | null;
   why?: string | null; description?: string | null;
+  /** Set by migration 0099. Absent on a database that has not run it. */
+  published?: boolean | null; youtube_id?: string | null;
+  difficulty?: string | null; tempo?: string | null;
 }): Exercise {
+  /**
+   * A PUBLISHED ROW IS NOT A CUSTOM EXERCISE ANY MORE, and the difference is
+   * the whole point of publishing it. `custom: true` is what renders the
+   * "yours" tag and what makes an entry read as somebody's private note; an
+   * exercise an admin reviewed, filled in and put in front of everybody is a
+   * library card like any other, and labelling it as one person's would be
+   * both wrong and a small privacy leak about who added it.
+   */
+  const published = r.published === true;
   return {
     id: `custom_${r.id}`,
     name: r.name,
@@ -1090,11 +1111,16 @@ export function rowToExercise(r: {
     demo: (r.demo as DemoPattern) ?? "squat",
     equipment: r.equipment || "—",
     muscles: r.muscles ?? [],
-    tempo: "Coach-set",
+    tempo: r.tempo || (published ? "Controlled" : "Coach-set"),
     cues: r.cues ?? [],
-    why: r.why || "Added by your coach.",
+    why: r.why || (published ? "" : "Added by your coach."),
     description: r.description || undefined,
+    // A how-to only counts as one when it teaches the movement. Review will not
+    // publish a row without a real description, so a published row has one.
+    hasHowTo: published && !!r.description,
     sports: r.sport ? [r.sport as SportId] : undefined,
-    custom: true,
+    difficulty: (r.difficulty as Difficulty) ?? undefined,
+    youtubeId: r.youtube_id || undefined,
+    custom: published ? undefined : true,
   };
 }

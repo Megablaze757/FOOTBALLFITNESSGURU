@@ -114,6 +114,11 @@ const WORKER_ONLY = new Set([
   "generate-content",
   // Admin-only, and gated behind a role the athlete app never has.
   "admin-create-user",
+  // Drafting a library entry. Admin-only, and there is nothing to fall back to:
+  // the whole value is the model writing the cues and the how-to, so an
+  // on-device version would be an empty form with extra steps. The review panel
+  // still works without it — somebody types the fields themselves.
+  "draft-exercise",
 ]);
 
 test("every backend call the app makes is served by some backend", () => {

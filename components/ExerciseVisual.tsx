@@ -15,10 +15,11 @@ import { ExerciseMuscleMap } from "@/components/ExerciseMuscleMap";
  * They stay adjacent choices rather than two layers of one image, because they
  * are answers to different questions and nobody wants both at once.
  */
-export function ExerciseVisual({ muscles, name, videoUrl }: {
+export function ExerciseVisual({ muscles, name, videoUrl, youtubeId }: {
   muscles: readonly string[];
   name: string;
   videoUrl?: string | null;
+  youtubeId?: string | null;
 }) {
   const [view, setView] = useState<"movement" | "muscles">("movement");
   const hasMap = muscles.length > 0;
@@ -51,7 +52,7 @@ export function ExerciseVisual({ muscles, name, videoUrl }: {
         /* The player sets its own 16:9 — a video letterboxed inside a 4:3 board
            to match a drawing that is no longer there would be a frame around
            nothing. */
-        <ExerciseWatch name={name} videoUrl={videoUrl} />
+        <ExerciseWatch name={name} videoUrl={videoUrl} youtubeId={youtubeId} />
       )}
     </div>
   );

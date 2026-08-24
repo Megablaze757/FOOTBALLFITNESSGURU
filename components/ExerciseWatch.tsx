@@ -28,9 +28,18 @@ import { FormGuideEmbed } from "@/components/FormGuideEmbed";
  * `videoUrl` is the exercise's OWN clip when the catalogue carries one. That
  * beats anything curated: it is the movement as this app prescribes it.
  */
-export function ExerciseWatch({ name, videoUrl, className = "" }: {
+export function ExerciseWatch({ name, videoUrl, youtubeId, className = "" }: {
   name: string;
   videoUrl?: string | null;
+  /**
+   * A guide chosen for THIS entry, which beats looking one up by name.
+   *
+   * formGuide() maps a name to a curated clip, and that can only ever cover
+   * the compiled catalogue — an exercise somebody added last week has no
+   * curated entry and never will. Publishing one attaches its own id, watched
+   * by whoever reviewed it. See lib/exercise-review.ts.
+   */
+  youtubeId?: string | null;
   className?: string;
 }) {
   if (videoUrl) {
@@ -40,6 +49,8 @@ export function ExerciseWatch({ name, videoUrl, className = "" }: {
       </div>
     );
   }
+
+  if (youtubeId) return <FormGuideEmbed videoId={youtubeId} title={name} />;
 
   const guide = formGuide(name);
 

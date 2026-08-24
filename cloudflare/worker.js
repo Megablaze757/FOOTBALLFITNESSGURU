@@ -641,6 +641,8 @@ var src_default = {
         return await generateChallenges(req, env);
       if (pathname.endsWith("/generate-content"))
         return await generateContent(req, env);
+      if (pathname.endsWith("/draft-exercise"))
+        return await draftExercise(req, env);
       if (pathname.endsWith("/injury-plan"))
         return await injuryPlan(req, env);
       if (pathname.endsWith("/create-checkout"))
@@ -923,7 +925,7 @@ function overBudget(state) {
   return json({ error: `${reason} The on-device coach still works, and your allowance resets \u2014 upgrade for more.` }, 429);
 }
 __name(overBudget, "overBudget");
-var WORKER_VERSION = "2026-08-24.2";
+var WORKER_VERSION = "2026-08-24.3";
 var ATTEMPT_TIMEOUT_MS = {
   groq: 1e4,
   openrouter: 2e4,
@@ -1800,6 +1802,55 @@ ${allowed.map((f) => `- ${f}`).join("\n") || "- (none supplied)"}`;
   });
 }
 __name(generateContent, "generateContent");
+async function draftExercise(req, env) {
+  const u = await authUser(req, env);
+  if (!u)
+    return json({ error: "unauthorized" }, 401);
+  if (!await isAdmin(env, u.id))
+    return json({ error: "admins only" }, 403);
+  const budget = await checkBudget(env, u.id);
+  if (!budget.allowed)
+    return overBudget(budget);
+  const { name, category, sport, equipment, note } = await req.json();
+  if (!name || !name.trim())
+    return json({ error: "name required" }, 400);
+  const sys = `You are a strength and conditioning coach writing one entry for an exercise library used by serious amateur athletes. Output ONLY valid minified JSON with these keys: {category:string,demo:string,difficulty:string,equipment:string,muscles:string[],cues:string[],tempo:string,why:string,description:string,videoSearch:string}. category MUST be one of: Speed, Agility, Power, Strength, Mobility, Rehab, Recovery, Endurance, Skill. demo MUST be one of: squat, hinge, lunge, jump, press, pull, plank, run, lateral, ball, bike. difficulty MUST be one of: easy, medium, advanced. muscles: 2-4 muscles worked, most-loaded first, plain names like 'Glutes', 'Adductors', 'Lats'. cues: 3 coaching cues, each under 12 words, each an INSTRUCTION you could shout across a gym ('Knees track over the middle toe'), never a description of the exercise. tempo: a short prescription like '3s down \xB7 explode up' or 'Hold 20-30s'. why: ONE sentence, under 25 words, on what it gives the athlete on the pitch or under the bar. description: 80-150 words teaching the movement \u2014 set-up, the rep itself, what the common error is and how it feels when it is right. Plain paragraphs, no markdown, no numbered list. videoSearch: a YouTube search that would find a good form guide, e.g. 'copenhagen plank technique'. RULES: British English. Speak to the athlete as 'you'. NEVER invent a video URL, video id, link, study, statistic or source \u2014 you are not asked for one. NEVER make a medical claim: this does not diagnose, treat, cure or prevent injury, and a rehab movement is described as what it loads, not what it heals. NEVER promise a specific result or timescale. If the name is ambiguous, write the most standard interpretation and say which one in the first line of description. If the name is not an exercise at all, return {"error":"not an exercise"} and nothing else. No prose outside the JSON.`;
+  const user = `Exercise name: ${String(name).slice(0, 120)}
+Category the author chose: ${String(category || "unspecified").slice(0, 40)}
+Sport: ${String(sport || "any").slice(0, 40)}
+Equipment the author named: ${String(equipment || "unspecified").slice(0, 60)}
+Author's own note: ${String(note || "(none)").slice(0, 400)}`;
+  const { text, model } = await meteredComplete(env, u.id, {
+    system: sys,
+    user,
+    maxTokens: 900,
+    json: true,
+    validate: (t) => {
+      try {
+        const p = JSON.parse(t);
+        if (typeof p.error === "string")
+          return true;
+        return Array.isArray(p.cues) && typeof p.description === "string" && p.description.length > 40;
+      } catch {
+        return false;
+      }
+    }
+  });
+  let draft;
+  try {
+    draft = JSON.parse(text);
+  } catch {
+    return json({ error: "the model returned something unusable \u2014 try again" }, 502);
+  }
+  if (typeof draft.error === "string")
+    return json({ error: "that does not read as an exercise" }, 422);
+  const prose = [draft.why, draft.description].filter((v) => typeof v === "string").join(" ");
+  if (BANNED_CLAIM.test(prose)) {
+    return json({ error: "the draft made a claim it cannot support \u2014 try again" }, 502);
+  }
+  return json({ draft, model });
+}
+__name(draftExercise, "draftExercise");
 async function generateChallenges(req, env) {
   const u = await authUser(req, env);
   if (!u)

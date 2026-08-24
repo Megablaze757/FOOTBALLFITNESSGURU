@@ -63,7 +63,7 @@ export function ExerciseDetailCard({ ex, sets, reps }: { ex: Exercise; sets?: nu
 
   return (
     <div className="space-y-4">
-      <ExerciseVisual muscles={activatedMuscles} name={ex.name} videoUrl={ex.video_url} />
+      <ExerciseVisual muscles={activatedMuscles} name={ex.name} videoUrl={ex.video_url} youtubeId={ex.youtubeId} />
 
       <div className="flex min-w-0 items-start justify-between gap-3">
         <div className="min-w-0 flex-1">

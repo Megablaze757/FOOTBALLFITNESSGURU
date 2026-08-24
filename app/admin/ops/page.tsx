@@ -6,6 +6,7 @@ import { LaunchToggle } from "@/components/admin/LaunchToggle";
 import { WaitlistAnnounce } from "@/components/admin/WaitlistAnnounce";
 import { EmailOps } from "@/components/admin/EmailOps";
 import { CustomExerciseLog } from "@/components/admin/DataLogs";
+import { ExerciseReview } from "@/components/admin/ExerciseReview";
 import { AdminShell, AdminArea, Drawer } from "@/components/admin/AdminShell";
 import type { Video } from "@/lib/types";
 
@@ -48,8 +49,19 @@ export default function AdminOps() {
           look at. Support can ask the athlete. See migration 0096: the read
           policy behind this table is dropped too, because a removed component
           and a live grant is a privacy fix in appearance only. */}
+      {/* THE LIBRARY GREW FROM THE PEOPLE USING IT, and until now it could not.
+          Athletes have been adding their own movements for months; every one of
+          them stayed visible to one squad because promoting it meant editing a
+          TypeScript array, building and deploying. It is a decision, not a code
+          change, so it belongs on a screen. */}
+      <AdminArea title="Library" note="What athletes added, and what is worth keeping">
+        <Drawer summary="Review and publish exercises">
+          <ExerciseReview />
+        </Drawer>
+      </AdminArea>
+
       <AdminArea title="Data" note="Read-only, for answering 'my number is wrong'">
-        <Drawer summary="Exercises athletes added themselves">
+        <Drawer summary="What athletes have added, by demand">
           <CustomExerciseLog />
         </Drawer>
       </AdminArea>
