@@ -425,7 +425,7 @@ export function InjuryPlanner({ sport, hurt, onHurtChange, description, onDescri
                         )}
                         {stage === i + 1 && (
                           <span className="text-[11px] text-slate-600">
-                            These exercises are in today's log, and the coach knows you are here.
+                            These exercises are in today&apos;s log, and the coach knows you are here.
                           </span>
                         )}
                       </div>
