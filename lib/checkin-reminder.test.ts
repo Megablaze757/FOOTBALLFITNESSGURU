@@ -98,3 +98,30 @@ test("there is exactly one sender, and it is the Worker", () => {
     assert.ok(!cron.includes(`invoke_edge('${job}')`), `${job} is still scheduled from pg_cron`);
   }
 });
+
+test("unscheduling the old cron jobs survives a database that never had pg_cron", () => {
+  /**
+   * THIS FAILED IN PRODUCTION, which is why it is a test.
+   *
+   * The first version of migration 0097 went straight to `select 1 from
+   * cron.job`, and the project it was written for had never enabled pg_cron —
+   * so the whole script died on `42P01: relation "cron.job" does not exist`
+   * before reaching anything else in the file it is bundled with.
+   *
+   * The guard must come BEFORE any reference to cron.job and must return, not
+   * wrap: PL/pgSQL parses a SQL statement when it first executes, so the only
+   * reliable way to never look for a missing table is to never reach the line.
+   */
+  // Comments stripped first: the header explains the fix and quotes the very
+  // query it is describing, and a test that trips on its own explanation is a
+  // test nobody keeps.
+  const sql = readFileSync(
+    new URL("../supabase/migrations/0097_reminders_move_to_the_worker.sql", import.meta.url), "utf8")
+    .replace(/^\s*--.*$/gm, "");
+  const guard = sql.indexOf("pg_namespace");
+  const use = sql.indexOf("from cron.job");
+  assert.ok(guard > -1, "nothing checks whether pg_cron is installed");
+  assert.ok(use > -1, "the migration no longer unschedules anything");
+  assert.ok(guard < use, "the guard comes after the query it is supposed to protect");
+  assert.match(sql.slice(guard, use), /\breturn;/, "the guard does not return before reaching cron.job");
+});
