@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/client";
 import { useAsync } from "@/lib/use-async";
 import { useState } from "react";
+import { todayLocal } from "@/lib/day";
 
 interface AdminUser {
   user_id: string;
@@ -18,6 +19,33 @@ interface AdminUser {
   suspended_at: string | null;
   comped: boolean;
   last_sign_in_at: string | null;
+  /**
+   * The last day they actually put something in — see migration 0098.
+   *
+   * Optional because the column does not exist until that migration is applied,
+   * and `undefined` has to stay distinguishable from `null`: one means we
+   * cannot tell, the other means they have logged nothing.
+   */
+  last_logged_on?: string | null;
+}
+
+/**
+ * "3d ago", or "never".
+ *
+ * A bare date makes an admin do arithmetic on every row to answer the only
+ * question the column is there for, which is how long it has been.
+ */
+function ago(day: string | null, today: string): string {
+  if (!day) return "never";
+  const days = Math.round(
+    (Date.parse(`${today}T00:00:00Z`) - Date.parse(`${day}T00:00:00Z`)) / 86_400_000,
+  );
+  if (!Number.isFinite(days) || days < 0) return day;
+  if (days === 0) return "today";
+  if (days === 1) return "yesterday";
+  if (days < 31) return `${days}d ago`;
+  if (days < 365) return `${Math.round(days / 30)}mo ago`;
+  return `${Math.round(days / 365)}y ago`;
 }
 
 const TIER_STYLE: Record<string, string> = {
@@ -29,6 +57,7 @@ const TIER_STYLE: Record<string, string> = {
 /** Everyone on the app: plan, beta status, and who referred them. */
 
 export function Users() {
+  const today = todayLocal();
   const [filter, setFilter] = useState<"all" | "beta" | "paid" | "free">("all");
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
@@ -114,7 +143,13 @@ export function Users() {
                 <th className="px-4 pt-3 pb-2">Plan</th>
                 <th className="px-4 pt-3 pb-2">Referred by</th>
                 <th className="px-4 pt-3 pb-2">Joined</th>
-                <th className="px-4 pt-3 pb-2">Last seen</th>
+                {/* NOT "last seen", which was the last sign-in and counted a
+                    session refresh. Somebody who has recorded nothing for six
+                    weeks but whose phone keeps the session alive read as
+                    active — the column an admin scans for "is this person
+                    using it" was answering a different question convincingly.
+                    This is the last day they put something in. */}
+                <th className="px-4 pt-3 pb-2">Last logged</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
@@ -145,7 +180,29 @@ export function Users() {
                         : <span className="text-slate-600">—</span>}
                   </td>
                   <td className="px-4 py-2 text-slate-400">{u.created_at.slice(0, 10)}</td>
-                  <td className="px-4 py-2 text-slate-400">{u.last_sign_in_at?.slice(0, 10) ?? "never"}</td>
+                  <td className="px-4 py-2 text-slate-400">
+                    {/* UNDEFINED IS NOT NULL. Before migration 0098 the RPC has
+                        no such column, and rendering that as "never" would tell
+                        an admin their whole user base had stopped using the app.
+                        Absent means fall back and say so; null means they really
+                        have logged nothing. */}
+                    {u.last_logged_on === undefined ? (
+                      <span title="Run migration 0098 to see when they last logged something">
+                        {u.last_sign_in_at?.slice(0, 10) ?? "never"}
+                        <span className="block text-xs text-slate-600">sign-in · needs 0098</span>
+                      </span>
+                    ) : (
+                    <>
+                    <span className={u.last_logged_on ? "" : "text-slate-600"}>{ago(u.last_logged_on, today)}</span>
+                    {/* Signing in and never recording anything is its own
+                        story, and the one the old column could not tell apart
+                        from using the app. Worth a second line, not a column. */}
+                    {!u.last_logged_on && u.last_sign_in_at && (
+                      <span className="block text-xs text-slate-600">signed in {ago(u.last_sign_in_at.slice(0, 10), today)}</span>
+                    )}
+                    </>
+                    )}
+                  </td>
                   <td className="px-4 py-2">
                     <div className="flex gap-1">
                       {/* Only offered for COMPED access. A real Stripe
