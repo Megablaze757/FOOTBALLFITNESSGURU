@@ -161,7 +161,9 @@ Pro-grade depth across the app (all pure + unit-tested engines):
   1.85 → 1.70s*); a real progress **ring** tracks your latest logged test toward the goal,
   honouring lower-is-better metrics (`benchmarkProgress`, migration `0010`).
 - **Deadline reminders** — an in-app banner when the target is ≤7 days out, plus a daily
-  `deadline-reminders` Edge Function (Resend email + cron) nudging athletes near their date.
+  email nudging athletes near their date. Sent by the Cloudflare Worker's own cron
+  (`sendDeadlineReminders`), not an Edge Function: every scheduled reminder moved there so
+  there is one sender, one deploy and one copy of the email shell — see migration `0097`.
 - **Coach chat** — ask *"why is this drill in my plan?"*, about pain, readiness or nutrition.
   Answered by the `coach-chat` Claude Edge Function when deployed, with a **local fallback**
   (`lib/coach-chat.ts`) that handles the headline cases offline / on GitHub Pages.
