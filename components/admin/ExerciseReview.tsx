@@ -14,6 +14,7 @@ import {
   parseYouTubeId, videoSearchUrl, normaliseDraft, publishBlockers, publishRow,
   EMPTY_DRAFT, type ExerciseDraft,
 } from "@/lib/exercise-review";
+import { screen, blockReasons } from "@/lib/exercise-moderation";
 
 /**
  * The queue that turns what somebody typed into a library entry.
@@ -206,6 +207,15 @@ export function ExerciseReview() {
                       {count > 1 && <> · <span className="text-pitch-400">{count} people added this</span></>}
                       {" · "}{readiness(row)}
                     </span>
+                    {/* TRIAGE, WHICH IS THE POINT OF THE FILTER HERE.
+                        An admin reading three hundred submissions should have
+                        the four worth looking at hard marked for them, rather
+                        than finding them by reading everything. */}
+                    {flagsFor(row).length > 0 && (
+                      <span className="mt-1 block text-[11px] text-amber-300">
+                        ⚠ {flagsFor(row).join(" · ")}
+                      </span>
+                    )}
                   </button>
                   <span className="shrink-0 text-slate-600">{openId === row.id ? "▾" : "▸"}</span>
                 </div>
@@ -253,6 +263,15 @@ export function ExerciseReview() {
   );
 }
 
+/** Anything the screening filter wants a human to look at. */
+function flagsFor(row: Row): string[] {
+  const { findings } = screen({
+    name: row.name, equipment: row.equipment, muscles: row.muscles,
+    cues: row.cues, why: row.why, description: row.description,
+  });
+  return [...new Set(findings.map((f) => f.message))];
+}
+
 /** What the row still needs, in three words, so the queue is scannable. */
 function readiness(row: Row): string {
   if (!row.cues?.length || !row.description) return "needs detail";
@@ -297,10 +316,27 @@ function Editor({ row, liveNames, onDone }: { row: Row; liveNames: string[]; onD
 
   const key = (v: string) => v.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
   const alreadyLive = liveNames.some((n) => key(n) === key(name)) ;
+  /**
+   * Screened on what is about to be SAVED, not on what arrived.
+   *
+   * The admin has been editing these fields — that is the whole job — so
+   * screening the original row would either block a submission they have
+   * already cleaned up or pass one they have just broken. Only the draft in
+   * front of them is the thing being published.
+   */
+  const screened = screen({
+    name, equipment: draft.equipment, muscles: draft.muscles,
+    cues: draft.cues, why: draft.why, description: draft.description,
+  });
   const blockers = [
     ...publishBlockers(draft, name),
+    ...blockReasons({
+      name, equipment: draft.equipment, muscles: draft.muscles,
+      cues: draft.cues, why: draft.why, description: draft.description,
+    }),
     ...(alreadyLive ? ["Another published entry already uses this name."] : []),
   ];
+  const warnings = screened.findings.filter((f) => f.severity === "flag");
 
   /** A curated clip for this exact name, if the app already has one. */
   const curated = formGuide(name)?.videoId ?? null;
@@ -464,6 +500,13 @@ function Editor({ row, liveNames, onDone }: { row: Row; liveNames: string[]; onD
           </div>
         )}
       </div>
+
+      {warnings.length > 0 && (
+        <ul className="space-y-0.5 rounded-xl border border-amber-400/25 bg-amber-500/[0.06] px-3 py-2 text-[11px] text-amber-100/90">
+          <li className="font-semibold text-amber-200">Worth a read before publishing:</li>
+          {[...new Set(warnings.map((w) => `${w.field}: ${w.message}`))].map((w) => <li key={w}>· {w}</li>)}
+        </ul>
+      )}
 
       {blockers.length > 0 && (
         <ul className="space-y-0.5 rounded-xl bg-white/[0.03] px-3 py-2 text-[11px] text-slate-400">

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { EXERCISE_CATEGORIES, DEMO_PATTERNS, SPORTS } from "@/lib/exercises";
+import { blockReasons, NAME_MAX, DESCRIPTION_MAX } from "@/lib/exercise-moderation";
 
 /**
  * Author your own exercise.
@@ -46,6 +47,33 @@ export function CustomExerciseForm({ coachId, onAdded, scope = "team" }: {
 
   async function save() {
     if (!name.trim()) return;
+
+    /**
+     * SCREENED BEFORE IT IS SAVED, and the refusal says why.
+     *
+     * This is not a security boundary and must not be read as one: the
+     * publishable key is public by design, so anybody who wants to can post
+     * straight to PostgREST and skip this entirely. The checks that actually
+     * hold are in the database — migration 0100 caps the lengths, rate-limits
+     * the inserts and insists a name is a name — and the review queue is what
+     * stands between anything and the whole app.
+     *
+     * What this buys is the ordinary case: somebody typing something they
+     * shouldn't is told immediately instead of having it quietly land in front
+     * of their squad. Mild language is deliberately NOT blocked — a coach
+     * writing "this one is brutal" is a coach — it is flagged for the reviewer
+     * and saves normally.
+     */
+    const refusals = blockReasons({
+      name,
+      equipment,
+      muscles: muscles.split(",").map((m) => m.trim()).filter(Boolean),
+      cues: cues.split("\n").map((c) => c.trim()).filter(Boolean),
+      why,
+      description,
+    });
+    if (refusals.length) { setError(refusals.join(" ")); return; }
+
     setSaving(true);
     setError(null);
     const { error } = await createClient().from("custom_exercises").insert({
@@ -61,7 +89,17 @@ export function CustomExerciseForm({ coachId, onAdded, scope = "team" }: {
       description: description || null,
     });
     setSaving(false);
-    if (error) { setError(error.message); return; }
+    if (error) {
+      /* The guard in migration 0100 raises plain English; everything else from
+         PostgREST does not. Passing a constraint name to somebody who typed an
+         exercise name is how a working rule reads as a broken app. */
+      setError(
+        /rate limit|too many|name|length|character/i.test(error.message)
+          ? error.message.replace(/^.*?:\s*/, "")
+          : "That could not be saved. Check the fields and try again.",
+      );
+      return;
+    }
     setName(""); setEquipment(""); setMuscles(""); setCues(""); setWhy(""); setDescription("");
     setOpen(false);
     onAdded();
@@ -80,7 +118,13 @@ export function CustomExerciseForm({ coachId, onAdded, scope = "team" }: {
 
       <label className="block">
         <span className="field-label">Name</span>
-        <input className="field" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Trap-bar jump" />
+        <input
+          className="field"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          maxLength={NAME_MAX}
+          placeholder="e.g. Trap-bar jump"
+        />
       </label>
 
       <div className="grid grid-cols-2 gap-2">
@@ -129,7 +173,13 @@ export function CustomExerciseForm({ coachId, onAdded, scope = "team" }: {
 
       <label className="block">
         <span className="field-label">Full description (optional)</span>
-        <textarea className="field resize-none" rows={3} value={description} onChange={(e) => setDescription(e.target.value)} />
+        <textarea
+          className="field resize-none"
+          rows={3}
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          maxLength={DESCRIPTION_MAX}
+        />
       </label>
 
       {error && <p className="text-sm text-readiness-red">{error}</p>}

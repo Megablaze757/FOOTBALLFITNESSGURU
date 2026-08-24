@@ -30,9 +30,10 @@ const PARTS = [
   "0097_reminders_move_to_the_worker",
   "0098_admin_last_logged",
   "0099_publish_custom_exercises",
+  "0100_custom_exercise_limits",
 ];
 
-const combined = read("../supabase/apply-0088-0099.sql");
+const combined = read("../supabase/apply-0088-0100.sql");
 
 /**
  * Split SQL into statements, without cutting a function body in half.
@@ -174,7 +175,31 @@ test("running it twice is safe", () => {
     /^update [\w.]+ set .* where /is,
   ];
 
+  /**
+   * `create trigger` has no `or replace` and no `if not exists`, so unlike a
+   * policy it is checked rather than assumed: the matching `drop trigger if
+   * exists` has to actually appear earlier in the file. Getting that pairing
+   * wrong is invisible on a fresh database and fails only on the second run,
+   * which is precisely the case this test exists for.
+   */
+  const droppedTriggers = new Set(
+    statements
+      .map((st) => /^drop trigger if exists (\w+) on ([\w.]+)/i.exec(st))
+      .filter(Boolean)
+      .map((m) => `${m![1].toLowerCase()} on ${m![2].toLowerCase()}`),
+  );
+
   for (const statement of statements) {
+    const trigger = /^create trigger (\w+)\s+before|^create trigger (\w+)\s+after|^create trigger (\w+)\s+instead/i.exec(statement);
+    if (trigger) {
+      const name = (trigger[1] ?? trigger[2] ?? trigger[3]).toLowerCase();
+      const on = /\son ([\w.]+)/i.exec(statement)?.[1].toLowerCase();
+      assert.ok(
+        droppedTriggers.has(`${name} on ${on}`),
+        `create trigger ${name} is not preceded by "drop trigger if exists ${name} on ${on}"`,
+      );
+      continue;
+    }
     assert.ok(REPEATABLE.some((rule) => rule.test(statement)),
       `this cannot be run twice:\n  ${statement.slice(0, 140)}`);
   }
