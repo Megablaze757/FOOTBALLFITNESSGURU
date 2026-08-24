@@ -39,6 +39,7 @@ import { splitCommission, estimateStripeFee } from "../../lib/affiliate";
 // tests cover rather than a second copy that drifts.
 import { parseOuraSleep, parseIngestPayload } from "../../lib/biometrics";
 import { checkinReminderDue, checkinReminderSince } from "../../lib/checkin-reminder";
+import { currentStreak, isStreakMilestone, goalAchieved, metricLabel } from "../../lib/milestones";
 
 export interface Env {
   // AI
@@ -263,6 +264,7 @@ export default {
       () => approveDueCommissions(env),
       () => sendDailyReminders(env),
       () => sendDeadlineReminders(env),
+      () => sendMilestoneNotifications(env),
       () => createTrialEndingReminders(env),
       ...(isMonday ? [() => sendWeeklySummaries(env)] : []),
       () => purgeExpiredVideos(env),
@@ -3188,6 +3190,95 @@ function money(amount: number | null | undefined, currency: string | null | unde
   } catch {
     return `${(amount / 100).toFixed(2)} ${currency.toUpperCase()}`;
   }
+}
+
+/**
+ * Streak milestones, and "you hit the number you were training for".
+ *
+ * PORTED OUT OF A SUPABASE EDGE FUNCTION, which is the last of five that were
+ * doing work this Worker already does on the same schedule. Keeping it there
+ * meant a second deploy target, a second copy of the email shell, a second set
+ * of secrets, and — for the four that overlapped — the same message sent twice.
+ *
+ * IDEMPOTENT THROUGH THE NOTIFICATIONS TABLE rather than by reading back the
+ * email log. `dedupe_key` is unique per user, so "streak:30" can only ever be
+ * inserted once however many times this runs; the old version scanned
+ * email_delivery_logs for a matching type, which is the same idea done at
+ * greater length and with a race in it.
+ */
+async function sendMilestoneNotifications(env: Env): Promise<void> {
+  const today = new Date().toISOString().slice(0, 10);
+  // A year and a bit, because the longest milestone is 365 days.
+  const since = new Date(Date.now() - 370 * 86_400_000).toISOString().slice(0, 10);
+  const [checkResponse, programResponse, benchResponse, profiles] = await Promise.all([
+    supa(env, `daily_check_ins?check_in_date=gte.${since}&select=user_id,check_in_date`),
+    supa(env, "programs?status=eq.active&target_metric=not.is.null&target_value=not.is.null" +
+      "&select=id,user_id,target_metric,target_value"),
+    supa(env, "strength_benchmarks?select=user_id,metrics,test_date&order=test_date.desc"),
+    reminderProfiles(env),
+  ]);
+  if (!checkResponse.ok || !programResponse.ok || !benchResponse.ok) {
+    throw new Error("milestone inputs unavailable");
+  }
+
+  const checks = (await checkResponse.json()) as { user_id: string; check_in_date: string }[];
+  const byUser = new Map<string, Set<string>>();
+  for (const row of checks ?? []) {
+    const held = byUser.get(row.user_id) ?? new Set<string>();
+    held.add(row.check_in_date);
+    byUser.set(row.user_id, held);
+  }
+
+  // Ordered newest first, so the first value seen for a metric is the current one.
+  const latest = new Map<string, Record<string, number>>();
+  for (const row of (await benchResponse.json()) as { user_id: string; metrics: Record<string, unknown> | null }[]) {
+    const held = latest.get(row.user_id) ?? {};
+    for (const [metric, raw] of Object.entries(row.metrics ?? {})) {
+      const value = Number(raw);
+      if (!(metric in held) && Number.isFinite(value)) held[metric] = value;
+    }
+    latest.set(row.user_id, held);
+  }
+
+  const rows: NotificationInput[] = [];
+  for (const profile of profiles.values()) {
+    if (!wants(profile, "milestone")) continue;
+    const streak = currentStreak(byUser.get(profile.id) ?? new Set<string>(), today);
+    if (!isStreakMilestone(streak)) continue;
+    rows.push({
+      user_id: profile.id,
+      kind: "streak_milestone",
+      title: `${streak} days in a row`,
+      body: `You have checked in ${streak} days running. That consistency is what makes the trends worth reading.`,
+      href: "/progress",
+      dedupe_key: `streak:${streak}`,
+      show_in_app: profile.in_app_training_reminders !== false,
+      email_category: "milestone",
+    });
+  }
+
+  const programs = (await programResponse.json()) as {
+    id: string; user_id: string; target_metric: string | null; target_value: number | null;
+  }[];
+  for (const program of programs ?? []) {
+    const profile = profiles.get(program.user_id);
+    if (!program.target_metric || program.target_value == null || !wants(profile, "milestone")) continue;
+    const current = latest.get(program.user_id)?.[program.target_metric];
+    if (current == null || !goalAchieved(program.target_metric, current, Number(program.target_value))) continue;
+    const label = metricLabel(program.target_metric);
+    rows.push({
+      user_id: program.user_id,
+      kind: "goal_reached",
+      title: `You hit your ${label} goal`,
+      body: `Your latest ${label} is ${current}, past the ${program.target_value} you were training for.`,
+      href: "/coach",
+      dedupe_key: `goal:${program.id}:${program.target_metric}`,
+      show_in_app: profile.in_app_training_reminders !== false,
+      email_category: "milestone",
+    });
+  }
+
+  await queueNotifications(env, rows);
 }
 
 async function createTrialEndingReminders(env: Env): Promise<void> {

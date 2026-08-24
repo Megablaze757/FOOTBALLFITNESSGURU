@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import {
   checkinReminderDue, checkinReminderSince, daysBetween,
   CHECKIN_REMINDER_GAP_DAYS, CHECKIN_REMINDER_STOP_DAYS,
@@ -64,21 +64,37 @@ test("the window fetched is wide enough to answer the question", () => {
   assert.equal(daysBetween(checkinReminderSince("2026-03-31"), "2026-03-31"), CHECKIN_REMINDER_STOP_DAYS);
 });
 
-test("both senders apply the same rule, and neither mails daily any more", () => {
+test("there is exactly one sender, and it is the Worker", () => {
   /**
-   * There are TWO of these — the Cloudflare Worker queues a notification, and a
-   * Supabase Edge Function sends mail directly on a cron. Deno cannot import
-   * from lib/, so the Edge Function carries its own copy of the arithmetic and
-   * this is what stops the two drifting into disagreeing about who gets mail.
+   * THERE USED TO BE TWO. The Cloudflare Worker queued a check-in notification
+   * and drained it to email on its 08:00 cron; a Supabase Edge Function on a
+   * pg_cron job sent the same reminder directly. Both were correct on their own
+   * and neither knew the other existed, so the athlete got it twice — and
+   * nothing inside the app could show that.
+   *
+   * The Edge Function is gone (migration 0097 unschedules its cron). This fails
+   * if a second sender comes back, because the failure mode is invisible from
+   * every screen in the product.
    */
   const worker = readFileSync(new URL("../cloudflare/src/index.ts", import.meta.url), "utf8");
-  assert.match(worker, /checkinReminderDue/, "the Worker no longer uses the shared rule");
+  assert.match(worker, /checkinReminderDue\(last, profile\.created_at/, "the Worker no longer applies the rule");
   assert.ok(!/daily_check_ins\?check_in_date=eq\.\$\{today\}&select=user_id`\),\s*\n\s*reminderProfiles/.test(worker),
-    "the Worker still decides from today's check-ins alone");
+    "the Worker is back to deciding from today's check-ins alone");
 
-  const deno = readFileSync(new URL("../supabase/functions/send-daily-reminders/index.ts", import.meta.url), "utf8");
-  assert.match(deno, new RegExp(`GAP_DAYS = ${CHECKIN_REMINDER_GAP_DAYS}\\b`), "the Edge Function's gap drifted from lib");
-  assert.match(deno, new RegExp(`STOP_DAYS = ${CHECKIN_REMINDER_STOP_DAYS}\\b`), "the Edge Function's cutoff drifted from lib");
-  assert.match(deno, /gap % GAP_DAYS === 0/, "the Edge Function went back to mailing every day");
-  assert.ok(!/\.eq\("check_in_date", today\)/.test(deno), "the Edge Function still looks only at today");
+  for (const gone of [
+    "supabase/functions/send-daily-reminders",
+    "supabase/functions/send-workout-reminders",
+    "supabase/functions/weekly-summary",
+    "supabase/functions/deadline-reminders",
+    "supabase/functions/milestone-notifications",
+  ]) {
+    assert.ok(!existsSync(new URL(`../${gone}`, import.meta.url)), `${gone} is back — that is a second sender`);
+  }
+
+  // And the schedule that invoked them is not quietly still in the repo.
+  const cron = readFileSync(new URL("../supabase/cron/schedule.sql", import.meta.url), "utf8");
+  for (const job of ["send-daily-reminders", "weekly-summary", "deadline-reminders",
+                     "milestone-notifications", "send-workout-reminders"]) {
+    assert.ok(!cron.includes(`invoke_edge('${job}')`), `${job} is still scheduled from pg_cron`);
+  }
 });

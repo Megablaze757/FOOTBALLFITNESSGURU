@@ -560,6 +560,64 @@ function checkinReminderSince(today) {
 }
 __name(checkinReminderSince, "checkinReminderSince");
 
+// ../lib/milestones.ts
+var STREAK_MILESTONES = [7, 14, 21, 30, 60, 100, 180, 365];
+var LOWER_IS_BETTER = /* @__PURE__ */ new Set([
+  "sprint_10m",
+  "sprint_20m",
+  "sprint_40m",
+  "bronco_s",
+  "lane_agility_s",
+  "run_1500m_min",
+  "run_5k_min",
+  "run_10k_min"
+]);
+var METRIC_LABELS = {
+  squat_1rm: "back squat 1RM",
+  bench_1rm: "bench press 1RM",
+  deadlift_1rm: "deadlift 1RM",
+  sprint_10m: "10 m sprint",
+  sprint_20m: "20 m sprint",
+  sprint_40m: "40 m sprint",
+  vertical_jump_cm: "vertical jump",
+  yo_yo_level: "Yo-Yo IR1 level",
+  bronco_s: "Bronco test",
+  lane_agility_s: "lane agility",
+  run_1500m_min: "1500 m time",
+  run_5k_min: "5K time",
+  run_10k_min: "10K time",
+  snatch_1rm: "snatch 1RM",
+  clean_jerk_1rm: "clean & jerk 1RM",
+  front_squat_1rm: "front squat 1RM",
+  ohp_1rm: "overhead press 1RM",
+  pullups_max: "max pull-ups"
+};
+function metricLabel(metric) {
+  return METRIC_LABELS[metric] ?? metric.replaceAll("_", " ");
+}
+__name(metricLabel, "metricLabel");
+function goalAchieved(metric, current, target) {
+  return LOWER_IS_BETTER.has(metric) ? current <= target : current >= target;
+}
+__name(goalAchieved, "goalAchieved");
+function currentStreak(dates, today) {
+  const start = Date.parse(`${today}T00:00:00Z`);
+  if (!Number.isFinite(start))
+    return 0;
+  let cursor = dates.has(today) ? start : start - 864e5;
+  let count = 0;
+  while (dates.has(new Date(cursor).toISOString().slice(0, 10))) {
+    count++;
+    cursor -= 864e5;
+  }
+  return count;
+}
+__name(currentStreak, "currentStreak");
+function isStreakMilestone(streak) {
+  return STREAK_MILESTONES.includes(streak);
+}
+__name(isStreakMilestone, "isStreakMilestone");
+
 // src/index.ts
 var CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -693,6 +751,7 @@ var src_default = {
       () => approveDueCommissions(env),
       () => sendDailyReminders(env),
       () => sendDeadlineReminders(env),
+      () => sendMilestoneNotifications(env),
       () => createTrialEndingReminders(env),
       ...isMonday ? [() => sendWeeklySummaries(env)] : [],
       () => purgeExpiredVideos(env),
@@ -2616,6 +2675,76 @@ function money(amount, currency) {
   }
 }
 __name(money, "money");
+async function sendMilestoneNotifications(env) {
+  const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+  const since = new Date(Date.now() - 370 * 864e5).toISOString().slice(0, 10);
+  const [checkResponse, programResponse, benchResponse, profiles] = await Promise.all([
+    supa(env, `daily_check_ins?check_in_date=gte.${since}&select=user_id,check_in_date`),
+    supa(env, "programs?status=eq.active&target_metric=not.is.null&target_value=not.is.null&select=id,user_id,target_metric,target_value"),
+    supa(env, "strength_benchmarks?select=user_id,metrics,test_date&order=test_date.desc"),
+    reminderProfiles(env)
+  ]);
+  if (!checkResponse.ok || !programResponse.ok || !benchResponse.ok) {
+    throw new Error("milestone inputs unavailable");
+  }
+  const checks = await checkResponse.json();
+  const byUser = /* @__PURE__ */ new Map();
+  for (const row2 of checks ?? []) {
+    const held = byUser.get(row2.user_id) ?? /* @__PURE__ */ new Set();
+    held.add(row2.check_in_date);
+    byUser.set(row2.user_id, held);
+  }
+  const latest = /* @__PURE__ */ new Map();
+  for (const row2 of await benchResponse.json()) {
+    const held = latest.get(row2.user_id) ?? {};
+    for (const [metric, raw] of Object.entries(row2.metrics ?? {})) {
+      const value = Number(raw);
+      if (!(metric in held) && Number.isFinite(value))
+        held[metric] = value;
+    }
+    latest.set(row2.user_id, held);
+  }
+  const rows = [];
+  for (const profile of profiles.values()) {
+    if (!wants(profile, "milestone"))
+      continue;
+    const streak = currentStreak(byUser.get(profile.id) ?? /* @__PURE__ */ new Set(), today);
+    if (!isStreakMilestone(streak))
+      continue;
+    rows.push({
+      user_id: profile.id,
+      kind: "streak_milestone",
+      title: `${streak} days in a row`,
+      body: `You have checked in ${streak} days running. That consistency is what makes the trends worth reading.`,
+      href: "/progress",
+      dedupe_key: `streak:${streak}`,
+      show_in_app: profile.in_app_training_reminders !== false,
+      email_category: "milestone"
+    });
+  }
+  const programs = await programResponse.json();
+  for (const program of programs ?? []) {
+    const profile = profiles.get(program.user_id);
+    if (!program.target_metric || program.target_value == null || !wants(profile, "milestone"))
+      continue;
+    const current = latest.get(program.user_id)?.[program.target_metric];
+    if (current == null || !goalAchieved(program.target_metric, current, Number(program.target_value)))
+      continue;
+    const label = metricLabel(program.target_metric);
+    rows.push({
+      user_id: program.user_id,
+      kind: "goal_reached",
+      title: `You hit your ${label} goal`,
+      body: `Your latest ${label} is ${current}, past the ${program.target_value} you were training for.`,
+      href: "/coach",
+      dedupe_key: `goal:${program.id}:${program.target_metric}`,
+      show_in_app: profile.in_app_training_reminders !== false,
+      email_category: "milestone"
+    });
+  }
+  await queueNotifications(env, rows);
+}
+__name(sendMilestoneNotifications, "sendMilestoneNotifications");
 async function createTrialEndingReminders(env) {
   if (!env.STRIPE_SECRET_KEY)
     return;

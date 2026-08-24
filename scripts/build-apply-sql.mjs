@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // =============================================================================
-// Rebuild supabase/apply-0088-0096.sql from the migrations it claims to be.
+// Rebuild supabase/apply-0088-0097.sql from the migrations it claims to be.
 //
 // WHY A SCRIPT AND NOT A HAND-EDITED FILE. A paste-ready copy of four
 // migrations is a second source of truth, and the failure mode is silent: the
@@ -39,9 +39,10 @@ const PARTS = [
   "0094_run_duration",
   "0095_admin_visibility_and_email_audit",
   "0096_drop_admin_bodyweight_read",
+  "0097_reminders_move_to_the_worker",
 ];
 
-const OUT = "supabase/apply-0088-0096.sql";
+const OUT = "supabase/apply-0088-0097.sql";
 const HEADER_END = "-- =============================================================================\n\n\n";
 
 const existing = readFileSync(OUT, "utf8");

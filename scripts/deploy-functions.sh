@@ -49,9 +49,12 @@ supabase secrets set \
 # estimate-food reads meal photos, and is here because the Cloudflare Worker's
 # deployed model chain is text-only — see the header of its index.ts — so this
 # is what the photo path actually runs against until that is fixed.
+# NO REMINDER FUNCTIONS HERE. The daily reminder, weekly summary, deadline
+# reminders, streak milestones and the workout reminder all moved into the
+# Cloudflare Worker's cron — they were being sent twice, once from each side.
+# See supabase/migrations/0097_reminders_move_to_the_worker.sql.
 for fn in assess-readiness process-daily-state process-video create-checkout \
-          send-daily-reminders weekly-summary coach-chat generate-program \
-          estimate-food; do
+          coach-chat generate-program estimate-food; do
   echo "Deploying $fn…"
   supabase functions deploy "$fn"
 done
@@ -60,4 +63,5 @@ done
 echo "Deploying stripe-webhook (no JWT verification)…"
 supabase functions deploy stripe-webhook --no-verify-jwt
 
-echo "Done. Next: run supabase/webhooks.sql and supabase/cron/schedule.sql in the SQL Editor."
+echo "Done. Next: run supabase/webhooks.sql in the SQL Editor."
+echo "Reminders are sent by the Cloudflare Worker, not from here — see cloudflare/src/index.ts."
