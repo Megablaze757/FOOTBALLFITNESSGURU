@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { invokeAI } from "@/lib/api";
 import { useAsync } from "@/lib/use-async";
 import { syncHealth, daysSinceSync } from "@/lib/biometrics";
-import { appleShortcutUrl } from "@/lib/apple-shortcut";
+import { useAppleShortcut } from "@/lib/apple-shortcut";
 
 /**
  * Connect a wearable so it uploads on its own.
@@ -40,6 +40,8 @@ import { appleShortcutUrl } from "@/lib/apple-shortcut";
  */
 export function WearableConnect({ userId }: { userId: string }) {
   const [open, setOpen] = useState<"oura" | "apple" | null>(null);
+  // Published by an admin (migration 0103), or the build-time fallback.
+  const shortcut = useAppleShortcut();
 
   const { data, loading, reload } = useAsync(async () => {
     const supabase = createClient();
@@ -108,14 +110,14 @@ export function WearableConnect({ userId }: { userId: string }) {
             detail={
               data?.ingestToken
                 ? "Set up. Your Shortcut sends to the app whenever you like."
-                : appleShortcutUrl()
+                : shortcut
                   ? "Add our ready-made Shortcut, paste one link, and your sleep is there every morning."
                   : "Optional. You can type your sleep in below — this is for never typing it again."
             }
             onClick={() => setOpen(open === "apple" ? null : "apple")}
             action={data?.ingestToken ? "Show setup" : "Set up"}
           />
-          {open === "apple" && <AppleSetup token={data?.ingestToken ?? null} onDone={reload} />}
+          {open === "apple" && <AppleSetup token={data?.ingestToken ?? null} shortcut={shortcut} onDone={reload} />}
 
           {/* EVERYTHING ELSE IS A CSV, and that's all this needs to say.
               Whoop and Garmin used to sit here as their own rows, greyed out,
@@ -214,7 +216,7 @@ function OuraForm({ onDone }: { onDone: () => void }) {
   );
 }
 
-function AppleSetup({ token, onDone }: { token: string | null; onDone: () => void }) {
+function AppleSetup({ token, shortcut, onDone }: { token: string | null; shortcut: string | null; onDone: () => void }) {
   const [busy, setBusy] = useState(false);
   const [minted, setMinted] = useState<{ token: string; url: string } | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -403,8 +405,6 @@ function AppleSetup({ token, onDone }: { token: string | null; onDone: () => voi
    * a broken state — it is the hand-built guide, which is what everybody has
    * been using. Nothing here is removed, only demoted.
    */
-  const shortcut = appleShortcutUrl();
-
   /**
    * The link, its share fallback and its copy-failed note, as one thing.
    *

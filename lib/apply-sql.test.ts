@@ -33,9 +33,10 @@ const PARTS = [
   "0100_custom_exercise_limits",
   "0101_program_edits",
   "0102_seen_tips",
+  "0103_apple_shortcut_link",
 ];
 
-const combined = read("../supabase/apply-0088-0102.sql");
+const combined = read("../supabase/apply-0088-0103.sql");
 
 /**
  * Split SQL into statements, without cutting a function body in half.

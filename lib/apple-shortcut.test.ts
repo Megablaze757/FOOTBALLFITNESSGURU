@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { isShortcutUrl, appleShortcutUrl } from "./apple-shortcut";
+import { isShortcutUrl, appleShortcutFallback, resolveShortcutUrl } from "./apple-shortcut";
 
 const REAL = "https://www.icloud.com/shortcuts/0123456789abcdef0123456789abcdef";
 
@@ -36,9 +36,31 @@ test("anything that would not install a shortcut is refused", () => {
   assert.equal(isShortcutUrl(undefined), false);
 });
 
-test("appleShortcutUrl returns null rather than a broken value", () => {
-  const url = appleShortcutUrl();
+test("the fallback returns null rather than a broken value", () => {
+  const url = appleShortcutFallback();
   assert.ok(url === null || isShortcutUrl(url));
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * A STORED VALUE THAT IS NOT A REAL LINK IS ABSENT, NOT AN OVERRIDE.
+ *
+ * The database constraint (0103) should refuse junk, but a column can be
+ * written by other means, and "somebody put nonsense here" must not silently
+ * disable a fallback that was working. The same reasoning as every other
+ * absent-is-not-zero decision in this codebase.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("resolving prefers what an admin published and falls back otherwise", () => {
+  assert.equal(resolveShortcutUrl(REAL), REAL);
+  assert.equal(resolveShortcutUrl(`  ${REAL}  `), REAL, "pasted links carry whitespace");
+
+  for (const junk of [null, undefined, "", "   ", "not a link", "https://example.com/x"]) {
+    assert.equal(
+      resolveShortcutUrl(junk), appleShortcutFallback(),
+      `${String(junk)} should fall back rather than turn the feature off`,
+    );
+  }
 });
 
 /**

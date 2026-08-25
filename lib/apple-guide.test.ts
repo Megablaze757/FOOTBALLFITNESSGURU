@@ -86,3 +86,23 @@ test("the panel still leads with the escape hatch", () => {
   assert.match(intro, /You don&apos;t need this|You don't need this/, "the opt-out line is gone");
   assert.match(intro, /one number/i, "no longer says how small the manual alternative is");
 });
+
+
+/**
+ * PUBLISHING THE LINK MUST NOT NEED A DEVELOPER.
+ *
+ * It used to be a constant in a source file, so switching the one-tap Apple
+ * setup on meant an edit, a commit, a build and a deploy — for a value that can
+ * only be produced by hand on an iPhone. That is why it stayed unpublished.
+ */
+test("an admin can publish the shortcut link without a deploy", () => {
+  const admin = readFileSync(new URL("../components/admin/AppleShortcutLink.tsx", import.meta.url), "utf8");
+  assert.match(admin, /apple_shortcut_url/, "the admin screen does not write the setting");
+  assert.match(admin, /isShortcutUrl/, "the admin screen does not validate what is pasted");
+
+  const ops = readFileSync(new URL("../app/admin/ops/page.tsx", import.meta.url), "utf8");
+  assert.match(ops, /<AppleShortcutLink\s*\/>/, "the admin screen is not rendered anywhere");
+
+  // And the panel has to read what was published, not a compile-time constant.
+  assert.match(PANEL, /useAppleShortcut\(\)/, "the wearable panel is not reading the published link");
+});

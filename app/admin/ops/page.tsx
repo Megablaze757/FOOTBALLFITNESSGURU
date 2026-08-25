@@ -7,6 +7,7 @@ import { WaitlistAnnounce } from "@/components/admin/WaitlistAnnounce";
 import { EmailOps } from "@/components/admin/EmailOps";
 import { CustomExerciseLog } from "@/components/admin/DataLogs";
 import { ExerciseReview } from "@/components/admin/ExerciseReview";
+import { AppleShortcutLink } from "@/components/admin/AppleShortcutLink";
 import { AdminShell, AdminArea, Drawer } from "@/components/admin/AdminShell";
 import type { Video } from "@/lib/types";
 
@@ -54,6 +55,13 @@ export default function AdminOps() {
           them stayed visible to one squad because promoting it meant editing a
           TypeScript array, building and deploying. It is a decision, not a code
           change, so it belongs on a screen. */}
+      {/* THE ONE-TAP APPLE SETUP IS A PASTE, NOT A DEPLOY. The link can only be
+          made by hand on an iPhone, so the least this screen can do is not also
+          require a code change to publish it. */}
+      <AdminArea title="Integrations" note="Set once, live for everyone">
+        <AppleShortcutLink />
+      </AdminArea>
+
       <AdminArea title="Library" note="What athletes added, and what is worth keeping">
         <Drawer summary="Review and publish exercises">
           <ExerciseReview />
