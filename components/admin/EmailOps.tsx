@@ -4,6 +4,7 @@ import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAsync } from "@/lib/use-async";
 import { RangeToggle } from "@/components/admin/RangeToggle";
+import { countByKind, emailKindOf } from "@/lib/email-kinds";
 
 /**
  * Is email working, and if not, why not?
@@ -91,6 +92,15 @@ async function callWorker(path: string, body?: unknown): Promise<{ ok: boolean; 
 }
 
 export function EmailOps() {
+  /**
+   * WHICH TYPE IS BEING LOOKED AT, or all of them.
+   *
+   * The audit was a hundred rows in date order with the type as a raw key in
+   * the fourth column, which technically shows every type and answers no
+   * question about them. "Are the check-in reminders going out?" needed reading
+   * the lot and tallying in your head.
+   */
+  const [kindFilter, setKindFilter] = useState<string | null>(null);
   const [days, setDays] = useState(7);
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
@@ -329,6 +339,40 @@ export function EmailOps() {
           The notification says why it exists; the delivery log says what happened to it. Addresses are masked
           in the database, not in this table — support needs to recognise an address, not read the list.
         </p>
+
+        {/* ═══════════════════════════════════════════════════════════════
+            WHAT IS THIS APP SENDING PEOPLE? — the question the log could not
+            answer. Every row already carried a type and it rendered as a raw
+            key at eleven pixels in the fourth column, so the only way to know
+            whether the check-in reminders were going out was to read a hundred
+            rows and tally them.
+
+            A kind that is FAILING sorts to the front, because that is what
+            somebody opened this screen to find.
+            ═══════════════════════════════════════════════════════════════ */}
+        {(data?.audit.length ?? 0) > 0 && (
+          <div className="mb-3 flex flex-wrap gap-1.5">
+            <button
+              onClick={() => setKindFilter(null)}
+              aria-pressed={kindFilter === null}
+              className={`chip ${kindFilter === null ? "text-pitch-400" : "text-slate-400"}`}
+            >
+              All {data!.audit.length}
+            </button>
+            {countByKind(data!.audit).map(({ kind, sent, failed, total }) => (
+              <button
+                key={kind.id}
+                onClick={() => setKindFilter(kindFilter === kind.id ? null : kind.id)}
+                aria-pressed={kindFilter === kind.id}
+                title={kind.when}
+                className={`chip ${kindFilter === kind.id ? "text-pitch-400" : failed > 0 ? "text-readiness-yellow" : "text-slate-400"}`}
+              >
+                {kind.label} {failed > 0 ? `${sent}/${total}` : total}
+                {failed > 0 && <span className="ml-1 text-readiness-red">· {failed} failed</span>}
+              </button>
+            ))}
+          </div>
+        )}
         {data?.auditError ? (
           <p className="text-sm text-readiness-yellow">
             {/does not exist|schema cache|PGRST202/i.test(data.auditError)
@@ -350,7 +394,9 @@ export function EmailOps() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/[0.06]">
-                {data!.audit.map((row, i) => (
+                {data!.audit
+                  .filter((row) => !kindFilter || emailKindOf(row).id === kindFilter)
+                  .map((row, i) => (
                   <tr key={`${row.sent_at}-${i}`}>
                     <td className="py-2 pr-3 text-xs tabular-nums text-slate-400">
                       {new Date(row.sent_at).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
@@ -359,7 +405,11 @@ export function EmailOps() {
                     <td className="py-2 pr-3 text-xs text-slate-300">
                       {row.trigger_title ?? <span className="text-slate-600">not from a notification</span>}
                     </td>
-                    <td className="py-2 pr-3 text-xs text-slate-500">{row.email_category ?? row.trigger_kind ?? "—"}</td>
+                    {/* The kind in words, with when it goes out on hover. A
+                        raw key is only readable by whoever wrote the Worker. */}
+                    <td className="py-2 pr-3 text-xs text-slate-400" title={emailKindOf(row).when}>
+                      {emailKindOf(row).label}
+                    </td>
                     <td className={`py-2 text-xs font-semibold ${STATUS_TONE[row.status] ?? "text-slate-400"}`}>
                       {row.status}
                       {row.error_message && (
