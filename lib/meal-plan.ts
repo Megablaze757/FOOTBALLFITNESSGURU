@@ -10,6 +10,7 @@
 import { FOODS, FOOD_BY_ID, packPriceFor, isCorrected, type Aisle, type Food, type FoodTag, type PriceOverrides, type StoreId } from "./food-db";
 import { skipReason, EMPTY_SCHEDULE, type DietSchedule } from "./meal-schedule";
 import { ingredientFatigue, monotonyCost, newServedLog, recordServing } from "./meal-monotony";
+import { planLeftovers } from "./batch-cooking";
 import type { PlanTargets } from "./nutrition"; // used below; also re-exported
 
 // The energy maths moved to ./nutrition so the Coach targets card and the meal
@@ -451,7 +452,15 @@ export function mealMacros(meal: Meal, scale = 1): Macros {
 
 // --- plan --------------------------------------------------------------------
 
-export interface PlannedMeal { meal: Meal; scale: number; macros: Macros }
+export interface PlannedMeal {
+  meal: Meal;
+  scale: number;
+  macros: Macros;
+  /** Set when this plate is the night before's dinner. See applyLeftovers. */
+  leftoverFrom?: string;
+  /** Set on the dinner that has to be cooked double to make that work. */
+  batchFor?: string;
+}
 export interface SkippedMeal { slot: Slot; reason: string }
 export interface PlannedDay {
   day: string;
@@ -2286,6 +2295,120 @@ const BUDGET_PROTEIN_FLOOR = 0.9;
  */
 const BUDGET_PROTEIN_KEEP = 0.95;
 
+/**
+ * Turn one dinner into two meals, wherever the dish will take it.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ * WHY THIS IS ALLOWED WHEN A PLAIN REPEAT IS NOT.
+ *
+ * The planner pays REPEAT_PENALTY — £4, escalating — to keep the same dish off
+ * the week twice, and it is right to. But that penalty treats two different
+ * things as one. Chilli on Monday and again on Thursday, presented as a new
+ * meal, is monotony. Sunday's chilli as Monday's lunch is not: it is how
+ * everybody who cooks actually eats, and nobody experiences it as the same meal
+ * twice.
+ *
+ * The difference is whether it is DECLARED, which is why the leftover is
+ * labelled and the source dinner carries "cook double". An unlabelled repeat
+ * reads as the app running out of ideas; a labelled one reads as the plan
+ * knowing how a kitchen works.
+ *
+ * The saving is real, not notional: the second serving draws on food the basket
+ * has already bought, so it costs marginal ingredients rather than a fresh set.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export function applyLeftovers(days: PlannedDay[], costOf?: (d: PlannedDay[]) => number): PlannedDay[] {
+  const plan = planLeftovers(days);
+  if (plan.length === 0) return days;
+
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * EVERY SWAP HAS TO PROVE IT SAVES MONEY, and the first version did not ask.
+   *
+   * "A leftover is free" is true of the SERVING and false of the WEEK. The swap
+   * replaces a lunch that was chosen partly because it was cheap with a second
+   * portion of a dinner that was chosen for other reasons — so it scales up the
+   * dearer set of ingredients and drops the cheaper one. Measured on the first
+   * version: a 78kg cutting week went from £51.94 to £61.61. It made the budget
+   * feature worse while looking like a saving.
+   *
+   * So each swap is applied, costed, and kept only if the week got cheaper.
+   * Greedy rather than exhaustive: three candidates at most, and the interaction
+   * between them is small next to the cost of searching every combination.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  const out = days.map((d) => ({ ...d, meals: [...d.meals] }));
+  for (const l of plan) {
+    const source = out[l.cookDay].meals.find((m) => m.meal.id === l.mealId);
+    const lunchAt = out[l.eatDay].meals.findIndex((m) => m.meal.slot === "Lunch");
+    if (!source || lunchAt < 0) continue;
+
+    /**
+     * SCALED TO THE LUNCH IT REPLACES, not to the dinner it came from.
+     *
+     * A leftover is the same food, not the same portion — lunch and dinner have
+     * different calorie targets, and serving a dinner-sized plate at midday
+     * would blow the day's numbers to save two pounds. The scale that was
+     * already computed for that slot is the right one.
+     */
+    const replacing = out[l.eatDay].meals[lunchAt];
+    // Same food, NOT the same portion — lunch and dinner have different targets,
+    // and a dinner-sized plate at midday would blow the day's numbers to save
+    // two pounds. The scale already chosen for that slot is the right one.
+    /**
+     * ═══════════════════════════════════════════════════════════════════════
+     * A LEFTOVER MAY NOT COST THEM PROTEIN TO SAVE THEM MONEY.
+     *
+     * The lunch being replaced was chosen for that slot's protein as well as
+     * its price. A chilli scaled down to a lunch's calories can deliver far
+     * less — and when it does, the day fails the protein floor, the whole
+     * budget search rejects every attempt, and the athlete is handed the
+     * unpressured week with "we cannot do it" written under it. Measured on the
+     * version without this check: 78kg cutting went from £51.94 to £83.02,
+     * which is the budget feature turning itself off.
+     *
+     * Ten per cent of slack, because a swap that is fractionally under is a
+     * real saving and the day has other meals in it. Anything more and the
+     * money is coming out of their food.
+     * ═══════════════════════════════════════════════════════════════════════
+     */
+    const leftoverMacros = mealMacros(source.meal, replacing.scale);
+    if (leftoverMacros.protein < replacing.macros.protein * 0.9) continue;
+
+    const before = costOf ? costOf(out) : null;
+    const priorLunch = out[l.eatDay].meals[lunchAt];
+    const priorDinners = out[l.cookDay].meals;
+
+    out[l.eatDay].meals[lunchAt] = {
+      meal: source.meal,
+      scale: replacing.scale,
+      macros: leftoverMacros,
+      leftoverFrom: days[l.cookDay].day,
+    } as PlannedMeal;
+    out[l.cookDay].meals = out[l.cookDay].meals.map((m) =>
+      m.meal.id === l.mealId ? ({ ...m, batchFor: days[l.eatDay].day } as PlannedMeal) : m);
+
+    if (before !== null && costOf!(out) >= before) {
+      // Put it back. A leftover that costs more is just the same dinner twice.
+      out[l.eatDay].meals[lunchAt] = priorLunch;
+      out[l.cookDay].meals = priorDinners;
+    }
+  }
+
+  // The day macros were computed before the swap and are now wrong.
+  // The day totals were computed before the swap and are now wrong.
+  return out.map((d) => ({
+    ...d,
+    macros: d.meals.reduce(
+      (sum, m) => ({
+        kcal: sum.kcal + m.macros.kcal, protein: sum.protein + m.macros.protein,
+        carbs: sum.carbs + m.macros.carbs, fats: sum.fats + m.macros.fats,
+      }),
+      { kcal: 0, protein: 0, carbs: 0, fats: 0 } as Macros,
+    ),
+  }));
+}
+
 export function planWithinBudget(
   targets: PlanTargets,
   seed = 0,
@@ -2295,8 +2418,22 @@ export function planWithinBudget(
   recent: string[] = [],
   pricing: PricingOptions = {},
 ): BudgetedWeek {
+  /**
+   * LEFTOVERS ARE PART OF THE SEARCH, not a garnish applied afterwards.
+   *
+   * Applied before the shopping list is costed, because that is the only place
+   * the saving is visible: the second serving draws on food the basket already
+   * holds. Applied only under a budget or the cheap tick — somebody who never
+   * mentioned money did not ask to eat last night's dinner, and getting it
+   * anyway would be the plan making a decision on their behalf to save them
+   * money they never said they needed.
+   */
+  const wantsBatching = prefs.budget || (Number(prefs.weeklyBudget) > 0);
   const build = (pressure: number) => {
-    const days = buildWeek(targets, seed, prefs, schedule, swaps, recent, pressure);
+    const raw = buildWeek(targets, seed, prefs, schedule, swaps, recent, pressure);
+    const days = wantsBatching
+      ? applyLeftovers(raw, (d) => shoppingList(d, pricing).ongoingTotal)
+      : raw;
     return { days, list: shoppingList(days, pricing) };
   };
 

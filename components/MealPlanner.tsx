@@ -18,6 +18,7 @@ import type { TargetContext } from "@/lib/nutrition";
 import { Recipe } from "@/components/Recipe";
 import { MealSwap, type SwapTarget } from "@/components/MealSwap";
 import { cookRating } from "@/lib/recipe-difficulty";
+import { leftoverLabel, batchTip } from "@/lib/batch-cooking";
 import { FOOD_BY_ID as FOOD_LOOKUP } from "@/lib/food-db";
 import { ShoppingList } from "@/components/ShoppingList";
 import { NumberInput } from "@/components/NumberInput";
@@ -787,6 +788,26 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
                             and "did that save?" is the first thing anyone
                             wonders after changing something. */}
                         {swapped && <span className="rounded bg-pitch-400/15 px-1 text-[10px] font-bold normal-case text-pitch-400">your pick</span>}
+                        {/* ═══════════════════════════════════════════════
+                            A LEFTOVER HAS TO SAY IT IS ONE.
+
+                            The identical plate served without a word reads as
+                            the app running out of ideas — which is exactly the
+                            monotony the repeat penalty spends £4 a time to
+                            prevent. Labelled, it reads as the plan knowing how a
+                            kitchen works, and nobody experiences last night's
+                            chilli as the same meal twice.
+                            ═══════════════════════════════════════════════ */}
+                        {pm.leftoverFrom && (
+                          <span className="rounded bg-emerald-400/15 px-1 text-[10px] font-bold normal-case text-emerald-300">
+                            leftovers
+                          </span>
+                        )}
+                        {pm.batchFor && (
+                          <span className="rounded bg-emerald-400/10 px-1 text-[10px] font-bold normal-case text-emerald-300/80">
+                            cook double
+                          </span>
+                        )}
                         {/* A marker, not a control. The row is already one tap
                             target that opens the recipe, and a second one on it
                             makes a one-handed tap a gamble — the same reason the
@@ -827,7 +848,18 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
                           );
                         })()}
                       </span>
-                      <span className="block text-sm font-bold text-slate-100">{pm.meal.name}</span>
+                      <span className="block text-sm font-bold text-slate-100">
+                        {pm.leftoverFrom ? leftoverLabel(pm.meal.name) : pm.meal.name}
+                      </span>
+                      {/* SAID AT THE POINT OF COOKING, which is the night
+                          before. Finding out at lunchtime that you were meant
+                          to have made double is the plan being wrong about your
+                          day, and worse than not suggesting it. */}
+                      {pm.batchFor && (
+                        <span className="mt-0.5 block text-[11px] leading-snug text-emerald-300/80">
+                          {batchTip(pm.meal.name)}
+                        </span>
+                      )}
                     </span>
                     <span className="shrink-0 text-right">
                       <span className="block text-sm font-bold tabular-nums text-slate-300">{Math.round(pm.macros.kcal)}</span>

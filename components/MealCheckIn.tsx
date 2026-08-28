@@ -168,6 +168,21 @@ export function MealCheckIn({ stats, prefs, dietNotes, seed, swaps, recent, star
   const [photoError, setPhotoError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   /**
+   * A SECOND INPUT, BECAUSE `capture` IS NOT A HINT.
+   *
+   * One input with capture="environment" does not offer the camera FIRST — it
+   * removes the photo library from the sheet entirely. So anybody who had
+   * already photographed their lunch, or who wanted a picture of a menu or a
+   * packet, had no way to use it: the only route the app offered was to
+   * photograph the food again, which by then is eaten.
+   *
+   * Two explicit buttons rather than dropping `capture` and letting the OS ask.
+   * Snapping the plate in front of you is the common case and deserves to stay
+   * one tap; the library is a second, obvious button rather than an extra sheet
+   * in front of the common case every time.
+   */
+  const libraryRef = useRef<HTMLInputElement>(null);
+  /**
    * Whether the backend can actually read a photo.
    *
    * `null` until the probe answers, and the camera stays fully offered in that
@@ -305,7 +320,9 @@ export function MealCheckIn({ stats, prefs, dietNotes, seed, swaps, recent, star
    */
   async function onPhoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (fileRef.current) fileRef.current.value = ""; // so the same file re-triggers
+    // Both, so the same file re-triggers whichever route it came from.
+    if (fileRef.current) fileRef.current.value = "";
+    if (libraryRef.current) libraryRef.current.value = "";
     if (!file) return;
 
     setPhotoError(null);
@@ -593,17 +610,31 @@ export function MealCheckIn({ stats, prefs, dietNotes, seed, swaps, recent, star
           </div>
         ) : (
         <>
-        <span className="mb-2 block text-xs text-slate-500">Snap the plate and I&apos;ll work it out</span>
+        <span className="mb-2 block text-xs text-slate-500">Snap the plate, or pick one you already took</span>
         <div className="flex flex-wrap items-center gap-2">
           <label className="btn-ghost w-auto cursor-pointer px-4 py-2 text-sm">
-            {busy ? "Reading the photo…" : photo ? "Use a different photo" : "📷 Photo of your meal"}
+            {busy ? "Reading the photo…" : "📷 Take a photo"}
             <input
               ref={fileRef}
               type="file"
               accept="image/*"
-              // Opens the camera directly on a phone rather than the photo
-              // library — this is nearly always a meal in front of you.
+              // Straight to the camera. Note this REMOVES the library from the
+              // sheet rather than merely preferring the camera, which is why
+              // there is a second input below rather than only this one.
               capture="environment"
+              onChange={onPhoto}
+              disabled={busy}
+              className="hidden"
+            />
+          </label>
+          <label className="btn-ghost w-auto cursor-pointer px-4 py-2 text-sm">
+            🖼 From your photos
+            <input
+              ref={libraryRef}
+              type="file"
+              accept="image/*"
+              // No `capture`, so this is the camera roll and Files — a lunch
+              // photographed an hour ago, a menu, a packet.
               onChange={onPhoto}
               disabled={busy}
               className="hidden"

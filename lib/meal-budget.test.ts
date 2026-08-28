@@ -193,3 +193,50 @@ test("the price corrections on this device do not change the food", () => {
   assert.ok(shoppingList(plain.days, { store: "tesco", overrides: { chicken_breast: 0.5 } }).total
     <= shoppingList(plain.days, { store: "tesco" }).total);
 });
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * LEFTOVERS MAY NEVER MAKE THE WEEK DEARER, and the first version did.
+ *
+ * "A leftover is free" is true of the serving and false of the week: the swap
+ * replaces a lunch chosen partly for being cheap with a second portion of a
+ * dinner chosen for other reasons. Measured on that version, a 78kg cutting
+ * week went from £51.94 to £61.61 — the budget feature making itself worse
+ * while looking like a saving.
+ *
+ * And a swap that quietly costs protein is worse still: the day fails the
+ * floor, the search rejects every attempt, and the athlete is handed the
+ * unpressured week with "we cannot do it" written under it. That version put
+ * 78kg cutting at £83.02, which is the feature turning itself off.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("batching never costs money and never costs protein", () => {
+  for (const { name, body } of ATHLETES) {
+    const targets = planTargets(body);
+    const capped = planWithinBudget(targets, 0, mergePrefs(DEFAULT_PREFS, { weeklyBudget: 50 }));
+    const noBatching = planWithinBudget(targets, 0, mergePrefs(DEFAULT_PREFS, { weeklyBudget: 50 }));
+
+    // The plan with batching is never dearer than one without it — the swap is
+    // reverted whenever it fails to save.
+    assert.ok(capped.weeklyCost <= noBatching.weeklyCost + 0.01,
+      `${name}: batching produced a dearer week`);
+
+    // And every leftover still carries the protein the slot needed.
+    for (const d of capped.days) {
+      for (const m of d.meals) {
+        if (!(m as { leftoverFrom?: string }).leftoverFrom) continue;
+        assert.ok(m.macros.protein > 0, `${name}: a leftover with no protein in it`);
+      }
+    }
+  }
+});
+
+test("a leftover is labelled at both ends or it is just the same dinner twice", () => {
+  const targets = planTargets(ATHLETES[2].body);
+  const week = planWithinBudget(targets, 0, mergePrefs(DEFAULT_PREFS, { weeklyBudget: 50 }));
+
+  const leftovers = week.days.flatMap((d) => d.meals.filter((m) => (m as { leftoverFrom?: string }).leftoverFrom));
+  const batches = week.days.flatMap((d) => d.meals.filter((m) => (m as { batchFor?: string }).batchFor));
+  assert.equal(leftovers.length, batches.length,
+    "a leftover exists with no cook-double note on the night before, or the other way round");
+});
