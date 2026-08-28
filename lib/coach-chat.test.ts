@@ -59,3 +59,36 @@ test("every chat route receives the briefing and recent conversation", () => {
   assert.match(migration, /user_id = auth\.uid\(\)/, "one athlete could read another athlete's conversation");
   assert.match(migration, /on delete cascade/i, "deleting an account leaves its coaching conversation behind");
 });
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * FROM A REAL CONVERSATION. A good AI answer about a shoulder, then the athlete
+ * says "Im cutting though", and the coach replies with a list of the things it
+ * can do. Nothing in that paragraph was wrong except that it was not an answer.
+ *
+ * Two separate faults, and both are tested here: "cutting" was not recognised
+ * as nutrition, and the catch-all claimed to have understood.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("the words people actually use for eating reach the nutrition answer", () => {
+  const nutri = { ...ctx, calorieTarget: 2400, proteinTarget: 180 };
+  for (const said of [
+    "Im cutting though",
+    "im bulking at the moment",
+    "how big a deficit should I be in",
+    "trying to get lean",
+    "how many calories",
+    "im losing weight too fast",
+    "what should my macros be",
+  ]) {
+    assert.match(localCoachAnswer(said, nutri), /2400 kcal|180g protein/, said);
+  }
+});
+
+test("a question it cannot answer says so instead of listing features", () => {
+  const answer = localCoachAnswer("whats the offside rule", ctx);
+  assert.match(answer, /couldn't reach the full coach|offline/i, "does not admit it fell back");
+  assert.ok(!/^Good question/i.test(answer), "still opens by claiming to have understood");
+  assert.ok(!/connect the AI coach/i.test(answer),
+    "still tells the athlete to connect something that is already connected and had just failed");
+});

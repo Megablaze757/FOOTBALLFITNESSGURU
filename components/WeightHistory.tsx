@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { recordChanged } from "@/lib/data-events";
+import { ensureUser, isAuthFailure, SESSION_LOST_RETRY } from "@/lib/session-guard";
 import type { Bodyweight } from "@/lib/bodyweight";
 import {
   weightTrend, changeLabel, spanLabel, isTowardGoal, type DietGoal,
@@ -152,7 +153,13 @@ function WeightRow({ userId, entry, previousKg, hasOtherBodyData, editing, onEdi
         ? await q.delete().eq("user_id", plan.userId).eq(plan.dateColumn, plan.date)
         : await q.update(plan.patch).eq("user_id", plan.userId).eq(plan.dateColumn, plan.date);
     setBusy(false);
-    if (error) { setErr(error.message); return; }
+    if (error) {
+      // Same failure as the daily log: a token that aged out in a pocket. Say
+      // what happened rather than passing a JWT error to somebody editing a
+      // weight — see lib/session-guard.ts.
+      setErr(isAuthFailure(error) ? SESSION_LOST_RETRY : error.message);
+      return;
+    }
     // Every reader of bodyweight — calorie target, strength ranks, home — is
     // listening for this. Without it they keep showing the old number until a
     // reload.

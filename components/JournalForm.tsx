@@ -58,6 +58,7 @@ interface DraftShape {
 }
 import type { CheckInInput, PainMap, ReadinessResult, TrainingDrill, TrainingLog } from "@/lib/types";
 import { daysAgoLocal, todayLocal } from "@/lib/day";
+import { ensureUser, isAuthFailure, SESSION_LOST_KEPT } from "@/lib/session-guard";
 
 /**
  * Is this failure "no signal" rather than "the server said no"?
@@ -413,9 +414,19 @@ export function JournalForm({ initial, initialTraining, sport, distanceUnit = "k
     setError(null);
 
     const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    /**
+     * ONE REFRESH BEFORE GIVING UP.
+     *
+     * getUser() returning null on a tab that has been in a pocket between sets
+     * almost never means signed out — it means the access token aged out while
+     * nothing was running to renew it. See lib/session-guard.ts: this was the
+     * "weights aren't saving after a while" report, and the old branch told
+     * somebody staring at a screen full of numbers they had just typed that
+     * they were "Not signed in."
+     */
+    const user = await ensureUser(supabase);
     if (!user) {
-      setError("Not signed in.");
+      setError(SESSION_LOST_KEPT);
       setSaving(false);
       return;
     }
@@ -491,7 +502,13 @@ export function JournalForm({ initial, initialTraining, sport, distanceUnit = "k
       // Only for connectivity failures: a rejected row (RLS, bad data) would
       // fail identically on every retry, so queueing it would just hide a real
       // error behind a promise to sync that never resolves.
-      if (isOffline(dbError)) {
+      /**
+       * AN EXPIRED SESSION IS AS RECOVERABLE AS A BASEMENT WITH NO BARS, and
+       * losing the entry is the outcome neither may produce. The refresh above
+       * covers the common case; this covers a token that died between that call
+       * and this write.
+       */
+      if (isOffline(dbError) || isAuthFailure(dbError)) {
         enqueue(browserStore(), {
           kind: "check_in", date: today, userId: user.id,
           payload: input as unknown as Record<string, unknown>,

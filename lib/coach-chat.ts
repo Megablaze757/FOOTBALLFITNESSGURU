@@ -40,7 +40,14 @@ export function localCoachAnswer(question: string, ctx: ChatContext): string {
     return "Readiness looks good — a green light for a higher-quality session. Warm up well and go after it.";
   }
 
-  if (/eat|nutrition|protein|carb|fuel|diet|weight/.test(q)) {
+  /**
+   * CUTTING AND BULKING ARE NUTRITION, and leaving them out is what produced
+   * the reported failure: an athlete answered a rehab reply with "Im cutting
+   * though" and got a list of things the coach can do. The words people
+   * actually use for eating are not "nutrition" — they are cutting, bulking,
+   * deficit, lean, dropping weight.
+   */
+  if (/eat|nutrition|protein|carb|fuel|diet|weight|cut|cutting|bulk|deficit|surplus|maintenance|lean|calorie|kcal|macro|lose|losing|gain|gaining/.test(q)) {
     const targets = [
       ctx.calorieTarget ? `${ctx.calorieTarget} kcal` : null,
       ctx.proteinTarget ? `${ctx.proteinTarget}g protein` : null,
@@ -63,8 +70,28 @@ export function localCoachAnswer(question: string, ctx: ChatContext): string {
   const drill = findAnyDrill(q);
   if (drill && explainIntent) return explainDrill(drill, ctx);
 
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * SAY IT COULD NOT ANSWER. DO NOT RECITE THE MENU.
+   *
+   * This used to open "Good question." and then list what the coach can do,
+   * which is the worst possible reply to something it did not understand: it
+   * claims to have understood, answers a different question, and reads as the
+   * coach being stupid rather than as a failure. It also ended with "connect
+   * the AI coach for deeper answers" — meaningless to an athlete, and untrue,
+   * because the AI *is* connected and had just failed on that turn.
+   *
+   * Reported from a real conversation: a good AI answer about a shoulder,
+   * then "Im cutting though", then this paragraph. Nothing in it was wrong
+   * except that it was not an answer.
+   *
+   * What it says now: this reply came from the offline coach, here is why,
+   * here is what the offline coach can do, try again. Three true sentences
+   * beat one confident irrelevant one.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
   const goalLabel = ctx.goal ? GOALS.find((g) => g.id === ctx.goal)?.label.toLowerCase() : "your goal";
-  return `Good question. Right now we're building ${goalLabel} with a pain-aware, readiness-adjusted plan. Ask me "why is <drill> in my plan?", about a sore area, your readiness, or nutrition — and connect the AI coach for deeper, free-form answers.`;
+  return `I couldn't reach the full coach for that one, so this is the offline version — and it only handles a few things: why a drill is in your plan, a sore area, your readiness, or your calorie and protein targets. Ask again in a moment and it should get through. Your block is currently built around ${goalLabel}.`;
 }
 
 function explainDrill(drill: NonNullable<ReturnType<typeof drillInfo>>, ctx: ChatContext): string {

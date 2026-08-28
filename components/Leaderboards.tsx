@@ -129,6 +129,40 @@ export function Leaderboards({ userId }: { userId: string }) {
         </p>
       ) : (
         <>
+          {/* ═══════════════════════════════════════════════════════════════
+              YOUR RANK, IN WORDS, BEFORE THE LIST OF OTHER PEOPLE.
+
+              The board drew a badge beside every name and highlighted your row,
+              which answers "what rank is that person" and not "what rank am I"
+              — you had to find yourself in a list to be told. And a badge is a
+              coloured shape: without its name, Gold 3 and Silver 1 are two
+              similar circles, which is the same confusion that produced the
+              wrong-rank report on Home.
+              ═══════════════════════════════════════════════════════════════ */}
+          {mine && (() => {
+            const lvl = levelFor(mine.stats.xp);
+            return (
+              <div className="mb-3 flex items-center gap-3 rounded-xl bg-pitch-400/[0.06] px-3 py-2.5 ring-1 ring-pitch-400/20">
+                <RankBadge tier={lvl.tier} division={lvl.division} color={lvl.color} size={34} className="shrink-0" title={lvl.rank} />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-extrabold text-slate-100">
+                    {ordinal(mine.rank)} of {ranked.length}
+                  </span>
+                  {/* The rank's NAME, not only its colour. */}
+                  <span className="block text-xs text-slate-400">{lvl.rank} · {board.label}</span>
+                </span>
+                <span className="shrink-0 text-right">
+                  <span className="block text-sm font-bold tabular-nums text-slate-100">{mine.display}</span>
+                  {mine.rank > 1 && (
+                    <span className="block text-[11px] text-slate-500">
+                      {gapTo(ranked, mine.rank)}
+                    </span>
+                  )}
+                </span>
+              </div>
+            );
+          })()}
+
           <ol className="space-y-1.5">
             {ranked.slice(0, 10).map((r) => {
               const isMe = r.stats.userId === userId;
@@ -172,6 +206,12 @@ export function Leaderboards({ userId }: { userId: string }) {
           {mine && mine.rank > 10 && (
             <div className="mt-2 flex items-center gap-3 rounded-xl bg-pitch-400/[0.08] px-2.5 py-2 ring-1 ring-pitch-400/25">
               <span className="w-6 shrink-0 text-center text-sm font-extrabold text-slate-400">{mine.rank}</span>
+              {/* The same badge every other row carries. Leaving it off the one
+                  row that is about you was the odd one out. */}
+              {(() => {
+                const lvl = levelFor(mine.stats.xp);
+                return <RankBadge tier={lvl.tier} division={lvl.division} color={lvl.color} size={22} className="shrink-0" title={lvl.rank} />;
+              })()}
               <span className="min-w-0 flex-1 truncate text-sm text-slate-100">
                 {mine.stats.name}<span className="ml-1.5 text-xs text-pitch-400">you</span>
               </span>
@@ -193,4 +233,26 @@ export function Leaderboards({ userId }: { userId: string }) {
       )}
     </div>
   );
+}
+
+/** "1st", "22nd", "13th" — the English rule, including the teens exception. */
+function ordinal(n: number): string {
+  const rem100 = n % 100;
+  if (rem100 >= 11 && rem100 <= 13) return `${n}th`;
+  return `${n}${["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
+}
+
+/**
+ * How far off the place above, in the board's own unit.
+ *
+ * A rank on its own is a verdict; a rank plus "2 check-ins behind 13th" is
+ * something to do this week. Only shown when the gap is real — an equal score
+ * ranked lower on a tie-break is not a gap you can close by training.
+ */
+function gapTo(ranked: { rank: number; value: number; display: string }[], myRank: number): string {
+  const me = ranked.find((r) => r.rank === myRank);
+  const above = ranked.find((r) => r.rank === myRank - 1);
+  if (!me || !above) return "";
+  const gap = Math.round((above.value - me.value) * 10) / 10;
+  return gap > 0 ? `${gap} behind ${ordinal(above.rank)}` : `level with ${ordinal(above.rank)}`;
 }

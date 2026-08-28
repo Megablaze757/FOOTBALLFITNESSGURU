@@ -10,6 +10,7 @@ import { MiniBars } from "@/components/MiniBars";
 import type { BodyLog } from "@/lib/types";
 import { daysAgoLocal, todayLocal } from "@/lib/day";
 import { weightSeries, weightProvenance } from "@/lib/bodyweight";
+import { isAuthFailure, SESSION_LOST_RETRY } from "@/lib/session-guard";
 import { WeightHistory } from "@/components/WeightHistory";
 import type { DietGoal } from "@/lib/weight-trend";
 
@@ -168,7 +169,7 @@ function BodyForm({ userId, today, onSaved }: { userId: string; today: string; o
     if (photoPath) payload.photo_path = photoPath;
 
     const { error: e } = await supabase.from("body_logs").upsert(payload, { onConflict: "user_id,log_date" });
-    if (e) setError(e.message);
+    if (e) setError(isAuthFailure(e) ? SESSION_LOST_RETRY : e.message);
     else { setSaved(true); setFile(null); recordChanged("weight"); onSaved(); }
     setSaving(false);
   }

@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { CoachBubble } from "@/components/CoachBubble";
 import { FeatureTip } from "@/components/FeatureTip";
+import { SessionKeepalive } from "@/components/SessionKeepalive";
 import { HomeBubble } from "@/components/HomeBubble";
 import { useRouter } from "next/navigation";
 import { useSession, UserProvider } from "@/lib/auth";
@@ -66,6 +67,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             phone a thumb held one-handed cannot reach. Bottom left, opposite the
             coach, so neither is tapped by accident. */}
         <HomeBubble />
+        {/* Renews the token when the app comes back from a pocket, so a save
+            after forty minutes between sets is not the discovery that the
+            session went. See components/SessionKeepalive.tsx. */}
+        <SessionKeepalive />
         {/* POINTS AT ONE THING THIS ATHLETE HAS NOT FOUND, then never again.
             Mounted once here rather than per page because a tip belongs to a
             control, and controls move between pages; lib/tips.ts decides
