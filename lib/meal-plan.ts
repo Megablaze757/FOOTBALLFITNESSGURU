@@ -2471,6 +2471,13 @@ export function planWithinBudget(
   const reference = buildWeek(targets, seed, { ...prefs, budget: false, weeklyBudget: null }, schedule, swaps, recent);
 
   let best: { days: PlannedDay[]; list: ShoppingList } | null = null;
+  /**
+   * The cheapest week that is merely ADEQUATE, kept for when nothing clears the
+   * stricter bar. See feedsThemAbsolutely — without it the "we could not do it"
+   * branch handed back the unpressured week, which is the DEAREST thing the
+   * search can produce, to the one person who has said they cannot afford it.
+   */
+  let adequate: { days: PlannedDay[]; list: ShoppingList } | null = null;
   for (const pressure of BUDGET_PRESSURE) {
     const attempt = pressure === 1 ? baseline : build(pressure);
     // Every returned week passes the floor, INCLUDING the unpressured one. It
@@ -2478,6 +2485,10 @@ export function planWithinBudget(
     // 62kg athlete asking for £30 was handed a week 36% short on its worst day
     // — the answer to an impossible budget is the plan they would have had,
     // not the cheapest thing the search happened to start from.
+    if (feedsThemAbsolutely(attempt.days, targets)
+      && (!adequate || attempt.list.ongoingTotal < adequate.list.ongoingTotal)) {
+      adequate = attempt;
+    }
     if (!feedsThem(attempt.days, reference, targets)) continue;
     if (!best || attempt.list.ongoingTotal < best.list.ongoingTotal) best = attempt;
     // With a ceiling, stop at the first week under it — pressure is spent in
@@ -2516,7 +2527,13 @@ export function planWithinBudget(
     };
   }
 
-  const fallback = best ?? { days: reference, list: shoppingList(reference, pricing) };
+  /**
+   * Cheapest passing week, then cheapest adequate week, and only then the
+   * unpressured one. Handing somebody who asked for £50 the £89 week because no
+   * attempt cleared a floor defined by that same £89 week is the worst answer
+   * available, and it is what this used to do.
+   */
+  const fallback = best ?? adequate ?? { days: reference, list: shoppingList(reference, pricing) };
 
   /**
    * The week they would have had may fit the budget by itself.
@@ -2565,6 +2582,26 @@ function metNote(list: ShoppingList, budget: number): string {
  * question a floor should ask is "is this materially worse than what they would
  * have got", and the answer here is the more forgiving of the two bars.
  */
+/**
+ * The floor with no reference to what they would otherwise have had.
+ *
+ * `feedsThem` measures against the unpressured week, which is right for
+ * choosing between weeks and wrong as a last resort: it RATCHETS. Add cheaper,
+ * better recipes to the book and the unpressured week improves, so the relative
+ * floor rises, so weeks that were acceptable yesterday are refused today — and
+ * the athlete is handed something dearer than they were being handed before.
+ * Measured while adding fourteen budget recipes: a 78kg cutting week went from
+ * £49.21 to £59.46 and a 95kg one from £65.86 to £89.06, purely because the
+ * comparison moved.
+ *
+ * This is the absolute version: enough protein for the athlete in front of you,
+ * whatever some other week might have contained.
+ */
+function feedsThemAbsolutely(days: PlannedDay[], targets: PlanTargets): boolean {
+  return days.every((day) =>
+    day.meals.length === 0 || day.macros.protein >= targets.protein * BUDGET_PROTEIN_FLOOR);
+}
+
 function feedsThem(days: PlannedDay[], baseline: PlannedDay[], targets: PlanTargets): boolean {
   return days.every((day, i) => {
     if (day.meals.length === 0) return true; // a day they said they are eating out

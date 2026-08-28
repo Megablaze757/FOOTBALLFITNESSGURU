@@ -4570,6 +4570,183 @@ export const MEALS: Meal[] = [
     tip: "Yoghurt instead of mayo: same job, a third of the calories and 5g more protein.",
     method: "Toss hot pasta through tuna, sweetcorn, yoghurt, garlic and lemon, loosening with pasta water.",
   },
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * THE CHEAP-AND-PROTEIN-DENSE BAND, WHICH WAS TOO THIN TO PLAN A WEEK FROM.
+   *
+   * Measured across the book: the median main gives 9.3g of protein per pound,
+   * and only about a dozen clear 19. A 95kg athlete cutting needs 209g a day —
+   * 1,463g a week — so at the median that protein alone is £157, and the budget
+   * search had nowhere to go but the same three lentil dishes. The repeat
+   * penalty then refuses to serve them, and the week comes back over budget
+   * with "we cannot do it" written under it.
+   *
+   * Nothing exotic below. Every one is built from what already makes the top of
+   * the price-per-gram list — red lentils at 96g/£, oats, pasta, milk, tinned
+   * beans, eggs, tinned fish, yoghurt, tofu — and every one is a real dinner
+   * somebody would cook twice, because a cheap meal nobody wants to eat saves
+   * nothing.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  {
+    id: "budget_lentil_keema", name: "Lentil keema with rice", slot: "Dinner", minutes: 30,
+    items: [
+      { foodId: "red_lentils", qty: 100 }, { foodId: "beef_mince_5", qty: 80 }, { foodId: "rice", qty: 75 },
+      { foodId: "tomatoes_tin", qty: 200 }, { foodId: "onion", qty: 80 }, { foodId: "peas_frozen", qty: 80 },
+      { foodId: "garlic", qty: 8 }, { foodId: "spice_mix", qty: 8 }, { foodId: "stock_cubes", qty: 5 },
+      { foodId: "olive_oil", qty: 8 },
+    ],
+    steps: [
+      "Brown the mince hard in a dry pan first and leave it alone — colour is most of the flavour here, and 80g of beef is doing the work of 250g.",
+      "Onion into the fat with a pinch of salt, 6 minutes, then garlic and spices for one.",
+      "Lentils, tomatoes, stock and 350ml water. Simmer 20 minutes.",
+      "Peas in for the last three. Rice on when the lentils go in.",
+    ],
+    tip: "The lentils are not stretching the meat, they are carrying it — you get the protein of a full mince keema for about a third of the price.",
+    method: "Brown mince, soften onion, bloom spices, simmer with lentils, tomatoes and stock, finish with peas and serve on rice.",
+  },
+  {
+    id: "budget_tuna_bean_pasta", name: "Tuna, bean & tomato pasta", slot: "Dinner", minutes: 18,
+    items: [
+      { foodId: "pasta", qty: 100 }, { foodId: "tuna_tin", qty: 145 }, { foodId: "butter_beans", qty: 120 },
+      { foodId: "tomatoes_tin", qty: 200 }, { foodId: "onion", qty: 60 }, { foodId: "garlic", qty: 8 },
+      { foodId: "olive_oil", qty: 10 }, { foodId: "lemon", qty: 0.5 },
+    ],
+    steps: [
+      "Pasta on. Onion and garlic softening in the oil while it cooks.",
+      "Tomatoes in, simmer hard for 8 minutes so it thickens rather than sits watery.",
+      "Beans and tuna in at the end, warmed through only — boil tuna and it turns to sawdust.",
+      "Drained pasta through it with a splash of the water, lemon over.",
+    ],
+    tip: "Butter beans are the cheapest protein in the aisle and they go creamy in a tomato sauce. Nobody will identify them.",
+    method: "Simmer tomatoes with onion and garlic, fold through beans and tuna, toss with pasta and lemon.",
+  },
+  {
+    id: "budget_chickpea_tikka", name: "Chickpea & spinach tikka", slot: "Dinner", minutes: 22,
+    items: [
+      { foodId: "chickpeas", qty: 240 }, { foodId: "greek_yoghurt", qty: 100 }, { foodId: "rice", qty: 75 },
+      { foodId: "tomatoes_tin", qty: 200 }, { foodId: "spinach", qty: 100 }, { foodId: "onion", qty: 70 },
+      { foodId: "curry_paste", qty: 30 }, { foodId: "garlic", qty: 8 }, { foodId: "olive_oil", qty: 8 },
+    ],
+    steps: [
+      "Onion soft in the oil, garlic and curry paste in for a minute until it smells like a curry house.",
+      "Tomatoes and chickpeas, 12 minutes at a proper simmer.",
+      "Spinach through in handfuls until it collapses.",
+      "Off the heat before the yoghurt goes in, or it splits. Rice alongside.",
+    ],
+    tip: "Off the heat for the yoghurt. That one rule is the difference between a sauce and curdled milk.",
+    method: "Bloom curry paste with onion and garlic, simmer chickpeas in tomato, wilt spinach, stir yoghurt in off the heat.",
+  },
+  {
+    id: "budget_egg_lentil_curry", name: "Egg & lentil curry", slot: "Dinner", minutes: 25,
+    items: [
+      { foodId: "eggs", qty: 3 }, { foodId: "red_lentils", qty: 90 }, { foodId: "rice", qty: 70 },
+      { foodId: "tomatoes_tin", qty: 200 }, { foodId: "onion", qty: 70 }, { foodId: "spice_mix", qty: 8 },
+      { foodId: "garlic", qty: 8 }, { foodId: "olive_oil", qty: 8 }, { foodId: "stock_cubes", qty: 5 },
+    ],
+    steps: [
+      "Eggs into boiling water for 8 minutes, then cold water and peel.",
+      "Onion, garlic and spices in the oil while they cook.",
+      "Lentils, tomatoes, stock and 350ml water, 18 minutes until thick.",
+      "Halve the eggs and sit them on top rather than stirring them in.",
+    ],
+    tip: "Boiled eggs in a curry is standard across South Asia and it is the cheapest 20g of protein you can add to anything.",
+    method: "Boil eggs, simmer spiced lentils in tomato and stock, halve the eggs over the top with rice.",
+  },
+  {
+    id: "budget_bean_chilli_jacket", name: "Three-bean chilli jacket", slot: "Dinner", minutes: 25,
+    items: [
+      { foodId: "potatoes", qty: 350 }, { foodId: "kidney_beans", qty: 120 }, { foodId: "black_beans", qty: 120 },
+      { foodId: "beans_baked", qty: 100 }, { foodId: "tomatoes_tin", qty: 150 }, { foodId: "onion", qty: 60 },
+      { foodId: "cheddar", qty: 25 }, { foodId: "spice_mix", qty: 8 }, { foodId: "olive_oil", qty: 8 },
+    ],
+    steps: [
+      "Potato pricked and microwaved 10 minutes, then 5 in a hot oven or air fryer for the skin.",
+      "Onion and spices in the oil, then all three tins of beans and the tomatoes.",
+      "Simmer 12 minutes. The baked beans are there for the sauce, not as a joke.",
+      "Split the potato, pile it on, cheese over.",
+    ],
+    tip: "Three tins of beans is about £1.40 and 35g of protein before the potato or the cheese.",
+    method: "Bake a potato, simmer three tins of beans with onion, spice and tomato, and pile it in with cheese.",
+  },
+  {
+    id: "budget_tofu_peanut_noodles", name: "Peanut tofu with rice", slot: "Dinner", minutes: 20,
+    items: [
+      { foodId: "tofu", qty: 200 }, { foodId: "rice", qty: 80 }, { foodId: "peanut_butter", qty: 30 },
+      { foodId: "peas_frozen", qty: 80 }, { foodId: "carrots", qty: 80 }, { foodId: "soy_sauce", qty: 15 },
+      { foodId: "garlic", qty: 8 }, { foodId: "olive_oil", qty: 8 }, { foodId: "lemon", qty: 0.5 },
+    ],
+    steps: [
+      "Press the tofu between two plates for ten minutes if you have them. It is the difference between crisp and steamed.",
+      "Cube and fry hard in the oil until it is actually browned on three sides — undercooked tofu is why people say they do not like tofu.",
+      "Carrots and peas in for three minutes.",
+      "Peanut butter, soy, garlic, lemon and 60ml water stirred to a sauce, poured over off the heat.",
+    ],
+    tip: "Peanut butter is 25g of protein per 100g and turns four cheap ingredients into something you would order.",
+    method: "Fry pressed tofu until browned, add vegetables, and coat in a peanut, soy and lemon sauce.",
+  },
+  {
+    id: "budget_sardine_pasta", name: "Sardine, tomato & chilli pasta", slot: "Dinner", minutes: 15,
+    items: [
+      { foodId: "pasta", qty: 110 }, { foodId: "sardines_tin", qty: 120 }, { foodId: "tomatoes_tin", qty: 200 },
+      { foodId: "onion", qty: 60 }, { foodId: "garlic", qty: 10 }, { foodId: "olive_oil", qty: 8 },
+      { foodId: "lemon", qty: 0.5 },
+    ],
+    steps: [
+      "Pasta on. Onion and garlic soft in the oil.",
+      "Tomatoes in and simmer hard while the pasta cooks.",
+      "Sardines in at the end, broken up with the spoon — they melt into the sauce and stop tasting of tinned fish.",
+      "Pasta through with a splash of the water, lemon over the top.",
+    ],
+    tip: "A tin of sardines is 25g of protein for under a pound, and in a tomato sauce it reads as a rich ragù rather than as fish.",
+    method: "Simmer tomatoes with onion and garlic, melt sardines through, toss with pasta and lemon.",
+  },
+  {
+    id: "budget_cottage_oat_banana", name: "Cottage cheese, oats & banana bowl", slot: "Breakfast", minutes: 4,
+    items: [
+      { foodId: "cottage_cheese", qty: 200 }, { foodId: "oats", qty: 60 }, { foodId: "banana", qty: 1 },
+      { foodId: "peanut_butter", qty: 20 }, { foodId: "milk", qty: 100 },
+    ],
+    steps: [
+      "Oats and milk in a bowl, two minutes in the microwave.",
+      "Cottage cheese stirred through while it is still hot so it goes creamy instead of lumpy.",
+      "Banana and peanut butter on top.",
+    ],
+    tip: "Cottage cheese in hot porridge sounds wrong and tastes like rice pudding. It is 25g of protein for about 70p.",
+    method: "Microwave oats with milk, stir cottage cheese through hot, top with banana and peanut butter.",
+  },
+  {
+    id: "budget_bean_egg_hash", name: "Bean, egg & potato hash", slot: "Breakfast", minutes: 18,
+    items: [
+      { foodId: "potatoes", qty: 250 }, { foodId: "eggs", qty: 3 }, { foodId: "beans_baked", qty: 200 },
+      { foodId: "onion", qty: 60 }, { foodId: "peppers", qty: 80 }, { foodId: "olive_oil", qty: 10 },
+      { foodId: "spice_mix", qty: 5 },
+    ],
+    steps: [
+      "Potato cubed small and microwaved 5 minutes first — that is the trick to a hash that is not raw in the middle.",
+      "Into a hot pan with the oil, onion, peppers and spice. Leave it alone to catch and colour.",
+      "Beans poured over, two wells made, eggs cracked in.",
+      "Lid on, four minutes, until the whites set.",
+    ],
+    tip: "Cook it in one pan and eat it out of the pan. Around 30g of protein for well under a pound.",
+    method: "Par-cook potato, crisp with onion and peppers, add beans and bake eggs into wells under a lid.",
+  },
+  {
+    id: "budget_lentil_bolognese_bake", name: "Lentil & butter bean bake", slot: "Dinner", minutes: 35,
+    items: [
+      { foodId: "red_lentils", qty: 110 }, { foodId: "butter_beans", qty: 150 }, { foodId: "tomatoes_tin", qty: 250 },
+      { foodId: "onion", qty: 80 }, { foodId: "carrots", qty: 90 }, { foodId: "cheddar", qty: 30 },
+      { foodId: "garlic", qty: 8 }, { foodId: "stock_cubes", qty: 5 }, { foodId: "olive_oil", qty: 10 },
+    ],
+    steps: [
+      "Onion and carrot in the oil, 8 minutes, until sweet rather than just hot.",
+      "Garlic, then lentils, tomatoes, stock and 350ml water. Simmer 20 minutes.",
+      "Beans stirred in, the lot into a dish, cheese over.",
+      "Under a hot grill until it blisters.",
+    ],
+    tip: "Freezes in portions and reheats better than it cooks. Make the full amount even if you are one person.",
+    method: "Soften onion and carrot, simmer lentils in tomato and stock, fold in butter beans, top with cheese and grill.",
+  },
   {
     id: "budget_red_lentil_dhal", name: "Red lentil dhal with rice", slot: "Lunch", minutes: 30,
     items: [
