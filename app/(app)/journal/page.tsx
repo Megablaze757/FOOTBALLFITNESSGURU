@@ -40,7 +40,7 @@ export default function JournalPage() {
       supabase.from("daily_check_ins").select("*").eq("user_id", user.id).eq("check_in_date", today).maybeSingle(),
       supabase.from("training_logs").select("*").eq("user_id", user.id).eq("log_date", today).maybeSingle(),
       supabase.from("biometrics").select("*").eq("user_id", user.id).eq("metric_date", today).maybeSingle(),
-      supabase.from("profiles").select("sport, distance_unit, sex, birth_year").eq("id", user.id).maybeSingle(),
+      supabase.from("profiles").select("sport, distance_unit, sex, birth_year, created_at").eq("id", user.id).maybeSingle(),
       supabase.from("programs").select("plan, completed_sessions, swaps").eq("user_id", user.id).eq("status", "active").maybeSingle(),
       /**
        * The dates for the streak AND the weights for the burn estimate.
@@ -119,8 +119,27 @@ export default function JournalPage() {
         return { name: e.name, sets: parsed.sets, load_kg: null, ...measuredTrainingFields(e.name, parsed.reps, e.dose) };
       },
     );
+    /**
+     * WHERE THEY ARE IN THEIR FIRST WEEK — the only week most people have.
+     *
+     * Counted rather than fetched: `recent` is already on the page for the
+     * streak, and profiles already carries created_at. See lib/first-week.ts
+     * for what the done screen does with it.
+     */
+    const joinedAt = (profile as { created_at?: string } | null)?.created_at ?? null;
+    const firstWeek = {
+      checkIns: (recent ?? []).length,
+      daysSinceJoined: joinedAt
+        ? Math.max(0, Math.round((Date.now() - Date.parse(joinedAt)) / 86_400_000))
+        // No join date means an old account, not a new one — a missing column
+        // must not put a long-standing athlete back into onboarding.
+        : 999,
+      hasProgram: !!program,
+    };
+
     return {
       existing,
+      firstWeek,
       streak: checkInStreak(((recent ?? []) as { check_in_date: string }[]).map((r) => r.check_in_date)),
       // The most recent weight anybody recorded, for the burn estimate on days
       // they did not type one. See lib/bodyweight.ts for why this is resolved
@@ -219,6 +238,7 @@ export default function JournalPage() {
           weightKg={data?.weightKg ?? null}
           sex={data?.sex ?? null}
           age={data?.age ?? null}
+          firstWeek={data?.firstWeek ?? null}
           editing={editing}
           onEdit={() => setEditing((v) => !v)}
           onAddTraining={() => {

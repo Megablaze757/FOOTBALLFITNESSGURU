@@ -125,3 +125,52 @@ test("unscheduling the old cron jobs survives a database that never had pg_cron"
   assert.ok(guard < use, "the guard comes after the query it is supposed to protect");
   assert.match(sql.slice(guard, use), /\breturn;/, "the guard does not return before reaching cron.job");
 });
+
+import { reminderStep, NEW_JOINER_GAP_DAYS, NEW_JOINER_WINDOW_DAYS } from "./checkin-reminder";
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE "USE IT ONCE AND NEVER COME BACK" SHAPE, and the app was sitting quietly
+ * through it by design.
+ *
+ * Somebody signs up Monday, checks in once, hears nothing Tuesday or Wednesday,
+ * and the first contact is a Thursday email to a person who has forgotten they
+ * signed up. Three days of grace is right for a regular who missed a Tuesday
+ * and wrong for somebody with no habit to fall back on.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("a brand new joiner hears the next day, not three days later", () => {
+  // Joined Monday, checked in once, nothing since.
+  assert.equal(checkinReminderDue("2026-08-24", "2026-08-24", "2026-08-25", 1), true,
+    "still silent on the one morning it could still matter");
+  assert.equal(checkinReminderDue("2026-08-24", "2026-08-24", "2026-08-26", 1), true);
+});
+
+test("an established athlete keeps the three-day grace", () => {
+  const joined = "2026-01-01";
+  assert.equal(checkinReminderDue("2026-08-24", joined, "2026-08-25", 90), false,
+    "nagging somebody who missed one Tuesday");
+  assert.equal(checkinReminderDue("2026-08-24", joined, "2026-08-27", 90), true);
+});
+
+/**
+ * A missing count means "we did not look", not "they are new" — and a two-year
+ * habit must never be put back on the new-joiner cadence by an absent field.
+ */
+test("an unknown check-in count is treated as established", () => {
+  assert.equal(reminderStep("2026-08-24", "2026-08-25"), 3);
+  assert.equal(checkinReminderDue("2026-08-24", "2026-08-24", "2026-08-25"), false);
+});
+
+test("the new-joiner window closes, and it closes on both conditions", () => {
+  assert.equal(reminderStep("2026-08-24", "2026-08-25", 1), NEW_JOINER_GAP_DAYS);
+  // Past the window by age.
+  assert.equal(reminderStep("2026-08-01", "2026-08-25", 3), 3);
+  // Past it by habit: joined days ago but already logging every day.
+  assert.equal(reminderStep("2026-08-24", "2026-08-25", NEW_JOINER_WINDOW_DAYS + 1), 3);
+});
+
+/** The total volume of mail is unchanged — only when it arrives. */
+test("the thirty-day stop still stops a new joiner", () => {
+  assert.equal(checkinReminderDue("2026-07-01", "2026-07-01", "2026-08-25", 1), false);
+});

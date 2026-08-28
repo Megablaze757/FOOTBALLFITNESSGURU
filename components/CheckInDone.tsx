@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { whatTomorrowBrings, shouldAskForPush, type FirstWeekContext } from "@/lib/first-week";
+import { PushToggle } from "@/components/PushToggle";
 import { isActivityDrill, activityMinutes, matchActivity, PARTS_OF_DAY } from "@/lib/activities";
 import type { CheckInInput, TrainingLog, ReadinessStatus } from "@/lib/types";
 import { assessReadiness } from "@/lib/readiness";
@@ -40,6 +42,7 @@ export function CheckInDone({
   weightKg,
   sex,
   age,
+  firstWeek,
 }: {
   checkIn: Partial<CheckInInput>;
   training: TrainingLog | null;
@@ -49,6 +52,14 @@ export function CheckInDone({
   /** Both needed by the Keytel equation — the same heart rate is different work in different bodies. */
   sex?: "male" | "female" | null;
   age?: number | null;
+  /**
+   * Where they are in their first week, or null once they are past it.
+   *
+   * The done screen is the one moment somebody has just done the thing and is
+   * looking for a sign it mattered — and on the very first check-in it rendered
+   * an empty span, because the streak chip needs `streak > 1`.
+   */
+  firstWeek?: FirstWeekContext | null;
   /** Acute:chronic load ratio — must be the same value Home scores with. */
   acwr: number | null;
   editing: boolean;
@@ -239,9 +250,44 @@ export function CheckInDone({
           )}
         </div>
 
+        {/* ═══════════════════════════════════════════════════════════════
+            WHAT TOMORROW ACTUALLY GIVES THEM.
+
+            This is the moment the whole retention problem lives in: somebody
+            has just logged for the first time, and the screen said nothing
+            about coming back. Not a slogan — every line names a thing the app
+            genuinely does on that specific day, because the second day is where
+            a vague promise gets found out. See lib/first-week.ts.
+            ═══════════════════════════════════════════════════════════════ */}
+        {firstWeek && whatTomorrowBrings(firstWeek) && (
+          <p className="rounded-2xl border border-pitch-400/20 bg-pitch-400/[0.06] px-4 py-3 text-sm leading-relaxed text-slate-200">
+            {whatTomorrowBrings(firstWeek)}
+          </p>
+        )}
+
+        {/* ASKED ONCE, AT THE ONE MOMENT THE ANSWER IS OBVIOUS.
+            Push lived on the Profile page, which nobody opens in their first
+            session. Asking on load is worse — the browser remembers a refusal
+            forever and the athlete had no idea what they were being asked. On
+            the second check-in they have just come back, which is exactly what
+            a reminder is for. */}
+        {firstWeek && shouldAskForPush(firstWeek) && (
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+            <p className="mb-2 text-sm font-semibold text-slate-100">That is two days. Want a nudge?</p>
+            <p className="mb-2 text-xs leading-relaxed text-slate-400">
+              One reminder in the morning, only on the days you have not logged. Off again whenever you like.
+            </p>
+            <PushToggle />
+          </div>
+        )}
+
         <div className="flex items-center justify-between gap-3 pt-1">
           {streak > 1 ? (
             <span className="chip text-pitch-400">🔥 {streak} days in a row</span>
+          ) : streak === 1 ? (
+            /* Day one is a streak of one, and saying so is the difference
+               between a number that has started and a blank space. */
+            <span className="chip text-pitch-400">🔥 Day 1</span>
           ) : (
             <span />
           )}

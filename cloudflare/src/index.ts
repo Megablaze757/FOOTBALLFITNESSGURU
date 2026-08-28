@@ -510,7 +510,7 @@ function overBudget(state: BudgetState): Response {
 // nobody is watching a spinner and the budget can be what the work actually
 // needs. Callers pass their own client-side timeout to match.
 // Bump on every paste into the Cloudflare dashboard. GET /health reports it.
-const WORKER_VERSION = "2026-08-24.4";
+const WORKER_VERSION = "2026-08-24.5";
 
 const CHAIN_BUDGET_MS = 55_000;
 /**
@@ -3165,9 +3165,19 @@ async function sendDailyReminders(env: Env): Promise<void> {
   if (!doneResponse.ok) throw new Error(`daily check-ins for reminders: ${doneResponse.status}`);
   const done = (await doneResponse.json()) as { user_id: string; check_in_date: string }[];
   const lastCheckIn = new Map<string, string>();
+  /**
+   * HOW MANY THEY HAVE EVER DONE, near enough.
+   *
+   * Counted over the same thirty-day window already fetched rather than with a
+   * second query: the only decision it feeds is whether somebody is inside
+   * their first week, and anybody with more than seven logs in the last month
+   * is not — whatever the true lifetime total is. See reminderStep.
+   */
+  const seen = new Map<string, number>();
   for (const row of done ?? []) {
     const held = lastCheckIn.get(row.user_id);
     if (!held || row.check_in_date > held) lastCheckIn.set(row.user_id, row.check_in_date);
+    seen.set(row.user_id, (seen.get(row.user_id) ?? 0) + 1);
   }
 
   const rows: NotificationInput[] = [];
@@ -3177,7 +3187,14 @@ async function sendDailyReminders(env: Env): Promise<void> {
     if (last === today) continue; // today is already done; there is nothing to ask for
     const inApp = profile.in_app_training_reminders !== false;
     const email = emailEnabled(profile, "checkin")
-      && checkinReminderDue(last, profile.created_at.slice(0, 10), today);
+      /**
+       * The count is passed so a day-one athlete hears on day one rather than
+       * day three. Three days of grace suits somebody with a habit who missed a
+       * Tuesday; for a new joiner it is a week of silence across the only days
+       * that decide anything. Same total mail, moved to where it can still do
+       * something — see lib/checkin-reminder.ts.
+       */
+      && checkinReminderDue(last, profile.created_at.slice(0, 10), today, seen.get(profile.id) ?? 0);
     // A row that shows nowhere and sends nothing is a row nobody asked for.
     if (!inApp && !email) continue;
     rows.push({

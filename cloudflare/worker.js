@@ -544,16 +544,25 @@ function daysBetween(from, to) {
   return Math.round((b - a) / 864e5);
 }
 __name(daysBetween, "daysBetween");
-function checkinReminderDue(lastCheckIn, joined, today) {
+function checkinReminderDue(lastCheckIn, joined, today, checkInsEver) {
   const anchor = lastCheckIn ?? joined;
   const gap = daysBetween(anchor, today);
-  if (gap < CHECKIN_REMINDER_GAP_DAYS)
+  const step = reminderStep(joined, today, checkInsEver);
+  if (gap < step)
     return false;
   if (gap > CHECKIN_REMINDER_STOP_DAYS)
     return false;
-  return gap % CHECKIN_REMINDER_GAP_DAYS === 0;
+  return gap % step === 0;
 }
 __name(checkinReminderDue, "checkinReminderDue");
+var NEW_JOINER_GAP_DAYS = 1;
+var NEW_JOINER_WINDOW_DAYS = 7;
+function reminderStep(joined, today, checkInsEver) {
+  const age = daysBetween(joined, today);
+  const stillNew = age >= 0 && age <= NEW_JOINER_WINDOW_DAYS && (checkInsEver === void 0 ? false : checkInsEver <= NEW_JOINER_WINDOW_DAYS);
+  return stillNew ? NEW_JOINER_GAP_DAYS : CHECKIN_REMINDER_GAP_DAYS;
+}
+__name(reminderStep, "reminderStep");
 function checkinReminderSince(today) {
   const t = Date.parse(`${today}T00:00:00Z`);
   return new Date(t - CHECKIN_REMINDER_STOP_DAYS * 864e5).toISOString().slice(0, 10);
@@ -925,7 +934,7 @@ function overBudget(state) {
   return json({ error: `${reason} The on-device coach still works, and your allowance resets \u2014 upgrade for more.` }, 429);
 }
 __name(overBudget, "overBudget");
-var WORKER_VERSION = "2026-08-24.4";
+var WORKER_VERSION = "2026-08-24.5";
 var ATTEMPT_TIMEOUT_MS = {
   groq: 1e4,
   openrouter: 2e4,
@@ -2567,10 +2576,12 @@ async function sendDailyReminders(env) {
     throw new Error(`daily check-ins for reminders: ${doneResponse.status}`);
   const done = await doneResponse.json();
   const lastCheckIn = /* @__PURE__ */ new Map();
+  const seen = /* @__PURE__ */ new Map();
   for (const row2 of done ?? []) {
     const held = lastCheckIn.get(row2.user_id);
     if (!held || row2.check_in_date > held)
       lastCheckIn.set(row2.user_id, row2.check_in_date);
+    seen.set(row2.user_id, (seen.get(row2.user_id) ?? 0) + 1);
   }
   const rows = [];
   for (const profile of profiles.values()) {
@@ -2580,7 +2591,7 @@ async function sendDailyReminders(env) {
     if (last === today)
       continue;
     const inApp = profile.in_app_training_reminders !== false;
-    const email2 = emailEnabled(profile, "checkin") && checkinReminderDue(last, profile.created_at.slice(0, 10), today);
+    const email2 = emailEnabled(profile, "checkin") && checkinReminderDue(last, profile.created_at.slice(0, 10), today, seen.get(profile.id) ?? 0);
     if (!inApp && !email2)
       continue;
     rows.push({
