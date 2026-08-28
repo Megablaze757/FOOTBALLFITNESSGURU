@@ -46,37 +46,85 @@ export function isNew(ctx: FirstWeekContext): boolean {
 }
 
 /**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * A MILESTONE IS A CLAIM ABOUT THE ENGINE, SO THE ENGINE HAS TO BACK IT.
+ *
+ * The first version of this file said the rule out loud — "every promise names
+ * a thing the app genuinely does on that specific day" — and then broke it
+ * three times out of three, because a rule a person holds is a rule that lasts
+ * exactly as long as their attention:
+ *
+ *   "the second check-in is when readiness starts comparing you against your
+ *   own normal"      — assessReadiness reads today's answers and nothing else.
+ *                      It has never compared anybody against anything.
+ *
+ *   "three days is the fewest that can draw a direction"
+ *                    — computeFatigueTrend returns "stable" until it has FOUR
+ *                      points. Three shows nothing.
+ *
+ *   "a full week of load is what the readiness score is built to read"
+ *                    — load needs a 28-day chronic window before it reports at
+ *                      all. A week gives you nothing.
+ *
+ * So the promises are no longer prose. Each one names the count it needs, and
+ * first-week.test.ts drives the real engine at `at - 1` and at `at` and fails
+ * unless the thing genuinely appears exactly there. The copy cannot drift from
+ * the app, and the app cannot drift from the copy — whichever one moves, the
+ * build stops.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export interface Milestone {
+  /** Check-ins required before this becomes true. */
+  at: number;
+  /** What appears then, in the athlete's words. */
+  promise: string;
+}
+
+export const MILESTONES: Milestone[] = [
+  {
+    at: 2,
+    // computeWeightDelta needs two weights to subtract. Verified in the test.
+    promise: "Log again tomorrow and you have two weights to compare — which is the first thing here that can show a direction rather than a number.",
+  },
+  {
+    at: 4,
+    // computeFatigueTrend returns "stable" below four points. Verified.
+    promise: "Two more and your fatigue trend can actually report — it needs four days before it will say whether you are climbing or recovering.",
+  },
+];
+
+/**
+ * The next real thing, and when it lands.
+ *
+ * Returns null when there is nothing left in the first week to promise, which
+ * is the honest answer rather than a fabricated one — see the header for what
+ * happened when this file was willing to invent.
+ */
+export function nextMilestone(checkIns: number): Milestone | null {
+  return MILESTONES.find((m) => m.at > checkIns) ?? null;
+}
+
+/**
  * What tomorrow actually gives them, in one line.
  *
- * Ordered by how soon it lands, so the nearest real thing is always the one
- * offered — a promise four days out is not a reason to open the app tomorrow.
- * Returns null once they are past the first week: at that point the app has
- * plenty to say and does not need to keep advertising itself.
+ * Null once they are past the first week, and null when the next milestone is
+ * more than a couple of days out — a promise four days away is not a reason to
+ * open the app tomorrow.
  */
 export function whatTomorrowBrings(ctx: FirstWeekContext): string | null {
   if (!isNew(ctx)) return null;
+  if (ctx.checkIns === 0) return null; // nothing logged — there is no tomorrow to promise
 
-  switch (ctx.checkIns) {
-    case 0:
-      return null; // nothing logged yet — there is no "tomorrow" to promise.
-    case 1:
-      /**
-       * Readiness is scored from today's answers alone until there is history
-       * to compare against — so the second check-in is the first one that
-       * changes what the score MEANS. That is true, specific, and happens
-       * tomorrow.
-       */
-      return "Log again tomorrow and your readiness stops being a snapshot — it starts comparing today against your own normal.";
-    case 2:
-      // Three points is the fewest that can draw a direction rather than a dot.
-      return "One more and your trend lines appear on Progress — three days is the fewest that can show a direction.";
-    case 3:
-      return "Four in a row. Two more days and you have a full week of load, which is what the readiness score is built to read.";
-    default:
-      return ctx.hasProgram
-        ? "Keep going — a week of logs is what lets the programme adjust to how you are actually recovering."
-        : "Keep going — a week of logs is what the weekly summary is built from.";
+  const next = nextMilestone(ctx.checkIns);
+  if (!next) {
+    // Past every milestone but still inside the first week: say the true thing
+    // about the week rather than inventing a fourth feature.
+    return ctx.hasProgram
+      ? "Keep going — a week of logs is what lets the programme adjust to how you are actually recovering."
+      : "Keep going — a week of logs is what the weekly summary is built from.";
   }
+  // More than two days out is not a reason to open it tomorrow.
+  return next.at - ctx.checkIns <= 2 ? next.promise : null;
 }
 
 /**

@@ -29,14 +29,16 @@ test("new means new — a week, and only a few logs", () => {
 test("the first check-in is told what the second one changes", () => {
   const promise = whatTomorrowBrings(ctx({ checkIns: 1 }));
   assert.ok(promise, "day one still ends in silence");
-  assert.match(promise!, /your own normal/i, "does not say what actually changes");
+  assert.match(promise!, /two weights/i, "does not say what actually changes");
 });
 
-test("each day promises the nearest real thing, not the same line again", () => {
-  const said = [1, 2, 3, 4].map((checkIns) => whatTomorrowBrings(ctx({ checkIns })));
-  assert.equal(new Set(said).size, said.length, "two days give the identical promise");
-  assert.match(said[1]!, /trend/i, "three points is what draws a direction");
-  assert.match(said[2]!, /week/i);
+test("each day promises the nearest real thing, and stops when it is far off", () => {
+  // Two logs in, the fatigue trend is two days away — worth saying.
+  assert.match(whatTomorrowBrings(ctx({ checkIns: 2 }))!, /fatigue trend/i);
+  assert.match(whatTomorrowBrings(ctx({ checkIns: 3 }))!, /fatigue trend/i);
+  // Past every milestone, it says the true thing about the week rather than
+  // inventing a fourth feature to promise.
+  assert.match(whatTomorrowBrings(ctx({ checkIns: 5 }))!, /week of logs/i);
 });
 
 test("nothing logged means nothing promised", () => {
@@ -53,8 +55,8 @@ test("the scaffolding comes down once they have a habit", () => {
 });
 
 test("the promise fits what they actually have", () => {
-  const withProgram = whatTomorrowBrings(ctx({ checkIns: 5, hasProgram: true }));
-  const without = whatTomorrowBrings(ctx({ checkIns: 5, hasProgram: false }));
+  const withProgram = whatTomorrowBrings(ctx({ checkIns: 6, hasProgram: true }));
+  const without = whatTomorrowBrings(ctx({ checkIns: 6, hasProgram: false }));
   assert.notEqual(withProgram, without, "promises a programme to somebody with no programme");
   assert.match(withProgram!, /programme/i);
 });
@@ -120,4 +122,93 @@ test("the Worker tells the reminder rule how new somebody is", () => {
   const worker = readFileSync(new URL("../cloudflare/src/index.ts", import.meta.url), "utf8");
   assert.match(worker, /checkinReminderDue\(last, profile\.created_at\.slice\(0, 10\), today, seen\.get/,
     "a day-one athlete is still waiting three days for the first email");
+});
+
+import { MILESTONES, nextMilestone } from "./first-week";
+import { summarizeTrends } from "./trends";
+import type { DailyCheckIn } from "./types";
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE RULE, ENFORCED RATHER THAN HELD.
+ *
+ * The first version of this file wrote the rule down — "every promise names a
+ * thing the app genuinely does on that specific day" — and then broke it three
+ * times out of three. Readiness was said to start comparing you against your
+ * own normal on the second check-in; assessReadiness reads today's answers and
+ * nothing else, and never has. Three days was said to be the fewest that can
+ * draw a direction; computeFatigueTrend needs four. A week of load was said to
+ * be what the readiness score reads; load needs twenty-eight days.
+ *
+ * Every one of those was written in good faith by somebody who had just read
+ * the engine. A rule a person holds lasts exactly as long as their attention.
+ *
+ * So this test drives the REAL engine at one short of each milestone and at the
+ * milestone, and fails unless the promised thing appears exactly there. The
+ * copy cannot drift from the app, and the app cannot drift from the copy —
+ * whichever one moves, the build stops.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+function logs(n: number): DailyCheckIn[] {
+  return Array.from({ length: n }, (_, i) => ({
+    check_in_date: `2026-08-${String(i + 1).padStart(2, "0")}`,
+    pain_map: {},
+    // A rising fatigue line, so a trend WOULD be reported the moment the engine
+    // has enough points. A flat series would pass by saying nothing.
+    fatigue_score: 2 + i * 2,
+    sleep_quality: 7,
+    nutrition_quality: 7,
+    weight_kg: 80 - i * 0.4,
+    is_match_day: false,
+    match_minutes_played: null,
+  })) as unknown as DailyCheckIn[];
+}
+
+test("the two-log promise is true: two weights are what make a comparison", () => {
+  const at = MILESTONES.find((m) => m.at === 2);
+  assert.ok(at, "the two-log milestone is gone — this test needs updating with it");
+
+  assert.equal(summarizeTrends(logs(1)).weightDeltaKg, null,
+    "one weight already reports a change, so the promise is late");
+  assert.notEqual(summarizeTrends(logs(2)).weightDeltaKg, null,
+    "two weights still report nothing, so the promise is a lie");
+});
+
+test("the four-log promise is true: the fatigue trend needs four points", () => {
+  const at = MILESTONES.find((m) => m.at === 4);
+  assert.ok(at, "the four-log milestone is gone — this test needs updating with it");
+
+  assert.equal(summarizeTrends(logs(3)).fatigueTrend, "stable",
+    "three logs already report a direction, so the promise is late");
+  assert.notEqual(summarizeTrends(logs(4)).fatigueTrend, "stable",
+    "four logs still report nothing, so the promise is a lie");
+});
+
+/**
+ * The claim that started all this, kept as a test so it cannot come back.
+ * assessReadiness takes one day's answers. It compares nobody to anything.
+ */
+test("nothing claims readiness compares them against their own normal", () => {
+  const said = MILESTONES.map((m) => m.promise).join(" ");
+  assert.ok(!/your own normal|own baseline|compar\w+ (?:you|today) against/i.test(said),
+    "a promise about a personal readiness baseline is back, and the engine still has none");
+});
+
+test("every milestone is reachable inside the first week", () => {
+  for (const m of MILESTONES) {
+    assert.ok(m.at >= 1 && m.at <= FIRST_WEEK_DAYS,
+      `${m.at} logs is not something somebody reaches in their first week`);
+    assert.ok(m.promise.length > 20, "a milestone with nothing to say");
+  }
+  // Ordered, or nextMilestone returns the wrong one.
+  const ats = MILESTONES.map((m) => m.at);
+  assert.deepEqual([...ats].sort((a, b) => a - b), ats, "milestones are out of order");
+});
+
+test("nextMilestone returns the next one, and null past the last", () => {
+  assert.equal(nextMilestone(0)?.at, 2);
+  assert.equal(nextMilestone(1)?.at, 2);
+  assert.equal(nextMilestone(2)?.at, 4);
+  assert.equal(nextMilestone(4), null);
+  assert.equal(nextMilestone(99), null);
 });
