@@ -27,6 +27,10 @@ jobs:
   # from the checks it is supposed to be enforcing.
   test:
     uses: ./.github/workflows/ci.yml
+    # The browser suite runs HERE and nowhere else on the way to production.
+    # Without this it skips — see the input's own note in ci.yml.
+    with:
+      e2e: true
 
   build:
     # Both the unit suite and the e2e smoke tests, since ci.yml runs them as

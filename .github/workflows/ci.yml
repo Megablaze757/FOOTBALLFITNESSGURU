@@ -12,6 +12,23 @@ on:
   # Callable from deploy.yml, so the deploy gate runs exactly these checks
   # rather than a copy of them that can drift.
   workflow_call:
+    inputs:
+      e2e:
+        # ═══════════════════════════════════════════════════════════════════
+        # `github.event_name` CANNOT TELL A DEPLOY FROM A BRANCH PUSH.
+        #
+        # The browser job used to skip itself with `if: github.event_name !=
+        # 'push'`, meaning to say "not on a work-in-progress branch push". But a
+        # workflow_call inherits the CALLER's event, so on a push to main —
+        # which is exactly when deploy.yml calls this — the value is still
+        # 'push' and the job skipped. The comment below it claimed it gated the
+        # deploy. It never has: every deploy run shows `test / e2e  skipped`.
+        #
+        # So the caller says what it wants instead of the job guessing.
+        # ═══════════════════════════════════════════════════════════════════
+        description: "Run the browser suite. deploy.yml passes true; a branch push does not."
+        type: boolean
+        default: false
   push:
     # NOT main, and not the agent mirror branches.
     #
@@ -104,7 +121,7 @@ jobs:
     # a white screen would actually reach somebody. On a work-in-progress branch
     # push it is a browser download to tell you what `npm run build` already
     # would, and that is most of the runs.
-    if: github.event_name != 'push'
+    if: github.event_name != 'push' || inputs.e2e
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
