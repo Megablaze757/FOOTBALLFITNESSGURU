@@ -19,6 +19,7 @@ import { Recipe } from "@/components/Recipe";
 import { MealSwap, type SwapTarget } from "@/components/MealSwap";
 import { cookRating } from "@/lib/recipe-difficulty";
 import { leftoverLabel, batchTip } from "@/lib/batch-cooking";
+import type { BudgetAdvice } from "@/lib/budget-advice";
 import { FOOD_BY_ID as FOOD_LOOKUP } from "@/lib/food-db";
 import { ShoppingList } from "@/components/ShoppingList";
 import { NumberInput } from "@/components/NumberInput";
@@ -195,7 +196,7 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
    * decided while the week is being BUILT — the planner leans harder on price
    * until it fits — and the list can only report what the chosen week costs.
    */
-  const [budgetNote, setBudgetNote] = useState<{ met: boolean; note: string } | null>(null);
+  const [budgetNote, setBudgetNote] = useState<{ met: boolean; note: string; advice?: BudgetAdvice } | null>(null);
 
   /**
    * Build a week, honouring the budget if there is one.
@@ -211,7 +212,7 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
    */
   const planWeek = (opts: { seed: number; prefs: MealPrefs; swaps: MealSwaps; recent: string[] }) => {
     const result = planWithinBudget(targets, opts.seed, opts.prefs, schedule, opts.swaps, opts.recent, { store });
-    setBudgetNote(result.note ? { met: result.met, note: result.note } : null);
+    setBudgetNote(result.note ? { met: result.met, note: result.note, advice: result.advice } : null);
     return result.days;
   };
   // If someone excludes enough, a meal slot can end up with nothing in it —
@@ -959,9 +960,50 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
               gets a defensible week under the number, this says what the
               cheapest one costs instead of quietly serving it. */}
           {budgetNote && (
-            <p className={`card p-4 text-sm ${budgetNote.met ? "text-slate-300" : "text-readiness-yellow"}`}>
-              {budgetNote.met ? "✓ " : "⚠ "}{budgetNote.note}
-            </p>
+            <div className={`card p-4 text-sm ${budgetNote.met ? "text-slate-300" : "text-readiness-yellow"}`}>
+              <p>{budgetNote.met ? "✓ " : "⚠ "}{budgetNote.note}</p>
+
+              {/* ═══════════════════════════════════════════════════════════
+                  THE WAY OUT, PRICED — which is the point of knowing the
+                  number at all.
+
+                  A miss used to end with one sentence of advice nobody had
+                  measured: "cooking fewer, larger meals or eating out less are
+                  the two biggest levers left", shown to every athlete
+                  including the ones already on three meals a day. Each of
+                  these was priced by re-planning the week with it, so what it
+                  says it saves is what it saves.
+
+                  Not summed. Two changes that both work by moving the plan
+                  onto lentils do not save twice, and adding them up is the
+                  arithmetic that gets somebody to the till twelve pounds
+                  short — see lib/budget-advice.ts.
+                  ═══════════════════════════════════════════════════════════ */}
+              {budgetNote.advice && budgetNote.advice.levers.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    What would change it
+                  </p>
+                  <ul className="space-y-1.5">
+                    {budgetNote.advice.levers.map((lever) => (
+                      <li key={lever.id} className="flex items-start gap-2 rounded-xl bg-white/[0.03] px-3 py-2">
+                        <span className="shrink-0 pt-0.5 font-bold tabular-nums text-pitch-400">
+                          −£{lever.saving.toFixed(2)}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-xs font-semibold text-slate-200">{lever.label}</span>
+                          <span className="block text-[11px] leading-snug text-slate-400">{lever.detail}</span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="text-[11px] text-slate-500">
+                    Each measured on its own by rebuilding your week with it. They do not add up — two
+                    changes that both move you onto lentils do not save twice.
+                  </p>
+                </div>
+              )}
+            </div>
           )}
           {list && <ShoppingList list={list} seed={seed} store={store} onStore={chooseStore} onCorrectPrice={correctPrice} />}
         </>

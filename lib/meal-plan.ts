@@ -11,6 +11,7 @@ import { FOODS, FOOD_BY_ID, packPriceFor, isCorrected, type Aisle, type Food, ty
 import { skipReason, EMPTY_SCHEDULE, type DietSchedule } from "./meal-schedule";
 import { ingredientFatigue, monotonyCost, newServedLog, recordServing } from "./meal-monotony";
 import { planLeftovers } from "./batch-cooking";
+import { measureLevers, budgetAdvice, type BudgetAdvice } from "./budget-advice";
 import type { PlanTargets } from "./nutrition"; // used below; also re-exported
 
 // The energy maths moved to ./nutrition so the Coach targets card and the meal
@@ -2260,6 +2261,13 @@ export interface BudgetedWeek {
   met: boolean;
   /** One line for the athlete. Null when there is no budget to report on. */
   note: string | null;
+  /**
+   * The priced way out, when the budget could not be met.
+   *
+   * Only present on a miss — a week that came in under budget has nothing to
+   * advise about. See lib/budget-advice.ts.
+   */
+  advice?: BudgetAdvice;
 }
 
 /**
@@ -2548,15 +2556,85 @@ export function planWithinBudget(
     return { ...fallback, budget, met: true, ...costs(fallback.list), note: metNote(fallback.list, budget) };
   }
 
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * A MISS IS THE MOST USEFUL THING THIS FUNCTION KNOWS, so it stops being a
+   * shrug.
+   *
+   * This used to end "£39 over your budget. Cooking fewer, larger meals or
+   * eating out less are the two biggest levers left." The number tells somebody
+   * they failed, and the advice was never measured — one sentence written once
+   * and shown to every athlete, including the ones already on three meals a
+   * day, for whom half of it is worth nothing and the app knew it.
+   *
+   * The app knows exactly what it costs to feed this person, which is genuinely
+   * rare. So each lever is PRICED by re-planning with it, and the answer is
+   * their real floor, what the protein alone costs, and what each change is
+   * worth in their week. "£50 is not possible, £64 is, and here is the £14" is
+   * a useful answer; "£39 over" is not.
+   *
+   * Costs a handful of extra plan builds, and only on the path where the
+   * athlete has already been told no.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  const floor = fallback.list.ongoingTotal;
+
+  /**
+   * LIKE FOR LIKE, or the number is not the change's.
+   *
+   * Measuring a lever against `floor` overstates it whenever the fallback is
+   * the unpressured reference week — the difference then includes "a budget
+   * plan existed at all" as well as the change itself. Measured on a 95kg
+   * cutter that inflated "go meat-free" from its real value to £36.49, which
+   * would have been the app promising a saving that was mostly something else.
+   *
+   * So every lever is compared against the SAME build with nothing changed.
+   */
+  const costOfPlan = (change: Partial<MealPrefs>) => {
+    const withChange = mergePrefs(prefs, change);
+    const week = buildWeek(targets, seed, withChange, schedule, swaps, recent, 1);
+    const batched = (withChange.budget || Number(withChange.weeklyBudget) > 0)
+      ? applyLeftovers(week, (d) => shoppingList(d, pricing).ongoingTotal)
+      : week;
+    return shoppingList(batched, pricing).ongoingTotal;
+  };
+  const levers = measureLevers(prefs, costOfPlan({}), costOfPlan);
+
+  const advice = budgetAdvice(budget, floor, levers, targets.protein, bestProteinPerPound());
+
   return {
     ...fallback, budget, met: false, ...costs(fallback.list),
-    note: `The cheapest week we can build that still feeds you properly is £${fallback.list.ongoingTotal.toFixed(2)}`
-      + ` — £${(fallback.list.ongoingTotal - budget).toFixed(2)} over your £${budget.toFixed(2)}.`
-      + ` Cooking fewer, larger meals or eating out less are the two biggest levers left.`,
+    advice,
+    note: advice.headline + (advice.proteinNote ? ` ${advice.proteinNote}` : ""),
   };
 }
 
 const costs = (list: ShoppingList) => ({ weeklyCost: list.ongoingTotal, firstShopCost: list.total });
+
+/**
+ * The best protein-per-pound anywhere in the book.
+ *
+ * Measured rather than written down, because a number in a comment goes stale
+ * the first time somebody adds a recipe — and this one is load bearing: it is
+ * what lets the app say "even at the cheapest source here, your protein alone
+ * is £42" and be right about it.
+ *
+ * Computed once. It depends only on the recipe data, which does not change at
+ * runtime.
+ */
+let cheapestProtein: number | null = null;
+function bestProteinPerPound(): number {
+  if (cheapestProtein !== null) return cheapestProtein;
+  const empty = basketOf([]);
+  let best = 0;
+  for (const meal of MEALS) {
+    const protein = mealMacros(meal, 1).protein;
+    const cost = ongoingMarginalCost(meal, empty, 1);
+    if (protein > 0 && cost > 0) best = Math.max(best, protein / cost);
+  }
+  cheapestProtein = best;
+  return best;
+}
 
 function metNote(list: ShoppingList, budget: number): string {
   const under = budget - list.ongoingTotal;
