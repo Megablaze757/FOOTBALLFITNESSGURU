@@ -63,7 +63,7 @@ jobs:
       # expanding globs there only arrived in Node 22. On 20 it looks for a file
       # literally called "lib/**/*.test.ts" and exits 1 without running anything
       # — which is what the first CI run did.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -124,7 +124,7 @@ jobs:
     if: github.event_name != 'push' || inputs.e2e
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
