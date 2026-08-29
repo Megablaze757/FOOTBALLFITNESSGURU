@@ -109,3 +109,111 @@ export function guideArticle(opts: {
 export function graph(nodes: unknown[]) {
   return { "@context": "https://schema.org", "@graph": [PUBLISHER, ...nodes] };
 }
+
+
+// --- recipes ------------------------------------------------------------------
+
+/**
+ * A Recipe node, which is the point of publishing these at all.
+ *
+ * Recipe is one of the few schema types Google still gives a genuine rich
+ * result to — the card with the picture, the time and the rating — and a
+ * database of costed recipes is exactly the sort of thing it is for. Every
+ * field below comes from the recipe data; nothing is padded to satisfy the
+ * spec, because a Recipe node claiming a cook time the page does not show is
+ * the kind of mismatch that loses the rich result rather than winning it.
+ */
+export function recipeSchema(opts: {
+  name: string;
+  url: string;
+  description: string;
+  minutes?: number;
+  ingredients: string[];
+  steps: string[];
+  kcal: number;
+  protein: number;
+  carbs: number;
+  fats: number;
+  category: string;
+}) {
+  return {
+    "@type": "Recipe",
+    "@id": `${opts.url}#recipe`,
+    name: opts.name,
+    url: opts.url,
+    description: opts.description,
+    recipeCategory: opts.category,
+    // ISO 8601. Omitted rather than guessed when the recipe does not say.
+    ...(opts.minutes ? { totalTime: `PT${Math.round(opts.minutes)}M` } : {}),
+    recipeYield: "1 serving",
+    recipeIngredient: opts.ingredients,
+    recipeInstructions: opts.steps.map((text, i) => ({
+      "@type": "HowToStep",
+      position: i + 1,
+      text,
+    })),
+    nutrition: {
+      "@type": "NutritionInformation",
+      servingSize: "1 serving",
+      calories: `${Math.round(opts.kcal)} calories`,
+      proteinContent: `${Math.round(opts.protein)} g`,
+      carbohydrateContent: `${Math.round(opts.carbs)} g`,
+      fatContent: `${Math.round(opts.fats)} g`,
+    },
+    publisher: PUBLISHER,
+  };
+}
+
+// --- exercises ----------------------------------------------------------------
+
+/**
+ * ExerciseAction rather than HowTo.
+ *
+ * HowTo lost its rich result in 2023 and is now decoration; ExerciseAction is
+ * what actually describes a movement, and it is the type an assistant reads
+ * when somebody asks how to do one. The bet in robots.txt — that being the
+ * source a model quotes is worth more than the click — only pays if the
+ * machine-readable version exists.
+ */
+export function exerciseSchema(opts: {
+  name: string;
+  url: string;
+  description: string;
+  muscles: string[];
+  equipment: string;
+  steps: string[];
+}) {
+  return {
+    "@type": "ExerciseAction",
+    "@id": `${opts.url}#exercise`,
+    name: opts.name,
+    url: opts.url,
+    description: opts.description,
+    ...(opts.muscles.length ? { exerciseType: opts.muscles.join(", ") } : {}),
+    ...(opts.equipment && opts.equipment !== "—"
+      ? { instrument: { "@type": "Thing", name: opts.equipment } }
+      : {}),
+    ...(opts.steps.length
+      ? {
+          subjectOf: {
+            "@type": "HowTo",
+            name: `How to do a ${opts.name.toLowerCase()}`,
+            step: opts.steps.map((text, i) => ({ "@type": "HowToStep", position: i + 1, text })),
+          },
+        }
+      : {}),
+  };
+}
+
+/** Where this page sits, so a crawler can see the shape of the site. */
+export function breadcrumbs(trail: { name: string; url: string }[]) {
+  return {
+    "@type": "BreadcrumbList",
+    itemListElement: trail.map((t, i) => ({
+      "@type": "ListItem",
+      position: i + 1,
+      name: t.name,
+      item: t.url,
+    })),
+  };
+}

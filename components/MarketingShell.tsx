@@ -27,6 +27,12 @@ export function MarketingShell({ children }: { children: React.ReactNode }) {
           <Link href="/plans" className="hover:text-slate-300">Pricing</Link>
           <Link href="/guides" className="hover:text-slate-300">Position guides</Link>
           <Link href="/drills" className="hover:text-slate-300">Drills</Link>
+          {/* WITHOUT THESE THE NEW PAGES ARE ORPHANS. Six hundred pages
+              reachable only from sitemap.xml is a set of pages a crawler is
+              told about and never given a reason to value — internal links are
+              most of how it decides what a site is about. */}
+          <Link href="/recipes" className="hover:text-slate-300">Recipes</Link>
+          <Link href="/exercises" className="hover:text-slate-300">Exercises</Link>
           <Link href="/privacy" className="hover:text-slate-300">Privacy</Link>
           <Link href="/terms" className="hover:text-slate-300">Terms</Link>
         </div>

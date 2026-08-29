@@ -17,6 +17,11 @@ const PUBLIC_ROUTES = [
   { path: "/privacy/", name: "privacy" },
   { path: "/terms/", name: "terms" },
   { path: "/waitlist/", name: "waitlist" },
+  // The content pages, which are now most of the site.
+  { path: "/recipes/", name: "recipes index" },
+  { path: "/exercises/", name: "exercises index" },
+  { path: "/recipes/red-lentil-dhal-with-rice/", name: "a recipe" },
+  { path: "/exercises/barbell-back-squat/", name: "an exercise" },
 ];
 
 /**

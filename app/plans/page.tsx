@@ -91,6 +91,12 @@ export default function PlansPage() {
           <Link href="/drills" className="rounded-2xl border border-white/10 px-5 py-2.5 text-sm font-semibold text-slate-200">
             Skill drills
           </Link>
+          <Link href="/recipes" className="rounded-2xl border border-white/10 px-5 py-2.5 text-sm font-semibold text-slate-200">
+            Recipes
+          </Link>
+          <Link href="/exercises" className="rounded-2xl border border-white/10 px-5 py-2.5 text-sm font-semibold text-slate-200">
+            Exercises
+          </Link>
         </div>
       </section>
     </MarketingShell>
