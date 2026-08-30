@@ -62,8 +62,9 @@ Disallow: /home
 Disallow: /journal
 Disallow: /coach
 Disallow: /nutrition
-# NOT /recipes or /exercises. Those are public pages built from the same data
-# the app uses, with no session required — see app/recipes and app/exercises.
+# NOT /recipes, /exercises or /collections. Those are public pages built from
+# the same data the app uses, with no session required — see app/recipes,
+# app/exercises and app/collections.
 # /library is the signed-in browser for the same catalogue and stays out.
 Disallow: /library
 Disallow: /essentials

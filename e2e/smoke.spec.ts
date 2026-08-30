@@ -22,6 +22,10 @@ const PUBLIC_ROUTES = [
   { path: "/exercises/", name: "exercises index" },
   { path: "/recipes/red-lentil-dhal-with-rice/", name: "a recipe" },
   { path: "/exercises/barbell-back-squat/", name: "an exercise" },
+  { path: "/collections/", name: "collections index" },
+  // The longest collection — 190 rows, which is where a list layout breaks
+  // sideways on a phone if it is going to.
+  { path: "/collections/vegetarian-high-protein/", name: "a collection" },
 ];
 
 /**

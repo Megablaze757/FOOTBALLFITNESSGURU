@@ -2,6 +2,7 @@ import type { MetadataRoute } from "next";
 import { SITE, guideSports, guidePages, contentPages } from "@/lib/seo";
 import { MEALS } from "@/lib/meals-data";
 import { EXERCISES, isRunEntry } from "@/lib/exercises";
+import { collectionSlugs } from "@/lib/collections";
 
 // Generated at build time from lib/seo.ts, which is the same source the pages
 // and the internal links use — so the sitemap can't list a URL that 404s.
@@ -21,6 +22,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${SITE}/guides/`, changeFrequency: "monthly" as const, priority: 0.8 },
     { url: `${SITE}/recipes/`, changeFrequency: "monthly" as const, priority: 0.85 },
     { url: `${SITE}/exercises/`, changeFrequency: "monthly" as const, priority: 0.85 },
+    { url: `${SITE}/collections/`, changeFrequency: "monthly" as const, priority: 0.85 },
     { url: `${SITE}/privacy/`, changeFrequency: "yearly" as const, priority: 0.2 },
     { url: `${SITE}/terms/`, changeFrequency: "yearly" as const, priority: 0.2 },
   ];
@@ -62,6 +64,21 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: 0.6,
   }));
 
-  return [...core, ...drills, ...guides, ...recipes, ...exercises]
+  /**
+   * The collection pages, which rank above the recipes they list on purpose.
+   *
+   * A collection is the page a search like "cheap high protein meals" is
+   * actually looking for, and it is the one page type here that no recipe site
+   * with uncosted ingredients can produce. Only the ones that cleared
+   * MIN_MEMBERS are listed, because collectionSlugs() is the same function the
+   * route uses — a collection the data cannot fill has no file to point at.
+   */
+  const collections = collectionSlugs().map((slug) => ({
+    url: `${SITE}/collections/${slug}/`,
+    changeFrequency: "monthly" as const,
+    priority: 0.75,
+  }));
+
+  return [...core, ...drills, ...guides, ...collections, ...recipes, ...exercises]
     .map((e) => ({ ...e, lastModified: now }));
 }

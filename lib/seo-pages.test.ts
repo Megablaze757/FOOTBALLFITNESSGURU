@@ -45,11 +45,14 @@ test("two things with the same name both still get a page", () => {
 });
 
 test("every slug resolves back to the thing it came from", () => {
-  for (const items of [MEALS, MOVEMENTS]) {
+  /** Generic, not a loop over [MEALS, MOVEMENTS]: a union of arrays cannot infer T. */
+  const roundTrips = <T extends { id: string; name: string }>(items: T[]) => {
     for (const { slug, id } of contentPages(items)) {
       assert.equal(findBySlug(items, slug)?.id, id, `${slug} resolves to the wrong row`);
     }
-  }
+  };
+  roundTrips(MEALS);
+  roundTrips(MOVEMENTS);
   assert.equal(findBySlug(MEALS, "no-such-recipe"), null);
 });
 
@@ -59,7 +62,7 @@ test("every slug resolves back to the thing it came from", () => {
  */
 test("robots opens the content pages and still closes the app", () => {
   const robots = readFileSync(new URL("../public/robots.txt", import.meta.url), "utf8");
-  for (const open of ["/recipes", "/exercises"]) {
+  for (const open of ["/recipes", "/exercises", "/collections"]) {
     assert.ok(!new RegExp(`^Disallow: ${open}`, "m").test(robots),
       `${open} is disallowed — the pages exist and no crawler may read them`);
   }

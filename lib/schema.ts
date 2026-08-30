@@ -217,3 +217,36 @@ export function breadcrumbs(trail: { name: string; url: string }[]) {
     })),
   };
 }
+
+/**
+ * A curated list, as the thing itself rather than a page that mentions one.
+ *
+ * ItemList is what a collection page actually is, and stating it means the
+ * entries can be understood as an ordered answer rather than as navigation.
+ * Every item points at a real page on this site — there is no version of this
+ * that summarises recipes we do not publish.
+ */
+export function itemList(opts: {
+  name: string;
+  description: string;
+  url: string;
+  items: { name: string; url: string }[];
+}) {
+  return {
+    "@type": "ItemList",
+    name: opts.name,
+    description: opts.description,
+    url: opts.url,
+    numberOfItems: opts.items.length,
+    // No itemListOrder. Each collection ranks on its own property — protein
+    // descending on most, minutes ascending on the 20-minute dinners — so a
+    // single direction would be a claim that is false on at least one page.
+    // The position fields already say the order is meaningful.
+    itemListElement: opts.items.map((item, i) => ({
+      "@type": "ListItem",
+      position: i + 1,
+      name: item.name,
+      url: item.url,
+    })),
+  };
+}
