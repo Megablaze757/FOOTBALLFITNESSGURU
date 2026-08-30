@@ -57,6 +57,50 @@ test("every slug resolves back to the thing it came from", () => {
 });
 
 /**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * A RATCHET, NOT A PASS MARK.
+ *
+ * `why` is the meta description of every public exercise page, and 201 of them
+ * repeat another page's — 43 saying "Builds the legs." alone. That is thin and
+ * duplicated, on the pages this site is asking to rank.
+ *
+ * 201 rather than the 197 in docs/EXERCISE-CUES.md, and the gap is the point:
+ * 197 is what the drafting script can fix, because it only takes rows with a
+ * description long enough to check a cue against. The other four are two pairs
+ * of hand-written entries that happen to share a sentence, and they need a
+ * person, not a model.
+ *
+ * It cannot be a clean assertion today without failing, and a test that fails
+ * on main teaches people to ignore red. So it holds the line at what was
+ * measured and no worse: another import of stub rows breaks it, and every
+ * drafted description lets the number come down.
+ *
+ * LOWER THIS NUMBER as drafts land — see docs/EXERCISE-CUES.md. It is meant to
+ * reach zero.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+const DUPLICATE_DESCRIPTIONS_BASELINE = 201;
+
+test("no more exercise pages share a meta description than already do", () => {
+  const counts = new Map<string, number>();
+  for (const e of MOVEMENTS) {
+    const description = e.why.trim();
+    counts.set(description, (counts.get(description) ?? 0) + 1);
+  }
+
+  const duplicated = [...counts.values()].filter((n) => n > 1).reduce((a, b) => a + b, 0);
+  assert.ok(duplicated <= DUPLICATE_DESCRIPTIONS_BASELINE,
+    `${duplicated} exercise pages share a meta description with another, up from `
+    + `${DUPLICATE_DESCRIPTIONS_BASELINE}. A page that describes itself the same way as `
+    + `42 others is a duplicate-content signal on the pages meant to rank.`);
+
+  if (duplicated < DUPLICATE_DESCRIPTIONS_BASELINE) {
+    console.log(`  ↓ duplicate descriptions now ${duplicated}; lower the baseline from `
+      + `${DUPLICATE_DESCRIPTIONS_BASELINE} in lib/seo-pages.test.ts`);
+  }
+});
+
+/**
  * The one rule that decides whether these pages are worth having: the app's
  * own catalogue must be public, and the signed-in browser for it must not be.
  */

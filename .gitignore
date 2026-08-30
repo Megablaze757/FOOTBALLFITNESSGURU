@@ -46,3 +46,6 @@ _*.js
 /playwright-report/
 /blob-report/
 /playwright/.cache/
+
+# Drafted exercise cues awaiting review — regenerate rather than commit.
+scripts/out/

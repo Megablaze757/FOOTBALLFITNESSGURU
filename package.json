@@ -13,7 +13,8 @@
     "test:coverage": "node --import tsx --test --experimental-test-coverage --test-coverage-lines=95 --test-coverage-branches=85 --test-coverage-functions=90 \"lib/**/*.test.ts\"",
     "test:e2e": "playwright test",
     "audit:ui": "node scripts/ui-audit.mjs",
-    "worker:drift": "node scripts/worker-drift.mjs"
+    "worker:drift": "node scripts/worker-drift.mjs",
+    "draft:cues": "node --import tsx scripts/draft-exercise-cues.mts"
   },
   "engines": {
     "//": "Node 22+: `node --test` only learned to expand globs in 22, and the test script relies on it.",
