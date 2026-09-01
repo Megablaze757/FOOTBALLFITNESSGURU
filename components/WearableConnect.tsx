@@ -672,7 +672,7 @@ function ManualBuild() {
         <Step n={1} title="Read last night's sleep">
           Open <b className="text-slate-200">Shortcuts</b>, start a new one, and search for
           <b className="text-slate-200"> Find Health Samples</b>. Set it to
-          <b className="text-slate-200"> Sleep Analysis</b>, <b className="text-slate-200">Latest First</b>,
+          <b className="text-slate-200"> Sleep</b>, <b className="text-slate-200">Latest First</b>,
           limit <b className="text-slate-200">1</b>.
           <span className="mt-1 block text-slate-500">
             Latest First with a limit of 1 is what makes it last night. On Oldest First it runs every day and

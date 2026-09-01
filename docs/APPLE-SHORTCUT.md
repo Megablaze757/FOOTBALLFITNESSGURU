@@ -37,15 +37,15 @@ the configured link.
 
 ## Building it — the checklist
 
-On the iPhone, in **Shortcuts**, make a new shortcut and add these six actions in
-order. **Search for each name in the action list.** Do not go looking for
+On the iPhone, in **Shortcuts**, make a new shortcut and add these seven actions
+in order. **Search for each name in the action list.** Do not go looking for
 buttons in particular corners — Apple moves those between iOS versions, which is
 exactly why athletes report that "the app looks different to the instructions".
 
 | # | Search for | Set it to |
 |---|---|---|
 | 1 | **Text** | Leave it empty. This is the one the athlete fills in — their upload link. |
-| 2 | **Find Health Samples** | `Sleep Analysis` · sort by `Start Date` · `Latest First` · **Limit on, 1** |
+| 2 | **Find Health Samples** | `Sleep` · sort by `Start Date` · `Latest First` · **Limit on, 1** |
 | 3 | **Get Details of Health Sample** | `Duration` — then tap the Duration variable and set its unit to **Hours** |
 | 4 | **Find Health Samples** | `Heart Rate Variability` · `Latest First` · Limit 1 → **Get Details of Health Sample** → `Value` |
 | 5 | **Find Health Samples** | `Resting Heart Rate` · `Latest First` · Limit 1 → **Get Details of Health Sample** → `Value` |
@@ -60,6 +60,10 @@ Two things that will otherwise cost you twenty minutes:
   hand-built version.
 - **The link from step 1 already ends `?t=…`**, so every key in step 6 starts
   with `&`.
+- **The sample type is `Sleep`, not `Sleep Analysis`.** It reads as "Sleep
+  Analysis" in the Health app and in Apple's own HealthKit docs, which is where
+  that name came from — but the Shortcuts picker lists it as plain `Sleep`, and
+  searching the longer name finds nothing.
 
 Name it something obvious — *Pocket Athlete — Morning Sync* — and run it once on
 your own account. It should answer with the hours it read.

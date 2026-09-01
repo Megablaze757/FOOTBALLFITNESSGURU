@@ -56,11 +56,53 @@ test("every action the guide relies on is named exactly", () => {
     "Find Health Samples",
     "Get Details of Health Sample",
     "Get Contents of URL",
-    "Sleep Analysis",
     "Latest First",
   ]) {
     assert.ok(GUIDE.includes(action), `the guide no longer names "${action}"`);
   }
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE NAME IN THE PICKER, NOT THE NAME IN THE DOCS.
+ *
+ * This guide said `Sleep Analysis` for months, and this test ASSERTED it — so
+ * the test was holding the bug in place. HKCategoryTypeIdentifierSleepAnalysis
+ * is what Apple calls it in HealthKit and what the Health app shows, which is
+ * where the name came from and why it looked right to everyone who checked it
+ * against a document instead of against a phone.
+ *
+ * The Shortcuts picker lists it as plain `Sleep`. Searching the longer name
+ * finds nothing, and an athlete who cannot complete step 2 does not complete
+ * step 3 either. Reported by somebody with the app actually open.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("the sleep sample is named as Shortcuts lists it", () => {
+  // Both copies. The same wrong name was in the in-app panel AND the build doc,
+  // because they were written from the same source and checked against each
+  // other rather than against a phone.
+  const DOC = readFileSync(new URL("../docs/APPLE-SHORTCUT.md", import.meta.url), "utf8")
+    .split("Two things that will otherwise cost you")[0];
+
+  for (const [where, text] of [["the in-app panel", GUIDE], ["docs/APPLE-SHORTCUT.md", DOC]] as const) {
+    assert.ok(!/Sleep Analysis/.test(text),
+      `${where} says "Sleep Analysis" — Shortcuts has no such option, it is just "Sleep"`);
+    assert.match(text, /\bSleep\b/, `${where} no longer names the sleep sample at all`);
+  }
+});
+
+/** The doc numbers its steps, and the count above the table has to match it. */
+test("the build doc counts its own steps correctly", () => {
+  const doc = readFileSync(new URL("../docs/APPLE-SHORTCUT.md", import.meta.url), "utf8");
+  const rows = [...doc.matchAll(/^\| (\d+) \|/gm)].map((m) => Number(m[1]));
+  assert.ok(rows.length > 0, "the action table is gone");
+
+  const WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
+  const claimed = doc.match(/add these (\w+) actions/);
+  assert.ok(claimed, "the sentence introducing the table is gone");
+  assert.equal(WORDS.indexOf(claimed[1]), rows.length,
+    `the doc says "${claimed[1]} actions" over a table of ${rows.length}`);
+  assert.deepEqual(rows, rows.map((_, i) => i + 1), "the steps are not numbered 1..n in order");
 });
 
 /**
