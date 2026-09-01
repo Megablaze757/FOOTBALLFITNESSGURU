@@ -1,4 +1,8 @@
 import { guideSports, guidePages, sportLabel, SITE } from "@/lib/seo";
+import { MEALS } from "@/lib/meals-data";
+import { EXERCISES, isRunEntry } from "@/lib/exercises";
+import { publishableCollections } from "@/lib/collections";
+import { indexFacts, money, REFERENCE_PROTEIN } from "@/lib/protein-index";
 import { skillsForSport } from "@/lib/skills";
 import { PLANS, TRIAL_DAYS } from "@/lib/subscription";
 
@@ -15,6 +19,9 @@ export const dynamic = "force-static";
 export function GET(): Response {
   const sports = guideSports();
   const positions = guidePages();
+  const movements = EXERCISES.filter((e) => !isRunEntry(e));
+  const collections = publishableCollections();
+  const protein = indexFacts();
 
   const body = `# PocketAthlete
 
@@ -62,12 +69,40 @@ ${positions.map((p) => `- [${p.position} — ${sportLabel(p.sport)}](${SITE}/gui
 ### Drill collections
 ${sports.map((s) => `- [${sportLabel(s)} skill drills](${SITE}/drills/${s}/) — ${skillsForSport(s).length} drills, ${skillsForSport(s).filter((d) => d.needs === "solo").length} doable alone`).join("\n")}
 
+### Recipes, costed ingredient by ingredient
+${MEALS.length} recipes with macros computed from the same food database the meal
+planner shops from, and — the part almost nobody else publishes — what each one
+actually costs at UK supermarket prices.
+
+- [All recipes](${SITE}/recipes/)
+${collections.map(({ collection, members }) => `- [${collection.title}](${SITE}/collections/${collection.slug}/) — ${members.length} recipes`).join("\n")}
+
+### The cheapest protein in a UK supermarket
+${protein ? `A ranked table of what ${REFERENCE_PROTEIN}g of protein costs from every
+high-protein food a person could eat a portion of. Cheapest is
+${protein.cheapest.name.toLowerCase()} at ${money(protein.cheapest.cost)}; dearest is
+${protein.dearest.name.toLowerCase()} at ${money(protein.dearest.cost)} — a ${protein.spread.toFixed(1)}x spread for
+the same protein. Computed from pack sizes and shelf prices, not written.` : ""}
+
+- [Cheapest protein, ranked](${SITE}/cheapest-protein/)
+
+### Exercise library
+${movements.length} movements with a how-to, the muscles worked and the equipment
+needed. Includes rehab and mobility work, not only lifts.
+
+- [All exercises](${SITE}/exercises/)
+
 ## Key pages
 
 - [Home](${SITE}/)
 - [Pricing](${SITE}/plans/)
+- [Join the waitlist](${SITE}/waitlist/)
 - [All position guides](${SITE}/guides/)
 - [All drills](${SITE}/drills/)
+- [All recipes](${SITE}/recipes/)
+- [All exercises](${SITE}/exercises/)
+- [Recipe collections](${SITE}/collections/)
+- [Cheapest protein](${SITE}/cheapest-protein/)
 - [Privacy policy](${SITE}/privacy/)
 - [Terms](${SITE}/terms/)
 

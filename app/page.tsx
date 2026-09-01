@@ -431,6 +431,80 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* ═══════════════════════════════════════════════════════════════════
+          THE FREE CONTENT, WHICH THE HOME PAGE DID NOT LINK TO AT ALL.
+
+          778 public pages — recipes, exercises, position guides, drills, the
+          protein index — and the only route to any of them from here was the
+          footer of a different layout. Two things wrong with that.
+
+          A visitor who is not ready to sign up was offered a waitlist and
+          nothing else, when the site's answer to "is this any good" is sitting
+          right there for free.
+
+          And a crawler follows links. Pages reachable only from a footer on
+          other pages are pages the index treats as an afterthought, which is a
+          poor return on the one thing here nobody else can publish.
+
+          No counts, deliberately. This is a client component and the numbers
+          would mean shipping the whole recipe, exercise and food database to
+          every first-time visitor — 175 kB is already the heaviest page on the
+          site. What each link is worth is said in words instead.
+          ═══════════════════════════════════════════════════════════════════ */}
+      <section className="mt-24">
+        <h2 className="text-center text-3xl font-extrabold tracking-tight sm:text-4xl">
+          Free, and no account needed
+        </h2>
+        <p className="mx-auto mt-3 max-w-lg text-center text-slate-400">
+          Most of what this app knows is readable without signing up for anything.
+        </p>
+
+        <ul className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {[
+            {
+              href: "/cheapest-protein/",
+              title: "The cheapest protein in a UK supermarket",
+              blurb: "Ranked by what 30g of protein actually costs. The cheapest is about ten times cheaper than the dearest.",
+            },
+            {
+              href: "/recipes/",
+              title: "Recipes, costed to the ingredient",
+              blurb: "Macros worked out and a real shopping cost for every one. No blog post in front of the method.",
+            },
+            {
+              href: "/collections/",
+              title: "Recipe collections",
+              blurb: "Cheap high-protein meals, 20-minute dinners, vegan, gluten-free, and dishes worth cooking double.",
+            },
+            {
+              href: "/exercises/",
+              title: "Exercise library",
+              blurb: "How to do every movement, what it works and what you need for it — rehab and mobility included.",
+            },
+            {
+              href: "/guides/",
+              title: "Position guides",
+              blurb: "What your position actually needs to train, physically and technically.",
+            },
+            {
+              href: "/drills/",
+              title: "Skill drills",
+              blurb: "Setup, steps, volume and a coaching cue. Marked solo, partner or team.",
+            },
+          ].map((item) => (
+            <li key={item.href}>
+              <Link
+                href={item.href}
+                className="flex h-full flex-col rounded-2xl border border-white/[0.08] bg-white/[0.02] p-4 transition hover:border-white/20"
+              >
+                <span className="text-sm font-extrabold text-slate-100">{item.title}</span>
+                <span className="mt-1.5 text-xs leading-relaxed text-slate-400">{item.blurb}</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </section>
+
       {/* Final CTA */}
       <section className="mt-24">
         <div className="card relative overflow-hidden p-10 text-center sm:p-16">
