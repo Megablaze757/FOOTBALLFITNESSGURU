@@ -5,8 +5,8 @@ import { RankBadge } from "@/components/RankBadge";
 import { useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAsync } from "@/lib/use-async";
-import { computeXp, levelFor, EMPTY_STATS } from "@/lib/gamification";
-import { BOARDS, rankBoard, placeOf, type AthleteStats, type BoardId } from "@/lib/leaderboard";
+import { computeXp, levelFor, EMPTY_STATS, type Standing } from "@/lib/gamification";
+import { BOARDS, rankBoard, boardView, placeAbove, type AthleteStats, type BoardId, type Ranked } from "@/lib/leaderboard";
 
 interface Row {
   user_id: string;
@@ -77,7 +77,25 @@ export function Leaderboards({ userId }: { userId: string }) {
 
   const board = BOARDS.find((b) => b.id === boardId)!;
   const ranked = useMemo(() => rankBoard(board, athletes), [board, athletes]);
-  const mine = placeOf(ranked, userId);
+  const { top, below } = boardView(ranked, userId);
+  const mine = below ?? top.find((r) => r.stats.userId === userId) ?? null;
+
+  /**
+   * Standing is a fact about the whole ladder, so it is read off the XP board
+   * at world scope — never off whichever board is on screen. Being top of
+   * "longest streak" in a squad of four is not being no. 1 in the world, and
+   * passing that rank through would have printed Apex beside their name.
+   *
+   * Squad scope gets no standing rather than a squad-shaped one. standingRank
+   * needs LADDER_MIN_ATHLETES anyway, so this is belt and braces.
+   */
+  const standings = useMemo(() => {
+    if (scope !== "world") return new Map<string, Standing>();
+    const byXp = rankBoard(BOARDS.find((b) => b.id === "xp")!, athletes);
+    return new Map(byXp.map((r) => [r.stats.userId, { athletes: byXp.length, position: r.rank }]));
+  }, [scope, athletes]);
+
+  const levelOf = (r: Ranked) => levelFor(r.stats.xp, standings.get(r.stats.userId) ?? null);
 
   return (
     <div className="card p-5">
@@ -140,7 +158,7 @@ export function Leaderboards({ userId }: { userId: string }) {
               wrong-rank report on Home.
               ═══════════════════════════════════════════════════════════════ */}
           {mine && (() => {
-            const lvl = levelFor(mine.stats.xp);
+            const lvl = levelOf(mine);
             return (
               <div className="mb-3 flex items-center gap-3 rounded-xl bg-pitch-400/[0.06] px-3 py-2.5 ring-1 ring-pitch-400/20">
                 <RankBadge tier={lvl.tier} division={lvl.division} color={lvl.color} size={34} className="shrink-0" title={lvl.rank} />
@@ -164,7 +182,7 @@ export function Leaderboards({ userId }: { userId: string }) {
           })()}
 
           <ol className="space-y-1.5">
-            {ranked.slice(0, 10).map((r) => {
+            {top.map((r) => {
               const isMe = r.stats.userId === userId;
               return (
                 <li
@@ -180,7 +198,7 @@ export function Leaderboards({ userId }: { userId: string }) {
                       or three years. The badge is drawn from their level, which
                       the board already computes. */}
                   {(() => {
-                    const lvl = levelFor(r.stats.xp);
+                    const lvl = levelOf(r);
                     return (
                       <RankBadge
                         tier={lvl.tier}
@@ -203,19 +221,19 @@ export function Leaderboards({ userId }: { userId: string }) {
 
           {/* If you're outside the top ten, say where you actually are —
               otherwise the board is just other people. */}
-          {mine && mine.rank > 10 && (
+          {below && (
             <div className="mt-2 flex items-center gap-3 rounded-xl bg-pitch-400/[0.08] px-2.5 py-2 ring-1 ring-pitch-400/25">
-              <span className="w-6 shrink-0 text-center text-sm font-extrabold text-slate-400">{mine.rank}</span>
+              <span className="w-6 shrink-0 text-center text-sm font-extrabold text-slate-400">{below.rank}</span>
               {/* The same badge every other row carries. Leaving it off the one
                   row that is about you was the odd one out. */}
               {(() => {
-                const lvl = levelFor(mine.stats.xp);
+                const lvl = levelOf(below);
                 return <RankBadge tier={lvl.tier} division={lvl.division} color={lvl.color} size={22} className="shrink-0" title={lvl.rank} />;
               })()}
               <span className="min-w-0 flex-1 truncate text-sm text-slate-100">
-                {mine.stats.name}<span className="ml-1.5 text-xs text-pitch-400">you</span>
+                {below.stats.name}<span className="ml-1.5 text-xs text-pitch-400">you</span>
               </span>
-              <span className="shrink-0 text-sm font-bold tabular-nums text-slate-200">{mine.display}</span>
+              <span className="shrink-0 text-sm font-bold tabular-nums text-slate-200">{below.display}</span>
             </div>
           )}
           {!mine && (
@@ -249,9 +267,11 @@ function ordinal(n: number): string {
  * something to do this week. Only shown when the gap is real — an equal score
  * ranked lower on a tie-break is not a gap you can close by training.
  */
-function gapTo(ranked: { rank: number; value: number; display: string }[], myRank: number): string {
+function gapTo(ranked: Ranked[], myRank: number): string {
   const me = ranked.find((r) => r.rank === myRank);
-  const above = ranked.find((r) => r.rank === myRank - 1);
+  // NOT rank - 1. Ranks skip over ties, so on a board reading 1, 1, 3 there is
+  // no second place and this said nothing at all to the athlete in third.
+  const above = placeAbove(ranked, myRank);
   if (!me || !above) return "";
   const gap = Math.round((above.value - me.value) * 10) / 10;
   return gap > 0 ? `${gap} behind ${ordinal(above.rank)}` : `level with ${ordinal(above.rank)}`;

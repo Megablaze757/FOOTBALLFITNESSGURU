@@ -116,3 +116,51 @@ export function rankBoard(board: Board, athletes: AthleteStats[]): Ranked[] {
 export function placeOf(ranked: Ranked[], userId: string): Ranked | null {
   return ranked.find((r) => r.stats.userId === userId) ?? null;
 }
+
+export interface BoardView {
+  /** The rows to render, in order. */
+  top: Ranked[];
+  /** The viewer's own row, ONLY when it is not already in `top`. */
+  below: Ranked | null;
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * WHICH ROWS TO SHOW, AND WHETHER TO REPEAT YOURS UNDERNEATH.
+ *
+ * This used to be two expressions in the component that had to agree and did
+ * not: the list rendered `ranked.slice(0, 10)` and the extra row appeared when
+ * `mine.rank > 10`. Rank and array position are not the same thing the moment
+ * anybody ties, and on a check-ins board everybody ties.
+ *
+ * Thirteen athletes, three on 7/7, three on 6/7, six on 5/7. The last of those
+ * sixes is RANK 7 at INDEX 11. Not in the first ten rows, and 7 is not greater
+ * than 10, so they appeared nowhere on their own leaderboard — while the board
+ * in front of them showed ranks 1, 1, 1, 4, 4, 4, 7, 7, 7, 7.
+ *
+ * The rule is now asked once, of the list that was actually built: is my row in
+ * it? A rank is not a position and must never be used as one.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export function boardView(ranked: Ranked[], userId: string, limit = 10): BoardView {
+  const top = ranked.slice(0, limit);
+  const mine = placeOf(ranked, userId);
+  const shown = top.some((r) => r.stats.userId === userId);
+  return { top, below: mine && !shown ? mine : null };
+}
+
+/**
+ * The place immediately above, which is NOT rank minus one.
+ *
+ * Ranks skip over ties: with 1, 1, 3 there is no second place, so looking for
+ * `myRank - 1` finds nobody and the athlete is told nothing at all — silently,
+ * on exactly the boards where ties are most common.
+ */
+export function placeAbove(ranked: Ranked[], myRank: number): Ranked | null {
+  let best: Ranked | null = null;
+  for (const r of ranked) {
+    if (r.rank >= myRank) continue;
+    if (!best || r.rank > best.rank) best = r;
+  }
+  return best;
+}

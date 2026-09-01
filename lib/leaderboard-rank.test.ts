@@ -58,3 +58,37 @@ test("the gap to the place above is stated when there is one", () => {
   assert.match(BOARD, /gapTo\(ranked, mine\.rank\)/, "the gap is computed but never shown");
   assert.match(BOARD, /level with/, "an equal score on a tie-break is reported as a gap");
 });
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE COMPONENT MUST NOT DECIDE WHAT TO SHOW FROM A RANK.
+ *
+ * The bug was `ranked.slice(0, 10)` for the list and `mine.rank > 10` for the
+ * row underneath — two expressions that had to agree and stopped agreeing the
+ * moment anybody tied. Both now come out of boardView(), which answers it once
+ * by asking whether the row is in the list it just built.
+ *
+ * lib/leaderboard.test.ts proves the function is right. This proves the
+ * component still uses it, because the easiest way to reintroduce the bug is to
+ * write the slice back by hand.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("which rows to show is decided by boardView, not by arithmetic on a rank", () => {
+  assert.match(BOARD, /boardView\(ranked, userId\)/, "the board no longer asks boardView");
+  // `mine.rank > 1` stays legal: that asks "is anybody above me", which is a
+  // question about rank. Comparing a rank to a ROW COUNT is the bug, and there
+  // is no first place to skip over, so 1 is the one safe number here.
+  assert.ok(!/mine\.rank\s*>\s*(?!1\b)\d+/.test(BOARD),
+    "a rank is being compared to a row count again — ranks skip over ties");
+  assert.ok(!/ranked\.slice\(/.test(BOARD),
+    "the list is being sliced by hand again, so it can disagree with the row below it");
+});
+
+/** Standing outranks every level, so a row drawn without it can be wrong. */
+test("badges are drawn with the athlete's standing, not from XP alone", () => {
+  assert.ok(!/levelFor\((?:mine|r)\.stats\.xp\)/.test(BOARD),
+    "a badge is being drawn from XP with no standing — Elite and Apex would never show");
+  assert.match(BOARD, /levelOf\s*=\s*\(r: Ranked\)/, "the single place that adds standing is gone");
+  assert.match(BOARD, /scope !== "world"/,
+    "standing must not be taken from a squad-scoped board — top of a squad is not no. 1 in the world");
+});

@@ -23,6 +23,9 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${SITE}/recipes/`, changeFrequency: "monthly" as const, priority: 0.85 },
     { url: `${SITE}/exercises/`, changeFrequency: "monthly" as const, priority: 0.85 },
     { url: `${SITE}/collections/`, changeFrequency: "monthly" as const, priority: 0.85 },
+    // The one page here no competitor can compute. Highest of the content
+    // pages because it is the one worth earning a link.
+    { url: `${SITE}/cheapest-protein/`, changeFrequency: "weekly" as const, priority: 0.9 },
     { url: `${SITE}/privacy/`, changeFrequency: "yearly" as const, priority: 0.2 },
     { url: `${SITE}/terms/`, changeFrequency: "yearly" as const, priority: 0.2 },
   ];

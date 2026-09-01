@@ -26,6 +26,7 @@ const PUBLIC_ROUTES = [
   // The longest collection — 190 rows, which is where a list layout breaks
   // sideways on a phone if it is going to.
   { path: "/collections/vegetarian-high-protein/", name: "a collection" },
+  { path: "/cheapest-protein/", name: "cheapest protein" },
 ];
 
 /**

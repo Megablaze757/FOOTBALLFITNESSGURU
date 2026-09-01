@@ -106,7 +106,7 @@ test("no more exercise pages share a meta description than already do", () => {
  */
 test("robots opens the content pages and still closes the app", () => {
   const robots = readFileSync(new URL("../public/robots.txt", import.meta.url), "utf8");
-  for (const open of ["/recipes", "/exercises", "/collections"]) {
+  for (const open of ["/recipes", "/exercises", "/collections", "/cheapest-protein"]) {
     assert.ok(!new RegExp(`^Disallow: ${open}`, "m").test(robots),
       `${open} is disallowed — the pages exist and no crawler may read them`);
   }
