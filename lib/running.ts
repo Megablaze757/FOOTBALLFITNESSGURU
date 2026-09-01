@@ -19,7 +19,7 @@
 //     or the other and rarely both.
 //   * Threshold pace derived from any race the athlete has actually run, so the
 //     paces are theirs rather than a table's.
-//   * Fourteen run types — the whole vocabulary, including the three that are
+//   * Every run type — the whole vocabulary, including the three that are
 //     usually left out of apps (strides, shakeout, progression) because they
 //     don't fit a "session" shape.
 //   * The rules that stop a week from hurting someone: the 80/20 split, a cap
@@ -429,6 +429,42 @@ export interface IntervalShape {
    * recovery is untimed by design — you go again when you're ready.
    */
   recovery: [number, number] | null;
+}
+
+/**
+ * The three groups the run-type picker shows, by how hard the running is.
+ *
+ * One flat list of every type is fine for a runner, who knows what a
+ * Fartlek is. It is not fine for the footballer the picker is mostly shown to,
+ * whose honest answer is nearly always in the first group.
+ *
+ * Keyed on `primaryZone`, which every type already carries, so a type added
+ * later files itself. runBands() is what the picker renders, and it puts
+ * anything the bands miss into an "Other" group — a type in an uncovered zone
+ * would otherwise vanish from a select that still looked complete.
+ */
+export const RUN_BANDS: { label: string; zones: ZoneId[] }[] = [
+  { label: "Easy", zones: [1, 2] },
+  { label: "Steady", zones: [3] },
+  { label: "Hard", zones: [4, 5] },
+];
+
+export function runBands(
+  // Injectable so the orphan branch below can actually be tested. A rescue path
+  // nothing exercises is a rescue path that does not work.
+  bands: { label: string; zones: ZoneId[] }[] = RUN_BANDS,
+): { label: string; types: RunType[] }[] {
+  const placed = new Set<RunTypeId>();
+  const grouped = bands.map((band) => {
+    const types = RUN_TYPES.filter((r) => band.zones.includes(r.primaryZone));
+    for (const t of types) placed.add(t.id);
+    return { label: band.label, types };
+  }).filter((b) => b.types.length > 0);
+
+  // A type nothing covers would disappear from the picker silently. Rather than
+  // lose it, put it somewhere a person will see and fix.
+  const orphans = RUN_TYPES.filter((r) => !placed.has(r.id));
+  return orphans.length > 0 ? [...grouped, { label: "Other", types: orphans }] : grouped;
 }
 
 /**

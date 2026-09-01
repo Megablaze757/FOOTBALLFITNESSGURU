@@ -119,10 +119,10 @@ function PaceSource({ threshold, hr, paces }: {
 }
 
 /**
- * The fourteen run types, each pointing at the zone it lives in.
+ * Every run type, each pointing at the zone it lives in.
  *
  * Sits under the zone table because the zones are the vocabulary and these are
- * the sentences — reading them the other way round means learning fourteen
+ * the sentences — reading them the other way round means learning every
  * names before knowing what any of them mean.
  */
 export function RunTypeGuide() {

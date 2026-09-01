@@ -11,7 +11,7 @@ import { Icon } from "@/components/Icon";
 import { DrillModal } from "@/components/DrillDetail";
 import { WhatIfLiftSheet } from "@/components/WhatIfLiftSheet";
 import {
-  RUN_TYPES, ZONE_LIST, ZONES, runType, describeShape, shapeMidpoint, intervalEffort,
+  RUN_TYPES, ZONE_LIST, ZONES, runType, runBands, describeShape, shapeMidpoint, intervalEffort,
   formatPace, runPace,
   type RunTypeId, type ZoneId,
 } from "@/lib/running";
@@ -42,7 +42,7 @@ export interface TrainingState {
   /** Rugby only. Weighted above ordinary minutes in sessionLoad. */
   contact_minutes?: number | null;
   // --- Runs. See migration 0064. -------------------------------------------
-  /** Which of the fourteen run types this was. Null = wasn't a run. */
+  /** Which run type this was — see RUN_TYPES. Null = wasn't a run. */
   run_type?: RunTypeId | null;
   /** The zone actually run, which is not always the one the type prescribes. */
   zone?: ZoneId | null;
@@ -166,6 +166,23 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
       return;
     }
     update({ run_type: id, zone: runType(id)?.primaryZone ?? null });
+  };
+
+  /**
+   * Whether they said they ran, kept apart from WHICH run it was.
+   *
+   * Derived rather than plain state so a row that already carries a run opens
+   * expanded — including one loaded after this mounted, which a `useState`
+   * seeded once would miss and quietly hide somebody's logged run behind a
+   * collapsed "No".
+   */
+  const [saidRan, setSaidRan] = useState(false);
+  const ranToday = saidRan || value.run_type != null;
+
+  /** Answering "No" clears the type — a hidden run is worse than a visible one. */
+  const setRanToday = (yes: boolean) => {
+    setSaidRan(yes);
+    if (!yes && value.run_type != null) chooseRunType(null);
   };
 
   const unit = value.distance_unit ?? distanceUnit;
@@ -328,7 +345,7 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
                 className="field"
               >
                 <option value="">Choose the closest type</option>
-                {RUN_TYPES.map((run) => <option key={run.id} value={run.id}>{run.label}</option>)}
+                <RunTypeOptions />
               </select>
               {value.run_type && <span className="mt-1 block text-xs text-slate-500">{runType(value.run_type)?.purpose}</span>}
             </label>
@@ -800,30 +817,75 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
         </label>
       </div>}
 
-      {/* DID YOU RUN?
-          Offered to every sport, not just runners — the program now prescribes
-          easy and recovery runs in all six, so a footballer's Tuesday can be a
-          30-minute Zone 2 run and there was nowhere to say so.
+      {/* ═══════════════════════════════════════════════════════════════════
+          DID YOU RUN?
 
-          Collapsed to one select until they say yes. The zone and heart-rate
-          fields only matter once there IS a run, and three empty boxes on a
-          lifter's check-in is the clutter this form keeps having to shed. */}
-      {sport !== "running" && <label className="block">
-        <span className="field-label">Did you run?</span>
-        <select
-          value={value.run_type ?? ""}
-          onChange={(e) => chooseRunType((e.target.value || null) as RunTypeId | null)}
-          className="field"
-        >
-          <option value="">No — this wasn&apos;t a run</option>
-          {RUN_TYPES.map((r) => (
-            <option key={r.id} value={r.id}>{r.label}</option>
-          ))}
-        </select>
-        {value.run_type && (
-          <span className="mt-1 block text-xs text-slate-500">{runType(value.run_type)?.purpose}</span>
-        )}
-      </label>}
+          Offered to every sport, not just runners — the program prescribes easy
+          and recovery runs in all six, so a footballer's Tuesday can be a
+          30-minute Zone 2 run and there was nowhere to say so. The zone,
+          distance and heart-rate fields stay hidden until there IS a run;
+          three empty boxes on a lifter's check-in is the clutter this form
+          keeps having to shed.
+
+          A YES/NO QUESTION SHOULD NOT BE A SIXTEEN-ITEM DROPDOWN.
+
+          That hiding used to be done by the type select itself, whose default
+          option read "No — this wasn't a run". Reported as confusing, for two
+          reasons worth keeping apart.
+
+          The copy argued with you. A field you have not touched sitting there
+          asserting "No — this wasn't a run" reads as the form contradicting
+          something, and "this" never had an antecedent: this session? this
+          day? this check-in?
+
+          And the shape was wrong. "Did you run?" has two answers, but saying
+          the common one meant opening a list of every run type — Fartlek,
+          Cruise intervals, VO2 max intervals, Shakeout — written in runners'
+          vocabulary for a footballer who did not run. The overwhelmingly
+          common answer should be the cheapest thing on the screen to give.
+
+          So: the question first, in two buttons. The types appear
+          only once somebody has said yes, which is the one time they mean
+          anything. Nothing is preselected on yes — guessing "Easy run" would
+          put a training type nobody chose into the zone and pace figures.
+          ═══════════════════════════════════════════════════════════════════ */}
+      {sport !== "running" && (
+        <div className="block">
+          <span className="field-label">Did you run today?</span>
+          <div className="mt-1.5 flex gap-1 rounded-full bg-white/[0.04] p-0.5">
+            {([["No", false], ["Yes", true]] as const).map(([label, yes]) => (
+              <button
+                key={label}
+                type="button"
+                onClick={() => setRanToday(yes)}
+                aria-pressed={ranToday === yes}
+                className={`min-h-[44px] flex-1 rounded-full px-3 text-xs font-semibold transition ${
+                  ranToday === yes ? "bg-sky-400 text-ink-900" : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {ranToday && (
+            <label className="mt-2 block">
+              <span className="field-label">Run type</span>
+              <select
+                value={value.run_type ?? ""}
+                onChange={(e) => chooseRunType((e.target.value || null) as RunTypeId | null)}
+                className="field"
+              >
+                <option value="">Choose the closest type</option>
+                <RunTypeOptions />
+              </select>
+              {value.run_type && (
+                <span className="mt-1 block text-xs text-slate-500">{runType(value.run_type)?.purpose}</span>
+              )}
+            </label>
+          )}
+        </div>
+      )}
 
       {sport !== "running" && value.run_type && (
         <div className="space-y-3 rounded-2xl border border-white/[0.08] bg-white/[0.02] p-3">
@@ -1056,6 +1118,30 @@ function PaceLine({ km, seconds, unit }: { km: number | null | undefined; second
 }
 
 /** km or miles, in the athlete's hands rather than buried in settings. */
+/**
+ * The run types, grouped by how hard the running is.
+ *
+ * A flat list of every type is fine for a runner, who knows what a Fartlek is. It
+ * is not fine for the footballer this picker is mostly shown to, whose honest
+ * answer is nearly always in the first group and who should not have to read
+ * past "Cruise intervals" to find it.
+ *
+ * The bands live in lib/running.ts beside the types they group, and runBands()
+ * puts anything they miss in an "Other" group rather than dropping it from a
+ * select that would still look complete.
+ */
+function RunTypeOptions() {
+  return (
+    <>
+      {runBands().map((band) => (
+        <optgroup key={band.label} label={band.label}>
+          {band.types.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
+        </optgroup>
+      ))}
+    </>
+  );
+}
+
 function UnitToggle({ unit, onChange }: { unit: "km" | "mi"; onChange: (next: "km" | "mi") => void }) {
   return (
     <span className="unit-toggle unit-toggle-sky">

@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { SPORTS } from "./exercises";
-import { RUN_TYPES, runPace } from "./running";
+import { RUN_TYPES, RUN_BANDS, runBands, runPace } from "./running";
 import { averagePaceSeconds } from "./load";
 import type { TrainingLog } from "./types";
 
@@ -20,7 +20,22 @@ import type { TrainingLog } from "./types";
  * missing field, it is a wrong number for the one sport that had the field.
  */
 
-const form = readFileSync(new URL("../components/TrainingLogInput.tsx", import.meta.url), "utf8");
+const source = readFileSync(new URL("../components/TrainingLogInput.tsx", import.meta.url), "utf8");
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * COMMENTS STRIPPED, BECAUSE ONE MADE A FAILING TEST PASS.
+ *
+ * The copy below changed from "Did you run?" to "Did you run today?", and the
+ * assertion for the old string kept passing — because the comment explaining
+ * the change QUOTED the old string. A source-scanning test that reads its own
+ * rationale is not testing the component, and it fails in the direction that
+ * hides work rather than the direction that shouts.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+const form = source
+  .replace(/\/\*[\s\S]*?\*\//g, " ")
+  .replace(/^\s*\/\/.*$/gm, " ");
 
 test("the run fields are one set of fields, not two", () => {
   // THE REASON THIS DRIFTED. The runner block and the everyone-else block were
@@ -69,7 +84,7 @@ test("every sport that can be prescribed a run can log one", () => {
   // that matters is that nothing gates them on being a runner.
   assert.ok(SPORTS.length >= 5);
   assert.ok(RUN_TYPES.length > 0);
-  assert.match(form, /Did you run\?/, "the other sports lost their way into the run fields");
+  assert.match(form, /Did you run today\?/, "the other sports lost their way into the run fields");
   assert.ok(!/sport === "running" && <PaceLine/.test(form), "pace is back behind a runners-only gate");
 });
 
@@ -153,4 +168,121 @@ test("for a runner, the run is the session", () => {
   assert.match(lone, /total_minutes: run \? Math\.round\(run \/ 60\) : null/);
   assert.match(runPart, /if \(sport !== "running"\) \{[\s\S]{0,120}run_seconds: run \}\);/,
     "a non-runner's session length now follows their run clock");
+});
+
+// --- "no this wasn't a run" was confusing --------------------------------------
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * A YES/NO QUESTION WAS A SIXTEEN-ITEM DROPDOWN.
+ *
+ * Reported as: the run bit on check-in is confusing, "No — this wasn't a run"
+ * especially. Two separate faults sat behind that one sentence.
+ *
+ * The copy argued with you. An untouched field asserting "No — this wasn't a
+ * run" reads as the form contradicting something, and "this" never had an
+ * antecedent — this session, this day, this check-in?
+ *
+ * And the shape was wrong. Saying the overwhelmingly common answer meant
+ * opening a list of every run type written in runners' vocabulary — Fartlek,
+ * Cruise intervals, Shakeout — at a footballer who did not run.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("the common answer is the cheapest thing on screen to give", () => {
+  assert.ok(!/No — this wasn/.test(form),
+    "the form is asserting 'No — this wasn't a run' at somebody who has not answered");
+  assert.match(form, /Did you run today\?/, "the question is gone");
+  assert.match(form, /aria-pressed=\{ranToday === yes\}/,
+    "the answer is not a pair of buttons with a pressed state");
+
+  // The types must be behind the yes, not in front of it. Measured
+  // within the non-runner block specifically: the runner's own form shows the
+  // same picker unconditionally, and should.
+  const question = form.indexOf("Did you run today?");
+  const yesGate = form.indexOf("{ranToday && (", question);
+  const picker = form.indexOf("<RunTypeOptions />", question);
+  assert.ok(question > 0 && yesGate > question, "the yes/no gate is gone");
+  assert.ok(picker > yesGate, "the run type picker is rendered outside the yes branch");
+});
+
+/**
+ * A flat list of every type is fine for a runner, who knows what a Fartlek is.
+ * fine for the footballer this control is mostly shown to, whose honest answer
+ * is nearly always in the first group.
+ */
+test("the run types are grouped by effort, off the data rather than by hand", () => {
+  assert.match(form, /<optgroup key=\{band\.label\} label=\{band\.label\}>/,
+    "the types are an ungrouped flat list again");
+  assert.match(form, /runBands\(\)\.map/,
+    "the picker builds its own grouping again instead of using the one beside the data");
+
+  // The real thing: every type reaches the picker, exactly once. Tested through
+  // runBands() rather than against a copy of the bands — a test holding its own
+  // duplicate of the data under test is asserting a constant.
+  const listed = runBands().flatMap((b) => b.types);
+  assert.equal(listed.length, RUN_TYPES.length,
+    "a run type is missing from the picker, or is in it twice");
+  assert.deepEqual(
+    [...listed.map((t) => t.id)].sort(),
+    [...RUN_TYPES.map((t) => t.id)].sort(),
+    "the picker does not offer the same set of types the app defines");
+
+  for (const band of runBands()) {
+    assert.ok(band.types.length > 0, `the "${band.label}" group is empty`);
+    assert.ok(band.label.length > 0, "a group has no heading");
+  }
+
+  // Easy is where a non-runner almost always lands, so it must not be empty
+  // or buried.
+  assert.equal(runBands()[0].label, "Easy", "the easiest group is no longer first");
+});
+
+/** A zone no band covers must surface, not vanish from a complete-looking select. */
+test("a run type in an uncovered zone is still offered", () => {
+  const covered = new Set(RUN_BANDS.flatMap((b) => b.zones));
+  const uncovered = RUN_TYPES.filter((t) => !covered.has(t.primaryZone));
+  assert.deepEqual(uncovered, [], "some run type is only reachable via the Other fallback");
+
+  assert.ok(!runBands().some((b) => b.label === "Other"),
+    "a type has fallen out of every band — check RUN_BANDS against primaryZone");
+
+  // And the rescue itself works, proven by taking a band away rather than by
+  // reading the code: every type still reaches the picker.
+  const missingSteady = runBands([
+    { label: "Easy", zones: [1, 2] },
+    { label: "Hard", zones: [4, 5] },
+  ]);
+  const rescued = missingSteady.find((b) => b.label === "Other");
+  assert.ok(rescued, "dropping a band silently loses every type that was in it");
+  assert.deepEqual(
+    rescued.types.map((t) => t.id).sort(),
+    RUN_TYPES.filter((t) => t.primaryZone === 3).map((t) => t.id).sort());
+  assert.equal(missingSteady.flatMap((b) => b.types).length, RUN_TYPES.length,
+    "a run type vanished from a select that still looked complete");
+});
+
+test("saying no clears the run rather than hiding it", () => {
+  // A collapsed control over a still-set run_type is the worst outcome: the
+  // athlete believes they answered no and the row still says they ran.
+  assert.match(form, /if \(!yes && value\.run_type != null\) chooseRunType\(null\)/,
+    "answering no leaves a logged run behind a collapsed control");
+});
+
+test("an existing run opens expanded, however the row arrived", () => {
+  // Derived, not seeded once — a useState(!!value.run_type) is correct on mount
+  // and wrong for a row loaded afterwards, which would hide a logged run.
+  assert.match(form, /const ranToday = saidRan \|\| value\.run_type != null/,
+    "a row that already carries a run can open collapsed");
+});
+
+/**
+ * The guard above this file's `form` constant, tested rather than trusted.
+ * It exists because an assertion for "Did you run?" kept passing after the copy
+ * changed, matching the comment that explained the change.
+ */
+test("the source scan cannot be satisfied by a comment", () => {
+  assert.ok(/Did you run\?/.test(source),
+    "fixture gone: no comment in the component quotes the old copy any more");
+  assert.ok(!/Did you run\?[^t]/.test(form.replace(/Did you run today\?/g, "")),
+    "comments are reaching the scanned source, so it can pass on its own rationale");
 });

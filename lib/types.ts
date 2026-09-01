@@ -213,7 +213,7 @@ export interface TrainingLog {
   avg_speed_kmh?: number | null;
   /** Contact work, weighted above running minutes in sessionLoad. */
   contact_minutes?: number | null;
-  /** Which of the fourteen run types this was — see lib/running.ts, migration 0064. */
+  /** Which run type this was — see RUN_TYPES in lib/running.ts, migration 0064. */
   run_type?: import("./running").RunTypeId | null;
   /** The zone actually run, 1–5. May differ from the one the run type prescribes. */
   zone?: import("./running").ZoneId | null;
