@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 /**
@@ -120,6 +120,86 @@ const WORKER_ONLY = new Set([
   // still works without it — somebody types the fields themselves.
   "draft-exercise",
 ]);
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * A CALL NO SCREEN CAN REACH IS NOT A FEATURE.
+ *
+ * The test below proves every backend call has a backend. It says nothing
+ * about whether a person can get to the call — and components/ContentEngine
+ * was exactly that: a four-tab marketing back-office wired to the Worker's
+ * live, admin-gated, budgeted /generate-content endpoint, imported by no route
+ * on the site. The Worker route was deployed and tested. The screen did not
+ * exist. Both halves passed every check we had, because no check joined them.
+ *
+ * So: walk the imports from every page.tsx and layout.tsx, and require that
+ * anything making a backend call is reachable from one of them. Transitive,
+ * because a component two levels down a mounted page is genuinely reachable.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+function reachableFromARoute(): Set<string> {
+  const resolve = (spec: string, from: string): string | null => {
+    if (!spec.startsWith("@/") && !spec.startsWith(".")) return null;
+    const base = spec.startsWith("@/")
+      ? join(ROOT, spec.slice(2))
+      : join(ROOT, dirname(from), spec);
+    for (const candidate of [`${base}.tsx`, `${base}.ts`, join(base, "index.tsx"), join(base, "index.ts")]) {
+      if (existsSync(candidate)) return relative(ROOT, candidate);
+    }
+    return null;
+  };
+
+  const seen = new Set<string>();
+  const queue: string[] = [];
+  const walk = (dir: string) => {
+    for (const entry of readdirSync(join(ROOT, dir), { withFileTypes: true })) {
+      const rel = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name === "node_modules" || entry.name.startsWith(".")) continue;
+        walk(rel);
+      } else if (/^(page|layout|template|error|not-found)\.tsx$/.test(entry.name)) {
+        queue.push(rel);
+      }
+    }
+  };
+  walk("app");
+
+  while (queue.length) {
+    const file = queue.pop()!;
+    if (seen.has(file)) continue;
+    seen.add(file);
+    const src = readFileSync(join(ROOT, file), "utf8");
+    for (const m of src.matchAll(/(?:from|import)\s*\(?\s*["']([^"']+)["']/g)) {
+      const next = resolve(m[1], file);
+      if (next && !seen.has(next)) queue.push(next);
+    }
+  }
+  return seen;
+}
+
+test("every screen that calls a backend is mounted on a route", () => {
+  const reachable = reachableFromARoute();
+  assert.ok(reachable.size > 50, `only walked ${reachable.size} files — the import scan is broken`);
+
+  const pattern = /(?:invokeAI|invokeEdge)\s*(?:<[^>]*>)?\s*\(\s*["'][a-z0-9-]+["']/;
+  const orphans: string[] = [];
+  const walk = (dir: string) => {
+    for (const entry of readdirSync(join(ROOT, dir), { withFileTypes: true })) {
+      const rel = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name === "node_modules" || entry.name.startsWith(".")) continue;
+        walk(rel);
+      } else if (/\.tsx$/.test(entry.name) && !reachable.has(rel)) {
+        if (pattern.test(readFileSync(join(ROOT, rel), "utf8"))) orphans.push(rel);
+      }
+    }
+  };
+  walk("components");
+
+  assert.deepEqual(orphans, [],
+    "these components call a backend and no page imports them — the endpoint is "
+    + "deployed, budgeted and tested, and nobody can get to it");
+});
 
 test("every backend call the app makes is served by some backend", () => {
   const called = calledFunctions();
