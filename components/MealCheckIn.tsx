@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { invokeAI, estimateFood, backendCapabilities } from "@/lib/api";
+import { VoiceInput } from "@/components/VoiceInput";
 import { useJobs } from "@/lib/jobs";
 import {
   planTargets, planWithinBudget, mealMacros, effectiveMealPrefs, DEFAULT_PREFS, mergePrefs,
@@ -654,7 +655,7 @@ export function MealCheckIn({ stats, prefs, dietNotes, seed, swaps, recent, star
         )}
       </div>
 
-      {/* 3. Free text */}
+      {/* 3. Free text, typed or spoken */}
       <div>
         <span className="mb-2 block text-xs text-slate-500">Or just tell me — &ldquo;chicken, rice and broccoli&rdquo;</span>
         <textarea
@@ -663,6 +664,28 @@ export function MealCheckIn({ stats, prefs, dietNotes, seed, swaps, recent, star
           rows={2}
           placeholder="200g chicken, rice, two eggs…"
           className="field resize-none"
+        />
+
+        {/* ═══════════════════════════════════════════════════════════════
+            SPEAKING IT, WHICH IS THE SAME BOX BY OTHER MEANS.
+
+            "200g chicken, rice, two eggs" is about forty taps on a phone
+            keyboard, one-handed, in a kitchen. It is four seconds of talking.
+
+            Deliberately NOT a separate estimator or a separate submit. The
+            words land in the field above and go through exactly the path
+            typing does, so the athlete reads them first — recognition hears
+            "chickpea" as "chicken", which is the same protein and a different
+            meal, and a person glancing at the text is the only thing that
+            catches it.
+
+            The component renders nothing at all where dictation is
+            unavailable, so nobody is offered a button that cannot work.
+            ═══════════════════════════════════════════════════════════════ */}
+        <VoiceInput
+          value={text}
+          onChange={(next) => { setText(next); setEstimate(null); }}
+          disabled={busy}
         />
 
         {shown && (
