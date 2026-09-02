@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { buildBriefing, type BriefingInput } from "./coach-briefing";
 import { RECOVERY_INJURY } from "./essentials";
 
@@ -155,4 +156,47 @@ test("with no exercise list, the coach is told to say nothing about the programm
   const out = buildBriefing({ goal: "strength" });
   assert.match(out, /exercise list is not available, so do not describe what it contains/);
   assert.ok(!/RULE:/.test(out), "a rule was written about a list that does not exist");
+});
+
+// --- the build form was reported as intimidating -------------------------------
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * "WHEN YOU BUILD A PLAN THERE'S WAY TOO MUCH TEXT."
+ *
+ * The form asks five things, and read as far longer: every section carried a
+ * capitalised label AND a sentence underneath, and the four training-kind
+ * cards each carried a second line — eight lines of prose to make one choice.
+ *
+ * What went was the copy that restated its own label. A row of numbers under
+ * DAYS PER WEEK does not need "how many sessions we'll schedule each week"
+ * beneath it. What stayed is everything that says something the controls do
+ * not: that you may pick more than one position, and why the button is dead.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("the build form does not restate its own labels", () => {
+  const form = readFileSync(new URL("../app/(app)/coach/page.tsx", import.meta.url), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, " ")
+    .replace(/^\s*\/\/.*$/gm, " ");
+
+  assert.ok(!/How many sessions we&apos;ll schedule each week/.test(form),
+    "the days-per-week helper is back, under a heading that already says days per week");
+
+  // The training-kind description belongs to the card you chose, not all four.
+  assert.match(form, /\{focus === f\.id && \(\s*<div className="mt-0\.5 text-xs text-slate-400">\{f\.blurb\}<\/div>/,
+    "all four training-kind cards render their description again");
+  assert.match(form, /title=\{f\.blurb\}/,
+    "the description is no longer reachable without selecting the card");
+
+  // The one helper that earns its place: a dead button with no stated reason.
+  assert.match(form, /Pick at least one goal above and this turns on/,
+    "the disabled button lost the only thing explaining why it is disabled");
+});
+
+test("the position picker says the one thing the chips do not", () => {
+  const picker = readFileSync(new URL("../components/PositionPicker.tsx", import.meta.url), "utf8");
+  assert.match(picker, /Play more than one\? Tap them all\./,
+    "the multi-select hint is gone, and nothing else on screen says it is allowed");
+  assert.ok(!/your drills will cover each\."/.test(picker),
+    "the hint is two sentences again where one carries the information");
 });

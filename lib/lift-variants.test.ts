@@ -111,12 +111,16 @@ test("a direct match is never converted", () => {
 });
 
 test("dumbbells are doubled, because they are logged per hand", () => {
-  // THE ONE THAT CAN BE 2x WRONG. 40kg per hand is 80kg of dumbbell, and 90% of
-  // that is 72kg of bench. Forgetting the doubling would halve every dumbbell
-  // lifter's chest rank; forgetting it only on some entries would be worse.
+  // THE ONE THAT CAN BE 2x WRONG. 40kg per hand is 80kg of dumbbell.
+  //
+  // And then DIVIDED, not multiplied. The factor is the variant as a fraction
+  // of the base — "two dumbbells combined run about 90% of a barbell bench" —
+  // so the barbell it implies is 80 / 0.9 = 89kg. This asserted 72, which is
+  // 80 x 0.9: the discount applied a second time instead of undone, and every
+  // dumbbell lifter ranked far below what they were.
   const r = resolveLift("Dumbbell Bench Press")!;
   assert.equal(r.derived, true);
-  assert.equal(Math.round(r.convert(40)), 72);
+  assert.equal(Math.round(r.convert(40)), 89);
   for (const v of LIFT_VARIANTS) {
     if (/dumbbell|db /i.test(v.label)) {
       assert.equal(v.perHand, true, `${v.key} is a dumbbell lift but is not marked per-hand`);
@@ -124,11 +128,60 @@ test("dumbbells are doubled, because they are logged per hand", () => {
   }
 });
 
-test("a harder variant converts down and an easier one converts up", () => {
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * A HARDER VARIANT CONVERTS UP. THIS TEST USED TO SAY THE OPPOSITE.
+ *
+ * It was titled "a harder variant converts down and an easier one converts up",
+ * and it is the reason the bug shipped: the implementation and its test agreed
+ * with each other and with nothing else.
+ *
+ * Two lifters. One benches 100kg flat; the other INCLINES 100kg. The second is
+ * stronger — incline is the harder angle, so pressing the same weight on it
+ * implies a bigger flat bench, not a smaller one. Convert up.
+ *
+ * Now decline, which is the easier angle: 100kg there implies a flat bench
+ * BELOW 100. Convert down. The doc comment on `factor` said exactly this all
+ * along — "a decline bench moves more weight than a flat one, so the same load
+ * says slightly less about you".
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("a harder variant converts up and an easier one converts down", () => {
   const incline = resolveLift("Incline Bench Press")!;
   const decline = resolveLift("Decline Bench Press")!;
-  assert.ok(incline.convert(100) < 100, "an incline should be worth less than the same weight flat");
-  assert.ok(decline.convert(100) > 100, "a decline moves more weight, so it should be worth more");
+  assert.ok(incline.convert(100) > 100,
+    "an incline is the harder angle — the same weight there implies a bigger flat bench");
+  assert.ok(decline.convert(100) < 100,
+    "a decline moves more weight, so the same load says less about you");
+
+  // The number the report was about: 42kg dumbbells on an incline is 84kg of
+  // dumbbell, and roughly 112kg of flat bench. It was being read as 63kg.
+  const inclineDb = resolveLift("Incline Dumbbell Bench Press")!;
+  assert.equal(Math.round(inclineDb.convert(42)), 112);
+  assert.ok(inclineDb.convert(42) > 84,
+    "a variant can never be worth LESS than the raw weight moved");
+});
+
+/**
+ * Every conversion, checked for the direction rather than the arithmetic.
+ *
+ * The two tests above pin two lifts. This is what stops the next variant being
+ * added with its ratio inverted — which reads perfectly plausibly in a table
+ * and is invisible until somebody notices their rank is three tiers low.
+ */
+test("no variant is worth less than the weight actually moved", () => {
+  for (const v of LIFT_VARIANTS) {
+    const resolved = resolveLift(v.aliases[0]);
+    if (!resolved) continue;
+    const moved = 100 * (v.perHand ? 2 : 1);
+    const converted = resolved.convert(100);
+    assert.ok(converted > 0, `${v.key} converts to nothing`);
+    // Easier variants convert below the load moved; harder ones above. What
+    // none of them may do is disagree with their own factor.
+    const expected = moved / v.factor;
+    assert.ok(Math.abs(converted - expected) < 0.01,
+      `${v.key}: ${converted.toFixed(1)} but its factor says ${expected.toFixed(1)}`);
+  }
 });
 
 test("a converted lift keeps its own name", () => {

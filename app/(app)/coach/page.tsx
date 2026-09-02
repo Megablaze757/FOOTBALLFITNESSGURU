@@ -592,10 +592,22 @@ function GoalBuilder({ painMap, painNote, latestBench, sport, initialPositions, 
               <button
                 key={f.id}
                 onClick={() => setFocus(focus === f.id ? initialFocus : f.id)}
+                title={f.blurb}
                 className={`card p-3 text-left transition ${focus === f.id ? "ring-2 ring-pitch-400/70 shadow-glow" : "card-hover"}`}
               >
+                {/* The blurb only on the chosen one.
+                    Four cards each carrying a title AND a description is eight
+                    lines of prose to make one choice, and it was the densest
+                    block on a page reported as intimidating. The labels —
+                    "Sport performance", "General fitness", "Muscle &
+                    aesthetics", "Rehab & return" — already say which is which;
+                    the sentence underneath is reassurance about the one you
+                    have landed on, so it appears there and on hover, and
+                    nowhere else. */}
                 <div className="text-sm font-bold text-slate-100">{f.label}</div>
-                <div className="mt-0.5 text-xs text-slate-400">{f.blurb}</div>
+                {focus === f.id && (
+                  <div className="mt-0.5 text-xs text-slate-400">{f.blurb}</div>
+                )}
               </button>
             ))}
           </div>
@@ -732,7 +744,6 @@ function GoalBuilder({ painMap, painNote, latestBench, sport, initialPositions, 
               </button>
             ))}
           </div>
-          <p className="mt-1 text-xs text-slate-500">How many sessions we&apos;ll schedule each week.</p>
         </div>
 
         <details className="group rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-3">

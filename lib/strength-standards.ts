@@ -240,7 +240,27 @@ export function resolveLift(name: string): ResolvedLift | null {
     lift: base,
     key: v.key,
     label: v.label,
-    convert: (e1rm) => e1rm * (v.perHand ? 2 : 1) * v.factor,
+    /**
+     * ═══════════════════════════════════════════════════════════════════
+     * DIVIDE. THE FACTOR IS THE VARIANT AS A FRACTION OF THE BASE.
+     *
+     * Every `why` in lib/lift-variants.ts states a ratio in one direction:
+     * "two dumbbells combined run about 90% of a barbell bench", "roughly
+     * four fifths of a flat bench". That is variant ÷ base. Recovering the
+     * base from a logged variant is therefore a DIVISION, and this
+     * multiplied — applying the discount a second time instead of undoing
+     * it, so every variant lift ranked far below what it was.
+     *
+     * Reported as "how is 42 kg incline dumbbell press novice". It was
+     * 42 × 2 × 0.75 = 63kg of notional flat bench. It is 84 ÷ 0.75 = 112kg.
+     *
+     * Decline is the proof that this is the operator and not the numbers:
+     * it is EASIER than flat, factor 1.05, and multiplying made a decline
+     * press count for MORE than the same weight on flat. Dividing makes it
+     * count for less, which is what the comment on `factor` always said.
+     * ═══════════════════════════════════════════════════════════════════
+     */
+    convert: (e1rm) => (e1rm * (v.perHand ? 2 : 1)) / v.factor,
     derived: true,
   };
 }

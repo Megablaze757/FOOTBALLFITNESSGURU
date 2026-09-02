@@ -51,10 +51,13 @@ export function PositionPicker({ sport, value, onChange }: {
           );
         })}
       </div>
+      {/* One line, and only the half that is not already on screen. The chips
+          show what is picked and which is main; what they do not show is that
+          picking more than one is allowed at all. */}
       <p className="mt-2 text-xs text-slate-500">
         {value.length > 1
-          ? "Your skill drills will cover all of these. The first is your main position."
-          : "Play more than one? Tap them all — your drills will cover each."}
+          ? "Drills cover all of these. The first is your main."
+          : "Play more than one? Tap them all."}
       </p>
     </div>
   );
