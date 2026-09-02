@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAsync } from "@/lib/use-async";
 import { computeXp, levelFor, EMPTY_STATS, type Standing } from "@/lib/gamification";
+import { lastPublished } from "@/lib/xp-publish";
 import { BOARDS, rankBoard, boardView, placeAbove, type AthleteStats, type BoardId, type Ranked } from "@/lib/leaderboard";
 
 interface Row {
@@ -122,10 +123,27 @@ export function Leaderboards({ userId }: { userId: string }) {
    * badge rather than the lowest one.
    * ═══════════════════════════════════════════════════════════════════════
    */
-  const levelOf = (r: Ranked) =>
-    r.stats.lifetimeXp == null
-      ? null
-      : levelFor(r.stats.lifetimeXp, standings.get(r.stats.userId) ?? null);
+  /**
+   * YOUR OWN RANK DOES NOT NEED A ROUND TRIP.
+   *
+   * Everyone else's lifetime XP has to come from the database, because this
+   * board cannot compute it for them. Yours was computed on this device the
+   * last time you opened Rewards, and lib/xp-publish.ts already remembers it —
+   * so your own badge is right straight away, whether or not the publish
+   * reached the server and whether or not migration 0105 has been applied.
+   *
+   * Still null-not-zero: an athlete who has never opened Rewards has no rank
+   * yet, and no badge is the honest answer rather than the lowest one.
+   */
+  const ownXp = useMemo(() => lastPublished(userId), [userId]);
+
+  const xpFor = (r: Ranked) =>
+    r.stats.userId === userId ? r.stats.lifetimeXp ?? ownXp : r.stats.lifetimeXp;
+
+  const levelOf = (r: Ranked) => {
+    const xp = xpFor(r);
+    return xp == null ? null : levelFor(xp, standings.get(r.stats.userId) ?? null);
+  };
 
   return (
     <div className="card p-5">

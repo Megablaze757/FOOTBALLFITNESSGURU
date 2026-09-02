@@ -209,3 +209,63 @@ test("the first screen is the consent gate, and it says what it is for", async (
   // It must name what it collects rather than asking for a blank cheque.
   expect(text).toMatch(/sleep|pain|injury|training/i);
 });
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * TRAINING, WITH NO PLAN, IS NOT AN EMPTY ROOM.
+ *
+ * Reported as "when I click Training without a plan I can't access none of
+ * the features". It was a program builder and nothing else: somebody who
+ * wanted to train TODAY was offered a four-week commitment or a blank screen.
+ *
+ * A consented, subscribed athlete with no program is the exact state this is
+ * about, and it is the state every new athlete passes through.
+ */
+const CONSENTED = {
+  id: USER_ID, full_name: "E2E Athlete", role: "athlete", onboarded: true,
+  sport: "football", position: "Centre-back", sex: "male", age: 24,
+  health_data_consent: true,
+  health_data_consent_at: "2026-08-18T00:00:00Z",
+  health_data_consent_version: "2026-08-17",
+};
+
+const SUBSCRIBED = {
+  user_id: USER_ID, tier: "gold", status: "active",
+  stripe_customer_id: "cus_stub", stripe_subscription_id: "sub_stub",
+  cancel_at_period_end: false, current_period_end: "2099-01-01T00:00:00Z",
+};
+
+test("training with no program offers a session you can do today", async ({ page }) => {
+  const errors = watchConsole(page);
+  await signIn(page);
+  await stubSupabase(page, { profiles: [CONSENTED], subscriptions: [SUBSCRIBED] });
+  await page.goto("/coach/", { waitUntil: "networkidle" });
+
+  // Both errands, not just the four-week one.
+  await expect(page.getByText("Give me a session for today")).toBeVisible();
+  await expect(page.getByText("Just log what you did")).toBeVisible();
+
+  // And it has to actually produce one — a button that builds nothing is the
+  // same empty room with an extra tap in it.
+  await page.getByText("Give me a session for today").click();
+  const session = page.locator("text=/not saved/i");
+  await expect(session).toBeVisible();
+
+  const body = await page.locator("body").innerText();
+  expect(body, "the generated session listed no drills").toMatch(/×|x\s?\d|reps|sets|m\b/i);
+
+  expect(errors, `console errors:\n${errors.join("\n")}`).toEqual([]);
+});
+
+test("the one-off session says it is not saved, before it is gone", async ({ page }) => {
+  await signIn(page);
+  await stubSupabase(page, { profiles: [CONSENTED], subscriptions: [SUBSCRIBED] });
+  await page.goto("/coach/", { waitUntil: "networkidle" });
+  await page.getByText("Give me a session for today").click();
+
+  // A session that vanishes without warning reads as lost work, and the way
+  // to keep it has to be offered where the warning is.
+  const note = page.locator("text=/This one is not saved/i");
+  await expect(note).toBeVisible();
+  await expect(page.getByRole("link", { name: /Log what you do/i })).toBeVisible();
+});

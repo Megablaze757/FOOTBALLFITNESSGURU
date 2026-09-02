@@ -45,7 +45,9 @@ function fakeClient() {
  * ═══════════════════════════════════════════════════════════════════════════
  */
 test("the badge reads lifetime XP, never the week the boards rank on", () => {
-  assert.match(BOARD, /r\.stats\.lifetimeXp == null/,
+  assert.match(BOARD, /const xp = xpFor\(r\);/,
+    "the badge no longer goes through the lifetime-XP lookup");
+  assert.match(BOARD, /lifetimeXp/,
     "the badge no longer distinguishes lifetime XP from this week's");
   assert.ok(!/levelFor\(r\.stats\.xp/.test(BOARD),
     "the badge is being computed from the seven-day XP again — that is level 1 for everybody");
@@ -55,7 +57,7 @@ test("the badge reads lifetime XP, never the week the boards rank on", () => {
 
 /** Null is not zero, and drawing the lowest badge for it is the original bug. */
 test("no badge at all when nobody has computed a rank yet", () => {
-  assert.match(BOARD, /\? null\n\s*: levelFor\(r\.stats\.lifetimeXp/,
+  assert.match(BOARD, /xp == null \? null : levelFor\(xp/,
     "levelOf does not return null for an athlete with no published XP");
   assert.match(BOARD, /\{lvl && <RankBadge/, "your own row draws a badge with no rank behind it");
   assert.ok((BOARD.match(/if \(!lvl\) return null;/g) ?? []).length >= 2,
@@ -128,4 +130,24 @@ test("the migration changes the return type and nothing else about the query", (
     assert.ok(MIGRATION.includes(original),
       `the rewritten function lost "${original}" — it must be the original body plus one column`);
   }
+});
+
+
+/**
+ * Your own rank does not need the database.
+ *
+ * Everyone else's lifetime XP has to be published and read back. Yours was
+ * computed on this device the last time Rewards was open, so your own badge
+ * should be right whether or not that publish reached the server and whether
+ * or not migration 0105 has been applied.
+ */
+test("your own badge falls back to what this device computed", () => {
+  assert.match(BOARD, /const ownXp = useMemo\(\(\) => lastPublished\(userId\), \[userId\]\)/,
+    "the board no longer reads the XP this device already computed");
+  assert.match(BOARD, /r\.stats\.userId === userId \? r\.stats\.lifetimeXp \?\? ownXp : r\.stats\.lifetimeXp/,
+    "the local fallback is applied to other athletes too, which would badge them with your rank");
+
+  // Still null-not-zero: never computed is not the lowest tier.
+  assert.match(BOARD, /xp == null \? null : levelFor\(xp/,
+    "a missing rank draws a badge again");
 });

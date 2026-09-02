@@ -133,10 +133,15 @@ test("the screens people look on say a program is not required", () => {
   const training = readFileSync(new URL("../app/(app)/coach/page.tsx", import.meta.url), "utf8");
   const library = readFileSync(new URL("../app/(app)/library/page.tsx", import.meta.url), "utf8");
 
-  assert.match(training, /Just log what you did today/,
+  assert.match(training, /Just log what you did/,
     "the Training page offers only to build a program");
   assert.match(training, /No program needed/,
     "nothing states the thing the report was about");
+  // And something to DO today, not only somewhere to write down what you did.
+  assert.match(training, /Give me a session for today/,
+    "training with no program is a builder and nothing else again");
+  assert.match(training, /This one is not saved/,
+    "a session that vanishes without warning reads as lost work");
   assert.match(library, /Log a session instead/,
     "Exercises is where people go to log, and points nowhere");
 

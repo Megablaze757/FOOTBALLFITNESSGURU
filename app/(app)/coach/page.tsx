@@ -15,7 +15,7 @@ import {
   FOCI,
   type GoalType, type ProgramPlan, type TrainingFocus,
 } from "@/lib/coach";
-import { adjustForReadiness, type ReadinessStatus, type ProgramDrill } from "@/lib/engine";
+import { adjustForReadiness, asGoalType, type ReadinessStatus, type ProgramDrill } from "@/lib/engine";
 import { repairPlan } from "@/lib/program-repair";
 import { useJobs } from "@/lib/jobs";
 import { positionList } from "@/lib/positions";
@@ -240,6 +240,37 @@ function GoalBuilder({ painMap, painNote, latestBench, sport, initialPositions, 
   const [focus, setFocus] = useState<TrainingFocus>(initialAnchor.focus ?? initialFocus);
   const [inSeason, setInSeason] = useState(false);
   const [daysPerWeek, setDaysPerWeek] = useState(3);
+
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * ONE SESSION, WITHOUT SIGNING UP TO FOUR WEEKS OF THEM.
+   *
+   * Reported as "when I click Training without a plan I can't access none of
+   * the features". The page was a builder and nothing else: an athlete who
+   * wanted to train TODAY was offered a four-week block or an empty screen.
+   *
+   * It is the same engine and the same defaults the block would start from —
+   * week one, day one — held in memory and never written. Nothing is saved,
+   * which is the point: this is the version for somebody who has not decided
+   * yet, and deciding is what the builder underneath is for.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  const [oneOff, setOneOff] = useState<{ title: string; drills: ProgramDrill[] } | null>(null);
+  const [oneOffDetail, setOneOffDetail] = useState<string | null>(null);
+
+  function buildOneOff() {
+    const plan = buildProgram({
+      goal: asGoalType(initialGoals[0]?.type ?? null),
+      painMap,
+      sport,
+      position: positions.length ? positions : initialPositions,
+      focus,
+      daysPerWeek,
+    });
+    const session = plan.weeks[0]?.sessions[0];
+    if (!session) return;
+    setOneOff({ title: session.title, drills: session.drills });
+  }
   const [customSchedule, setCustomSchedule] = useState(false);
   const [schedule, setSchedule] = useState<ScheduleDay[]>(defaultSchedule(3, initialGoals));
   const [exerciseTarget, setExerciseTarget] = useState<number | null>(null);
@@ -537,19 +568,61 @@ function GoalBuilder({ painMap, painNote, latestBench, sport, initialPositions, 
           `?log=training` opens the training section of Today's log and scrolls
           to it, so it is one tap from here to a weight box.
           ═══════════════════════════════════════════════════════════════════ */}
-      <Link
-        href="/journal?log=training"
-        className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4 transition hover:border-pitch-400/40"
-      >
-        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-pitch-400/10 text-lg" aria-hidden>🏋️</span>
-        <span className="min-w-0 flex-1">
-          <span className="block text-sm font-bold text-slate-100">Just log what you did today</span>
-          <span className="block text-xs text-slate-500">No program needed — sets, reps and weight straight in.</span>
-        </span>
-        <span className="shrink-0 whitespace-nowrap text-xs font-bold text-accent-400">
-          Log it <span aria-hidden>→</span>
-        </span>
-      </Link>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <button
+          type="button"
+          onClick={buildOneOff}
+          className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-left transition hover:border-pitch-400/40"
+        >
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-pitch-400/10 text-lg" aria-hidden>⚡</span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-bold text-slate-100">Give me a session for today</span>
+            <span className="block text-xs text-slate-500">One workout, built now. Nothing saved.</span>
+          </span>
+        </button>
+
+        <Link
+          href="/journal?log=training"
+          className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4 transition hover:border-pitch-400/40"
+        >
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-pitch-400/10 text-lg" aria-hidden>🏋️</span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-bold text-slate-100">Just log what you did</span>
+            <span className="block text-xs text-slate-500">No program needed — sets, reps and weight straight in.</span>
+          </span>
+        </Link>
+      </div>
+
+      {oneOff && (
+        <div className="card p-4">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <span className="text-sm font-extrabold text-slate-100">{oneOff.title}</span>
+            <div className="flex items-center gap-3">
+              {/* tap-target: 44px is the floor on a phone, and these two sit
+                  side by side where a miss hits the wrong one. */}
+              <button type="button" onClick={buildOneOff} className="tap-target text-xs font-semibold text-accent-400 hover:underline">
+                Another
+              </button>
+              <button type="button" onClick={() => setOneOff(null)} className="tap-target text-xs text-slate-500 hover:text-slate-300">
+                Close
+              </button>
+            </div>
+          </div>
+          {/* Tapping a drill opens the same technique card the rest of the app
+              uses, so a one-off session is not a lesser view of a session. */}
+          <SessionDrills drills={oneOff.drills} onPick={(name) => setOneOffDetail(name)} />
+          {/* Said plainly, and said HERE rather than after they close the tab.
+              A session that vanishes without warning reads as lost work. */}
+          <p className="mt-3 text-xs text-slate-500">
+            This one is not saved.{" "}
+            <Link href="/journal?log=training" className="font-semibold text-accent-400 hover:underline">
+              Log what you do
+            </Link>
+            , or build a block below to keep the progression week to week.
+          </p>
+          {oneOffDetail && <DrillModal name={oneOffDetail} onClose={() => setOneOffDetail(null)} />}
+        </div>
+      )}
 
       {/* One-tap templates */}
       <div>
