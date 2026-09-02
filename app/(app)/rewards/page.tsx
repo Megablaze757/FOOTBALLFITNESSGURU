@@ -20,6 +20,7 @@ import { WeeklyChallenges } from "@/components/WeeklyChallenges";
 import { boardsFor } from "@/lib/challenge-pool";
 import { completionsFrom, recordCompletions } from "@/lib/challenge-xp";
 import { fetchXpExtras } from "@/lib/athlete-xp";
+import { publishXp, type XpWriter } from "@/lib/xp-publish";
 import { Leaderboards } from "@/components/Leaderboards";
 import { RankLadder } from "@/components/RankLadder";
 import { RankBadge } from "@/components/RankBadge";
@@ -358,6 +359,18 @@ export default function RewardsPage() {
     const prev = Number(localStorage.getItem(key) || "0");
     if (prev && lvl > prev) setLeveledUpTo(lvl);
     localStorage.setItem(key, String(lvl));
+  }, [data, user.id]);
+
+  /**
+   * Tell the leaderboard what this athlete's rank actually is.
+   *
+   * This screen is the only place the real lifetime XP exists — the board can
+   * only see seven days, which is why every badge on it said Iron. Writes only
+   * when the number changed; see lib/xp-publish.ts.
+   */
+  useEffect(() => {
+    if (!data) return;
+    void publishXp(createClient() as unknown as XpWriter, user.id, data.xp);
   }, [data, user.id]);
 
   if (loading || !data) return <div className="card mx-auto max-w-2xl h-96 animate-pulse" />;

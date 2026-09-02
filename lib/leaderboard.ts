@@ -24,6 +24,15 @@ export interface AthleteStats {
   streak: number;
   /** Program sessions ticked off in the last 7 days. */
   completedLast7: number;
+  /**
+   * Lifetime XP, for the rank badge only — see migration 0105.
+   *
+   * Deliberately NOT the `xp` below, which is a week's worth and is what the
+   * boards rank on. Conflating them is what put an Iron badge on every athlete
+   * regardless of what they had done. Null means nobody has computed it yet,
+   * which is not zero: draw no badge rather than the lowest one.
+   */
+  lifetimeXp?: number | null;
   xp: number;
   level: number;
 }
@@ -75,7 +84,12 @@ export const BOARDS: Board[] = [
   },
   {
     id: "xp", label: "Overall", icon: "👑",
-    blurb: "Total XP earned",
+    // "XP this week", not "Total XP earned". The value below is computed from
+    // the seven-day window leaderboard_stats returns, and always was — the
+    // blurb promised a lifetime total the board has never ranked on. Lifetime
+    // XP is a different number and lives on AthleteStats.lifetimeXp, where the
+    // rank badge reads it.
+    blurb: "XP earned this week",
     value: (a) => a.xp,
     format: (v) => `${v.toLocaleString()} XP`,
   },

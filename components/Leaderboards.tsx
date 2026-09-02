@@ -17,6 +17,15 @@ interface Row {
   minutes_7: number;
   completed_7: number;
   streak: number;
+  /**
+   * Lifetime XP, written by that athlete's own client — see migration 0105.
+   *
+   * Optional AND nullable, and the two mean different things: undefined is a
+   * database without 0105, null is an athlete who has not computed it yet.
+   * Neither is zero, and drawing a badge for either is how everyone ended up
+   * wearing Iron.
+   */
+  xp?: number | null;
 }
 
 /**
@@ -64,6 +73,9 @@ export function Leaderboards({ userId }: { userId: string }) {
     return {
       userId: r.user_id,
       name: r.name,
+      // The rank badge needs LIFETIME xp; `xp` below is this week's and is what
+      // the boards rank on. Keeping them apart is the fix — see lifetimeXp.
+      lifetimeXp: r.xp ?? null,
       checkInsLast7: r.check_ins_7,
       avgSleep: r.avg_sleep == null ? null : Number(r.avg_sleep),
       sessionsLast7: r.sessions_7,
@@ -95,7 +107,25 @@ export function Leaderboards({ userId }: { userId: string }) {
     return new Map(byXp.map((r) => [r.stats.userId, { athletes: byXp.length, position: r.rank }]));
   }, [scope, athletes]);
 
-  const levelOf = (r: Ranked) => levelFor(r.stats.xp, standings.get(r.stats.userId) ?? null);
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * THE BADGE READS LIFETIME XP. IT USED TO READ A WEEK'S.
+   *
+   * `stats.xp` is computed here from what leaderboard_stats returns, which is
+   * seven days of activity — a few hundred XP at most, which is level 1. So
+   * every athlete on the board wore an Iron badge, including the Gold ones.
+   * Reported as "rank on leaderboard showing everyone iron when I'm gold".
+   *
+   * The real number is computed on the rewards screen, from lifetime stats,
+   * by the one implementation of computeXp, and stored for others to read.
+   * Null means it has never been computed — which is not zero, so there is no
+   * badge rather than the lowest one.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  const levelOf = (r: Ranked) =>
+    r.stats.lifetimeXp == null
+      ? null
+      : levelFor(r.stats.lifetimeXp, standings.get(r.stats.userId) ?? null);
 
   return (
     <div className="card p-5">
@@ -161,13 +191,15 @@ export function Leaderboards({ userId }: { userId: string }) {
             const lvl = levelOf(mine);
             return (
               <div className="mb-3 flex items-center gap-3 rounded-xl bg-pitch-400/[0.06] px-3 py-2.5 ring-1 ring-pitch-400/20">
-                <RankBadge tier={lvl.tier} division={lvl.division} color={lvl.color} size={34} className="shrink-0" title={lvl.rank} />
+                {lvl && <RankBadge tier={lvl.tier} division={lvl.division} color={lvl.color} size={34} className="shrink-0" title={lvl.rank} />}
                 <span className="min-w-0 flex-1">
                   <span className="block text-sm font-extrabold text-slate-100">
                     {ordinal(mine.rank)} of {ranked.length}
                   </span>
                   {/* The rank's NAME, not only its colour. */}
-                  <span className="block text-xs text-slate-400">{lvl.rank} · {board.label}</span>
+                  <span className="block text-xs text-slate-400">
+                    {lvl ? `${lvl.rank} · ${board.label}` : board.label}
+                  </span>
                 </span>
                 <span className="shrink-0 text-right">
                   <span className="block text-sm font-bold tabular-nums text-slate-100">{mine.display}</span>
@@ -199,6 +231,7 @@ export function Leaderboards({ userId }: { userId: string }) {
                       the board already computes. */}
                   {(() => {
                     const lvl = levelOf(r);
+                    if (!lvl) return null;
                     return (
                       <RankBadge
                         tier={lvl.tier}
@@ -228,6 +261,7 @@ export function Leaderboards({ userId }: { userId: string }) {
                   row that is about you was the odd one out. */}
               {(() => {
                 const lvl = levelOf(below);
+                if (!lvl) return null;
                 return <RankBadge tier={lvl.tier} division={lvl.division} color={lvl.color} size={22} className="shrink-0" title={lvl.rank} />;
               })()}
               <span className="min-w-0 flex-1 truncate text-sm text-slate-100">
