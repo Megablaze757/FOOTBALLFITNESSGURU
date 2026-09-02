@@ -50,7 +50,7 @@ export function ProgressPanel({ userId }: { userId: string }) {
       // daily_check_ins and body_logs — and naming it made PostgREST reject this
       // whole query, so this panel also had no name and no sex. See
       // lib/schema-columns.test.ts.
-      supabase.from("profiles").select("full_name, sex, sport, distance_unit").eq("id", userId).maybeSingle(),
+      supabase.from("profiles").select("full_name, sex, sport, distance_unit, birth_year").eq("id", userId).maybeSingle(),
       supabase.from("subscriptions").select("*").eq("user_id", userId).maybeSingle(),
       /**
        * BODYWEIGHT, FROM WHEREVER IT WAS ACTUALLY ENTERED.
@@ -107,6 +107,17 @@ export function ProgressPanel({ userId }: { userId: string }) {
         weighIns: (weighBody ?? []).map((r) => ({ date: r.log_date as string, kg: r.weight_kg as number })),
       }),
       sex: ((profile as { sex?: string | null } | null)?.sex === "female" ? "female" : "male") as "male" | "female",
+      /**
+       * Null unless they told us, and null is not young — see lib/strength-age.ts.
+       * An unknown birth year gets no adjustment at all rather than a default
+       * one, which would silently change everybody's ranks.
+       */
+      age: (() => {
+        const year = (profile as { birth_year?: number | null } | null)?.birth_year;
+        if (!year || !Number.isFinite(Number(year))) return null;
+        const age = new Date().getUTCFullYear() - Number(year);
+        return age > 0 && age < 120 ? age : null;
+      })(),
       sport: (profile as { sport?: string | null } | null)?.sport ?? null,
       distanceUnit: ((profile as { distance_unit?: string | null } | null)?.distance_unit === "mi" ? "mi" : "km") as "km" | "mi",
       sub: (sub ?? null) as Subscription | null,
@@ -167,6 +178,7 @@ export function ProgressPanel({ userId }: { userId: string }) {
         bodyweight={data?.bodyweight ?? null}
         sex={data?.sex ?? "male"}
         tested={data?.tested ?? []}
+        age={data?.age ?? null}
       />
 
       {/**

@@ -13,6 +13,7 @@ import {
   strengthHeadline, weakestLink, type BodyPartStrength, type LiftRank, type Sex,
   type TestedMax,
 } from "@/lib/strength-standards";
+import { ageFactor, ageNote } from "@/lib/strength-age";
 
 /**
  * "Am I strong?" — which is a comparison, and a line going up is not one.
@@ -31,12 +32,21 @@ export function StrengthRanks({
   bodyweight,
   sex,
   tested,
+  age = null,
 }: {
   logs: TrainingLog[] | null | undefined;
   bodyweight: Bodyweight | null;
   sex: Sex;
   /** Tested maxes from the Benchmarks page — better evidence than an estimate. */
   tested?: TestedMax[] | null;
+  /**
+   * Years, or null when they have not said.
+   *
+   * Null is not young: an unknown birth year gets no adjustment rather than a
+   * default one, which would quietly change everybody's ranks — see
+   * lib/strength-age.ts.
+   */
+  age?: number | null;
 }) {
   const [selected, setSelected] = useState<MuscleGroup | null>(null);
   const [view, setView] = useState<BodyView>("front");
@@ -47,6 +57,32 @@ export function StrengthRanks({
     const p = bodyPartStrength(r);
     return { ranks: r, parts: p, headline: strengthHeadline(r, p), weak: weakestLink(p) };
   }, [logs, weightKg, sex, tested]);
+
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * THE SAME LIFT MEANS MORE AT FIFTY.
+   *
+   * The tier above is absolute and stays that way — "Advanced: stronger than
+   * most people in any gym" is a claim about the gym, not about a birthday.
+   * What it cannot say is whether a 52-year-old's 140kg is remarkable, and
+   * being ranked against a population that is mostly half your age is either
+   * demoralising or meaningless.
+   *
+   * So this is a SECOND rank, not a replacement, and it is only rendered on
+   * the rows where it actually changes the answer.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  const forAge = useMemo(() => {
+    const factor = ageFactor(age);
+    if (factor === 1 || !weightKg) return new Map<string, string>();
+    // Bodyweight DIVIDED by the factor, which is the same arithmetic as
+    // multiplying the lift — every threshold is a ratio of load to bodyweight,
+    // and rankedLifts takes logs rather than a load to scale. Only the tier
+    // NAME is read back out; the "kg to the next tier" from this pass belongs
+    // to a bodyweight nobody has.
+    const adjusted = rankedLifts(logs, weightKg / factor, sex, tested);
+    return new Map(adjusted.map((r) => [r.lift.key, r.tier.name]));
+  }, [logs, weightKg, sex, tested, age]);
 
   /**
    * WHAT THEY ARE ACTUALLY DOING, beside what they have achieved.
@@ -211,7 +247,7 @@ export function StrengthRanks({
         </p>
       )}
 
-      {ranks.length > 0 && <LiftTable ranks={ranks} />}
+      {ranks.length > 0 && <LiftTable ranks={ranks} age={age} forAge={forAge} />}
 
       {/* SHOW THE DENOMINATOR. Every rank on this card is a multiple of one
           number, so an athlete who disagrees with a rank needs to be able to
@@ -236,7 +272,7 @@ export function StrengthRanks({
 }
 
 /** Every ranked lift, with the exact kilos to the next rung. */
-function LiftTable({ ranks }: { ranks: LiftRank[] }) {
+function LiftTable({ ranks, age, forAge }: { ranks: LiftRank[]; age: number | null; forAge: Map<string, string> }) {
   return (
     <ul className="mt-4 space-y-2 border-t border-white/[0.08] pt-4">
       {ranks.map((r) => (
@@ -267,7 +303,16 @@ function LiftTable({ ranks }: { ranks: LiftRank[] }) {
                 </span>
               )}
             </span>
-            <span className="text-xs font-bold" style={{ color: r.tier.color }}>{r.tier.name}</span>
+            <span className="shrink-0 text-right">
+              <span className="block text-xs font-bold" style={{ color: r.tier.color }}>{r.tier.name}</span>
+              {/* Only where age changes the answer. Repeating "Advanced, and
+                  Advanced for your age" on every row is noise that teaches
+                  people to stop reading the row. */}
+              {(() => {
+                const note = ageNote({ age, absoluteTier: r.tier.name, adjustedTier: forAge.get(r.lift.key) ?? r.tier.name });
+                return note ? <span className="block text-[10px] text-slate-500">{note}</span> : null;
+              })()}
+            </span>
           </div>
           <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-white/[0.07]">
             <div
