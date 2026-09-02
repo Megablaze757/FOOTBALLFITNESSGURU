@@ -17,7 +17,7 @@ import type { ProgramPlan } from "@/lib/coach";
 import { WearableImport } from "@/components/WearableImport";
 import { WearableConnect } from "@/components/WearableConnect";
 import type { TrainingState } from "@/components/TrainingLogInput";
-import type { Biometric } from "@/lib/biometrics";
+import { biometricSignal, type Biometric } from "@/lib/biometrics";
 import type { CheckInInput, TrainingDrill, TrainingLog } from "@/lib/types";
 import { todayLocal, daysAgoLocal } from "@/lib/day";
 import { measuredTrainingFields } from "@/lib/exercise-measure";
@@ -39,7 +39,15 @@ export default function JournalPage() {
     const [{ data: existing }, { data: training }, { data: bio }, { data: profile }, { data: program }, { data: recent }, { data: recentTraining }, { data: drillHistory }, { data: rehab }] = await Promise.all([
       supabase.from("daily_check_ins").select("*").eq("user_id", user.id).eq("check_in_date", today).maybeSingle(),
       supabase.from("training_logs").select("*").eq("user_id", user.id).eq("log_date", today).maybeSingle(),
-      supabase.from("biometrics").select("*").eq("user_id", user.id).eq("metric_date", today).maybeSingle(),
+      /**
+       * The 28-day window, not just today. Today's row alone fills the form,
+       * and it cannot produce a BASELINE — and without a baseline the wearable
+       * cannot move the readiness this page uses to ease the session, so this
+       * screen and Home would reach different verdicts from the same rows.
+       * That is the exact split readinessFor was written to close.
+       */
+      supabase.from("biometrics").select("*").eq("user_id", user.id)
+        .gte("metric_date", since28).order("metric_date", { ascending: true }),
       supabase.from("profiles").select("sport, distance_unit, sex, birth_year, created_at").eq("id", user.id).maybeSingle(),
       supabase.from("programs").select("plan, completed_sessions, swaps").eq("user_id", user.id).eq("status", "active").maybeSingle(),
       /**
@@ -115,9 +123,13 @@ export default function JournalPage() {
       (program as { plan?: ProgramPlan } | null)?.plan ?? null,
       (program as { completed_sessions?: string[] } | null)?.completed_sessions ?? []
     );
+    const bioHistory = (bio ?? []) as Biometric[];
+    const bioToday = bioHistory.find((r) => r.metric_date === today) ?? null;
     const readiness = readinessFor(
       existing as { pain_map?: Record<string, number> | null } | null,
       computeACWR((recentTraining ?? []) as unknown as TrainingLog[]).ratio,
+      false,
+      biometricSignal(bioToday, bioHistory),
     );
     const eased = session
       ? adjustForReadiness(session.session, (readiness?.status as ReadinessStatus) ?? "Green")
@@ -184,7 +196,7 @@ export default function JournalPage() {
       // answers "what did I lift last time", which has no 28-day horizon.
       drillHistory: (drillHistory ?? []) as { log_date?: string; drills?: TrainingDrill[] | null }[],
       training: (training ?? null) as TrainingLog | null,
-      bio: (bio ?? null) as Biometric | null,
+      bio: bioToday,
       sport: (profile as { sport?: string } | null)?.sport ?? "football",
       distanceUnit: ((profile as { distance_unit?: string } | null)?.distance_unit === "mi" ? "mi" : "km") as "km" | "mi",
       // Today's scheduled drills, so logging is a tap rather than retyping

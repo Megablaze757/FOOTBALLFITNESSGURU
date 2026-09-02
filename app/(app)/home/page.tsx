@@ -283,7 +283,13 @@ export default function HomePage() {
   // Home already knew whether you had trained today — it ticks a quest with it
   // — and the coach line underneath was still written as if you had not, telling
   // somebody who trained at seven to "train today, keep the intensity".
-  const readiness = assessReadiness(input, { acwr: data!.acwr.ratio, trainedToday: data!.trainedToday });
+  // bioSignal was computed on load and then dropped on the floor — the whole
+  // point of importing a watch export is this line.
+  const readiness = assessReadiness(input, {
+    acwr: data!.acwr.ratio,
+    trainedToday: data!.trainedToday,
+    biometric: data!.bioSignal,
+  });
   const coachText = data!.insight?.ai_summary_text ?? readiness.advice;
   const watchZone = data!.insight?.focus_body_part ?? readiness.focus_body_part;
   const actionTag = actionLabel(data!.insight?.recommended_action ?? null);

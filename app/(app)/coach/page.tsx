@@ -32,6 +32,7 @@ import type { SportId } from "@/lib/exercises";
 import type { SplitStyle } from "@/lib/hypertrophy";
 import { templatesForSport } from "@/lib/programs";
 import { readinessFor } from "@/lib/readiness";
+import { biometricSignal, type Biometric, type BiometricSignal } from "@/lib/biometrics";
 import { computeACWR } from "@/lib/load";
 import { invokeAI } from "@/lib/api";
 import {
@@ -95,8 +96,12 @@ function deadlineInfo(startDate: string, targetDate: string, adherencePct: numbe
 // SAME session to log — had no readiness at all and handed over the unadjusted
 // prescription. One implementation now, in lib/readiness.ts, so the two pages
 // cannot reach different verdicts from the same rows.
-function readinessOf(checkIn: DailyCheckIn | null, training: TrainingLog[] = []) {
-  return readinessFor(checkIn, computeACWR(training).ratio);
+function readinessOf(
+  checkIn: DailyCheckIn | null,
+  training: TrainingLog[] = [],
+  biometric: BiometricSignal | null = null,
+) {
+  return readinessFor(checkIn, computeACWR(training).ratio, false, biometric);
 }
 
 type CoachTab = "today" | "program";
@@ -118,7 +123,7 @@ export default function CoachPage() {
   const { data, loading, reload } = useAsync(async () => {
     const supabase = createClient();
     const since = daysAgoLocal(30);
-    const [{ data: program }, { data: checkIn }, { data: training }, { data: checkHist }, { data: benches }, { data: profile }, { data: sub }, { data: rehab }] = await Promise.all([
+    const [{ data: program }, { data: checkIn }, { data: training }, { data: checkHist }, { data: benches }, { data: profile }, { data: sub }, { data: rehab }, { data: bio }] = await Promise.all([
       supabase.from("programs").select("*").eq("user_id", user.id).eq("status", "active").order("created_at", { ascending: false }).limit(1).maybeSingle(),
       supabase.from("daily_check_ins").select("*").eq("user_id", user.id).eq("check_in_date", today).maybeSingle(),
       supabase.from("training_logs").select("*").eq("user_id", user.id).gte("log_date", since).order("log_date", { ascending: true }),
@@ -138,10 +143,20 @@ export default function CoachPage() {
        */
       supabase.from("rehab_plans").select("*").eq("user_id", user.id).eq("active", true)
         .order("created_at", { ascending: false }).limit(1).maybeSingle(),
+      /**
+       * The wearable window, for the same reason the rehab plan is here: this
+       * is the page that hands over the session. Home applies today's HRV,
+       * resting HR and sleep to readiness, the check-in does too, and a plan
+       * page that did not would be the third screen with its own opinion.
+       */
+      supabase.from("biometrics").select("*").eq("user_id", user.id)
+        .gte("metric_date", since).order("metric_date", { ascending: true }),
     ]);
+    const bioHistory = (bio ?? []) as Biometric[];
     const p = profile as { sport?: string; position?: string; positions?: string[]; training_focus?: string; goals?: GoalPreference[] } | null;
     return {
       program: (program ?? null) as Program | null,
+      bioSignal: biometricSignal(bioHistory.find((r) => r.metric_date === today) ?? null, bioHistory),
       checkIn: (checkIn ?? null) as DailyCheckIn | null,
       training: (training ?? []) as TrainingLog[],
       checkHist: (checkHist ?? []) as { check_in_date: string; pain_map: Record<string, number> | null }[],
@@ -224,6 +239,7 @@ export default function CoachPage() {
       focus={data.focus}
       positions={data.positions}
       rehab={data.rehab}
+      bioSignal={data.bioSignal}
       onChange={reload}
     />
   );
@@ -1068,13 +1084,13 @@ function SeasonToggle({ inSeason, onChange }: { inSeason: boolean; onChange: (v:
 // --- Active program ---------------------------------------------------------
 
 function ActiveProgram({
-  program, checkIn, training, checkHist, userId, today, latestBench, sport, focus, positions, rehab, onChange,
+  program, checkIn, training, checkHist, userId, today, latestBench, sport, focus, positions, rehab, bioSignal, onChange,
 }: {
   program: Program; checkIn: DailyCheckIn | null; training: TrainingLog[];
   checkHist: { check_in_date: string; pain_map: Record<string, number> | null }[];
   userId: string; today: string; latestBench: Record<string, number>;
   sport: SportId; focus: TrainingFocus; positions: string[];
-  rehab: RehabPlanRow | null; onChange: () => void;
+  rehab: RehabPlanRow | null; bioSignal: BiometricSignal | null; onChange: () => void;
 }) {
   const plan = program.plan;
   const goal = program.goal_type as GoalType;
@@ -1088,7 +1104,7 @@ function ActiveProgram({
    * training, so it is the screen where a memory did the most damage.
    */
   const painMap = currentPain(checkIn?.pain_map, checkIn?.check_in_date, today);
-  const readiness = readinessOf(checkIn, training);
+  const readiness = readinessOf(checkIn, training, bioSignal);
   const insights = analyzeProgress(training, checkHist);
   /**
    * IS THIS BLOCK THE RIGHT DIFFICULTY? The engine prescribes an effort for

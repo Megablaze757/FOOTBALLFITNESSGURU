@@ -49,6 +49,29 @@ export interface LoadContext {
    * than the check-in said — it changes what there is left to decide.
    */
   trainedToday?: boolean;
+  /**
+   * ═════════════════════════════════════════════════════════════════════════
+   * WHAT THE WATCH SAW, WHICH THE CHECK-IN CANNOT.
+   *
+   * lib/biometrics.ts computed this, and its own type annotated it "-15..+5
+   * applied to readiness". Nothing applied it. The only component that read it
+   * — BiometricSignalCard — was never mounted on a route, so HRV, resting
+   * heart rate and sleep duration moved the score by exactly zero while the
+   * code said otherwise and the marketing fact list implied the same.
+   *
+   * It belongs here for the reason ACWR does: suppressed HRV and an elevated
+   * resting heart rate are strain you cannot feel, and the athlete makes one
+   * decision, not two. `sleep_quality` on the check-in is how rested you FEEL
+   * out of ten; sleep hours off a watch is how long you were actually asleep.
+   * Related, not the same, and the second is the one you cannot talk yourself
+   * out of.
+   *
+   * Absent means absent: no wearable, no readings, or too little history for a
+   * baseline all give 0, which changes nothing. It is not a penalty for having
+   * no watch.
+   * ═════════════════════════════════════════════════════════════════════════
+   */
+  biometric?: { adjustment: number; note: string | null } | null;
 }
 
 function maxPain(painMap: PainMap): { part: string | null; value: number } {
@@ -98,7 +121,16 @@ export function assessReadiness(input: CheckInInput, load?: LoadContext): Readin
     0.3 * sleepGood +
     0.25 * fatigueGood +
     0.1 * nutritionGood;
-  const score = Math.round(score01 * 100);
+  /**
+   * The wearable moves the NUMBER, and the number decides the band.
+   *
+   * Not a second verdict shown beside this one — that is the mistake the ACWR
+   * note below describes, and two panels disagreeing about one morning is
+   * worse than either alone. The hard limits still short-circuit underneath
+   * it: no amount of good HRV outranks a knee at 8/10 or three hours' sleep.
+   */
+  const adjustment = load?.biometric?.adjustment ?? 0;
+  const score = Math.max(0, Math.min(100, Math.round(score01 * 100) + adjustment));
 
   let status: ReadinessStatus;
   if (pain.value >= PAIN_HARD_LIMIT || sleep <= SLEEP_HARD_LIMIT) {
@@ -123,12 +155,40 @@ export function assessReadiness(input: CheckInInput, load?: LoadContext): Readin
   return {
     status,
     score,
-    advice: buildAdvice(status, { sleep, fatigue, pain, focus, acwr, trainedToday: load?.trainedToday === true }),
+    advice: buildAdvice(status, {
+      sleep, fatigue, pain, focus, acwr,
+      trainedToday: load?.trainedToday === true,
+      // Only when it COST them something. "HRV is 14% above your norm" as the
+      // opening line of a Red day reads as the app not having read the room.
+      biometricNote: adjustment < 0 ? load?.biometric?.note ?? null : null,
+    }),
     focus_body_part: focus,
   };
 }
 
+/**
+ * SAY WHAT THE WATCH SAW, BEFORE ANYTHING ELSE.
+ *
+ * A score that drops ten points with no explanation is the app being
+ * mysterious about the one number it exists to produce. The athlete checked in
+ * feeling fine — the reason they are not Green is sitting in a metric they
+ * have not looked at, and that is the entire value of wearing the watch.
+ *
+ * Prefixed rather than replacing the advice, because the advice still has to
+ * say what to DO and "HRV is 18% below your norm" is not an instruction. And
+ * done HERE rather than at each return: `return prefix + trainedToday ? a : b`
+ * parses as `(prefix + trainedToday) ? a : b`, which is always truthy — one
+ * wrapper cannot make that mistake eleven times.
+ */
 function buildAdvice(
+  status: ReadinessStatus,
+  ctx: Parameters<typeof adviceBody>[1] & { biometricNote?: string | null },
+): string {
+  const body = adviceBody(status, ctx);
+  return ctx.biometricNote ? `Your watch: ${ctx.biometricNote} ${body}` : body;
+}
+
+function adviceBody(
   status: ReadinessStatus,
   ctx: {
     trainedToday: boolean;
@@ -137,6 +197,8 @@ function buildAdvice(
     pain: { part: string | null; value: number };
     focus: string | null;
     acwr?: number | null;
+    /** Set only when the wearable COST them points — see the caller. */
+    biometricNote?: string | null;
   }
 ): string {
   const { sleep, fatigue, pain, focus, acwr, trainedToday } = ctx;
@@ -235,6 +297,11 @@ export function readinessFor(
   acwr: number | null,
   /** Whether a session is already logged for today — changes the advice, not the score. */
   trainedToday = false,
+  /**
+   * Today's wearable signal, from biometricSignal(). Optional and absent-safe:
+   * every caller that has no watch data passes nothing and nothing changes.
+   */
+  biometric: { adjustment: number; note: string | null } | null = null,
 ): ReadinessResult | null {
   if (!checkIn) return null;
   return assessReadiness(
@@ -247,6 +314,6 @@ export function readinessFor(
       is_match_day: checkIn.is_match_day,
       match_minutes_played: checkIn.match_minutes_played,
     } as CheckInInput,
-    { acwr, trainedToday },
+    { acwr, trainedToday, biometric },
   );
 }

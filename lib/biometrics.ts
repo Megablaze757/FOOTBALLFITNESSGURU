@@ -16,13 +16,33 @@ export interface Biometric {
 
 const mean = (a: number[]) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null);
 
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * A BASELINE MADE OF TWO READINGS IS NOT A BASELINE.
+ *
+ * This averaged whatever it had. On the second day of wearing a watch your
+ * "norm" was yesterday, and a 12% night-to-night HRV swing — which is ordinary,
+ * healthy variation — read as "your body is under strain" and took 10 points
+ * off readiness. The first week with a new watch is exactly when somebody is
+ * deciding whether to trust any of this.
+ *
+ * Seven readings before a deviation means anything. Below that the baseline is
+ * null, which suppresses the HRV and resting-HR adjustments entirely and shows
+ * no baseline in the trends card. Sleep hours are unaffected because they are
+ * an absolute threshold, not a deviation — so a short night still registers
+ * from day one and the feature is not dead while the history builds.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export const MIN_BASELINE_DAYS = 7;
+
 /** Rolling average of a metric over history, optionally excluding one date. */
 function baseline(history: Biometric[], field: "hrv_ms" | "resting_hr", excludeDate?: string): number | null {
   const vals = history
     .filter((b) => b.metric_date !== excludeDate)
     .map((b) => b[field])
     .filter((v): v is number => v != null);
-  return mean(vals.slice(-28));
+  const window = vals.slice(-28);
+  return window.length >= MIN_BASELINE_DAYS ? mean(window) : null;
 }
 
 export interface BiometricSignal {

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { biometricSignal, parseBiometricCsv, parseOuraSleep, parseIngestPayload, syncHealth, daysSinceSync , durationTextToHours } from "./biometrics";
+import { biometricSignal, parseBiometricCsv, parseOuraSleep, parseIngestPayload, syncHealth, daysSinceSync , durationTextToHours, MIN_BASELINE_DAYS } from "./biometrics";
 import { todayLocal } from "./day";
 
 const hist = (hrv: number, days = 20) =>
@@ -336,4 +336,57 @@ test("the existing units still work exactly as they did", () => {
     const rows = parseIngestPayload({ date: "2026-08-16", sleep: value });
     assert.equal(rows[0].sleep_hours, expected, `sleep=${value}`);
   }
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * WEEK ONE WITH A NEW WATCH IS WHEN THIS HAS TO BE QUIET.
+ *
+ * baseline() averaged whatever history it had, so on day two your "norm" was
+ * yesterday, and a night-to-night HRV swing of 12% — ordinary, healthy
+ * variation — read as "your body is under strain" and cost 10 readiness
+ * points. Now that the adjustment actually reaches the score (see
+ * lib/readiness.ts), that is the first week of every new athlete's data.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("a deviation needs a real baseline, not two readings", () => {
+  const days = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({
+      metric_date: `2026-06-${String(i + 1).padStart(2, "0")}`,
+      hrv_ms: 60, resting_hr: 52, sleep_hours: 8,
+    }));
+  // Seven hours: neither the short-night penalty nor the long-night bonus, so
+  // anything that moves is a baseline-derived signal and nothing else.
+  const today = { metric_date: "2026-07-01", hrv_ms: 40, resting_hr: 60, sleep_hours: 7 };
+
+  for (const n of [0, 1, 3, 6]) {
+    const s = biometricSignal(today, days(n));
+    assert.equal(s.hrvBaseline, null, `${n} days should not be a baseline`);
+    assert.equal(s.hrvDeviationPct, null);
+    assert.equal(s.restingHrBaseline, null);
+    assert.equal(s.adjustment, 0, `${n} days of history moved readiness`);
+    assert.equal(s.note, null);
+  }
+
+  const real = biometricSignal(today, days(MIN_BASELINE_DAYS));
+  assert.equal(real.hrvBaseline, 60, "seven readings is a baseline");
+  assert.ok(real.hrvDeviationPct! <= -30);
+  assert.ok(real.adjustment < 0);
+});
+
+/**
+ * Sleep is an absolute threshold, not a deviation, so it is the one signal
+ * that must work on day one — otherwise the feature is dead for a week and
+ * nobody stays to find out it woke up.
+ */
+test("a short night registers with no history at all", () => {
+  const s = biometricSignal({ metric_date: "2026-07-01", hrv_ms: null, resting_hr: null, sleep_hours: 4 }, []);
+  assert.ok(s.adjustment < 0, "four hours' sleep is four hours' sleep on day one");
+  assert.match(s.note!, /4h sleep/);
+});
+
+test("no readings at all is no adjustment at all", () => {
+  const s = biometricSignal(null, []);
+  assert.equal(s.adjustment, 0);
+  assert.equal(s.note, null);
 });

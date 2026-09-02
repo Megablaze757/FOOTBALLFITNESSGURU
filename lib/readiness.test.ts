@@ -148,3 +148,106 @@ test("a Red day says the same thing either way", () => {
     assessReadiness(hurt, { trainedToday: false }).advice,
   );
 });
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE WEARABLE CHANGED THE SCORE BY ZERO, IN A FIELD ANNOTATED "-15..+5
+ * APPLIED TO READINESS".
+ *
+ * lib/biometrics.ts computed the adjustment and every test above passed with
+ * it disconnected, because none of them crossed the seam: readiness tests fed
+ * a check-in, biometrics tests checked the signal, and nothing asserted that
+ * one reached the other. The only component that read it was never mounted.
+ *
+ * These are that seam. The rules they pin down: absent changes nothing, a bad
+ * signal can cost you the band, a good one can never outrank a hard limit, and
+ * the athlete is told which of their metrics did it.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("no wearable is not a penalty", () => {
+  const plain = assessReadiness(base);
+  for (const ctx of [undefined, {}, { biometric: null }, { biometric: { adjustment: 0, note: null } }]) {
+    const r = assessReadiness(base, ctx);
+    assert.equal(r.score, plain.score, `${JSON.stringify(ctx)} moved the score`);
+    assert.equal(r.status, plain.status);
+    assert.equal(r.advice, plain.advice, "and it said something different about it");
+  }
+});
+
+test("a suppressed-HRV morning costs the score and can cost the band", () => {
+  // Deliberately just over the Green line rather than `base`, which scores 86:
+  // an adjustment that cannot reach a boundary proves nothing about bands.
+  const onTheLine = { ...base, sleep_quality: 6, fatigue_score: 5, nutrition_quality: 6 } as CheckInInput;
+  const plain = assessReadiness(onTheLine);
+  assert.equal(plain.score, 71);
+  assert.equal(plain.status, "Green");
+
+  const r = assessReadiness(onTheLine, {
+    biometric: { adjustment: -10, note: "HRV is 18% below your norm — your body is under strain" },
+  });
+  assert.equal(r.score, 61);
+  assert.equal(r.status, "Yellow", "a 10-point drop across the Green line has to move the verdict");
+  assert.match(r.advice, /^Your watch: HRV is 18% below your norm/);
+
+  // And the same signal on a comfortable morning moves the number without
+  // pretending the day is compromised — 86 down to 76 is still Green.
+  assert.equal(assessReadiness(base, { biometric: { adjustment: -10, note: "n" } }).status, "Green");
+});
+
+test("the watch is only quoted when it cost something", () => {
+  const good = assessReadiness(base, {
+    biometric: { adjustment: 3, note: "HRV is 14% above your norm — you're well recovered" },
+  });
+  assert.ok(!good.advice.startsWith("Your watch:"),
+    "opening a Red day with good news reads as not having read the room");
+  assert.equal(good.score, assessReadiness(base).score + 3);
+});
+
+test("good HRV does not outrank a hard limit", () => {
+  const hurt = { ...base, pain_map: { knee_left: 8 } } as CheckInInput;
+  const r = assessReadiness(hurt, { biometric: { adjustment: 5, note: "you're well recovered" } });
+  assert.equal(r.status, "Red", "a knee at 8/10 is Red whatever the watch says");
+  assert.match(r.advice, /knee/i);
+
+  const sleepless = { ...base, sleep_quality: 2 } as CheckInInput;
+  assert.equal(assessReadiness(sleepless, { biometric: { adjustment: 5, note: "n" } }).status, "Red");
+});
+
+test("a load spike still caps a verdict the wearable lifted", () => {
+  const r = assessReadiness(base, {
+    acwr: 1.8,
+    biometric: { adjustment: 5, note: "you're well recovered" },
+  });
+  assert.equal(r.status, "Yellow", "ACWR caps whatever raised the score");
+});
+
+test("the score cannot leave 0-100", () => {
+  // The actual extremes, not a rough day: the blend already reaches 0 and 100
+  // on its own, so only these two check-ins can push an adjustment off the end.
+  const worst = { ...base, pain_map: { knee_left: 10 }, fatigue_score: 10, sleep_quality: 1, nutrition_quality: 1 } as CheckInInput;
+  assert.equal(assessReadiness(worst).score, 0, "the floor moved — this test no longer tests the floor");
+  const low = assessReadiness(worst, { biometric: { adjustment: -15, note: "n" } });
+  assert.equal(low.score, 0, "a wearable penalty took the score negative");
+
+  const best = { ...base, pain_map: {}, fatigue_score: 1, sleep_quality: 10, nutrition_quality: 10 } as CheckInInput;
+  assert.equal(assessReadiness(best).score, 100, "the ceiling moved");
+  const high = assessReadiness(best, { biometric: { adjustment: 5, note: null } });
+  assert.equal(high.score, 100, "a wearable bonus took the score past 100");
+});
+
+/**
+ * The ternary that the first attempt at this shipped: prefixing each `return`
+ * inside buildAdvice turns `return prefix + trainedToday ? a : b` into
+ * `(prefix + trainedToday) ? a : b`, which is a non-empty string and therefore
+ * always the first branch. Every trainedToday=false case would have silently
+ * returned the "session done" copy.
+ */
+test("the advice still branches on trainedToday with a watch note attached", () => {
+  const ctx = { biometric: { adjustment: -5, note: "only 5h sleep" } };
+  const tired = { ...base, fatigue_score: 8 } as CheckInInput;
+  const before = assessReadiness(tired, { ...ctx, trainedToday: false });
+  const after = assessReadiness(tired, { ...ctx, trainedToday: true });
+  assert.notEqual(before.advice, after.advice);
+  assert.match(after.advice, /Session done|Session logged|session logged/);
+  assert.ok(!/Session done|Session logged/.test(before.advice));
+});
