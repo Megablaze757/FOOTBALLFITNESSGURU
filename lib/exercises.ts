@@ -937,10 +937,22 @@ const DESCRIPTIONS: Record<string, string> = {
   stair_intervals: "Run or bound up a flight, then walk down as recovery — always walk down, since descending fast is where the knees and the injuries come from. Drive the knees and use your arms. Keep the torso tall rather than folding forward at the waist. Steep stairs make this closer to a power session than a run, so treat the first couple of reps as a build rather than going flat out cold.",
 };
 
-// Merge the bulk gym database — skip any whose name already has a rich entry.
-const richNames = new Set(EXERCISES.map((e) => e.name.toLowerCase()));
+/**
+ * Merge the bulk gym database — skip any whose name already has a rich entry.
+ *
+ * The set GROWS as it pushes. Seeding it once and never adding to it made this
+ * loop trust its input to be unique, and the input is two hand-kept name lists
+ * concatenated: "Dumbbell Lateral Raise" was in both, so the catalogue carried
+ * it twice and the public site built two identical pages for it. build() now
+ * dedupes at the source as well, but a merge that can emit a duplicate should
+ * not need a distant function to be careful on its behalf.
+ */
+const seenNames = new Set(EXERCISES.map((e) => e.name.toLowerCase()));
 for (const e of IMPORTED_EXERCISES) {
-  if (!richNames.has(e.name.toLowerCase())) EXERCISES.push(e);
+  const key = e.name.toLowerCase();
+  if (seenNames.has(key)) continue;
+  seenNames.add(key);
+  EXERCISES.push(e);
 }
 
 // Descriptions are assigned AFTER the merge, not before.

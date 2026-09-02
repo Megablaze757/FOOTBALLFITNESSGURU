@@ -207,12 +207,33 @@ function build(raw: string): Exercise[] {
   // Blank lines are dropped rather than parsed into an entry with no name. The
   // list is now built from two blocks joined together, and the seam between
   // them is exactly where an empty line appears.
-  return raw.trim().split("\n").map((l) => l.trim()).filter(Boolean).map((line) => {
+  const lines = raw.trim().split("\n").map((l) => l.trim()).filter(Boolean);
+
+  /**
+   * FIRST NAME WINS — because two hand-kept lists are bound to overlap.
+   *
+   * STAPLE_RAW was written as "the lifts the catalogue forgot", and two of
+   * them, the dumbbell lateral raise and the hanging leg raise, it had not
+   * forgotten. Concatenating the blocks put each of those in the catalogue
+   * twice, byte for byte, which was not a cosmetic problem: the public site
+   * built the same page twice under two URLs, the second one wearing a "-2"
+   * slug and identical copy — a duplicate the crawler sees before we do.
+   *
+   * Deduping here rather than deleting the two lines: the seam will be edited
+   * again, and the next overlap should be a no-op instead of a second page.
+   */
+  const seen = new Set<string>();
+  const built: Exercise[] = [];
+  for (const line of lines) {
     const [name, muscle] = line.split("|").map((s) => s.trim());
+    const id = slug(name);
+    if (seen.has(id)) continue;
+    seen.add(id);
+
     const equipment = equipmentOf(name);
     const coach = COACHING[name.toLowerCase()];
-    return {
-      id: slug(name),
+    built.push({
+      id,
       name,
       category: categoryOf(muscle),
       demo: demoOf(name),
@@ -223,8 +244,9 @@ function build(raw: string): Exercise[] {
       why: coach?.why ?? `Builds the ${muscle.toLowerCase()}.`,
       difficulty: difficultyOf(name),
       imported: true,
-    } as Exercise;
-  });
+    } as Exercise);
+  }
+  return built;
 }
 
 // name | primary muscle

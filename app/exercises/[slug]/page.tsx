@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { EXERCISES, isRunEntry } from "@/lib/exercises";
-import { contentPages, findBySlug, SITE } from "@/lib/seo";
+import { contentPages, findBySlug, exerciseMetaDescription, SITE } from "@/lib/seo";
+import { STUB_WHY } from "@/lib/exercise-draft";
 import { MarketingShell, GuideCta } from "@/components/MarketingShell";
 import { jsonLd, graph, exerciseSchema, breadcrumbs } from "@/lib/schema";
 import { formGuide } from "@/lib/form-guide";
@@ -18,7 +19,10 @@ export function generateMetadata({ params }: { params: { slug: string } }): Meta
   if (!ex) return { title: "Not found" };
   const url = `${SITE}/exercises/${params.slug}/`;
   const title = `How to do a ${ex.name.toLowerCase()}`;
-  const description = ex.why || `${ex.name}: what it works, how to do it, and the cues that matter.`;
+  // NOT ex.why. For 197 of these that is "Builds the legs." — forty-three
+  // pages sharing one sentence — while ex.description holds a real how-to for
+  // every one of them. See exerciseMetaDescription.
+  const description = exerciseMetaDescription(ex, (w) => STUB_WHY.test(w));
   return {
     title,
     description,
@@ -33,6 +37,9 @@ export default function ExercisePage({ params }: { params: { slug: string } }) {
 
   const url = `${SITE}/exercises/${params.slug}/`;
   const guide = formGuide(ex.name);
+  // Same string the <meta> gets, for the same reason — a schema.org
+  // description repeated across 197 pages is read by the same crawler.
+  const described = exerciseMetaDescription(ex, (w) => STUB_WHY.test(w));
   /**
    * Only a description that actually TEACHES the movement becomes steps.
    *
@@ -55,7 +62,7 @@ export default function ExercisePage({ params }: { params: { slug: string } }) {
             exerciseSchema({
               name: ex.name,
               url,
-              description: ex.why || ex.name,
+              description: described,
               muscles: ex.muscles,
               equipment: ex.equipment,
               steps,

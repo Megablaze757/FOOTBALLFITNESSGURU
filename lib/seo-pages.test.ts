@@ -1,7 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, existsSync } from "node:fs";
-import { contentPages, findBySlug, slugify } from "./seo";
+import { contentPages, findBySlug, slugify, exerciseMetaDescription, trimToMeta, META_MAX } from "./seo";
+import { STUB_WHY } from "./exercise-draft";
 import { MEALS } from "./meals-data";
 import { EXERCISES, isRunEntry } from "./exercises";
 
@@ -58,46 +59,123 @@ test("every slug resolves back to the thing it came from", () => {
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- * A RATCHET, NOT A PASS MARK.
+ * THE UNIQUE TEXT WAS ALREADY IN THE ROW; THE PAGE WAS PICKING THE PLACEHOLDER.
  *
- * `why` is the meta description of every public exercise page, and 201 of them
- * repeat another page's — 43 saying "Builds the legs." alone. That is thin and
- * duplicated, on the pages this site is asking to rank.
+ * This was a ratchet held at 201 — 201 exercise pages whose meta description
+ * repeated another page's, 43 of them saying "Builds the legs." and nothing
+ * else — with a note to lower it as drafted cues landed.
  *
- * 201 rather than the 197 in docs/EXERCISE-CUES.md, and the gap is the point:
- * 197 is what the drafting script can fix, because it only takes rows with a
- * description long enough to check a cue against. The other four are two pairs
- * of hand-written entries that happen to share a sentence, and they need a
- * person, not a model.
+ * No cue was ever drafted. The page took `ex.why`, and for every bulk-imported
+ * movement that string is what the importer generated from the muscle column.
+ * `ex.description` held a real how-to for all 197 of them, written by a person
+ * — "Back flat against the seat, feet on the platform shoulder width. Press
+ * out to near-extension..." — and the page was choosing the placeholder over
+ * it. exerciseMetaDescription now prefers a curated `why`, falls back to that
+ * how-to, and only invents a line when there is neither.
  *
- * It cannot be a clean assertion today without failing, and a test that fails
- * on main teaches people to ignore red. So it holds the line at what was
- * measured and no worse: another import of stub rows breaks it, and every
- * drafted description lets the number come down.
+ * The last four were a different bug: two movements listed in both catalogue
+ * blocks, so the site built the same page twice under a "-2" slug. Deduped in
+ * build() — see the note there.
  *
- * LOWER THIS NUMBER as drafts land — see docs/EXERCISE-CUES.md. It is meant to
- * reach zero.
+ * So this is a clean assertion now, not a ratchet, and it stays clean: an
+ * import of stub rows can no longer move it, because a stub `why` is not what
+ * the page prints.
  * ═══════════════════════════════════════════════════════════════════════════
  */
-const DUPLICATE_DESCRIPTIONS_BASELINE = 201;
-
-test("no more exercise pages share a meta description than already do", () => {
-  const counts = new Map<string, number>();
+test("no two exercise pages describe themselves the same way", () => {
+  const counts = new Map<string, string[]>();
   for (const e of MOVEMENTS) {
-    const description = e.why.trim();
-    counts.set(description, (counts.get(description) ?? 0) + 1);
+    const description = exerciseMetaDescription(e, (w) => STUB_WHY.test(w));
+    counts.set(description, [...(counts.get(description) ?? []), e.name]);
   }
 
-  const duplicated = [...counts.values()].filter((n) => n > 1).reduce((a, b) => a + b, 0);
-  assert.ok(duplicated <= DUPLICATE_DESCRIPTIONS_BASELINE,
-    `${duplicated} exercise pages share a meta description with another, up from `
-    + `${DUPLICATE_DESCRIPTIONS_BASELINE}. A page that describes itself the same way as `
-    + `42 others is a duplicate-content signal on the pages meant to rank.`);
+  const shared = [...counts].filter(([, names]) => names.length > 1);
+  assert.deepEqual(shared.map(([d, names]) => `${names.join(" / ")}: ${d}`), [],
+    "pages that describe themselves identically are a duplicate-content signal "
+    + "on the pages this site is asking to rank");
+});
 
-  if (duplicated < DUPLICATE_DESCRIPTIONS_BASELINE) {
-    console.log(`  ↓ duplicate descriptions now ${duplicated}; lower the baseline from `
-      + `${DUPLICATE_DESCRIPTIONS_BASELINE} in lib/seo-pages.test.ts`);
+/**
+ * The check that would have caught the "-2" pages on the day they appeared.
+ *
+ * Two lists of movement names are maintained by hand and concatenated, and a
+ * name in both used to produce two identical catalogue rows: two entries in
+ * every picker in the app, and two public pages with the same title, the same
+ * copy and the same schema.org block.
+ */
+test("no movement is in the catalogue twice", () => {
+  const byId = new Map<string, number>();
+  const byName = new Map<string, number>();
+  for (const e of MOVEMENTS) {
+    byId.set(e.id, (byId.get(e.id) ?? 0) + 1);
+    byName.set(e.name.toLowerCase(), (byName.get(e.name.toLowerCase()) ?? 0) + 1);
   }
+  assert.deepEqual([...byId].filter(([, n]) => n > 1), [], "two catalogue rows share an id");
+  assert.deepEqual([...byName].filter(([, n]) => n > 1), [], "two catalogue rows share a name");
+});
+
+/**
+ * A description Google cuts in half is one it wrote itself instead, and a
+ * description cut mid-word reads as broken rather than as abbreviated.
+ */
+test("every exercise description fits, and none ends mid-word", () => {
+  for (const e of MOVEMENTS) {
+    const d = exerciseMetaDescription(e, (w) => STUB_WHY.test(w));
+    assert.ok(d.length <= META_MAX, `${e.name}: ${d.length} chars`);
+    assert.ok(d.length >= 20, `${e.name} says almost nothing: ${JSON.stringify(d)}`);
+    if (d.endsWith("…")) {
+      // The character before the ellipsis has to be the end of a whole word:
+      // the trim cut at a space, so what is left cannot be half of one.
+      const stem = d.slice(0, -1);
+      assert.ok(e.description?.replace(/\s+/g, " ").startsWith(stem) || e.why.startsWith(stem),
+        `${e.name} was cut somewhere the source text does not go: ${JSON.stringify(d)}`);
+      assert.ok(!/[,;:—-]$/.test(stem), `${e.name} ends on punctuation: ${JSON.stringify(d)}`);
+    }
+  }
+});
+
+test("a curated why still wins over the how-to", () => {
+  const pick = (why: string, description: string) =>
+    exerciseMetaDescription({ name: "Bench Press", why, description }, (w) => STUB_WHY.test(w));
+
+  assert.equal(pick("Emphasises the upper chest and front delts.", "Bench at ~30°. Bar to the upper chest."),
+    "Emphasises the upper chest and front delts.");
+  assert.match(pick("Builds the chest.", "Bench at ~30°, blades retracted, and drive the feet into the floor as you press."),
+    /^Bench at ~30°/);
+  // Neither: a line that at least names the page it is on.
+  assert.equal(pick("Builds the chest.", "Push."), "Bench Press: what it works, how to do it, and the cues that matter.");
+});
+
+test("trimToMeta prefers a sentence, then a word, and never overruns", () => {
+  const short = "Press out to near-extension.";
+  assert.equal(trimToMeta(short), short, "nothing to cut");
+  assert.equal(trimToMeta("  spaced   out  \n text "), "spaced out text", "whitespace collapses");
+
+  // A sentence ends comfortably inside the window: cut there, no ellipsis.
+  const two = "Back flat against the seat, feet on the platform shoulder width. Press out to near-extension, then return under control.";
+  assert.equal(trimToMeta(two, 80), "Back flat against the seat, feet on the platform shoulder width.");
+
+  // No sentence end in range: cut at a space and mark it.
+  const run = "Take a wide stance with toes turned out and grip the bar inside the knees before you pull";
+  const cut = trimToMeta(run, 40);
+  assert.ok(cut.length <= 40, `${cut.length} chars`);
+  assert.ok(cut.endsWith("…"));
+  assert.ok(run.startsWith(cut.slice(0, -1)), `${cut} is not a prefix of the source`);
+  assert.ok(!cut.slice(0, -1).endsWith(" "));
+
+  /**
+   * THE FULL STOP INSIDE A NUMBER IS NOT A SENTENCE.
+   *
+   * The window here ends "...loaded at 3." and the digit that would prove it
+   * is a decimal is the character the cut threw away — so the test that the
+   * function reads past the window, not just inside it.
+   */
+  const decimal = "Add a little each week, so a bar loaded at 3.5kg this Monday is 5kg the next one.";
+  assert.equal(decimal.indexOf("."), 44, "the window below has to END on that full stop to prove anything");
+  assert.equal(trimToMeta(decimal, 46), "Add a little each week, so a bar loaded at…");
+
+  // A single word longer than the window still has to come back inside it.
+  assert.ok(trimToMeta("a".repeat(200), 20).length <= 20);
 });
 
 /**

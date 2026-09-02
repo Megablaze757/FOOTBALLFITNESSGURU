@@ -20,10 +20,10 @@ never got written was the part an athlete reads *first*:
 197 rows look like that. The curated exercises next to them have three cues
 each and a `why` that says something.
 
-### It is also a live SEO defect
+### It was also a live SEO defect — that part is fixed, and not by a model
 
-`why` is not just body copy — it is the **meta description** of the public
-exercise page (`app/exercises/[slug]/page.tsx`). Counted off the built output:
+`why` used to be the **meta description** of the public exercise page. Counted
+off the built output:
 
 ```
  43 pages  "Builds the legs."
@@ -37,10 +37,22 @@ exercise page (`app/exercises/[slug]/page.tsx`). Counted off the built output:
   5 pages  "Builds the forearms."
 ```
 
-197 of 384 public exercise pages share one of nine strings, and the cues block
-is hidden entirely when `cues` is empty. So these pages are both thin and
-duplicated — on a site that was just given 600 new pages to rank. Filling this
-in is the highest-value content work left.
+197 of 382 pages shared one of nine strings. That was written up here as the
+reason to draft cues, and it was the wrong conclusion: **the unique text was
+already in the row.** Every one of those 197 has a real, human-written
+`description`, and the page was choosing the placeholder over it.
+
+`exerciseMetaDescription` (`lib/seo.ts`) now prefers a curated `why`, falls
+back to that description, and only invents a line when there is neither. The
+duplicate count went 197 → 0 with no key, no model and no review queue. The
+last four were two movements listed in both catalogue blocks, which built the
+same page twice under a `-2` slug; `build()` dedupes now.
+
+So drafting is no longer an SEO job. What is still missing is what an athlete
+reads: the one-liner at the top of the page and in the app's exercise card is
+still "Builds the legs." on 197 movements, and their cues block is still empty
+because `cues` is `[]`. That is worth fixing on its own terms, for the person
+using the app — not to move a duplicate-content number that is already zero.
 
 ## Why a model belongs here and not on the collection pages
 
