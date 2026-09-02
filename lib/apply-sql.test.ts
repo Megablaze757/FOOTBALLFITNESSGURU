@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+// The list lives with the generator. A second copy here is a list that can go
+// stale and then validate the combined file against migrations it no longer
+// contains — which is exactly what happened when 0104 was added.
+import { PARTS } from "../scripts/build-apply-sql.mjs";
 
 /**
  * The paste-ready copy must be the migrations it claims to be.
@@ -17,26 +21,8 @@ import { readFileSync } from "node:fs";
 
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
 
-const PARTS = [
-  "0088_program_preferences_and_active_rest",
-  "0089_post_completion_preferences",
-  "0090_coach_conversation",
-  "0091_notifications_trials_and_consent",
-  "0092_meal_plan_preferences",
-  "0093_meal_budget_and_store",
-  "0094_run_duration",
-  "0095_admin_visibility_and_email_audit",
-  "0096_drop_admin_bodyweight_read",
-  "0097_reminders_move_to_the_worker",
-  "0098_admin_last_logged",
-  "0099_publish_custom_exercises",
-  "0100_custom_exercise_limits",
-  "0101_program_edits",
-  "0102_seen_tips",
-  "0103_apple_shortcut_link",
-];
 
-const combined = read("../supabase/apply-0088-0103.sql");
+const combined = read("../supabase/apply-0088-0104.sql");
 
 /**
  * Split SQL into statements, without cutting a function body in half.
@@ -216,4 +202,26 @@ test("it says how to run it and what is still outstanding", () => {
   // The Worker is deployed by hand and is not in this file. Somebody who runs
   // the SQL and stops will find the admin email panel still not answering.
   assert.match(combined, /cloudflare\/worker\.js/);
+});
+
+/**
+ * The combined file's NAME is quoted on an admin screen, telling somebody what
+ * to paste. Adding a migration renames the file, and a rename that misses that
+ * screen leaves an admin looking for a path that does not exist.
+ */
+test("everything that names the combined file names the one that exists", () => {
+  const expected = `supabase/apply-0088-${PARTS[PARTS.length - 1].slice(0, 4)}.sql`;
+
+  const quoted = [
+    "../components/admin/AppleShortcutLink.tsx",
+    "../scripts/build-apply-sql.mjs",
+  ];
+  for (const file of quoted) {
+    const src = read(file);
+    const names = [...src.matchAll(/supabase\/apply-0088-\d{4}\.sql/g)].map((m) => m[0]);
+    assert.ok(names.length > 0, `${file} no longer names the combined file`);
+    for (const name of names) {
+      assert.equal(name, expected, `${file} points at a file that does not exist`);
+    }
+  }
 });

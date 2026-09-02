@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // =============================================================================
-// Rebuild supabase/apply-0088-0103.sql from the migrations it claims to be.
+// Rebuild supabase/apply-0088-0104.sql from the migrations it claims to be.
 //
 // WHY A SCRIPT AND NOT A HAND-EDITED FILE. A paste-ready copy of four
 // migrations is a second source of truth, and the failure mode is silent: the
@@ -29,7 +29,7 @@ import { readFileSync, writeFileSync } from "node:fs";
  * it), so including one that has already been applied costs nothing, and
  * leaving one out costs an error nobody can diagnose from the message.
  */
-const PARTS = [
+export const PARTS = [
   "0088_program_preferences_and_active_rest",
   "0089_post_completion_preferences",
   "0090_coach_conversation",
@@ -46,11 +46,17 @@ const PARTS = [
   "0101_program_edits",
   "0102_seen_tips",
   "0103_apple_shortcut_link",
+  "0104_admin_cancellation_actor",
 ];
 
-const OUT = "supabase/apply-0088-0103.sql";
+const OUT = "supabase/apply-0088-0104.sql";
 const HEADER_END = "-- =============================================================================\n\n\n";
 
+// Importing this module must not rebuild anything — lib/apply-sql.test.ts
+// reads PARTS from here so the list cannot drift from a second copy.
+if (import.meta.url === `file://${process.argv[1]}`) rebuild();
+
+function rebuild() {
 const existing = readFileSync(OUT, "utf8");
 const header = existing.slice(0, existing.indexOf(HEADER_END) + HEADER_END.length);
 if (!header) throw new Error(`${OUT} has no header to preserve — restore it before rebuilding`);
@@ -63,3 +69,4 @@ const body = PARTS.map((part) => {
 
 writeFileSync(OUT, header + body);
 console.log(`${OUT} rebuilt from ${PARTS.length} migrations`);
+}

@@ -143,6 +143,7 @@ export default {
       if (pathname.endsWith("/create-checkout")) return await createCheckout(req, env);
       if (pathname.endsWith("/billing-portal")) return await billingPortal(req, env);
       if (pathname.endsWith("/cancel-subscription")) return await cancelSubscription(req, env);
+      if (pathname.endsWith("/admin-subscription")) return await adminSubscription(req, env);
       if (pathname.endsWith("/pause-subscription")) return await pauseSubscription(req, env);
       if (pathname.endsWith("/resume-subscription")) return await resumeSubscription(req, env);
       if (pathname.endsWith("/delete-account")) return await deleteAccount(req, env);
@@ -510,7 +511,7 @@ function overBudget(state: BudgetState): Response {
 // nobody is watching a spinner and the budget can be what the work actually
 // needs. Callers pass their own client-side timeout to match.
 // Bump on every paste into the Cloudflare dashboard. GET /health reports it.
-const WORKER_VERSION = "2026-08-24.5";
+const WORKER_VERSION = "2026-08-24.6";
 
 const CHAIN_BUDGET_MS = 55_000;
 /**
@@ -2208,9 +2209,11 @@ async function generateChallenges(req: Request, env: Env): Promise<Response> {
 function form(obj: Record<string, string>): string {
   return Object.entries(obj).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join("&");
 }
-async function stripe(env: Env, path: string, body?: Record<string, string>): Promise<any> {
+async function stripe(env: Env, path: string, body?: Record<string, string>, method?: string): Promise<any> {
   const r = await fetch(`https://api.stripe.com/v1/${path}`, {
-    method: body ? "POST" : "GET",
+    // DELETE is how Stripe cancels a subscription there and then. Everything
+    // else here is a POST with a form body or a plain GET.
+    method: method ?? (body ? "POST" : "GET"),
     headers: { Authorization: `Bearer ${env.STRIPE_SECRET_KEY}`, "Content-Type": "application/x-www-form-urlencoded" },
     body: body ? form(body) : undefined,
   });
@@ -2384,6 +2387,119 @@ async function recordCancellationFeedback(
 }
 
 /** The athlete's live Stripe subscription id, or null if they haven't got one. */
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * CANCEL SOMEBODY ELSE'S SUBSCRIPTION, FROM THE ADMIN PAGE.
+ *
+ * Somebody emails and asks. The answer should not be "log in and do it
+ * yourself", and it should not be "I'll go and find you in the Stripe
+ * dashboard" either — doing it there means the app only finds out via the
+ * webhook, and the webhook attributes rows by Stripe metadata that a
+ * hand-made subscription does not have.
+ *
+ * ADMIN ONLY, CHECKED SERVER-SIDE. The button lives on an admin page, but a
+ * button is not a permission check: anyone can POST to a Worker URL with their
+ * own token. The role is read here, from profiles, with the service key.
+ *
+ * PERIOD END IS THE DEFAULT AND `cancel_now` HAS TO BE ASKED FOR. They paid
+ * for the month, so they keep the month, and it stays reversible the whole
+ * time — which matters, because a good number of people change their mind
+ * within a day. An immediate cancellation is for fraud and chargebacks, and it
+ * cannot be undone from here.
+ *
+ * IT NEVER REFUNDS. Cancelling and refunding are different decisions and
+ * quietly doing the second because somebody asked for the first is how money
+ * goes missing. Refund on the invoice in Stripe, deliberately.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+async function adminSubscription(req: Request, env: Env): Promise<Response> {
+  const actor = await authUser(req, env);
+  if (!actor) return json({ error: "unauthorized" }, 401);
+  if (!(await isAdmin(env, actor.id))) return json({ error: "admins only" }, 403);
+  if (!env.STRIPE_SECRET_KEY) return json({ error: "billing not configured" }, 503);
+
+  const { userId, action, reason } = (await req.json().catch(() => ({}))) as
+    { userId?: string; action?: string; reason?: string };
+
+  if (!userId) return json({ error: "userId required" }, 400);
+  if (!["cancel", "cancel_now", "resume"].includes(action ?? "")) {
+    return json({ error: "action must be cancel, cancel_now or resume" }, 400);
+  }
+
+  // An admin cancelling their own subscription is the self-serve path with
+  // extra steps, and it would write an actor_id that makes the churn numbers
+  // read as an admin action. Send them to their own profile.
+  if (userId === actor.id) return json({ error: "use your own profile to manage your own billing" }, 400);
+
+  const rows = (await (await supa(
+    env,
+    `subscriptions?user_id=eq.${userId}&select=stripe_subscription_id,tier,status`,
+  )).json()) as { stripe_subscription_id: string | null; tier: string | null; status: string | null }[] | null;
+
+  const row = rows?.[0];
+  if (!row?.stripe_subscription_id) return json({ error: "no-billing-account" }, 404);
+
+  let sub: any;
+  if (action === "cancel_now") {
+    sub = await stripe(env, `subscriptions/${row.stripe_subscription_id}`, undefined, "DELETE");
+  } else if (action === "resume") {
+    sub = await stripe(env, `subscriptions/${row.stripe_subscription_id}`, {
+      cancel_at_period_end: "false",
+      pause_collection: "",
+    });
+  } else {
+    sub = await stripe(env, `subscriptions/${row.stripe_subscription_id}`, { cancel_at_period_end: "true" });
+  }
+
+  // The tier from our own row, because a hand-made Stripe subscription has no
+  // metadata and upsertSub would otherwise write nothing at all.
+  await upsertSub(env, sub, { userId, tier: row.tier ?? undefined });
+
+  if (action !== "resume") {
+    await recordAdminCancellation(env, userId, actor.id, reason, action === "cancel_now");
+  }
+
+  return json({
+    ok: true,
+    action,
+    status: sub.status,
+    cancelAtPeriodEnd: !!sub.cancel_at_period_end,
+    endsAt: sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : null,
+  });
+}
+
+/**
+ * The audit row. Written with actor_id set, which is what tells this apart from
+ * a cancellation the customer performed — see migration 0104.
+ *
+ * A failure here must not fail the request: the subscription is already
+ * cancelled at Stripe by this point, and returning an error would invite a
+ * second attempt at something already done.
+ */
+async function recordAdminCancellation(
+  env: Env,
+  userId: string,
+  actorId: string,
+  reason: string | undefined,
+  immediate: boolean,
+): Promise<void> {
+  try {
+    await supa(env, "cancellation_feedback", {
+      method: "POST",
+      body: JSON.stringify([{
+        user_id: userId,
+        actor_id: actorId,
+        reason: String(reason || "cancelled by admin on request").slice(0, 80),
+        detail: immediate ? "Immediate cancellation, no refund issued" : "Cancelled at period end",
+        outcome: "cancelled",
+      }]),
+    });
+  } catch (e) {
+    console.error("admin cancellation not recorded:", String(e));
+  }
+}
+
 async function stripeSubIdFor(env: Env, userId: string): Promise<string | null> {
   const rows = (await (await supa(env, `subscriptions?user_id=eq.${userId}&select=stripe_subscription_id`)).json()) as
     { stripe_subscription_id: string | null }[] | null;
@@ -2814,9 +2930,19 @@ async function reverseCommission(env: Env, opts: {
   console.log(`commission: ${opts.reason} touched ${n} line(s) for ${opts.chargeId ?? opts.invoiceId}`);
 }
 
-async function upsertSub(env: Env, sub: any): Promise<void> {
-  const uid = sub.metadata?.user_id;
-  const tier = sub.metadata?.tier;
+/**
+ * Write a Stripe subscription through to our table.
+ *
+ * `known` exists because the metadata is not always there. Everything created
+ * through create-checkout carries user_id and tier, but a subscription somebody
+ * made by hand in the Stripe dashboard carries neither — and this function used
+ * to return silently on those, so cancelling one looked like it worked and left
+ * the customer on their paid tier for good. A caller that already knows who the
+ * subscription belongs to should say so rather than hope.
+ */
+async function upsertSub(env: Env, sub: any, known?: { userId?: string; tier?: string }): Promise<void> {
+  const uid = sub.metadata?.user_id ?? known?.userId;
+  const tier = sub.metadata?.tier ?? known?.tier;
   if (!uid || !tier) return;
   const item = sub.items?.data?.[0];
   const s = sub.status;

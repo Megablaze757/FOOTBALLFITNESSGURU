@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { callWorker } from "@/lib/admin-api";
 import { useAsync } from "@/lib/use-async";
 import { RangeToggle } from "@/components/admin/RangeToggle";
 import { countByKind, emailKindOf } from "@/lib/email-kinds";
@@ -75,21 +76,6 @@ const STATUS_TONE: Record<string, string> = {
   delayed: "text-readiness-yellow", attempted: "text-slate-400", skipped: "text-slate-500",
 };
 
-async function callWorker(path: string, body?: unknown): Promise<{ ok: boolean; data: Record<string, unknown> }> {
-  const base = process.env.NEXT_PUBLIC_API_URL;
-  if (!base) return { ok: false, data: { error: "NEXT_PUBLIC_API_URL is not set on this build." } };
-  const { data: { session } } = await createClient().auth.getSession();
-  const res = await fetch(`${base}${path}`, {
-    method: body === undefined ? "GET" : "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
-    },
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-  });
-  const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-  return { ok: res.ok, data };
-}
 
 export function EmailOps() {
   /**

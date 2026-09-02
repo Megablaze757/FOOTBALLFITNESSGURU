@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useAsync } from "@/lib/use-async";
 import { useState } from "react";
 import { todayLocal } from "@/lib/day";
+import { callWorker, workerError } from "@/lib/admin-api";
 
 interface AdminUser {
   user_id: string;
@@ -27,6 +28,17 @@ interface AdminUser {
    * cannot tell, the other means they have logged nothing.
    */
   last_logged_on?: string | null;
+  /**
+   * Billing, as three optional fields — see migration 0104.
+   *
+   * Optional for the same reason last_logged_on is: before that migration the
+   * RPC returns no such columns, and `undefined` has to stay distinguishable
+   * from `false`. "We cannot tell whether they have billing" must render as
+   * nothing at all, never as a Cancel button that will 404.
+   */
+  has_billing?: boolean;
+  cancel_at_period_end?: boolean;
+  current_period_end?: string | null;
 }
 
 /**
@@ -92,6 +104,53 @@ export function Users() {
     act(u.user_id,
       () => createClient().rpc("admin_set_comped", { p_user: u.user_id, p_on: !u.comped }),
       u.comped ? `Pro removed from ${u.email}.` : `${u.email} now has comped Pro.`);
+
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * CANCELLING FOR SOMEBODY WHO ASKED.
+   *
+   * Goes through the Worker rather than the database, because the thing that
+   * actually has to change is at Stripe. Writing `status: cancelled` here
+   * would stop their access and keep taking their money, which is the worst
+   * of both and the exact mistake this button exists to prevent.
+   *
+   * Period end by default. They paid for the month, so they keep the month,
+   * and it stays undoable the whole time.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  async function billing(u: AdminUser, action: "cancel" | "cancel_now" | "resume") {
+    const what =
+      action === "resume" ? `Let ${u.email} keep their subscription?`
+      : action === "cancel_now"
+        // Named in full, because this is the irreversible one and a dialog
+        // saying "are you sure?" tells nobody what they are agreeing to.
+        ? `Cancel ${u.email} IMMEDIATELY?\n\nThey lose access now, this cannot be undone `
+          + `from here, and no refund is issued — refund on the invoice in Stripe if you mean to.`
+        : `Cancel ${u.email} at the end of the period they have paid for?\n\n`
+          + `They keep access until then, and you can undo this until it ends.`;
+    if (!window.confirm(what)) return;
+
+    const reason = action === "resume" ? undefined
+      : window.prompt("Reason (kept for the churn numbers, optional):") ?? undefined;
+
+    setBusy(u.user_id);
+    const res = await callWorker("/admin-subscription", { userId: u.user_id, action, reason });
+    setBusy(null);
+
+    if (!res.ok) {
+      setNote(res.data.error === "no-billing-account"
+        ? `${u.email} has no Stripe subscription — nothing to cancel. A comped account is removed with the Pro toggle.`
+        : workerError(res, "That did not work. Check the Worker is deployed."));
+    } else {
+      const endsAt = typeof res.data.endsAt === "string" ? res.data.endsAt.slice(0, 10) : null;
+      setNote(
+        action === "resume" ? `${u.email} is no longer cancelling.`
+        : action === "cancel_now" ? `${u.email} cancelled immediately. No refund was issued.`
+        : `${u.email} cancels${endsAt ? ` on ${endsAt}` : " at the end of the period"}.`);
+      reload();
+    }
+    setTimeout(() => setNote(null), 8000);
+  }
 
   const rows = data ?? [];
   const paid = rows.filter((r) => r.tier !== "bronze");
@@ -205,10 +264,58 @@ export function Users() {
                   </td>
                   <td className="px-4 py-2">
                     <div className="flex gap-1">
-                      {/* Only offered for COMPED access. A real Stripe
-                          subscription has to be changed in Stripe — quietly
-                          cutting off someone who is still being billed is the
-                          worst thing this panel could do. */}
+                      {/* ═════════════════════════════════════════════════
+                          BILLING, WHEN THERE IS ACTUALLY BILLING.
+
+                          Shown only when the RPC says there is a Stripe
+                          subscription behind this row. `undefined` means the
+                          0104 migration has not been applied and we cannot
+                          tell — which renders nothing, rather than a button
+                          that would 404.
+
+                          It goes through the Worker, never the database:
+                          quietly writing "cancelled" here would cut their
+                          access off and keep taking their money, which is the
+                          worst thing this panel could do.
+                          ═════════════════════════════════════════════════ */}
+                      {u.has_billing && !u.suspended_at && (
+                        u.cancel_at_period_end ? (
+                          <button
+                            onClick={() => billing(u, "resume")}
+                            disabled={busy === u.user_id}
+                            title={u.current_period_end ? `Cancels ${u.current_period_end.slice(0, 10)}` : undefined}
+                            className="tap-target rounded-lg border border-readiness-green/40 px-2 py-1 text-[11px] font-semibold text-readiness-green disabled:opacity-40"
+                          >
+                            Undo cancel
+                          </button>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => billing(u, "cancel")}
+                              disabled={busy === u.user_id}
+                              className="tap-target rounded-lg border border-white/10 px-2 py-1 text-[11px] font-semibold text-slate-300 disabled:opacity-40"
+                            >
+                              Cancel
+                            </button>
+                            {/* Deliberately quieter than the reversible one.
+                                This is the button for fraud and chargebacks,
+                                not for somebody who emailed asking to stop. */}
+                            <button
+                              onClick={() => billing(u, "cancel_now")}
+                              disabled={busy === u.user_id}
+                              title="Ends access immediately. Cannot be undone here, and issues no refund."
+                              className="tap-target rounded-lg px-2 py-1 text-[11px] font-semibold text-slate-600 hover:text-readiness-red disabled:opacity-40"
+                            >
+                              now
+                            </button>
+                          </>
+                        )
+                      )}
+
+                      {/* Only offered for COMPED access — access granted
+                          without Stripe, which is the only kind this toggle
+                          can honestly revoke. A real subscription is cancelled
+                          with the buttons above. */}
                       {(u.comped || u.tier === "bronze") && !u.suspended_at && (
                         <button
                           onClick={() => toggleComped(u)}
