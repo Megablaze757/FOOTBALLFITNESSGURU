@@ -15,17 +15,25 @@
 //
 // WHY THIS IS A SUPABASE FUNCTION AND NOT A CLOUDFLARE ROUTE.
 //
-// The Cloudflare Worker already has this code — `wearableIngest` in
-// cloudflare/src/index.ts — and it has never been deployed. Worse, the Worker
-// running in production (2026-08-04.2) is built from source that is NOT in this
-// repository: it carries a three-provider, eight-model AI fallback chain that
-// `cloudflare/src/index.ts` has never heard of. Pasting the repo's bundle would
-// fix the sync and simultaneously delete that work.
+// Historically: the Worker in production was built from source nobody had, so
+// pasting the repo's bundle would have fixed the sync and deleted the live AI
+// provider chain at the same time. The morning sync shares nothing with those
+// routes but a Supabase key, so it shipped here and went live on its own.
 //
-// So the merge is blocked on someone who has the other source. The morning sync
-// is not: it shares nothing with the AI routes but a Supabase key. Shipping it
-// here means it can go live today, by whoever has the Supabase login, without
-// touching the Worker or waiting for anyone.
+// That reason has expired — the Worker and the repo are in sync (check with
+// `npm run worker:drift <url>`) and cloudflare/src/index.ts DOES serve
+// /wearable-ingest today. Two things keep this the athlete-facing one anyway:
+//
+//   1. The Worker's copy accepts POST + `Authorization: Bearer` ONLY. The
+//      setup guide teaches a bare GET with `?t=`, because that is one action in
+//      Shortcuts instead of six. A link pointed at the Worker 401s.
+//   2. NEXT_PUBLIC_SUPABASE_URL is always set; NEXT_PUBLIC_API_URL is not, and
+//      a sync that silently stops when a build variable is missing is the
+//      failure mode this feature already had once.
+//
+// components/WearableConnect builds every athlete's link from the Supabase URL
+// and never from the Worker, so nothing reaches the Worker's copy. If that ever
+// changes, teach it the GET form first.
 //
 // Deploy:
 //   supabase functions deploy wearable-ingest --no-verify-jwt
@@ -119,8 +127,21 @@ function parseIngestPayload(body: unknown, todayLocalDate: string): BiometricRow
 
 function numOrNull(v: unknown): number | null {
   if (v == null || v === "") return null;
+  // Strip first: a Shortcut can hand over "55 ms" or "48 bpm" depending on
+  // which Health detail was dragged in, and the unit is not the athlete's
+  // mistake.
   const n = typeof v === "number" ? v : Number(String(v).replace(/[^\d.-]/g, ""));
-  return Number.isFinite(n) ? n : null;
+  /**
+   * ZERO IS A SENSOR THAT DID NOT READ, NOT A MEASUREMENT.
+   *
+   * The two copies of this disagreed here, and the Edge one — the one that
+   * WRITES — accepted it. A watch that fails to get a reading reports 0, that
+   * landed in biometrics as hrv_ms: 0, and biometricSignal then computed a
+   * deviation of -100% against the athlete's baseline and took ten points off
+   * readiness. There is no resting heart rate of zero and no HRV of zero in
+   * anyone this app is for.
+   */
+  return Number.isFinite(n) && n > 0 ? n : null;
 }
 
 /**

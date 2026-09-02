@@ -390,3 +390,58 @@ test("no readings at all is no adjustment at all", () => {
   assert.equal(s.adjustment, 0);
   assert.equal(s.note, null);
 });
+
+/**
+ * A WATCH THAT FAILED TO READ REPORTS ZERO, AND ZERO IS NOT A MEASUREMENT.
+ *
+ * The two copies of numOrNull disagreed about this and the one that WRITES —
+ * the Edge Function the Apple Shortcut posts to — accepted it. hrv_ms: 0 in
+ * the table is a -100% deviation against any baseline, which is -10 readiness
+ * for a morning where the sensor simply did not get a reading. Found by
+ * lib/ingest-parity.test.ts on its first run.
+ */
+test("a zero reading is dropped, not stored as a catastrophic morning", () => {
+  const rows = parseIngestPayload({ hrv: 0, rhr: 0, sleep: 0 });
+  assert.deepEqual(rows, [], "nothing usable arrived, so nothing should be written");
+
+  // And the same payload cannot reach readiness through the signal either.
+  const history = Array.from({ length: 10 }, (_, i) => ({
+    metric_date: `2026-06-${String(i + 1).padStart(2, "0")}`,
+    hrv_ms: 60, resting_hr: 52, sleep_hours: 8,
+  }));
+  const zeroed = biometricSignal(
+    { metric_date: "2026-07-01", hrv_ms: 0, resting_hr: 0, sleep_hours: 0 },
+    history,
+  );
+  assert.equal(zeroed.hrvDeviationPct, null, "a zero HRV must not read as 100% below baseline");
+  assert.equal(zeroed.adjustment, 0, "a failed sensor is not a hard training day");
+});
+
+/** The unit the athlete never asked to be judged on. */
+test("a reading arrives with its unit attached and still parses", () => {
+  const [row] = parseIngestPayload({ hrv: "55 ms", rhr: "48 bpm" });
+  assert.equal(row.hrv_ms, 55);
+  assert.equal(row.resting_hr, 48);
+});
+
+/**
+ * And the same zeros in HISTORY. A fortnight of good readings with three
+ * failed mornings among them would otherwise average a norm well below the
+ * athlete's real one, and every honest morning after that reads as suppressed.
+ */
+test("a failed morning does not drag the baseline down", () => {
+  const history = Array.from({ length: 10 }, (_, i) => ({
+    metric_date: `2026-06-${String(i + 1).padStart(2, "0")}`,
+    // Three mornings the strap did not read.
+    hrv_ms: i < 3 ? 0 : 60,
+    resting_hr: 52,
+    sleep_hours: 8,
+  }));
+  const s = biometricSignal(
+    { metric_date: "2026-07-01", hrv_ms: 58, resting_hr: 52, sleep_hours: 7 },
+    history,
+  );
+  assert.equal(s.hrvBaseline, 60, "the zeros were averaged into the norm");
+  assert.equal(s.hrvDeviationPct, -3, "58 against a real norm of 60 is a normal morning");
+  assert.equal(s.adjustment, 0, "and a normal morning costs nothing");
+});

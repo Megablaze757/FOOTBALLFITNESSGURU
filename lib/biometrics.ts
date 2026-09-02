@@ -40,7 +40,9 @@ function baseline(history: Biometric[], field: "hrv_ms" | "resting_hr", excludeD
   const vals = history
     .filter((b) => b.metric_date !== excludeDate)
     .map((b) => b[field])
-    .filter((v): v is number => v != null);
+    // Same rule as the reading itself: a zero in the history drags the norm
+    // down and makes every honest morning after it look suppressed.
+    .filter((v): v is number => v != null && v > 0);
   const window = vals.slice(-28);
   return window.length >= MIN_BASELINE_DAYS ? mean(window) : null;
 }
@@ -64,9 +66,20 @@ export interface BiometricSignal {
 export function biometricSignal(today: Biometric | null, history: Biometric[]): BiometricSignal {
   const hrvBase = baseline(history, "hrv_ms", today?.metric_date);
   const rhrBase = baseline(history, "resting_hr", today?.metric_date);
-  const hrv = today?.hrv_ms ?? null;
-  const rhr = today?.resting_hr ?? null;
-  const sleep = today?.sleep_hours ?? null;
+  /**
+   * Non-positive is absent, HERE TOO — not only at the door.
+   *
+   * numOrNull now refuses to store a zero, but rows written before it did are
+   * in the table, and this function is what turns a row into a readiness
+   * penalty. A stored hrv_ms of 0 reads as 100% below any baseline, which is
+   * the maximum penalty this scale can apply, for a morning the sensor simply
+   * missed. The parser stops new ones arriving; this stops the existing ones
+   * counting.
+   */
+  const positive = (v: number | null | undefined) => (v != null && v > 0 ? v : null);
+  const hrv = positive(today?.hrv_ms);
+  const rhr = positive(today?.resting_hr);
+  const sleep = positive(today?.sleep_hours);
 
   const hrvDev = hrv != null && hrvBase ? Math.round(((hrv - hrvBase) / hrvBase) * 100) : null;
 
@@ -280,7 +293,21 @@ export function parseIngestPayload(body: unknown): Biometric[] {
 
 /** Number, or null for anything that isn't a usable one (including 0 and NaN). */
 function numOrNull(v: unknown): number | null {
-  const n = Number(v);
+  if (v == null || v === "") return null;
+  // Strip first: a Shortcut can hand over "55 ms" or "48 bpm" depending on
+  // which Health detail was dragged in, and the unit is not the athlete's
+  // mistake.
+  const n = typeof v === "number" ? v : Number(String(v).replace(/[^\d.-]/g, ""));
+  /**
+   * ZERO IS A SENSOR THAT DID NOT READ, NOT A MEASUREMENT.
+   *
+   * The two copies of this disagreed here, and the Edge one — the one that
+   * WRITES — accepted it. A watch that fails to get a reading reports 0, that
+   * landed in biometrics as hrv_ms: 0, and biometricSignal then computed a
+   * deviation of -100% against the athlete's baseline and took ten points off
+   * readiness. There is no resting heart rate of zero and no HRV of zero in
+   * anyone this app is for.
+   */
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 

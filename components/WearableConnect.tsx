@@ -236,13 +236,17 @@ function AppleSetup({ token, shortcut, onDone }: { token: string | null; shortcu
   /**
    * The endpoint a Shortcut posts to — the Supabase Edge Function.
    *
-   * IT USED TO BE THE CLOUDFLARE WORKER, AND THAT ROUTE DOES NOT EXIST. Live
-   * answers 404 on both /ingest-token and /wearable-ingest, so "Set up" failed
-   * and every configured Shortcut posted into a void. The Worker running in
-   * production is built from source that is not in this repo, so the fix could
-   * not be "deploy the repo's Worker" — that would delete the AI provider work
-   * that is live. The sync shares nothing with the AI routes, so it moved to a
-   * Supabase function that deploys on its own.
+   * IT USED TO BE THE CLOUDFLARE WORKER, WHICH 404'd. Every configured
+   * Shortcut posted into a void, silently, every morning. At the time the
+   * Worker in production was built from source nobody had, so "deploy the
+   * repo's Worker" would have deleted the live AI provider chain — the sync
+   * moved to a Supabase function that deploys on its own.
+   *
+   * The Worker now serves the route (it is in sync with this repo), so that
+   * 404 is history — but it accepts POST + Bearer only, and the guide teaches
+   * a bare GET with the token in the query string because that is one action
+   * in Shortcuts rather than six. So this stays pointed at Supabase, and the
+   * reason is now a shape difference rather than a missing deployment.
    *
    * Derived from NEXT_PUBLIC_SUPABASE_URL, which is always set — the app cannot
    * function without it. So unlike the old NEXT_PUBLIC_API_URL, this can never
@@ -255,10 +259,11 @@ function AppleSetup({ token, shortcut, onDone }: { token: string | null; shortcu
   /**
    * IS THE ENDPOINT ACTUALLY THERE?
    *
-   * It was not — and had not been for the entire life of this feature. The
-   * Supabase function this guide points at has never been deployed, so every
-   * Shortcut anyone built against it posted into a 404, silently, every morning.
-   * The guide was five careful steps to nowhere.
+   * For the entire life of this feature it was not: the function this guide
+   * points at had never been deployed, so every Shortcut built against it
+   * posted into a 404 every morning. The guide was five careful steps to
+   * nowhere. It is deployed now — but the probe stays, because the thing that
+   * made that so expensive was not the outage, it was that nothing said so.
    *
    * A bare GET is the cheapest possible probe and it is safe: the function
    * answers a link with no metrics on it with "your link works", writes
