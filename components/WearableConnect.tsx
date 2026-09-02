@@ -160,7 +160,7 @@ function Row({ name, icon, state, detail, onClick, action }: {
         <span className="mt-0.5 block text-xs text-slate-400">{detail}</span>
       </span>
       {onClick && action && (
-        <button onClick={onClick} className="chip shrink-0 text-pitch-400 hover:bg-white/[0.08]">{action}</button>
+        <button onClick={onClick} className="chip shrink-0 text-accent-400 hover:bg-white/[0.08]">{action}</button>
       )}
     </li>
   );
@@ -207,7 +207,7 @@ function OuraForm({ onDone }: { onDone: () => void }) {
         {busy ? "Checking with Oura…" : "Connect"}
       </button>
       {err && <p className="mt-2 text-sm text-readiness-red">{err}</p>}
-      {msg && <p className="mt-2 text-sm text-pitch-400">{msg}</p>}
+      {msg && <p className="mt-2 text-sm text-accent-400">{msg}</p>}
       <p className="mt-2 text-xs text-slate-500">
         The token is stored server-side and never sent back to this page — not even to you. Disconnect
         by creating a new one on Oura&apos;s site, which invalidates this one.
@@ -601,7 +601,7 @@ function AppleSetup({ token, shortcut, onDone }: { token: string | null; shortcu
                 <code className="ml-1 text-slate-400">hrv</code>,
                 <code className="ml-1 text-slate-400">restingHR</code>.
               </p>
-              <button onClick={() => copy("Header", `Bearer ${shown.token}`)} className="chip text-pitch-400">
+              <button onClick={() => copy("Header", `Bearer ${shown.token}`)} className="chip text-accent-400">
                 {copied === "Header" ? "Copied" : "Copy the header value"}
               </button>
               <p>
@@ -758,7 +758,7 @@ function Copyable({ label, value, copied, onCopy, secret, onReveal, revealed }: 
         <code className={`min-w-0 flex-1 text-xs text-slate-300 ${revealed ? "select-all break-all" : "truncate"}`}>
           {secret ? maskSecret(value) : value}
         </code>
-        <button onClick={onCopy} className="chip shrink-0 text-pitch-400">{copied ? "Copied" : "Copy"}</button>
+        <button onClick={onCopy} className="chip shrink-0 text-accent-400">{copied ? "Copied" : "Copy"}</button>
       </div>
       {onReveal && (
         <button
@@ -797,7 +797,7 @@ function maskSecret(value: string): string {
 function Step({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
   return (
     <li className="flex gap-2.5">
-      <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-pitch-400/15 text-[10px] font-extrabold text-pitch-400">
+      <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-pitch-400/15 text-[10px] font-extrabold text-accent-400">
         {n}
       </span>
       {/* div, not span: a step's body can hold the copy widget, and that is a

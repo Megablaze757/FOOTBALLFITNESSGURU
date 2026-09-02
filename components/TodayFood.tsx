@@ -92,7 +92,7 @@ export function TodayFood({
                   onKeyDown={(ev) => { if (ev.key === "Enter") commit(e); if (ev.key === "Escape") setOpenId(null); }}
                   className="field w-24 px-2 py-1 text-center text-xs tabular-nums"
                 />
-                <button type="button" onClick={() => commit(e)} className="chip text-pitch-400">Save</button>
+                <button type="button" onClick={() => commit(e)} className="chip text-accent-400">Save</button>
                 <span className="text-[11px] text-slate-600">
                   {e.protein}p · {e.carbs}c · {e.fats}f
                 </span>

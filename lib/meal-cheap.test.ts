@@ -153,7 +153,10 @@ test("the shopping list leads with what a week costs, not what this trip costs",
   // this. It was the first shop, which is a third dearer and is a one-off.
   const src = readFileSync(new URL("../components/ShoppingList.tsx", import.meta.url), "utf8");
   const header = src.slice(src.indexOf("<h3 className=\"text-lg font-extrabold\">Shopping list"), src.indexOf("<div className=\"mt-3 h-1.5"));
-  assert.match(header, /text-lg font-extrabold text-pitch-400">~£\{list\.ongoingTotal\.toFixed\(2\)\}/);
+  // text-accent-400, not text-pitch-400: gold text and gold fills split into
+  // two tokens when light mode arrived, because no single value is both a
+  // readable label on white and a recognisable gold button.
+  assert.match(header, /text-lg font-extrabold text-accent-400">~£\{list\.ongoingTotal\.toFixed\(2\)\}/);
   assert.match(header, /a week/);
   // The till total is still there — it is the number at the checkout.
   assert.match(header, /list\.total\.toFixed\(2\)\}.{0,20}this shop/s);

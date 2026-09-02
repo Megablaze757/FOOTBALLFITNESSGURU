@@ -240,7 +240,7 @@ export default function LoginPage() {
               "heading level 1, PocketAthlete" is the difference between landing
               here and being lost. Caught by the e2e h1 check. */}
           <h1 className="text-4xl font-extrabold tracking-tight">
-            <span className="text-pitch-400">PocketAthlete</span>
+            <span className="text-accent-400">PocketAthlete</span>
           </h1>
           <p className="mt-2 text-sm text-slate-400">
             {mode === "sign_in" ? "Welcome back, athlete." : mode === "sign_up" ? "Create your athlete account." : "Reset your password."}
@@ -303,7 +303,7 @@ export default function LoginPage() {
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
                   aria-pressed={showPassword}
-                  className="tap-target absolute right-1 top-1/2 -translate-y-1/2 px-2 text-xs font-semibold text-slate-400 hover:text-pitch-400"
+                  className="tap-target absolute right-1 top-1/2 -translate-y-1/2 px-2 text-xs font-semibold text-slate-400 hover:text-accent-400"
                 >
                   {showPassword ? "Hide" : "Show"}
                 </button>
@@ -320,7 +320,7 @@ export default function LoginPage() {
             <button
               type="button"
               onClick={() => { setMode("forgot"); setError(null); setInfo(null); }}
-              className="tap-target block text-left text-xs text-slate-400 hover:text-pitch-400"
+              className="tap-target block text-left text-xs text-slate-400 hover:text-accent-400"
             >
               Forgot password?
             </button>
@@ -339,7 +339,7 @@ export default function LoginPage() {
                   I explicitly consent to PocketAthlete processing health and fitness data I enter —
                   including pain, sleep, fatigue, weight, body composition, nutrition and training —
                   to personalise readiness, recovery, food and training guidance. Relevant details may
-                  be sent to the AI providers named in the <a href="/privacy" className="text-pitch-400 underline">privacy policy</a>.
+                  be sent to the AI providers named in the <a href="/privacy" className="text-accent-400 underline">privacy policy</a>.
                 </span>
               </label>
               <p className="text-[11px] leading-relaxed text-slate-500">
@@ -350,13 +350,13 @@ export default function LoginPage() {
           )}
 
           {verifying && (
-            <p className="flex items-center gap-2 text-sm text-pitch-400">
+            <p className="flex items-center gap-2 text-sm text-accent-400">
               <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-pitch-500 border-t-transparent" />
               Confirming your email…
             </p>
           )}
           {error && <p className="text-sm text-readiness-red">{error}</p>}
-          {info && <p className="text-sm text-pitch-400">{info}</p>}
+          {info && <p className="text-sm text-accent-400">{info}</p>}
 
           {/* Confirmation mail goes missing often enough that "sign up again"
               being the only recovery is a real dead end — the second attempt
@@ -368,7 +368,7 @@ export default function LoginPage() {
                 type="button"
                 onClick={resendConfirmation}
                 disabled={cooldown > 0}
-                className="tap-target mt-2 text-sm font-semibold text-pitch-400 hover:underline disabled:text-slate-500 disabled:no-underline"
+                className="tap-target mt-2 text-sm font-semibold text-accent-400 hover:underline disabled:text-slate-500 disabled:no-underline"
               >
                 {cooldown > 0 ? `Resend in ${cooldown}s` : "Resend confirmation email"}
               </button>
@@ -386,7 +386,7 @@ export default function LoginPage() {
             setError(null);
             setInfo(null);
           }}
-          className="tap-target mt-5 w-full text-sm text-slate-400 transition hover:text-pitch-400"
+          className="tap-target mt-5 w-full text-sm text-slate-400 transition hover:text-accent-400"
         >
           {mode === "sign_in" ? "Need an account? Sign up" : "Have an account? Sign in"}
         </button>

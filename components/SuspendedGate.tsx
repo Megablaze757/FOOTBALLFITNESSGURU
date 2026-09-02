@@ -69,7 +69,7 @@ export function SuspendedGate({ userId, children }: { userId: string; children: 
           >
             Get in touch
           </a>
-          <button onClick={signOut} className="tap-target mt-3 text-sm text-slate-400 hover:text-pitch-400">
+          <button onClick={signOut} className="tap-target mt-3 text-sm text-slate-400 hover:text-accent-400">
             Sign out
           </button>
         </div>

@@ -6,7 +6,7 @@ export function LegalPage({ title, intro, sections }: { title: string; intro: st
   return (
     <main className="mx-auto max-w-2xl px-6 pb-24 pt-10">
       <header className="mb-8">
-        <Link href="/" className="text-sm text-slate-500 hover:text-pitch-400">← PocketAthlete</Link>
+        <Link href="/" className="text-sm text-slate-500 hover:text-accent-400">← PocketAthlete</Link>
         <h1 className="mt-4 text-3xl font-extrabold tracking-tight sm:text-4xl">{title}</h1>
         <p className="mt-2 text-sm text-slate-400">{intro}</p>
         <p className="mt-1 text-xs text-slate-600">Last updated {LEGAL_UPDATED}</p>
@@ -35,11 +35,11 @@ export function LegalPage({ title, intro, sections }: { title: string; intro: st
 
       <footer className="mt-12 border-t border-white/10 pt-6 text-sm text-slate-400">
         <p>
-          Questions? Email <a href={`mailto:${LEGAL_CONTACT}`} className="text-pitch-400 hover:underline">{LEGAL_CONTACT}</a>.
+          Questions? Email <a href={`mailto:${LEGAL_CONTACT}`} className="text-accent-400 hover:underline">{LEGAL_CONTACT}</a>.
         </p>
         <p className="mt-2 flex gap-4 text-xs">
-          <Link href="/privacy" className="hover:text-pitch-400">Privacy policy</Link>
-          <Link href="/terms" className="hover:text-pitch-400">Terms</Link>
+          <Link href="/privacy" className="hover:text-accent-400">Privacy policy</Link>
+          <Link href="/terms" className="hover:text-accent-400">Terms</Link>
         </p>
       </footer>
     </main>

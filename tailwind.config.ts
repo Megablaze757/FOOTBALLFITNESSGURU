@@ -30,6 +30,16 @@ const config: Config = {
           500: "rgb(var(--pitch-500) / <alpha-value>)",
           600: "rgb(var(--pitch-600) / <alpha-value>)",
         },
+        /* Gold as TEXT. Separate from `pitch` because no single value is both a
+           readable label on a white page and a recognisable gold button — the
+           first attempt darkened the one token and turned every button brown. */
+        accent: {
+          DEFAULT: "rgb(var(--accent-400) / <alpha-value>)",
+          300: "rgb(var(--accent-300) / <alpha-value>)",
+          400: "rgb(var(--accent-400) / <alpha-value>)",
+          500: "rgb(var(--accent-500) / <alpha-value>)",
+          600: "rgb(var(--accent-600) / <alpha-value>)",
+        },
         gold: {
           DEFAULT: "rgb(var(--pitch-400) / <alpha-value>)",
           300: "rgb(var(--pitch-300) / <alpha-value>)",

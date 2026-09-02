@@ -45,11 +45,11 @@ export function EmptyState({ icon, title, body, action, compact }: {
       {action && (
         <div className="mt-3">
           {action.href ? (
-            <Link href={action.href} className="chip-option chip-option-sm border-pitch-400/40 text-pitch-400">
+            <Link href={action.href} className="chip-option chip-option-sm border-pitch-400/40 text-accent-400">
               {action.label}
             </Link>
           ) : (
-            <button onClick={action.onClick} className="chip-option chip-option-sm border-pitch-400/40 text-pitch-400">
+            <button onClick={action.onClick} className="chip-option chip-option-sm border-pitch-400/40 text-accent-400">
               {action.label}
             </button>
           )}

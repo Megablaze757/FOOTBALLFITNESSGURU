@@ -105,7 +105,7 @@ export function AppleHealthPill({ onSleep }: {
         type="button"
         onClick={pull}
         disabled={state === "reading"}
-        className="tap-target self-start rounded-full border border-white/10 bg-white/[0.03] px-3.5 py-2 text-xs font-semibold text-slate-400 transition hover:border-pitch-400/40 hover:text-pitch-400 disabled:opacity-50"
+        className="tap-target self-start rounded-full border border-white/10 bg-white/[0.03] px-3.5 py-2 text-xs font-semibold text-slate-400 transition hover:border-pitch-400/40 hover:text-accent-400 disabled:opacity-50"
       >
         {state === "reading" ? "Reading Health…" : "❤️ Fill from Apple Health"}
       </button>

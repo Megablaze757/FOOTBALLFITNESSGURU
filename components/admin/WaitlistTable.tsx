@@ -24,7 +24,7 @@ export function Waitlist({ rows }: { rows: { email: string; source: string | nul
       <div className="mb-3 flex items-center justify-between">
         <h2 className="field-label !mb-0">📧 Email waitlist · {rows.length}</h2>
         {rows.length > 0 && (
-          <button onClick={copyEmails} className="tap-target text-xs font-semibold text-pitch-400 hover:underline">
+          <button onClick={copyEmails} className="tap-target text-xs font-semibold text-accent-400 hover:underline">
             {copied ? "Copied ✓" : "Copy all emails"}
           </button>
         )}
@@ -70,7 +70,7 @@ interface AdminUser {
 }
 
 const TIER_STYLE: Record<string, string> = {
-  gold: "text-pitch-400",
+  gold: "text-accent-400",
   silver: "text-slate-200",
   bronze: "text-slate-500",
 };

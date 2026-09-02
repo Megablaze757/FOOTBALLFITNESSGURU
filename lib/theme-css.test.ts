@@ -108,3 +108,45 @@ test("no accent text is dimmed with an opacity modifier", async () => {
   assert.deepEqual(offenders, [],
     `accent text dimmed with opacity — use a dimmer tier instead:\n  ${offenders.join("\n  ")}`);
 });
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * GOLD TEXT AND GOLD FILLS ARE TWO TOKENS, AND HAVE TO STAY TWO.
+ *
+ * The first light mode darkened `pitch` so that `text-pitch-400` would pass on
+ * white. It did — and turned every gold button muddy brown, because the same
+ * token paints the fill. Every contrast test passed while the brand was gone,
+ * which is precisely the failure a ratio cannot see.
+ *
+ * `pitch` is the fill and is identical in both themes. `accent` is the text
+ * and darkens. Using `text-pitch-*` puts the bright fill gold on a white page
+ * at about 1.9:1.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("gold text uses the text token, never the fill token", async () => {
+  const { readdirSync, statSync } = await import("node:fs");
+  const { join } = await import("node:path");
+
+  const walk = (dir: string): string[] =>
+    readdirSync(dir).flatMap((entry) => {
+      const full = join(dir, entry);
+      if (statSync(full).isDirectory()) return walk(full);
+      return /\.(tsx|css)$/.test(full) ? [full] : [];
+    });
+
+  const offenders: string[] = [];
+  for (const file of [...walk("app"), ...walk("components")]) {
+    for (const [, match] of readFileSync(file, "utf8").matchAll(/(text-(?:pitch|gold)-[a-z0-9]+)/g)) {
+      offenders.push(`${file}: ${match}`);
+    }
+  }
+
+  assert.deepEqual(offenders, [],
+    `gold text must use accent-*, which darkens for light mode:\n  ${offenders.join("\n  ")}`);
+
+  // And the split has to be real — identical values would mean it never happened.
+  assert.notEqual(PALETTES.light.accent[400], PALETTES.light.pitch[400],
+    "the text and fill golds are the same colour in light mode — the split is decorative");
+  assert.equal(PALETTES.dark.accent[400], PALETTES.dark.pitch[400],
+    "dark mode has no reason to differ, and differing would be an accident");
+});

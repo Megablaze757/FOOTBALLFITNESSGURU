@@ -166,3 +166,44 @@ export function shouldRestart(opts: {
   // ended in under a second never really started.
   return opts.msSinceStart >= 1000 || opts.restarts < 2;
 }
+
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * ENDING A SESSION SO THAT IT STAYS ENDED.
+ *
+ * Reported as "the stop button doesn't work", and there were two ways for that
+ * to be true.
+ *
+ * `stop()` does not stop. It asks the engine to finish and hand back a final
+ * result, keeping the microphone open while it does — so the recording
+ * indicator stays lit after the press. `abort()` is the one that ends now.
+ * Nothing is lost by preferring it: interim words are written into the field
+ * as they are spoken, so what is on screen at the moment of the press is what
+ * the athlete keeps.
+ *
+ * And a session that ends on its own restarts itself, deliberately, so that
+ * pausing mid-sentence does not cut anybody off. If the press lands while a
+ * restart is queued, clearing a flag is not enough — the handler is still
+ * attached and starts it again. So the handlers come off FIRST, which is what
+ * makes a late event from a dying session inert.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export interface Stoppable {
+  onend: unknown;
+  onresult: unknown;
+  onerror: unknown;
+  stop: () => void;
+  abort?: () => void;
+}
+
+export function endSession(rec: Stoppable | null | undefined): void {
+  if (!rec) return;
+  rec.onend = null;
+  rec.onresult = null;
+  rec.onerror = null;
+  try {
+    if (typeof rec.abort === "function") rec.abort();
+    else rec.stop();
+  } catch { /* already gone */ }
+}

@@ -245,7 +245,7 @@ export function WaitlistAnnounce() {
           </p>
         </div>
         <span className="text-right">
-          <span className="chip text-pitch-400">{pending} to send</span>
+          <span className="chip text-accent-400">{pending} to send</span>
           {sender && (
             <span className="mt-1 block text-[11px] text-slate-500">
               via {sender === "worker" ? "the Worker" : "the database"}

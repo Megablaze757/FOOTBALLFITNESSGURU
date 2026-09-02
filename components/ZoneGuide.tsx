@@ -83,7 +83,7 @@ export function ZoneGuide({ metrics, age, restingHr, maxHr }: {
 
 function YourNumber({ label, value }: { label: string; value: string }) {
   return (
-    <span className="chip border-pitch-400/30 bg-pitch-400/10 text-pitch-400">
+    <span className="chip border-pitch-400/30 bg-pitch-400/10 text-accent-400">
       <span className="text-slate-400">{label}</span> {value}
     </span>
   );

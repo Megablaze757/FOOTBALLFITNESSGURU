@@ -40,7 +40,7 @@ export function FeatureLock({ capability, title, blurb }: {
           edge costs nothing and the symmetry reads as deliberate. */}
       <p className="mx-auto mt-1 max-w-sm text-left text-sm text-slate-400">{blurb}</p>
       <p className="mt-3 text-sm">
-        <span className="font-bold text-pitch-400">{plan.name}</span>
+        <span className="font-bold text-accent-400">{plan.name}</span>
         <span className="text-slate-400"> · {plan.priceLabel}</span>
       </p>
       {/* Lead with the trial, not with "see plans". The ask is smaller and the
@@ -63,7 +63,7 @@ export function UpgradeNote({ capability, children }: { capability: Capability; 
   return (
     <p className="mt-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-slate-400">
       {children}{" "}
-      <Link href="/pricing" className="font-semibold text-pitch-400 hover:underline">
+      <Link href="/pricing" className="font-semibold text-accent-400 hover:underline">
         {plan.name}, {plan.priceLabel} →
       </Link>
     </p>

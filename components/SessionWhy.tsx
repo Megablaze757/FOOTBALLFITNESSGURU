@@ -32,7 +32,7 @@ export function SessionWhy(props: SessionWhyInput & { storageKey?: string }) {
     >
       <summary className="tap-target flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 text-left">
         <span className="min-w-0">
-          <span className="block text-xs font-bold text-pitch-300">Why this session, today</span>
+          <span className="block text-xs font-bold text-accent-300">Why this session, today</span>
           <span className="block truncate text-[11px] text-slate-400">{why.headline}</span>
         </span>
         <span className="shrink-0 text-slate-500 transition group-open:rotate-180">▾</span>
@@ -40,7 +40,7 @@ export function SessionWhy(props: SessionWhyInput & { storageKey?: string }) {
       <ul className="space-y-2 border-t border-pitch-400/15 px-3 py-3">
         {why.lines.map((line, i) => (
           <li key={i} className="flex gap-2.5 text-xs leading-relaxed text-slate-300">
-            <span className="mt-0.5 shrink-0 text-pitch-500">
+            <span className="mt-0.5 shrink-0 text-accent-500">
               <Icon name={line.icon as IconName} size={14} />
             </span>
             <span className="min-w-0">{line.text}</span>

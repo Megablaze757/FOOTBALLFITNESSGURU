@@ -252,7 +252,7 @@ export function ProfileForm({ profile, email }: { profile: Profile; email: strin
       </fieldset>
 
       {error && <p className="text-sm text-readiness-red">{error}</p>}
-      {saved && <p className="text-sm text-pitch-400">Saved.</p>}
+      {saved && <p className="text-sm text-accent-400">Saved.</p>}
 
       <button type="submit" disabled={saving} className="btn-primary">{saving ? "Saving…" : "Save profile"}</button>
       <button type="button" onClick={handleSignOut} className="btn-ghost">Sign out</button>

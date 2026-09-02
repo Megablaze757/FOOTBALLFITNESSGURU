@@ -30,7 +30,7 @@ export function SectionNav({ section }: { section: string }) {
         <Link
           key={l.href}
           href={l.href}
-          className="tap-target flex shrink-0 items-center gap-2 rounded-2xl border border-white/[0.08] bg-white/[0.03] px-3 text-xs font-semibold text-slate-300 transition hover:border-pitch-400/30 hover:text-pitch-400"
+          className="tap-target flex shrink-0 items-center gap-2 rounded-2xl border border-white/[0.08] bg-white/[0.03] px-3 text-xs font-semibold text-slate-300 transition hover:border-pitch-400/30 hover:text-accent-400"
         >
           <NavIcon name={l.icon} active={false} size={16} />
           {l.label}

@@ -92,7 +92,7 @@ export function AffiliateEarnings() {
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="field-label !mb-0">💸 Commission</h2>
         <span className="text-sm">
-          <b className="text-pitch-400">{poundsFromPennies(owed)}</b>
+          <b className="text-accent-400">{poundsFromPennies(owed)}</b>
           <span className="text-slate-400"> ready to pay · {poundsFromPennies(held)} still held</span>
         </span>
       </div>
@@ -127,7 +127,7 @@ export function AffiliateEarnings() {
                     </p>
                   </div>
                   <div className="shrink-0 text-right">
-                    <div className="text-lg font-extrabold text-pitch-400">{poundsFromPennies(r.approved_pennies)}</div>
+                    <div className="text-lg font-extrabold text-accent-400">{poundsFromPennies(r.approved_pennies)}</div>
                     <div className="text-[11px] text-slate-400">ready to pay</div>
                   </div>
                 </div>

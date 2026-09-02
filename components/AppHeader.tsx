@@ -52,7 +52,7 @@ export function AppHeader() {
         {back ? (
           <Link
             href={back.href}
-            className="tap-target -ml-2 flex min-w-0 items-center gap-1.5 rounded-2xl px-2 text-sm font-semibold text-slate-300 transition hover:text-pitch-400"
+            className="tap-target -ml-2 flex min-w-0 items-center gap-1.5 rounded-2xl px-2 text-sm font-semibold text-slate-300 transition hover:text-accent-400"
           >
             <span aria-hidden className="text-base leading-none">←</span>
             <span className="truncate">{back.label}</span>
@@ -69,7 +69,7 @@ export function AppHeader() {
             </span>
             <span className="text-base font-extrabold tracking-tight text-slate-100">PocketAthlete</span>
             {!launched && (
-              <span className="rounded-md bg-pitch-400/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-pitch-400">
+              <span className="rounded-md bg-pitch-400/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-accent-400">
                 Beta
               </span>
             )}

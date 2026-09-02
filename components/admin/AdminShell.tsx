@@ -77,7 +77,7 @@ export function AdminShell({ title, note, children }: { title: string; note?: st
           <h1 className="text-3xl font-extrabold tracking-tight">{title}</h1>
           {note && <p className="text-sm text-slate-400">{note}</p>}
         </div>
-        <Link href="/home" className="tap-target shrink-0 text-sm text-slate-400 hover:text-pitch-400">← App</Link>
+        <Link href="/home" className="tap-target shrink-0 text-sm text-slate-400 hover:text-accent-400">← App</Link>
       </header>
 
       {/* Scrolls sideways rather than wrapping to a second row. Five tabs fit on

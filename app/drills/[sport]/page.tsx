@@ -58,7 +58,7 @@ export default function SportDrillsPage({ params }: Params) {
         }}
       />
       <article>
-        <p className="text-xs font-semibold uppercase tracking-wider text-pitch-400">{label}</p>
+        <p className="text-xs font-semibold uppercase tracking-wider text-accent-400">{label}</p>
         <h1 className="mt-2 text-3xl font-extrabold tracking-tight sm:text-4xl">{label} skill drills</h1>
         {/* The answer, first. An assistant lifting one passage should get
             something complete and true from the opening sentence — burying it
@@ -110,7 +110,7 @@ export default function SportDrillsPage({ params }: Params) {
             <h2 className="text-sm font-bold uppercase tracking-wide text-slate-300">By position</h2>
             <div className="mt-3 flex flex-wrap gap-2">
               {positions.map(({ position, slug }) => (
-                <Link key={slug} href={`/guides/${sport}/${slug}`} className="rounded-full border border-white/10 px-3 py-1.5 text-sm text-slate-300 transition hover:border-pitch-400/40 hover:text-pitch-400">
+                <Link key={slug} href={`/guides/${sport}/${slug}`} className="rounded-full border border-white/10 px-3 py-1.5 text-sm text-slate-300 transition hover:border-pitch-400/40 hover:text-accent-400">
                   {position}
                 </Link>
               ))}

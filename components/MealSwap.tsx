@@ -223,7 +223,7 @@ export function MealSwap({ target, prefs, starred = [], basket, onPick, onClose 
                       ingredients are already being bought for another day. */}
                   {cost != null && currentCost != null && (
                     <span className={`shrink-0 self-center text-xs tabular-nums ${
-                      cost < currentCost - 0.05 ? "text-pitch-400"
+                      cost < currentCost - 0.05 ? "text-accent-400"
                         : cost > currentCost + 0.05 ? "text-slate-400" : "text-slate-600"
                     }`}>
                       {cost < currentCost - 0.05
@@ -233,7 +233,7 @@ export function MealSwap({ target, prefs, starred = [], basket, onPick, onClose 
                           : "same"}
                     </span>
                   )}
-                  <span className="shrink-0 self-center text-xs font-bold text-pitch-400">Use</span>
+                  <span className="shrink-0 self-center text-xs font-bold text-accent-400">Use</span>
                 </button>
               </li>
             );

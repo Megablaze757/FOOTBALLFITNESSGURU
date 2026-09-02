@@ -49,3 +49,6 @@ _*.js
 
 # Drafted exercise cues awaiting review — regenerate rather than commit.
 scripts/out/
+
+# Theme screenshots — regenerate with `npm run shots`, do not commit.
+screenshots/

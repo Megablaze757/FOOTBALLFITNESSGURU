@@ -163,7 +163,7 @@ export function FeatureTip() {
       }}
       className="animate-fade-up rounded-2xl border border-pitch-400/30 bg-surface-base/95 p-3 shadow-card backdrop-blur"
     >
-      <p className="text-sm font-bold text-pitch-400">{tip.title}</p>
+      <p className="text-sm font-bold text-accent-400">{tip.title}</p>
       <p className="mt-1 text-xs leading-relaxed text-slate-300">{tip.body}</p>
       <div className="mt-2.5 flex items-center justify-end gap-2">
         <button onClick={() => void close(false)} className="tap-target chip text-slate-400">
@@ -177,7 +177,7 @@ export function FeatureTip() {
               ?.scrollIntoView({ block: "center", behavior: "smooth" });
             void close(true);
           }}
-          className="tap-target chip text-pitch-400"
+          className="tap-target chip text-accent-400"
         >
           Show me
         </button>

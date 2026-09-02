@@ -153,7 +153,7 @@ export default function ReportPage() {
             <p className="mt-1 text-sm text-slate-200">{report.topWin}</p>
           </div>
           <div className="rounded-2xl border border-pitch-400/20 bg-pitch-400/[0.06] p-4">
-            <div className="stat-label text-pitch-400">🎯 Focus next week</div>
+            <div className="stat-label text-accent-400">🎯 Focus next week</div>
             <p className="mt-1 text-sm text-slate-200">{report.focus}</p>
           </div>
         </div>

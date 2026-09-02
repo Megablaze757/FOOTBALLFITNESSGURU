@@ -65,7 +65,7 @@ export function WeekStrip({ days, sessions, minutes, accent, complete }: {
                 }`}
           </p>
         </div>
-        <Link href="/dashboard" className="tap-target -mr-2 shrink-0 gap-1 px-2 text-xs font-semibold text-slate-400 hover:text-pitch-400">
+        <Link href="/dashboard" className="tap-target -mr-2 shrink-0 gap-1 px-2 text-xs font-semibold text-slate-400 hover:text-accent-400">
           Progress <span aria-hidden>→</span>
         </Link>
       </div>

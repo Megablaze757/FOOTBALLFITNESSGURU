@@ -127,7 +127,7 @@ export function WhatIfLiftSheet({ initialExercise = "", onClose }: {
             <div className="stat-label">Preview</div>
             {estimate ? (
               <div className="mt-1">
-                <div className="text-3xl font-extrabold tabular-nums text-pitch-400">
+                <div className="text-3xl font-extrabold tabular-nums text-accent-400">
                   {unit === "kg" ? `${estimate}kg` : `${Math.round(estimate * 2.2046226218)}lb`}
                   <span className="text-sm text-slate-400"> estimated 1RM</span>
                 </div>

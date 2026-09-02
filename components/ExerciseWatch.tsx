@@ -79,7 +79,7 @@ export function ExerciseWatch({ name, videoUrl, youtubeId, className = "" }: {
       rel="noreferrer"
       className={`tap-target group flex aspect-video w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-white/15 bg-white/[0.03] px-4 text-center transition hover:border-pitch-400/40 hover:bg-white/[0.05] ${className}`}
     >
-      <span aria-hidden className="grid h-11 w-11 place-items-center rounded-full border border-pitch-400/40 text-base text-pitch-400 transition group-hover:bg-pitch-400/10">
+      <span aria-hidden className="grid h-11 w-11 place-items-center rounded-full border border-pitch-400/40 text-base text-accent-400 transition group-hover:bg-pitch-400/10">
         ▶
       </span>
       <span className="text-sm font-bold text-slate-200">Find a demonstration</span>

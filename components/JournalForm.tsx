@@ -571,7 +571,7 @@ export function JournalForm({ initial, initialTraining, sport, distanceUnit = "k
   if (result) {
     return (
       <div className="card animate-scale-in space-y-5 p-6 text-center">
-        <h2 className="text-sm font-bold uppercase tracking-wider text-pitch-400">Today&apos;s readiness</h2>
+        <h2 className="text-sm font-bold uppercase tracking-wider text-accent-400">Today&apos;s readiness</h2>
         <ReadinessGauge score={result.score} status={result.status} />
         {queued && (
           <p className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-left text-xs text-slate-400">
@@ -581,7 +581,7 @@ export function JournalForm({ initial, initialTraining, sport, distanceUnit = "k
         )}
         <p className="rounded-2xl bg-white/[0.04] p-4 text-left text-sm text-slate-200">{result.advice}</p>
         <button onClick={() => router.push("/home")} className="btn-primary">Back to home</button>
-        <button onClick={() => setResult(null)} className="tap-target text-sm text-slate-400 hover:text-pitch-400">
+        <button onClick={() => setResult(null)} className="tap-target text-sm text-slate-400 hover:text-accent-400">
           Edit today&apos;s entry
         </button>
       </div>
@@ -618,7 +618,7 @@ export function JournalForm({ initial, initialTraining, sport, distanceUnit = "k
             <button
               type="button"
               onClick={() => { applyDraft(pendingDraft); setPendingDraft(null); }}
-              className="chip text-pitch-400 hover:bg-white/[0.08]"
+              className="chip text-accent-400 hover:bg-white/[0.08]"
             >
               Restore
             </button>
@@ -655,7 +655,7 @@ export function JournalForm({ initial, initialTraining, sport, distanceUnit = "k
               setRestored(null);
               setSavedAt(null);
             }}
-            className="tap-target shrink-0 text-xs font-semibold text-slate-400 hover:text-pitch-400"
+            className="tap-target shrink-0 text-xs font-semibold text-slate-400 hover:text-accent-400"
           >
             Start fresh
           </button>
@@ -701,7 +701,7 @@ export function JournalForm({ initial, initialTraining, sport, distanceUnit = "k
                   type="button"
                   onClick={() => { setSore(false); setPainMap({}); }}
                   className={`flex-1 rounded-2xl border px-3 py-3 text-sm font-semibold transition ${
-                    sore === false ? "border-pitch-400/50 bg-pitch-400/10 text-pitch-400" : "border-white/10 bg-white/[0.03] text-slate-300"
+                    sore === false ? "border-pitch-400/50 bg-pitch-400/10 text-accent-400" : "border-white/10 bg-white/[0.03] text-slate-300"
                   }`}
                 >
                   No, all good
@@ -744,7 +744,7 @@ export function JournalForm({ initial, initialTraining, sport, distanceUnit = "k
               <button
                 type="button"
                 onClick={() => setWeighing(true)}
-                className="tap-target self-start rounded-full border border-white/10 bg-white/[0.03] px-3.5 py-2 text-xs font-semibold text-slate-400 transition hover:border-pitch-400/40 hover:text-pitch-400"
+                className="tap-target self-start rounded-full border border-white/10 bg-white/[0.03] px-3.5 py-2 text-xs font-semibold text-slate-400 transition hover:border-pitch-400/40 hover:text-accent-400"
               >
                 + Weight today
               </button>
@@ -810,7 +810,7 @@ export function JournalForm({ initial, initialTraining, sport, distanceUnit = "k
                   a button", which matters because logging a session is the
                   thing this screen was specifically asked to make findable. A
                   worded action reads as an action; a punctuation mark doesn't. */}
-              <span className="shrink-0 whitespace-nowrap text-xs font-bold text-pitch-400">
+              <span className="shrink-0 whitespace-nowrap text-xs font-bold text-accent-400">
                 Log it <span aria-hidden>→</span>
               </span>
             </button>
@@ -842,7 +842,7 @@ export function JournalForm({ initial, initialTraining, sport, distanceUnit = "k
           <button
             type="button"
             onClick={() => chooseMode(true)}
-            className="w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-slate-300 transition hover:border-pitch-400/40 hover:text-pitch-400"
+            className="w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-slate-300 transition hover:border-pitch-400/40 hover:text-accent-400"
           >
             + {terms.eventToday.replace(/\?$/, "")}, pain detail and sliders
           </button>
@@ -855,7 +855,7 @@ export function JournalForm({ initial, initialTraining, sport, distanceUnit = "k
           <button
             type="button"
             onClick={() => chooseMode(false)}
-            className="tap-target shrink-0 text-xs font-semibold text-slate-400 hover:text-pitch-400"
+            className="tap-target shrink-0 text-xs font-semibold text-slate-400 hover:text-accent-400"
           >
             Use the quick version
           </button>
@@ -891,7 +891,7 @@ export function JournalForm({ initial, initialTraining, sport, distanceUnit = "k
       <section id="training" className="card scroll-mt-20 p-5">
         <div className="mb-3 flex items-center gap-2">
           <h2 className="field-label !mb-0">Today&apos;s training</h2>
-          <span className="chip text-pitch-400">drills logged to history</span>
+          <span className="chip text-accent-400">drills logged to history</span>
         </div>
         <DayTypePicker value={training.session_type ?? "workout"} onChange={(session_type) => setTraining((current) => ({ ...current, session_type }))} />
         {training.session_type !== "rest_day" && (
@@ -950,7 +950,7 @@ function DayTypePicker({ value, onChange }: {
           const active = value === option.id;
           return (
             <button key={option.id} type="button" onClick={() => onChange(option.id)} aria-pressed={active}
-              className={`min-h-16 rounded-xl border px-2 py-2 text-center transition ${active ? "border-pitch-400/50 bg-pitch-400/10 text-pitch-300" : "border-white/[0.07] bg-white/[0.02] text-slate-400"}`}>
+              className={`min-h-16 rounded-xl border px-2 py-2 text-center transition ${active ? "border-pitch-400/50 bg-pitch-400/10 text-accent-300" : "border-white/[0.07] bg-white/[0.02] text-slate-400"}`}>
               <span className="block text-base" aria-hidden>{option.icon}</span>
               <span className="block text-xs font-bold">{option.label}</span>
               <span className="mt-0.5 hidden text-[9px] text-slate-500 sm:block">{option.note}</span>
@@ -995,7 +995,7 @@ function TapScale({ label, value, onChange, options }: {
               }`}
             >
               <span className="text-xl leading-none">{o.emoji}</span>
-              <span className={`text-[10px] font-medium leading-tight ${active ? "text-pitch-400" : "text-slate-400"}`}>
+              <span className={`text-[10px] font-medium leading-tight ${active ? "text-accent-400" : "text-slate-400"}`}>
                 {o.label}
               </span>
             </button>
@@ -1015,7 +1015,7 @@ function MetricSlider({ label, hint, value, onChange }: { label: string; hint: s
       </div>
       <div className="flex items-center gap-3">
         <input type="range" min={1} max={10} value={value} onChange={(e) => onChange(Number(e.target.value))} className="w-full" />
-        <span className="w-7 rounded-lg bg-white/[0.06] py-1 text-center text-sm font-bold tabular-nums text-pitch-400">{value}</span>
+        <span className="w-7 rounded-lg bg-white/[0.06] py-1 text-center text-sm font-bold tabular-nums text-accent-400">{value}</span>
       </div>
     </label>
   );

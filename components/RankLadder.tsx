@@ -82,7 +82,7 @@ export function RankLadder({ level }: { level: LevelInfo }) {
                   </span>
                 )}
                 {!standing && !reached && i === currentIndex + 1 && (
-                  <span className="shrink-0 text-[11px] font-semibold text-pitch-400">
+                  <span className="shrink-0 text-[11px] font-semibold text-accent-400">
                     {t.fromLevel - level.level} level{t.fromLevel - level.level === 1 ? "" : "s"} away
                   </span>
                 )}

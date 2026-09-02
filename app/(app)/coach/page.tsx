@@ -542,7 +542,7 @@ function GoalBuilder({ painMap, painNote, latestBench, sport, initialPositions, 
                 <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white/[0.04] text-xl">
                   {isBuilding
                     ? <span className="h-5 w-5 animate-spin rounded-full border-2 border-pitch-500 border-t-transparent" />
-                    : <Icon name={t.icon} size={22} className="text-pitch-400" />}
+                    : <Icon name={t.icon} size={22} className="text-accent-400" />}
                 </span>
                 {/* min-w-0 lets the text column shrink inside the flex row —
                     without it a flex child refuses to go below its content
@@ -616,7 +616,7 @@ function GoalBuilder({ painMap, painNote, latestBench, sport, initialPositions, 
                   disabled={unavailable}
                   aria-pressed={selected}
                   title={g.blurb}
-                  className={`chip-option relative pr-4 ${selected ? "border-pitch-400/50 bg-pitch-400/10 text-pitch-400" : ""} disabled:opacity-35`}
+                  className={`chip-option relative pr-4 ${selected ? "border-pitch-400/50 bg-pitch-400/10 text-accent-400" : ""} disabled:opacity-35`}
                 >
                   {selected && <span className="mr-1.5 inline-grid h-5 w-5 place-items-center rounded-full bg-pitch-400 text-[10px] font-black text-on-accent">{index + 1}</span>}
                   {g.label}
@@ -632,7 +632,7 @@ function GoalBuilder({ painMap, painNote, latestBench, sport, initialPositions, 
                 <ol className="mt-2 space-y-1">
                   {selectedGoals.map((g, i) => (
                     <li key={g.type} className="flex min-h-[36px] items-center gap-2 text-xs text-slate-400">
-                      <span className="grid h-5 w-5 place-items-center rounded-full bg-pitch-400/15 font-bold text-pitch-400">{i + 1}</span>
+                      <span className="grid h-5 w-5 place-items-center rounded-full bg-pitch-400/15 font-bold text-accent-400">{i + 1}</span>
                       <span className="flex-1">{goalLabel(g.type)}</span>
                       <button type="button" onClick={() => moveGoal(i, -1)} disabled={i === 0} className="tap-target px-2 disabled:opacity-25" aria-label={`Move ${goalLabel(g.type)} up`}>↑</button>
                       <button type="button" onClick={() => moveGoal(i, 1)} disabled={i === selectedGoals.length - 1} className="tap-target px-2 disabled:opacity-25" aria-label={`Move ${goalLabel(g.type)} down`}>↓</button>
@@ -697,7 +697,7 @@ function GoalBuilder({ painMap, painNote, latestBench, sport, initialPositions, 
                     onClick={() => setRunnerLevel(id)}
                     className={`min-h-[44px] flex-1 rounded-xl border p-2.5 text-center transition ${
                       runnerLevel === id
-                        ? "border-pitch-400/50 bg-pitch-400/10 text-pitch-400"
+                        ? "border-pitch-400/50 bg-pitch-400/10 text-accent-400"
                         : "border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.06]"
                     }`}
                   >
@@ -724,7 +724,7 @@ function GoalBuilder({ painMap, painNote, latestBench, sport, initialPositions, 
                 onClick={() => changeDays(n)}
                 className={`min-h-[44px] flex-1 rounded-xl border py-2.5 text-sm font-bold transition ${
                   daysPerWeek === n
-                    ? "border-pitch-400/50 bg-pitch-400/10 text-pitch-400"
+                    ? "border-pitch-400/50 bg-pitch-400/10 text-accent-400"
                     : "border-white/10 bg-white/[0.03] text-slate-300"
                 }`}
               >
@@ -808,7 +808,7 @@ function GoalBuilder({ painMap, painNote, latestBench, sport, initialPositions, 
                 onChange={(e) => setExerciseTarget(Number(e.target.value))}
                 className="w-full"
               />
-              <button type="button" onClick={() => setExerciseTarget(null)} className="tap-target mt-1 text-xs font-semibold text-pitch-400">Use goal default</button>
+              <button type="button" onClick={() => setExerciseTarget(null)} className="tap-target mt-1 text-xs font-semibold text-accent-400">Use goal default</button>
             </label>
             <div>
               <span className="field-label">Muscle priority</span>
@@ -833,7 +833,7 @@ function GoalBuilder({ painMap, painNote, latestBench, sport, initialPositions, 
                 <button
                   type="button"
                   onClick={() => setUpperWarmup((current) => [...current, "New warm-up"])}
-                  className="tap-target text-xs font-semibold text-pitch-400"
+                  className="tap-target text-xs font-semibold text-accent-400"
                 >
                   + Add item
                 </button>
@@ -1450,14 +1450,14 @@ function ActiveProgram({
       {actionError && (
         <div className="rounded-2xl border border-readiness-red/30 bg-readiness-red/10 p-3 text-sm text-slate-200">
           {actionError}
-          <button onClick={() => setActionError(null)} className="tap-target ml-2 text-xs text-slate-400 hover:text-pitch-400">Dismiss</button>
+          <button onClick={() => setActionError(null)} className="tap-target ml-2 text-xs text-slate-400 hover:text-accent-400">Dismiss</button>
         </div>
       )}
       <header className="space-y-4">
         <div className="flex items-start justify-between">
         <div>
           <h1 className="text-3xl font-extrabold tracking-tight">Training</h1>
-          <p className="mt-1 text-sm capitalize text-pitch-400">
+          <p className="mt-1 text-sm capitalize text-accent-400">
             {adaptiveGoals.map((g) => goalLabel(g.type)).join(" + ")} · Block {program.block}
           </p>
         </div>
@@ -1485,7 +1485,7 @@ function ActiveProgram({
             question="Archive this block and start again?"
             confirmLabel="Rebuild it"
             destructive={false}
-            className="tap-target text-xs font-semibold text-slate-300 hover:text-pitch-400"
+            className="tap-target text-xs font-semibold text-slate-300 hover:text-accent-400"
           >
             Not right? Rebuild it
           </ConfirmButton>
@@ -1605,7 +1605,7 @@ function ActiveProgram({
             <div className="mt-0.5 text-base font-extrabold text-slate-100">
               {complete ? "Block complete" : `${Math.max(0, totalSessions - doneCount)} sessions left`}
             </div>
-            <div className="mt-0.5 truncate text-xs text-pitch-400">
+            <div className="mt-0.5 truncate text-xs text-accent-400">
               {adaptiveGoals.slice(0, 2).map((g) => goalLabel(g.type)).join(" + ")}
             </div>
           </div>
@@ -1697,7 +1697,7 @@ function ActiveProgram({
                 </span>
               )}
               <button type="button" data-tip="customise-session" onClick={() => setEditingSession((editing) => !editing)}
-                className={`tap-target rounded-xl px-2 text-sm ${editingSession ? "bg-pitch-400/10 text-pitch-400" : "text-slate-500 hover:bg-white/[0.05] hover:text-slate-300"}`}
+                className={`tap-target rounded-xl px-2 text-sm ${editingSession ? "bg-pitch-400/10 text-accent-400" : "text-slate-500 hover:bg-white/[0.05] hover:text-slate-300"}`}
                 aria-label={editingSession ? "Finish editing session" : "Edit session"} aria-pressed={editingSession}>
                 {editingSession ? "Done" : "⋮"}
               </button>
@@ -1710,7 +1710,7 @@ function ActiveProgram({
           <div>
             {todaySession.kind === "active_rest" ? (
               <div className="mb-3 rounded-2xl border border-pitch-400/15 bg-pitch-400/[0.04] p-3 text-sm text-slate-200">
-                <b className="text-pitch-400">Active rest</b> · {todaySession.durationMinutes ?? 30} min · RPE {todaySession.rpe ?? 3}
+                <b className="text-accent-400">Active rest</b> · {todaySession.durationMinutes ?? 30} min · RPE {todaySession.rpe ?? 3}
                 {todaySession.notes && <span className="mt-1 block text-xs text-slate-400">{todaySession.notes}</span>}
               </div>
             ) : readiness?.status === "Red" ? (
@@ -1785,7 +1785,7 @@ function ActiveProgram({
                 <ul className="space-y-1.5 border-t border-white/[0.06] px-3 py-2.5">
                   {program.plan.corrections!.map((note) => (
                     <li key={note} className="flex gap-2 text-xs leading-relaxed text-slate-400">
-                      <span aria-hidden className="text-pitch-400">·</span>{note}
+                      <span aria-hidden className="text-accent-400">·</span>{note}
                     </li>
                   ))}
                 </ul>
@@ -1841,7 +1841,7 @@ function ActiveProgram({
                   <div className="mt-1.5 flex flex-wrap gap-1.5">
                     {takenOut.map((name) => (
                       <button key={name} onClick={() => void putBackDrill(name)} className="chip text-slate-300">
-                        {name} <span className="text-pitch-400">+ put back</span>
+                        {name} <span className="text-accent-400">+ put back</span>
                       </button>
                     ))}
                   </div>
@@ -1911,13 +1911,13 @@ function ActiveProgram({
           <h2 className="field-label">What&apos;s working</h2>
           <ul className="space-y-2 text-sm text-slate-200">
             {insights.insights.map((i, k) => (
-              <li key={k} className="flex gap-2"><span className="text-pitch-400">📈</span>{i}</li>
+              <li key={k} className="flex gap-2"><span className="text-accent-400">📈</span>{i}</li>
             ))}
           </ul>
           {insights.progressions.length > 0 && (
             <div className="mt-3 flex flex-wrap gap-2">
               {insights.progressions.map((p) => (
-                <span key={p.name} className="chip text-pitch-400">{p.name} +{p.deltaKg}kg</span>
+                <span key={p.name} className="chip text-accent-400">{p.name} +{p.deltaKg}kg</span>
               ))}
             </div>
           )}

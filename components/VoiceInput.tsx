@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   MAX_RESTARTS,
   mergeTranscript,
+  endSession,
   readResults,
   shouldRestart,
   speechSupport,
@@ -41,6 +42,8 @@ interface Recognition {
   onend: (() => void) | null;
   start: () => void;
   stop: () => void;
+  /** Ends immediately and discards anything still in flight. */
+  abort?: () => void;
 }
 type RecognitionCtor = new () => Recognition;
 
@@ -78,11 +81,37 @@ export function VoiceInput({ value, onChange, disabled, label = "what you ate" }
   // hydration is a layout jump on the first paint.
   useEffect(() => setSupport(speechSupport()), []);
 
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * STOP HAS TO BE UNCONDITIONAL, AND THE FIRST VERSION WAS NOT.
+   *
+   * Two ways it could carry on listening after the button was pressed.
+   *
+   * `stop()` does not stop. It asks the engine to finish and deliver a final
+   * result, which can take a moment and keeps the microphone open meanwhile —
+   * so the indicator stays lit and the athlete presses it again. `abort()` is
+   * the one that ends now. Nothing is lost by it: interim words are already
+   * written into the field as they are spoken, so what is on screen when they
+   * press Stop is what they keep.
+   *
+   * And a session ending on its own restarts itself, by design, so somebody
+   * pausing mid-sentence is not cut off. If Stop lands while a restart is
+   * already queued, clearing a flag is not enough — the handler is still
+   * attached and will start it again. So the handlers come off first and the
+   * ref is cleared, which makes a late event from a dying session inert.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
   const stop = useCallback(() => {
     wantsToListen.current = false;
     setListening(false);
     setInterim("");
-    try { recognition.current?.stop(); } catch { /* already stopped */ }
+
+    const rec = recognition.current;
+    recognition.current = null;
+    if (!rec) return;
+
+    // endSession detaches the handlers before ending it — see lib/voice-input.ts.
+    endSession(rec);
   }, []);
 
   // Leaving the page with the microphone open is a bug you cannot see and can
@@ -138,6 +167,9 @@ export function VoiceInput({ value, onChange, disabled, label = "what you ate" }
         setInterim("");
         return;
       }
+      // Belt and braces with the handler detach in stop(): if this fires from
+      // a session that was already abandoned, the ref no longer points at it.
+      if (recognition.current !== rec) return;
       restarts.current++;
       startedAt.current = Date.now();
       readTo.current = 0;

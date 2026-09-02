@@ -154,7 +154,7 @@ export default function InjuryPage() {
       {data?.painNote && (
         <p className="mt-2 flex flex-wrap items-center gap-x-2 text-xs text-amber-500/90">
           {data.painNote}
-          <Link href="/journal" className="font-semibold text-pitch-400 underline-offset-2 hover:underline">
+          <Link href="/journal" className="font-semibold text-accent-400 underline-offset-2 hover:underline">
             Today&apos;s log
           </Link>
         </p>

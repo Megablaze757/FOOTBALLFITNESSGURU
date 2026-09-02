@@ -109,7 +109,7 @@ export function Recipe({ meal, scale, macros }: {
               {/* A real number in a real circle. The step you are on has to be
                   findable in the half-second you look down. */}
               <span
-                className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-pitch-400/15 text-xs font-bold text-pitch-400"
+                className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-pitch-400/15 text-xs font-bold text-accent-400"
                 aria-hidden
               >
                 {i + 1}
@@ -141,7 +141,7 @@ export function Recipe({ meal, scale, macros }: {
           href={recipeSearchUrl(meal)}
           target="_blank"
           rel="noopener noreferrer"
-          className="tap-target -mr-2 gap-1 px-2 text-xs text-slate-500 transition hover:text-pitch-400"
+          className="tap-target -mr-2 gap-1 px-2 text-xs text-slate-500 transition hover:text-accent-400"
         >
           Other versions <span aria-hidden>↗</span>
         </a>

@@ -120,7 +120,7 @@ export function ConfirmButton({
                   className={`tap-target flex-1 rounded-2xl px-4 py-3 text-sm font-bold disabled:opacity-50 ${
                     destructive
                       ? "bg-readiness-red/20 text-readiness-red hover:bg-readiness-red/30"
-                      : "bg-pitch-400/20 text-pitch-400 hover:bg-pitch-400/30"
+                      : "bg-pitch-400/20 text-accent-400 hover:bg-pitch-400/30"
                   }`}
                 >
                   {busy ? "Working…" : confirmLabel}

@@ -149,7 +149,7 @@ export function PushToggle() {
             <ol className="mt-2 space-y-1">
               {installGuide(currentBrowser()).steps.map((step, i) => (
                 <li key={step} className="flex gap-2 text-[11px] leading-relaxed text-slate-400">
-                  <span className="shrink-0 font-bold text-pitch-400">{i + 1}</span>{step}
+                  <span className="shrink-0 font-bold text-accent-400">{i + 1}</span>{step}
                 </li>
               ))}
             </ol>

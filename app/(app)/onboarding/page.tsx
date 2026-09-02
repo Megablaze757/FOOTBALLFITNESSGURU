@@ -97,7 +97,7 @@ export default function OnboardingPage() {
                   {/* Lights up with the selection instead of staying a fixed
                       full-colour glyph — the ring alone was carrying the whole
                       selected state on the first screen anyone ever sees. */}
-                  <Icon name={s.icon} size={30} className={sport === s.id ? "text-pitch-400" : "text-slate-300"} />
+                  <Icon name={s.icon} size={30} className={sport === s.id ? "text-accent-400" : "text-slate-300"} />
                   <div className="mt-2 font-bold text-slate-100">{s.label}</div>
                 </button>
               ))}
@@ -150,7 +150,7 @@ export default function OnboardingPage() {
       {/* Nav */}
       <div className="mt-8 flex items-center justify-between">
         {step > 0 && step < 3 ? (
-          <button onClick={() => setStep((s) => s - 1)} className="tap-target -ml-2 gap-1 px-2 text-sm text-slate-400 hover:text-pitch-400">
+          <button onClick={() => setStep((s) => s - 1)} className="tap-target -ml-2 gap-1 px-2 text-sm text-slate-400 hover:text-accent-400">
             <span aria-hidden>←</span> Back
           </button>
         ) : <span />}

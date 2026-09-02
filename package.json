@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "build:worker": "esbuild cloudflare/src/index.ts --bundle --format=esm --target=es2022 --platform=neutral --outfile=../worker-paste-me.js",
     "build:theme": "node --import tsx scripts/build-theme-css.mts",
+    "shots": "node --import tsx scripts/screenshot-themes.mts",
     "test": "node --import tsx --test \"lib/**/*.test.ts\"",
     "test:coverage": "node --import tsx --test --experimental-test-coverage --test-coverage-lines=95 --test-coverage-branches=85 --test-coverage-functions=90 \"lib/**/*.test.ts\"",
     "test:e2e": "playwright test",

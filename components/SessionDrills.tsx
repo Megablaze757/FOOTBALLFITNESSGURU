@@ -118,7 +118,7 @@ export function SessionDrills({ drills, onPick, onSwap, onReorder, onRemove, rem
                       aria-label={`Swap ${d.name}`}
                       aria-expanded={open}
                       className={`tap-target shrink-0 px-1.5 text-xs transition ${
-                        open || d.swappedFrom ? "text-pitch-400" : "text-slate-600 hover:text-pitch-400"
+                        open || d.swappedFrom ? "text-accent-400" : "text-slate-600 hover:text-accent-400"
                       }`}
                     >
                       ⇄
@@ -213,7 +213,7 @@ function DrillCard({ drill, onPick, rehab, slot }: { drill: Drill; onPick?: (nam
         </span>
         <span className="mt-0.5 flex min-w-0 items-start justify-between gap-2">
           <span className="min-w-0 break-words text-sm font-bold leading-snug text-slate-100">
-            {drill.skill && <span className="mr-1.5 text-pitch-400">⚽</span>}
+            {drill.skill && <span className="mr-1.5 text-accent-400">⚽</span>}
             {displayName(drill)}
           </span>
           {!longPrescription && (
@@ -250,7 +250,7 @@ function kindBadge(drill: Drill) {
   const kind = kindOf(drill.name, drill.slot);
   if (!isWorkingSet(kind)) return null;
   const tone = kind === "power" ? "bg-amber-400/15 text-amber-300"
-    : kind === "compound" || kind === "secondary" ? "bg-pitch-400/15 text-pitch-300"
+    : kind === "compound" || kind === "secondary" ? "bg-pitch-400/15 text-accent-300"
     : kind === "machine" ? "bg-sky-400/15 text-sky-300"
     : "bg-white/[0.07] text-slate-400";
   return (
@@ -273,7 +273,7 @@ function CompactRow({ drill, onPick }: { drill: Drill; onPick?: (name: string) =
     >
       <div className="flex min-w-0 items-baseline justify-between gap-2">
         <span className="min-w-0 break-words text-xs text-slate-300">
-          {drill.skill && <span className="mr-1.5 text-pitch-400">⚽</span>}
+          {drill.skill && <span className="mr-1.5 text-accent-400">⚽</span>}
           {displayName(drill)}
         </span>
         {!longPrescription && <span className="shrink-0 text-xs text-slate-500">{prescription}</span>}
@@ -312,7 +312,7 @@ function sectionStyle(group: Group): { label: string; icon: IconName; wrap: stri
   if (slot === "warmup") return { label: "Warm-up", icon: "bolt", wrap: "border-l-sky-400/70 bg-sky-400/[0.02]", text: "text-sky-400" };
   if (slot === "conditioning") return { label: "Conditioning", icon: "run", wrap: "border-l-emerald-400/70 bg-emerald-400/[0.02]", text: "text-emerald-300/80" };
   if (slot === "cooldown") return { label: "Cool-down", icon: "stretch", wrap: "border-l-violet-400/70 bg-violet-400/[0.02]", text: "text-violet-300/80" };
-  if (slot === "skill") return { label: "Skill", icon: "ball", wrap: "border-l-pitch-400/60 bg-pitch-400/[0.02]", text: "text-pitch-400" };
+  if (slot === "skill") return { label: "Skill", icon: "ball", wrap: "border-l-pitch-400/60 bg-pitch-400/[0.02]", text: "text-accent-400" };
   // ONE HEADING FOR ALL THE STRENGTH WORK.
   //
   // "Main work", then "Secondary", then "Accessory" is how a coach files a
@@ -321,7 +321,7 @@ function sectionStyle(group: Group): { label: string; icon: IconName; wrap: stri
   // programme has one. The tiers still exist and still decide the order; they
   // are now shown per exercise, on the card, where they answer a question the
   // reader actually has ("why is this one after the squat?").
-  if (slot) return { label: "Main / Strength", icon: "dumbbell", wrap: "border-l-pitch-400/70 bg-pitch-400/[0.02]", text: "text-pitch-400" };
+  if (slot) return { label: "Main / Strength", icon: "dumbbell", wrap: "border-l-pitch-400/70 bg-pitch-400/[0.02]", text: "text-accent-400" };
   return { label: "Workout", icon: "dumbbell", wrap: "border-l-white/15", text: "text-slate-400" };
 }
 

@@ -189,7 +189,7 @@ export function Leaderboards({ userId }: { userId: string }) {
                   key={r.stats.userId}
                   className={`flex items-center gap-3 rounded-xl px-2.5 py-2 ${isMe ? "bg-pitch-400/[0.08] ring-1 ring-pitch-400/25" : ""}`}
                 >
-                  <span className={`w-6 shrink-0 text-center text-sm font-extrabold ${r.rank <= 3 ? "text-pitch-400" : "text-slate-500"}`}>
+                  <span className={`w-6 shrink-0 text-center text-sm font-extrabold ${r.rank <= 3 ? "text-accent-400" : "text-slate-500"}`}>
                     {["🥇", "🥈", "🥉"][r.rank - 1] ?? r.rank}
                   </span>
                   {/* THE RANK, BESIDE THE NAME.
@@ -211,7 +211,7 @@ export function Leaderboards({ userId }: { userId: string }) {
                     );
                   })()}
                   <span className="min-w-0 flex-1 truncate text-sm text-slate-100">
-                    {r.stats.name}{isMe && <span className="ml-1.5 text-xs text-pitch-400">you</span>}
+                    {r.stats.name}{isMe && <span className="ml-1.5 text-xs text-accent-400">you</span>}
                   </span>
                   <span className="shrink-0 text-sm font-bold tabular-nums text-slate-200">{r.display}</span>
                 </li>
@@ -231,7 +231,7 @@ export function Leaderboards({ userId }: { userId: string }) {
                 return <RankBadge tier={lvl.tier} division={lvl.division} color={lvl.color} size={22} className="shrink-0" title={lvl.rank} />;
               })()}
               <span className="min-w-0 flex-1 truncate text-sm text-slate-100">
-                {below.stats.name}<span className="ml-1.5 text-xs text-pitch-400">you</span>
+                {below.stats.name}<span className="ml-1.5 text-xs text-accent-400">you</span>
               </span>
               <span className="shrink-0 text-sm font-bold tabular-nums text-slate-200">{below.display}</span>
             </div>

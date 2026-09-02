@@ -86,7 +86,7 @@ export default function BenchmarksPage() {
                 <div className="mb-1 text-sm font-semibold text-slate-100">{b.test_date}</div>
                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-300">
                   {Object.entries(b.metrics).map(([k, v]) => (
-                    <span key={k}>{metricDef(k).label}: <span className="font-medium text-pitch-400">{v}</span> {metricDef(k).unit}</span>
+                    <span key={k}>{metricDef(k).label}: <span className="font-medium text-accent-400">{v}</span> {metricDef(k).unit}</span>
                   ))}
                 </div>
                 {b.notes && <p className="mt-1 text-xs italic text-slate-500">{b.notes}</p>}

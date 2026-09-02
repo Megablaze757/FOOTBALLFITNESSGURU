@@ -67,7 +67,7 @@ export function NotFoundView() {
         {/* aria-hidden: a screen reader gets the h1 below, which says the same
             thing in words. "404" announced on its own is noise. */}
         <div className="text-6xl font-extrabold leading-none" aria-hidden>
-          <span className="text-pitch-400">404</span>
+          <span className="text-accent-400">404</span>
         </div>
 
         <h1 className="mt-4 text-2xl font-extrabold tracking-tight">This page doesn&apos;t exist</h1>
@@ -92,7 +92,7 @@ export function NotFoundView() {
           <Link href="/home" className="btn-primary max-w-[14rem]">Back to home</Link>
           <button
             onClick={() => window.history.back()}
-            className="tap-target text-sm text-slate-400 transition hover:text-pitch-400"
+            className="tap-target text-sm text-slate-400 transition hover:text-accent-400"
           >
             ← Go back
           </button>
@@ -100,7 +100,7 @@ export function NotFoundView() {
 
         <p className="mt-8 text-xs text-slate-500">
           Still stuck? Email{" "}
-          <a href="mailto:info@pocketathlete.com" className="text-pitch-400 hover:underline">
+          <a href="mailto:info@pocketathlete.com" className="text-accent-400 hover:underline">
             info@pocketathlete.com
           </a>
         </p>

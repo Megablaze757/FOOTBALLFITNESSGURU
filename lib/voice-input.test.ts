@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  endSession,
   MAX_RESTARTS,
   MAX_TRANSCRIPT,
   capTranscript,
@@ -10,6 +11,7 @@ import {
   speechSupport,
   voiceErrorMessage,
   type SpeechResultLike,
+  type Stoppable,
 } from "./voice-input";
 
 /**
@@ -132,6 +134,62 @@ test("the restart ceiling is low enough to notice and high enough to be useful",
   assert.ok(MAX_TRANSCRIPT >= 200, "a meal description has to fit");
 });
 
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * "THE STOP BUTTON DOESN'T WORK."
+ *
+ * It didn't, twice over. `stop()` asks the engine to finish and hand back a
+ * final result while keeping the microphone open, so the recording indicator
+ * stayed lit after the press. And a session ending restarts itself on purpose,
+ * so a press landing while a restart was queued got undone by the handler that
+ * was still attached.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+function fakeRecognition(withAbort = true) {
+  const calls: string[] = [];
+  const rec = {
+    onend: () => calls.push("onend fired"),
+    onresult: () => calls.push("onresult fired"),
+    onerror: () => calls.push("onerror fired"),
+    stop: () => calls.push("stop"),
+    ...(withAbort ? { abort: () => calls.push("abort") } : {}),
+  } as Stoppable;
+  return { rec, calls };
+}
+
+test("stopping ends the session now, not when the engine feels like it", () => {
+  const { rec, calls } = fakeRecognition();
+  endSession(rec);
+  assert.deepEqual(calls, ["abort"], "stop() was used, which keeps the microphone open");
+});
+
+test("the handlers come off before it is ended, so a queued restart cannot fire", () => {
+  const { rec } = fakeRecognition();
+  endSession(rec);
+  assert.equal(rec.onend, null, "onend is still attached — it would restart the session");
+  assert.equal(rec.onresult, null);
+  assert.equal(rec.onerror, null);
+});
+
+test("an engine without abort still gets stopped", () => {
+  const { rec, calls } = fakeRecognition(false);
+  endSession(rec);
+  assert.deepEqual(calls, ["stop"], "an engine with no abort() was left running");
+  assert.equal(rec.onend, null);
+});
+
+test("ending something already gone is not an error", () => {
+  assert.doesNotThrow(() => endSession(null));
+  assert.doesNotThrow(() => endSession(undefined));
+  const throwing = {
+    onend: null, onresult: null, onerror: null,
+    stop() { throw new Error("already stopped"); },
+    abort() { throw new Error("already aborted"); },
+  } as Stoppable;
+  assert.doesNotThrow(() => endSession(throwing),
+    "a second press must not throw — the first one already ended it");
+});
+
 // --- how the component is allowed to use it ------------------------------------
 
 import { readFileSync } from "node:fs";
@@ -199,4 +257,20 @@ test("it says whose microphone and whose transcription this is", () => {
     "the dictation notice is gone — this app makes privacy claims elsewhere and must not overclaim here");
   assert.ok(!/we (do not|don't) (record|store|send)/i.test(strip(visible)),
     "claiming WE do not send it implies we handle the audio at all, which we never see");
+});
+
+
+test("the component ends the session through endSession, not by hand", () => {
+  assert.match(COMPONENT, /endSession\(rec\)/,
+    "the stop path no longer goes through the tested teardown");
+  assert.ok(!/recognition\.current\?\.stop\(\)/.test(COMPONENT),
+    "stop() is being called directly again, which does not stop it");
+
+  // The ref has to be cleared before ending, so a late onend from the dying
+  // session fails its own identity check instead of restarting.
+  const stopFn = COMPONENT.slice(COMPONENT.indexOf("const stop = useCallback"), COMPONENT.indexOf("useEffect(() => stop"));
+  assert.ok(stopFn.indexOf("recognition.current = null") < stopFn.indexOf("endSession(rec)"),
+    "the ref is cleared after ending, leaving a window where a restart can win");
+  assert.match(COMPONENT, /if \(recognition\.current !== rec\) return;/,
+    "the restart path does not check it is still the current session");
 });

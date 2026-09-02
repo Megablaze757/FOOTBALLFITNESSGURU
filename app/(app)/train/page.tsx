@@ -15,8 +15,8 @@ import type { Video, VideoStatus, VideoAnalysis } from "@/lib/types";
 
 const STATUS_META: Record<VideoStatus, { label: string; cls: string }> = {
   uploading: { label: "Uploading", cls: "bg-white/10 text-slate-400" },
-  processing: { label: "Tap to analyse", cls: "bg-pitch-400/15 text-pitch-400" },
-  ready: { label: "Tap to analyse", cls: "bg-pitch-400/15 text-pitch-400" },
+  processing: { label: "Tap to analyse", cls: "bg-pitch-400/15 text-accent-400" },
+  ready: { label: "Tap to analyse", cls: "bg-pitch-400/15 text-accent-400" },
   analyzed: { label: "Analysed ✓", cls: "bg-readiness-green/15 text-readiness-green" },
   failed: { label: "Failed", cls: "bg-red-500/15 text-readiness-red" },
 };

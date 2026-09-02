@@ -177,13 +177,13 @@ function InstallPrompt() {
           onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open)}
           className="group mt-2"
         >
-          <summary className="tap-target cursor-pointer list-none text-xs font-semibold text-pitch-400">
+          <summary className="tap-target cursor-pointer list-none text-xs font-semibold text-accent-400">
             {guide.title}
           </summary>
           <ol className="mt-2 space-y-1.5">
             {guide.steps.map((step, i) => (
               <li key={step} className="flex gap-2 text-xs leading-relaxed text-slate-300">
-                <span className="shrink-0 font-bold text-pitch-400">{i + 1}</span>{step}
+                <span className="shrink-0 font-bold text-accent-400">{i + 1}</span>{step}
               </li>
             ))}
           </ol>
@@ -194,7 +194,7 @@ function InstallPrompt() {
         <ol className="mt-2 space-y-1.5">
           {guide.steps.slice(1).map((step, i) => (
             <li key={step} className="flex gap-2 text-xs leading-relaxed text-slate-300">
-              <span className="shrink-0 font-bold text-pitch-400">{i + 1}</span>{step}
+              <span className="shrink-0 font-bold text-accent-400">{i + 1}</span>{step}
             </li>
           ))}
         </ol>

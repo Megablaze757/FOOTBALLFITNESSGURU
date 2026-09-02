@@ -30,7 +30,7 @@ export function HowToCard({ how }: { how: HowTo }) {
     <div className="space-y-4">
       <ExerciseVisual muscles={how.muscles} name={how.name} />
       <div className="min-w-0">
-        <span className="chip text-pitch-400">{how.tag}</span>
+        <span className="chip text-accent-400">{how.tag}</span>
         <h3 className="mt-2 break-words text-2xl font-extrabold leading-tight text-slate-100">{how.name}</h3>
         <p className="mt-1 text-sm leading-relaxed text-slate-400">{how.why}</p>
         {how.needs && (
@@ -61,7 +61,7 @@ export function HowToCard({ how }: { how: HowTo }) {
             <ol className="space-y-2">
               {how.steps.map((s, i) => (
                 <li key={s} className="flex gap-3 text-sm text-slate-200">
-                  <span className="shrink-0 font-bold text-pitch-400">{i + 1}</span>
+                  <span className="shrink-0 font-bold text-accent-400">{i + 1}</span>
                   <span>{s}</span>
                 </li>
               ))}
@@ -76,7 +76,7 @@ export function HowToCard({ how }: { how: HowTo }) {
           <ul className="space-y-2">
             {how.cues.map((c) => (
               <li key={c} className="flex gap-2 text-sm text-slate-200">
-                <span className="text-pitch-400">›</span>{c}
+                <span className="text-accent-400">›</span>{c}
               </li>
             ))}
           </ul>

@@ -258,7 +258,7 @@ export default function LibraryPage() {
           type="button"
           onClick={() => setSavedOnly((v) => !v)}
           aria-pressed={savedOnly}
-          className={`chip-option chip-option-sm ${savedOnly ? "text-pitch-400" : ""}`}
+          className={`chip-option chip-option-sm ${savedOnly ? "text-accent-400" : ""}`}
         >
           Saved{savedIds.size ? ` (${savedIds.size})` : ""}
         </button>
@@ -292,7 +292,7 @@ export default function LibraryPage() {
         onClick={() => setCalc("")}
         className="card card-hover flex w-full items-center gap-3 p-4 text-left text-sm"
       >
-        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-pitch-400/10 text-pitch-400">
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-pitch-400/10 text-accent-400">
           <Icon name="calculator" size={18} />
         </span>
         <span className="min-w-0 flex-1">
@@ -338,7 +338,7 @@ export default function LibraryPage() {
         <summary className="flex min-h-[44px] cursor-pointer list-none items-center justify-between text-sm font-semibold text-slate-200">
           <span>
             Filters
-            {activeFilters > 0 && <span className="ml-2 chip text-pitch-400">{activeFilters} on</span>}
+            {activeFilters > 0 && <span className="ml-2 chip text-accent-400">{activeFilters} on</span>}
           </span>
           <span className="text-xs text-slate-500 transition group-open:rotate-180">▾</span>
         </summary>
@@ -376,7 +376,7 @@ export default function LibraryPage() {
           {activeFilters > 0 && (
             <button
               onClick={() => { setLevel("advanced"); setEquip("all"); setCat("All"); }}
-              className="tap-target text-xs font-semibold text-pitch-400 hover:underline"
+              className="tap-target text-xs font-semibold text-accent-400 hover:underline"
             >
               Clear filters
             </button>
@@ -428,7 +428,7 @@ export default function LibraryPage() {
             {/* THE ROW USED TO CARRY A DRAWING OF THE MOVEMENT, which at least
                 said "there is something to open here". Text alone does not, and
                 what is behind the tap is now a video — so the row says so. */}
-            <span aria-hidden className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-white/10 text-xs text-slate-500 transition group-hover:text-pitch-400">▶</span>
+            <span aria-hidden className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-white/10 text-xs text-slate-500 transition group-hover:text-accent-400">▶</span>
           </button>
         ))}
       </div>

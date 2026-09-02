@@ -223,7 +223,7 @@ export default function PartnerPage() {
       {owed > 0 && (
         <p className="text-center text-xs text-slate-500">
           {poundsFromPennies(owed)} earned in total. Payouts are made once commission clears the
-          refund window. <Link href="/profile" className="text-pitch-400">Questions?</Link>
+          refund window. <Link href="/profile" className="text-accent-400">Questions?</Link>
         </p>
       )}
     </div>
@@ -231,7 +231,7 @@ export default function PartnerPage() {
 }
 
 function Stat({ label, value, tone }: { label: string; value: string; tone?: "good" | "bad" }) {
-  const color = tone === "good" ? "text-pitch-400" : tone === "bad" ? "text-readiness-red" : "text-slate-100";
+  const color = tone === "good" ? "text-accent-400" : tone === "bad" ? "text-readiness-red" : "text-slate-100";
   return (
     <div className="card p-4">
       <div className="stat-label !mb-1">{label}</div>
@@ -256,7 +256,7 @@ function LinkRow({ label, value, copied, onCopy }: {
     <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/30 p-2">
       <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider text-slate-500">{label}</span>
       <code className="min-w-0 flex-1 truncate text-xs text-slate-300">{value}</code>
-      <button onClick={onCopy} className="chip shrink-0 text-pitch-400">{copied ? "Copied" : "Copy"}</button>
+      <button onClick={onCopy} className="chip shrink-0 text-accent-400">{copied ? "Copied" : "Copy"}</button>
     </div>
   );
 }

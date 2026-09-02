@@ -838,7 +838,7 @@ function NutritionTracker({ userId, today, initial, targets, coachTargets, stats
               {/* A floor moved the number — say which, rather than showing a
                   figure that doesn't match the maths above it. */}
               {targets.guard && (
-                <p className="mt-2 rounded-xl bg-pitch-400/10 px-3 py-2 text-[11px] text-pitch-400">{targets.guard}</p>
+                <p className="mt-2 rounded-xl bg-pitch-400/10 px-3 py-2 text-[11px] text-accent-400">{targets.guard}</p>
               )}
               {/* Ask for what's missing, once, where the imprecision shows. */}
               {targets.basis === "estimated" && targets.missing.length > 0 && (
@@ -850,7 +850,7 @@ function NutritionTracker({ userId, today, initial, targets, coachTargets, stats
                   metabolic calculation →
                 </button>
               )}
-              <button onClick={applyTargets} className="tap-target mt-3 text-xs font-semibold text-pitch-400 hover:underline">
+              <button onClick={applyTargets} className="tap-target mt-3 text-xs font-semibold text-accent-400 hover:underline">
                 Reset my numbers to these
               </button>
             </div>

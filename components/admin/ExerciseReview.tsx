@@ -172,8 +172,8 @@ export function ExerciseReview() {
         <>
           {picked.size > 0 && (
             <div className="flex flex-wrap items-center gap-2 rounded-xl border border-pitch-400/25 bg-pitch-400/[0.06] px-3 py-2">
-              <span className="text-xs font-semibold text-pitch-300">{picked.size} selected</span>
-              <button onClick={draftPicked} disabled={!!bulk} className="chip text-pitch-400 disabled:opacity-40">
+              <span className="text-xs font-semibold text-accent-300">{picked.size} selected</span>
+              <button onClick={draftPicked} disabled={!!bulk} className="chip text-accent-400 disabled:opacity-40">
                 {bulk ?? "Draft the detail for these"}
               </button>
               <button onClick={() => setPicked(new Set())} className="chip text-slate-400">Clear</button>
@@ -204,7 +204,7 @@ export function ExerciseReview() {
                     <span className="block truncate text-sm font-semibold text-slate-100">{row.name}</span>
                     <span className="block text-[11px] text-slate-500">
                       {row.category || "Strength"}
-                      {count > 1 && <> · <span className="text-pitch-400">{count} people added this</span></>}
+                      {count > 1 && <> · <span className="text-accent-400">{count} people added this</span></>}
                       {" · "}{readiness(row)}
                     </span>
                     {/* TRIAGE, WHICH IS THE POINT OF THE FILTER HERE.
@@ -456,7 +456,7 @@ function Editor({ row, liveNames, onDone }: { row: Row; liveNames: string[]; onD
         <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">Video guide</p>
 
         {curated && !draft.youtubeId && (
-          <button onClick={() => set("youtubeId", curated)} className="chip mb-2 text-pitch-400">
+          <button onClick={() => set("youtubeId", curated)} className="chip mb-2 text-accent-400">
             Use the curated guide we already have
           </button>
         )}

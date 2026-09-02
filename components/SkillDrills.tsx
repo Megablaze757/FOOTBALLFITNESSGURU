@@ -67,7 +67,7 @@ export function SkillDrills({ sport, position }: { sport: SportId; position?: st
               onClick={() => setHave(o.id)}
               className={`min-h-[44px] flex-1 rounded-xl border py-2 text-xs font-semibold transition ${
                 have === o.id
-                  ? "border-pitch-400/50 bg-pitch-400/10 text-pitch-400"
+                  ? "border-pitch-400/50 bg-pitch-400/10 text-accent-400"
                   : "border-white/10 bg-white/[0.03] text-slate-300"
               }`}
             >
@@ -107,9 +107,9 @@ function DrillCard({ drill, highlight }: { drill: SkillDrill; highlight: boolean
       <summary className="min-h-[44px] flex cursor-pointer list-none items-start gap-3">
         <span className="min-w-0 flex-1">
           <span className="flex flex-wrap items-center gap-2">
-            <span className="chip text-pitch-400">{drill.skill}</span>
+            <span className="chip text-accent-400">{drill.skill}</span>
             <span className={`chip ${NEEDS_STYLE[drill.needs]}`}>{NEEDS_LABEL[drill.needs]}</span>
-            {highlight && <span className="chip text-pitch-400">your position</span>}
+            {highlight && <span className="chip text-accent-400">your position</span>}
           </span>
           <span className="mt-1.5 block font-bold text-slate-100">{drill.name}</span>
           <span className="mt-0.5 block text-xs text-slate-500">{drill.reps}</span>
@@ -124,13 +124,13 @@ function DrillCard({ drill, highlight }: { drill: SkillDrill; highlight: boolean
           <ol className="space-y-1">
             {drill.how.map((s, i) => (
               <li key={s} className="flex gap-2 text-sm text-slate-300">
-                <span className="shrink-0 text-pitch-400">{i + 1}.</span>{s}
+                <span className="shrink-0 text-accent-400">{i + 1}.</span>{s}
               </li>
             ))}
           </ol>
         </div>
         <div className="rounded-2xl bg-pitch-400/[0.06] p-3">
-          <div className="stat-label !mb-1 text-pitch-400">The thing that matters</div>
+          <div className="stat-label !mb-1 text-accent-400">The thing that matters</div>
           <p className="text-sm text-slate-200">{drill.coaching}</p>
         </div>
         <Line label="Make it harder" text={drill.progression} />

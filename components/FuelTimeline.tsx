@@ -46,7 +46,7 @@ export function FuelTimeline({ phases, label }: {
               aria-pressed={on}
               className={`min-h-[44px] flex shrink-0 items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold transition ${
                 on
-                  ? "border-pitch-400/50 bg-pitch-400/10 text-pitch-400"
+                  ? "border-pitch-400/50 bg-pitch-400/10 text-accent-400"
                   : "border-white/10 bg-white/[0.02] text-slate-400 hover:border-white/20"
               }`}
             >
@@ -60,7 +60,7 @@ export function FuelTimeline({ phases, label }: {
       <div className="p-5">
         <div className="flex items-baseline gap-2">
           <h3 className="text-base font-extrabold text-slate-100">{phase.title}</h3>
-          <span className="text-xs font-semibold text-pitch-400">{phase.when}</span>
+          <span className="text-xs font-semibold text-accent-400">{phase.when}</span>
         </div>
         <ul className="mt-3 space-y-2">
           {phase.tips.map((t) => (
@@ -81,14 +81,14 @@ export function FuelTimeline({ phases, label }: {
             <button
               onClick={() => setAt((n) => Math.max(0, n - 1))}
               disabled={at === 0}
-              className="tap-target text-xs font-semibold text-slate-400 transition hover:text-pitch-400 disabled:opacity-30"
+              className="tap-target text-xs font-semibold text-slate-400 transition hover:text-accent-400 disabled:opacity-30"
             >
               ← Earlier
             </button>
             <button
               onClick={() => setAt((n) => Math.min(phases.length - 1, n + 1))}
               disabled={at === phases.length - 1}
-              className="tap-target text-xs font-semibold text-slate-400 transition hover:text-pitch-400 disabled:opacity-30"
+              className="tap-target text-xs font-semibold text-slate-400 transition hover:text-accent-400 disabled:opacity-30"
             >
               Next →
             </button>

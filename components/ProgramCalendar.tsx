@@ -55,7 +55,7 @@ export function ProgramCalendar({
             </summary>
 
             {w.focusNote && (
-              <p className="mb-3 rounded-lg border border-pitch-400/20 bg-pitch-400/[0.05] px-3 py-2 text-xs text-pitch-300">
+              <p className="mb-3 rounded-lg border border-pitch-400/20 bg-pitch-400/[0.05] px-3 py-2 text-xs text-accent-300">
                 {w.focusNote}
               </p>
             )}

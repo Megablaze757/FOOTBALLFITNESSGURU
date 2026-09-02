@@ -160,7 +160,7 @@ export function CheckInDone({
         {trained ? (
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-sm text-slate-300">
-              <span className="text-pitch-400">✓</span>
+              <span className="text-accent-400">✓</span>
               <span>
                 {training?.session_type === "rest_day"
                   ? "Rest day logged"
@@ -240,7 +240,7 @@ export function CheckInDone({
         )}
 
         <div className="flex flex-wrap gap-2">
-          <Link href="/coach" className="tap-target flex-1 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-center text-sm font-medium text-slate-200 transition hover:border-pitch-400/40 hover:text-pitch-400">
+          <Link href="/coach" className="tap-target flex-1 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-center text-sm font-medium text-slate-200 transition hover:border-pitch-400/40 hover:text-accent-400">
             See today&apos;s session
           </Link>
           {readiness.focus_body_part && (
@@ -283,11 +283,11 @@ export function CheckInDone({
 
         <div className="flex items-center justify-between gap-3 pt-1">
           {streak > 1 ? (
-            <span className="chip text-pitch-400">🔥 {streak} days in a row</span>
+            <span className="chip text-accent-400">🔥 {streak} days in a row</span>
           ) : streak === 1 ? (
             /* Day one is a streak of one, and saying so is the difference
                between a number that has started and a blank space. */
-            <span className="chip text-pitch-400">🔥 Day 1</span>
+            <span className="chip text-accent-400">🔥 Day 1</span>
           ) : (
             <span />
           )}

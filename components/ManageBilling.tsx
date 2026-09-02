@@ -98,7 +98,7 @@ export function ManageBilling({ hasBilling, onPaidPlan, cancelling, paused, resu
               wants to know exactly how long they've got — making them work it
               out from a billing cycle they can't see is the sort of vagueness
               that gets read as evasive. */}
-          <p className="mt-1 text-2xl font-extrabold text-pitch-400">
+          <p className="mt-1 text-2xl font-extrabold text-accent-400">
             {paused
               ? (resumesAt ? fmt(resumesAt) : "Paused")
               : (endsAt ? fmt(endsAt) : "End of your paid period")}

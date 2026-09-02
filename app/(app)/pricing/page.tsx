@@ -110,13 +110,13 @@ function PricingInner() {
       </header>
 
       {activation === "waiting" && (
-        <div className="card flex items-center gap-3 px-4 py-3 text-sm text-pitch-400">
+        <div className="card flex items-center gap-3 px-4 py-3 text-sm text-accent-400">
           <span className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-pitch-400/30 border-t-pitch-400" />
           Payment received — activating your plan…
         </div>
       )}
       {activation === "active" && (
-        <div className="card px-4 py-3 text-sm text-pitch-400">
+        <div className="card px-4 py-3 text-sm text-accent-400">
           🎉 You&apos;re on Pro. Everything&apos;s unlocked — go and use it.
         </div>
       )}
@@ -126,7 +126,7 @@ function PricingInner() {
           <p className="mt-1 text-slate-400">
             Nothing is lost and you won&apos;t be charged twice. Try reloading in a minute — if it&apos;s
             still not right, email{" "}
-            <a href="mailto:info@pocketathlete.com?subject=Payment%20taken%20but%20plan%20not%20active" className="font-semibold text-pitch-400 hover:underline">
+            <a href="mailto:info@pocketathlete.com?subject=Payment%20taken%20but%20plan%20not%20active" className="font-semibold text-accent-400 hover:underline">
               info@pocketathlete.com
             </a>{" "}
             and we&apos;ll sort it straight away.

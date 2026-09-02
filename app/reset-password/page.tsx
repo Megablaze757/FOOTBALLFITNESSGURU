@@ -94,7 +94,7 @@ export default function ResetPasswordPage() {
         <div className="mb-8 text-center">
           <Logo size={64} className="mx-auto mb-4" />
           <div className="text-4xl font-extrabold tracking-tight">
-            <span className="text-pitch-400">PocketAthlete</span>
+            <span className="text-accent-400">PocketAthlete</span>
           </div>
           <p className="mt-2 text-sm text-slate-400">Set a new password.</p>
         </div>
@@ -104,7 +104,7 @@ export default function ResetPasswordPage() {
             <div className="h-7 w-7 animate-spin rounded-full border-2 border-white/20 border-t-pitch-400" />
           </div>
         ) : done ? (
-          <div className="card p-6 text-center text-sm text-pitch-400">Password updated — signing you in…</div>
+          <div className="card p-6 text-center text-sm text-accent-400">Password updated — signing you in…</div>
         ) : !canReset ? (
           <div className="card space-y-3 p-6 text-sm text-slate-300">
             <p className="font-semibold text-slate-100">That link didn&apos;t work</p>
@@ -129,7 +129,7 @@ export default function ResetPasswordPage() {
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
                   aria-pressed={showPassword}
-                  className="tap-target text-xs font-semibold text-slate-400 hover:text-pitch-400"
+                  className="tap-target text-xs font-semibold text-slate-400 hover:text-accent-400"
                 >
                   {showPassword ? "Hide" : "Show"}
                 </button>

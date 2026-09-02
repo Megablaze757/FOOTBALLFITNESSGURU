@@ -28,7 +28,7 @@ export function BackLink({ href, label }: { href: string; label: string }) {
   return (
     <Link
       href={href}
-      className="tap-target -ml-2 mb-1 hidden gap-1 self-start px-2 text-sm text-slate-400 transition hover:text-pitch-400 lg:inline-flex"
+      className="tap-target -ml-2 mb-1 hidden gap-1 self-start px-2 text-sm text-slate-400 transition hover:text-accent-400 lg:inline-flex"
     >
       <span aria-hidden>←</span> {label}
     </Link>

@@ -92,7 +92,7 @@ export function TabBar() {
                 href={tab.href}
                 aria-current={active ? "page" : undefined}
                 className={`flex min-h-[44px] flex-col items-center gap-1 rounded-2xl py-2 text-[10px] font-medium transition ${
-                  active ? "bg-pitch-400/10 text-pitch-400" : "text-slate-400 hover:text-slate-200"
+                  active ? "bg-pitch-400/10 text-accent-400" : "text-slate-400 hover:text-slate-200"
                 }`}
               >
                 <NavIcon name={tab.icon} active={active} />

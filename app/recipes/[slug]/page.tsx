@@ -92,7 +92,7 @@ export default function RecipePage({ params }: { params: { slug: string } }) {
       />
 
       <nav className="pt-2 text-sm text-slate-500">
-        <Link href="/recipes/" className="hover:text-pitch-400">← All recipes</Link>
+        <Link href="/recipes/" className="hover:text-accent-400">← All recipes</Link>
       </nav>
 
       <h1 className="mt-3 text-4xl font-extrabold tracking-tight">{meal.name}</h1>
@@ -123,7 +123,7 @@ export default function RecipePage({ params }: { params: { slug: string } }) {
         <ul className="mt-3 space-y-1.5">
           {ingredients.map((line) => (
             <li key={line} className="flex gap-2 text-slate-300">
-              <span className="text-pitch-400">·</span>{line}
+              <span className="text-accent-400">·</span>{line}
             </li>
           ))}
         </ul>
@@ -134,7 +134,7 @@ export default function RecipePage({ params }: { params: { slug: string } }) {
         <ol className="mt-3 space-y-3">
           {steps.map((step, i) => (
             <li key={step} className="flex gap-3">
-              <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-pitch-400/15 text-[11px] font-extrabold text-pitch-400">
+              <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-pitch-400/15 text-[11px] font-extrabold text-accent-400">
                 {i + 1}
               </span>
               <span className="text-slate-300">{step}</span>
@@ -148,7 +148,7 @@ export default function RecipePage({ params }: { params: { slug: string } }) {
 
       {meal.tip && (
         <p className="mt-6 rounded-2xl border border-pitch-400/20 bg-pitch-400/[0.04] px-4 py-3 text-sm text-slate-300">
-          <b className="text-pitch-400">Worth knowing:</b> {meal.tip}
+          <b className="text-accent-400">Worth knowing:</b> {meal.tip}
         </p>
       )}
 

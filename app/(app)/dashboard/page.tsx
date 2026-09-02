@@ -260,10 +260,10 @@ export default function DashboardPage() {
       {resolved.source === "ai" && resolved.summaryText && (
         <div className="card p-5">
           <div className="mb-2 flex items-center justify-between">
-            <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-pitch-400">
+            <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-accent-400">
               <span className="h-1.5 w-1.5 rounded-full bg-pitch-400" /> AI Coach
             </span>
-            {actionLabel(resolved.recommendedAction) && <span className="chip text-pitch-400">{actionLabel(resolved.recommendedAction)}</span>}
+            {actionLabel(resolved.recommendedAction) && <span className="chip text-accent-400">{actionLabel(resolved.recommendedAction)}</span>}
           </div>
           <p className="text-sm leading-relaxed text-slate-200">{resolved.summaryText}</p>
         </div>
@@ -433,7 +433,7 @@ export default function DashboardPage() {
               <Wk label="Load" value={report.loadTrend === "up" ? "↗" : report.loadTrend === "down" ? "↘" : "→"} />
             </div>
             <p className="mt-3 text-sm text-slate-200">🏆 {report.topWin}</p>
-            <p className="mt-1 text-sm text-pitch-400">🎯 {report.focus}</p>
+            <p className="mt-1 text-sm text-accent-400">🎯 {report.focus}</p>
             <Link href="/report" className="btn-ghost mt-4">📄 Weekly report (PDF)</Link>
           </div>
 
@@ -459,7 +459,7 @@ function Header({ source }: { source?: "ai" | "local" }) {
       </div>
       {source && (
         <span
-          className={`mt-1 rounded-full px-2.5 py-1 text-xs font-semibold ${source === "ai" ? "bg-pitch-400/15 text-pitch-400" : "bg-white/10 text-slate-400"}`}
+          className={`mt-1 rounded-full px-2.5 py-1 text-xs font-semibold ${source === "ai" ? "bg-pitch-400/15 text-accent-400" : "bg-white/10 text-slate-400"}`}
           title={source === "ai" ? "Powered by the AI worker" : "Local estimate — AI worker not connected"}
         >
           {source === "ai" ? "AI" : "Estimate"}

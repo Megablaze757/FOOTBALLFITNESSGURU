@@ -372,10 +372,10 @@ export default function HomePage() {
           <div className="space-y-5 lg:col-span-2">
             <div className="card overflow-hidden p-5 sm:p-6">
               <div className="mb-2 flex items-center justify-between">
-                <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-pitch-400">
+                <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-accent-400">
                   <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-pitch-400" /> AI Coach
                 </span>
-                {actionTag && <span className="chip text-pitch-400">{actionTag}</span>}
+                {actionTag && <span className="chip text-accent-400">{actionTag}</span>}
               </div>
               <p className="text-sm leading-relaxed text-slate-200 sm:text-base">{coachText}</p>
               {watchZone && <div className="chip mt-3 text-readiness-red">⚠️ Watch zone: {watchZone}</div>}
@@ -491,7 +491,7 @@ function SorenessCard({ painMap, focus }: { painMap: Record<string, number>; foc
             : "Build a rehab plan around it, or find mobility work for the area."}
         </span>
       </span>
-      <span className="shrink-0 text-xs font-bold text-pitch-400">Open →</span>
+      <span className="shrink-0 text-xs font-bold text-accent-400">Open →</span>
     </Link>
   );
 }
@@ -506,7 +506,7 @@ function CheckInNudge() {
           Three taps, about ten seconds. Skip it and everything above still works.
         </span>
       </span>
-      <span className="shrink-0 text-xs font-bold text-pitch-400">Open →</span>
+      <span className="shrink-0 text-xs font-bold text-accent-400">Open →</span>
     </Link>
   );
 }
@@ -582,7 +582,7 @@ function GettingStarted({ setup, showingProgramCta }: {
                 <span className={`block text-sm font-semibold ${st.done ? "text-slate-400 line-through" : "text-slate-100"}`}>{st.title}</span>
                 {!st.done && <span className="block text-xs text-slate-400">{st.sub}</span>}
               </span>
-              {st === next && <span className="shrink-0 text-xs font-bold text-pitch-400">Start →</span>}
+              {st === next && <span className="shrink-0 text-xs font-bold text-accent-400">Start →</span>}
             </Link>
           </li>
         ))}
@@ -602,7 +602,7 @@ function Greeting({ name, sub, streak = 0 }: { name: string; sub: string; streak
         <p className="mt-1 text-sm text-slate-400">{sub}</p>
       </div>
       {streak > 0 && (
-        <span className="chip text-pitch-400" title="Consecutive days logged">🔥 {streak}-day streak</span>
+        <span className="chip text-accent-400" title="Consecutive days logged">🔥 {streak}-day streak</span>
       )}
     </header>
   );
@@ -664,7 +664,7 @@ function FuelCard({ nutri }: { nutri: { calories_eaten: number | null; daily_cal
           <span className="block text-sm font-bold text-slate-100">What should I eat today?</span>
           <span className="block text-xs text-slate-400">Calorie and protein targets from your body and training.</span>
         </span>
-        <span className="shrink-0 text-pitch-400">→</span>
+        <span className="shrink-0 text-accent-400">→</span>
       </Link>
     );
   }
@@ -685,7 +685,7 @@ function FuelCard({ nutri }: { nutri: { calories_eaten: number | null; daily_cal
           <div className="mt-0.5 text-lg font-extrabold text-slate-100">{headline}</div>
           <div className="text-xs text-slate-500">{eaten.toLocaleString()} of {target.toLocaleString()} kcal</div>
         </div>
-        <span className="shrink-0 text-pitch-400">→</span>
+        <span className="shrink-0 text-accent-400">→</span>
       </div>
       <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-white/10">
         <div

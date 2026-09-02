@@ -217,7 +217,7 @@ export function ProgressPanel({ userId }: { userId: string }) {
             <ul className="space-y-2">
               {t.drillFrequency.slice(0, 6).map((d, i) => (
                 <li key={d.name} className="flex items-center gap-3">
-                  <span className="w-5 text-center text-sm font-bold text-pitch-400">{i + 1}</span>
+                  <span className="w-5 text-center text-sm font-bold text-accent-400">{i + 1}</span>
                   <span className="flex-1 truncate text-sm text-slate-200">{d.name}</span>
                   <span className="shrink-0 text-xs text-slate-400">{d.sessions}× · {d.totalSets} sets{d.bestLoad ? ` · ${d.bestLoad}kg PR` : ""}</span>
                 </li>
@@ -270,7 +270,7 @@ export function ProgressPanel({ userId }: { userId: string }) {
         ) : (
           <Empty label="Track nutrition to see trends." />
         )}
-        <Link href="/nutrition" className="tap-target mt-3 inline-flex min-h-[44px] items-center text-sm font-semibold text-pitch-400">
+        <Link href="/nutrition" className="tap-target mt-3 inline-flex min-h-[44px] items-center text-sm font-semibold text-accent-400">
           Open Nutrition <span aria-hidden className="ml-1">→</span>
         </Link>
       </section>

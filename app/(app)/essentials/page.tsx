@@ -112,7 +112,7 @@ export default function EssentialsPage() {
         {guides.map(({ position, guide }, i) => (
         <section key={position || "all"} className="card-premium p-6">
           <div className="flex items-center gap-2">
-            <span className="chip text-pitch-400">{sportLabel}</span>
+            <span className="chip text-accent-400">{sportLabel}</span>
             {i === 0 && guides.length > 1 && <span className="chip text-slate-400">main</span>}
           </div>
           {/* The position was a chip AND the heading. One of them was enough. */}
@@ -145,7 +145,7 @@ export default function EssentialsPage() {
             </div>
           </div>
           {!positions.length && (
-            <p className="mt-4 text-xs text-slate-500">Set your position in the <Link href="/coach" className="text-pitch-400 hover:underline">AI Coach quiz</Link> to make this position-specific.</p>
+            <p className="mt-4 text-xs text-slate-500">Set your position in the <Link href="/coach" className="text-accent-400 hover:underline">AI Coach quiz</Link> to make this position-specific.</p>
           )}
         </section>
         ))}

@@ -54,7 +54,7 @@ export default function UnsubscribePage() {
 
       <div className="w-full max-w-md text-center">
         <div className="mb-8 text-2xl font-extrabold tracking-tight">
-          <span className="text-pitch-400">◆</span> PocketAthlete
+          <span className="text-accent-400">◆</span> PocketAthlete
         </div>
 
         {state === "working" && (
@@ -69,7 +69,7 @@ export default function UnsubscribePage() {
             </p>
             <p className="mx-auto mt-6 max-w-sm text-xs text-slate-500">
               Changed your mind? You can{" "}
-              <Link href="/waitlist" className="text-pitch-400 underline">join again</Link> any time.
+              <Link href="/waitlist" className="text-accent-400 underline">join again</Link> any time.
             </p>
           </>
         )}

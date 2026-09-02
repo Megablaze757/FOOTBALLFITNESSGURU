@@ -75,7 +75,7 @@ function Inner() {
           <h1 className="text-2xl font-extrabold tracking-tight">{data.name}</h1>
           <p className="text-sm text-slate-400">Coach view · read-only</p>
         </div>
-        <Link href="/squad" className="text-sm text-slate-400 hover:text-pitch-400">← Squad</Link>
+        <Link href="/squad" className="text-sm text-slate-400 hover:text-accent-400">← Squad</Link>
       </header>
 
       {/* What a coach should actually do about this athlete, before the numbers

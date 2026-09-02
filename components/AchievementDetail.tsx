@@ -69,7 +69,7 @@ export function AchievementDetail({ achievement, unlocked, rarity, sampled, onCl
           <div className="text-center">
             <span
               className={`mx-auto grid h-20 w-20 place-items-center rounded-3xl ${
-                unlocked ? "bg-pitch-400/15 text-pitch-400" : "bg-white/[0.03] text-slate-500 opacity-60"
+                unlocked ? "bg-pitch-400/15 text-accent-400" : "bg-white/[0.03] text-slate-500 opacity-60"
               }`}
             >
               <Icon name={achievement.icon} size={40} />

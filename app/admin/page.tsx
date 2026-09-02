@@ -97,7 +97,7 @@ export default function AdminOverview() {
               under it is what you keep. */}
           <div className="card p-5 shadow-glow ring-1 ring-pitch-400/40">
             <div className="stat-label">Monthly recurring revenue</div>
-            <div className="mt-0.5 text-4xl font-extrabold tracking-tight text-pitch-400">£{mrr}</div>
+            <div className="mt-0.5 text-4xl font-extrabold tracking-tight text-accent-400">£{mrr}</div>
             {commission > 0 && (
               <div className="mt-1 text-sm text-slate-400">
                 −£{commission.toFixed(2)} to affiliates ·{" "}
@@ -119,7 +119,7 @@ export default function AdminOverview() {
             <div className="mt-0.5 text-4xl font-extrabold tracking-tight text-slate-100">
               {data?.costs ? `£${cost.toFixed(2)}` : "—"}
             </div>
-            <div className={`mt-2 text-sm font-semibold ${profit >= 0 ? "text-pitch-400" : "text-readiness-red"}`}>
+            <div className={`mt-2 text-sm font-semibold ${profit >= 0 ? "text-accent-400" : "text-readiness-red"}`}>
               {!data?.costs ? (
                 <span className="font-normal text-slate-500">Run migration 0080 to see this</span>
               ) : profit >= 0 ? (
@@ -172,7 +172,7 @@ export default function AdminOverview() {
                       cost report starts lying. */}
                   <span
                     className={`ml-2 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
-                      l.basis === "measured" ? "bg-pitch-400/15 text-pitch-400" : "bg-white/[0.06] text-slate-500"
+                      l.basis === "measured" ? "bg-pitch-400/15 text-accent-400" : "bg-white/[0.06] text-slate-500"
                     }`}
                   >
                     {l.basis}
@@ -269,7 +269,7 @@ function Figure({ label, value, note, accent }: { label: string; value: string; 
   return (
     <div className={`card p-3 ${accent ? "ring-1 ring-pitch-400/40" : ""}`}>
       <div className="stat-label">{label}</div>
-      <div className={`mt-0.5 text-xl font-extrabold ${accent ? "text-pitch-400" : "text-slate-100"}`}>{value}</div>
+      <div className={`mt-0.5 text-xl font-extrabold ${accent ? "text-accent-400" : "text-slate-100"}`}>{value}</div>
       <div className="text-[11px] leading-tight text-slate-500">{note}</div>
     </div>
   );

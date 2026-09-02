@@ -488,7 +488,7 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
                   className="field min-h-[44px] flex-1 py-2"
                 />
                 {d.name.trim() && (
-                  <button type="button" onClick={() => setDetail(d.name)} className="tap-target grid h-9 w-9 place-items-center text-slate-500 hover:text-pitch-400" aria-label={`View ${d.name} technique`}>
+                  <button type="button" onClick={() => setDetail(d.name)} className="tap-target grid h-9 w-9 place-items-center text-slate-500 hover:text-accent-400" aria-label={`View ${d.name} technique`}>
                     <Icon name="book" size={17} />
                   </button>
                 )}
@@ -550,7 +550,7 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
                       value={d.load_kg ?? ""}
                       onChange={(v) => setDrill(i, { load_kg: v === "" ? null : v })}
                       optional
-                      action={<button type="button" onClick={() => setWhatIf(d.name)} className="tap-pad relative grid h-6 w-6 place-items-center text-pitch-400" aria-label={`What-if lift check for ${d.name || "this exercise"}`}><Icon name="calculator" size={14} /></button>}
+                      action={<button type="button" onClick={() => setWhatIf(d.name)} className="tap-pad relative grid h-6 w-6 place-items-center text-accent-400" aria-label={`What-if lift check for ${d.name || "this exercise"}`}><Icon name="calculator" size={14} /></button>}
                     />
                   </div>
                   <button
@@ -571,7 +571,7 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
                     onClick={() => setDrill(i, withSets(d, prev
                       ? prev.map((st) => ({ reps: st.reps, load_kg: null }))
                       : setsOf(d)))}
-                    className="tap-target mt-1 text-xs font-semibold text-pitch-400"
+                    className="tap-target mt-1 text-xs font-semibold text-accent-400"
                   >
                     Log each set separately
                   </button>
@@ -590,7 +590,7 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
                       <span className="flex items-center justify-center gap-1">
                         {/* "kg each" on a two-dumbbell lift — see lib/dumbbell.ts. */}
                         {loadUnitLabel(d.name ?? "")}
-                        <button type="button" onClick={() => setWhatIf(d.name)} className="tap-pad relative grid h-6 w-6 place-items-center text-pitch-400" aria-label={`What-if lift check for ${d.name || "this exercise"}`}><Icon name="calculator" size={14} /></button>
+                        <button type="button" onClick={() => setWhatIf(d.name)} className="tap-pad relative grid h-6 w-6 place-items-center text-accent-400" aria-label={`What-if lift check for ${d.name || "this exercise"}`}><Icon name="calculator" size={14} /></button>
                       </span>
                     </div>
                     <span className="w-9 shrink-0" aria-hidden="true" />
@@ -643,7 +643,7 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
                         const last = cur[cur.length - 1] ?? { reps: 10, load_kg: d.load_kg ?? null };
                         replaceSets([...cur, { ...last }]);
                       }}
-                      className="tap-target text-xs font-semibold text-pitch-400"
+                      className="tap-target text-xs font-semibold text-accent-400"
                     >
                       + Add set
                     </button>
@@ -658,7 +658,7 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
                         onClick={() => replaceSets(working.map((st, xi) => ({
                           ...st, load_kg: st.load_kg ?? prev[xi]?.load_kg ?? null,
                         })))}
-                        className="tap-target text-xs font-semibold text-pitch-400"
+                        className="tap-target text-xs font-semibold text-accent-400"
                       >
                         Same weight as last time
                       </button>
@@ -740,7 +740,7 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
                         const baseWorking = hasSetDetail(d) ? working : setsOf(d);
                         replaceSets(baseWorking, [...warmups, { reps: 8, load_kg: null, isWarmup: true }]);
                       }}
-                      className="tap-target text-xs font-semibold text-pitch-400"
+                      className="tap-target text-xs font-semibold text-accent-400"
                     >
                       + Add warm-up set
                     </button>
@@ -800,9 +800,9 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
                 no explanation reads as a bug, and the athlete needs to know it
                 is theirs to change. */}
             {sessions > 1 ? (
-              <span className="ml-1 font-normal text-pitch-400">· averaged</span>
+              <span className="ml-1 font-normal text-accent-400">· averaged</span>
             ) : effort && !ratedItThemselves.current && (
-              <span className="ml-1 font-normal text-pitch-400">· from your intervals</span>
+              <span className="ml-1 font-normal text-accent-400">· from your intervals</span>
             )}
           </span>
           <input
@@ -934,7 +934,7 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
                 <button
                   type="button"
                   onClick={() => updateDerived(shapeFill)}
-                  className="chip shrink-0 text-pitch-400 hover:bg-white/[0.08]"
+                  className="chip shrink-0 text-accent-400 hover:bg-white/[0.08]"
                 >
                   Use {describeShape(shape)}
                 </button>

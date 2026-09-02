@@ -67,7 +67,7 @@ export function ExerciseDetailCard({ ex, sets, reps }: { ex: Exercise; sets?: nu
 
       <div className="flex min-w-0 items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <span className="chip text-pitch-400">{ex.category}</span>
+          <span className="chip text-accent-400">{ex.category}</span>
           <h3 className="mt-2 break-words text-2xl font-extrabold leading-tight text-slate-100">{ex.name}</h3>
         </div>
       </div>
@@ -83,7 +83,7 @@ export function ExerciseDetailCard({ ex, sets, reps }: { ex: Exercise; sets?: nu
         <button type="button" onClick={shareExercise} className="btn-ghost min-h-[46px] gap-2 rounded-full px-4 py-2 text-sm">
           <Icon name="share" size={18} /> {shared ? "Copied" : "Share"}
         </button>
-        <button type="button" onClick={toggleSaved} disabled={saving} aria-pressed={saved} className={`btn-ghost min-h-[46px] gap-2 rounded-full px-4 py-2 text-sm ${saved ? "text-pitch-400" : ""}`}>
+        <button type="button" onClick={toggleSaved} disabled={saving} aria-pressed={saved} className={`btn-ghost min-h-[46px] gap-2 rounded-full px-4 py-2 text-sm ${saved ? "text-accent-400" : ""}`}>
           <Icon name="bookmark" size={18} /> {saved ? "Saved" : "Save"}
         </button>
       </div>
@@ -115,7 +115,7 @@ export function ExerciseDetailCard({ ex, sets, reps }: { ex: Exercise; sets?: nu
           <ul className="space-y-2">
             {ex.cues.map((c) => (
               <li key={c} className="flex gap-2 text-sm text-slate-200">
-                <span className="text-pitch-400">›</span>{c}
+                <span className="text-accent-400">›</span>{c}
               </li>
             ))}
           </ul>
@@ -137,7 +137,7 @@ export function ExerciseDetailCard({ ex, sets, reps }: { ex: Exercise; sets?: nu
           <div>
             <div className="stat-label mb-1.5">Targets</div>
             <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-full bg-pitch-400/15 px-3 py-1 text-xs font-semibold text-pitch-400">
+              <span className="rounded-full bg-pitch-400/15 px-3 py-1 text-xs font-semibold text-accent-400">
                 {primary}
               </span>
               {secondary.length > 0 && (
@@ -159,7 +159,7 @@ export function ExerciseDetailCard({ ex, sets, reps }: { ex: Exercise; sets?: nu
           <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
             <div className="flex items-center gap-2">
               <span className="stat-label !mb-0">How to progress</span>
-              <span className="chip text-pitch-400">{PROGRESSION_LABEL[method]}</span>
+              <span className="chip text-accent-400">{PROGRESSION_LABEL[method]}</span>
             </div>
             <p className="mt-1.5 text-sm text-slate-300">{PROGRESSION_NOTE[method]}</p>
           </div>

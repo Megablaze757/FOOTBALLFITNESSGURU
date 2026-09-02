@@ -48,8 +48,18 @@ export interface Palette {
    */
   tint: string;
   slate: Record<100 | 200 | 300 | 400 | 500 | 600, string>;
-  /** Brand gold. Darker in light mode, or it fails against white by a mile. */
+  /**
+   * Brand gold, as a FILL. Identical in both themes on purpose — a gold button
+   * that goes brown in light mode is not the brand any more, and that is what
+   * the first version did.
+   */
   pitch: Record<300 | 400 | 500 | 600, string>;
+  /**
+   * Brand gold, as TEXT. Gold on white is about 1.9:1, so this is the one that
+   * has to darken — and it has to be a separate token, because no single value
+   * can be a readable label on white AND a recognisable gold button.
+   */
+  accent: Record<300 | 400 | 500 | 600, string>;
   readiness: { green: string; yellow: string; red: string };
   sky: Record<300 | 400, string>;
   /**
@@ -86,6 +96,7 @@ export const DARK: Palette = {
     600: "#76849b",
   },
   pitch: { 300: "#f0d68a", 400: "#e3b53f", 500: "#c99a2e", 600: "#a67c1f" },
+  accent: { 300: "#f0d68a", 400: "#e3b53f", 500: "#c99a2e", 600: "#a67c1f" },
   readiness: { green: "#34d399", yellow: "#fbbf24", red: "#fb5d6b" },
   sky: { 300: "#7dd3fc", 400: "#38bdf8" },
   onAccent: "#0a0a0b",
@@ -118,14 +129,38 @@ export const LIGHT: Palette = {
     300: "#2b3648",
     400: "#414d63",
     500: "#525f77",
-    600: "#5f6c85",
+    600: "#59657c",
   },
-  // Gold on white is around 1.9:1 and unreadable. These are darkened until the
-  // text uses pass, and the brand still reads as gold.
-  pitch: { 300: "#8a6a12", 400: "#7a5c0e", 500: "#6b500c", 600: "#5c440a" },
-  readiness: { green: "#0f7a52", yellow: "#8a5a00", red: "#c02434" },
+  // The FILL keeps the brand's gold. A gold button with a near-black label is
+  // exactly as readable on a white page as on a black one, and it is the only
+  // version of it anybody recognises.
+  pitch: { 300: "#f0d68a", 400: "#e3b53f", 500: "#c99a2e", 600: "#a67c1f" },
+  /*
+   * The TEXT darkens, because gold on white is about 1.9:1.
+   *
+   * 400 is tuned as light as AA allows on the WORST surface it lands on, which
+   * is not white — it is a chip, a 6% wash of the tint over the page. Against
+   * white this is 5.5; against that chip it is 4.74, and the first attempt at
+   * 4.64-on-white was 4.09 there. Axe found it in a browser because the palette
+   * test only knew about pages and cards.
+   *
+   * As light as that allows, because 319 of the 332 gold-text uses are this one
+   * shade and every step darker reads less like gold and more like brown. The
+   * headline on the landing page is this colour.
+   *
+   * The other tiers do not preserve dark mode's ordering, and cannot: in dark,
+   * a higher number is dimmer, which in light means LIGHTER, and there is not
+   * enough room between 4.5 and the brand hue to fit four tiers above the
+   * line. They are 13 uses between them, all decorative, so they sit darker
+   * and legible rather than ordered and unreadable.
+   */
+  accent: { 300: "#6b500c", 400: "#7f6010", 500: "#7a5c0e", 600: "#5c440a" },
+  readiness: { green: "#0d6d49", yellow: "#8a5a00", red: "#c02434" },
   sky: { 300: "#0b6a8f", 400: "#0a5f80" },
-  onAccent: "#ffffff",
+  // Dark again, because the accent it sits on is gold and gold stays bright.
+  // The handful of labels on a DARK fill (a red button, the sky segment) pin
+  // their own white rather than dragging this one with them.
+  onAccent: "#0a0a0b",
   glow: "rgba(227, 181, 63, 0.16)",
 };
 
@@ -136,21 +171,47 @@ export const PALETTES: Record<ThemeName, Palette> = { dark: DARK, light: LIGHT }
  * Separate from surfacesOf() because ordinary body text never lands on these.
  */
 export function accentSurfacesOf(p: Palette): { name: string; colour: string }[] {
+  // Gold only. The other coloured fills carry a pinned white label rather than
+  // this token, because they darken in light mode and gold does not.
   return [
     { name: "gold button", colour: p.pitch[400] },
-    { name: "sky button", colour: p.sky[400] },
-    { name: "green pill", colour: p.readiness.green },
-    { name: "red button", colour: p.readiness.red },
+    { name: "gold 500 button", colour: p.pitch[500] },
   ];
 }
 
-/** Every surface a piece of text can land on, for the contrast test. */
-export function surfacesOf(p: Palette): { name: string; colour: string; alpha?: number }[] {
+/**
+ * Every surface a piece of text can land on.
+ *
+ * INCLUDING THE TINTED ONES, which is the half this first missed. Chips,
+ * pills, table stripes and inputs are `bg-white/[0.04]` and friends — a wash
+ * of the tint over the page, and 326 of them. Text on those sits on a surface
+ * that is neither the page nor a card, and gold at 4.64 against white was 4.29
+ * against a 6% wash. Axe found it in a browser; this is so it is found before.
+ */
+export function surfacesOf(p: Palette): { name: string; colour: string }[] {
+  const wash = (alpha: number) => {
+    const t = parseChannels(p.tint);
+    const b = parseChannels(p.surfaceBase);
+    const mix = (x: number, y: number) => Math.round(x * alpha + y * (1 - alpha));
+    return `#${[0, 1, 2].map((i) => mix(t[i], b[i]).toString(16).padStart(2, "0")).join("")}`;
+  };
   return [
     { name: "page", colour: p.surfaceBase },
     { name: "card", colour: p.surfaceRaised },
     { name: "raised panel", colour: p.surfaceHigh },
+    // The overlay strengths that actually carry muted text. Heavier washes
+    // exist — bg-white/10 and /[0.08], 31 of them — but every one of those
+    // carries slate-200 or slate-400, which clear AA on any surface here. It
+    // is the faint tiers on a light wash that get close to the line.
+    { name: "4% tint", colour: wash(0.04) },
+    { name: "6% tint", colour: wash(0.06) },
   ];
+}
+
+function parseChannels(hex: string): [number, number, number] {
+  const clean = hex.replace("#", "");
+  const full = clean.length === 3 ? clean.split("").map((c) => c + c).join("") : clean;
+  return [0, 2, 4].map((i) => parseInt(full.slice(i, i + 2), 16)) as [number, number, number];
 }
 
 /** The text tokens, which are the ones AA applies to. */
@@ -162,7 +223,8 @@ export function textTokensOf(p: Palette): Record<string, string> {
     "slate-400": p.slate[400],
     "slate-500": p.slate[500],
     "slate-600": p.slate[600],
-    "pitch-400": p.pitch[400],
+    "accent-400": p.accent[400],
+    "accent-500": p.accent[500],
     "sky-300": p.sky[300],
     "readiness-green": p.readiness.green,
     "readiness-yellow": p.readiness.yellow,
@@ -187,6 +249,7 @@ export function cssVariables(p: Palette): string {
     `--on-accent: ${rgbChannels(p.onAccent)};`,
     ...Object.entries(p.slate).map(([k, v]) => `--slate-${k}: ${rgbChannels(v)};`),
     ...Object.entries(p.pitch).map(([k, v]) => `--pitch-${k}: ${rgbChannels(v)};`),
+    ...Object.entries(p.accent).map(([k, v]) => `--accent-${k}: ${rgbChannels(v)};`),
     ...Object.entries(p.readiness).map(([k, v]) => `--readiness-${k}: ${rgbChannels(v)};`),
     ...Object.entries(p.sky).map(([k, v]) => `--sky-${k}: ${rgbChannels(v)};`),
     `--glow: ${p.glow};`,

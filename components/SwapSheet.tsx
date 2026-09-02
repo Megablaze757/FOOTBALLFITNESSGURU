@@ -91,7 +91,7 @@ export function SwapSheet({ name, current, onSwap, onClose }: {
                 >
                   <span className="flex items-baseline justify-between gap-2">
                     <span className="text-sm font-semibold text-slate-100">{o.ex.name}</span>
-                    {chosen && <span className="shrink-0 text-[10px] font-bold uppercase text-pitch-400">doing this</span>}
+                    {chosen && <span className="shrink-0 text-[10px] font-bold uppercase text-accent-400">doing this</span>}
                   </span>
                   {/* What it trains and what it needs — the two things that
                       decide whether a substitute is any use to you today. */}

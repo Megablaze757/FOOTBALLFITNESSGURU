@@ -61,7 +61,7 @@ function ago(day: string | null, today: string): string {
 }
 
 const TIER_STYLE: Record<string, string> = {
-  gold: "text-pitch-400",
+  gold: "text-accent-400",
   silver: "text-slate-200",
   bronze: "text-slate-500",
 };
@@ -176,7 +176,7 @@ export function Users() {
             key={f}
             onClick={() => setFilter(f)}
             className={`min-h-[44px] rounded-full border px-3 py-1 text-xs font-medium capitalize transition ${
-              filter === f ? "border-pitch-400/40 bg-pitch-400/10 text-pitch-400" : "border-white/10 bg-white/[0.03] text-slate-300"
+              filter === f ? "border-pitch-400/40 bg-pitch-400/10 text-accent-400" : "border-white/10 bg-white/[0.03] text-slate-300"
             }`}
           >
             {f}
@@ -218,7 +218,7 @@ export function Users() {
                     <div className="flex items-center gap-2">
                       <span className="truncate text-slate-200">{u.email}</span>
                       {u.suspended_at && <span className="chip shrink-0 text-readiness-red">deactivated</span>}
-                      {u.beta && <span className="chip shrink-0 text-pitch-400">beta</span>}
+                      {u.beta && <span className="chip shrink-0 text-accent-400">beta</span>}
                       {u.role !== "athlete" && <span className="chip shrink-0 text-slate-400">{u.role}</span>}
                     </div>
                     {u.full_name && <div className="text-xs text-slate-500">{u.full_name}</div>}

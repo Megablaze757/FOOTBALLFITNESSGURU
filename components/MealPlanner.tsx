@@ -452,7 +452,7 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
                     : "border-white/10 bg-white/[0.02] hover:border-white/20"
                 }`}
               >
-                <span className={`block text-sm font-bold ${goal === g.id ? "text-pitch-400" : "text-slate-200"}`}>
+                <span className={`block text-sm font-bold ${goal === g.id ? "text-accent-400" : "text-slate-200"}`}>
                   {g.label}
                 </span>
                 <span className="mt-0.5 block text-[11px] leading-snug text-slate-500">{g.blurb}</span>
@@ -496,7 +496,7 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
         ) : (
           <button
             onClick={() => setAdjustOpen((o) => !o)}
-            className="tap-target mt-1 text-xs font-semibold text-slate-400 hover:text-pitch-400"
+            className="tap-target mt-1 text-xs font-semibold text-slate-400 hover:text-accent-400"
           >
             Change any of this →
           </button>
@@ -598,7 +598,7 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
                 onClick={() => setPrefs((p) => ({ ...p, pattern: d.id }))}
                 className={`min-h-[44px] rounded-full border px-3 py-1.5 text-sm transition ${
                   prefs.pattern === d.id
-                    ? "border-pitch-400/50 bg-pitch-400/10 text-pitch-400"
+                    ? "border-pitch-400/50 bg-pitch-400/10 text-accent-400"
                     : "border-white/10 bg-white/[0.03] text-slate-300"
                 }`}
               >
@@ -700,14 +700,14 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
             className="field resize-none"
           />
           {noteDislikes.length > 0 && (
-            <p className="mt-1 text-xs text-pitch-400">
+            <p className="mt-1 text-xs text-accent-400">
               Leaving out: {noteDislikes.map((id) => FOOD_LOOKUP[id]?.name ?? id).join(", ")}.
             </p>
           )}
           {/* Echo the schedule back as it's typed, so a note that wasn't
               understood is obvious before the week is built. */}
           {schedule.summary.map((s) => (
-            <p key={s} className="mt-1 text-xs text-pitch-400">{s}</p>
+            <p key={s} className="mt-1 text-xs text-accent-400">{s}</p>
           ))}
         </label>
 
@@ -734,10 +734,10 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
                         : "border-white/10 bg-white/[0.02] hover:border-white/20"
                     }`}
                   >
-                    <span className={`block text-sm font-bold ${on ? "text-pitch-400" : "text-slate-300"}`}>
+                    <span className={`block text-sm font-bold ${on ? "text-accent-400" : "text-slate-300"}`}>
                       {d.day.slice(0, 3)}
                     </span>
-                    <span className={`block text-[11px] tabular-nums ${on ? "text-pitch-500" : "text-slate-600"}`}>
+                    <span className={`block text-[11px] tabular-nums ${on ? "text-accent-500" : "text-slate-600"}`}>
                       {Math.round(d.macros.kcal)}
                     </span>
                     {d.load !== "even" && (
@@ -759,7 +759,7 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
                 </span>
                 {/* An undo, not a regenerate. Regenerating rerolls all 28 meals
                     and is a much bigger thing to do by accident. */}
-                <button onClick={clearSwaps} className="tap-target shrink-0 px-2 text-xs font-semibold text-slate-400 hover:text-pitch-400">
+                <button onClick={clearSwaps} className="tap-target shrink-0 px-2 text-xs font-semibold text-slate-400 hover:text-accent-400">
                   Undo all
                 </button>
               </div>
@@ -788,7 +788,7 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
                             meal is indistinguishable from one the app chose,
                             and "did that save?" is the first thing anyone
                             wonders after changing something. */}
-                        {swapped && <span className="rounded bg-pitch-400/15 px-1 text-[10px] font-bold normal-case text-pitch-400">your pick</span>}
+                        {swapped && <span className="rounded bg-pitch-400/15 px-1 text-[10px] font-bold normal-case text-accent-400">your pick</span>}
                         {/* ═══════════════════════════════════════════════
                             A LEFTOVER HAS TO SAY IT IS ONE.
 
@@ -987,7 +987,7 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
                   <ul className="space-y-1.5">
                     {budgetNote.advice.levers.map((lever) => (
                       <li key={lever.id} className="flex items-start gap-2 rounded-xl bg-white/[0.03] px-3 py-2">
-                        <span className="shrink-0 pt-0.5 font-bold tabular-nums text-pitch-400">
+                        <span className="shrink-0 pt-0.5 font-bold tabular-nums text-accent-400">
                           −£{lever.saving.toFixed(2)}
                         </span>
                         <span className="min-w-0 flex-1">
@@ -1080,7 +1080,7 @@ function DayBar({ label, value, target, colour, unit }: {
 function Metric({ label, value, accent }: { label: string; value: string | number; accent?: boolean }) {
   return (
     <div>
-      <div className={`text-lg font-extrabold ${accent ? "text-pitch-400" : "text-slate-100"}`}>{value}</div>
+      <div className={`text-lg font-extrabold ${accent ? "text-accent-400" : "text-slate-100"}`}>{value}</div>
       <div className="stat-label">{label}</div>
     </div>
   );

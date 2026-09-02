@@ -249,13 +249,13 @@ export function BodyMap({
                   delete next[k];
                   onChange(next);
                 }}
-                className="min-h-[44px] flex items-center gap-1.5 rounded-full border border-pitch-400/40 bg-pitch-400/10 px-3 py-1.5 text-xs font-semibold text-pitch-400 transition hover:bg-pitch-400/20"
+                className="min-h-[44px] flex items-center gap-1.5 rounded-full border border-pitch-400/40 bg-pitch-400/10 px-3 py-1.5 text-xs font-semibold text-accent-400 transition hover:bg-pitch-400/20"
               >
                 {/* ALL_REGIONS, not the visible side: a chip for a hamstring
                     must still say "L hamstring" while you are looking at the
                     front, or your own selections turn into raw database keys. */}
                 {ALL_REGIONS.find((r) => r.key === k)?.label ?? k}
-                <span className="text-pitch-500" aria-hidden>×</span>
+                <span className="text-accent-500" aria-hidden>×</span>
                 <span className="sr-only">Remove</span>
               </button>
             ))

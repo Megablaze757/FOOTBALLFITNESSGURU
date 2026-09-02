@@ -17,7 +17,7 @@ export function BiometricSignalCard({ signal }: { signal: BiometricSignal }) {
           <div className="stat-label">⌚ Wearable</div>
           <div className="mt-0.5 text-sm font-bold text-slate-100">Connect HRV, sleep &amp; resting HR</div>
         </div>
-        <span className="text-pitch-400">→</span>
+        <span className="text-accent-400">→</span>
       </Link>
     );
   }

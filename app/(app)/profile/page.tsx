@@ -87,13 +87,13 @@ export default function ProfilePage() {
         <div>
           <div className="stat-label">Plan</div>
           <div className="mt-0.5 text-lg font-extrabold">
-            <span className={plan.paid ? "text-pitch-400" : "text-slate-200"}>{plan.name}</span>
+            <span className={plan.paid ? "text-accent-400" : "text-slate-200"}>{plan.name}</span>
           </div>
           {subscription?.cancel_at_period_end && subscription.current_period_end && (
             <div className="text-xs text-readiness-red">Cancels {subscription.current_period_end.slice(0, 10)}</div>
           )}
           {subscription?.stripe_status === "trialing" && subscription.trial_end && (
-            <div className="text-xs text-pitch-400">Free trial ends {subscription.trial_end.slice(0, 10)}</div>
+            <div className="text-xs text-accent-400">Free trial ends {subscription.trial_end.slice(0, 10)}</div>
           )}
         </div>
         {/* Keyed on whether they've paid, not on a tier id. It used to compare

@@ -42,7 +42,7 @@ export function ContentEngine() {
             aria-pressed={tab === t.id}
             className={`tap-target shrink-0 rounded-full border px-3.5 py-2 text-sm font-medium transition ${
               tab === t.id
-                ? "border-pitch-400/50 bg-pitch-400/10 text-pitch-400"
+                ? "border-pitch-400/50 bg-pitch-400/10 text-accent-400"
                 : "border-white/10 bg-white/[0.03] text-slate-300"
             }`}
           >
@@ -97,7 +97,7 @@ function PlanTab() {
         <ol className="mt-4 space-y-3">
           {LAUNCH_SEQUENCE.map((s) => (
             <li key={s.when} className="flex gap-3">
-              <span className="w-14 shrink-0 text-sm font-extrabold text-pitch-400">{s.when}</span>
+              <span className="w-14 shrink-0 text-sm font-extrabold text-accent-400">{s.when}</span>
               <span className="min-w-0">
                 <span className="block text-sm font-semibold text-slate-100">{s.what}</span>
                 <span className="block text-sm text-slate-400">{s.detail}</span>
@@ -355,7 +355,7 @@ function WriterTab() {
                   onClick={() => setGroups((s) => (on ? s.filter((x) => x !== g.id) : [...s, g.id]))}
                   aria-pressed={on}
                   className={`tap-target rounded-full border px-3 py-1.5 text-sm transition ${
-                    on ? "border-pitch-400/50 bg-pitch-400/10 text-pitch-400" : "border-white/10 text-slate-300"
+                    on ? "border-pitch-400/50 bg-pitch-400/10 text-accent-400" : "border-white/10 text-slate-300"
                   }`}
                 >
                   {g.label}
@@ -392,7 +392,7 @@ function WriterTab() {
           {result.options.map((o, i) => (
             <div key={i} className="card p-4">
               <div className="flex items-start justify-between gap-3">
-                <h4 className="text-sm font-bold text-pitch-400">{o.title}</h4>
+                <h4 className="text-sm font-bold text-accent-400">{o.title}</h4>
                 <button
                   onClick={() => { navigator.clipboard.writeText(o.body); setCopied(i); setTimeout(() => setCopied(null), 1500); }}
                   className="tap-target shrink-0 rounded-xl border border-white/10 px-3 py-1.5 text-xs font-semibold text-slate-300"
@@ -443,7 +443,7 @@ function Picker({ label, options, value, onChange }: {
             onClick={() => onChange(id)}
             aria-pressed={value === id}
             className={`tap-target rounded-full border px-3 py-1.5 text-sm transition ${
-              value === id ? "border-pitch-400/50 bg-pitch-400/10 text-pitch-400" : "border-white/10 text-slate-300"
+              value === id ? "border-pitch-400/50 bg-pitch-400/10 text-accent-400" : "border-white/10 text-slate-300"
             }`}
           >
             {text}

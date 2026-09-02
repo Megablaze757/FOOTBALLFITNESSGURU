@@ -100,7 +100,7 @@ export function QuickCalories({ hidden, onAdd }: {
           onClick={() => amount && add(amount)}
           disabled={!amount || amount <= 0}
           aria-label={amount ? `Add ${amount} kcal` : "Add calories"}
-          className="chip w-11 shrink-0 justify-center text-base text-pitch-400 hover:bg-white/[0.08] disabled:opacity-40 disabled:hover:bg-white/[0.05]"
+          className="chip w-11 shrink-0 justify-center text-base text-accent-400 hover:bg-white/[0.08] disabled:opacity-40 disabled:hover:bg-white/[0.05]"
         >
           +
         </button>

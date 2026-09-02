@@ -40,10 +40,10 @@ export function VideoCoachFeedback({ analysis }: { analysis: VideoAnalysis }) {
   return (
     <div className="card p-5">
       <div className="mb-2 flex items-center gap-2">
-        <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-pitch-400">
+        <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-accent-400">
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-pitch-400" /> Coach&apos;s take
         </span>
-        {!loading && ai && <span className="chip text-pitch-400">AI</span>}
+        {!loading && ai && <span className="chip text-accent-400">AI</span>}
       </div>
       {loading ? (
         <p className="text-sm text-slate-500">Analysing your movement…</p>

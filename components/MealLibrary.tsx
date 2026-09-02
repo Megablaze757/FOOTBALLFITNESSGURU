@@ -296,7 +296,7 @@ function MealModal({ meal, canStar, starred, onStar, onClose }: {
           {(patterns.length > 0 || tags.length > 0) && (
             <div className="mt-4 flex flex-wrap gap-1.5 border-t border-white/[0.06] pt-4">
               {patterns.map((p) => (
-                <span key={p.id} className="chip text-pitch-400">{p.label}</span>
+                <span key={p.id} className="chip text-accent-400">{p.label}</span>
               ))}
               {tags.map((t) => (
                 <span key={t} className="chip text-slate-400">Contains {TAG_LABEL[t]?.toLowerCase() ?? t}</span>

@@ -802,7 +802,7 @@ export function MealCheckIn({ stats, prefs, dietNotes, seed, swaps, recent, star
           </div>
         )}
 
-        {added && <p className="mt-2 text-sm text-pitch-400">{added} ✓ — remember to save below.</p>}
+        {added && <p className="mt-2 text-sm text-accent-400">{added} ✓ — remember to save below.</p>}
         <p className="mt-2 text-xs text-slate-500">
           Estimates, not measurements — portions vary. Adjust the numbers below if you know better.
         </p>

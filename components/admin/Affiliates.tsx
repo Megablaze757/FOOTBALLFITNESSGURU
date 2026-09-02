@@ -127,7 +127,7 @@ export function Affiliates() {
                         <button
                           disabled={busy}
                           onClick={() => saveEmail(r.code, editEmail)}
-                          className="chip shrink-0 text-pitch-400 disabled:opacity-50"
+                          className="chip shrink-0 text-accent-400 disabled:opacity-50"
                         >
                           Save
                         </button>
@@ -141,7 +141,7 @@ export function Affiliates() {
                     ) : (
                       <button
                         onClick={() => { setEditing(r.code); setEditEmail(r.email ?? ""); }}
-                        className="min-h-[44px] mt-0.5 text-left text-xs text-slate-500 hover:text-pitch-400"
+                        className="min-h-[44px] mt-0.5 text-left text-xs text-slate-500 hover:text-accent-400"
                       >
                         {/* AN AFFILIATE WITH NO EMAIL CANNOT SEE THEIR OWN
                             DASHBOARD, so the gap is called out rather than
@@ -153,13 +153,13 @@ export function Affiliates() {
                   <td className="py-2 font-mono text-xs text-slate-300">{r.code}</td>
                   <td className="py-2 text-right text-slate-300">{r.waitlist}</td>
                   <td className="py-2 text-right font-bold text-slate-100">{r.signups}</td>
-                  <td className="py-2 text-right font-bold text-pitch-400">{r.paid}</td>
+                  <td className="py-2 text-right font-bold text-accent-400">{r.paid}</td>
                   <td className="py-2 text-right">
                     <div className="flex justify-end gap-3">
-                      <button onClick={() => copy(r.code, "waitlist")} className="tap-target whitespace-nowrap text-xs text-slate-400 hover:text-pitch-400">
+                      <button onClick={() => copy(r.code, "waitlist")} className="tap-target whitespace-nowrap text-xs text-slate-400 hover:text-accent-400">
                         {copied === `${r.code}:waitlist` ? "Copied ✓" : "Waitlist link"}
                       </button>
-                      <button onClick={() => copy(r.code, "site")} className="tap-target whitespace-nowrap text-xs text-slate-400 hover:text-pitch-400">
+                      <button onClick={() => copy(r.code, "site")} className="tap-target whitespace-nowrap text-xs text-slate-400 hover:text-accent-400">
                         {copied === `${r.code}:site` ? "Copied ✓" : "Site link"}
                       </button>
                     </div>

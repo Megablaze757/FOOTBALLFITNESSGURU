@@ -274,7 +274,7 @@ export function InjuryPlanner({ sport, hurt, onHurtChange, description, onDescri
               question="Clear this rehab plan and start a new one?"
               confirmLabel="New plan"
               destructive={false}
-              className="tap-target shrink-0 text-xs text-slate-400 hover:text-pitch-400"
+              className="tap-target shrink-0 text-xs text-slate-400 hover:text-accent-400"
             >
               New plan
             </ConfirmButton>
@@ -304,7 +304,7 @@ export function InjuryPlanner({ sport, hurt, onHurtChange, description, onDescri
                   className="flex w-full items-center gap-3 p-4 text-left"
                 >
                   <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-xs font-bold ${
-                    isOpen ? "bg-pitch-400 text-on-accent" : "bg-pitch-400/15 text-pitch-400"
+                    isOpen ? "bg-pitch-400 text-on-accent" : "bg-pitch-400/15 text-accent-400"
                   }`}>
                     {i + 1}
                   </span>
@@ -315,7 +315,7 @@ export function InjuryPlanner({ sport, hurt, onHurtChange, description, onDescri
                           rest of the app reads this — the check-in adds this
                           stage's exercises and drops what it says to avoid. */}
                       {stage === i + 1 && (
-                        <span className="shrink-0 rounded-full bg-pitch-400/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-pitch-400">
+                        <span className="shrink-0 rounded-full bg-pitch-400/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-accent-400">
                           you are here
                         </span>
                       )}
@@ -361,7 +361,7 @@ export function InjuryPlanner({ sport, hurt, onHurtChange, description, onDescri
                               </span>
                               <span className="flex shrink-0 items-baseline gap-2">
                                 <span className="text-xs text-slate-400">{ex.dose}</span>
-                                <span className={`text-xs text-pitch-400 transition ${open ? "rotate-180" : ""}`}>▾</span>
+                                <span className={`text-xs text-accent-400 transition ${open ? "rotate-180" : ""}`}>▾</span>
                               </span>
                             </button>
                             {lib && open && (
@@ -400,7 +400,7 @@ export function InjuryPlanner({ sport, hurt, onHurtChange, description, onDescri
                           <button
                             type="button" disabled={savingStage}
                             onClick={() => moveToStage(i + 1)}
-                            className="chip text-pitch-400 hover:bg-white/[0.08] disabled:opacity-50"
+                            className="chip text-accent-400 hover:bg-white/[0.08] disabled:opacity-50"
                           >
                             I&apos;m on this stage
                           </button>
@@ -409,7 +409,7 @@ export function InjuryPlanner({ sport, hurt, onHurtChange, description, onDescri
                           <button
                             type="button" disabled={savingStage}
                             onClick={() => moveToStage(i + 2)}
-                            className="chip text-pitch-400 hover:bg-white/[0.08] disabled:opacity-50"
+                            className="chip text-accent-400 hover:bg-white/[0.08] disabled:opacity-50"
                           >
                             I can do this — next stage →
                           </button>
@@ -506,7 +506,7 @@ export function InjuryPlanner({ sport, hurt, onHurtChange, description, onDescri
                 onClick={() => onDescriptionChange(
                   description.trim() ? `${description.trim().replace(/[.,]$/, "")}, ${h}` : h
                 )}
-                className="chip-option chip-option-sm text-slate-400 hover:border-pitch-400/40 hover:text-pitch-400"
+                className="chip-option chip-option-sm text-slate-400 hover:border-pitch-400/40 hover:text-accent-400"
               >
                 <span aria-hidden>+</span> {h}
                 <span className="sr-only">Add &ldquo;{h}&rdquo; to the description</span>

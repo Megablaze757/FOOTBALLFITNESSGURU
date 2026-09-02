@@ -341,7 +341,7 @@ export function EmailOps() {
             <button
               onClick={() => setKindFilter(null)}
               aria-pressed={kindFilter === null}
-              className={`chip ${kindFilter === null ? "text-pitch-400" : "text-slate-400"}`}
+              className={`chip ${kindFilter === null ? "text-accent-400" : "text-slate-400"}`}
             >
               All {data!.audit.length}
             </button>
@@ -351,7 +351,7 @@ export function EmailOps() {
                 onClick={() => setKindFilter(kindFilter === kind.id ? null : kind.id)}
                 aria-pressed={kindFilter === kind.id}
                 title={kind.when}
-                className={`chip ${kindFilter === kind.id ? "text-pitch-400" : failed > 0 ? "text-readiness-yellow" : "text-slate-400"}`}
+                className={`chip ${kindFilter === kind.id ? "text-accent-400" : failed > 0 ? "text-readiness-yellow" : "text-slate-400"}`}
               >
                 {kind.label} {failed > 0 ? `${sent}/${total}` : total}
                 {failed > 0 && <span className="ml-1 text-readiness-red">· {failed} failed</span>}

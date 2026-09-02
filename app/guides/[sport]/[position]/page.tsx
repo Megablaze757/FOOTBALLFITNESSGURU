@@ -85,7 +85,7 @@ export default function PositionGuidePage({ params }: Params) {
         }}
       />
       <article className="prose-invert">
-        <p className="text-xs font-semibold uppercase tracking-wider text-pitch-400">
+        <p className="text-xs font-semibold uppercase tracking-wider text-accent-400">
           {label} · Position guide
         </p>
         <h1 className="mt-2 text-3xl font-extrabold tracking-tight sm:text-4xl">
@@ -98,7 +98,7 @@ export default function PositionGuidePage({ params }: Params) {
             something complete rather than a fragment that needs the rest of
             the page to make sense. */}
         <div className="mt-5 rounded-2xl border border-pitch-400/20 bg-pitch-400/[0.04] p-5">
-          <h2 className="text-sm font-bold uppercase tracking-wide text-pitch-400">The short answer</h2>
+          <h2 className="text-sm font-bold uppercase tracking-wide text-accent-400">The short answer</h2>
           <p className="mt-2 text-sm text-slate-200">
             A {lower} should build {guide.physical.slice(0, 2).join(" and ").toLowerCase()},
             and practise {guide.skills.slice(0, 2).join(" and ").toLowerCase()}.
@@ -178,11 +178,11 @@ export default function PositionGuidePage({ params }: Params) {
         <GuideCta what="a program" />
 
         <nav className="mt-10 text-sm">
-          <Link href={`/drills/${sport}`} className="text-pitch-400 hover:underline">
+          <Link href={`/drills/${sport}`} className="text-accent-400 hover:underline">
             All {sportLabel(sport).toLowerCase()} drills →
           </Link>
           <span className="mx-2 text-slate-600">·</span>
-          <Link href="/guides" className="text-pitch-400 hover:underline">Every position guide →</Link>
+          <Link href="/guides" className="text-accent-400 hover:underline">Every position guide →</Link>
         </nav>
       </article>
     </MarketingShell>

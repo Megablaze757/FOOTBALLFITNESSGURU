@@ -79,7 +79,7 @@ export function MuscleGains({ logs }: { logs: TrainingLog[] | null | undefined }
                 nothing has been gained. */}
             <span className="w-20 shrink-0 text-right text-xs tabular-nums">
               {gain
-                ? <><b className="text-pitch-400">+{gain.pct}%</b></>
+                ? <><b className="text-accent-400">+{gain.pct}%</b></>
                 : <span className="text-slate-600">—</span>}
             </span>
           </li>

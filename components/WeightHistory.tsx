@@ -78,7 +78,7 @@ export function WeightHistory({ userId, series, today, dietGoal, bodyLogExtras, 
                        bulk, and a green arrow on every drop tells somebody
                        trying to add size that they are doing well while they
                        lose it. No goal set, no colour. */
-                    good === true ? "text-pitch-400" : good === false ? "text-readiness-yellow" : "text-slate-100"
+                    good === true ? "text-accent-400" : good === false ? "text-readiness-yellow" : "text-slate-100"
                   }`}
                 >
                   {changeLabel(w.change)}
@@ -205,7 +205,7 @@ function WeightRow({ userId, entry, previousKg, hasOtherBodyData, editing, onEdi
         )}
         {editing ? (
           <>
-            <button onClick={save} disabled={busy} className="chip shrink-0 text-pitch-400 disabled:opacity-40">
+            <button onClick={save} disabled={busy} className="chip shrink-0 text-accent-400 disabled:opacity-40">
               {busy ? "…" : confirmSave === value ? "Yes, save" : "Save"}
             </button>
             <button onClick={onEdit} className="chip shrink-0 text-slate-400">Cancel</button>

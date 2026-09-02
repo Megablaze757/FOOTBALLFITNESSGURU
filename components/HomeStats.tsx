@@ -51,6 +51,6 @@ function Arrow({ trend, goodWhen }: { trend: HomeStat["trend"]; goodWhen: HomeSt
   const glyph = trend === "up" ? "↑" : trend === "down" ? "↓" : "↔";
   const good = goodWhen !== "either" && trend !== "flat" && (goodWhen === trend);
   const bad = goodWhen !== "either" && trend !== "flat" && !good;
-  const colour = good ? "text-readiness-green" : bad ? "text-pitch-400" : "text-slate-500";
+  const colour = good ? "text-readiness-green" : bad ? "text-accent-400" : "text-slate-500";
   return <span className={`shrink-0 font-bold ${colour}`} aria-hidden>{glyph}</span>;
 }

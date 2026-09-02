@@ -221,7 +221,7 @@ export function CoachChat({ context, briefing, suggestions, storageKey, userId, 
               key={s}
               onClick={() => ask(s)}
               disabled={!restored}
-              className="chip shrink-0 whitespace-nowrap text-slate-300 hover:border-pitch-400/50 hover:text-pitch-400 disabled:opacity-40"
+              className="chip shrink-0 whitespace-nowrap text-slate-300 hover:border-pitch-400/50 hover:text-accent-400 disabled:opacity-40"
             >
               {s}
             </button>

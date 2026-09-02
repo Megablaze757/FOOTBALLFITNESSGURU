@@ -37,12 +37,12 @@ export function ProtocolCard({ p, relevant, reason, onOpenExercise }: {
       }`}
     >
       <summary className="flex cursor-pointer list-none items-center gap-3 p-4">
-        <Icon name={p.icon} size={22} className="text-pitch-400" />
+        <Icon name={p.icon} size={22} className="text-accent-400" />
         <span className="min-w-0 flex-1">
           <span className="flex flex-wrap items-center gap-x-2">
             <span className="text-sm font-bold text-slate-100">{p.title}</span>
             {relevant && (
-              <span className="rounded-full bg-pitch-400/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-pitch-400">
+              <span className="rounded-full bg-pitch-400/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-accent-400">
                 {reason ?? "for you"}
               </span>
             )}
@@ -67,7 +67,7 @@ function ProtocolBody({ p, onOpenExercise }: {
       {/* The steps are what someone opened this for. Everything else on the
           card is reference and sits below or behind a disclosure. */}
       <ul className="space-y-1.5 text-sm text-slate-300">
-        {p.steps.map((s) => <li key={s} className="flex gap-2"><span className="text-pitch-400">✓</span>{s}</li>)}
+        {p.steps.map((s) => <li key={s} className="flex gap-2"><span className="text-accent-400">✓</span>{s}</li>)}
       </ul>
 
       {p.exerciseIds && (
@@ -78,7 +78,7 @@ function ProtocolBody({ p, onOpenExercise }: {
               const ex = getExercise(id);
               if (!ex) return null;
               return (
-                <button key={id} onClick={() => onOpenExercise?.(ex)} className="chip-option chip-option-sm hover:border-pitch-500/50 hover:text-pitch-400">
+                <button key={id} onClick={() => onOpenExercise?.(ex)} className="chip-option chip-option-sm hover:border-pitch-500/50 hover:text-accent-400">
                   {ex.name}
                 </button>
               );
@@ -92,7 +92,7 @@ function ProtocolBody({ p, onOpenExercise }: {
           not in the first thirty seconds. */}
       {p.stages && (
         <details className="group/rtp mt-3 rounded-xl border border-white/10 bg-white/[0.02]">
-          <summary className="flex cursor-pointer list-none items-center justify-between p-3 text-sm font-semibold text-pitch-400">
+          <summary className="flex cursor-pointer list-none items-center justify-between p-3 text-sm font-semibold text-accent-400">
             <span>Return-to-play plan <span className="font-normal text-slate-500">({p.stages.length} stages)</span></span>
             <span className="text-xs text-slate-500 transition group-open/rtp:rotate-180" aria-hidden>▾</span>
           </summary>

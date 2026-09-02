@@ -159,12 +159,12 @@ export function AssignProgram({ athleteId, athleteName, sport, position, coachId
   }
 
   if (done) {
-    return <p className="text-xs font-semibold text-pitch-400">✓ Program assigned to {done}</p>;
+    return <p className="text-xs font-semibold text-accent-400">✓ Program assigned to {done}</p>;
   }
 
   if (!open) {
     return (
-      <button onClick={() => setOpen(true)} className="tap-target text-xs font-semibold text-pitch-400 hover:underline">
+      <button onClick={() => setOpen(true)} className="tap-target text-xs font-semibold text-accent-400 hover:underline">
         Assign a program →
       </button>
     );
@@ -239,7 +239,7 @@ export function AssignProgram({ athleteId, athleteName, sport, position, coachId
               key={n}
               onClick={() => setDays(n)}
               className={`min-h-[44px] flex-1 rounded-xl border py-2 text-sm font-bold transition ${
-                days === n ? "border-pitch-400/50 bg-pitch-400/10 text-pitch-400" : "border-white/10 bg-white/[0.03] text-slate-300"
+                days === n ? "border-pitch-400/50 bg-pitch-400/10 text-accent-400" : "border-white/10 bg-white/[0.03] text-slate-300"
               }`}
             >
               {n}

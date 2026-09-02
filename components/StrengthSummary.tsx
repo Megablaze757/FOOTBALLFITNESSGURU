@@ -37,7 +37,7 @@ export function StrengthSummary({ stats }: { stats: ActivityStats }) {
           Log a squat, bench, deadlift or press with a weight in today&apos;s log and every lift gets
           ranked against your bodyweight — plus XP for every rung you climb.
         </p>
-        <Link href="/journal" className="mt-3 inline-block text-sm font-semibold text-pitch-400">
+        <Link href="/journal" className="mt-3 inline-block text-sm font-semibold text-accent-400">
           Log a session →
         </Link>
       </section>
@@ -48,7 +48,7 @@ export function StrengthSummary({ stats }: { stats: ActivityStats }) {
     <section className="card p-5">
       <div className="mb-3 flex items-baseline justify-between gap-3">
         <h2 className="field-label !mb-0">Strength</h2>
-        <Link href="/dashboard" className="text-xs font-semibold text-pitch-400">Every lift →</Link>
+        <Link href="/dashboard" className="text-xs font-semibold text-accent-400">Every lift →</Link>
       </div>
 
       <div className="flex items-center gap-4">

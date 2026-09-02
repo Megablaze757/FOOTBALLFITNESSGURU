@@ -248,7 +248,7 @@ export function WorkoutPlayer({ title, drills, activeRest, onComplete, onClose }
           </div>
         ) : activeRest ? (
           <div className="animate-fade-up w-full max-w-sm text-left">
-            <div className="mx-auto grid h-20 w-20 place-items-center rounded-3xl bg-pitch-400/10 text-pitch-400">
+            <div className="mx-auto grid h-20 w-20 place-items-center rounded-3xl bg-pitch-400/10 text-accent-400">
               <span className="text-3xl" aria-hidden>↻</span>
             </div>
             <div className="mt-5 text-center">
@@ -278,7 +278,7 @@ export function WorkoutPlayer({ title, drills, activeRest, onComplete, onClose }
               <div className="mx-auto mb-6 max-w-xs rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-sm text-slate-200">{guidance}</div>
             )}
             <div className="stat-label">Rest</div>
-            <div className="my-4 text-7xl font-extrabold tabular-nums text-pitch-400">{rest}s</div>
+            <div className="my-4 text-7xl font-extrabold tabular-nums text-accent-400">{rest}s</div>
             {/* A bar, so a 3-minute rest before a heavy pull doesn't read as
                 the timer having stalled. */}
             <div className="mx-auto h-1.5 w-40 overflow-hidden rounded-full bg-white/10">
@@ -308,7 +308,7 @@ export function WorkoutPlayer({ title, drills, activeRest, onComplete, onClose }
                 <ExerciseWatch name={how.name} />
               </div>
             )}
-            <div className="chip mx-auto text-pitch-400">
+            <div className="chip mx-auto text-accent-400">
               {step.drill.completionOnly ? "Warm-up" : `Set ${step.setNum} of ${step.totalSets}`}
             </div>
             <h2 className="mt-3 break-words text-2xl font-extrabold sm:text-3xl">{step.drill.name}</h2>
@@ -325,7 +325,7 @@ export function WorkoutPlayer({ title, drills, activeRest, onComplete, onClose }
             {/* Effort and tempo belong here, while the bar is in your hands —
                 not only on the plan you read this morning. */}
             {(step.drill.intensity || step.drill.tempo) && (
-              <p className="mt-1 text-xs font-semibold text-pitch-400">
+              <p className="mt-1 text-xs font-semibold text-accent-400">
                 {[step.drill.intensity, step.drill.tempo].filter(Boolean).join(" · ")}
               </p>
             )}
@@ -370,7 +370,7 @@ export function WorkoutPlayer({ title, drills, activeRest, onComplete, onClose }
                 open={step.setNum === 1}
                 className="mx-auto mt-4 max-w-sm text-left"
               >
-                <summary className="tap-target cursor-pointer list-none text-center text-xs font-semibold text-pitch-400">
+                <summary className="tap-target cursor-pointer list-none text-center text-xs font-semibold text-accent-400">
                   How to do it
                 </summary>
                 <div className="mt-2 space-y-3 rounded-2xl bg-white/[0.04] p-3">
@@ -387,7 +387,7 @@ export function WorkoutPlayer({ title, drills, activeRest, onComplete, onClose }
                     <ol className="space-y-1.5">
                       {how.steps.map((s, n) => (
                         <li key={s} className="flex gap-2 text-xs text-slate-300">
-                          <span className="shrink-0 font-bold text-pitch-400">{n + 1}</span>{s}
+                          <span className="shrink-0 font-bold text-accent-400">{n + 1}</span>{s}
                         </li>
                       ))}
                     </ol>
@@ -396,7 +396,7 @@ export function WorkoutPlayer({ title, drills, activeRest, onComplete, onClose }
                     <ul className="space-y-1.5">
                       {how.cues.map((c) => (
                         <li key={c} className="flex gap-2 text-xs text-slate-300">
-                          <span className="text-pitch-400">›</span>{c}
+                          <span className="text-accent-400">›</span>{c}
                         </li>
                       ))}
                     </ul>

@@ -118,12 +118,12 @@ export function ShoppingList({ list, seed, store, onStore, onCorrectPrice }: {
               it is the number at the checkout on Saturday, and it is still the
               one the progress line counts down. */}
           <div className="flex shrink-0 flex-col items-end">
-            <span className="text-lg font-extrabold text-pitch-400">~£{list.ongoingTotal.toFixed(2)}</span>
+            <span className="text-lg font-extrabold text-accent-400">~£{list.ongoingTotal.toFixed(2)}</span>
             <span className="text-[11px] text-slate-500">a week</span>
             {list.total > list.ongoingTotal + 1 && (
               <span className="mt-1 text-[11px] text-slate-500">~£{list.total.toFixed(2)} this shop</span>
             )}
-            <button onClick={copy} className="tap-target mt-1 text-xs text-slate-400 hover:text-pitch-400">
+            <button onClick={copy} className="tap-target mt-1 text-xs text-slate-400 hover:text-accent-400">
               {copied ? "Copied ✓" : "Copy"}
             </button>
           </div>
@@ -150,7 +150,7 @@ export function ShoppingList({ list, seed, store, onStore, onCorrectPrice }: {
             <button
               key={sm.id}
               onClick={() => onStore(sm.id)}
-              className={`chip transition ${store === sm.id ? "border-pitch-400/50 text-pitch-400" : "hover:text-slate-200"}`}
+              className={`chip transition ${store === sm.id ? "border-pitch-400/50 text-accent-400" : "hover:text-slate-200"}`}
             >
               {sm.name}
             </button>
@@ -167,7 +167,7 @@ export function ShoppingList({ list, seed, store, onStore, onCorrectPrice }: {
               <div className="mb-2 flex items-center justify-between">
                 <span className={`text-xs font-bold uppercase tracking-wide transition ${allDone ? "text-slate-600" : "text-slate-400"}`}>
                   {group.aisle}
-                  {allDone && <span className="ml-1.5 text-pitch-400">✓</span>}
+                  {allDone && <span className="ml-1.5 text-accent-400">✓</span>}
                 </span>
                 <span className="text-xs tabular-nums text-slate-600">
                   {groupDone}/{group.lines.length} · ~£{group.cost.toFixed(2)}
@@ -211,7 +211,7 @@ export function ShoppingList({ list, seed, store, onStore, onCorrectPrice }: {
                             <span className="block text-[11px] text-slate-500">covers {l.meals} meals this week</span>
                           )}
                         </span>
-                        <span className={`shrink-0 tabular-nums text-sm transition ${isTicked ? "text-slate-600" : l.corrected ? "text-pitch-400" : "text-slate-400"}`}>
+                        <span className={`shrink-0 tabular-nums text-sm transition ${isTicked ? "text-slate-600" : l.corrected ? "text-accent-400" : "text-slate-400"}`}>
                           {l.corrected ? "" : "~"}£{l.cost.toFixed(2)}
                         </span>
                       </button>
@@ -234,7 +234,7 @@ export function ShoppingList({ list, seed, store, onStore, onCorrectPrice }: {
                           const n = Number(typed.replace(/[^\d.]/g, ""));
                           onCorrectPrice(l.food.id, typed.trim() === "" || !Number.isFinite(n) || n <= 0 ? null : n);
                         }}
-                        className="tap-target shrink-0 px-2 text-[11px] text-slate-600 hover:text-pitch-400"
+                        className="tap-target shrink-0 px-2 text-[11px] text-slate-600 hover:text-accent-400"
                         aria-label={`Correct the price of ${l.food.name}`}
                       >
                         {l.corrected ? "edit" : "fix price"}
@@ -248,7 +248,7 @@ export function ShoppingList({ list, seed, store, onStore, onCorrectPrice }: {
                         target="_blank"
                         rel="noopener noreferrer"
                         title={`Search ${l.food.name} in ${shop.name}`}
-                        className="tap-target shrink-0 rounded-lg px-2 py-2 text-slate-600 transition hover:text-pitch-400"
+                        className="tap-target shrink-0 rounded-lg px-2 py-2 text-slate-600 transition hover:text-accent-400"
                       >
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                           <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />

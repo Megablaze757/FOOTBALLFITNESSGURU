@@ -363,7 +363,7 @@ export function VideoUploader({ sport, onUploaded }: { sport?: string; onUploade
           <div className="flex items-center gap-3">
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-semibold text-slate-100">{file.name}</div>
-              <div className="text-xs text-pitch-400">
+              <div className="text-xs text-accent-400">
                 ✓ Ready to upload{(duration ?? preview?.seconds) ? ` · ${(duration ?? preview!.seconds).toFixed(1)}s` : ""} · {(file.size / 1048576).toFixed(1)}MB
               </div>
             </div>
@@ -404,7 +404,7 @@ export function VideoUploader({ sport, onUploaded }: { sport?: string; onUploade
                 }`}
               >
                 <span className="text-lg" aria-hidden>{m.icon}</span>
-                <span className={`mt-1 block text-xs font-bold ${movement === m.id ? "text-pitch-400" : "text-slate-200"}`}>
+                <span className={`mt-1 block text-xs font-bold ${movement === m.id ? "text-accent-400" : "text-slate-200"}`}>
                   {m.label}
                 </span>
                 <span className="mt-0.5 block text-[11px] leading-snug text-slate-500">{m.blurb}</span>
@@ -465,7 +465,7 @@ export function VideoUploader({ sport, onUploaded }: { sport?: string; onUploade
           <div className="flex items-center gap-2 text-xs text-slate-400">
             <span aria-hidden>{MOVEMENTS.find((m) => m.id === movement)?.icon}</span>
             Checking <span className="font-semibold text-slate-200">{MOVEMENTS.find((m) => m.id === movement)?.label}</span>
-            <button type="button" onClick={clearFile} className="tap-target text-slate-500 hover:text-pitch-400">change</button>
+            <button type="button" onClick={clearFile} className="tap-target text-slate-500 hover:text-accent-400">change</button>
           </div>
 
           {/* Session type and in-season are for the training-load record, not
@@ -505,7 +505,7 @@ export function VideoUploader({ sport, onUploaded }: { sport?: string; onUploade
                 {atCap === "locked" ? "Video analysis is a Pro feature" : "Monthly upload limit reached"}
               </p>
               <p className="mt-1 text-xs leading-relaxed text-slate-400">{error}</p>
-              <Link href="/pricing" className="chip-option chip-option-sm mt-2 border-pitch-400/40 text-pitch-400">
+              <Link href="/pricing" className="chip-option chip-option-sm mt-2 border-pitch-400/40 text-accent-400">
                 {atCap === "locked" ? `See ${planFor(PAID_TIER).name}` : "See plans"}
               </Link>
             </div>

@@ -159,7 +159,7 @@ export function InBrowserAnalysis({ videoId, userId, src, painMap, sessionType, 
     return (
       <div className="space-y-4">
         <video src={src} controls playsInline className="w-full rounded-2xl bg-black" />
-        <div className="card flex items-center gap-3 px-4 py-3 text-sm text-pitch-300">
+        <div className="card flex items-center gap-3 px-4 py-3 text-sm text-accent-300">
           <span className="h-4 w-4 animate-spin rounded-full border-2 border-pitch-500 border-t-transparent" />
           {progress}
         </div>

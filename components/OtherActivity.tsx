@@ -111,7 +111,7 @@ export function OtherActivity({ drills, onChange }: {
             aria-pressed={known?.id === activity.id}
             className={`tap-target flex shrink-0 items-center gap-1.5 rounded-2xl border px-3 text-xs font-semibold transition ${
               known?.id === activity.id
-                ? "border-pitch-400/50 bg-pitch-400/10 text-pitch-300"
+                ? "border-pitch-400/50 bg-pitch-400/10 text-accent-300"
                 : "border-white/[0.07] bg-white/[0.02] text-slate-300 hover:text-slate-100"
             }`}
           >
@@ -159,7 +159,7 @@ export function OtherActivity({ drills, onChange }: {
             aria-pressed={part === option.id}
             className={`tap-target flex items-center gap-1.5 rounded-2xl border px-3 text-xs font-semibold transition ${
               part === option.id
-                ? "border-pitch-400/50 bg-pitch-400/10 text-pitch-300"
+                ? "border-pitch-400/50 bg-pitch-400/10 text-accent-300"
                 : "border-white/[0.07] bg-white/[0.02] text-slate-400 hover:text-slate-200"
             }`}
           >

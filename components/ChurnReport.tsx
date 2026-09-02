@@ -75,7 +75,7 @@ export function ChurnReport() {
           {rescueRate != null && (
             <div className="card mb-3 p-4 text-center">
               <div className="stat-label">Kept instead of lost</div>
-              <div className="mt-1 text-3xl font-extrabold text-pitch-400">{rescueRate}%</div>
+              <div className="mt-1 text-3xl font-extrabold text-accent-400">{rescueRate}%</div>
               <p className="mt-1 text-[11px] text-slate-500">
                 Took a pause or stayed, rather than cancelling outright.
               </p>

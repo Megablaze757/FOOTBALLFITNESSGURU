@@ -23,7 +23,7 @@ export function LevelUpModal({ level, rank, emoji, color = "#e3b53f", onClose }:
           className="card-premium animate-scale-in relative w-full max-w-sm overflow-hidden p-8 text-center"
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="text-xs font-bold uppercase tracking-[0.2em] text-pitch-400">Level up</div>
+          <div className="text-xs font-bold uppercase tracking-[0.2em] text-accent-400">Level up</div>
           <div
             className="mx-auto mt-4 grid h-24 w-24 place-items-center rounded-3xl text-5xl shadow-glow"
             style={{ background: `linear-gradient(135deg, ${color}, ${color}88)` }}

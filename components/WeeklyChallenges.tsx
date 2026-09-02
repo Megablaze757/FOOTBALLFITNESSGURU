@@ -94,7 +94,7 @@ function ChallengeGroup({ heading, note, board }: {
             <div className="flex items-center gap-3">
               <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white/[0.05] text-lg">{c.icon}</span>
               <span className="min-w-0 flex-1">
-                <span className={`block text-sm font-bold ${complete ? "text-pitch-400" : "text-slate-100"}`}>
+                <span className={`block text-sm font-bold ${complete ? "text-accent-400" : "text-slate-100"}`}>
                   {c.title}{complete && " ✓"}
                 </span>
                 <span className="block text-xs text-slate-400">{c.blurb}</span>

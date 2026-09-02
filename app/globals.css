@@ -27,6 +27,10 @@
   --pitch-400: 227 181 63;
   --pitch-500: 201 154 46;
   --pitch-600: 166 124 31;
+  --accent-300: 240 214 138;
+  --accent-400: 227 181 63;
+  --accent-500: 201 154 46;
+  --accent-600: 166 124 31;
   --readiness-green: 52 211 153;
   --readiness-yellow: 251 191 36;
   --readiness-red: 251 93 107;
@@ -42,18 +46,22 @@
   --surface-raised: 255 255 255;
   --surface-high: 255 255 255;
   --tint: 11 18 32;
-  --on-accent: 255 255 255;
+  --on-accent: 10 10 11;
   --slate-100: 11 18 32;
   --slate-200: 22 32 58;
   --slate-300: 43 54 72;
   --slate-400: 65 77 99;
   --slate-500: 82 95 119;
-  --slate-600: 95 108 133;
-  --pitch-300: 138 106 18;
-  --pitch-400: 122 92 14;
-  --pitch-500: 107 80 12;
-  --pitch-600: 92 68 10;
-  --readiness-green: 15 122 82;
+  --slate-600: 89 101 124;
+  --pitch-300: 240 214 138;
+  --pitch-400: 227 181 63;
+  --pitch-500: 201 154 46;
+  --pitch-600: 166 124 31;
+  --accent-300: 107 80 12;
+  --accent-400: 127 96 16;
+  --accent-500: 122 92 14;
+  --accent-600: 92 68 10;
+  --readiness-green: 13 109 73;
   --readiness-yellow: 138 90 0;
   --readiness-red: 192 36 52;
   --sky-300: 11 106 143;
@@ -68,18 +76,22 @@
   --surface-raised: 255 255 255;
   --surface-high: 255 255 255;
   --tint: 11 18 32;
-  --on-accent: 255 255 255;
+  --on-accent: 10 10 11;
   --slate-100: 11 18 32;
   --slate-200: 22 32 58;
   --slate-300: 43 54 72;
   --slate-400: 65 77 99;
   --slate-500: 82 95 119;
-  --slate-600: 95 108 133;
-  --pitch-300: 138 106 18;
-  --pitch-400: 122 92 14;
-  --pitch-500: 107 80 12;
-  --pitch-600: 92 68 10;
-  --readiness-green: 15 122 82;
+  --slate-600: 89 101 124;
+  --pitch-300: 240 214 138;
+  --pitch-400: 227 181 63;
+  --pitch-500: 201 154 46;
+  --pitch-600: 166 124 31;
+  --accent-300: 107 80 12;
+  --accent-400: 127 96 16;
+  --accent-500: 122 92 14;
+  --accent-600: 92 68 10;
+  --readiness-green: 13 109 73;
   --readiness-yellow: 138 90 0;
   --readiness-red: 192 36 52;
   --sky-300: 11 106 143;
@@ -104,6 +116,10 @@
   --pitch-400: 227 181 63;
   --pitch-500: 201 154 46;
   --pitch-600: 166 124 31;
+  --accent-300: 240 214 138;
+  --accent-400: 227 181 63;
+  --accent-500: 201 154 46;
+  --accent-600: 166 124 31;
   --readiness-green: 52 211 153;
   --readiness-yellow: 251 191 36;
   --readiness-red: 251 93 107;
@@ -231,7 +247,7 @@ h1 { letter-spacing: -0.02em; }
 
 /* Small uppercase eyebrow — a sports-brand staple for section labels. */
 .eyebrow {
-  @apply text-[11px] font-bold uppercase tracking-[0.14em] text-pitch-400;
+  @apply text-[11px] font-bold uppercase tracking-[0.14em] text-accent-400;
 }
 
 @layer components {
@@ -257,7 +273,7 @@ h1 { letter-spacing: -0.02em; }
   /* Brand wordmark: solid gold, not a gradient. Gradient text was the biggest
      tell that read as an AI-generated template. */
   .gold-text {
-    @apply text-pitch-400;
+    @apply text-accent-400;
   }
 
   .btn-primary {
@@ -380,7 +396,7 @@ h1 { letter-spacing: -0.02em; }
   }
   .chip-option[aria-pressed="true"],
   .chip-option[aria-selected="true"] {
-    @apply border-pitch-400/50 bg-pitch-400/10 text-pitch-400;
+    @apply border-pitch-400/50 bg-pitch-400/10 text-accent-400;
   }
   .chip-option:disabled {
     @apply cursor-not-allowed opacity-40 hover:bg-white/[0.03];
@@ -417,7 +433,9 @@ h1 { letter-spacing: -0.02em; }
     @apply bg-pitch-400 text-on-accent;
   }
   .unit-toggle-sky > button[aria-pressed="true"] {
-    @apply bg-sky-400 text-on-accent;
+    /* Pinned white, not text-on-accent: sky darkens in light mode while
+       gold does not, so the shared token cannot serve both. */
+    @apply bg-sky-400 text-[#ffffff];
   }
 
   /* Any chip-sized control that is actually tappable. WCAG 2.5.8 (AA) sets the

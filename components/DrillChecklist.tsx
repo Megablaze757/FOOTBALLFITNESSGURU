@@ -53,7 +53,7 @@ export function DrillChecklist({ drills }: { drills: DrillItem[] }) {
                   <span className={`block text-sm font-medium text-slate-100 ${done[d.id] ? "line-through" : ""}`}>{d.name}</span>
                   <span className="block text-xs text-slate-500">{d.sets} × {d.reps} · {d.targets}</span>
                 </span>
-                {ex && <span className="shrink-0 text-xs font-semibold text-pitch-400">View ›</span>}
+                {ex && <span className="shrink-0 text-xs font-semibold text-accent-400">View ›</span>}
               </button>
             </li>
           );

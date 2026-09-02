@@ -31,7 +31,7 @@ export function LaunchToggle() {
               : "In beta — a “Beta” badge shows next to the logo for everyone."}
           </p>
         </div>
-        <span className={`chip ${isLaunched ? "text-readiness-green" : "text-pitch-400"}`}>
+        <span className={`chip ${isLaunched ? "text-readiness-green" : "text-accent-400"}`}>
           {isLaunched ? "Launched" : "Beta"}
         </span>
       </div>

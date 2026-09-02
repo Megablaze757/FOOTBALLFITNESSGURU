@@ -215,13 +215,13 @@ export default function SquadPage() {
           {data.athletes.map((a, i) => (
             <li key={a.id}>
               <Link href={`/squad/view?id=${a.id}`} className="card card-hover flex items-center gap-3 p-3 sm:p-4">
-                <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl text-sm font-extrabold ${i < 3 ? "bg-pitch-400/15 text-pitch-400" : "bg-white/[0.04] text-slate-400"}`}>
+                <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl text-sm font-extrabold ${i < 3 ? "bg-pitch-400/15 text-accent-400" : "bg-white/[0.04] text-slate-400"}`}>
                   {["🥇", "🥈", "🥉"][i] ?? i + 1}
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="truncate font-bold text-slate-100">{a.name}</span>
-                    <span className="chip shrink-0 text-pitch-400">Lv {a.level}</span>
+                    <span className="chip shrink-0 text-accent-400">Lv {a.level}</span>
                   </div>
                   <div className="truncate text-xs text-slate-400">
                     {a.xp.toLocaleString()} XP · 🔥 {a.streak}d{a.goal ? ` · ${a.adherence ?? 0}% adherence` : ""}
@@ -297,7 +297,7 @@ function AddAthlete({ onAdded }: { onAdded: () => void }) {
     <form onSubmit={add} className="card relative flex gap-2 p-3">
       <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="athlete@email.com" className="field flex-1" />
       <button type="submit" disabled={busy} className="min-h-[44px] rounded-2xl bg-gradient-to-br from-pitch-400 to-pitch-600 px-4 font-semibold text-on-accent disabled:opacity-50">Add</button>
-      {msg && <p className={`absolute -bottom-6 left-0 text-xs ${msg.ok ? "text-pitch-400" : "text-readiness-red"}`}>{msg.text}</p>}
+      {msg && <p className={`absolute -bottom-6 left-0 text-xs ${msg.ok ? "text-accent-400" : "text-readiness-red"}`}>{msg.text}</p>}
     </form>
   );
 }

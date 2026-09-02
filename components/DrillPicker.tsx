@@ -139,9 +139,9 @@ export function DrillPicker({ planned, chosen, onAdd, sport = "all" }: {
                 key={d.name}
                 type="button"
                 onClick={() => onAdd({ ...d })}
-                className="tap-target rounded-full border border-pitch-400/30 bg-pitch-400/[0.07] px-3 py-1.5 text-xs font-medium text-pitch-400 transition hover:bg-pitch-400/15"
+                className="tap-target rounded-full border border-pitch-400/30 bg-pitch-400/[0.07] px-3 py-1.5 text-xs font-medium text-accent-400 transition hover:bg-pitch-400/15"
               >
-                + {d.name} <span className="text-pitch-500">{formatMeasuredDose(d)}</span>
+                + {d.name} <span className="text-accent-500">{formatMeasuredDose(d)}</span>
               </button>
             ))}
           </div>
@@ -171,13 +171,13 @@ export function DrillPicker({ planned, chosen, onAdd, sport = "all" }: {
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm text-slate-100">
                         {e.name}
-                        {e.custom && <span className="ml-1.5 text-[10px] font-semibold uppercase tracking-wide text-pitch-400">yours</span>}
+                        {e.custom && <span className="ml-1.5 text-[10px] font-semibold uppercase tracking-wide text-accent-400">yours</span>}
                       </span>
                       <span className="block truncate text-[11px] text-slate-500">
                         {e.muscles[0] ?? e.category} · {exerciseEquip(e)}
                       </span>
                     </span>
-                    <span className="shrink-0 text-xs text-pitch-400">{used ? "added" : "+"}</span>
+                    <span className="shrink-0 text-xs text-accent-400">{used ? "added" : "+"}</span>
                   </button>
                 </li>
               );
@@ -192,14 +192,14 @@ export function DrillPicker({ planned, chosen, onAdd, sport = "all" }: {
                   className="flex min-h-[44px] w-full items-center gap-2 rounded-xl border border-dashed border-pitch-400/40 bg-pitch-400/[0.05] px-3 py-2 text-left transition hover:bg-pitch-400/[0.12] disabled:opacity-40"
                 >
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-semibold text-pitch-400">
+                    <span className="block truncate text-sm font-semibold text-accent-400">
                       {results.length === 0 ? "Nothing matches — add" : "Add"} &ldquo;{query}&rdquo;
                     </span>
                     <span className="block truncate text-[11px] text-slate-500">
                       Logs it now and keeps it, so it&apos;s here next time
                     </span>
                   </span>
-                  <span className="shrink-0 text-xs text-pitch-400">{saving ? "…" : "+"}</span>
+                  <span className="shrink-0 text-xs text-accent-400">{saving ? "…" : "+"}</span>
                 </button>
               </li>
             )}

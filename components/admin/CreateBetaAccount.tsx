@@ -51,7 +51,7 @@ export function CreateBetaAccount() {
       <button onClick={create} disabled={busy || !email.trim() || password.length < 6} className="btn-primary mt-3">
         {busy ? "Creating…" : "Create account"}
       </button>
-      {result && <p className="mt-2 break-words text-sm text-pitch-400">{result}</p>}
+      {result && <p className="mt-2 break-words text-sm text-accent-400">{result}</p>}
       {error && <p className="mt-2 text-sm text-readiness-red">{error}</p>}
     </div>
   );

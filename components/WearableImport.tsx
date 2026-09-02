@@ -88,7 +88,7 @@ export function WearableImport({ userId, today, initial, onSaved }: {
       <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={onFile} />
 
       {err && <p className="mt-2 text-sm text-readiness-red">{err}</p>}
-      {msg && <p className="mt-2 text-sm text-pitch-400">{msg}</p>}
+      {msg && <p className="mt-2 text-sm text-accent-400">{msg}</p>}
     </div>
   );
 }

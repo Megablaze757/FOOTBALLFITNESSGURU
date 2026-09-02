@@ -118,7 +118,7 @@ export function StrengthRanks({
                 setSelected(weak.muscle);
                 setView(BACK_MUSCLES.has(weak.muscle) ? "back" : "front");
               }}
-              className="tap-target inline-flex min-h-[44px] items-center gap-1.5 text-sm font-semibold text-pitch-400"
+              className="tap-target inline-flex min-h-[44px] items-center gap-1.5 text-sm font-semibold text-accent-400"
             >
               Show me <span aria-hidden>→</span>
             </button>
@@ -130,7 +130,7 @@ export function StrengthRanks({
               library already searched muscle names — it just had no way in. */}
           <Link
             href={`/library?q=${encodeURIComponent(MUSCLE_WORD[weak.muscle])}`}
-            className="tap-target inline-flex min-h-[44px] items-center gap-1.5 text-sm font-semibold text-pitch-400"
+            className="tap-target inline-flex min-h-[44px] items-center gap-1.5 text-sm font-semibold text-accent-400"
           >
             Train {MUSCLE_WORD[weak.muscle]} <span aria-hidden>→</span>
           </Link>
@@ -227,7 +227,7 @@ export function StrengthRanks({
           in the invisible state it spent its whole life in. It just says so,
           and the fix is one tap rather than a hunt for the right screen. */}
       {stale && (
-        <Link href="/body" className="tap-target mt-1 inline-flex min-h-[44px] items-center text-[11px] font-semibold text-pitch-400">
+        <Link href="/body" className="tap-target mt-1 inline-flex min-h-[44px] items-center text-[11px] font-semibold text-accent-400">
           That weight is a while old — update it →
         </Link>
       )}
@@ -253,7 +253,7 @@ function LiftTable({ ranks }: { ranks: LiftRank[] }) {
                   looking at — otherwise a tested 140kg squat and an estimated
                   one are the same row and the Benchmarks page looks ignored. */}
               {r.source === "tested" && (
-                <span className="rounded bg-pitch-400/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-pitch-400">
+                <span className="rounded bg-pitch-400/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-accent-400">
                   tested
                 </span>
               )}

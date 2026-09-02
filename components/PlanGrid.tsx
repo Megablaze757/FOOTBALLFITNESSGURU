@@ -32,7 +32,7 @@ export function PlanGrid({ mode, currentTier = "bronze" }: {
           // Highlight the plan being SOLD, not a hard-coded id — pinning this
           // to "gold" broke the moment the tiers changed.
           const featured = plan.paid;
-          const accent = featured ? "text-pitch-400" : "text-slate-200";
+          const accent = featured ? "text-accent-400" : "text-slate-200";
 
           return (
             <div
@@ -44,7 +44,7 @@ export function PlanGrid({ mode, currentTier = "bronze" }: {
             >
               <div className="flex items-center justify-between">
                 <h2 className={`text-lg font-extrabold ${accent}`}>{plan.name}</h2>
-                {featured && !isCurrent && TRIAL_DAYS > 0 && <span className="chip text-pitch-400">{TRIAL_DAYS} days free</span>}
+                {featured && !isCurrent && TRIAL_DAYS > 0 && <span className="chip text-accent-400">{TRIAL_DAYS} days free</span>}
               </div>
               <div className="mt-2 text-3xl font-extrabold">{plan.priceLabel}</div>
               <p className="mt-1 text-sm text-slate-400">{plan.tagline}</p>
@@ -54,7 +54,7 @@ export function PlanGrid({ mode, currentTier = "bronze" }: {
                 <p className="mt-2 text-sm font-medium text-slate-200">{plan.headline}</p>
               )}
               {plan.paid && TRIAL_DAYS > 0 && !isCurrent && !isDowngrade && (
-                <p className="mt-2 text-xs font-semibold text-pitch-400">
+                <p className="mt-2 text-xs font-semibold text-accent-400">
                   {TRIAL_DAYS} days free — cancel any time before it ends
                 </p>
               )}
@@ -62,7 +62,7 @@ export function PlanGrid({ mode, currentTier = "bronze" }: {
               <ul className="my-5 flex-1 space-y-2 text-sm text-slate-300">
                 {plan.features.map((f) => (
                   <li key={f} className="flex gap-2">
-                    <span className={featured ? "text-pitch-400" : "text-slate-400"} aria-hidden="true">✓</span>
+                    <span className={featured ? "text-accent-400" : "text-slate-400"} aria-hidden="true">✓</span>
                     {f}
                   </li>
                 ))}
@@ -92,13 +92,13 @@ export function PlanGrid({ mode, currentTier = "bronze" }: {
       <div className="card-premium mt-5 flex flex-col gap-5 p-6 sm:flex-row sm:items-center">
         <div className="flex-1">
           <div className="flex items-center gap-2">
-            <h2 className="text-lg font-extrabold text-pitch-400">🏆 {TEAM_PLAN.name}</h2>
+            <h2 className="text-lg font-extrabold text-accent-400">🏆 {TEAM_PLAN.name}</h2>
             <span className="chip text-slate-300">for clubs</span>
           </div>
           <p className="mt-1 text-sm text-slate-400">{TEAM_PLAN.tagline}</p>
           <ul className="mt-3 grid gap-x-4 gap-y-1.5 text-sm text-slate-300 sm:grid-cols-2">
             {TEAM_PLAN.features.map((f) => (
-              <li key={f} className="flex gap-2"><span className="text-pitch-400" aria-hidden="true">✓</span>{f}</li>
+              <li key={f} className="flex gap-2"><span className="text-accent-400" aria-hidden="true">✓</span>{f}</li>
             ))}
           </ul>
         </div>

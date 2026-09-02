@@ -70,7 +70,7 @@ export function HealthConsentGate({ userId, children }: { userId: string; childr
         </p>
         <p className="mt-2 text-sm leading-relaxed text-slate-400">
           Some coach questions send the relevant details to our named AI providers. We do not sell
-          this data or use it for advertising. Read the <Link href="/privacy" className="text-pitch-400 underline">privacy policy</Link>.
+          this data or use it for advertising. Read the <Link href="/privacy" className="text-accent-400 underline">privacy policy</Link>.
         </p>
         <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
           <input type="checkbox" checked={agreed} onChange={(event) => setAgreed(event.target.checked)} className="mt-0.5 h-5 w-5 shrink-0 accent-pitch-500" />

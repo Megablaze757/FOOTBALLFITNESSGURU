@@ -70,7 +70,7 @@ export default function ExercisePage({ params }: { params: { slug: string } }) {
       />
 
       <nav className="pt-2 text-sm text-slate-500">
-        <Link href="/exercises/" className="hover:text-pitch-400">← All exercises</Link>
+        <Link href="/exercises/" className="hover:text-accent-400">← All exercises</Link>
       </nav>
 
       <h1 className="mt-3 text-4xl font-extrabold tracking-tight">{ex.name}</h1>
@@ -97,7 +97,7 @@ export default function ExercisePage({ params }: { params: { slug: string } }) {
           <ol className="mt-3 space-y-3">
             {steps.map((step, i) => (
               <li key={step} className="flex gap-3">
-                <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-pitch-400/15 text-[11px] font-extrabold text-pitch-400">
+                <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-pitch-400/15 text-[11px] font-extrabold text-accent-400">
                   {i + 1}
                 </span>
                 <span className="text-slate-300">{step}</span>
@@ -120,7 +120,7 @@ export default function ExercisePage({ params }: { params: { slug: string } }) {
           <ul className="mt-3 space-y-2">
             {ex.cues.map((cue) => (
               <li key={cue} className="flex gap-2 text-slate-300">
-                <span className="text-pitch-400">›</span>{cue}
+                <span className="text-accent-400">›</span>{cue}
               </li>
             ))}
           </ul>
@@ -136,7 +136,7 @@ export default function ExercisePage({ params }: { params: { slug: string } }) {
             href={guide.url}
             target="_blank"
             rel="noreferrer"
-            className="text-pitch-400 underline underline-offset-4"
+            className="text-accent-400 underline underline-offset-4"
           >
             Watch a form guide for the {ex.name.toLowerCase()} ↗
           </a>

@@ -177,7 +177,7 @@ export default function Landing() {
               sounds like something and means nothing — and a stranger's first
               impression shouldn't be spent on it. Replaced with the one fact
               that removes the risk of reading on. */}
-          <div className="chip mb-6 text-pitch-400">Free forever tier · no card to start</div>
+          <div className="chip mb-6 text-accent-400">Free forever tier · no card to start</div>
           {/* THE HOOK HAS TO DO ONE JOB: say what makes this different, in the
               first line, in words a stranger already understands.
 
@@ -267,7 +267,7 @@ export default function Landing() {
                   <span className="mr-2 text-readiness-red">✕</span>{p.bad}
                 </p>
                 <p className="flex-1 text-sm leading-relaxed text-slate-400">
-                  <span className="mr-2 font-bold text-pitch-400">✓</span>{p.good}
+                  <span className="mr-2 font-bold text-accent-400">✓</span>{p.good}
                 </p>
               </div>
             </div>
@@ -306,7 +306,7 @@ export default function Landing() {
               {/* /30 measured 1.9:1 — a step number you cannot read is not a
                   subtle watermark, it's a missing step. /60 is 4.2:1 and still
                   sits behind the heading. */}
-              <div className="text-3xl font-black text-pitch-500">{s.n}</div>
+              <div className="text-3xl font-black text-accent-500">{s.n}</div>
               <h3 className="mt-2 font-bold text-slate-100">{s.title}</h3>
               <p className="mt-1 text-sm text-slate-400">{s.body}</p>
             </div>
@@ -340,7 +340,7 @@ export default function Landing() {
             <thead>
               <tr className="border-b border-white/10">
                 <th className="py-3 pr-4 text-left font-medium text-slate-400"> </th>
-                <th className="px-3 py-3 text-center font-extrabold text-pitch-400">PocketAthlete</th>
+                <th className="px-3 py-3 text-center font-extrabold text-accent-400">PocketAthlete</th>
                 <th className="px-3 py-3 text-center font-medium text-slate-400">A generic fitness app</th>
                 <th className="px-3 py-3 text-center font-medium text-slate-400">A private coach</th>
               </tr>
@@ -368,11 +368,11 @@ export default function Landing() {
         </div>
         <div className="mt-12 grid gap-4 md:grid-cols-2">
           <div className="card p-6">
-            <h3 className="text-lg font-bold text-pitch-400">Yes, if…</h3>
+            <h3 className="text-lg font-bold text-accent-400">Yes, if…</h3>
             <ul className="mt-4 space-y-3">
               {FIT.yes.map((t) => (
                 <li key={t} className="flex gap-2.5 text-sm leading-relaxed text-slate-300">
-                  <span className="shrink-0 font-bold text-pitch-400">✓</span>{t}
+                  <span className="shrink-0 font-bold text-accent-400">✓</span>{t}
                 </li>
               ))}
             </ul>
@@ -403,7 +403,7 @@ export default function Landing() {
         <div className="mx-auto mt-12 max-w-5xl">
           <PlanGrid mode="public" />
           <p className="mt-6 text-center text-sm">
-            <Link href="/plans" className="font-semibold text-pitch-400 hover:underline">
+            <Link href="/plans" className="font-semibold text-accent-400 hover:underline">
               Full comparison and FAQ →
             </Link>
           </p>
@@ -525,15 +525,15 @@ export default function Landing() {
 
       <footer className="mt-20 flex flex-col items-center gap-2 text-center">
         <div className="text-xl font-extrabold">
-          <span className="text-pitch-400">PocketAthlete</span>
+          <span className="text-accent-400">PocketAthlete</span>
         </div>
         <p className="text-xs text-slate-500">Train smarter. Recover faster. Peak when it counts.</p>
-        <Link href="/waitlist" className="mt-2 text-xs font-semibold text-pitch-400 hover:underline">
+        <Link href="/waitlist" className="mt-2 text-xs font-semibold text-accent-400 hover:underline">
           Not ready to sign up? Join the waitlist →
         </Link>
         <div className="mt-4 flex gap-4 text-xs text-slate-500">
-          <Link href="/privacy" className="hover:text-pitch-400">Privacy</Link>
-          <Link href="/terms" className="hover:text-pitch-400">Terms</Link>
+          <Link href="/privacy" className="hover:text-accent-400">Privacy</Link>
+          <Link href="/terms" className="hover:text-accent-400">Terms</Link>
         </div>
         <p className="mt-3 max-w-md text-[11px] leading-relaxed text-slate-600">
           Training guidance, not medical advice. Speak to a qualified professional before
@@ -640,7 +640,7 @@ function HeroMock() {
       </div>
 
       <div className="mt-5 rounded-2xl border border-pitch-400/20 bg-pitch-400/[0.05] p-4">
-        <div className="text-xs font-semibold uppercase tracking-wider text-pitch-400">AI coach</div>
+        <div className="text-xs font-semibold uppercase tracking-wider text-accent-400">AI coach</div>
         <p className="mt-1 text-sm text-slate-200">Left-knee valgus is up 12° and matches your logged soreness — swapping today&apos;s plyos for single-leg stability work.</p>
       </div>
 
@@ -699,7 +699,7 @@ function Cell({ v, highlight }: { v: string; highlight?: boolean }) {
   if (v === "yes") {
     return (
       <td className={`px-3 py-3 text-center ${base}`}>
-        <span className={highlight ? "font-bold text-pitch-400" : "text-slate-300"} aria-label="yes">✓</span>
+        <span className={highlight ? "font-bold text-accent-400" : "text-slate-300"} aria-label="yes">✓</span>
       </td>
     );
   }
@@ -711,7 +711,7 @@ function Cell({ v, highlight }: { v: string; highlight?: boolean }) {
     );
   }
   return (
-    <td className={`px-3 py-3 text-center text-xs ${base} ${highlight ? "font-bold text-pitch-400" : "text-slate-400"}`}>
+    <td className={`px-3 py-3 text-center text-xs ${base} ${highlight ? "font-bold text-accent-400" : "text-slate-400"}`}>
       {v}
     </td>
   );
