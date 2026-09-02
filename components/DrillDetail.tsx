@@ -109,14 +109,29 @@ export function HowToCard({ how }: { how: HowTo }) {
  * coach-entered movements receive the shared how-to card, so every named row
  * that looks like an exercise can actually be opened.
  */
-export function DrillModal({ name, sets, reps, onClose }: {
+export function DrillModal({ name, sets, reps, action, onClose }: {
   name: string;
   sets?: number;
   reps?: number;
+  /**
+   * Something to DO about this exercise, under the technique.
+   *
+   * Reported as "when I click on the exercise and go to the card allow me to
+   * swap it". Swapping existed, as a ⇄ on the row and only once the session
+   * was put into an edit mode — so an athlete who had opened the card to
+   * decide whether they could do the movement had to close it, find the mode,
+   * and find the row again. The decision is made here, so the action belongs
+   * here.
+   *
+   * A slot rather than a swap prop, because this component is opened from the
+   * calendar and the library too, where there is nothing to swap against and
+   * the caller passes nothing.
+   */
+  action?: React.ReactNode;
   onClose: () => void;
 }) {
   const ex = getExerciseByName(name);
-  if (ex) return <ExerciseModal ex={ex} sets={sets} reps={reps} onClose={onClose} />;
+  if (ex) return <ExerciseModal ex={ex} sets={sets} reps={reps} action={action} onClose={onClose} />;
 
   const how = howToFor(name);
   if (!how) return null;
@@ -124,6 +139,7 @@ export function DrillModal({ name, sets, reps, onClose }: {
   return (
     <Sheet label={how.name} onClose={onClose}>
       <HowToCard how={how} />
+      {action && <div className="mt-3">{action}</div>}
     </Sheet>
   );
 }

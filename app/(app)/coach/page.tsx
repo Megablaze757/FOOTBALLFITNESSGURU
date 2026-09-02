@@ -52,6 +52,7 @@ import {
 } from "@/lib/program-edit";
 import { ExercisePicker } from "@/components/ExercisePicker";
 import { DrillModal } from "@/components/DrillDetail";
+import { SwapSheet } from "@/components/SwapSheet";
 import { sessionLength } from "@/lib/session-time";
 import { WorkoutPlayer, type SessionResult } from "@/components/WorkoutPlayer";
 import type { CheckInInput, DailyCheckIn, Program, StrengthBenchmark, Tier, TrainingLog, TrainingDrill } from "@/lib/types";
@@ -1975,7 +1976,41 @@ function ActiveProgram({
         </section>
       )}
 
-      {showing && <DrillModal name={showing} onClose={() => setShowing(null)} />}
+      {/* ═══════════════════════════════════════════════════════════════════
+          SWAP IT FROM THE CARD YOU OPENED TO DECIDE.
+
+          Reported as "when I click on the exercise and go to the card allow me
+          to swap it". Swapping existed — a ⇄ on the row, once the session had
+          been put into an edit mode. But the card is where somebody works out
+          that they cannot do the movement: no rack free, shoulder complains,
+          never done it. Making them close it, find the edit mode and find the
+          row again is asking them to hold the decision in their head through
+          three taps that are about something else.
+
+          The prescribed name, not the shown one: a drill already swapped once
+          is keyed by what the programme asked for, or swapping again would
+          write a substitution for a substitution.
+          ═══════════════════════════════════════════════════════════════════ */}
+      {showing && (() => {
+        const picked = sessionDrills.find((d) => d.name === showing);
+        const prescribed = picked?.swappedFrom ?? picked?.name ?? null;
+        // No swap on rehab or skill work — the same rule the row applies. A
+        // stage-two isometric is a protocol, not a preference.
+        const swappable = !!picked && !picked.skill && !picked.rehab && !!prescribed;
+        return (
+          <DrillModal
+            name={showing}
+            onClose={() => setShowing(null)}
+            action={swappable ? (
+              <SwapAction
+                prescribed={prescribed}
+                current={picked.swappedFrom ? picked.name : null}
+                onSwap={async (to) => { await saveSwap(prescribed, to); setShowing(null); }}
+              />
+            ) : undefined}
+          />
+        );
+      })()}
 
       {playing && nextSession && todaySession && (
         <WorkoutPlayer
@@ -2087,5 +2122,43 @@ function RunnerPaces({ latestBench }: { latestBench: Record<string, number> }) {
         ))}
       </ul>
     </div>
+  );
+}
+
+
+/**
+ * The swap control that lives inside an exercise card.
+ *
+ * Two states rather than one: a button, then the chooser. Dropping eight
+ * alternatives under every card somebody opens would bury the technique they
+ * came to read under a list they did not ask for.
+ */
+function SwapAction({ prescribed, current, onSwap }: {
+  prescribed: string;
+  current: string | null;
+  onSwap: (to: string | null) => void | Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="tap-target flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-semibold text-slate-200 transition hover:border-pitch-400/40"
+      >
+        <span aria-hidden>⇄</span>
+        {current ? "Swap it for something else" : "Can't do this one? Swap it"}
+      </button>
+    );
+  }
+
+  return (
+    <SwapSheet
+      name={prescribed}
+      current={current}
+      onSwap={onSwap}
+      onClose={() => setOpen(false)}
+    />
   );
 }
