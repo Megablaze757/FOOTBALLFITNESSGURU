@@ -523,6 +523,34 @@ function GoalBuilder({ painMap, painNote, latestBench, sport, initialPositions, 
         </div>
       )}
 
+      {/* ═══════════════════════════════════════════════════════════════════
+          YOU DO NOT NEED A PROGRAM TO WRITE DOWN WHAT YOU LIFTED.
+
+          Reported as "I should be able to log exercises easily without making
+          a plan — it's a bit frustrating and hard to find". You always could;
+          nothing on this page said so. Somebody who came to record three sets
+          of ten lands on a screen offering to build them a four-week block,
+          concludes that is the price of entry, and leaves.
+
+          Sits ABOVE the templates rather than below them, because it is the
+          shorter errand and the one somebody is more likely to be on.
+          `?log=training` opens the training section of Today's log and scrolls
+          to it, so it is one tap from here to a weight box.
+          ═══════════════════════════════════════════════════════════════════ */}
+      <Link
+        href="/journal?log=training"
+        className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4 transition hover:border-pitch-400/40"
+      >
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-pitch-400/10 text-lg" aria-hidden>🏋️</span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-bold text-slate-100">Just log what you did today</span>
+          <span className="block text-xs text-slate-500">No program needed — sets, reps and weight straight in.</span>
+        </span>
+        <span className="shrink-0 whitespace-nowrap text-xs font-bold text-accent-400">
+          Log it <span aria-hidden>→</span>
+        </span>
+      </Link>
+
       {/* One-tap templates */}
       <div>
         <div className="mb-2 flex items-center justify-between">

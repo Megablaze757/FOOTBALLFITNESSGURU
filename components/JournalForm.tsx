@@ -198,6 +198,33 @@ export function JournalForm({ initial, initialTraining, sport, distanceUnit = "k
   );
 
   /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * ARRIVING HERE TO LOG A LIFT, RATHER THAN TO ANSWER HOW YOU SLEPT.
+   *
+   * `?log=training` opens the training section and scrolls to it. Reported as
+   * "I should be able to log exercises easily without making a plan — it's a
+   * bit frustrating and hard to find": the row was always there, four screens
+   * down, under sleep, soreness, pain and what-kind-of-day. Somebody who came
+   * to write down three sets of ten should not have to answer four wellbeing
+   * questions to reach the box, and now does not — the check-in is still there
+   * above, still optional, and still saves with the same button.
+   *
+   * Scrolled rather than only expanded, because opening a section below the
+   * fold looks identical to nothing happening.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  const trainingRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (new URLSearchParams(window.location.search).get("log") !== "training") return;
+    setLogTraining(true);
+    // After paint, or the section it is scrolling to does not exist yet.
+    const id = window.requestAnimationFrame(() =>
+      trainingRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    return () => window.cancelAnimationFrame(id);
+  }, []);
+
+  /**
    * Offline state, said BEFORE they fill the form in.
    *
    * Check-ins have always survived no signal — they queue on the device and
@@ -793,6 +820,8 @@ export function JournalForm({ initial, initialTraining, sport, distanceUnit = "k
             }}
           />
 
+          {/* The anchor `?log=training` scrolls to. */}
+          <div ref={trainingRef} />
           {training.session_type !== "rest_day" && (!logTraining ? (
             <button
               type="button"

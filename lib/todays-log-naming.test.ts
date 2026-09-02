@@ -93,3 +93,61 @@ test("the heading, the nav and the button agree", () => {
   assert.match(nav, /label: "Today's log"/);
   assert.match(form, /Save today&apos;s log|Save today's log/);
 });
+
+// --- logging a lift without building a program ---------------------------------
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * "I SHOULD BE ABLE TO LOG EXERCISES WITHOUT MAKING A PLAN."
+ *
+ * You always could. Nothing said so, and everything implied otherwise: the
+ * Training page opens by offering to build a four-week block, Exercises is a
+ * reference, and Today's log introduced itself as "log how your body feels
+ * today" — so the one screen that does take a weight had told you it was not
+ * the place before you scrolled.
+ *
+ * The row itself was already there and had already been worked on once. What
+ * was missing was a route to it that does not go through four wellbeing
+ * questions, and anything anywhere saying a program is not required.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("the log page says it is for training, not only for feelings", () => {
+  const page = readFileSync(new URL("../app/(app)/journal/page.tsx", import.meta.url), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, " ")
+    .replace(/^\s*\/\/.*$/gm, " ");
+  assert.ok(!/Log how your body feels today/.test(page),
+    "the subtitle says the page is about how you feel, which is why nobody scrolls to the training row");
+  assert.match(page, /How you feel, and what you trained/);
+});
+
+test("there is a route straight to the training section", () => {
+  const form = readFileSync(new URL("../components/JournalForm.tsx", import.meta.url), "utf8");
+  assert.match(form, /get\("log"\) !== "training"/, "the ?log=training deep link is gone");
+  assert.match(form, /setLogTraining\(true\)/, "the deep link no longer opens the section");
+  assert.match(form, /scrollIntoView/,
+    "opening a section below the fold looks identical to nothing happening");
+  assert.match(form, /ref=\{trainingRef\}/, "there is nothing for it to scroll to");
+});
+
+test("the screens people look on say a program is not required", () => {
+  const training = readFileSync(new URL("../app/(app)/coach/page.tsx", import.meta.url), "utf8");
+  const library = readFileSync(new URL("../app/(app)/library/page.tsx", import.meta.url), "utf8");
+
+  assert.match(training, /Just log what you did today/,
+    "the Training page offers only to build a program");
+  assert.match(training, /No program needed/,
+    "nothing states the thing the report was about");
+  assert.match(library, /Log a session instead/,
+    "Exercises is where people go to log, and points nowhere");
+
+  for (const [name, src] of [["training", training], ["library", library]] as const) {
+    assert.ok(src.includes('href="/journal?log=training"'),
+      `the ${name} link does not open the training section`);
+  }
+
+  // Above the templates: it is the shorter errand and the likelier one.
+  const link = training.indexOf('href="/journal?log=training"');
+  const templates = training.indexOf("Quick-start programs");
+  assert.ok(link > 0 && link < templates,
+    "the log-it link sits below the program templates, which is the wrong way round");
+});

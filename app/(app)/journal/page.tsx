@@ -248,7 +248,13 @@ export default function JournalPage() {
             from under the person who just tapped it helps no one. */}
         <h1 className="text-3xl font-extrabold tracking-tight">Today&apos;s log</h1>
         <p className="mt-1 text-sm text-slate-400">
-          {done ? "You're done for today — here's what it means." : "Log how your body feels today."}
+          {/* SAYS TRAINING TOO, because the page was reported as the reason
+              logging a lift is "frustrating and hard to find". It is not
+              hidden — "Trained today? Log it" is right there — but a page that
+              introduces itself as "log how your body feels" has told you it is
+              not the place, and nobody scrolls past an answer they have
+              already been given. */}
+          {done ? "You're done for today — here's what it means." : "How you feel, and what you trained."}
         </p>
       </header>
 

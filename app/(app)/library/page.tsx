@@ -192,6 +192,17 @@ export default function LibraryPage() {
           ? `Look up any movement — how to do it, what it works, and when to use it. ${MOVEMENT_COUNT} in total.`
           : `Every recipe the meal planner can serve — method, timings and macros. ${MEALS.length} in total.`}
       </p>
+      {/* This page is a reference, not a logbook, and "Exercises" is what
+          somebody clicks when they want to write down what they lifted. Saying
+          where that actually happens costs one line and saves the search. */}
+      {tab === "moves" && (
+        <Link
+          href="/journal?log=training"
+          className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-accent-400 hover:underline"
+        >
+          Log a session instead <span aria-hidden>→</span>
+        </Link>
+      )}
     </header>
   );
 
