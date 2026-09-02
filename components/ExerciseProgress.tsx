@@ -86,7 +86,7 @@ export function ExerciseProgress({ logs, windowDays }: { logs: TrainingLog[]; wi
               aria-pressed={metric === m.id}
               className={`min-h-[44px] min-h-[2.25rem] flex-1 rounded-xl px-3 py-2 text-xs font-semibold transition ${
                 metric === m.id
-                  ? "bg-pitch-400 text-slate-950"
+                  ? "bg-pitch-400 text-on-accent"
                   : "bg-white/[0.04] text-slate-400 hover:bg-white/[0.08] hover:text-slate-200"
               }`}
             >

@@ -161,7 +161,7 @@ export function FeatureTip() {
         // Above the tab bar (z-60) and the sheets (z-100) it may sit beside.
         zIndex: 110,
       }}
-      className="animate-fade-up rounded-2xl border border-pitch-400/30 bg-ink-900/95 p-3 shadow-card backdrop-blur"
+      className="animate-fade-up rounded-2xl border border-pitch-400/30 bg-surface-base/95 p-3 shadow-card backdrop-blur"
     >
       <p className="text-sm font-bold text-pitch-400">{tip.title}</p>
       <p className="mt-1 text-xs leading-relaxed text-slate-300">{tip.body}</p>

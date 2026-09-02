@@ -10,6 +10,7 @@ import { ProfileForm } from "@/components/ProfileForm";
 import { CoachRequests } from "@/components/CoachRequests";
 import { CoachMessages } from "@/components/CoachMessages";
 import { ManageBilling } from "@/components/ManageBilling";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { PushToggle } from "@/components/PushToggle";
 import { DeleteAccount } from "@/components/DeleteAccount";
 import { planFor, hasLivePlan } from "@/lib/subscription";
@@ -98,7 +99,7 @@ export default function ProfilePage() {
         {/* Keyed on whether they've paid, not on a tier id. It used to compare
             against the gold tier by name, so a Pro subscriber was invited to
             upgrade to something that no longer exists. */}
-        <span className="rounded-xl bg-gradient-to-br from-pitch-400 to-pitch-600 px-3 py-1.5 text-sm font-semibold text-ink-900">
+        <span className="rounded-xl bg-gradient-to-br from-pitch-400 to-pitch-600 px-3 py-1.5 text-sm font-semibold text-on-accent">
           {plan.paid ? "Plans" : "Upgrade →"}
         </span>
       </Link>
@@ -120,6 +121,12 @@ export default function ProfilePage() {
 
       {/* The whole loop depends on the app being opened in the morning. */}
       <PushToggle />
+
+      {/* Appearance sits with the other things about how the app behaves for
+          you, rather than in a settings screen this app does not have. */}
+      <div className="mb-4">
+        <ThemeToggle />
+      </div>
 
       {(safeProfile.role === "coach" || safeProfile.role === "admin") && (
         <Link href="/squad" className="btn-ghost mb-4">🧑‍🏫 My squad</Link>

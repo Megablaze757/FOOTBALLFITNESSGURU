@@ -141,7 +141,7 @@ export function DrillPicker({ planned, chosen, onAdd, sport = "all" }: {
                 onClick={() => onAdd({ ...d })}
                 className="tap-target rounded-full border border-pitch-400/30 bg-pitch-400/[0.07] px-3 py-1.5 text-xs font-medium text-pitch-400 transition hover:bg-pitch-400/15"
               >
-                + {d.name} <span className="text-pitch-400/60">{formatMeasuredDose(d)}</span>
+                + {d.name} <span className="text-pitch-500">{formatMeasuredDose(d)}</span>
               </button>
             ))}
           </div>

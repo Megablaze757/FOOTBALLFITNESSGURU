@@ -22,7 +22,7 @@ export function Logo({ size = 36, className = "" }: { size?: number; className?:
     return (
       <span
         style={{ width: size, height: size, fontSize: size * 0.4 }}
-        className={`grid shrink-0 place-items-center rounded-xl bg-gradient-to-br from-[#f6d365] to-[#c9962f] font-black tracking-tight text-ink-900 shadow-glow ${className}`}
+        className={`grid shrink-0 place-items-center rounded-xl bg-gradient-to-br from-[#f6d365] to-[#c9962f] font-black tracking-tight text-on-accent shadow-glow ${className}`}
       >
         PA
       </span>

@@ -100,7 +100,7 @@ export function AdminShell({ title, note, children }: { title: string; note?: st
                 href={t.href}
                 aria-current={active ? "page" : undefined}
                 className={`tap-target rounded-lg px-3 py-1.5 text-[13px] font-semibold transition ${
-                  active ? "bg-pitch-400 text-ink-900" : "text-slate-400 hover:text-slate-200"
+                  active ? "bg-pitch-400 text-on-accent" : "text-slate-400 hover:text-slate-200"
                 }`}
               >
                 {t.label}

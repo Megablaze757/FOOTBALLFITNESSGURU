@@ -53,7 +53,7 @@ export function CoachRequests() {
             </div>
           </div>
           <div className="flex gap-2">
-            <button onClick={() => respond(inv.id, "accepted")} className="min-h-[44px] rounded-xl bg-gradient-to-br from-pitch-400 to-pitch-600 px-3 py-1.5 text-xs font-semibold text-ink-900">Accept</button>
+            <button onClick={() => respond(inv.id, "accepted")} className="min-h-[44px] rounded-xl bg-gradient-to-br from-pitch-400 to-pitch-600 px-3 py-1.5 text-xs font-semibold text-on-accent">Accept</button>
             <button onClick={() => respond(inv.id, "declined")} className="min-h-[44px] rounded-xl border border-white/10 px-3 py-1.5 text-xs font-medium text-slate-300 hover:bg-white/5">Decline</button>
           </div>
         </div>

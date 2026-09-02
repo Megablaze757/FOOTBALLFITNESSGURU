@@ -220,7 +220,7 @@ export function WorkoutPlayer({ title, drills, activeRest, onComplete, onClose }
      * gone away, and Escape did nothing. The only way out was finding the ✕.
      */
     <div
-      className="fixed inset-0 z-[100] flex flex-col bg-ink-900/95 backdrop-blur-md"
+      className="fixed inset-0 z-[100] flex flex-col bg-surface-base/95 backdrop-blur-md"
       role="dialog"
       aria-modal="true"
       aria-labelledby="player-title"

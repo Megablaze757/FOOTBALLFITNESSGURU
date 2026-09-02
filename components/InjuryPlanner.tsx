@@ -304,7 +304,7 @@ export function InjuryPlanner({ sport, hurt, onHurtChange, description, onDescri
                   className="flex w-full items-center gap-3 p-4 text-left"
                 >
                   <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-xs font-bold ${
-                    isOpen ? "bg-pitch-400 text-slate-950" : "bg-pitch-400/15 text-pitch-400"
+                    isOpen ? "bg-pitch-400 text-on-accent" : "bg-pitch-400/15 text-pitch-400"
                   }`}>
                     {i + 1}
                   </span>
@@ -573,7 +573,7 @@ function Step({ n, title, done, children }: {
     <div>
       <div className="mb-2 flex items-center gap-2.5">
         <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-[11px] font-bold transition ${
-          done ? "bg-pitch-400 text-slate-950" : "bg-white/[0.07] text-slate-400"
+          done ? "bg-pitch-400 text-on-accent" : "bg-white/[0.07] text-slate-400"
         }`}>
           {done ? "✓" : n}
         </span>

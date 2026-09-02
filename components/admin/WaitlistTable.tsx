@@ -34,7 +34,7 @@ export function Waitlist({ rows }: { rows: { email: string; source: string | nul
       ) : (
         <div className="card max-h-96 overflow-auto">
           <table className="w-full text-left text-sm">
-            <thead className="sticky top-0 bg-ink-800/95 text-xs uppercase tracking-wide text-slate-500">
+            <thead className="sticky top-0 bg-surface-raised/95 text-xs uppercase tracking-wide text-slate-500">
               <tr><th className="px-4 pt-3 pb-2">Email</th><th className="px-4 pt-3 pb-2">Via</th><th className="px-4 pt-3 pb-2">Joined</th></tr>
             </thead>
             <tbody className="divide-y divide-white/5">

@@ -17,7 +17,7 @@ export function SideNav() {
   return (
     <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-white/10 bg-white/[0.02] px-4 py-6 backdrop-blur-xl lg:flex">
       <Link href="/home" className="mb-8 flex items-center gap-2 px-2">
-        <span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-pitch-400 to-pitch-600 text-lg font-black text-ink-900 shadow-glow">A</span>
+        <span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-pitch-400 to-pitch-600 text-lg font-black text-on-accent shadow-glow">A</span>
         <span className="text-lg font-extrabold tracking-tight">PocketAthlete</span>
         {!launched && <span className="rounded-md bg-pitch-400/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-pitch-400">Beta</span>}
       </Link>

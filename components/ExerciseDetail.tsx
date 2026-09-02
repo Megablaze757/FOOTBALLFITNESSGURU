@@ -197,7 +197,7 @@ export function Sheet({ label, children, onClose }: { label: string; children: R
         <div
           // pb-28 keeps the bottom of the sheet clear of the floating mobile
           // tab bar, which otherwise sits on top of the last section.
-          className="animate-scale-in max-h-[88vh] w-full max-w-lg overflow-y-auto rounded-t-3xl border border-white/10 bg-ink-800 p-4 pb-28 shadow-card sm:rounded-3xl sm:p-6 sm:pb-6"
+          className="animate-scale-in max-h-[88vh] w-full max-w-lg overflow-y-auto rounded-t-3xl border border-white/10 bg-surface-raised p-4 pb-28 shadow-card sm:rounded-3xl sm:p-6 sm:pb-6"
           onClick={(e) => e.stopPropagation()}
           // Escape already worked here; the dialog semantics didn't exist, so a
           // screen reader was never told the page behind had become unavailable.

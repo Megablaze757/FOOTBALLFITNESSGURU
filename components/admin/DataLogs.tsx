@@ -81,7 +81,7 @@ export function CustomExerciseLog() {
     <div className="space-y-3">
       <div className="max-h-96 overflow-auto">
         <table className="w-full min-w-[520px] text-left text-sm">
-          <thead className="sticky top-0 bg-ink-900 text-xs uppercase tracking-wide text-slate-500">
+          <thead className="sticky top-0 bg-surface-base text-xs uppercase tracking-wide text-slate-500">
             <tr><th className="py-2 pr-3">Exercise</th><th className="py-2 pr-3">Added by</th><th className="py-2 pr-3">Times</th><th className="py-2">Last added</th></tr>
           </thead>
           <tbody className="divide-y divide-white/[0.06]">

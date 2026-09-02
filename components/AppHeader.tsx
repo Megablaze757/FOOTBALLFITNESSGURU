@@ -45,7 +45,7 @@ export function AppHeader() {
        needs no compensating padding on <main>. `top-0` plus the safe-area
        inset keeps it clear of a notch in landscape. */
     <header
-      className="sticky top-0 z-50 border-b border-white/[0.06] bg-ink-900/95 lg:hidden"
+      className="sticky top-0 z-50 border-b border-white/[0.06] bg-surface-base/95 lg:hidden"
       style={{ paddingTop: "env(safe-area-inset-top)" }}
     >
       <div className="mx-auto flex w-full max-w-5xl items-center justify-between px-4 py-2">
@@ -64,7 +64,7 @@ export function AppHeader() {
             aria-current={pathname.startsWith(home.href) ? "page" : undefined}
             className="flex min-h-[44px] items-center gap-2 rounded-2xl pr-2"
           >
-            <span className="grid h-8 w-8 place-items-center rounded-xl bg-gradient-to-br from-pitch-400 to-pitch-600 text-base font-black text-ink-900 shadow-glow">
+            <span className="grid h-8 w-8 place-items-center rounded-xl bg-gradient-to-br from-pitch-400 to-pitch-600 text-base font-black text-on-accent shadow-glow">
               A
             </span>
             <span className="text-base font-extrabold tracking-tight text-slate-100">PocketAthlete</span>

@@ -577,7 +577,7 @@ function GettingStarted({ setup, showingProgramCta }: {
                     : "border-white/10 bg-white/[0.03] hover:bg-white/[0.05]"
               }`}
             >
-              <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-full border text-xs ${st.done ? "border-pitch-400 bg-pitch-400 text-ink-900" : "border-white/25 text-transparent"}`}>✓</span>
+              <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-full border text-xs ${st.done ? "border-pitch-400 bg-pitch-400 text-on-accent" : "border-white/25 text-transparent"}`}>✓</span>
               <span className="min-w-0 flex-1">
                 <span className={`block text-sm font-semibold ${st.done ? "text-slate-400 line-through" : "text-slate-100"}`}>{st.title}</span>
                 {!st.done && <span className="block text-xs text-slate-400">{st.sub}</span>}

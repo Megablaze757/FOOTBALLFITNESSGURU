@@ -379,7 +379,7 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
                       key={zone.id}
                       type="button"
                       onClick={() => updateDerived({ zone: zone.id })}
-                      className={`tap-target min-w-0 rounded-xl border px-1 text-xs font-bold transition ${active ? "text-ink-900" : "border-white/10 bg-white/[0.03] text-slate-400"}`}
+                      className={`tap-target min-w-0 rounded-xl border px-1 text-xs font-bold transition ${active ? "text-on-accent" : "border-white/10 bg-white/[0.03] text-slate-400"}`}
                       style={active ? { background: zone.colour, borderColor: zone.colour } : undefined}
                       aria-label={`Zone ${zone.id}: ${zone.name}`}
                     >
@@ -860,7 +860,7 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
                 onClick={() => setRanToday(yes)}
                 aria-pressed={ranToday === yes}
                 className={`min-h-[44px] flex-1 rounded-full px-3 text-xs font-semibold transition ${
-                  ranToday === yes ? "bg-sky-400 text-ink-900" : "text-slate-400 hover:text-slate-200"
+                  ranToday === yes ? "bg-sky-400 text-on-accent" : "text-slate-400 hover:text-slate-200"
                 }`}
               >
                 {label}
@@ -1007,7 +1007,7 @@ export function TrainingLogInput({ value, onChange, planned = [], sport = "all",
                     type="button"
                     onClick={() => updateDerived({ zone: z.id })}
                     className={`tap-target rounded-full border px-3 text-xs font-semibold transition ${
-                      active ? "text-ink-900" : "border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.06]"
+                      active ? "text-on-accent" : "border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.06]"
                     }`}
                     style={active ? { background: z.colour, borderColor: z.colour } : undefined}
                   >

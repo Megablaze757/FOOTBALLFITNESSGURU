@@ -162,7 +162,7 @@ export function AffiliateEarnings() {
                   <button
                     onClick={() => markPaid(r.affiliate_id, r.name)}
                     disabled={busy === r.affiliate_id || r.approved_pennies <= 0}
-                    className="tap-target rounded-xl bg-pitch-500 px-3 py-2 text-xs font-semibold text-ink-900 disabled:opacity-40"
+                    className="tap-target rounded-xl bg-pitch-500 px-3 py-2 text-xs font-semibold text-on-accent disabled:opacity-40"
                   >
                     Mark {poundsFromPennies(r.approved_pennies)} paid
                   </button>

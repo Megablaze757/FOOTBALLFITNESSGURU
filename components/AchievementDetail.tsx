@@ -50,7 +50,7 @@ export function AchievementDetail({ achievement, unlocked, rarity, sampled, onCl
           // it up from the bottom put it under the thumb it was opened with —
           // the sheet pattern earns its keep for long, scrollable, form-like
           // content, which this is the opposite of.
-          className="animate-scale-in max-h-[85vh] w-full max-w-sm overflow-y-auto rounded-3xl border border-white/10 bg-ink-800 p-6 shadow-card"
+          className="animate-scale-in max-h-[85vh] w-full max-w-sm overflow-y-auto rounded-3xl border border-white/10 bg-surface-raised p-6 shadow-card"
           onClick={(e) => e.stopPropagation()}
           role="dialog"
           aria-modal="true"

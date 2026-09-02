@@ -43,9 +43,13 @@ const TAILWIND_PALETTES = new Set([
 function customFamilies(): Record<string, Set<string>> {
   const config = readFileSync(join(ROOT, "tailwind.config.ts"), "utf8");
   const out: Record<string, Set<string>> = {};
-  // Each family is `name: { key: "#hex", ... }` inside the colors block.
-  for (const m of config.matchAll(/\n\s{8}([a-z][a-z0-9]*):\s*\{([^}]*)\}/g)) {
-    const shades = [...m[2].matchAll(/(?:^|\s)"?([a-z0-9]+)"?:\s*"#/g)].map((s) => s[1]);
+  // Each family is `name: { key: <value>, ... }` inside the colors block, where
+  // a value is a hex literal OR `rgb(var(--token) / <alpha-value>)`. Both
+  // forms count: the second is what every themed colour became when light mode
+  // arrived, and a parser that only knew hex silently found two families out
+  // of eight and passed on an assertion about one of them.
+  for (const m of config.matchAll(/\n\s{8}"?([a-z][a-z0-9-]*)"?:\s*\{([^}]*)\}/g)) {
+    const shades = [...m[2].matchAll(/(?:^|\s)"?([a-zA-Z0-9]+)"?:\s*"(?:#|rgb\()/g)].map((s) => s[1]);
     if (shades.length && !TAILWIND_PALETTES.has(m[1])) out[m[1]] = new Set(shades);
   }
   return out;
@@ -69,8 +73,19 @@ function sourceFiles(): string[] {
 test("every custom colour class names a shade that exists", () => {
   const families = customFamilies();
   const names = Object.keys(families);
-  assert.ok(names.includes("readiness"), `theme parse failed — found families: ${names.join(", ")}`);
+  // Every family invented by this app, named. A parser that quietly finds two
+  // of five passes its own assertions and validates nothing — which is what
+  // happened when the palette moved from hex to rgb(var(--token)).
+  //
+  // `sky` and `slate` are Tailwind's own names and are skipped on purpose:
+  // extend MERGES, so an undefined shade of those still resolves to a stock
+  // colour rather than to nothing. The test below catches that instead.
+  for (const family of ["pitch", "gold", "ink", "surface", "readiness"]) {
+    assert.ok(names.includes(family),
+      `theme parse failed to find "${family}" — found: ${names.join(", ")}`);
+  }
   assert.ok(families.readiness.has("yellow"), "readiness should define a yellow");
+  assert.ok(families.surface.has("raised"), "surface should define the card layer");
 
   // bg-, text-, border-, from-, ring-… any utility, and any /opacity suffix.
   const pattern = new RegExp(`\\b[a-z-]+-(${names.join("|")})-([a-z0-9]+)`, "g");
@@ -91,4 +106,34 @@ test("every custom colour class names a shade that exists", () => {
     "these name a colour the theme does not define, so they render as nothing:\n  " +
       [...new Set(bad)].join("\n  ")
   );
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * A SHADE THE THEME DOES NOT DEFINE FALLS BACK TO TAILWIND'S FIXED DEFAULT.
+ *
+ * `theme.extend.colors` MERGES, so `text-slate-950` still resolves — to
+ * Tailwind's own near-black, which does not know this app has two themes. It
+ * was being used five times as the label on a gold button, which is the same
+ * pairing that broke every page in light mode when the gold went dark.
+ *
+ * Only the tiers lib/theme.ts actually defines are themed. Anything outside
+ * them is a colour that will be wrong in one mode and cannot be found by
+ * looking at the palette.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("no slate shade outside the themed range is used", () => {
+  const themed = new Set(["100", "200", "300", "400", "500", "600"]);
+  const offenders: string[] = [];
+
+  for (const file of sourceFiles()) {
+    const src = readFileSync(join(ROOT, file), "utf8");
+    for (const [cls, shade] of [...src.matchAll(/\b[a-z-]+-slate-(\d+)/g)].map((m) => [m[0], m[1]])) {
+      if (!themed.has(shade)) offenders.push(`${file}: ${cls}`);
+    }
+  }
+
+  assert.deepEqual([...new Set(offenders)], [],
+    "these fall through to Tailwind's fixed defaults, which do not flip with the theme:\n  "
+      + [...new Set(offenders)].join("\n  "));
 });

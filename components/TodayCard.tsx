@@ -103,7 +103,7 @@ export function TodayCard({ quests, sessionTitle, sessionSub, kcalLeft, readines
                   thing worth saying is that it is done. */}
               <span
                 className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl border transition ${
-                  q.done ? "border-pitch-400 bg-pitch-400 text-ink-900" : ""
+                  q.done ? "border-pitch-400 bg-pitch-400 text-on-accent" : ""
                 }`}
                 style={
                   q.done

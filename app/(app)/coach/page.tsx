@@ -618,7 +618,7 @@ function GoalBuilder({ painMap, painNote, latestBench, sport, initialPositions, 
                   title={g.blurb}
                   className={`chip-option relative pr-4 ${selected ? "border-pitch-400/50 bg-pitch-400/10 text-pitch-400" : ""} disabled:opacity-35`}
                 >
-                  {selected && <span className="mr-1.5 inline-grid h-5 w-5 place-items-center rounded-full bg-pitch-400 text-[10px] font-black text-ink-900">{index + 1}</span>}
+                  {selected && <span className="mr-1.5 inline-grid h-5 w-5 place-items-center rounded-full bg-pitch-400 text-[10px] font-black text-on-accent">{index + 1}</span>}
                   {g.label}
                 </button>
               );
@@ -941,10 +941,10 @@ function SeasonToggle({ inSeason, onChange }: { inSeason: boolean; onChange: (v:
           <button
             key={String(o.v)}
             onClick={() => onChange(o.v)}
-            className={`min-h-[44px] rounded-xl px-3 py-2 text-center transition ${inSeason === o.v ? "bg-gradient-to-br from-pitch-400 to-pitch-600 text-ink-900" : "text-slate-300 hover:bg-white/5"}`}
+            className={`min-h-[44px] rounded-xl px-3 py-2 text-center transition ${inSeason === o.v ? "bg-gradient-to-br from-pitch-400 to-pitch-600 text-on-accent" : "text-slate-300 hover:bg-white/5"}`}
           >
             <div className="text-sm font-semibold">{o.label}</div>
-            <div className={`text-[10px] ${inSeason === o.v ? "text-ink-900/70" : "text-slate-500"}`}>{o.sub}</div>
+            <div className={`text-[10px] ${inSeason === o.v ? "text-on-accent/70" : "text-slate-500"}`}>{o.sub}</div>
           </button>
         ))}
       </div>

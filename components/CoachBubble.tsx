@@ -91,7 +91,7 @@ export function CoachBubble() {
          * around. It sits at a fixed height clear of the bar's tallest state
          * plus the home indicator, and stays put.
          */
-        className="fixed bottom-24 right-4 z-40 grid h-14 w-14 place-items-center rounded-full bg-gradient-to-br from-pitch-400 to-pitch-600 text-ink-900 shadow-glow transition hover:scale-105 active:scale-95 lg:bottom-8 lg:right-8"
+        className="fixed bottom-24 right-4 z-40 grid h-14 w-14 place-items-center rounded-full bg-gradient-to-br from-pitch-400 to-pitch-600 text-on-accent shadow-glow transition hover:scale-105 active:scale-95 lg:bottom-8 lg:right-8"
         style={{ marginBottom: "env(safe-area-inset-bottom)" }}
       >
         <ChatIcon />
@@ -105,7 +105,11 @@ export function CoachBubble() {
               chips, which is why the panel looked like it had failed to load
               rather than like it was behind something. A full-screen sheet has
               to outrank the furniture it covers. */}
-          <div className="fixed inset-0 z-[70] flex flex-col justify-end bg-ink-900/70 backdrop-blur-sm sm:items-end sm:justify-end sm:p-6">
+          {/* bg-black, not a surface token: this is the scrim behind the sheet,
+              and a scrim has to darken the page in BOTH themes. A light-mode
+              surface at 70% dims nothing. Every other dialog here uses the
+              same black. */}
+          <div className="fixed inset-0 z-[70] flex flex-col justify-end bg-black/70 backdrop-blur-sm sm:items-end sm:justify-end sm:p-6">
             {/* Tapping the dimmed page closes it — the gesture everybody tries
                 first, and the one a sheet without it swallows. */}
             <button
@@ -115,7 +119,7 @@ export function CoachBubble() {
               className="absolute inset-0 cursor-default"
             />
 
-            <div className="animate-fade-up relative flex h-[85dvh] w-full flex-col overflow-hidden rounded-t-3xl border border-white/[0.08] bg-ink-900 shadow-2xl sm:h-[calc(100dvh-6rem)] sm:max-w-md sm:rounded-3xl">
+            <div className="animate-fade-up relative flex h-[85dvh] w-full flex-col overflow-hidden rounded-t-3xl border border-white/[0.08] bg-surface-base shadow-2xl sm:h-[calc(100dvh-6rem)] sm:max-w-md sm:rounded-3xl">
               <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-3">
                 <span className="text-sm font-bold text-slate-100">Ask your coach</span>
                 <button

@@ -4,6 +4,7 @@ import "./globals.css";
 import { ChunkReloader } from "@/components/ChunkReloader";
 import { PWA } from "@/components/PWA";
 import { StructuredData } from "@/components/StructuredData";
+import { themeBootScript } from "@/lib/theme";
 
 // Body: Inter — a workhorse UI face, less of an "AI-template default" than Sora.
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans", display: "swap" });
@@ -97,6 +98,19 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en-GB" className={`${inter.variable} ${display.variable}`}>
+      <head>
+        {/*
+          BEFORE THE FIRST PAINT, and it has to be here rather than in a
+          component. Without it the page renders dark, hydrates, then turns
+          light — a full-screen flash on every load for anybody who chose
+          light, which is the one thing people remember about theme switching.
+
+          Blocking and inline on purpose: an async script runs after paint,
+          which is the bug. It stamps nothing when the preference is "system",
+          because the stylesheet's media query already handles that.
+        */}
+        <script dangerouslySetInnerHTML={{ __html: themeBootScript() }} />
+      </head>
       <body className="font-sans">
         <StructuredData />
         <ChunkReloader />

@@ -131,7 +131,7 @@ export function MealSwap({ target, prefs, starred = [], basket, onPick, onClose 
           list can run to eighty rows, so it scrolls inside a fixed frame rather
           than growing the page behind it. */}
       <div
-        className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl border border-white/10 bg-ink-900 sm:rounded-3xl"
+        className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl border border-white/10 bg-surface-base sm:rounded-3xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="shrink-0 border-b border-white/[0.08] p-4">

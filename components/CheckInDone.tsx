@@ -307,7 +307,7 @@ export function CheckInDone({
 
 function Stat({ label, value, tone }: { label: string; value: string; tone?: "warn" }) {
   return (
-    <div className="bg-ink-900 px-3 py-3 text-center">
+    <div className="bg-surface-base px-3 py-3 text-center">
       <dt className="text-[0.65rem] font-bold uppercase tracking-wider text-slate-500">{label}</dt>
       <dd className={`mt-1 truncate text-sm font-bold ${tone === "warn" ? "text-readiness-red" : "text-slate-100"}`}>
         {value}

@@ -283,7 +283,7 @@ export function WaitlistAnnounce() {
           </button>
         ) : (
           <>
-            <button onClick={() => void send()} disabled={busy !== null} className="btn-primary !bg-readiness-red !text-white">
+            <button onClick={() => void send()} disabled={busy !== null} className="btn-primary !bg-readiness-red !text-[#ffffff]">
               {busy === "send" ? "Sending…" : `Yes — email ${Math.min(pending, BATCH)} people now`}
             </button>
             <button onClick={() => setArmed(false)} disabled={busy !== null} className="btn-ghost">Cancel</button>

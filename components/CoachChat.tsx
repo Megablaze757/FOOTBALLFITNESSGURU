@@ -245,7 +245,7 @@ export function CoachChat({ context, briefing, suggestions, storageKey, userId, 
           type="submit"
           disabled={!canSend}
           aria-label="Send"
-          className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-gradient-to-br from-pitch-400 to-pitch-600 text-lg font-bold text-ink-900 transition disabled:opacity-40"
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-gradient-to-br from-pitch-400 to-pitch-600 text-lg font-bold text-on-accent transition disabled:opacity-40"
         >
           ↑
         </button>
@@ -298,7 +298,7 @@ function CoachAvatar({ small }: { small?: boolean }) {
   return (
     <span
       aria-hidden
-      className={`grid shrink-0 place-items-center rounded-full bg-gradient-to-br from-pitch-400 to-pitch-600 font-black text-ink-900 ${
+      className={`grid shrink-0 place-items-center rounded-full bg-gradient-to-br from-pitch-400 to-pitch-600 font-black text-on-accent ${
         small ? "h-6 w-6 text-[10px]" : "h-9 w-9 text-xs"
       }`}
     >

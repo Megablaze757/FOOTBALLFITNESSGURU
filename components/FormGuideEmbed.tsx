@@ -50,10 +50,10 @@ export function FormGuideEmbed({ videoId, title }: { videoId: string; title: str
        * point is that nothing leaves the page until this is tapped, and a
        * thumbnail request is a request.
        */
-      className="tap-target group relative flex aspect-video w-full items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-gradient-to-br from-slate-800 to-ink-900 transition hover:border-pitch-400/40"
+      className="tap-target group relative flex aspect-video w-full items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-gradient-to-br from-surface-high to-surface-base transition hover:border-pitch-400/40"
       aria-label={`Play the form guide for ${title}`}
     >
-      <span className="grid h-14 w-14 place-items-center rounded-full bg-pitch-400 text-xl text-ink-900 shadow-glow transition group-hover:scale-105">
+      <span className="grid h-14 w-14 place-items-center rounded-full bg-pitch-400 text-xl text-on-accent shadow-glow transition group-hover:scale-105">
         <span aria-hidden className="ml-1">▶</span>
       </span>
       <span className="absolute bottom-3 left-0 right-0 px-4 text-center text-xs font-semibold text-slate-300">

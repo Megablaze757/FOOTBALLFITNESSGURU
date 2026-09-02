@@ -111,7 +111,7 @@ export function Leaderboards({ userId }: { userId: string }) {
               // than the outlined chip look — but it takes the 44px floor, and
               // the aria-pressed it never had.
               className={`min-h-[44px] rounded-full px-3 text-xs font-semibold transition ${
-                scope === s ? "bg-pitch-400 text-ink-900" : "text-slate-400 hover:text-slate-200"
+                scope === s ? "bg-pitch-400 text-on-accent" : "text-slate-400 hover:text-slate-200"
               }`}
             >
               {s === "squad" ? "My squad" : "World"}

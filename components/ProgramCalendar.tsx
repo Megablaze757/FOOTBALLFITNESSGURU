@@ -92,7 +92,7 @@ export function ProgramCalendar({
                         onClick={() => onToggle(sid)}
                         aria-label={done ? "Mark session not done" : "Mark session done"}
                         className={`tap-pad relative grid h-7 w-7 shrink-0 place-items-center rounded-full border text-xs transition ${
-                          done ? "border-pitch-400 bg-pitch-400 text-ink-900" : "border-white/20 text-transparent hover:border-pitch-400/60"
+                          done ? "border-pitch-400 bg-pitch-400 text-on-accent" : "border-white/20 text-transparent hover:border-pitch-400/60"
                         }`}
                       >
                         ✓

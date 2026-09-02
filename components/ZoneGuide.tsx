@@ -46,7 +46,7 @@ export function ZoneGuide({ metrics, age, restingHr, maxHr }: {
             <li key={z.id} className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-3">
               <div className="flex items-center gap-2">
                 <span
-                  className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-xs font-extrabold text-ink-900"
+                  className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-xs font-extrabold text-on-accent"
                   style={{ background: z.colour }}
                 >
                   {z.id}
@@ -135,7 +135,7 @@ export function RunTypeGuide() {
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-bold text-slate-100">{r.label}</span>
               <span
-                className="rounded-lg px-2 py-0.5 text-[11px] font-bold text-ink-900"
+                className="rounded-lg px-2 py-0.5 text-[11px] font-bold text-on-accent"
                 style={{ background: zone.colour }}
               >
                 Zone {zone.id}

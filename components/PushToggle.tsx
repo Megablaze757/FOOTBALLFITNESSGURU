@@ -162,7 +162,7 @@ export function PushToggle() {
             className={`min-h-[44px] shrink-0 rounded-xl px-3 py-1.5 text-xs font-semibold transition disabled:opacity-50 ${
               state === "on"
                 ? "border border-white/10 text-slate-300 hover:bg-white/[0.06]"
-                : "bg-pitch-500 text-ink-900"
+                : "bg-pitch-500 text-on-accent"
             }`}
           >
             {busy ? "…" : state === "on" ? "Turn off" : "Turn on"}

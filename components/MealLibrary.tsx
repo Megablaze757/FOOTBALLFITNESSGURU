@@ -273,7 +273,7 @@ function MealModal({ meal, canStar, starred, onStar, onClose }: {
     <Portal>
       <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/70 p-0 backdrop-blur-sm sm:items-center sm:p-4" onClick={onClose}>
         <div
-          className="animate-scale-in max-h-[88vh] w-full max-w-lg overflow-y-auto rounded-t-3xl border border-white/10 bg-ink-800 p-6 pb-28 shadow-card sm:rounded-3xl sm:pb-6"
+          className="animate-scale-in max-h-[88vh] w-full max-w-lg overflow-y-auto rounded-t-3xl border border-white/10 bg-surface-raised p-6 pb-28 shadow-card sm:rounded-3xl sm:pb-6"
           onClick={(e) => e.stopPropagation()}
           role="dialog"
           aria-modal="true"

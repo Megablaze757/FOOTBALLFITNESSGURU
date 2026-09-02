@@ -255,7 +255,7 @@ export function BodyMap({
                     must still say "L hamstring" while you are looking at the
                     front, or your own selections turn into raw database keys. */}
                 {ALL_REGIONS.find((r) => r.key === k)?.label ?? k}
-                <span className="text-pitch-400/60" aria-hidden>×</span>
+                <span className="text-pitch-500" aria-hidden>×</span>
                 <span className="sr-only">Remove</span>
               </button>
             ))

@@ -70,7 +70,7 @@ export function DeleteAccount({ email }: { email: string }) {
       {open && (
         <Portal>
           <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/70 p-4 backdrop-blur-sm sm:items-center">
-            <div className="w-full max-w-md rounded-3xl border border-white/10 bg-ink-900 p-6">
+            <div className="w-full max-w-md rounded-3xl border border-white/10 bg-surface-base p-6">
               <h2 className="text-xl font-extrabold tracking-tight">Delete your account?</h2>
               <p className="mt-2 text-sm text-slate-400">
                 This is permanent. We will delete:
@@ -113,7 +113,7 @@ export function DeleteAccount({ email }: { email: string }) {
                 <button
                   onClick={confirmDelete}
                   disabled={!matches || busy}
-                  className="min-h-[44px] flex-1 rounded-2xl bg-readiness-red px-4 py-2.5 text-sm font-semibold text-white transition disabled:opacity-40"
+                  className="min-h-[44px] flex-1 rounded-2xl bg-readiness-red px-4 py-2.5 text-sm font-semibold text-[#ffffff] transition disabled:opacity-40"
                 >
                   {busy ? "Deleting…" : "Delete forever"}
                 </button>

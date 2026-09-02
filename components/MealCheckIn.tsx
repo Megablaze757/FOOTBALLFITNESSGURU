@@ -556,7 +556,7 @@ export function MealCheckIn({ stats, prefs, dietNotes, seed, swaps, recent, star
                       aria-label={`${on ? "Un-tick" : "Tick off"} ${pm.meal.name}`}
                       className="tap-target grid shrink-0 place-items-center pl-3 pr-1"
                     >
-                      <span className={`grid h-5 w-5 place-items-center rounded-md border text-[11px] ${on ? "border-pitch-400 bg-pitch-400 text-ink-900" : "border-white/25 text-transparent"}`}>✓</span>
+                      <span className={`grid h-5 w-5 place-items-center rounded-md border text-[11px] ${on ? "border-pitch-400 bg-pitch-400 text-on-accent" : "border-white/25 text-transparent"}`}>✓</span>
                     </button>
 
                     <button
@@ -817,7 +817,7 @@ export function MealCheckIn({ stats, prefs, dietNotes, seed, swaps, recent, star
             <div
               // pb-28 clears the floating mobile tab bar, which otherwise sits
               // on top of the last of the method steps.
-              className="animate-scale-in max-h-[88vh] w-full max-w-lg overflow-y-auto rounded-t-3xl border border-white/10 bg-ink-800 p-6 pb-28 shadow-card sm:rounded-3xl sm:pb-6"
+              className="animate-scale-in max-h-[88vh] w-full max-w-lg overflow-y-auto rounded-t-3xl border border-white/10 bg-surface-raised p-6 pb-28 shadow-card sm:rounded-3xl sm:pb-6"
               onClick={(e) => e.stopPropagation()}
               role="dialog"
               aria-modal="true"

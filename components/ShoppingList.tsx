@@ -190,7 +190,7 @@ export function ShoppingList({ list, seed, store, onStore, onCorrectPrice }: {
                         <span
                           className={`grid h-5 w-5 shrink-0 place-items-center rounded-md border text-[11px] font-bold transition ${
                             isTicked
-                              ? "border-pitch-400 bg-pitch-400 text-slate-950"
+                              ? "border-pitch-400 bg-pitch-400 text-on-accent"
                               : "border-white/25 bg-white/[0.03] text-transparent"
                           }`}
                           aria-hidden

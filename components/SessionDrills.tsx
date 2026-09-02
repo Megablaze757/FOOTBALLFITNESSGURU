@@ -309,10 +309,10 @@ function displayName(drill: Drill): string {
 function sectionStyle(group: Group): { label: string; icon: IconName; wrap: string; text: string } {
   if (group.rehab) return { label: "Rehab", icon: "plaster", wrap: "border-l-orange-400/70 bg-orange-400/[0.03]", text: "text-orange-300" };
   const slot = group.slot;
-  if (slot === "warmup") return { label: "Warm-up", icon: "bolt", wrap: "border-l-sky-400/70 bg-sky-400/[0.02]", text: "text-sky-300/80" };
+  if (slot === "warmup") return { label: "Warm-up", icon: "bolt", wrap: "border-l-sky-400/70 bg-sky-400/[0.02]", text: "text-sky-400" };
   if (slot === "conditioning") return { label: "Conditioning", icon: "run", wrap: "border-l-emerald-400/70 bg-emerald-400/[0.02]", text: "text-emerald-300/80" };
   if (slot === "cooldown") return { label: "Cool-down", icon: "stretch", wrap: "border-l-violet-400/70 bg-violet-400/[0.02]", text: "text-violet-300/80" };
-  if (slot === "skill") return { label: "Skill", icon: "ball", wrap: "border-l-pitch-400/60 bg-pitch-400/[0.02]", text: "text-pitch-300/80" };
+  if (slot === "skill") return { label: "Skill", icon: "ball", wrap: "border-l-pitch-400/60 bg-pitch-400/[0.02]", text: "text-pitch-400" };
   // ONE HEADING FOR ALL THE STRENGTH WORK.
   //
   // "Main work", then "Secondary", then "Accessory" is how a coach files a
@@ -321,7 +321,7 @@ function sectionStyle(group: Group): { label: string; icon: IconName; wrap: stri
   // programme has one. The tiers still exist and still decide the order; they
   // are now shown per exercise, on the card, where they answer a question the
   // reader actually has ("why is this one after the squat?").
-  if (slot) return { label: "Main / Strength", icon: "dumbbell", wrap: "border-l-pitch-400/70 bg-pitch-400/[0.02]", text: "text-pitch-300/80" };
+  if (slot) return { label: "Main / Strength", icon: "dumbbell", wrap: "border-l-pitch-400/70 bg-pitch-400/[0.02]", text: "text-pitch-400" };
   return { label: "Workout", icon: "dumbbell", wrap: "border-l-white/15", text: "text-slate-400" };
 }
 

@@ -441,7 +441,7 @@ export default function RewardsPage() {
           {quests.map((q) => (
             <li key={q.id}>
               <Link href={q.href} className={`flex items-center gap-3 rounded-2xl border p-3 transition ${q.done ? "border-pitch-400/30 bg-pitch-400/[0.06]" : "border-white/10 bg-white/[0.03] hover:bg-white/[0.06]"}`}>
-                <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-full border text-xs ${q.done ? "border-pitch-400 bg-pitch-400 text-ink-900" : "border-white/20 text-transparent"}`}>✓</span>
+                <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-full border text-xs ${q.done ? "border-pitch-400 bg-pitch-400 text-on-accent" : "border-white/20 text-transparent"}`}>✓</span>
                 <span className={`flex-1 text-sm ${q.done ? "text-slate-400 line-through" : "text-slate-100"}`}>{q.label}</span>
                 <span className="chip text-pitch-400">+{q.xp} XP</span>
               </Link>

@@ -306,7 +306,7 @@ export default function Landing() {
               {/* /30 measured 1.9:1 — a step number you cannot read is not a
                   subtle watermark, it's a missing step. /60 is 4.2:1 and still
                   sits behind the heading. */}
-              <div className="text-3xl font-black text-pitch-400/60">{s.n}</div>
+              <div className="text-3xl font-black text-pitch-500">{s.n}</div>
               <h3 className="mt-2 font-bold text-slate-100">{s.title}</h3>
               <p className="mt-1 text-sm text-slate-400">{s.body}</p>
             </div>

@@ -296,7 +296,7 @@ function AddAthlete({ onAdded }: { onAdded: () => void }) {
   return (
     <form onSubmit={add} className="card relative flex gap-2 p-3">
       <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="athlete@email.com" className="field flex-1" />
-      <button type="submit" disabled={busy} className="min-h-[44px] rounded-2xl bg-gradient-to-br from-pitch-400 to-pitch-600 px-4 font-semibold text-ink-900 disabled:opacity-50">Add</button>
+      <button type="submit" disabled={busy} className="min-h-[44px] rounded-2xl bg-gradient-to-br from-pitch-400 to-pitch-600 px-4 font-semibold text-on-accent disabled:opacity-50">Add</button>
       {msg && <p className={`absolute -bottom-6 left-0 text-xs ${msg.ok ? "text-pitch-400" : "text-readiness-red"}`}>{msg.text}</p>}
     </form>
   );

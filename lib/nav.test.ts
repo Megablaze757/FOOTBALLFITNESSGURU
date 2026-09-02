@@ -17,6 +17,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { NAV_ITEMS, MOBILE_NAV, HEADER_NAV, SECTION_LINKS, COACH_NAV } from "../components/nav-items";
 import tailwind from "../tailwind.config";
+import { AA_NORMAL, contrast, ratio } from "./contrast";
+import { PALETTES } from "./theme";
 
 const page = (route: string) =>
   readFileSync(new URL(`../app/(app)${route}/page.tsx`, import.meta.url), "utf8");
@@ -186,35 +188,25 @@ test("every nav icon resolves", () => {
 
 test("the muted text tiers pass WCAG AA on this app's background", () => {
   // Tailwind's stock slate-500 and slate-600 do NOT pass here — 4.18:1 and
-  // 2.63:1 against this background, where normal text needs 4.5:1.
-  // tailwind.config.ts overrides both, and that override is the only thing
-  // standing between ~185 uses of text-slate-500 and a contrast failure across
-  // every hint, caption and empty state in the app.
+  // 2.63:1 against this background, where normal text needs 4.5:1. The
+  // override is the only thing standing between ~185 uses of text-slate-500
+  // and a contrast failure across every hint, caption and empty state.
   //
-  // I twice reasoned about these colours using Tailwind's DEFAULTS and reached a
-  // wrong conclusion — once declaring a passing colour a failure. This reads the
-  // real config so nobody has to remember that it's overridden.
-  const slate = (tailwind.theme?.extend?.colors as Record<string, Record<string, string>>)?.slate;
-  assert.ok(slate, "slate is no longer overridden in tailwind.config.ts — Tailwind's defaults fail AA here");
-
-  const lum = (h: string) => {
-    const n = parseInt(h.slice(1), 16);
-    return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
-      .map((v) => { const s = v / 255; return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4; })
-      .reduce((a, c, i) => a + c * [0.2126, 0.7152, 0.0722][i], 0);
-  };
-  const ratio = (a: string, b: string) => {
-    const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
-    return (hi + 0.05) / (lo + 0.05);
-  };
-
-  // ink-800, the card surface. The lighter of the two backgrounds text sits on,
-  // so the harder of the two tests.
-  const CARD = "#141416";
-  for (const shade of ["500", "600"]) {
-    const hex = slate[shade];
-    assert.ok(hex, `slate-${shade} is not overridden — Tailwind's default fails AA here`);
-    const r = ratio(hex, CARD);
-    assert.ok(r >= 4.5, `slate-${shade} (${hex}) is ${r.toFixed(2)}:1 on a card — AA needs 4.5:1`);
+  // I twice reasoned about these colours using Tailwind's DEFAULTS and reached
+  // a wrong conclusion — once declaring a passing colour a failure. So this
+  // reads the real values rather than anybody's memory of them.
+  //
+  // It used to read them out of tailwind.config.ts and carry its own copy of
+  // the WCAG formula. Both moved: the config holds `rgb(var(--slate-500))` now
+  // that there are two themes, and the numbers live in lib/theme.ts where
+  // BOTH can be checked. lib/theme.test.ts does the exhaustive sweep; this
+  // keeps the specific claim the nav's own copy depends on.
+  for (const [themeName, palette] of Object.entries(PALETTES)) {
+    for (const shade of [500, 600] as const) {
+      const colour = palette.slate[shade];
+      const r = contrast(colour, palette.surfaceRaised);
+      assert.ok(r >= AA_NORMAL,
+        `${themeName}: slate-${shade} (${colour}) is ${ratio(r)}:1 on a card — AA needs 4.5:1`);
+    }
   }
 });

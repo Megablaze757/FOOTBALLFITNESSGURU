@@ -196,7 +196,7 @@ export function Users() {
         <div className="card max-h-[28rem] overflow-auto">
           {/* Six columns don't fit a phone; scroll the table, not the page. */}
           <table className="w-full min-w-[38rem] text-left text-sm">
-            <thead className="sticky top-0 bg-ink-800/95 text-xs uppercase tracking-wide text-slate-500">
+            <thead className="sticky top-0 bg-surface-raised/95 text-xs uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="px-4 pt-3 pb-2">User</th>
                 <th className="px-4 pt-3 pb-2">Plan</th>

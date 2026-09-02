@@ -72,7 +72,7 @@ export function TabBar() {
       // anyone who happened to be scrolling down at the time.
       aria-label="Sections"
     >
-      {/* Not `card`. Same look, but bg-ink-800/95 instead of /70.
+      {/* Not `card`. Same look, but bg-surface-raised/95 instead of /70.
           `.card` leans on backdrop-blur for legibility, and a blurred surface
           is the first thing a mobile browser abandons under scroll load — at
           70% opacity that leaves the labels sitting on whatever is passing
@@ -83,7 +83,7 @@ export function TabBar() {
           during scroll is the combination mobile Safari has long got wrong,
           and hiding the bar means animating a transform on exactly that
           element, during exactly that scroll. */}
-      <ul className="flex items-center justify-between gap-0.5 rounded-2xl border border-white/[0.08] bg-ink-800 px-1.5 py-2 shadow-card">
+      <ul className="flex items-center justify-between gap-0.5 rounded-2xl border border-white/[0.08] bg-surface-raised px-1.5 py-2 shadow-card">
         {MOBILE_NAV.map((tab) => {
           const active = pathname.startsWith(tab.href);
           return (

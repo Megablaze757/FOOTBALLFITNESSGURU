@@ -56,7 +56,7 @@ export function GuideCta({ what }: { what: string }) {
         PocketAthlete builds your program from your sport, your position and how recovered you
         actually are that morning — then adapts it as you log sessions.
       </p>
-      <Link href="/waitlist" className="mt-4 inline-block rounded-2xl bg-pitch-500 px-5 py-2.5 text-sm font-semibold text-ink-900">
+      <Link href="/waitlist" className="mt-4 inline-block rounded-2xl bg-pitch-500 px-5 py-2.5 text-sm font-semibold text-on-accent">
         Join the waitlist →
       </Link>
     </section>

@@ -75,7 +75,7 @@ export function FunnelReport() {
               onClick={() => setDays(d)}
               aria-pressed={days === d}
               className={`tap-target rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
-                days === d ? "bg-pitch-400 text-ink-900" : "text-slate-400 hover:text-slate-200"
+                days === d ? "bg-pitch-400 text-on-accent" : "text-slate-400 hover:text-slate-200"
               }`}
             >
               {d}d

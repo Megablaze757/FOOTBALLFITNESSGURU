@@ -70,7 +70,7 @@ function ClipPicker({ clips, idx, onPick }: { clips: Clip[]; idx: number; onPick
       className="field !py-2 text-sm"
     >
       {clips.map((c, i) => (
-        <option key={c.id} value={i} className="bg-ink-800">
+        <option key={c.id} value={i} className="bg-surface-raised">
           {c.date} · {c.label}
         </option>
       ))}

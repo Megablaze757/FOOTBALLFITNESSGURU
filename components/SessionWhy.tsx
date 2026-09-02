@@ -40,7 +40,7 @@ export function SessionWhy(props: SessionWhyInput & { storageKey?: string }) {
       <ul className="space-y-2 border-t border-pitch-400/15 px-3 py-3">
         {why.lines.map((line, i) => (
           <li key={i} className="flex gap-2.5 text-xs leading-relaxed text-slate-300">
-            <span className="mt-0.5 shrink-0 text-pitch-400/70">
+            <span className="mt-0.5 shrink-0 text-pitch-500">
               <Icon name={line.icon as IconName} size={14} />
             </span>
             <span className="min-w-0">{line.text}</span>

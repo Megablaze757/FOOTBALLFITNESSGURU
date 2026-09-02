@@ -122,9 +122,32 @@ test("the page never scrolls sideways on a phone", async ({ page }, testInfo) =>
  * docs/PRODUCTION-READINESS.md. Running every axe rule including "best
  * practice" would fail on judgement calls and teach people to ignore the suite.
  */
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * BOTH THEMES, BECAUSE ONLY ONE OF THEM CAN BE LOOKED AT AT A TIME.
+ *
+ * lib/theme.test.ts proves every token in the palette passes AA against every
+ * surface. That is the palette; this is the page — the ratio that matters is
+ * the one between the colours that actually ended up on top of each other,
+ * which only a browser can tell you.
+ *
+ * `data-theme` rather than emulateMedia, because that is the path an athlete
+ * who chose light actually takes, and it is the one the boot script writes.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+const THEMES = ["dark", "light"] as const;
+
 for (const route of PUBLIC_ROUTES) {
-  test(`${route.name} has no WCAG A/AA violations`, async ({ page }) => {
+  for (const theme of THEMES) {
+    test(`${route.name} has no WCAG A/AA violations in ${theme}`, async ({ page }) => {
+    await page.addInitScript((t) => {
+      try { localStorage.setItem("pa-theme", t); } catch { /* private mode */ }
+    }, theme);
     await page.goto(route.path, { waitUntil: "networkidle" });
+
+    // The boot script should already have done this. Asserting it is how we
+    // find out the theme never applied, instead of testing dark twice.
+    await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
 
     const results = await new AxeBuilder({ page })
       .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
@@ -137,6 +160,7 @@ for (const route of PUBLIC_ROUTES) {
       .map((v) => `  [${v.impact}] ${v.id}: ${v.help}\n    ${v.nodes.slice(0, 3).map((n) => n.target.join(" ")).join("\n    ")}`)
       .join("\n");
 
-    expect(results.violations, `${route.path}\n${summary}`).toEqual([]);
-  });
+    expect(results.violations, `${route.path} (${theme})\n${summary}`).toEqual([]);
+    });
+  }
 }

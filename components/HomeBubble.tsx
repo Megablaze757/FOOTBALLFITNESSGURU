@@ -34,7 +34,7 @@ export function HomeBubble() {
       aria-label="Home"
       // Same bottom offset as the coach bubble, so the two sit on one line
       // above the tab bar rather than at two arbitrary heights.
-      className="fixed bottom-24 left-4 z-40 grid h-12 w-12 place-items-center rounded-full border border-white/[0.10] bg-ink-800 shadow-card transition hover:border-pitch-400/40 lg:hidden"
+      className="fixed bottom-24 left-4 z-40 grid h-12 w-12 place-items-center rounded-full border border-white/[0.10] bg-surface-raised shadow-card transition hover:border-pitch-400/40 lg:hidden"
       style={{ marginBottom: "env(safe-area-inset-bottom)" }}
     >
       <NavIcon name="home" active={false} size={20} />

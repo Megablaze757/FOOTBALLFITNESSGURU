@@ -737,7 +737,7 @@ export function MealPlanner({ userId, initial, initialPrefs, initialNotes, initi
                     <span className={`block text-sm font-bold ${on ? "text-pitch-400" : "text-slate-300"}`}>
                       {d.day.slice(0, 3)}
                     </span>
-                    <span className={`block text-[11px] tabular-nums ${on ? "text-pitch-400/70" : "text-slate-600"}`}>
+                    <span className={`block text-[11px] tabular-nums ${on ? "text-pitch-500" : "text-slate-600"}`}>
                       {Math.round(d.macros.kcal)}
                     </span>
                     {d.load !== "even" && (
