@@ -25,6 +25,7 @@
 
 import { handsFor } from "./dumbbell";
 import type { TrainingDrill } from "./types";
+import { findExercise } from "./exercise-match";
 
 export interface DrillSet {
   reps: number;
@@ -173,12 +174,44 @@ export function lastSetsFor(
   // Newest first. Sorted here rather than trusted, because the query that
   // supplies these is ordered for a different purpose and could change.
   const sorted = [...(logs ?? [])].sort((a, b) => String(b.log_date ?? "").localeCompare(String(a.log_date ?? "")));
+
+  const usable = (d: TrainingDrill) => {
+    const sets = workingSetsOf(d);
+    // A drill recorded with zero sets is not a previous performance.
+    return sets.length > 0 && sets.some((s) => s.reps > 0) ? sets : null;
+  };
+
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * THE SAME LIFT, TYPED DIFFERENTLY, IS STILL THE SAME LIFT.
+   *
+   * "Last time: 3 x 10 @ 42kg" is the number an athlete is trying to beat,
+   * and it only appeared when today's name matched a previous one character
+   * for character. Somebody logging freehand types "Incline dumbbell press"
+   * one week and "Incline Dumbbell Bench Press" the next, and the line
+   * silently vanished — empty boxes and nothing to beat.
+   *
+   * So a name that is not identical is put to the catalogue: if both resolve
+   * to the same entry, it is the same movement. Deliberately that narrow —
+   * two names resolving to one library exercise — rather than fuzzy matching,
+   * which would eventually show somebody their back squat under a front squat.
+   *
+   * ONE PASS, NEWEST FIRST. An earlier version did every exact match before
+   * any catalogue match, which quietly answered a different question: it
+   * returned a six-week-old "Incline Dumbbell Bench Press" over last
+   * Tuesday's "incline dumbbell press". Recency is the point of the line.
+   */
+  const canonical = findExercise(name)?.id ?? null;
+
   for (const log of sorted) {
     for (const d of log.drills ?? []) {
-      if (String(d.name ?? "").trim().toLowerCase() !== wanted) continue;
-      const sets = workingSetsOf(d);
-      // A drill recorded with zero sets is not a previous performance.
-      if (sets.length > 0 && sets.some((s) => s.reps > 0)) return sets;
+      const other = String(d.name ?? "").trim();
+      if (!other) continue;
+      const same = other.toLowerCase() === wanted
+        || (canonical !== null && findExercise(other)?.id === canonical);
+      if (!same) continue;
+      const sets = usable(d);
+      if (sets) return sets;
     }
   }
   return null;

@@ -236,3 +236,90 @@ test("a warm-up-only drill contributes no strength volume", () => {
   assert.equal(drillTonnage(logged), 0);
   assert.equal(warmupSetsOf(logged).length, 1);
 });
+
+// --- "why can't i see my previous weight anymore" ------------------------------
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE SAME LIFT, TYPED DIFFERENTLY, IS STILL THE SAME LIFT.
+ *
+ * "Last time: 3 × 10 @ 42kg" is the number an athlete is trying to beat, and
+ * it only appeared when today's drill name matched a previous one character
+ * for character. Somebody logging freehand types "Incline dumbbell press" one
+ * week and "Incline Dumbbell Bench Press" the next, and the line silently
+ * disappeared — empty boxes and nothing to beat.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("a previous performance survives being typed differently", () => {
+  const history = [{
+    log_date: "2026-08-01",
+    drills: [{
+      name: "Incline Dumbbell Bench Press",
+      sets: 3, reps: 10,
+      sets_detail: [
+        { reps: 10, load_kg: 42 }, { reps: 10, load_kg: 42 }, { reps: 8, load_kg: 42 },
+      ],
+    }],
+  }] as unknown as Parameters<typeof lastSetsFor>[0];
+
+  const exact = lastSetsFor(history, "Incline Dumbbell Bench Press");
+  assert.ok(exact, "the exact name stopped matching, which is the fast path");
+  assert.equal(exact.length, 3);
+
+  // Case and spacing were already handled. The catalogue is what handles this.
+  const reworded = lastSetsFor(history, "incline dumbbell press");
+  assert.ok(reworded, "the same lift under a different name found nothing to beat");
+  assert.deepEqual(reworded, exact);
+});
+
+/** Narrow on purpose: a different lift must never show up as your last one. */
+test("a different lift is not offered as your previous performance", () => {
+  const history = [{
+    log_date: "2026-08-01",
+    drills: [{
+      name: "Back Squat", sets: 3, reps: 5,
+      sets_detail: [{ reps: 5, load_kg: 140 }, { reps: 5, load_kg: 140 }, { reps: 5, load_kg: 140 }],
+    }],
+  }] as unknown as Parameters<typeof lastSetsFor>[0];
+
+  assert.equal(lastSetsFor(history, "Front Squat"), null,
+    "a front squat showed last week's back squat — the fallback is too loose");
+  assert.equal(lastSetsFor(history, "Bench Press"), null);
+  assert.ok(lastSetsFor(history, "back squat"), "the lift itself still matches");
+});
+
+test("the newest performance wins, whichever spelling it used", () => {
+  const history = [
+    {
+      log_date: "2026-08-10",
+      drills: [{ name: "incline dumbbell press", sets: 3, reps: 8,
+        sets_detail: [{ reps: 8, load_kg: 44 }, { reps: 8, load_kg: 44 }, { reps: 8, load_kg: 44 }] }],
+    },
+    {
+      log_date: "2026-08-01",
+      drills: [{ name: "Incline Dumbbell Bench Press", sets: 3, reps: 10,
+        sets_detail: [{ reps: 10, load_kg: 42 }, { reps: 10, load_kg: 42 }, { reps: 10, load_kg: 42 }] }],
+    },
+  ] as unknown as Parameters<typeof lastSetsFor>[0];
+
+  const found = lastSetsFor(history, "Incline Dumbbell Bench Press");
+  assert.equal(found?.[0].load_kg, 44, "an older exact match beat a newer reworded one");
+});
+
+/**
+ * The window the hint reads from is not the window a load ratio needs.
+ *
+ * "Last time" was being served out of the 28-day ACWR query, so anything on a
+ * six-week rotation, or skipped for a holiday, lost its history entirely.
+ */
+test("the journal reads last-time history from its own query", () => {
+  const page = readFileSync(new URL("../app/(app)/journal/page.tsx", import.meta.url), "utf8");
+  assert.match(page, /history=\{data\?\.drillHistory \?\? \[\]\}/,
+    "the drill hints are reading the ACWR window again, which is 28 days");
+  assert.match(page, /from\("training_logs"\)\.select\("log_date, drills"\)/,
+    "the last-time query is gone");
+  assert.match(page, /\.order\("log_date", \{ ascending: false \}\)\.limit\(200\)/,
+    "the last-time query has no bound, or is dated rather than limited");
+  // And the ACWR query must keep its own 28-day window.
+  assert.match(page, /gte\("log_date", since28\)/, "ACWR lost its window");
+});

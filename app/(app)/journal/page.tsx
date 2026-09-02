@@ -36,7 +36,7 @@ export default function JournalPage() {
     // parallel query returning dates only, not a scan of the whole table.
     const since60 = daysAgoLocal(59);
     const since28 = daysAgoLocal(27);
-    const [{ data: existing }, { data: training }, { data: bio }, { data: profile }, { data: program }, { data: recent }, { data: recentTraining }, { data: rehab }] = await Promise.all([
+    const [{ data: existing }, { data: training }, { data: bio }, { data: profile }, { data: program }, { data: recent }, { data: recentTraining }, { data: drillHistory }, { data: rehab }] = await Promise.all([
       supabase.from("daily_check_ins").select("*").eq("user_id", user.id).eq("check_in_date", today).maybeSingle(),
       supabase.from("training_logs").select("*").eq("user_id", user.id).eq("log_date", today).maybeSingle(),
       supabase.from("biometrics").select("*").eq("user_id", user.id).eq("metric_date", today).maybeSingle(),
@@ -64,6 +64,26 @@ export default function JournalPage() {
        */
       supabase.from("training_logs").select("log_date, total_minutes, duration_seconds, intensity, drills, contact_minutes, distance_km, session_type")
         .eq("user_id", user.id).gte("log_date", since28),
+      /**
+       * ═══════════════════════════════════════════════════════════════════
+       * "WHY CAN'T I SEE MY PREVIOUS WEIGHT ANYMORE?"
+       *
+       * Because "Last time: 3 x 10 @ 42kg" was being read out of the query
+       * ABOVE — the 28-day ACWR window. Those are two different questions
+       * wearing one query. A load ratio genuinely only wants four weeks; the
+       * last time you pressed something wants the last time you pressed it,
+       * whenever that was. Anything trained on a six-week rotation, or
+       * skipped for a holiday, silently lost its history and came back with
+       * empty boxes and nothing to beat.
+       *
+       * Ordered and limited rather than dated: 200 sessions is well over a
+       * year for most people and a hard ceiling for somebody who logs twice
+       * a day, and only two columns come back rather than the eight ACWR
+       * needs.
+       * ═══════════════════════════════════════════════════════════════════
+       */
+      supabase.from("training_logs").select("log_date, drills")
+        .eq("user_id", user.id).order("log_date", { ascending: false }).limit(200),
       /**
        * THE REHAB PLAN THEY ARE ON.
        *
@@ -160,6 +180,9 @@ export default function JournalPage() {
       // pre-fill a drill with what it actually was last time. No extra query —
       // this data was already on the page and only being counted.
       recentTraining: (recentTraining ?? []) as unknown as TrainingLog[],
+      // Separate from recentTraining on purpose — see the query. This one
+      // answers "what did I lift last time", which has no 28-day horizon.
+      drillHistory: (drillHistory ?? []) as { log_date?: string; drills?: TrainingDrill[] | null }[],
       training: (training ?? null) as TrainingLog | null,
       bio: (bio ?? null) as Biometric | null,
       sport: (profile as { sport?: string } | null)?.sport ?? "football",
@@ -267,7 +290,7 @@ export default function JournalPage() {
               🩹 {data.rehabNote}
             </p>
           )}
-          <JournalForm initial={initial} initialTraining={initialTraining} sport={data?.sport} distanceUnit={data?.distanceUnit ?? "km"} planned={data?.planned ?? []} history={data?.recentTraining ?? []} />
+          <JournalForm initial={initial} initialTraining={initialTraining} sport={data?.sport} distanceUnit={data?.distanceUnit ?? "km"} planned={data?.planned ?? []} history={data?.drillHistory ?? []} />
         </div>
       )}
 
