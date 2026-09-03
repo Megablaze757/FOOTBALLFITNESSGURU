@@ -1,6 +1,9 @@
 "use client";
 
 import { daysAgoLocal } from "@/lib/day";
+import { useMemo } from "react";
+import { ShareMomentCard } from "@/components/ShareMomentCard";
+import { rankedLifts } from "@/lib/strength-standards";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useAsync } from "@/lib/use-async";
@@ -130,6 +133,30 @@ export function ProgressPanel({ userId }: { userId: string }) {
     // for a runner until background revalidation landed.
   }, [userId], `history:v4:${userId}`);
 
+    /**
+   * The single best-ranked lift, for the share prompt.
+   *
+   * Recomputed here rather than lifted out of StrengthRanks: that component
+   * owns its own rendering and threading a callback out of it to tell the page
+   * what it found would couple the two for one string. rankedLifts is pure and
+   * cheap, and this screen already has every input it needs.
+   */
+  const bestLift = useMemo(() => {
+    const kg = data?.bodyweight?.kg ?? null;
+    if (!kg) return null;
+    const ranks = rankedLifts(data?.allDrills ?? [], kg, data?.sex ?? "male", data?.tested ?? []);
+    const best = [...ranks].sort((a, b) => b.tier.index - a.tier.index || b.best - a.best)[0];
+    // Untrained is not an achievement, and telling somebody it is would be the
+    // fastest way to make them never open this card again.
+    if (!best || best.tier.index < 1) return null;
+    return { name: best.via, tier: best.tier.name, weightKg: best.best };
+  }, [data?.allDrills, data?.bodyweight, data?.sex, data?.tested]);
+
+  const shareInput = useMemo(() => ({
+    name: data?.name ?? "Athlete",
+    lift: bestLift,
+  }), [data?.name, bestLift]);
+
   if (loading) {
     return (
       <div className="space-y-4">
@@ -171,6 +198,12 @@ export function ProgressPanel({ userId }: { userId: string }) {
         * are the evidence for it, in that order — headline first, then the
         * trend, then the detail.
         */}
+      {/* THE STRONGEST MOMENT THIS APP HAS.
+          "Advanced bench press" is a thing somebody tells a group chat; "18
+          sessions this month" is not. The ranks are already computed on this
+          screen — the prompt just uses the best of them, once. */}
+      <ShareMomentCard input={shareInput} />
+
       <StrengthRanks
         // Full history, not the 90-day window: ranks are best-ever, and a PR
         // from last winter is still a PR. This panel was quietly capping them.

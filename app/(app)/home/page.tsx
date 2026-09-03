@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ShareMomentCard } from "@/components/ShareMomentCard";
+import { useMemo } from "react";
 import Link from "next/link";
 import { Icon, type IconName } from "@/components/Icon";
 import { useRouter } from "next/navigation";
@@ -233,6 +235,15 @@ export default function HomePage() {
 
   const firstName = data?.profile?.full_name?.split(" ")[0] ?? "athlete";
   const streak = data?.streak ?? 0;
+
+  /**
+   * Memoised because ShareMomentCard reads it in an effect keyed on the object:
+   * a fresh literal every render would re-run the lookup on every render.
+   */
+  const momentInput = useMemo(() => ({
+    name: firstName,
+    streak,
+  }), [firstName, streak]);
   // Tool order, accent and tagline all come from here — see lib/sport-profile.ts.
   const sport = sportProfile((data?.profile as { sport?: string } | null)?.sport);
 
@@ -337,6 +348,13 @@ export default function HomePage() {
           accent={sport.accent}
         />
       )}
+
+      {/* ASKED AT THE MOMENT, NOT PARKED BEHIND A BUTTON.
+          The share card existed on two screens under "Share my progress", and
+          nobody opens a progress page in order to post — people post when
+          something just happened. This renders only when there IS something,
+          and never twice for the same thing. See lib/share-moment.ts. */}
+      <ShareMomentCard input={momentInput} />
 
       <TodayCard
         quests={data!.quests}
