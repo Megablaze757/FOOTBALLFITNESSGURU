@@ -7,6 +7,8 @@ import { STUB_WHY } from "@/lib/exercise-draft";
 import { MarketingShell, GuideCta } from "@/components/MarketingShell";
 import { jsonLd, graph, exerciseSchema, breadcrumbs } from "@/lib/schema";
 import { formGuide } from "@/lib/form-guide";
+import { relatedExercises } from "@/lib/related";
+import { slugify } from "@/lib/seo";
 
 const MOVEMENTS = EXERCISES.filter((e) => !isRunEntry(e));
 
@@ -40,6 +42,11 @@ export default function ExercisePage({ params }: { params: { slug: string } }) {
   // Same string the <meta> gets, for the same reason — a schema.org
   // description repeated across 197 pages is read by the same crawler.
   const described = exerciseMetaDescription(ex, (w) => STUB_WHY.test(w));
+  /**
+   * Somewhere to go next. Every one of these pages linked only to its own
+   * index — 382 of 383 dead ends, and the thinnest of them 107 words.
+   */
+  const related = relatedExercises(ex, MOVEMENTS);
   /**
    * Only a description that actually TEACHES the movement becomes steps.
    *
@@ -148,6 +155,27 @@ export default function ExercisePage({ params }: { params: { slug: string } }) {
             Watch a form guide for the {ex.name.toLowerCase()} ↗
           </a>
         </p>
+      )}
+
+      {related.length > 0 && (
+        <section className="mt-10">
+          <h2 className="text-xl font-extrabold tracking-tight">Train the same thing</h2>
+          <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+            {related.map((r) => (
+              <li key={r.id}>
+                <Link
+                  href={`/exercises/${slugify(r.name)}/`}
+                  className="block rounded-2xl border border-white/10 px-4 py-3 transition hover:border-pitch-400/40"
+                >
+                  <span className="font-semibold text-slate-100">{r.name}</span>
+                  <span className="block text-xs text-slate-500">
+                    {[r.equipment, r.muscles.join(", ")].filter(Boolean).join(" · ")}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       <GuideCta what="a training block" />

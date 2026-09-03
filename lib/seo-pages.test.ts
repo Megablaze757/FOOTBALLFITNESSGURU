@@ -195,6 +195,53 @@ test("robots opens the content pages and still closes the app", () => {
 });
 
 /**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * 717 PAGES THAT LINKED TO NOTHING IN THEIR OWN SECTION.
+ *
+ * Measured off the built HTML, not guessed: every exercise and recipe page had
+ * exactly one same-section link — its own index. Twelve outbound links each,
+ * and all twelve were the header and the footer. A crawler landing on "cable
+ * shrug" could reach the home page and nothing else about shrugs.
+ *
+ * That is also why 504 of 776 pages were under 200 words. Six real links is
+ * not padding; it is the part of the page a reader uses, and the part a
+ * crawler reads as "this belongs to a topic".
+ *
+ * Checked against the export because that is what ships. A related block that
+ * renders in dev and is dropped from the static build is exactly the failure
+ * this cannot see any other way.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("no content page is a dead end in its own section", (t) => {
+  const out = new URL("../out/", import.meta.url);
+  if (!existsSync(new URL("sitemap.xml", out))) {
+    return t.skip("no export in out/ — run npm run build first");
+  }
+  const xml = readFileSync(new URL("sitemap.xml", out), "utf8");
+  const paths = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)]
+    .map((m) => m[1].replace(/^https:\/\/[^/]+/, "").replace(/\/$/, ""))
+    .filter((p) => /^\/(exercises|recipes)\//.test(p));
+
+  assert.ok(paths.length > 700, `only ${paths.length} content pages — has the export shrunk?`);
+
+  const deadEnds: string[] = [];
+  for (const path of paths) {
+    const file = new URL(`.${path}/index.html`, out);
+    if (!existsSync(file)) continue;
+    const html = readFileSync(file, "utf8");
+    const section = path.split("/")[1];
+    const siblings = new Set(
+      [...html.matchAll(/href="(\/[^"#?]*)"/g)]
+        .map((m) => m[1].replace(/\/$/, ""))
+        .filter((h) => h !== path && h !== `/${section}` && h.startsWith(`/${section}/`)),
+    );
+    if (siblings.size < 3) deadEnds.push(`${path} (${siblings.size})`);
+  }
+  assert.deepEqual(deadEnds.slice(0, 10), [],
+    `${deadEnds.length} pages offer fewer than three ways further into their own section`);
+});
+
+/**
  * A sitemap that lists a URL the build did not make is worse than no sitemap —
  * it tells a crawler the site is broken, in the one file it trusts.
  */

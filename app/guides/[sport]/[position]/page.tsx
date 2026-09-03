@@ -28,9 +28,12 @@ export function generateMetadata({ params }: Params): Metadata {
   if (!found) return { title: "Not found" };
   const { sport, position } = found;
   const title = `${position} training guide — ${sportLabel(sport)}`;
+  // NAMING THE SPORT. Rugby and basketball both have a "Centre", so without it
+  // those two pages shipped the same meta description — the only duplicate
+  // pair left on the site.
   const description =
-    `What a ${position.toLowerCase()} actually needs to train: the physical qualities, ` +
-    `the technical work, and drills you can do on your own.`;
+    `What a ${sportLabel(sport).toLowerCase()} ${position.toLowerCase()} actually needs to train: ` +
+    `the physical qualities, the technical work, and drills you can do on your own.`;
   const url = `${SITE}/guides/${sport}/${params.position}/`;
   return {
     title,

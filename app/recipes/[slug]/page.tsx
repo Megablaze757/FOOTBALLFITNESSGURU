@@ -5,7 +5,8 @@ import { MEALS } from "@/lib/meals-data";
 import { mealMacros } from "@/lib/meal-plan";
 import { FOOD_BY_ID } from "@/lib/food-db";
 import { recipeSteps, recipeNote } from "@/lib/recipe-steps";
-import { contentPages, findBySlug, SITE } from "@/lib/seo";
+import { contentPages, findBySlug, slugify, SITE } from "@/lib/seo";
+import { relatedMeals } from "@/lib/related";
 import { MarketingShell, GuideCta } from "@/components/MarketingShell";
 import { jsonLd, graph, recipeSchema, breadcrumbs } from "@/lib/schema";
 
@@ -59,6 +60,8 @@ export default function RecipePage({ params }: { params: { slug: string } }) {
 
   const macros = mealMacros(meal, 1);
   const steps = recipeSteps(meal);
+  // Somewhere to go next: these pages linked only to their own index.
+  const related = relatedMeals(meal, MEALS);
   const note = recipeNote(meal);
   const url = `${SITE}/recipes/${params.slug}/`;
   const ingredients = meal.items
@@ -150,6 +153,25 @@ export default function RecipePage({ params }: { params: { slug: string } }) {
         <p className="mt-6 rounded-2xl border border-pitch-400/20 bg-pitch-400/[0.04] px-4 py-3 text-sm text-slate-300">
           <b className="text-accent-400">Worth knowing:</b> {meal.tip}
         </p>
+      )}
+
+      {related.length > 0 && (
+        <section className="mt-10">
+          <h2 className="text-xl font-extrabold tracking-tight">Cook next</h2>
+          <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+            {related.map((r) => (
+              <li key={r.id}>
+                <Link
+                  href={`/recipes/${slugify(r.name)}/`}
+                  className="block rounded-2xl border border-white/10 px-4 py-3 transition hover:border-pitch-400/40"
+                >
+                  <span className="font-semibold text-slate-100">{r.name}</span>
+                  <span className="block text-xs text-slate-500 capitalize">{r.slot}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       <GuideCta what="a week of meals" />
