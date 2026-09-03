@@ -1,9 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import {
-  nextNavState, INITIAL_NAV_STATE, TOP_ZONE, HIDE_AFTER, SHOW_AFTER, BOTTOM_ZONE,
-  type NavScrollState,
-} from "./nav-scroll";
+import { nextNavState, INITIAL_NAV_STATE, TOP_ZONE, HIDE_AFTER, SHOW_AFTER, BOTTOM_ZONE, type NavScrollState } from "./nav-scroll";
 
 /** A tall page on a phone. */
 const PAGE = { viewportH: 844, docH: 6000 };
@@ -99,4 +96,38 @@ test("a negative scroll position is not a scroll upwards", () => {
   const state = nextNavState({ hidden: true, anchorY: 300 }, { y: -40, ...PAGE });
   assert.equal(state.hidden, false);
   assert.equal(state.anchorY, 0, "the anchor must not be left negative");
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * REPORTED TWICE AS "THE NAV IS NOT AT THE BOTTOM".
+ *
+ * Measured before changing anything: in Chromium at 390x844 the bar is
+ * `position: fixed`, `bottom: 16px`, and flush to the viewport on every
+ * signed-in page. So the stylesheet is not the cause this time, and the CSS
+ * fallback added for the first report is still doing its job.
+ *
+ * What IS wrong is that the state survives a route change — the app layout
+ * does not remount — so the bar can arrive on a new page already hidden. The
+ * component now resets on the pathname rather than waiting for a scroll event
+ * it does not control. That part is in TabBar, not here.
+ *
+ * The case below is what made the difference clear: a stale scroll position on
+ * a page too short to scroll. It passes without any change to this file,
+ * because the bottom-of-page rule already covers it — which is worth pinning
+ * so nobody "optimises" that rule away.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("a stale scroll position on a short page still shows the nav", () => {
+  const hidden = { hidden: true, anchorY: 1180 };
+  for (const docH of [400, 800, 844, 844 + BOTTOM_ZONE]) {
+    const next = nextNavState(hidden, { y: 1200, viewportH: 844, docH });
+    assert.equal(next.hidden, false, `docH ${docH}: a hidden bar had no way back`);
+  }
+});
+
+test("a page that IS scrollable can still hide it", () => {
+  const shown = { hidden: false, anchorY: 200 };
+  const next = nextNavState(shown, { y: 200 + HIDE_AFTER + 1, viewportH: 844, docH: 5000 });
+  assert.equal(next.hidden, true, "the hide gesture stopped working");
 });

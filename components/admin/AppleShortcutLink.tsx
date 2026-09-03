@@ -81,7 +81,7 @@ export function AppleShortcutLink() {
 
       {data?.missing && (
         <p className="rounded-xl border border-amber-400/30 bg-amber-400/[0.08] px-3 py-2 text-xs text-amber-200">
-          <b>Migration 0103 has not run.</b> Paste supabase/apply-0088-0105.sql into the SQL editor and
+          <b>Migration 0103 has not run.</b> Paste supabase/apply-0088-0106.sql into the SQL editor and
           this box will work.
         </p>
       )}

@@ -94,7 +94,27 @@ for (const theme of ["light", "dark"] as const) {
   await context.close();
 
   // --- and the same pages behind a login ---------------------------------
-  const signedIn = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  /**
+   * ═════════════════════════════════════════════════════════════════════════
+   * A PHONE, NOT A DESKTOP.
+   *
+   * Every screenshot this script has ever taken was 1280 wide, and the tab bar
+   * is `lg:hidden` — so the primary navigation of the mobile app, the thing
+   * most reports are about, had never once been photographed. The light-mode
+   * bugs were found this way and this was the same blind spot one breakpoint
+   * over.
+   *
+   * 390x844 is an iPhone 14. `isMobile` matters as much as the width: it turns
+   * on the mobile viewport meta behaviour, and `position: fixed` against a
+   * visual viewport is exactly what a desktop context does not simulate.
+   * ═════════════════════════════════════════════════════════════════════════
+   */
+  const signedIn = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    isMobile: true,
+    hasTouch: true,
+    deviceScaleFactor: 2,
+  });
   await signedIn.addInitScript((t) => {
     try { localStorage.setItem("pa-theme", t as string); } catch { /* private mode */ }
   }, theme);
@@ -133,6 +153,41 @@ for (const theme of ["light", "dark"] as const) {
 
   for (const [name, path] of SIGNED_IN) {
     await authed.goto(`${BASE}${path}`, { waitUntil: "networkidle" });
+    /**
+     * SCROLLED, AND NOT FULL-PAGE.
+     *
+     * A fullPage screenshot of a `position: fixed` element is not evidence:
+     * the engine composites it once, so a bar that has fallen back into normal
+     * flow and a bar pinned to the viewport can look identical. Scrolling into
+     * the middle and shooting the VIEWPORT is what tells the two apart.
+     */
+    await authed.evaluate(() => window.scrollTo(0, Math.round(document.body.scrollHeight / 3)));
+    await authed.waitForTimeout(400);
+    await authed.screenshot({ path: `${OUT}/${name}-${theme}-phone.png` });
+    await authed.evaluate(() => window.scrollTo(0, 0));
+    await authed.waitForTimeout(400);
+
+    /**
+     * The bar's geometry, printed rather than only photographed.
+     *
+     * A picture shows you it is wrong; the numbers say how. `offBottom` is the
+     * one that matters: 0 means pinned to the bottom of the viewport, and a
+     * large positive number means it has fallen back into the document and is
+     * sitting at the bottom of the PAGE, which is the reported failure.
+     */
+    const bar = await authed.evaluate(() => {
+      const el = document.querySelector(".tab-bar");
+      if (!el) return { missing: true };
+      const box = el.getBoundingClientRect();
+      const cs = getComputedStyle(el);
+      return {
+        position: cs.position,
+        bottom: cs.bottom,
+        offBottom: Math.round(box.bottom - window.innerHeight),
+        visible: box.top < window.innerHeight,
+      };
+    });
+    console.log(`  ${name} tab bar:`, JSON.stringify(bar));
     await authed.screenshot({ path: `${OUT}/${name}-${theme}.png`, fullPage: true });
     console.log(`${OUT}/${name}-${theme}.png`);
   }

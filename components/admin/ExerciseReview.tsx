@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { draftProblems } from "@/lib/exercise-draft";
 import { createClient } from "@/lib/supabase/client";
 import { invokeAI } from "@/lib/api";
 import { useAsync } from "@/lib/use-async";
@@ -60,13 +61,17 @@ interface Row {
   youtube_id: string | null;
   published: boolean | null;
   published_at: string | null;
+  /** Set when the AI last drafted this row — null means never. */
+  ai_drafted_at: string | null;
+  /** Why the last draft was held, from draftProblems(). Null = nothing flagged. */
+  review_notes: string | null;
   created_at: string;
 }
 
 /** Everything migration 0099 adds, so a database without it fails one way. */
 const COLUMNS =
   "id, name, coach_id, category, sport, demo, equipment, muscles, cues, why, description, " +
-  "difficulty, tempo, youtube_id, published, published_at, created_at";
+  "difficulty, tempo, youtube_id, published, published_at, ai_drafted_at, review_notes, created_at";
 
 export function ExerciseReview() {
   const { data, loading, reload } = useAsync(async () => {
@@ -110,6 +115,13 @@ export function ExerciseReview() {
 
   const live = useMemo(() => rows.filter((r) => r.published), [rows]);
 
+  /**
+   * Never drafted, so drafting them costs one request each and skips nothing.
+   * A row that has been drafted and held is deliberately NOT in here — running
+   * the same prompt again on the same text is paying twice for the same answer.
+   */
+  const undrafted = useMemo(() => queue.filter((q) => !q.row.ai_drafted_at), [queue]);
+
   if (data?.error) {
     return (
       <p className="text-sm text-readiness-yellow">
@@ -131,8 +143,8 @@ export function ExerciseReview() {
    * as timeouts and no way to tell which. Slower and legible beats fast and
    * partly done.
    */
-  async function draftPicked() {
-    const ids = [...picked];
+  async function draftPicked(ids: string[] = [...picked]) {
+    let held = 0;
     for (let i = 0; i < ids.length; i++) {
       const row = queue.find((q) => q.row.id === ids[i])?.row;
       if (!row) continue;
@@ -141,20 +153,56 @@ export function ExerciseReview() {
         const res = await invokeAI<{ draft?: unknown }>("draft-exercise", {
           name: row.name, category: row.category, sport: row.sport,
           equipment: row.equipment, note: row.description,
+          // Free rungs only. A queue of thirty is thirty requests nobody is
+          // waiting on, and the paid model is there for the athlete-facing
+          // calls that somebody is. See complete() in the Worker.
+          freeOnly: true,
         });
         const draft = normaliseDraft(res?.draft, fromRow(row));
+
+        /**
+         * THE SAME CHECKS A HUMAN REVIEW WOULD RUN, RUN FIRST.
+         *
+         * lib/exercise-draft.ts already validates a draft against the row's own
+         * description: a cue may only name equipment the exercise uses and body
+         * parts its own text mentions, no therapeutic or "best exercise"
+         * claims, and house style on length and count. It was written for the
+         * offline script and never wired to the screen that drafts in bulk —
+         * so a fluent cue about the wrong exercise was saved silently and
+         * waited for somebody to notice it by reading.
+         *
+         * Held drafts are still SAVED. The reasons go in review_notes and the
+         * row stays unpublished, because "held" means "read this one", not
+         * "this one is wrong" — and throwing the draft away would mean paying
+         * to generate it again.
+         */
+        const problems = draftProblems(
+          { id: row.id, why: draft.why, cues: draft.cues },
+          {
+            id: row.id,
+            name: row.name,
+            category: draft.category,
+            equipment: draft.equipment,
+            muscles: draft.muscles,
+            description: draft.description || row.description || "",
+          },
+        );
+        held += problems.length ? 1 : 0;
+
         await createClient().from("custom_exercises").update({
           category: draft.category, demo: draft.demo, difficulty: draft.difficulty,
           equipment: draft.equipment, muscles: draft.muscles, cues: draft.cues,
           tempo: draft.tempo || null, why: draft.why, description: draft.description,
           ai_drafted_at: new Date().toISOString(),
+          review_notes: problems.length ? problems.join("; ") : null,
         }).eq("id", row.id);
       } catch {
         // One failure does not stop the batch — the row simply stays undrafted,
         // and the queue shows that plainly.
       }
     }
-    setBulk(null);
+    setBulk(held ? `Done — ${held} held for review, reasons on each row.` : null);
+    if (held) setTimeout(() => setBulk(null), 6000);
     setPicked(new Set());
     reload();
   }
@@ -166,6 +214,21 @@ export function ExerciseReview() {
         everybody, as a normal card — and it stops being editable by whoever added it.
       </p>
 
+      {/* THE WHOLE QUEUE, WITHOUT SELECTING IT FIRST.
+          Drafting was per-row or per-selection, which is fine for three and a
+          chore for thirty — and thirty is what a library gets after a week of
+          submissions. Free rungs only, so the cost of running it over the
+          backlog is nothing. */}
+      {undrafted.length > 0 && (
+        <button
+          onClick={() => draftPicked(undrafted.map((q) => q.row.id))}
+          disabled={!!bulk}
+          className="tap-target w-full rounded-xl border border-pitch-400/30 bg-pitch-400/[0.06] px-3 py-2.5 text-sm font-semibold text-accent-300 disabled:opacity-50"
+        >
+          {bulk ?? `Draft all ${undrafted.length} undrafted — free models, checked as they land`}
+        </button>
+      )}
+
       {queue.length === 0 ? (
         <p className="py-2 text-center text-sm text-slate-500">Nothing waiting. Nobody has added an exercise yet.</p>
       ) : (
@@ -173,7 +236,7 @@ export function ExerciseReview() {
           {picked.size > 0 && (
             <div className="flex flex-wrap items-center gap-2 rounded-xl border border-pitch-400/25 bg-pitch-400/[0.06] px-3 py-2">
               <span className="text-xs font-semibold text-accent-300">{picked.size} selected</span>
-              <button onClick={draftPicked} disabled={!!bulk} className="chip text-accent-400 disabled:opacity-40">
+              <button onClick={() => draftPicked()} disabled={!!bulk} className="chip text-accent-400 disabled:opacity-40">
                 {bulk ?? "Draft the detail for these"}
               </button>
               <button onClick={() => setPicked(new Set())} className="chip text-slate-400">Clear</button>
@@ -214,6 +277,16 @@ export function ExerciseReview() {
                     {flagsFor(row).length > 0 && (
                       <span className="mt-1 block text-[11px] text-amber-300">
                         ⚠ {flagsFor(row).join(" · ")}
+                      </span>
+                    )}
+                    {/* Why the AI draft was held. Not a rejection — the checks
+                        lean towards holding, because a cue that is fluent,
+                        confident and about a different exercise is the failure
+                        that gets somebody hurt, and five seconds of reading is
+                        the cheaper side of that trade. */}
+                    {row.review_notes && (
+                      <span className="mt-1 block text-[11px] text-readiness-yellow">
+                        Held: {row.review_notes}
                       </span>
                     )}
                   </button>

@@ -511,7 +511,7 @@ function overBudget(state: BudgetState): Response {
 // nobody is watching a spinner and the budget can be what the work actually
 // needs. Callers pass their own client-side timeout to match.
 // Bump on every paste into the Cloudflare dashboard. GET /health reports it.
-const WORKER_VERSION = "2026-08-24.6";
+const WORKER_VERSION = "2026-08-24.7";
 
 const CHAIN_BUDGET_MS = 55_000;
 /**
@@ -988,6 +988,8 @@ async function complete(
     priority?: boolean;
     /** A `data:image/…` URL. Its presence switches to the vision ladder. */
     image?: string | null;
+    /** Restrict to zero-cost rungs — see the note below the ladder. */
+    freeOnly?: boolean;
   }
 ): Promise<{ text: string; model: string; cost: number }> {
   const started = Date.now();
@@ -1024,7 +1026,32 @@ async function complete(
     return { text, model: `${rung.provider}/${rung.model}`, cost: 0 };
   };
 
-  const chain = opts.image ? visionChain(env) : modelChain(env);
+  /**
+   * ═════════════════════════════════════════════════════════════════════════
+   * FREE RUNGS ONLY, FOR WORK THAT IS BULK AND NOT URGENT.
+   *
+   * The ladder is Groq -> OpenRouter -> NVIDIA, and OpenRouter's FIRST rung is
+   * the paid model. That order is right for an athlete waiting on a screen: it
+   * is the fastest path to an answer, and one call costs a fraction of a penny.
+   *
+   * It is wrong for drafting a library. Admin drafting runs over a queue, one
+   * request per exercise, and every one that falls past Groq lands on the paid
+   * rung before it ever reaches NVIDIA's free tier. Nobody is waiting on any
+   * single one of them, so the correct trade is the opposite: try every free
+   * rung on every provider first, and only pay if all of them are down.
+   *
+   * Not a separate ladder — the same one, filtered — so a provider added or
+   * retired is added or retired once.
+   */
+  const full = opts.image ? visionChain(env) : modelChain(env);
+  const chain = opts.freeOnly
+    ? (() => {
+        const free = full.filter((r) => isFree(r) || r.provider === "groq" || r.provider === "nvidia");
+        // Never empty-handed: if nothing free is configured, the paid rung is
+        // better than failing a queue that would otherwise run all night.
+        return free.length ? free : full;
+      })()
+    : full;
   if (!chain.length) {
     // Distinguished from "no provider configured": with a photo in hand, the
     // useful thing to know is that nothing on the ladder can SEE, which is a
@@ -1130,6 +1157,8 @@ async function meteredComplete(
   opts: {
     system: string; user: string; maxTokens: number;
     validate?: (text: string) => boolean; json?: boolean; image?: string | null;
+    /** Restrict to zero-cost rungs — see the note in complete(). */
+    freeOnly?: boolean;
   }
 ): Promise<{ text: string; model: string }> {
   try {
@@ -2071,8 +2100,15 @@ async function draftExercise(req: Request, env: Env): Promise<Response> {
   const budget = await checkBudget(env, u.id);
   if (!budget.allowed) return overBudget(budget);
 
-  const { name, category, sport, equipment, note } = (await req.json()) as {
+  const { name, category, sport, equipment, note, freeOnly } = (await req.json()) as {
     name?: string; category?: string; sport?: string; equipment?: string; note?: string;
+    /**
+     * Set by the admin queue when it drafts in bulk. Nobody is waiting on any
+     * single one of these, so they take the free rungs and leave the paid model
+     * — and the monthly spend cap — for the calls an athlete is sitting in
+     * front of.
+     */
+    freeOnly?: boolean;
   };
   if (!name || !name.trim()) return json({ error: "name required" }, 400);
 
@@ -2138,7 +2174,9 @@ async function draftExercise(req: Request, env: Env): Promise<Response> {
     `Author's own note: ${clean(note || "(none)", 400)}`;
 
   const { text, model } = await meteredComplete(env, u.id, {
-    system: sys, user, maxTokens: 900, json: true,
+    system: sys,
+    // Bulk queue work takes the free rungs — see the note in complete().
+    freeOnly: freeOnly === true,
     validate: (t) => {
       try {
         const p = JSON.parse(t) as { cues?: unknown; description?: unknown; error?: unknown };

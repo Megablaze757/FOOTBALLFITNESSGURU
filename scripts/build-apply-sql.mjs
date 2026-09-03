@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // =============================================================================
-// Rebuild supabase/apply-0088-0105.sql from the migrations it claims to be.
+// Rebuild supabase/apply-0088-0106.sql from the migrations it claims to be.
 //
 // WHY A SCRIPT AND NOT A HAND-EDITED FILE. A paste-ready copy of four
 // migrations is a second source of truth, and the failure mode is silent: the
@@ -48,9 +48,10 @@ export const PARTS = [
   "0103_apple_shortcut_link",
   "0104_admin_cancellation_actor",
   "0105_leaderboard_rank",
+  "0106_exercise_review_notes",
 ];
 
-const OUT = "supabase/apply-0088-0105.sql";
+const OUT = "supabase/apply-0088-0106.sql";
 const HEADER_END = "-- =============================================================================\n\n\n";
 
 // Importing this module must not rebuild anything — lib/apply-sql.test.ts

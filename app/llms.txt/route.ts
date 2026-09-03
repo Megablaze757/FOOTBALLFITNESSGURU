@@ -5,6 +5,9 @@ import { publishableCollections } from "@/lib/collections";
 import { indexFacts, money, REFERENCE_PROTEIN } from "@/lib/protein-index";
 import { skillsForSport } from "@/lib/skills";
 import { PLANS, TRIAL_DAYS } from "@/lib/subscription";
+import { STRENGTH_TIERS } from "@/lib/strength-standards";
+import { standardPages } from "@/lib/standards-page";
+import { ARTICLES } from "@/lib/articles";
 
 // /llms.txt — the llmstxt.org convention: one markdown file telling a model
 // what this site is and where the substance lives, without making it parse
@@ -66,6 +69,21 @@ that matter for it.
 
 ${positions.map((p) => `- [${p.position} — ${sportLabel(p.sport)}](${SITE}/guides/${p.sport}/${p.slug}/)`).join("\n")}
 
+### Strength standards
+
+What a lift is worth at a given bodyweight, as multiples of it, across
+${STRENGTH_TIERS.length} tiers. The same numbers the app ranks an athlete's own
+training with rather than a separate set written for a web page.
+
+${standardPages().map(({ lift, slug }) => `- [${lift.label} standards](${SITE}/standards/${slug}/)`).join("\n")}
+
+### Articles
+
+Every figure in these is interpolated from the data the app runs on, so none of
+it is a number somebody typed that has since gone stale.
+
+${ARTICLES.map((a) => `- [${a.title}](${SITE}/articles/${a.slug}/) — ${a.description}`).join("\n")}
+
 ### Drill collections
 ${sports.map((s) => `- [${sportLabel(s)} skill drills](${SITE}/drills/${s}/) — ${skillsForSport(s).length} drills, ${skillsForSport(s).filter((d) => d.needs === "solo").length} doable alone`).join("\n")}
 
@@ -103,6 +121,8 @@ needed. Includes rehab and mobility work, not only lifts.
 - [All exercises](${SITE}/exercises/)
 - [Recipe collections](${SITE}/collections/)
 - [Cheapest protein](${SITE}/cheapest-protein/)
+- [Strength standards](${SITE}/standards/)
+- [Articles](${SITE}/articles/)
 - [Privacy policy](${SITE}/privacy/)
 - [Terms](${SITE}/terms/)
 

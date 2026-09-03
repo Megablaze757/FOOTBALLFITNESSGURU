@@ -3,6 +3,8 @@ import { SITE, guideSports, guidePages, contentPages } from "@/lib/seo";
 import { MEALS } from "@/lib/meals-data";
 import { EXERCISES, isRunEntry } from "@/lib/exercises";
 import { publishableHubs, hubPath } from "@/lib/hubs";
+import { ARTICLES } from "@/lib/articles";
+import { standardPages } from "@/lib/standards-page";
 import { collectionSlugs } from "@/lib/collections";
 
 // Generated at build time from lib/seo.ts, which is the same source the pages
@@ -24,6 +26,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${SITE}/recipes/`, changeFrequency: "monthly" as const, priority: 0.85 },
     { url: `${SITE}/exercises/`, changeFrequency: "monthly" as const, priority: 0.85 },
     { url: `${SITE}/collections/`, changeFrequency: "monthly" as const, priority: 0.85 },
+    { url: `${SITE}/standards/`, changeFrequency: "monthly" as const, priority: 0.85 },
+    { url: `${SITE}/articles/`, changeFrequency: "weekly" as const, priority: 0.8 },
     // The one page here no competitor can compute. Highest of the content
     // pages because it is the one worth earning a link.
     { url: `${SITE}/cheapest-protein/`, changeFrequency: "weekly" as const, priority: 0.9 },
@@ -94,6 +98,19 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: 0.8,
   }));
 
-  return [...core, ...drills, ...guides, ...collections, ...hubs, ...recipes, ...exercises]
+  const articles = ARTICLES.map((a) => ({
+    url: `${SITE}/articles/${a.slug}/`,
+    lastModified: new Date(a.updated ?? a.published),
+    changeFrequency: "monthly" as const,
+    priority: 0.7,
+  }));
+
+  const standards = standardPages().map(({ slug }) => ({
+    url: `${SITE}/standards/${slug}/`,
+    changeFrequency: "monthly" as const,
+    priority: 0.8,
+  }));
+
+  return [...core, ...drills, ...guides, ...collections, ...hubs, ...standards, ...articles, ...recipes, ...exercises]
     .map((e) => ({ ...e, lastModified: now }));
 }

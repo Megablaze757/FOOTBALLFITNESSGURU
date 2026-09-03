@@ -65,7 +65,16 @@ export const INITIAL_NAV_STATE: NavScrollState = { hidden: false, anchorY: 0 };
 export function nextNavState(state: NavScrollState, pos: ScrollPosition): NavScrollState {
   const y = Math.max(0, pos.y);
 
-  // Top of the page, and the bottom of it, are both always-visible.
+  /**
+   * Top of the page, and the bottom of it, are both always-visible.
+   *
+   * The bottom rule also covers a page too short to scroll, which is not
+   * obvious: on a page shorter than the viewport, `y + viewportH` clears
+   * `docH - BOTTOM_ZONE` for any y at all, so a hidden bar carried in from the
+   * previous route always comes back. A separate guard for that case was
+   * written and deleted — it never fired, and dead code with a confident
+   * comment above it is worse than no comment.
+   */
   if (y <= TOP_ZONE) return { hidden: false, anchorY: y };
   if (pos.y + pos.viewportH >= pos.docH - BOTTOM_ZONE) return { hidden: false, anchorY: y };
 

@@ -4,10 +4,6 @@ import { useMemo, useState } from "react";
 import { SKILL_DRILLS, type SkillDrill } from "@/lib/skills";
 import { buildDrillCardSvg, type CardStyle } from "@/lib/drill-card";
 import { POST_SIZES, svgDimensions, type PostSize } from "@/lib/post-size";
-import {
-  reelScenes, reelDuration, reelFrameSvg, pickMimeType, fileExtension, REEL_FPS,
-  inspectRecording, isPostable,
-} from "@/lib/reel";
 import { drillCaption, demoCaption, renderCaption, captionProblems } from "@/lib/caption";
 import { buildDemoCardSvg, DEMO_SCREENS, type DemoScreen } from "@/lib/demo-card";
 import { FACT_GROUPS, PILLARS, LAUNCH_SEQUENCE, CHANNELS, NEVER_CLAIM, allFacts } from "@/lib/content";
@@ -25,13 +21,12 @@ import type { SportId } from "@/lib/exercises";
  * All of it lives in admin because it's a marketing back-office, not a user
  * feature — and because the AI writer spends real money per call.
  */
-type Tab = "plan" | "drills" | "demos" | "reels" | "write";
+type Tab = "plan" | "drills" | "demos" | "write";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "plan", label: "📋 Plan" },
   { id: "drills", label: "🎯 Drill cards" },
   { id: "demos", label: "📱 App demos" },
-  { id: "reels", label: "🎬 Reels" },
   { id: "write", label: "✍️ AI writer" },
 ];
 
@@ -61,7 +56,6 @@ export function ContentEngine() {
       {tab === "plan" && <PlanTab />}
       {tab === "drills" && <DrillCardsTab />}
       {tab === "demos" && <DemosTab />}
-      {tab === "reels" && <ReelsTab />}
       {tab === "write" && <WriterTab />}
     </div>
   );
@@ -221,164 +215,6 @@ function CardPreview({ svg, onDownload, label, busy }: { svg: string; onDownload
   );
 }
 
-
-// --- Reels -------------------------------------------------------------------
-
-/**
- * Record a drill as a vertical video, in the browser, with no dependency.
- *
- * A canvas is drawn frame by frame from lib/reel's storyboard and captured with
- * MediaRecorder. The SVG for each frame is rasterised once per SCENE, not once
- * per frame — a scene is a held card, so redrawing it thirty times a second is
- * thirty times the work for identical pixels. Only the progress bar moves, and
- * that is drawn straight onto the canvas.
- */
-async function recordReel(
-  scenes: ReturnType<typeof reelScenes>,
-  handle: string,
-  onProgress: (fraction: number) => void,
-): Promise<{ blob: Blob; postable: boolean; type: string; container: string; h264: boolean }> {
-  const mime = pickMimeType((t) => MediaRecorder.isTypeSupported(t));
-  if (!mime) throw new Error("This browser cannot record video. Chrome or Safari can.");
-
-  const total = reelDuration(scenes);
-  const canvas = document.createElement("canvas");
-  canvas.width = 1080;
-  canvas.height = 1920;
-  const ctx = canvas.getContext("2d")!;
-
-  // One raster per scene, decoded up front: decoding mid-recording drops frames
-  // and the drop lands exactly on a cut, which is where it is most visible.
-  const frames: HTMLImageElement[] = [];
-  let at = 0;
-  for (const scene of scenes) {
-    const img = new Image();
-    img.src = "data:image/svg+xml;base64,"
-      + btoa(unescape(encodeURIComponent(reelFrameSvg(scenes, at, { handle }))));
-    await img.decode();
-    frames.push(img);
-    at += scene.ms;
-  }
-
-  const stream = canvas.captureStream(REEL_FPS);
-  const recorder = new MediaRecorder(stream, { mimeType: mime.type, videoBitsPerSecond: 8_000_000 });
-  const chunks: BlobPart[] = [];
-  recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
-
-  const done = new Promise<Blob>((resolve) => {
-    recorder.onstop = () => resolve(new Blob(chunks, { type: mime.type }));
-  });
-
-  recorder.start();
-  const started = performance.now();
-  await new Promise<void>((resolve) => {
-    const tick = () => {
-      const t = performance.now() - started;
-      if (t >= total) return resolve();
-      // Which scene, from the storyboard — never from a frame counter, which
-      // drifts the moment the tab is throttled.
-      let elapsed = 0, index = 0;
-      for (let i = 0; i < scenes.length; i++) {
-        if (t < elapsed + scenes[i].ms) { index = i; break; }
-        elapsed += scenes[i].ms;
-      }
-      ctx.drawImage(frames[index], 0, 0);
-      // The progress bar is the one thing that moves within a scene.
-      ctx.fillStyle = "#e3b53f";
-      ctx.fillRect(88, 1920 - 190, Math.round((1080 - 176) * (t / total)), 6);
-      onProgress(t / total);
-      requestAnimationFrame(tick);
-    };
-    requestAnimationFrame(tick);
-  });
-  recorder.stop();
-  onProgress(1);
-  const blob = await done;
-  /**
-   * Judged on the FILE, not on what was requested.
-   *
-   * Asking for "video/mp4" and getting one is not the same as getting
-   * something Instagram will take: Chromium answers that request with VP9 in
-   * an MP4 container, which is an upload failure with the right extension.
-   */
-  const info = inspectRecording(new Uint8Array(await blob.slice(0, 64).arrayBuffer()));
-  return { blob, postable: isPostable(info), type: mime.type, container: info.container, h264: info.h264 };
-}
-
-function ReelsTab() {
-  const [sport, setSport] = useState<SportId>("football");
-  const [handle, setHandle] = useState("pocketathlete.com/drills");
-  const [busy, setBusy] = useState<string | null>(null);
-  const [progress, setProgress] = useState(0);
-  const [warning, setWarning] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  const drills = useMemo(() => SKILL_DRILLS.filter((d) => d.sport === sport), [sport]);
-
-  async function record(d: SkillDrill) {
-    setBusy(d.id); setProgress(0); setError(null); setWarning(null);
-    try {
-      const scenes = reelScenes(d);
-      const { blob, postable, type, container, h264 } = await recordReel(scenes, handle, setProgress);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${d.id}-reel.${fileExtension(type)}`;
-      a.click();
-      URL.revokeObjectURL(url);
-      if (!postable) {
-        setWarning(container === "mp4" && !h264
-          ? "Your browser put VP9 inside the MP4 rather than H.264, which Instagram will not process. "
-            + "The file downloaded — convert it to H.264 before posting."
-          : "Your browser recorded WebM, which Instagram will not accept. "
-            + "The file downloaded — convert it to MP4 (H.264) before posting.");
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally { setBusy(null); }
-  }
-
-  return (
-    <div className="space-y-5">
-      <div className="card space-y-4 p-5">
-        <Picker label="Sport" options={guideSports().map((s) => [s, sportLabel(s)])} value={sport} onChange={(v) => setSport(v as SportId)} />
-        <label className="block">
-          <span className="field-label">Footer link</span>
-          <input value={handle} onChange={(e) => setHandle(e.target.value)} className="field" />
-        </label>
-        <p className="text-xs text-slate-500">
-          1080×1920, cut between held cards. Recorded here — nothing is uploaded.
-        </p>
-        {warning && <p className="text-sm text-readiness-yellow">{warning}</p>}
-        {error && <p className="text-sm text-readiness-red">{error}</p>}
-      </div>
-
-      <div className="space-y-3">
-        {drills.map((d) => {
-          const seconds = Math.round(reelDuration(reelScenes(d)) / 1000);
-          return (
-            <div key={d.id} className="card p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-bold text-slate-100">{d.name}</div>
-                  <div className="text-xs text-slate-500">{d.skill} · {seconds}s</div>
-                </div>
-                <button
-                  onClick={() => record(d)}
-                  disabled={!!busy}
-                  className="tap-target shrink-0 rounded-xl border border-white/10 px-3 py-2 text-xs font-semibold text-slate-300 disabled:opacity-50"
-                >
-                  {busy === d.id ? `${Math.round(progress * 100)}%` : "Record"}
-                </button>
-              </div>
-              <CaptionBox text={renderCaption(drillCaption(d, { link: handle }))} />
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
 
 // --- Drill cards -------------------------------------------------------------
 

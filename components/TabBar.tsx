@@ -23,6 +23,25 @@ export function TabBar() {
    */
   const [hidden, setHidden] = useState(false);
   const scrollState = useRef<NavScrollState>(INITIAL_NAV_STATE);
+
+  /**
+   * COME BACK ON NAVIGATION, WITHOUT WAITING TO BE SCROLLED.
+   *
+   * This layout does not remount between routes, so `hidden` and the scroll
+   * anchor survive a page change: scroll down on a long page, tap a tab, and
+   * the next page starts with the nav already off-screen. It usually recovers,
+   * because the router scrolls to the top and that fires a scroll event — but
+   * "usually" is doing the work there, and when the new page is short enough
+   * not to scroll, nothing fires and the bar simply is not there.
+   *
+   * Resetting on the path is the fix that does not depend on an event we do
+   * not control.
+   */
+  useEffect(() => {
+    scrollState.current = INITIAL_NAV_STATE;
+    setHidden(false);
+  }, [pathname]);
+
   useEffect(() => {
     let queued = false;
     const onScroll = () => {
