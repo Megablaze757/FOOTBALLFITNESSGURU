@@ -3,6 +3,11 @@
 import { useMemo, useState } from "react";
 import { SKILL_DRILLS, type SkillDrill } from "@/lib/skills";
 import { buildDrillCardSvg, type CardStyle } from "@/lib/drill-card";
+import { POST_SIZES, svgDimensions, type PostSize } from "@/lib/post-size";
+import {
+  reelScenes, reelDuration, reelFrameSvg, pickMimeType, fileExtension, REEL_FPS,
+} from "@/lib/reel";
+import { drillCaption, demoCaption, renderCaption, captionProblems } from "@/lib/caption";
 import { buildDemoCardSvg, DEMO_SCREENS, type DemoScreen } from "@/lib/demo-card";
 import { FACT_GROUPS, PILLARS, LAUNCH_SEQUENCE, CHANNELS, NEVER_CLAIM, allFacts } from "@/lib/content";
 import { guideSports, sportLabel } from "@/lib/seo";
@@ -19,12 +24,13 @@ import type { SportId } from "@/lib/exercises";
  * All of it lives in admin because it's a marketing back-office, not a user
  * feature — and because the AI writer spends real money per call.
  */
-type Tab = "plan" | "drills" | "demos" | "write";
+type Tab = "plan" | "drills" | "demos" | "reels" | "write";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "plan", label: "📋 Plan" },
   { id: "drills", label: "🎯 Drill cards" },
   { id: "demos", label: "📱 App demos" },
+  { id: "reels", label: "🎬 Reels" },
   { id: "write", label: "✍️ AI writer" },
 ];
 
@@ -54,6 +60,7 @@ export function ContentEngine() {
       {tab === "plan" && <PlanTab />}
       {tab === "drills" && <DrillCardsTab />}
       {tab === "demos" && <DemosTab />}
+      {tab === "reels" && <ReelsTab />}
       {tab === "write" && <WriterTab />}
     </div>
   );
@@ -137,13 +144,17 @@ function PlanTab() {
 
 // --- Shared export -----------------------------------------------------------
 
-async function rasterise(svg: string, size = 1080): Promise<Blob> {
+async function rasterise(svg: string): Promise<Blob> {
   const img = new Image();
   img.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svg)));
   await img.decode();
+  // READ FROM THE MARKUP. This took a `size` and set width AND height from it,
+  // so the first non-square card would have been squashed into a square — and
+  // silently, because the preview is the SVG and only the export is the canvas.
+  const { w, h } = svgDimensions(svg);
   const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
+  canvas.width = w;
+  canvas.height = h;
   canvas.getContext("2d")!.drawImage(img, 0, 0);
   return await new Promise<Blob>((res, rej) =>
     canvas.toBlob((b) => (b ? res(b) : rej(new Error("toBlob failed"))), "image/png"),
@@ -157,6 +168,36 @@ async function downloadPng(svg: string, name: string) {
   a.download = name;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+/**
+ * The caption, next to the picture it belongs to.
+ *
+ * Exporting an image and then writing the words somewhere else is where the
+ * habit dies — 38 drills is 38 posts only if the post is finished when the
+ * download completes. Re-checked against the claim rules on the way out, so a
+ * hand-edit that reintroduces a banned claim is visible before it is posted
+ * rather than after.
+ */
+function CaptionBox({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const problems = captionProblems(text);
+  return (
+    <div className="mt-2 rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+      <pre className="max-h-40 overflow-y-auto whitespace-pre-wrap break-words text-xs leading-relaxed text-slate-300">{text}</pre>
+      {problems.length > 0 && (
+        <ul className="mt-2 space-y-1 text-xs text-readiness-red">
+          {problems.map((p) => <li key={p}>{p}</li>)}
+        </ul>
+      )}
+      <button
+        onClick={() => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
+        className="tap-target mt-2 w-full rounded-xl border border-white/10 px-3 py-2 text-xs font-semibold text-slate-300 transition hover:bg-white/[0.06]"
+      >
+        {copied ? "Caption copied" : "Copy caption"}
+      </button>
+    </div>
+  );
 }
 
 function CardPreview({ svg, onDownload, label, busy }: { svg: string; onDownload: () => void; label: string; busy: boolean }) {
@@ -179,11 +220,159 @@ function CardPreview({ svg, onDownload, label, busy }: { svg: string; onDownload
   );
 }
 
+
+// --- Reels -------------------------------------------------------------------
+
+/**
+ * Record a drill as a vertical video, in the browser, with no dependency.
+ *
+ * A canvas is drawn frame by frame from lib/reel's storyboard and captured with
+ * MediaRecorder. The SVG for each frame is rasterised once per SCENE, not once
+ * per frame — a scene is a held card, so redrawing it thirty times a second is
+ * thirty times the work for identical pixels. Only the progress bar moves, and
+ * that is drawn straight onto the canvas.
+ */
+async function recordReel(
+  scenes: ReturnType<typeof reelScenes>,
+  handle: string,
+  onProgress: (fraction: number) => void,
+): Promise<{ blob: Blob; postable: boolean; type: string }> {
+  const mime = pickMimeType((t) => MediaRecorder.isTypeSupported(t));
+  if (!mime) throw new Error("This browser cannot record video. Chrome or Safari can.");
+
+  const total = reelDuration(scenes);
+  const canvas = document.createElement("canvas");
+  canvas.width = 1080;
+  canvas.height = 1920;
+  const ctx = canvas.getContext("2d")!;
+
+  // One raster per scene, decoded up front: decoding mid-recording drops frames
+  // and the drop lands exactly on a cut, which is where it is most visible.
+  const frames: HTMLImageElement[] = [];
+  let at = 0;
+  for (const scene of scenes) {
+    const img = new Image();
+    img.src = "data:image/svg+xml;base64,"
+      + btoa(unescape(encodeURIComponent(reelFrameSvg(scenes, at, { handle }))));
+    await img.decode();
+    frames.push(img);
+    at += scene.ms;
+  }
+
+  const stream = canvas.captureStream(REEL_FPS);
+  const recorder = new MediaRecorder(stream, { mimeType: mime.type, videoBitsPerSecond: 8_000_000 });
+  const chunks: BlobPart[] = [];
+  recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+
+  const done = new Promise<Blob>((resolve) => {
+    recorder.onstop = () => resolve(new Blob(chunks, { type: mime.type }));
+  });
+
+  recorder.start();
+  const started = performance.now();
+  await new Promise<void>((resolve) => {
+    const tick = () => {
+      const t = performance.now() - started;
+      if (t >= total) return resolve();
+      // Which scene, from the storyboard — never from a frame counter, which
+      // drifts the moment the tab is throttled.
+      let elapsed = 0, index = 0;
+      for (let i = 0; i < scenes.length; i++) {
+        if (t < elapsed + scenes[i].ms) { index = i; break; }
+        elapsed += scenes[i].ms;
+      }
+      ctx.drawImage(frames[index], 0, 0);
+      // The progress bar is the one thing that moves within a scene.
+      ctx.fillStyle = "#e3b53f";
+      ctx.fillRect(88, 1920 - 190, Math.round((1080 - 176) * (t / total)), 6);
+      onProgress(t / total);
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+  recorder.stop();
+  onProgress(1);
+  return { blob: await done, postable: mime.postable, type: mime.type };
+}
+
+function ReelsTab() {
+  const [sport, setSport] = useState<SportId>("football");
+  const [handle, setHandle] = useState("pocketathlete.com/drills");
+  const [busy, setBusy] = useState<string | null>(null);
+  const [progress, setProgress] = useState(0);
+  const [warning, setWarning] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const drills = useMemo(() => SKILL_DRILLS.filter((d) => d.sport === sport), [sport]);
+
+  async function record(d: SkillDrill) {
+    setBusy(d.id); setProgress(0); setError(null); setWarning(null);
+    try {
+      const scenes = reelScenes(d);
+      const { blob, postable, type } = await recordReel(scenes, handle, setProgress);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${d.id}-reel.${fileExtension(type)}`;
+      a.click();
+      URL.revokeObjectURL(url);
+      if (!postable) {
+        setWarning("Your browser recorded WebM, which Instagram will not accept. "
+          + "The file downloaded — convert it to MP4 before posting, or record in Chrome or Safari.");
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally { setBusy(null); }
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="card space-y-4 p-5">
+        <Picker label="Sport" options={guideSports().map((s) => [s, sportLabel(s)])} value={sport} onChange={(v) => setSport(v as SportId)} />
+        <label className="block">
+          <span className="field-label">Footer link</span>
+          <input value={handle} onChange={(e) => setHandle(e.target.value)} className="field" />
+        </label>
+        <p className="text-xs text-slate-500">
+          1080×1920, cut between held cards. Recorded here — nothing is uploaded.
+        </p>
+        {warning && <p className="text-sm text-readiness-yellow">{warning}</p>}
+        {error && <p className="text-sm text-readiness-red">{error}</p>}
+      </div>
+
+      <div className="space-y-3">
+        {drills.map((d) => {
+          const seconds = Math.round(reelDuration(reelScenes(d)) / 1000);
+          return (
+            <div key={d.id} className="card p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-bold text-slate-100">{d.name}</div>
+                  <div className="text-xs text-slate-500">{d.skill} · {seconds}s</div>
+                </div>
+                <button
+                  onClick={() => record(d)}
+                  disabled={!!busy}
+                  className="tap-target shrink-0 rounded-xl border border-white/10 px-3 py-2 text-xs font-semibold text-slate-300 disabled:opacity-50"
+                >
+                  {busy === d.id ? `${Math.round(progress * 100)}%` : "Record"}
+                </button>
+              </div>
+              <CaptionBox text={renderCaption(drillCaption(d, { link: handle }))} />
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // --- Drill cards -------------------------------------------------------------
 
 function DrillCardsTab() {
   const [sport, setSport] = useState<SportId>("football");
   const [style, setStyle] = useState<CardStyle>("drill");
+  const [size, setSize] = useState<PostSize>("portrait");
   const [handle, setHandle] = useState("pocketathlete.com/drills");
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -192,7 +381,7 @@ function DrillCardsTab() {
   async function one(d: SkillDrill) {
     setBusy(d.id);
     try {
-      await downloadPng(buildDrillCardSvg({ drill: d, sportLabel: sportLabel(sport), style, handle }), `${d.id}-${style}.png`);
+      await downloadPng(buildDrillCardSvg({ drill: d, sportLabel: sportLabel(sport), style, handle, size }), `${d.id}-${style}-${size}.png`);
     } finally { setBusy(null); }
   }
 
@@ -214,6 +403,12 @@ function DrillCardsTab() {
           value={style}
           onChange={(v) => setStyle(v as CardStyle)}
         />
+        <Picker
+          label="Size"
+          options={POST_SIZES.map((o) => [o.id, `${o.label} · ${o.note.split(" · ")[1] ?? o.note}`] as [string, string])}
+          value={size}
+          onChange={(v) => setSize(v as PostSize)}
+        />
         <label className="block">
           <span className="field-label">Footer link</span>
           <input value={handle} onChange={(e) => setHandle(e.target.value)} className="field" />
@@ -228,13 +423,15 @@ function DrillCardsTab() {
 
       <div className="grid gap-5 sm:grid-cols-2">
         {drills.map((d) => (
-          <CardPreview
-            key={d.id}
-            label={d.name}
-            busy={busy === d.id}
-            svg={buildDrillCardSvg({ drill: d, sportLabel: sportLabel(sport), style, handle })}
-            onDownload={() => one(d)}
-          />
+          <div key={d.id}>
+            <CardPreview
+              label={d.name}
+              busy={busy === d.id}
+              svg={buildDrillCardSvg({ drill: d, sportLabel: sportLabel(sport), style, handle, size })}
+              onDownload={() => one(d)}
+            />
+            <CaptionBox text={renderCaption(drillCaption(d, { link: handle }))} />
+          </div>
         ))}
       </div>
     </div>
@@ -245,22 +442,31 @@ function DrillCardsTab() {
 
 function DemosTab() {
   const [headlines, setHeadlines] = useState<Record<string, string>>({});
+  const [size, setSize] = useState<PostSize>("portrait");
   const [busy, setBusy] = useState<string | null>(null);
 
   async function one(screen: DemoScreen) {
     setBusy(screen);
     try {
-      await downloadPng(buildDemoCardSvg({ screen, headline: headlines[screen] || undefined }), `demo-${screen}.png`);
+      await downloadPng(buildDemoCardSvg({ screen, headline: headlines[screen] || undefined, size }), `demo-${screen}-${size}.png`);
     } finally { setBusy(null); }
   }
 
   return (
     <div className="space-y-5">
       <p className="card p-4 text-sm text-slate-400">
-        These screens are <b className="text-slate-200">drawn, not screenshotted</b> — so they
-        can&apos;t leak a real athlete&apos;s data and can&apos;t drift into showing a feature that
-        doesn&apos;t exist. Edit the headline on any of them.
+        Drawn, not screenshotted — so they can&apos;t leak an athlete&apos;s data or show a
+        feature that doesn&apos;t exist. Edit any headline.
       </p>
+
+      <div className="card p-5">
+        <Picker
+          label="Size"
+          options={POST_SIZES.map((o) => [o.id, `${o.label} · ${o.note.split(" · ")[1] ?? o.note}`] as [string, string])}
+          value={size}
+          onChange={(v) => setSize(v as PostSize)}
+        />
+      </div>
 
       <div className="grid gap-5 sm:grid-cols-2">
         {DEMO_SCREENS.map((s) => (
@@ -268,7 +474,7 @@ function DemosTab() {
             <CardPreview
               label={s.label}
               busy={busy === s.id}
-              svg={buildDemoCardSvg({ screen: s.id, headline: headlines[s.id] || undefined })}
+              svg={buildDemoCardSvg({ screen: s.id, headline: headlines[s.id] || undefined, size })}
               onDownload={() => one(s.id)}
             />
             <input
@@ -278,6 +484,7 @@ function DemosTab() {
               aria-label={`Headline for ${s.label}`}
               className="field mt-2"
             />
+            <CaptionBox text={renderCaption(demoCaption(s.id))} />
           </div>
         ))}
       </div>

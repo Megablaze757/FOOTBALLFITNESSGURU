@@ -12,6 +12,8 @@
 // a genuine screenshot very easily can.
 // =============================================================================
 
+import { sizeOf, type PostSize } from "./post-size";
+
 const W = 1080;
 const GOLD = "#e3b53f";
 const INK = "#0a0a0b";
@@ -32,21 +34,32 @@ export const DEMO_SCREENS: { id: DemoScreen; label: string; caption: string }[] 
 ];
 
 export interface DemoCardOptions {
+  /** Feed square, feed portrait or story. Width is 1080 either way. */
+  size?: PostSize;
   screen: DemoScreen;
   headline?: string;
   handle?: string;
 }
 
 /** A phone chassis with the screen content drawn inside it. */
-export function buildDemoCardSvg({ screen, headline, handle = "pocketathlete.com" }: DemoCardOptions): string {
+export function buildDemoCardSvg({ screen, headline, handle = "pocketathlete.com", size = "square" }: DemoCardOptions): string {
   const meta = DEMO_SCREENS.find((s) => s.id === screen)!;
   const title = headline ?? meta.caption;
+  const { h: H } = sizeOf(size);
 
-  // Phone geometry. Sized so the frame sits in the lower two thirds with room
-  // for a headline above it — the layout that reads at thumbnail size.
-  const pw = 460, ph = 700, px = (W - pw) / 2, py = 330;
+  /**
+   * Phone geometry. Sized so the frame sits in the lower two thirds with room
+   * for a headline above it — the layout that reads at thumbnail size.
+   *
+   * A taller canvas grows the PHONE rather than the margins: this card is a
+   * screenshot of the product, and on a story the product should be bigger,
+   * not floating in a field of background.
+   */
+  const scale = Math.min(1.5, H / 1080);
+  const pw = Math.round(460 * scale), ph = Math.round(700 * scale);
+  const px = Math.round((W - pw) / 2), py = Math.round(330 + (H - 1080) * 0.3);
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${W}" viewBox="0 0 ${W} ${W}">
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#141416"/><stop offset="100%" stop-color="${INK}"/>
@@ -59,7 +72,7 @@ export function buildDemoCardSvg({ screen, headline, handle = "pocketathlete.com
     </clipPath>
   </defs>
 
-  <rect width="${W}" height="${W}" fill="url(#bg)"/>
+  <rect width="${W}" height="${H}" fill="url(#bg)"/>
   <rect x="0" y="0" width="${W}" height="8" fill="url(#gold)"/>
 
   ${headlineBlock(title)}
@@ -73,8 +86,8 @@ export function buildDemoCardSvg({ screen, headline, handle = "pocketathlete.com
   <!-- Notch -->
   <rect x="${px + pw / 2 - 55}" y="${py + 22}" width="110" height="26" rx="13" fill="#1c1c1f"/>
 
-  <text x="72" y="${W - 52}" font-family="Arial, Helvetica, sans-serif" font-size="26" font-weight="700" fill="#8391a6">${esc(handle)}</text>
-  <text x="${W - 72}" y="${W - 52}" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="800" fill="${GOLD}">PocketAthlete</text>
+  <text x="72" y="${H - 52}" font-family="Arial, Helvetica, sans-serif" font-size="26" font-weight="700" fill="#8391a6">${esc(handle)}</text>
+  <text x="${W - 72}" y="${H - 52}" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="800" fill="${GOLD}">PocketAthlete</text>
 </svg>`;
 }
 

@@ -11,6 +11,7 @@
 // =============================================================================
 
 import type { SkillDrill } from "./skills";
+import { sizeOf, type PostSize } from "./post-size";
 
 const W = 1080;
 const GOLD = "#e3b53f";
@@ -60,20 +61,23 @@ export interface DrillCardOptions {
   style?: CardStyle;
   /** Shown bottom-right, e.g. "pocketathlete.com/drills". */
   handle?: string;
+  /** Feed square, feed portrait or story. Width is 1080 either way. */
+  size?: PostSize;
 }
 
-export function buildDrillCardSvg({ drill, sportLabel, style = "drill", handle = "pocketathlete.com/drills" }: DrillCardOptions): string {
+export function buildDrillCardSvg({ drill, sportLabel, style = "drill", handle = "pocketathlete.com/drills", size = "square" }: DrillCardOptions): string {
   const needs = drill.needs === "solo" ? "YOU ONLY" : drill.needs === "partner" ? "YOU + ONE" : "FULL SESSION";
+  const { h: H } = sizeOf(size);
 
-  const body = style === "cue" ? cueBody(drill) : drillBody(drill);
+  const body = style === "cue" ? cueBody(drill, H) : drillBody(drill, H);
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${W}" viewBox="0 0 ${W} ${W}">
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
   <defs>
     <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0%" stop-color="#f6d365"/><stop offset="100%" stop-color="#c9962f"/>
     </linearGradient>
   </defs>
-  <rect width="${W}" height="${W}" fill="${INK}"/>
+  <rect width="${W}" height="${H}" fill="${INK}"/>
   <rect x="0" y="0" width="${W}" height="8" fill="url(#g)"/>
 
   <text x="72" y="120" font-family="Arial, Helvetica, sans-serif" font-size="26" font-weight="700" fill="${GOLD}" letter-spacing="3">
@@ -85,19 +89,37 @@ export function buildDrillCardSvg({ drill, sportLabel, style = "drill", handle =
 
   ${body}
 
-  <text x="72" y="${W - 56}" font-family="Arial, Helvetica, sans-serif" font-size="26" font-weight="700" fill="#475569">
+  <text x="72" y="${H - 56}" font-family="Arial, Helvetica, sans-serif" font-size="26" font-weight="700" fill="#475569">
     ${esc(handle)}
   </text>
-  <text x="${W - 72}" y="${W - 56}" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="800" fill="${GOLD}">
+  <text x="${W - 72}" y="${H - 56}" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="800" fill="${GOLD}">
     PocketAthlete
   </text>
 </svg>`;
 }
 
 /** Full how-to: title, setup, numbered steps, volume, cue. */
-function drillBody(d: SkillDrill): string {
+/**
+ * Full how-to: title, setup, numbered steps, volume, cue.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE BLOCK IS CENTRED, NOT PINNED AT BOTH ENDS.
+ *
+ * First attempt at the taller sizes pushed the title down and left the cue box
+ * fixed to the bottom, which on a 1920 story opened a 500px hole in the middle
+ * of the card — the two halves at opposite ends of an empty screen. Found by
+ * rendering one and looking at it, which is the only way this kind of thing is
+ * ever found.
+ *
+ * So the content is laid out at its natural height and the whole group is
+ * translated down by half the slack. On a square that slack is zero and the
+ * card is unchanged.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+function drillBody(d: SkillDrill, H: number): string {
   const title = wrap(d.name, 24, 2);
-  let y = 230;
+  const TOP = 230;
+  let y = TOP;
   const out: string[] = [];
 
   for (const line of title) {
@@ -126,10 +148,19 @@ function drillBody(d: SkillDrill): string {
   y += 6;
   out.push(`<text x="72" y="${y}" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="700" fill="#94a3b8">${esc(d.reps)}</text>`);
 
-  // The cue is the payoff. Boxed so it reads as the thing to remember.
+  // The cue is the payoff. Boxed so it reads as the thing to remember, and
+  // placed after the content rather than against the bottom edge.
   const cue = wrap(d.coaching, 48, 3);
   const boxH = 60 + cue.length * 44;
-  const boxY = W - 130 - boxH;
+  /**
+   * After the content — but never past the footer.
+   *
+   * The old layout pinned this to the bottom edge, which guaranteed it fitted
+   * and opened a hole on a tall card. Flowing it after the content fixed the
+   * hole and lost the guarantee: the longest drill on a SQUARE now placed text
+   * at y=1102 on a 1080 card, off the bottom. So it flows, and clamps.
+   */
+  const boxY = Math.min(y + 56, H - 130 - boxH);
   out.push(`<rect x="56" y="${boxY}" width="${W - 112}" height="${boxH}" rx="28" fill="#ffffff" fill-opacity="0.05"/>`);
   out.push(`<rect x="56" y="${boxY}" width="6" height="${boxH}" rx="3" fill="${GOLD}"/>`);
   let cy = boxY + 60;
@@ -138,14 +169,20 @@ function drillBody(d: SkillDrill): string {
     cy += 44;
   }
 
-  return out.join("\n  ");
+  // Slack between the header and the footer, halved. Never negative: on a
+  // square this is 0 and the layout is exactly what it always was.
+  const bottom = boxY + boxH;
+  const slack = Math.max(0, (H - 130) - bottom);
+  return `<g transform="translate(0, ${Math.round(slack / 2)})">\n  ${out.join("\n  ")}\n  </g>`;
 }
 
 /** Just the coaching cue, set large — the format that travels furthest. */
-function cueBody(d: SkillDrill): string {
+function cueBody(d: SkillDrill, H: number): string {
   const cue = wrap(d.coaching, 26, 5);
   const out: string[] = [];
-  let y = 360 - (cue.length - 1) * 34;
+  // Centred on the canvas rather than at a fixed 360: the whole point of this
+  // style is one big quote, and a quote pinned to the top of a story is a gap.
+  let y = Math.round(H * 0.33) - (cue.length - 1) * 34;
   for (const line of cue) {
     out.push(`<text x="72" y="${y}" font-family="Arial, Helvetica, sans-serif" font-size="68" font-weight="800" fill="#ffffff">${esc(line)}</text>`);
     y += 86;
