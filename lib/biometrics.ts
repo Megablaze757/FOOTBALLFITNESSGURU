@@ -86,8 +86,8 @@ export function biometricSignal(today: Biometric | null, history: Biometric[]): 
   let adj = 0;
   const notes: string[] = [];
   if (hrvDev != null) {
-    if (hrvDev <= -12) { adj -= 10; notes.push(`HRV is ${Math.abs(hrvDev)}% below your norm — your body is under strain`); }
-    else if (hrvDev >= 10) { adj += 3; notes.push(`HRV is ${hrvDev}% above your norm — you're well recovered`); }
+    if (hrvDev <= -12) { adj -= 10; notes.push(`HRV ${Math.abs(hrvDev)}% below your norm`); }
+    else if (hrvDev >= 10) { adj += 3; notes.push(`HRV ${hrvDev}% above your norm`); }
   }
   if (sleep != null && sleep < 6) { adj -= 5; notes.push(`only ${sleep}h sleep`); }
   else if (sleep != null && sleep >= 8) { adj += 2; }

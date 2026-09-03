@@ -111,14 +111,30 @@ test("it does not tell someone who has trained to go and train", () => {
   // 2.22 is the reported case: "you've trained 122% more this week than your
   // four-week average… Train today, keep the intensity" — shown to somebody who
   // had already trained.
+  /**
+   * Matched on INTENT, not on a sentence. This asserted the exact strings and
+   * broke the moment the copy was shortened — which is a test that pins the
+   * wording rather than the behaviour, and the behaviour is the whole point.
+   *
+   * Prescribing = an imperative "Train", at the start of the advice or of any
+   * sentence in it. Acknowledging = naming the session they already did.
+   */
+  const PRESCRIBES = /(^|[.—-]\s*)Train\b/;
+  // "Session done", "Session logged", "Good session" — all three past-tense
+  // openers the advice actually uses. Not a bare /session/, which would also
+  // match "A moderate session is fine", a prescription.
+  const ACKNOWLEDGES = /session (done|logged)|good session|trained today/i;
+
   for (const acwr of [2.22, 1.4, null] as (number | null)[]) {
     const after = assessReadiness(recovered, { acwr, trainedToday: true });
-    assert.ok(!/\btrain today\b/i.test(after.advice), `acwr ${acwr}: still prescribing a session — ${after.advice}`);
-    assert.match(after.advice, /trained today|session logged/i, `acwr ${acwr}: ${after.advice}`);
+    assert.ok(!PRESCRIBES.test(after.advice), `acwr ${acwr}: still prescribing a session — ${after.advice}`);
+    assert.match(after.advice, ACKNOWLEDGES, `acwr ${acwr}: ${after.advice}`);
   }
 
   // …and it still prescribes one when they have not trained.
-  assert.match(assessReadiness(recovered, { acwr: 2.22, trainedToday: false }).advice, /train today/i);
+  const before = assessReadiness(recovered, { acwr: 2.22, trainedToday: false }).advice;
+  assert.match(before, PRESCRIBES, before);
+  assert.ok(!ACKNOWLEDGES.test(before), before);
 });
 
 test("having trained changes the advice, never the score", () => {
@@ -250,4 +266,48 @@ test("the advice still branches on trainedToday with a watch note attached", () 
   assert.notEqual(before.advice, after.advice);
   assert.match(after.advice, /Session done|Session logged|session logged/);
   assert.ok(!/Session done|Session logged/.test(before.advice));
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * NOTHING HERE IS A PARAGRAPH.
+ *
+ * This is the most-read text in the app — the coach line on the home card —
+ * and it had grown to 57 words in the worst case: a load-spike explanation, a
+ * wearable note and a generic sign-off, stacked. On a phone that is a wall
+ * where a sentence was wanted, and the athlete stops reading before the part
+ * that says what to do.
+ *
+ * A cap, not a style note, because every one of those clauses arrived
+ * separately and each was defensible on its own.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("no readiness advice is a wall of text", () => {
+  const watch = { adjustment: -10, note: "HRV 18% below your norm; only 5h sleep." };
+  const inputs: CheckInInput[] = [
+    base as CheckInInput,
+    { ...base, pain_map: { knee_left: 8 } } as CheckInInput,
+    { ...base, pain_map: { knee_left: 4 }, sleep_quality: 6, fatigue_score: 6 } as CheckInInput,
+    { ...base, sleep_quality: 2 } as CheckInInput,
+    { ...base, fatigue_score: 8, sleep_quality: 5 } as CheckInInput,
+  ];
+
+  let worst = { words: 0, advice: "" };
+  for (const input of inputs) {
+    for (const acwr of [null, 1.4, 1.8]) {
+      for (const trainedToday of [false, true]) {
+        for (const biometric of [null, watch]) {
+          const { advice } = assessReadiness(input, { acwr, trainedToday, biometric });
+          const words = advice.split(/\s+/).length;
+          if (words > worst.words) worst = { words, advice };
+          assert.ok(words <= 35, `${words} words: ${advice}`);
+          // Two sentences that disagree is worse than one that is too long.
+          assert.ok(!(/under strain|below your norm/.test(advice) && /well recovered and ready/.test(advice)),
+            `the advice contradicts itself: ${advice}`);
+          assert.ok(!/\.\s*[A-Z]\S*\s+\S+\s*$/.test(advice) || advice.length < 200);
+        }
+      }
+    }
+  }
+  assert.ok(worst.words > 20, `the worst case is only ${worst.words} words — is this still testing anything?`);
 });

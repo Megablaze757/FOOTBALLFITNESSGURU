@@ -184,8 +184,12 @@ function buildAdvice(
   status: ReadinessStatus,
   ctx: Parameters<typeof adviceBody>[1] & { biometricNote?: string | null },
 ): string {
-  const body = adviceBody(status, ctx);
-  return ctx.biometricNote ? `Your watch: ${ctx.biometricNote} ${body}` : body;
+  const note = ctx.biometricNote;
+  const body = adviceBody(status, { ...ctx, watchFlagged: !!note });
+  if (!note) return body;
+  // The note is built with a full stop; don't assume it and run two sentences
+  // together if that ever changes.
+  return `Your watch: ${/[.!?]$/.test(note) ? note : `${note}.`} ${body}`;
 }
 
 function adviceBody(
@@ -197,11 +201,18 @@ function adviceBody(
     pain: { part: string | null; value: number };
     focus: string | null;
     acwr?: number | null;
-    /** Set only when the wearable COST them points — see the caller. */
-    biometricNote?: string | null;
+    /**
+     * The watch has already said something bad, and it is printed FIRST.
+     *
+     * Without this the advice contradicted its own opening line: a drop that
+     * costs points without crossing a band still printed "You're well
+     * recovered and ready to go" directly after "your body is under strain".
+     * The reassurance is exactly what the watch is disputing, so it goes.
+     */
+    watchFlagged?: boolean;
   }
 ): string {
-  const { sleep, fatigue, pain, focus, acwr, trainedToday } = ctx;
+  const { sleep, fatigue, pain, focus, acwr, trainedToday, watchFlagged } = ctx;
 
   // Said first, because when it applies it's the reason for the verdict and the
   // athlete has no other way to know it. Percentages beat a bare ratio: "58%
@@ -209,55 +220,51 @@ function adviceBody(
   // not.
   if (acwr != null && acwr > ACWR_SPIKE && status !== "Red") {
     const over = Math.round((acwr - 1) * 100);
-    if (trainedToday) {
-      return (
-        `You've trained today, and this week is already ${over}% up on your four-week average — that jump is ` +
-        `where injuries come from. Nothing else hard today. Eat, get the sleep, and let the next session be the ` +
-        `one that counts.`
-      );
-    }
-    return (
-      `You feel recovered, and that's real — but you've trained ${over}% more this week than your four-week ` +
-      `average, and that jump is where injuries come from. Train today, keep the intensity, hold the volume ` +
-      `where it is rather than adding to it.`
-    );
+    return trainedToday
+      ? `Session done, on a week already ${over}% up on your average. Nothing else hard today.`
+      : `You feel fine, but this week is ${over}% up on your average. Train — keep the intensity, not the volume.`;
   }
 
   if (status === "Red") {
     if (pain.value >= PAIN_HARD_LIMIT && focus) {
-      return `${capitalize(focus)} pain is high (${pain.value}/10). Skip sprints today — focus on gentle mobility and static stretching around the area.`;
+      return `${capitalize(focus)} pain is high (${pain.value}/10). No sprints today — gentle mobility and stretching around it.`;
     }
     if (sleep <= SLEEP_HARD_LIMIT) {
-      return `Sleep quality is very low (${sleep}/10). Prioritise rest and light recovery work; heavy training now raises injury risk.`;
+      return `Sleep is very low (${sleep}/10). Rest and light work only — heavy training now raises injury risk.`;
     }
-    return "Your overall load is high. Treat today as active recovery: stretching, mobility and hydration.";
+    return "Load is high. Active recovery today — stretching, mobility, hydration.";
   }
 
   if (status === "Yellow") {
     if (focus && pain.value > 0) {
       return trainedToday
-        ? `Session done. Keep an eye on your ${focus} (${pain.value}/10) — if it is still there tomorrow, that is worth acting on rather than training through.`
-        : `Mostly recovered, but watch your ${focus} (${pain.value}/10). Keep intensity moderate and warm up thoroughly.`;
+        ? `Session done. Watch that ${focus} (${pain.value}/10) — if it's still there tomorrow, act on it.`
+        : `Mostly recovered. Watch your ${focus} (${pain.value}/10) — moderate intensity, warm up properly.`;
     }
     if (fatigue >= 7) {
       return trainedToday
-        ? "Session done on an already-tired day. Nothing else hard today — the recovery is the work now."
-        : "Fatigue is elevated. A moderate session is fine — avoid maximal efforts and keep volume in check.";
+        ? "Session done on a tired day. Nothing else hard — recovery is the work now."
+        : "Fatigue is up. A moderate session is fine — no maximal efforts.";
     }
     return trainedToday
-      ? "Session logged. Nothing more needed today — how you eat and sleep tonight is what decides what it was worth."
-      : "You're moderately ready. Train as planned but listen to your body and ease off if anything flares up.";
+      ? "Session logged. Nothing more today — tonight's food and sleep decide what it was worth."
+      : "Moderately ready. Train as planned, ease off if anything flares up.";
   }
 
   if (trainedToday) {
+    if (watchFlagged) return "Session logged. Keep the rest of today easy.";
     return acwr != null && acwr > ACWR_CLIMBING
-      ? "Good session logged, and you were well recovered for it. Your load is climbing though — keep the rest of today easy."
-      : "Good session logged today, and you had the recovery to back it. Eat well and get the sleep in; that is where it turns into progress.";
+      ? "Good session, and you had the recovery for it. Load is climbing — keep the rest of today easy."
+      : "Good session, and you had the recovery for it. Eat and sleep; that's where it becomes progress.";
   }
   if (acwr != null && acwr > ACWR_CLIMBING) {
-    return "You're well recovered and ready to go. Your load is climbing fast though, so take the intensity, not the extra volume.";
+    return watchFlagged
+      ? "Load is climbing too. Take the intensity, not the extra volume."
+      : "Well recovered, but your load is climbing fast. Take the intensity, not the extra volume.";
   }
-  return "You're well recovered and ready to go. Good day for a higher-intensity session.";
+  return watchFlagged
+    ? "Everything you logged says fine, so train — but keep it honest and stop if it bites."
+    : "You're well recovered and ready to go. Good day for a higher-intensity session.";
 }
 
 function clamp1to10(v: number | null): number {

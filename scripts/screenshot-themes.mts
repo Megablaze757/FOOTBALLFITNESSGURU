@@ -43,6 +43,14 @@ const SIGNED_IN: [string, string][] = [
   ["home", "/home/"],
   ["journal", "/journal/"],
   ["nutrition", "/nutrition/"],
+  // Added while auditing text density: these are the screens carrying the most
+  // prose, and density is a thing you have to LOOK at — no test counts words.
+  ["dashboard", "/dashboard/"],
+  ["library", "/library/"],
+  ["injury", "/injury/"],
+  ["ask", "/ask/"],
+  ["benchmarks", "/benchmarks/"],
+  ["report", "/report/"],
 ];
 
 const SUPABASE = "https://example.supabase.co";
