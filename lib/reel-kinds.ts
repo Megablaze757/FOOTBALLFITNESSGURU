@@ -47,6 +47,40 @@ export interface ReelSubject {
 const timed = (scenes: { kicker: string; text: string }[]): Scene[] =>
   scenes.filter((s) => s.text.trim()).map((s) => ({ ...s, ms: holdFor(s.text) }));
 
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE FIRST CARD IS THE ONLY ONE MOST PEOPLE SEE.
+ *
+ * Every reel opened on the subject's NAME — "Wall passing reps", "Firm tofu
+ * curry" — which is a label, not a reason. A feed gives about a second to
+ * decide, and a name spends it saying what the thing is called to somebody who
+ * has not yet been given a reason to care.
+ *
+ * The hook is built from the content's own most surprising fact, so it is
+ * specific and true: the cue that decides whether a drill works, what a meal
+ * costs, what a lift is worth. No kicker on it — the label above a hook is one
+ * more thing to read before the point.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+/** A feed gives about a second. Ten words is what fits in one. */
+export const HOOK_MAX_WORDS = 10;
+
+export function hookText(text: string): string {
+  const clean = text.trim().replace(/\s+/g, " ");
+  if (clean.split(" ").length <= HOOK_MAX_WORDS) return clean;
+
+  // Cut at a clause boundary if there is one in range — "Your first touch
+  // decides the pass" is a hook; the same sentence with its second half is a
+  // paragraph. Falls back to a word cut, never mid-word.
+  const clause = clean.search(/\s[—–-]\s|[,;:]\s/);
+  if (clause > 0 && clean.slice(0, clause).split(" ").length <= HOOK_MAX_WORDS) {
+    return clean.slice(0, clause).replace(/[,;:]$/, "");
+  }
+  return clean.split(" ").slice(0, HOOK_MAX_WORDS).join(" ").replace(/[,;:—–-]$/, "");
+}
+
+const hook = (text: string) => ({ kicker: "", text: hookText(text) });
+
 const MOVEMENTS = EXERCISES.filter((e) => !isRunEntry(e));
 
 /**
@@ -70,10 +104,10 @@ export function reelSubjects(kind: ReelKind): ReelSubject[] {
         label: d.name,
         note: `${d.sport} · ${d.skill}`,
         scenes: timed([
+          hook(d.coaching),
           { kicker: d.skill.toUpperCase(), text: d.name },
           { kicker: "YOU NEED", text: d.setup },
           ...d.how.slice(0, 3).map((step, i) => ({ kicker: `STEP ${i + 1}`, text: step })),
-          { kicker: "THE CUE", text: d.coaching },
           { kicker: "VOLUME", text: d.reps },
           closer("drills"),
         ]),
@@ -89,6 +123,7 @@ export function reelSubjects(kind: ReelKind): ReelSubject[] {
           label: e.name,
           note: `${e.equipment} · ${e.muscles.join(", ")}`,
           scenes: timed([
+            hook(e.cues[0]),
             { kicker: "HOW TO", text: e.name },
             { kicker: "WHAT IT WORKS", text: e.muscles.join(", ") },
             ...e.description!.split(/(?<=\.)\s+/).filter((s) => s.trim().length > 12).slice(0, 3)
@@ -104,8 +139,8 @@ export function reelSubjects(kind: ReelKind): ReelSubject[] {
         label: f.meal.name,
         note: `${money(f.cost)} · ${Math.round(f.protein)}g protein`,
         scenes: timed([
+          hook(`${Math.round(f.protein)}g of protein for ${money(f.cost)}`),
           { kicker: f.meal.slot.toUpperCase(), text: f.meal.name },
-          { kicker: "COST", text: `${money(f.cost)} a serving` },
           { kicker: "PROTEIN", text: `${Math.round(f.protein)}g, ${Math.round(f.kcal)} kcal` },
           ...recipeSteps(f.meal).slice(0, 3).map((step, i) => ({ kicker: `STEP ${i + 1}`, text: step })),
           closer("nutrition"),
@@ -122,7 +157,7 @@ export function reelSubjects(kind: ReelKind): ReelSubject[] {
           label: "The cheapest protein in a supermarket",
           note: `${facts.count} foods, ${facts.spread.toFixed(1)}× spread`,
           scenes: timed([
-            { kicker: "WE COSTED IT", text: `What ${REFERENCE_PROTEIN}g of protein actually costs` },
+            hook(`${REFERENCE_PROTEIN}g of protein for ${money(facts.cheapest.cost)}`),
             { kicker: "CHEAPEST", text: `${facts.cheapest.name} — ${money(facts.cheapest.cost)} for ${portionLabel(facts.cheapest)}` },
             { kicker: "DEAREST", text: `${facts.dearest.name} — ${money(facts.dearest.cost)}` },
             { kicker: "THE SPREAD", text: `${facts.spread.toFixed(1)} times the price, for the same ${REFERENCE_PROTEIN}g` },
@@ -137,6 +172,7 @@ export function reelSubjects(kind: ReelKind): ReelSubject[] {
           label: entry.name,
           note: `#${i + 1} cheapest · ${money(entry.cost)}`,
           scenes: timed([
+            hook(`${entry.name}: ${money(entry.cost)} for ${REFERENCE_PROTEIN}g of protein`),
             { kicker: `#${i + 1} CHEAPEST`, text: entry.name },
             { kicker: `${REFERENCE_PROTEIN}G OF PROTEIN`, text: `${money(entry.cost)} — ${portionLabel(entry)}` },
             { kicker: "COMPARE", text: `The dearest on our list is ${money(facts.dearest.cost)} for the same` },
@@ -152,6 +188,7 @@ export function reelSubjects(kind: ReelKind): ReelSubject[] {
         label: `${lift.label} standards`,
         note: lift.muscles.join(", "),
         scenes: timed([
+          hook(`An intermediate ${lift.label.toLowerCase()} is ${roundToPlate(80 * lift.male[1])}kg at 80kg bodyweight`),
           { kicker: "STANDARDS", text: `What a ${lift.label.toLowerCase()} is worth at your bodyweight` },
           ...STRENGTH_TIERS.filter((t) => t.index >= 1 && t.index <= 4).map((t) => ({
             kicker: t.name.toUpperCase(),
@@ -170,6 +207,7 @@ export function reelSubjects(kind: ReelKind): ReelSubject[] {
           label: screen.label,
           note: screen.caption,
           scenes: timed([
+            hook(screen.caption),
             { kicker: "IN THE APP", text: screen.label },
             ...group.facts.slice(0, 4).map((f) => ({ kicker: "", text: f })),
             closer(screen.id),
@@ -183,8 +221,9 @@ export function reelSubjects(kind: ReelKind): ReelSubject[] {
         label: group.label,
         note: `${group.facts.length} verified facts`,
         scenes: timed([
+          hook(group.facts[0]),
           { kicker: "POCKETATHLETE", text: group.label },
-          ...group.facts.slice(0, 5).map((f) => ({ kicker: "", text: f })),
+          ...group.facts.slice(1, 5).map((f) => ({ kicker: "", text: f })),
         ]),
       }));
   }

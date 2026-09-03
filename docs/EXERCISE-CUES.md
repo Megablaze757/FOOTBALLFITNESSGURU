@@ -103,12 +103,21 @@ human review is for.
 # See the prompt and the queue size without spending anything
 npm run draft:cues -- --dry-run
 
-# Draft five and read them
-OPENROUTER_API_KEY=... npm run draft:cues
+# Draft five and read them. NVIDIA is free — build.nvidia.com issues a key.
+NVIDIA_API_KEY=... npm run draft:cues
 
 # Draft the rest, once the five look right
-OPENROUTER_API_KEY=... npm run draft:cues -- --all
+NVIDIA_API_KEY=... npm run draft:cues -- --all
 ```
+
+**NVIDIA is preferred automatically when its key is set**, because a drafting
+run is two hundred requests nobody is waiting on and theirs is free. Set
+`OPENROUTER_API_KEY` instead — or pass `--provider openrouter` when both are
+set — to use the paid one. The script prints which it chose and whether it
+costs money before it sends anything.
+
+This is the 197 exercises with no cues, which is also 221 of the pages still
+under 200 words. It is the last large piece of content work on the site.
 
 `--limit` defaults to **5** on purpose. Drafting all 197 costs real money and
 takes real minutes, and finding out the prompt was wrong two hundred requests

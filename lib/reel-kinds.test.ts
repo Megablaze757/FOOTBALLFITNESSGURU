@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { REEL_KINDS, reelSubjects, type ReelKind } from "./reel-kinds";
+import { REEL_KINDS, reelSubjects, hookText, HOOK_MAX_WORDS, type ReelKind } from "./reel-kinds";
 import { reelDuration, MIN_REEL_MS, MAX_REEL_MS, reelFrameSvg } from "./reel";
 import { captionProblems } from "./caption";
 
@@ -56,7 +56,10 @@ test("nothing any reel says breaks the claim rules", () => {
 test("every reel is 9:16 and renders its first card", () => {
   for (const kind of KINDS) {
     const [first] = reelSubjects(kind);
-    const svg = reelFrameSvg(first.scenes, 100);
+    // Sampled at the END of the first card. The lines arrive one at a time
+    // now, so an early frame legitimately shows only the first of them —
+    // asserting on t=100 would be asserting the reveal does not happen.
+    const svg = reelFrameSvg(first.scenes, first.scenes[0].ms - 1);
     assert.match(svg, /width="1080" height="1920"/, `${kind} is not vertical`);
     // Word by word, not a slice: the frame wraps text into separate <text>
     // elements, so any substring that spans a line break is absent by design.
@@ -80,4 +83,43 @@ test("exercise reels only use movements with a real how-to", () => {
     const cues = s.scenes.filter((sc) => sc.kicker === "CUE");
     assert.ok(cues.length >= 2, `${s.id} has ${cues.length} cues`);
   }
+});
+
+/**
+ * The hook is the whole first second. It must be a claim somebody would stop
+ * for, not the name of the thing — and short enough to be read in that second.
+ */
+test("every reel opens on a hook, not on a label", () => {
+  for (const kind of KINDS) {
+    for (const s of reelSubjects(kind)) {
+      const first = s.scenes[0];
+      assert.equal(first.kicker, "", `${kind}/${s.id}: a label above the hook is one more thing to read`);
+      const words = first.text.split(/\s+/).length;
+      assert.ok(words <= HOOK_MAX_WORDS, `${kind}/${s.id}: ${words}-word hook — "${first.text}"`);
+      assert.notEqual(first.text, s.label, `${kind}/${s.id} opens on its own name`);
+    }
+  }
+});
+
+test("hookText cuts at a clause, never mid-word, and leaves short ones alone", () => {
+  assert.equal(hookText("Set the ball outside your body"), "Set the ball outside your body");
+  assert.equal(
+    hookText("Your first touch decides the pass — set the ball outside your body, not under it."),
+    "Your first touch decides the pass",
+  );
+  // Already inside the limit, so it is left whole: the clause cut is for hooks
+  // that would otherwise overrun, not a style rule applied to every string.
+  assert.equal(hookText("Keep the chest up, drive through the floor"),
+    "Keep the chest up, drive through the floor");
+  assert.equal(
+    hookText("Keep the chest up, drive hard through the floor and finish tall every single rep"),
+    "Keep the chest up",
+  );
+
+  // No clause in range: a word cut, with no trailing punctuation left hanging.
+  const long = "one two three four five six seven eight nine ten eleven twelve thirteen";
+  const cut = hookText(long);
+  assert.equal(cut.split(" ").length, HOOK_MAX_WORDS);
+  assert.ok(long.startsWith(cut), "the hook is not a prefix of what it came from");
+  assert.ok(!/[,;:—–-]$/.test(cut));
 });

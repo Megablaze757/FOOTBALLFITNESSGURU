@@ -24,18 +24,33 @@ const INK = "#0a0a0b";
 export const REEL_FPS = 30;
 
 /**
- * How long a card holds, by how much there is to read.
+ * ═══════════════════════════════════════════════════════════════════════════
+ * PACED FOR A FEED, NOT FOR A READER.
  *
- * Measured against reading speed rather than picked: ~3.5 words a second is
- * comfortable subtitle pace, and the floor stops a two-word card flashing past
- * before the eye has landed on it.
+ * The first version held each card at subtitle pace — 285ms a word, 1.6s
+ * minimum — which produced a 22-second reel of static cards. That is a
+ * perfectly good way to read something and a bad piece of short video: nothing
+ * moves, the first second states a name rather than a reason, and it is too
+ * long to loop.
+ *
+ * Faster, because the words also ARRIVE now rather than appearing all at once
+ * — a line at a time, which is what gives the eye something to follow and what
+ * lets the hold be shorter without the card becoming unreadable.
+ *
+ * This will not make it footage. A stack of text cards is a text reel however
+ * well it is cut, and if that format does not work for this account no amount
+ * of pacing rescues it — that is worth knowing before spending more on it.
+ * ═══════════════════════════════════════════════════════════════════════════
  */
-export const MIN_SCENE_MS = 1600;
-export const MS_PER_WORD = 285;
+export const MIN_SCENE_MS = 1100;
+export const MS_PER_WORD = 175;
+
+/** How long the last line of a card sits complete before the cut. */
+export const SETTLE_MS = 320;
 
 export function holdFor(text: string): number {
   const words = text.trim().split(/\s+/).filter(Boolean).length;
-  return Math.max(MIN_SCENE_MS, Math.round(words * MS_PER_WORD));
+  return Math.max(MIN_SCENE_MS, Math.round(words * MS_PER_WORD) + SETTLE_MS);
 }
 
 export interface Scene {
@@ -147,9 +162,30 @@ export function reelFrameSvg(
 
   const body: string[] = [];
   if (at) {
-    body.push(`<text x="88" y="${Math.round(H * 0.3)}" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="700" fill="${GOLD}" letter-spacing="4">${esc(at.scene.kicker)}</text>`);
-    let y = Math.round(H * 0.3) + 110;
-    for (const line of wrap(at.scene.text, 22, 6)) {
+    if (at.scene.kicker) {
+      body.push(`<text x="88" y="${Math.round(H * 0.3)}" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="700" fill="${GOLD}" letter-spacing="4">${esc(at.scene.kicker)}</text>`);
+    }
+    /**
+     * THE LINES ARRIVE; THEY ARE NOT ALREADY THERE.
+     *
+     * A card that appears whole is a slide. Revealing a line at a time is the
+     * cheapest motion there is and it is the thing that makes a text reel
+     * watchable — the eye has somewhere to go, and the hold can be shorter
+     * without the card becoming unreadable.
+     *
+     * Stepped, not tweened: the reveal changes on line boundaries, so a whole
+     * card needs one raster per LINE rather than one per frame. Thirty frames
+     * a second of freshly decoded SVG is what makes a browser drop frames, and
+     * it would drop them on the cut, where it shows most.
+     */
+    const lines = wrap(at.scene.text, 22, 6);
+    // The last line lands with SETTLE_MS of the hold still to run, so the
+    // finished card is on screen for a beat before the cut.
+    const revealWindow = Math.max(1, at.scene.ms - SETTLE_MS);
+    const shown = Math.min(lines.length, Math.floor((at.progress * at.scene.ms) / revealWindow * lines.length) + 1);
+
+    let y = Math.round(H * 0.3) + (at.scene.kicker ? 110 : 40);
+    for (const line of lines.slice(0, shown)) {
       body.push(`<text x="88" y="${y}" font-family="Arial, Helvetica, sans-serif" font-size="76" font-weight="800" fill="#ffffff">${esc(line)}</text>`);
       y += 96;
     }
@@ -249,4 +285,29 @@ export function isPostable(info: { container: Container; h264: boolean }): boole
 
 export function fileExtension(mimeType: string): string {
   return mimeType.startsWith("video/mp4") ? "mp4" : "webm";
+}
+
+
+/**
+ * Every distinct picture in the reel, with the time it appears.
+ *
+ * The recorder draws from this rather than from a frame counter: a stepped
+ * reveal means the number of images is the number of LINES, not the number of
+ * frames, and computing that here keeps the browser's job to drawImage.
+ */
+export function reelSteps(scenes: Scene[]): { at: number; svg: string }[] {
+  const steps: { at: number; svg: string }[] = [];
+  let start = 0;
+  for (const scene of scenes) {
+    const lines = Math.max(1, Math.ceil(scene.text.trim().split(/\s+/).length / 4));
+    const window = Math.max(1, scene.ms - SETTLE_MS);
+    for (let i = 0; i < lines; i++) {
+      // A hair past the boundary, so the step lands on the reveal it names
+      // rather than on the frame before it.
+      const at = start + Math.min(window - 1, Math.round((i * window) / lines) + 1);
+      steps.push({ at, svg: reelFrameSvg(scenes, at) });
+    }
+    start += scene.ms;
+  }
+  return steps;
 }

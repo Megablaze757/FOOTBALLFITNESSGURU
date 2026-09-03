@@ -30,6 +30,7 @@
 // =============================================================================
 
 import { mkdirSync, writeFileSync } from "node:fs";
+import { pickProvider, missingKeyMessage, NVIDIA_DEFAULT_MODEL, type ProviderId } from "../lib/draft-provider";
 import { EXERCISES, isRunEntry } from "../lib/exercises";
 import {
   draftPrompt,
@@ -59,7 +60,18 @@ const value = (flag: string, fallback: number) => {
 
 const DRY_RUN = has("--dry-run");
 const LIMIT = has("--all") ? Infinity : value("--limit", 5);
-const MODEL = process.env.OPENROUTER_MODEL ?? "anthropic/claude-sonnet-4.5";
+/**
+ * Which API, and whether it costs anything.
+ *
+ * Chosen by which key is set rather than by a flag — NVIDIA first, because it
+ * is free and this is two hundred requests nobody is waiting on. See
+ * lib/draft-provider.ts.
+ */
+const PREFER = has("--provider")
+  ? (process.argv[process.argv.indexOf("--provider") + 1] as ProviderId | undefined)
+  : undefined;
+const provider = pickProvider(process.env, PREFER);
+const MODEL = provider?.model ?? NVIDIA_DEFAULT_MODEL;
 const OUT = new URL("./out/", import.meta.url);
 
 const targets = draftTargets(EXERCISES.filter((e) => !isRunEntry(e)));
@@ -69,26 +81,23 @@ if (DRY_RUN) {
   const { system, user } = draftPrompt(targets[0]);
   console.log(`\nModel: ${MODEL}\nDrafting ${Math.min(LIMIT, targets.length)} of ${targets.length}.`);
   console.log(`\n─── system ───\n${system}\n\n─── user (${targets[0].name}) ───\n${user}`);
-  console.log("\nNo request was made. Drop --dry-run and set OPENROUTER_API_KEY to draft.");
+  console.log(`\nProvider: ${provider ? `${provider.id}${provider.free ? " (free)" : " — PAID"}` : "none set"}`);
+  console.log("\nNo request was made. Drop --dry-run and set a key to draft.");
   process.exit(0);
 }
 
-const KEY = process.env.OPENROUTER_API_KEY;
-if (!KEY) {
-  console.error("OPENROUTER_API_KEY is not set. Use --dry-run to see the prompt without it.");
+if (!provider) {
+  console.error(missingKeyMessage());
   process.exit(1);
 }
 
+console.log(`Using ${provider.id} (${provider.model})${provider.free ? " — free" : " — THIS COSTS MONEY"}.`);
+
 async function draftOne(target: DraftTarget): Promise<Draft | null> {
   const { system, user } = draftPrompt(target);
-  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+  const res = await fetch(provider!.url, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${KEY}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": "https://pocketathlete.com",
-      "X-Title": "PocketAthlete exercise cues",
-    },
+    headers: provider!.headers,
     body: JSON.stringify({
       model: MODEL,
       temperature: 0.3,

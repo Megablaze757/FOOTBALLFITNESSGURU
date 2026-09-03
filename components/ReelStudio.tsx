@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import {
-  reelDuration, reelFrameSvg, pickMimeType, fileExtension, REEL_FPS,
+  reelDuration, reelFrameSvg, reelSteps, pickMimeType, fileExtension, REEL_FPS,
   inspectRecording, isPostable, type Scene,
 } from "@/lib/reel";
 import { REEL_KINDS, reelSubjects, type ReelKind } from "@/lib/reel-kinds";
@@ -31,17 +31,25 @@ async function recordReel(
   canvas.height = 1920;
   const ctx = canvas.getContext("2d")!;
 
-  // Decoded up front: decoding mid-recording drops frames, and the drop lands
-  // exactly on a cut, which is where it is most visible.
+  /**
+   * One image per REVEAL STEP, not per scene and not per frame.
+   *
+   * The lines of a card arrive one at a time now, so a scene is several
+   * pictures — but only several, because the reveal is stepped. Thirty
+   * freshly-decoded SVGs a second is what makes a browser drop frames, and it
+   * drops them on the cut where it shows most. Decoded up front for the same
+   * reason.
+   */
+  const steps = reelSteps(scenes).map((step) => ({
+    at: step.at,
+    svg: reelFrameSvg(scenes, step.at, { handle }),
+  }));
   const frames: HTMLImageElement[] = [];
-  let at = 0;
-  for (const scene of scenes) {
+  for (const step of steps) {
     const img = new Image();
-    img.src = "data:image/svg+xml;base64,"
-      + btoa(unescape(encodeURIComponent(reelFrameSvg(scenes, at, { handle }))));
+    img.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(step.svg)));
     await img.decode();
     frames.push(img);
-    at += scene.ms;
   }
 
   const recorder = new MediaRecorder(canvas.captureStream(REEL_FPS), {
@@ -60,12 +68,12 @@ async function recordReel(
     const tick = () => {
       const t = performance.now() - started;
       if (t >= total) return resolve();
-      // Which scene, from the storyboard — never from a frame counter, which
-      // drifts the moment the tab is throttled.
-      let elapsed = 0, index = 0;
-      for (let i = 0; i < scenes.length; i++) {
-        if (t < elapsed + scenes[i].ms) { index = i; break; }
-        elapsed += scenes[i].ms;
+      // Which STEP, from the storyboard — never from a frame counter, which
+      // drifts the moment the tab is throttled. The last step whose time has
+      // passed is the picture that should be on screen.
+      let index = 0;
+      for (let i = steps.length - 1; i >= 0; i--) {
+        if (t >= steps[i].at) { index = i; break; }
       }
       ctx.drawImage(frames[index], 0, 0);
       ctx.fillStyle = "#e3b53f";

@@ -4,7 +4,7 @@ import { SKILL_DRILLS } from "./skills";
 import {
   holdFor, reelScenes, reelDuration, sceneAt, reelFrameSvg, pickMimeType, fileExtension,
   MIN_SCENE_MS, MIN_REEL_MS, MAX_REEL_MS, REEL_MIME_TYPES, closingFact,
-  inspectRecording, isPostable, requestsH264,
+  inspectRecording, isPostable, requestsH264, reelSteps, REEL_FPS,
 } from "./reel";
 import { captionProblems } from "./caption";
 
@@ -161,4 +161,61 @@ test("requestsH264 is what separates a promise from a container name", () => {
   assert.equal(requestsH264("video/mp4;codecs=h264"), true);
   assert.equal(requestsH264("video/mp4"), false);
   assert.equal(requestsH264("video/webm;codecs=vp9"), false);
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * PACED FOR A FEED, AND HONEST ABOUT WHAT THAT DOES NOT FIX.
+ *
+ * Reported plainly: these are not viral content. They were 22 seconds of
+ * static cards opening on the subject's NAME, which is a label rather than a
+ * reason, spent on the one second a feed actually gives you.
+ *
+ * What changed: a hook first, capped at ten words; lines that arrive one at a
+ * time instead of a card appearing whole; and roughly half the hold. What did
+ * not change is that a stack of text cards is a text reel — no amount of
+ * pacing turns it into footage, and if the format does not work for this
+ * account that is worth knowing rather than spending more on it.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("a card is on screen long enough to read and short enough for a feed", () => {
+  const scenes = reelScenes(drill);
+  for (const s of scenes) {
+    assert.ok(s.ms >= MIN_SCENE_MS, `${s.text}: ${s.ms}ms`);
+    assert.ok(s.ms <= 5000, `${s.text} holds for ${s.ms}ms — that is a slide, not a cut`);
+  }
+});
+
+test("the reveal is stepped, one picture per line, not one per frame", () => {
+  const scenes = reelScenes(drill);
+  const steps = reelSteps(scenes);
+  assert.ok(steps.length >= scenes.length, "fewer pictures than cards");
+  assert.ok(steps.length < REEL_FPS * (reelDuration(scenes) / 1000) / 4,
+    `${steps.length} images for ${scenes.length} cards — that is per-frame rendering`);
+
+  // Strictly increasing, and every one inside the reel.
+  let last = -1;
+  for (const s of steps) {
+    assert.ok(s.at > last, `steps are not in order: ${s.at} after ${last}`);
+    assert.ok(s.at < reelDuration(scenes));
+    last = s.at;
+  }
+});
+
+test("a card shows less at the start than at the end", () => {
+  const scenes = reelScenes(drill);
+  // A card with more than one line, so there is something to reveal.
+  let start = 0;
+  const multi = scenes.find((s) => {
+    const found = s.text.split(/\s+/).length > 6;
+    if (!found) start += s.ms;
+    return found;
+  });
+  assert.ok(multi, "no multi-line card to test the reveal on");
+
+  const early = reelFrameSvg(scenes, start + 10);
+  const late = reelFrameSvg(scenes, start + multi!.ms - 1);
+  const count = (svg: string) => (svg.match(/font-size="76"/g) ?? []).length;
+  assert.ok(count(late) > count(early),
+    `the card shows ${count(early)} lines at the start and ${count(late)} at the end — nothing arrives`);
 });
