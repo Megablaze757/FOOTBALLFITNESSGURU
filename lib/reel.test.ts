@@ -4,7 +4,7 @@ import { SKILL_DRILLS } from "./skills";
 import {
   holdFor, reelScenes, reelDuration, sceneAt, reelFrameSvg, pickMimeType, fileExtension,
   MIN_SCENE_MS, MIN_REEL_MS, MAX_REEL_MS, REEL_MIME_TYPES, closingFact,
-  inspectRecording, isPostable, requestsH264, reelSteps, REEL_FPS,
+  inspectRecording, isPostable, requestsH264, reelSteps, REEL_FPS, emphasise, type Scene,
 } from "./reel";
 import { captionProblems } from "./caption";
 
@@ -218,4 +218,62 @@ test("a card shows less at the start than at the end", () => {
   const count = (svg: string) => (svg.match(/font-size="76"/g) ?? []).length;
   assert.ok(count(late) > count(early),
     `the card shows ${count(early)} lines at the start and ${count(late)} at the end — nothing arrives`);
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * WHERE THE NUMBER IS THE CONTENT, THE CARD SHOULD BE THE NUMBER.
+ *
+ * "£0.31" inside a sentence at 76px is a fact. The same figure at 190px in
+ * gold is a piece of video somebody stops scrolling for, and it costs the same
+ * to render. Prices, weights and gram counts get it; sentences do not.
+ *
+ * The first attempt drew the stat 60px below the kicker's baseline, and a
+ * 190px ascender covered it entirely — the card read "£3.19" with "DEAREST"
+ * struck through the middle. Found by rendering one and looking at it.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("a stat is drawn large, and never on top of its own kicker", () => {
+  const scenes: Scene[] = [{ kicker: "DEAREST", text: "Cooked king prawns", ms: 2000, stat: "£3.19" }];
+  const svg = reelFrameSvg(scenes, 1900);
+  assert.ok(svg.includes(">£3.19</text>"), "the stat is not drawn");
+  assert.match(svg, /font-size="190"/, "the stat is not set large");
+
+  // All the text baselines and what is on each, so a lookup needs no nested
+  // escaping — the first version of this built a RegExp from a string and the
+  // backslashes did not survive the trip.
+  const lines = [...svg.matchAll(/<text x="88" y="(\d+)"[^>]*>([\s\S]*?)<\/text>/g)]
+    .map((m) => ({ y: Number(m[1]), text: m[2] }));
+  const yOf = (needle: string) => lines.find((l) => l.text.includes(needle))?.y ?? null;
+
+  const kicker = yOf("DEAREST");
+  const stat = yOf("3.19");
+  const caption = yOf("Cooked");
+  assert.ok(kicker !== null && stat !== null && caption !== null,
+    `a line is missing: ${JSON.stringify(lines.map((l) => l.text))}`);
+  // A 190px stat needs at least its own height between the two baselines.
+  assert.ok(stat! - kicker! >= 150, `only ${stat! - kicker!}px between the kicker and the stat`);
+  assert.ok(caption! > stat!, "the caption is above the number it captions");
+});
+
+/**
+ * One thing on a card is gold. Everything at the same weight reads as a
+ * paragraph cut into pieces; emphasis on everything is emphasis on nothing.
+ */
+test("the first figure on a card is highlighted, and only the first", () => {
+  assert.deepEqual(emphasise("30g of protein for £0.31", false),
+    { before: "", figure: "30g", after: " of protein for £0.31" });
+  assert.equal(emphasise("30g of protein", true), null, "a second highlight on one card");
+  assert.equal(emphasise("Keep the chest up", false), null, "no figure to highlight");
+
+  const scenes: Scene[] = [{ kicker: "", text: "30g of protein for 31 pence", ms: 2000 }];
+  const svg = reelFrameSvg(scenes, 1900);
+  assert.equal((svg.match(/<tspan/g) ?? []).length, 1, "more than one figure was highlighted");
+});
+
+test("a stat card does not also highlight a figure in its caption", () => {
+  const scenes: Scene[] = [{ kicker: "COST", text: "420 kcal, 32g protein", ms: 2000, stat: "£1.10" }];
+  const svg = reelFrameSvg(scenes, 1900);
+  assert.equal((svg.match(/<tspan/g) ?? []).length, 0,
+    "the stat is already the emphasis — a second one competes with it");
 });

@@ -7,6 +7,7 @@ import { WaitlistAnnounce } from "@/components/admin/WaitlistAnnounce";
 import { EmailOps } from "@/components/admin/EmailOps";
 import { CustomExerciseLog } from "@/components/admin/DataLogs";
 import { ExerciseReview } from "@/components/admin/ExerciseReview";
+import { LibraryCues } from "@/components/admin/LibraryCues";
 import { AppleShortcutLink } from "@/components/admin/AppleShortcutLink";
 import { AdminShell, AdminArea, Drawer } from "@/components/admin/AdminShell";
 import type { Video } from "@/lib/types";
@@ -65,6 +66,12 @@ export default function AdminOps() {
       <AdminArea title="Library" note="What athletes added, and what is worth keeping">
         <Drawer summary="Review and publish exercises">
           <ExerciseReview />
+        </Drawer>
+        {/* The catalogue's own gap, not an athlete's submission — 197 movements
+            with a how-to and an empty cues block, drafted on the Worker's free
+            models and output as a diff to paste. */}
+        <Drawer summary="Draft the library's missing cues">
+          <LibraryCues />
         </Drawer>
       </AdminArea>
 

@@ -44,7 +44,7 @@ export interface ReelSubject {
   scenes: Scene[];
 }
 
-const timed = (scenes: { kicker: string; text: string }[]): Scene[] =>
+const timed = (scenes: { kicker: string; text: string; stat?: string }[]): Scene[] =>
   scenes.filter((s) => s.text.trim()).map((s) => ({ ...s, ms: holdFor(s.text) }));
 
 /**
@@ -141,6 +141,7 @@ export function reelSubjects(kind: ReelKind): ReelSubject[] {
         scenes: timed([
           hook(`${Math.round(f.protein)}g of protein for ${money(f.cost)}`),
           { kicker: f.meal.slot.toUpperCase(), text: f.meal.name },
+          { kicker: "A SERVING", text: `${Math.round(f.kcal)} kcal, ${Math.round(f.protein)}g protein`, stat: money(f.cost) },
           { kicker: "PROTEIN", text: `${Math.round(f.protein)}g, ${Math.round(f.kcal)} kcal` },
           ...recipeSteps(f.meal).slice(0, 3).map((step, i) => ({ kicker: `STEP ${i + 1}`, text: step })),
           closer("nutrition"),
@@ -158,9 +159,9 @@ export function reelSubjects(kind: ReelKind): ReelSubject[] {
           note: `${facts.count} foods, ${facts.spread.toFixed(1)}× spread`,
           scenes: timed([
             hook(`${REFERENCE_PROTEIN}g of protein for ${money(facts.cheapest.cost)}`),
-            { kicker: "CHEAPEST", text: `${facts.cheapest.name} — ${money(facts.cheapest.cost)} for ${portionLabel(facts.cheapest)}` },
-            { kicker: "DEAREST", text: `${facts.dearest.name} — ${money(facts.dearest.cost)}` },
-            { kicker: "THE SPREAD", text: `${facts.spread.toFixed(1)} times the price, for the same ${REFERENCE_PROTEIN}g` },
+            { kicker: "CHEAPEST", text: `${facts.cheapest.name}, ${portionLabel(facts.cheapest)}`, stat: money(facts.cheapest.cost) },
+            { kicker: "DEAREST", text: facts.dearest.name, stat: money(facts.dearest.cost) },
+            { kicker: "THE SPREAD", text: `times the price, for the same ${REFERENCE_PROTEIN}g`, stat: `${facts.spread.toFixed(1)}×` },
             ...(facts.cheapestPlant && facts.plantSaving != null
               ? [{ kicker: "PLANT VS ANIMAL", text: `${facts.cheapestPlant.name} saves ${money(facts.plantSaving)} a serving` }]
               : []),
@@ -174,7 +175,7 @@ export function reelSubjects(kind: ReelKind): ReelSubject[] {
           scenes: timed([
             hook(`${entry.name}: ${money(entry.cost)} for ${REFERENCE_PROTEIN}g of protein`),
             { kicker: `#${i + 1} CHEAPEST`, text: entry.name },
-            { kicker: `${REFERENCE_PROTEIN}G OF PROTEIN`, text: `${money(entry.cost)} — ${portionLabel(entry)}` },
+            { kicker: `${REFERENCE_PROTEIN}G OF PROTEIN`, text: portionLabel(entry), stat: money(entry.cost) },
             { kicker: "COMPARE", text: `The dearest on our list is ${money(facts.dearest.cost)} for the same` },
             closer("nutrition"),
           ]),
@@ -192,7 +193,8 @@ export function reelSubjects(kind: ReelKind): ReelSubject[] {
           { kicker: "STANDARDS", text: `What a ${lift.label.toLowerCase()} is worth at your bodyweight` },
           ...STRENGTH_TIERS.filter((t) => t.index >= 1 && t.index <= 4).map((t) => ({
             kicker: t.name.toUpperCase(),
-            text: `${roundToPlate(80 * lift.male[t.index - 1])}kg at 80kg bodyweight — ${lift.male[t.index - 1]}× bodyweight`,
+            text: `at 80kg bodyweight — ${lift.male[t.index - 1]}× bodyweight`,
+            stat: `${roundToPlate(80 * lift.male[t.index - 1])}kg`,
           })),
           { kicker: "WHAT IT IS NOT", text: "A description of what lifters at your weight lift. Not a target you have to hit." },
           closer("programs"),

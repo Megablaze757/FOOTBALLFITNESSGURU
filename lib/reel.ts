@@ -59,6 +59,15 @@ export interface Scene {
   /** The words. Wrapped by the renderer, not here. */
   text: string;
   ms: number;
+  /**
+   * A figure to set LARGE, above the text.
+   *
+   * "£0.31" at 200px is a different piece of video from the same number inside
+   * a sentence at 76px. Where the number IS the content — a price, a weight, a
+   * gram count — the card should be the number, and the sentence should be the
+   * caption under it.
+   */
+  stat?: string;
 }
 
 /**
@@ -124,6 +133,29 @@ export function sceneAt(scenes: Scene[], t: number): { scene: Scene; index: numb
   return null;
 }
 
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * ONE THING ON THE CARD IS GOLD.
+ *
+ * Every line was the same white at the same weight, which reads as a
+ * paragraph broken into pieces rather than as a point being made. Highlighting
+ * the figure — a price, a weight, a percentage, a count — costs nothing and is
+ * what the eye actually stops on when scrolling.
+ *
+ * Only figures, and only the first. Emphasis applied to everything is emphasis
+ * applied to nothing, and a rule that highlighted words would need to know
+ * which word mattered, which it cannot.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+const FIGURE = /(£\d[\d.,]*|\d[\d.,]*(?:kg|g|%|×|x\b|s\b|h\b|min\b|kcal\b)?)/;
+
+export function emphasise(line: string, alreadyUsed: boolean): { before: string; figure: string; after: string } | null {
+  if (alreadyUsed) return null;
+  const m = FIGURE.exec(line);
+  if (!m || !/\d/.test(m[1])) return null;
+  return { before: line.slice(0, m.index), figure: m[1], after: line.slice(m.index + m[1].length) };
+}
+
 /** A word-wrapper matching lib/drill-card's: SVG has no text wrapping. */
 function wrap(text: string, perLine: number, max: number): string[] {
   const words = text.split(/\s+/);
@@ -178,15 +210,38 @@ export function reelFrameSvg(
      * a second of freshly decoded SVG is what makes a browser drop frames, and
      * it would drop them on the cut, where it shows most.
      */
+    /**
+     * THE NUMBER, IF THERE IS ONE, AT THE SIZE A NUMBER DESERVES.
+     *
+     * Drawn before the reveal and never revealed: it is the thing the eye
+     * lands on, so holding it back for a beat wastes the beat.
+     */
+    if (at.scene.stat) {
+      // A full stat-height below the kicker's baseline. At +60 the 190px
+      // ascender covered it entirely: the first render read "£3.19" with
+      // "DEAREST" struck through the middle of it.
+      body.push(`<text x="88" y="${Math.round(H * 0.3) + 190}" font-family="Arial, Helvetica, sans-serif" font-size="190" font-weight="800" fill="${GOLD}">${esc(at.scene.stat)}</text>`);
+    }
+
     const lines = wrap(at.scene.text, 22, 6);
     // The last line lands with SETTLE_MS of the hold still to run, so the
     // finished card is on screen for a beat before the cut.
     const revealWindow = Math.max(1, at.scene.ms - SETTLE_MS);
     const shown = Math.min(lines.length, Math.floor((at.progress * at.scene.ms) / revealWindow * lines.length) + 1);
 
-    let y = Math.round(H * 0.3) + (at.scene.kicker ? 110 : 40);
+    let y = Math.round(H * 0.3) + (at.scene.kicker ? 110 : 40) + (at.scene.stat ? 200 : 0);
+    let used = !!at.scene.stat; // the stat is already the emphasis on this card
     for (const line of lines.slice(0, shown)) {
-      body.push(`<text x="88" y="${y}" font-family="Arial, Helvetica, sans-serif" font-size="76" font-weight="800" fill="#ffffff">${esc(line)}</text>`);
+      const parts = emphasise(line, used);
+      if (parts) {
+        used = true;
+        body.push(
+          `<text x="88" y="${y}" font-family="Arial, Helvetica, sans-serif" font-size="76" font-weight="800" fill="#ffffff">`
+          + `${esc(parts.before)}<tspan fill="${GOLD}">${esc(parts.figure)}</tspan>${esc(parts.after)}</text>`,
+        );
+      } else {
+        body.push(`<text x="88" y="${y}" font-family="Arial, Helvetica, sans-serif" font-size="76" font-weight="800" fill="#ffffff">${esc(line)}</text>`);
+      }
       y += 96;
     }
   }
