@@ -4,6 +4,7 @@ import { SKILL_DRILLS } from "./skills";
 import {
   holdFor, reelScenes, reelDuration, sceneAt, reelFrameSvg, pickMimeType, fileExtension,
   MIN_SCENE_MS, MIN_REEL_MS, MAX_REEL_MS, REEL_MIME_TYPES, closingFact,
+  inspectRecording, isPostable, requestsH264,
 } from "./reel";
 import { captionProblems } from "./caption";
 
@@ -90,19 +91,58 @@ test("the text is escaped — a drill name with an ampersand must not break the 
  * upload screen, long after the person thought they were done.
  * ═══════════════════════════════════════════════════════════════════════════
  */
-test("mp4 is preferred, and a webm is reported as not postable", () => {
+test("H.264 is asked for first, and a bare mp4 is not assumed to be one", () => {
   const all = pickMimeType(() => true);
-  assert.equal(all?.type, REEL_MIME_TYPES[0], "H.264 in mp4 should win when it is available");
-  assert.equal(all?.postable, true);
+  assert.equal(all?.type, REEL_MIME_TYPES[0], "explicit H.264 should win when available");
+  assert.equal(all?.h264, true);
 
-  const webmOnly = pickMimeType((t) => t.startsWith("video/webm"));
-  assert.ok(webmOnly?.type.startsWith("video/webm"));
-  assert.equal(webmOnly?.postable, false, "the UI has to be able to warn — this is what it reads");
+  // The container without a codec. Preferred over WebM, but not a promise.
+  const bare = pickMimeType((t) => t === "video/mp4" || t.startsWith("video/webm"));
+  assert.equal(bare?.type, "video/mp4", "an mp4 of unknown codec still beats a webm");
+  assert.equal(bare?.h264, false, "asking for a container is not asking for a codec");
 
   assert.equal(pickMimeType(() => false), null, "no supported type is null, not a guess");
-
   assert.equal(fileExtension("video/mp4;codecs=avc1.42E01E"), "mp4");
   assert.equal(fileExtension("video/webm;codecs=vp9"), "webm");
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE BYTES BELOW ARE FROM A REAL RECORDING, NOT FROM THE SPEC.
+ *
+ * Recording a reel in Chromium and reading its header is what found this: ask
+ * for "video/mp4" and it answers with brands `isom iso6 iso2 vp09 mp41` — VP9
+ * inside an MP4. The first version of this code reported that as postable. It
+ * is an upload failure wearing the right extension.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+const REAL_CHROMIUM_MP4 = new Uint8Array([
+  0x00, 0x00, 0x00, 0x24, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d, 0x00, 0x00, 0x02, 0x00,
+  0x69, 0x73, 0x6f, 0x6d, 0x69, 0x73, 0x6f, 0x36, 0x69, 0x73, 0x6f, 0x32, 0x76, 0x70, 0x30, 0x39,
+  0x6d, 0x70, 0x34, 0x31, 0x00, 0x00, 0x02, 0xb7,
+]);
+
+test("an mp4 full of VP9 is not reported as a reel", () => {
+  const info = inspectRecording(REAL_CHROMIUM_MP4);
+  assert.deepEqual(info, { container: "mp4", h264: false });
+  assert.equal(isPostable(info), false, "this exact file was called postable, and Instagram rejects it");
+});
+
+test("an H.264 mp4 is the one that posts", () => {
+  const h264 = Uint8Array.from("\u0000\u0000\u0000\u0018ftypisomisomavc1mp41", (c) => c.charCodeAt(0));
+  assert.deepEqual(inspectRecording(h264), { container: "mp4", h264: true });
+  assert.equal(isPostable(inspectRecording(h264)), true);
+});
+
+test("webm is recognised by its magic number, not its extension", () => {
+  const webm = new Uint8Array([0x1a, 0x45, 0xdf, 0xa3, 0x01, 0x02, 0x03, 0x04]);
+  assert.deepEqual(inspectRecording(webm), { container: "webm", h264: false });
+  assert.equal(isPostable(inspectRecording(webm)), false);
+
+  assert.deepEqual(inspectRecording(new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8])),
+    { container: "unknown", h264: false });
+  assert.equal(isPostable({ container: "unknown", h264: true }), false,
+    "an unknown container is never postable, whatever else it claims");
 });
 
 /**
@@ -114,4 +154,11 @@ test("the closing card is a verified fact, not a slogan", () => {
   assert.ok(fact.length > 20);
   assert.deepEqual(captionProblems(fact), [], "the reel closes on something we cannot say");
   assert.ok(reelFrameSvg(reelScenes(drill), 1e9 - 1) !== null);
+});
+
+test("requestsH264 is what separates a promise from a container name", () => {
+  assert.equal(requestsH264("video/mp4;codecs=avc1.42E01E"), true);
+  assert.equal(requestsH264("video/mp4;codecs=h264"), true);
+  assert.equal(requestsH264("video/mp4"), false);
+  assert.equal(requestsH264("video/webm;codecs=vp9"), false);
 });

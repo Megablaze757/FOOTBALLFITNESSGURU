@@ -6,6 +6,7 @@ import { buildDrillCardSvg, type CardStyle } from "@/lib/drill-card";
 import { POST_SIZES, svgDimensions, type PostSize } from "@/lib/post-size";
 import {
   reelScenes, reelDuration, reelFrameSvg, pickMimeType, fileExtension, REEL_FPS,
+  inspectRecording, isPostable,
 } from "@/lib/reel";
 import { drillCaption, demoCaption, renderCaption, captionProblems } from "@/lib/caption";
 import { buildDemoCardSvg, DEMO_SCREENS, type DemoScreen } from "@/lib/demo-card";
@@ -236,7 +237,7 @@ async function recordReel(
   scenes: ReturnType<typeof reelScenes>,
   handle: string,
   onProgress: (fraction: number) => void,
-): Promise<{ blob: Blob; postable: boolean; type: string }> {
+): Promise<{ blob: Blob; postable: boolean; type: string; container: string; h264: boolean }> {
   const mime = pickMimeType((t) => MediaRecorder.isTypeSupported(t));
   if (!mime) throw new Error("This browser cannot record video. Chrome or Safari can.");
 
@@ -292,7 +293,16 @@ async function recordReel(
   });
   recorder.stop();
   onProgress(1);
-  return { blob: await done, postable: mime.postable, type: mime.type };
+  const blob = await done;
+  /**
+   * Judged on the FILE, not on what was requested.
+   *
+   * Asking for "video/mp4" and getting one is not the same as getting
+   * something Instagram will take: Chromium answers that request with VP9 in
+   * an MP4 container, which is an upload failure with the right extension.
+   */
+  const info = inspectRecording(new Uint8Array(await blob.slice(0, 64).arrayBuffer()));
+  return { blob, postable: isPostable(info), type: mime.type, container: info.container, h264: info.h264 };
 }
 
 function ReelsTab() {
@@ -309,7 +319,7 @@ function ReelsTab() {
     setBusy(d.id); setProgress(0); setError(null); setWarning(null);
     try {
       const scenes = reelScenes(d);
-      const { blob, postable, type } = await recordReel(scenes, handle, setProgress);
+      const { blob, postable, type, container, h264 } = await recordReel(scenes, handle, setProgress);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -317,8 +327,11 @@ function ReelsTab() {
       a.click();
       URL.revokeObjectURL(url);
       if (!postable) {
-        setWarning("Your browser recorded WebM, which Instagram will not accept. "
-          + "The file downloaded — convert it to MP4 before posting, or record in Chrome or Safari.");
+        setWarning(container === "mp4" && !h264
+          ? "Your browser put VP9 inside the MP4 rather than H.264, which Instagram will not process. "
+            + "The file downloaded — convert it to H.264 before posting."
+          : "Your browser recorded WebM, which Instagram will not accept. "
+            + "The file downloaded — convert it to MP4 (H.264) before posting.");
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));

@@ -172,30 +172,79 @@ export function reelFrameSvg(
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- * MP4 OR NOTHING USEFUL.
+ * AN MP4 IS NOT ENOUGH. INSTAGRAM WANTS H.264 INSIDE IT.
  *
- * Instagram's uploader takes MP4 and MOV. MediaRecorder's historical default
- * is WebM, which Instagram rejects — so a recorder that just asks for "video"
- * hands over a file that cannot be posted, and the person finds out at the
- * upload screen rather than here.
+ * First version of this asked for "video/mp4", got it, and reported the file
+ * as postable. Recording one in Chromium and reading its header says
+ * otherwise: the brands are `isom iso6 iso2 vp09 mp41` — VP9 video in an MP4
+ * container. Instagram wants H.264, so that file is an upload failure wearing
+ * the right extension, which is the exact thing this check exists to prevent.
  *
- * Chrome and Safari can now record H.264 in an MP4 container. Ask for that
- * first and only fall back to WebM knowingly, so the UI can say out loud that
- * the file needs converting before it will post.
+ * So the request asks for H.264 explicitly, and the ANSWER is verified against
+ * the bytes that come back rather than against what was asked for. A browser
+ * is free to hand you a different codec in the container you named, and only
+ * the file can tell you whether it did.
  * ═══════════════════════════════════════════════════════════════════════════
  */
 export const REEL_MIME_TYPES = [
+  // Explicit H.264: baseline, then main. What Instagram actually ingests.
   "video/mp4;codecs=avc1.42E01E",
+  "video/mp4;codecs=avc1.4d002a",
+  "video/mp4;codecs=h264",
+  // An MP4 of unknown codec. Still preferred over WebM — it is at least the
+  // right container, and some browsers do fill it with H.264 — but it is not
+  // reported as postable until the bytes say so.
   "video/mp4",
   "video/webm;codecs=vp9",
   "video/webm",
 ] as const;
 
-export function pickMimeType(isSupported: (type: string) => boolean): { type: string; postable: boolean } | null {
+/** True only for a type that NAMES H.264. A bare "video/mp4" does not. */
+export function requestsH264(type: string): boolean {
+  return /codecs=(avc1|h264)/i.test(type);
+}
+
+export function pickMimeType(isSupported: (type: string) => boolean): { type: string; h264: boolean } | null {
   for (const type of REEL_MIME_TYPES) {
-    if (isSupported(type)) return { type, postable: type.startsWith("video/mp4") };
+    if (isSupported(type)) return { type, h264: requestsH264(type) };
   }
   return null;
+}
+
+export type Container = "mp4" | "webm" | "unknown";
+
+/**
+ * What a recording ACTUALLY is, from its first bytes.
+ *
+ * MP4 puts a `ftyp` box at offset 4 and lists its brands after it; a VP9
+ * payload declares the `vp09` brand and an H.264 one declares `avc1`. WebM is
+ * Matroska and opens with the EBML magic number. Sixty-four bytes is plenty.
+ */
+export function inspectRecording(head: Uint8Array): { container: Container; h264: boolean } {
+  const ascii = (from: number, to: number) =>
+    String.fromCharCode(...Array.from(head.slice(from, to))).replace(/[^\x20-\x7e]/g, " ");
+
+  if (head[0] === 0x1a && head[1] === 0x45 && head[2] === 0xdf && head[3] === 0xa3) {
+    return { container: "webm", h264: false };
+  }
+  if (ascii(4, 8) === "ftyp") {
+    const brands = ascii(8, Math.min(head.length, 64)).toLowerCase();
+    // vp09/vp08 named explicitly beats a bare container: an MP4 that says VP9
+    // is a VP9 file, whatever its extension.
+    if (/vp0[89]/.test(brands)) return { container: "mp4", h264: false };
+    return { container: "mp4", h264: /avc1|avc3|h264/.test(brands) };
+  }
+  return { container: "unknown", h264: false };
+}
+
+/**
+ * Whether this file can be posted as a reel without converting it first.
+ *
+ * H.264 in MP4 only. Everything else downloads with a warning saying what it
+ * is, rather than being handed over as if it would work.
+ */
+export function isPostable(info: { container: Container; h264: boolean }): boolean {
+  return info.container === "mp4" && info.h264;
 }
 
 export function fileExtension(mimeType: string): string {
