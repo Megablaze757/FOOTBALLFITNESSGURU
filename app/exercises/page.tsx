@@ -3,6 +3,7 @@ import Link from "next/link";
 import { EXERCISES, isRunEntry, EXERCISE_CATEGORIES } from "@/lib/exercises";
 import { contentPages, SITE } from "@/lib/seo";
 import { MarketingShell, GuideCta } from "@/components/MarketingShell";
+import { publishableHubs, hubPath } from "@/lib/hubs";
 import { jsonLd, graph, breadcrumbs } from "@/lib/schema";
 
 /** Runs live on Guides — a run is a session, not a movement you look up. */
@@ -37,6 +38,23 @@ export default function ExercisesIndex() {
         {MOVEMENTS.length} movements, with what each one actually works and the two or three cues
         that decide whether it does.
       </p>
+
+      {/* The hubs first. An index of 382 is a list; these are the pages a
+          list-shaped search is actually looking for. */}
+      <section className="mt-8">
+        <h2 className="text-xl font-extrabold tracking-tight">Browse by muscle or kit</h2>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {publishableHubs(MOVEMENTS).map(({ hub, members }) => (
+            <Link
+              key={`${hub.kind}-${hub.slug}`}
+              href={hubPath(hub)}
+              className="rounded-full border border-white/10 px-3.5 py-2 text-sm text-slate-300 transition hover:border-pitch-400/40"
+            >
+              {hub.name} <span className="text-slate-600">{members.length}</span>
+            </Link>
+          ))}
+        </div>
+      </section>
 
       {EXERCISE_CATEGORIES.map((category) => {
         const inCategory = MOVEMENTS.filter((e) => e.category === category);

@@ -2,6 +2,7 @@ import type { MetadataRoute } from "next";
 import { SITE, guideSports, guidePages, contentPages } from "@/lib/seo";
 import { MEALS } from "@/lib/meals-data";
 import { EXERCISES, isRunEntry } from "@/lib/exercises";
+import { publishableHubs, hubPath } from "@/lib/hubs";
 import { collectionSlugs } from "@/lib/collections";
 
 // Generated at build time from lib/seo.ts, which is the same source the pages
@@ -82,6 +83,17 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: 0.75,
   }));
 
-  return [...core, ...drills, ...guides, ...collections, ...recipes, ...exercises]
+  /**
+   * The topic hubs. Higher priority than a single movement: these are the
+   * pages a list-shaped query ("dumbbell chest exercises") is looking for, and
+   * they are what the individual pages link up into.
+   */
+  const hubs = publishableHubs(EXERCISES.filter((e) => !isRunEntry(e))).map(({ hub }) => ({
+    url: `${SITE}${hubPath(hub)}`,
+    changeFrequency: "monthly" as const,
+    priority: 0.8,
+  }));
+
+  return [...core, ...drills, ...guides, ...collections, ...hubs, ...recipes, ...exercises]
     .map((e) => ({ ...e, lastModified: now }));
 }

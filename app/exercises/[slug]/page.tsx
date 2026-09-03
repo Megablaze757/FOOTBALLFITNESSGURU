@@ -8,6 +8,7 @@ import { MarketingShell, GuideCta } from "@/components/MarketingShell";
 import { jsonLd, graph, exerciseSchema, breadcrumbs } from "@/lib/schema";
 import { formGuide } from "@/lib/form-guide";
 import { relatedExercises } from "@/lib/related";
+import { hubsFor, hubPath } from "@/lib/hubs";
 import { slugify } from "@/lib/seo";
 
 const MOVEMENTS = EXERCISES.filter((e) => !isRunEntry(e));
@@ -47,6 +48,8 @@ export default function ExercisePage({ params }: { params: { slug: string } }) {
    * index — 382 of 383 dead ends, and the thinnest of them 107 words.
    */
   const related = relatedExercises(ex, MOVEMENTS);
+  // The topics this movement belongs to — the way back up to a list page.
+  const hubs = hubsFor(ex, MOVEMENTS);
   /**
    * Only a description that actually TEACHES the movement becomes steps.
    *
@@ -95,6 +98,15 @@ export default function ExercisePage({ params }: { params: { slug: string } }) {
           <span key={String(tag)} className="rounded-full border border-white/10 px-3 py-1 text-slate-400">
             {tag}
           </span>
+        ))}
+        {hubs.map((h) => (
+          <Link
+            key={`${h.kind}-${h.slug}`}
+            href={hubPath(h)}
+            className="rounded-full border border-pitch-400/30 px-3 py-1 text-accent-400 transition hover:border-pitch-400/60"
+          >
+            All {h.name.toLowerCase()} exercises
+          </Link>
         ))}
       </div>
 
