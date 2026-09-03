@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { publishableRecipeHubs, recipeHubPath, recipeHubTitle } from "@/lib/recipe-hubs";
 import { ogImage } from "@/lib/og";
 import Link from "next/link";
 import { MEALS } from "@/lib/meals-data";
@@ -54,6 +55,21 @@ export default function RecipesIndex() {
         {MEALS.length} recipes with the macros worked out and the cost of every ingredient. No blog
         post in front of the method, and no ingredient list that assumes you already own six spices.
       </p>
+
+      <section className="mt-8">
+        <h2 className="text-xl font-extrabold tracking-tight">Browse by meal or main ingredient</h2>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {publishableRecipeHubs().map(({ hub, members }) => (
+            <Link
+              key={`${hub.kind}-${hub.slug}`}
+              href={recipeHubPath(hub)}
+              className="rounded-full border border-white/10 px-3.5 py-2 text-sm text-slate-300 transition hover:border-pitch-400/40"
+            >
+              {recipeHubTitle(hub)} <span className="text-slate-600">{members.length}</span>
+            </Link>
+          ))}
+        </div>
+      </section>
 
       {bySlot.map((slot) => {
         const meals = MEALS.filter((m) => m.slot === slot);

@@ -3,6 +3,7 @@ import { SITE, guideSports, guidePages, contentPages } from "@/lib/seo";
 import { MEALS } from "@/lib/meals-data";
 import { EXERCISES, isRunEntry } from "@/lib/exercises";
 import { publishableHubs, hubPath } from "@/lib/hubs";
+import { publishableRecipeHubs, recipeHubPath } from "@/lib/recipe-hubs";
 import { ARTICLES } from "@/lib/articles";
 import { standardPages } from "@/lib/standards-page";
 import { collectionSlugs } from "@/lib/collections";
@@ -111,6 +112,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: 0.8,
   }));
 
-  return [...core, ...drills, ...guides, ...collections, ...hubs, ...standards, ...articles, ...recipes, ...exercises]
+  const recipeHubs = publishableRecipeHubs().map(({ hub }) => ({
+    url: `${SITE}${recipeHubPath(hub)}`,
+    changeFrequency: "monthly" as const,
+    priority: 0.8,
+  }));
+
+  return [...core, ...drills, ...guides, ...collections, ...hubs, ...recipeHubs, ...standards, ...articles, ...recipes, ...exercises]
     .map((e) => ({ ...e, lastModified: now }));
 }

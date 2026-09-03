@@ -8,6 +8,7 @@ import { FOOD_BY_ID } from "@/lib/food-db";
 import { recipeSteps, recipeNote } from "@/lib/recipe-steps";
 import { contentPages, findBySlug, slugify, SITE } from "@/lib/seo";
 import { relatedMeals } from "@/lib/related";
+import { recipeHubsFor, recipeHubPath, recipeHubTitle } from "@/lib/recipe-hubs";
 import { MarketingShell, GuideCta } from "@/components/MarketingShell";
 import { jsonLd, graph, recipeSchema, breadcrumbs } from "@/lib/schema";
 
@@ -63,6 +64,8 @@ export default function RecipePage({ params }: { params: { slug: string } }) {
   const steps = recipeSteps(meal);
   // Somewhere to go next: these pages linked only to their own index.
   const related = relatedMeals(meal, MEALS);
+  // The topics this recipe belongs to — the way back up to a list page.
+  const hubs = recipeHubsFor(meal);
   const note = recipeNote(meal);
   const url = `${SITE}/recipes/${params.slug}/`;
   const ingredients = meal.items
@@ -154,6 +157,20 @@ export default function RecipePage({ params }: { params: { slug: string } }) {
         <p className="mt-6 rounded-2xl border border-pitch-400/20 bg-pitch-400/[0.04] px-4 py-3 text-sm text-slate-300">
           <b className="text-accent-400">Worth knowing:</b> {meal.tip}
         </p>
+      )}
+
+      {hubs.length > 0 && (
+        <div className="mt-6 flex flex-wrap gap-2 text-xs">
+          {hubs.map((h) => (
+            <Link
+              key={`${h.kind}-${h.slug}`}
+              href={recipeHubPath(h)}
+              className="rounded-full border border-pitch-400/30 px-3 py-1 text-accent-400 transition hover:border-pitch-400/60"
+            >
+              {recipeHubTitle(h)}
+            </Link>
+          ))}
+        </div>
       )}
 
       {related.length > 0 && (
