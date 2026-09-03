@@ -187,7 +187,7 @@ test("a reply wrapped in markdown or chat still parses", () => {
     "Here is the JSON you asked for:\n\n" + payload,
     "Sure!\n```json\n" + payload + "\n```\nLet me know if you want changes.",
   ]) {
-    const draft = parseDraft("x", raw);
+    const draft = parseDraft({ id: "x", raw });
     assert.ok(draft, `did not parse: ${raw.slice(0, 40)}`);
     assert.equal(draft.cues.length, 3);
     assert.equal(draft.id, "x");
@@ -204,12 +204,12 @@ test("a reply that is not a usable draft returns null rather than half a draft",
     '{"why": "fine", "cues": [1, 2, 3]}',
     "null", "[]",
   ]) {
-    assert.equal(parseDraft("x", raw), null, `should not have parsed: ${raw}`);
+    assert.equal(parseDraft({ id: "x", raw }), null, `should not have parsed: ${raw}`);
   }
 });
 
 test("blank cues are dropped rather than counted", () => {
-  const draft = parseDraft("x", '{"why": "w", "cues": ["one", "  ", "", "two"]}');
+  const draft = parseDraft({ id: "x", raw: '{"why": "w", "cues": ["one", "  ", "", "two"]}' });
   assert.deepEqual(draft?.cues, ["one", "two"]);
 });
 

@@ -2,7 +2,6 @@
 
 import { FunnelReport } from "@/components/FunnelReport";
 import { ChurnReport } from "@/components/ChurnReport";
-import { ContentEngine } from "@/components/ContentEngine";
 import { AdminShell, AdminArea } from "@/components/admin/AdminShell";
 
 /**
@@ -11,10 +10,10 @@ import { AdminShell, AdminArea } from "@/components/admin/AdminShell";
  * Knowing where people arrive is only useful next to why they leave, which is
  * why these two sit on one page and not next to the billing screens.
  *
- * The content engine is here for the same reason: it is the thing you reach
- * for when the funnel says nobody is arriving. It was written, wired to a live
- * Worker endpoint, and then never mounted on any route — see the test in
- * lib/backend-routes.test.ts that now checks a screen can actually reach it.
+ * The content engine used to be here — it was the thing you reach for when the
+ * funnel says nobody is arriving. It has moved to Social, next to the reels and
+ * the share loop, because those are the same job and the plan belongs beside
+ * the tools that act on it.
  */
 export default function AdminGrowth() {
   return (
@@ -24,9 +23,6 @@ export default function AdminGrowth() {
       </AdminArea>
       <AdminArea title="Churn" note="Cancellations, and the reasons given">
         <ChurnReport />
-      </AdminArea>
-      <AdminArea title="Content" note="A plan, image cards, and a writer that may only use verified facts">
-        <ContentEngine />
       </AdminArea>
     </AdminShell>
   );

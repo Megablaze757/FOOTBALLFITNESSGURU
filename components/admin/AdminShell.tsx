@@ -28,7 +28,7 @@ const TABS = [
   { href: "/admin/growth", label: "Growth" },
   { href: "/admin/money", label: "Money" },
   { href: "/admin/people", label: "People" },
-  { href: "/admin/reels", label: "Reels" },
+  { href: "/admin/social", label: "Social" },
   { href: "/admin/ops", label: "Ops" },
 ];
 

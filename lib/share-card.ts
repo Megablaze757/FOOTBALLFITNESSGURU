@@ -14,6 +14,37 @@ export interface ShareStats {
   accent?: string; // hex
   stats: ShareStat[]; // up to 3
   caption?: string;
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * A SHARED CARD WITH NO ADDRESS ON IT IS NOT MARKETING.
+   *
+   * This card said "POCKETATHLETE" across the top and gave no way to find it.
+   * Somebody who sees an athlete's rank in a group chat has a brand name, a
+   * screenshot, and nowhere to go — so the one piece of distribution the app
+   * had that costs nothing and carries social proof ended at the image.
+   *
+   * The link goes on the card. When the athlete has a referral code it is
+   * THEIR link, so a share that works is a share they get credit for — which
+   * is the difference between a feature people are told to use and one they
+   * want to.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  link?: string;
+}
+
+/** What the card shows when the athlete has no referral code of their own. */
+export const SHARE_FALLBACK_LINK = "pocketathlete.com";
+
+/**
+ * The address as it should READ on a card: no scheme, no trailing slash.
+ *
+ * "https://pocketathlete.com/?ref=ABC" is a URL bar; "pocketathlete.com/?ref=ABC"
+ * is something you can type. Nobody transcribes the scheme.
+ */
+export function displayLink(link: string | undefined): string {
+  if (!link) return SHARE_FALLBACK_LINK;
+  const clean = link.trim().replace(/^https?:\/\//, "").replace(/\/$/, "");
+  return clean || SHARE_FALLBACK_LINK;
 }
 
 function esc(s: string): string {
@@ -56,7 +87,8 @@ export function buildShareSvg(s: ShareStats): string {
     <line x1="80" y1="700" x2="1000" y2="700" stroke="rgba(255,255,255,0.08)" stroke-width="2"/>
     ${statCols}
 
-    <text x="540" y="980" text-anchor="middle" fill="#6b7686" font-size="28" font-weight="600" font-family="Arial, sans-serif">${esc(s.caption ?? "Train smarter. Recover faster.")}</text>
+    <text x="540" y="960" text-anchor="middle" fill="#6b7686" font-size="28" font-weight="600" font-family="Arial, sans-serif">${esc(s.caption ?? "Train smarter. Recover faster.")}</text>
+    <text x="540" y="1006" text-anchor="middle" fill="url(#acc)" font-size="30" font-weight="800" font-family="Arial, sans-serif">${esc(displayLink(s.link))}</text>
   </svg>`;
 }
 
@@ -82,7 +114,14 @@ export async function exportShareCard(stats: ShareStats): Promise<void> {
   const nav = navigator as Navigator & { canShare?: (d: { files: File[] }) => boolean; share?: (d: unknown) => Promise<void> };
   if (nav.canShare?.({ files: [file] }) && nav.share) {
     try {
-      await nav.share({ files: [file], title: "My progress" });
+      // The link in the TEXT as well as on the card. A shared image with no
+      // text is untappable in most apps, and the card's own address then has
+      // to be typed out by hand from a screenshot.
+      await nav.share({
+        files: [file],
+        title: "My progress",
+        text: `${stats.headlineValue} ${stats.headlineLabel} — ${displayLink(stats.link)}`,
+      });
       return;
     } catch {
       /* user cancelled — fall through to download */

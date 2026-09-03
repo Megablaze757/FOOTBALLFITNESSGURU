@@ -71,7 +71,10 @@ export function LibraryCues() {
           freeOnly: true,
         });
         const raw = res?.draft as { cues?: unknown; why?: unknown } | undefined;
-        const draft = parseDraft(JSON.stringify({ cues: raw?.cues ?? [], why: raw?.why ?? "" }), target.id);
+        const draft = parseDraft({
+          id: target.id,
+          raw: JSON.stringify({ cues: raw?.cues ?? [], why: raw?.why ?? "" }),
+        });
         if (!draft) { setError(`${target.name}: the model returned nothing usable.`); continue; }
         setDone((d) => [...d, { target, draft, problems: draftProblems(draft, target) }]);
       } catch (e) {

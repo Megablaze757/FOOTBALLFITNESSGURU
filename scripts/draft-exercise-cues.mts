@@ -118,7 +118,7 @@ async function draftOne(target: DraftTarget): Promise<Draft | null> {
     console.error(`  ${target.name}: empty reply`);
     return null;
   }
-  return parseDraft(target.id, text);
+  return parseDraft({ id: target.id, raw: text });
 }
 
 const reviewed: Reviewed[] = [];

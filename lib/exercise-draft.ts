@@ -143,7 +143,21 @@ export function draftPrompt(t: DraftTarget): { system: string; user: string } {
  * Models fence JSON in markdown, prefix it with "Here is", or both, whatever
  * the prompt says. That is not worth a retry — it is worth a parser.
  */
-export function parseDraft(id: string, raw: string): Draft | null {
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * NAMED, BECAUSE TWO STRINGS IN A ROW ARE TWO STRINGS A COMPILER CANNOT TELL
+ * APART.
+ *
+ * This was `parseDraft(id, raw)`. The admin drafting screen called it as
+ * `parseDraft(json, id)` — arguments the wrong way round — and TypeScript had
+ * nothing to say, because both are strings. It returned null for every
+ * exercise and the screen reported that the model had produced nothing usable,
+ * which was a lie about a bug one frame away.
+ *
+ * An object cannot be swapped.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export function parseDraft({ id, raw }: { id: string; raw: string }): Draft | null {
   const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
   const body = (fenced ? fenced[1] : raw).trim();
   const start = body.indexOf("{");
