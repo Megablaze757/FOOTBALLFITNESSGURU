@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ogImage } from "@/lib/og";
 import Link from "next/link";
 import {
   HIGH_PROTEIN_ENERGY_SHARE,
@@ -33,6 +34,7 @@ export const metadata: Metadata = {
     + "supermarket, worked out from real pack sizes and shelf prices. The cheapest is about ten "
     + "times cheaper than the dearest.",
   alternates: { canonical: `${SITE}/cheapest-protein/` },
+  openGraph: { images: ogImage("cheapest-protein", "The protein index") },
 };
 
 export default function CheapestProteinPage() {

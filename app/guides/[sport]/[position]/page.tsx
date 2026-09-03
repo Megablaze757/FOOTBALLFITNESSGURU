@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ogImage } from "@/lib/og";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { positionGuide } from "@/lib/essentials";
@@ -39,7 +40,7 @@ export function generateMetadata({ params }: Params): Metadata {
     title,
     description,
     alternates: { canonical: url },
-    openGraph: { title, description, url, type: "article" },
+    openGraph: { title, description, url, type: "article", images: ogImage("guides", title) },
   };
 }
 

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ogImage } from "@/lib/og";
 import Link from "next/link";
 import { publishableCollections } from "@/lib/collections";
 import { SITE } from "@/lib/seo";
@@ -24,6 +25,7 @@ export const metadata: Metadata = {
     "Hand-picked lists built from 335 costed recipes: cheap high-protein meals, "
     + "20-minute dinners, vegan and gluten-free options, and dishes worth cooking double.",
   alternates: { canonical: `${SITE}/collections/` },
+  openGraph: { images: ogImage("collections", "Recipe collections") },
 };
 
 export default function CollectionsIndex() {

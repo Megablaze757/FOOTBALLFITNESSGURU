@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ogImage } from "@/lib/og";
 import Link from "next/link";
 import { TRIAL_DAYS } from "@/lib/subscription";
 import { SITE } from "@/lib/seo";
@@ -16,7 +17,7 @@ export const metadata: Metadata = {
     `drill library. £20/mo for training programs, the AI coach, nutrition, video form analysis ` +
     `and injury planning. ${TRIAL_DAYS} days free, cancel any time.`,
   alternates: { canonical: `${SITE}/plans/` },
-  openGraph: {
+  openGraph: { images: ogImage("plans", "Pricing"),
     title: "PocketAthlete pricing",
     description: `Free to start. ${TRIAL_DAYS} days free on any paid plan. Cancel any time.`,
     url: `${SITE}/plans/`,

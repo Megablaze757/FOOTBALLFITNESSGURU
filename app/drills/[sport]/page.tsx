@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ogImage } from "@/lib/og";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { skillsForSport, skillCategories, NEEDS_LABEL } from "@/lib/skills";
@@ -22,7 +23,7 @@ export function generateMetadata({ params }: Params): Metadata {
     `Technical ${label.toLowerCase()} drills with setup, coaching points and how to progress them — ` +
     `including the ones you can do on your own.`;
   const url = `${SITE}/drills/${sport}/`;
-  return { title, description, alternates: { canonical: url }, openGraph: { title, description, url, type: "article" } };
+  return { title, description, alternates: { canonical: url }, openGraph: { images: ogImage("drills", "Skill drills"), title, description, url, type: "article" } };
 }
 
 export default function SportDrillsPage({ params }: Params) {

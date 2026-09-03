@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ogImage } from "@/lib/og";
 import Link from "next/link";
 import { MEALS } from "@/lib/meals-data";
 import { mealMacros } from "@/lib/meal-plan";
@@ -28,6 +29,7 @@ export const metadata: Metadata = {
     `${MEALS.length} recipes with the macros worked out and the shopping cost of every ingredient — `
     + "built for athletes eating to a target rather than to a diet.",
   alternates: { canonical: `${SITE}/recipes/` },
+  openGraph: { images: ogImage("recipes", "Recipes") },
 };
 
 export default function RecipesIndex() {

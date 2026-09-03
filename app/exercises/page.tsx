@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ogImage } from "@/lib/og";
 import Link from "next/link";
 import { EXERCISES, isRunEntry, EXERCISE_CATEGORIES } from "@/lib/exercises";
 import { contentPages, SITE } from "@/lib/seo";
@@ -15,6 +16,7 @@ export const metadata: Metadata = {
     `${MOVEMENTS.length} exercises with the muscles they work, the coaching cues that matter and `
     + "a form video for the ones worth watching before you load them.",
   alternates: { canonical: `${SITE}/exercises/` },
+  openGraph: { images: ogImage("exercises", "Exercise library") },
 };
 
 export default function ExercisesIndex() {

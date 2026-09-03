@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ogImage } from "@/lib/og";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
@@ -33,7 +34,7 @@ export function generateMetadata({ params }: { params: { slug: string } }): Meta
     title: found.collection.title,
     description,
     alternates: { canonical: url },
-    openGraph: { title: found.collection.title, description, url, type: "website" },
+    openGraph: { title: found.collection.title, description, url, type: "website", images: ogImage("collections", found.collection.title) },
   };
 }
 

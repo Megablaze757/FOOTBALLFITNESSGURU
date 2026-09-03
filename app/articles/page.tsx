@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ogImage } from "@/lib/og";
 import Link from "next/link";
 import { ARTICLES } from "@/lib/articles";
 import { SITE } from "@/lib/seo";
@@ -11,6 +12,7 @@ export const metadata: Metadata = {
     "Articles built from the numbers this app already computes: what protein actually costs, "
     + "what a lift is worth at your bodyweight, and what the data says about training.",
   alternates: { canonical: `${SITE}/articles/` },
+  openGraph: { images: ogImage("articles", "Articles") },
 };
 
 export default function ArticlesIndex() {

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { EXERCISES, isRunEntry } from "@/lib/exercises";
 import { slugify, SITE } from "@/lib/seo";
+import { ogImage } from "@/lib/og";
 import { MarketingShell, GuideCta } from "@/components/MarketingShell";
 import { jsonLd, graph, breadcrumbs } from "@/lib/schema";
 import { findHub, publishableHubs, hubPath, HUB_COPY, type HubKind } from "@/lib/hubs";
@@ -20,7 +21,11 @@ export function hubMetadata(kind: HubKind, slug: string) {
   const title = HUB_COPY[kind].title(hub.name);
   const description = HUB_COPY[kind].blurb(hub.name, members.length);
   const url = `${SITE}${hubPath(hub)}`;
-  return { title, description, alternates: { canonical: url }, openGraph: { title, description, url } };
+  return {
+    title, description,
+    alternates: { canonical: url },
+    openGraph: { title, description, url, images: ogImage("exercises", title) },
+  };
 }
 
 /**

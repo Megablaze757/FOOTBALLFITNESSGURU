@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ogImage } from "@/lib/og";
 import Link from "next/link";
 import { standardPages, standardSummary } from "@/lib/standards-page";
 import { STRENGTH_TIERS } from "@/lib/strength-standards";
@@ -14,6 +15,7 @@ export const metadata: Metadata = {
     `Strength standards for ${PAGES.length} barbell lifts as multiples of bodyweight, from untrained `
     + "to world class — the same numbers the app uses to rank your own lifts.",
   alternates: { canonical: `${SITE}/standards/` },
+  openGraph: { images: ogImage("standards", "Strength standards") },
 };
 
 export default function StandardsIndex() {

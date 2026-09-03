@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ogImage } from "@/lib/og";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { standardPages, findStandardPage, standardTable, tierColumns, standardSummary } from "@/lib/standards-page";
@@ -17,7 +18,11 @@ export function generateMetadata({ params }: { params: { slug: string } }): Meta
   const description = `${standardSummary(page.lift, "male")} The full table for men and women, `
     + `from untrained to world class.`;
   const url = `${SITE}/standards/${page.slug}/`;
-  return { title, description, alternates: { canonical: url }, openGraph: { title, description, url } };
+  return {
+    title, description,
+    alternates: { canonical: url },
+    openGraph: { title, description, url, images: ogImage(`standards-${page.slug}`, title) },
+  };
 }
 
 export default function Page({ params }: { params: { slug: string } }) {
