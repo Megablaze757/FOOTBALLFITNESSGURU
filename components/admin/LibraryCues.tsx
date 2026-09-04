@@ -15,7 +15,7 @@ import { invokeAI } from "@/lib/api";
  *
  * The offline script does this too, and needs a key on the machine running it.
  * The Worker already HAS one — NVIDIA's, free, on the same ladder as the rest
- * — so this screen borrows it: /draft-exercise with `freeOnly`, which restricts
+ * — so this screen borrows it: /draft-exercise, which is back-office and restricts
  * the ladder to its zero-cost rungs. No key to set, nothing to paste, and the
  * spend cap stays for the calls an athlete is waiting on.
  *
@@ -68,7 +68,6 @@ export function LibraryCues() {
           // rather than for what it assumes from the name. It is also what
           // draftProblems checks the cues against.
           note: target.description,
-          freeOnly: true,
         });
         const raw = res?.draft as { cues?: unknown; why?: unknown } | undefined;
         const draft = parseDraft({

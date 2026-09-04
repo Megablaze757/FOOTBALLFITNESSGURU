@@ -693,6 +693,35 @@ function isFree(r: Rung): boolean {
   return r.provider === "openrouter" && r.model.endsWith(":free");
 }
 
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * BACK-OFFICE AI NEVER SPENDS.
+ *
+ * The ladder in complete() is ordered for somebody staring at a spinner:
+ * Groq, then OpenRouter's free rungs, then OpenRouter PAID, and only then
+ * NVIDIA. For an athlete waiting on a program that is right — NVIDIA is the
+ * slowest rung and half a penny is worth three seconds.
+ *
+ * For the admin tools it is exactly backwards. Drafting captions and exercise
+ * cues is a batch nobody is waiting on, and the order above pays for
+ * OpenRouter before it has even tried a provider that bills nothing. Worse,
+ * meteredComplete sets `priority` from the caller's own tier — so the admin
+ * account, being a paying one, SKIPPED the free rungs and went straight to the
+ * paid model every time. The one user guaranteed not to need the fast path was
+ * the only one who could not get the cheap one.
+ *
+ * There is a second reason, and it is the one that actually costs money.
+ * Groq's and NVIDIA's free tiers are finite, shared, rate-limited pots — see
+ * the note on isFree(). A drafting run of two hundred requests burning Groq's
+ * quota pushes the ATHLETES' requests down onto the paid rung for the rest of
+ * the window. Back-office work must not eat the allowance the product runs on.
+ *
+ * So it is a rule rather than a parameter: no admin endpoint may spend, and no
+ * request body may ask it to. See lib/ai-routing.test.ts.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+const BACK_OFFICE_AI = { freeOnly: true } as const;
+
 function chainFor(env: Env, p: Provider): Rung[] {
   if (!keyFor(env, p)) return [];
   const raw = p === "groq" ? env.GROQ_FALLBACK_MODELS
@@ -2040,6 +2069,7 @@ async function generateContent(req: Request, env: Env): Promise<Response> {
     `Facts you may use (and nothing else):\n${allowed.map((f) => `- ${f}`).join("\n") || "- (none supplied)"}`;
 
   const { text, model } = await meteredComplete(env, u.id, {
+    ...BACK_OFFICE_AI,
     system: sys, user, maxTokens: 1200, json: true,
     validate: (t) => {
       try {
@@ -2101,15 +2131,20 @@ async function draftExercise(req: Request, env: Env): Promise<Response> {
   const budget = await checkBudget(env, u.id);
   if (!budget.allowed) return overBudget(budget);
 
-  const { name, category, sport, equipment, note, freeOnly } = (await req.json()) as {
+  /**
+   * `freeOnly` USED TO COME FROM THE REQUEST BODY, defaulting to false.
+   *
+   * The admin queue set it when drafting in bulk; a single draft from the
+   * exercise form did not, so it went down the paid rung — and because
+   * meteredComplete reads `priority` from the caller's tier, the admin account
+   * skipped the free rungs on the way there. Every one-off draft was billed,
+   * and nothing said so.
+   *
+   * It is not a parameter any more. This endpoint is admins-only back-office
+   * work, so it takes BACK_OFFICE_AI and a request cannot ask to spend.
+   */
+  const { name, category, sport, equipment, note } = (await req.json()) as {
     name?: string; category?: string; sport?: string; equipment?: string; note?: string;
-    /**
-     * Set by the admin queue when it drafts in bulk. Nobody is waiting on any
-     * single one of these, so they take the free rungs and leave the paid model
-     * — and the monthly spend cap — for the calls an athlete is sitting in
-     * front of.
-     */
-    freeOnly?: boolean;
   };
   if (!name || !name.trim()) return json({ error: "name required" }, 400);
 
@@ -2175,9 +2210,8 @@ async function draftExercise(req: Request, env: Env): Promise<Response> {
     `Author's own note: ${clean(note || "(none)", 400)}`;
 
   const { text, model } = await meteredComplete(env, u.id, {
+    ...BACK_OFFICE_AI,
     system: sys,
-    // Bulk queue work takes the free rungs — see the note in complete().
-    freeOnly: freeOnly === true,
     validate: (t) => {
       try {
         const p = JSON.parse(t) as { cues?: unknown; description?: unknown; error?: unknown };

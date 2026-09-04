@@ -156,7 +156,6 @@ export function ExerciseReview() {
           // Free rungs only. A queue of thirty is thirty requests nobody is
           // waiting on, and the paid model is there for the athlete-facing
           // calls that somebody is. See complete() in the Worker.
-          freeOnly: true,
         });
         const draft = normaliseDraft(res?.draft, fromRow(row));
 

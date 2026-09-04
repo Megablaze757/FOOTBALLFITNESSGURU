@@ -8,6 +8,7 @@ import { drillCaption, demoCaption, renderCaption, captionProblems } from "@/lib
 import { buildDemoCardSvg, DEMO_SCREENS, type DemoScreen } from "@/lib/demo-card";
 import { FACT_GROUPS, PILLARS, LAUNCH_SEQUENCE, CHANNELS, NEVER_CLAIM, allFacts } from "@/lib/content";
 import { guideSports, sportLabel } from "@/lib/seo";
+import { plannedPosts, type PlannedPost } from "@/lib/post-plan";
 import { invokeAI } from "@/lib/api";
 import type { SportId } from "@/lib/exercises";
 
@@ -21,9 +22,10 @@ import type { SportId } from "@/lib/exercises";
  * All of it lives in admin because it's a marketing back-office, not a user
  * feature — and because the AI writer spends real money per call.
  */
-type Tab = "plan" | "drills" | "demos" | "write";
+type Tab = "schedule" | "plan" | "drills" | "demos" | "write";
 
 const TABS: { id: Tab; label: string }[] = [
+  { id: "schedule", label: "🗓 This week" },
   { id: "plan", label: "📋 Plan" },
   { id: "drills", label: "🎯 Drill cards" },
   { id: "demos", label: "📱 App demos" },
@@ -31,7 +33,10 @@ const TABS: { id: Tab; label: string }[] = [
 ];
 
 export function ContentEngine() {
-  const [tab, setTab] = useState<Tab>("plan");
+  // Opens on the schedule, because "what do I post today" is the question,
+  // and the plan tab answers "what kinds of thing should I post" — good
+  // advice you need once, in front of the thing you need every day.
+  const [tab, setTab] = useState<Tab>("schedule");
 
   return (
     <div>
@@ -53,6 +58,7 @@ export function ContentEngine() {
         ))}
       </div>
 
+      {tab === "schedule" && <ScheduleTab />}
       {tab === "plan" && <PlanTab />}
       {tab === "drills" && <DrillCardsTab />}
       {tab === "demos" && <DemosTab />}
@@ -508,4 +514,154 @@ function Picker({ label, options, value, onChange }: {
       </div>
     </div>
   );
+}
+
+// --- the schedule ------------------------------------------------------------
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE PLAN SAID WHAT KINDS OF THING TO POST. THIS SAYS WHAT TO POST.
+ *
+ * Every tool on the other tabs begins with a blank field — the writer wants a
+ * topic typed in, the drill cards want a drill chosen. So the first step is
+ * always somebody deciding what today's subject is, which is the step that
+ * does not happen on a busy Tuesday. A content engine full of good tools
+ * produces nothing because of one empty box at the front of it.
+ *
+ * The subjects come out of catalogues that already exist and were already
+ * researched: a hundred skill drills, the costed collections, the strength
+ * standards, the protein index, the app's own screens. See lib/post-plan.ts —
+ * it is derived from the date, so there is no queue to keep in step and the
+ * same week shows on every device.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+function ScheduleTab() {
+  const [from, setFrom] = useState(() => new Date().toISOString().slice(0, 10));
+  const posts = useMemo(() => plannedPosts(from, 7), [from]);
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState<string | null>(null);
+
+  /**
+   * One draft, from the topic the schedule already wrote.
+   *
+   * The facts are the ones that post is allowed to draw on — narrower than the
+   * writer tab's default of everything, because a post about one drill has no
+   * business quoting the protein index.
+   */
+  async function draft(post: PlannedPost) {
+    setBusy(post.date);
+    setError(null);
+    try {
+      const facts = FACT_GROUPS.filter((g) => post.factGroups.includes(g.id)).flatMap((g) => g.facts);
+      const r = await invokeAI<{ options?: { title: string; body: string }[] }>(
+        "generate-content",
+        { format: "caption", topic: post.topic, facts, count: 1 },
+        45_000,
+      );
+      const body = r.options?.[0]?.body?.trim();
+      setDrafts((d) => ({ ...d, [post.date]: body || "Nothing usable came back — try again." }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  /**
+   * SEQUENTIAL, NOT Promise.all.
+   *
+   * Seven at once is seven simultaneous requests at a rate-limited free tier,
+   * and the way that fails is five drafts and two errors — worse than waiting.
+   * It also stops on the first failure rather than burning the remaining quota
+   * against a provider that is plainly not answering.
+   */
+  async function draftAll() {
+    for (const post of posts) {
+      if (drafts[post.date]) continue;
+      await draft(post);
+      if (error) return;
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="card space-y-3 p-5">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <label className="block">
+            <span className="field-label">Week beginning</span>
+            <input
+              type="date"
+              value={from}
+              onChange={(e) => setFrom(e.target.value || from)}
+              className="field"
+            />
+          </label>
+          <button onClick={draftAll} disabled={busy !== null} className="btn-primary">
+            {busy ? "Writing…" : "Draft all seven"}
+          </button>
+        </div>
+        <p className="text-xs text-slate-500">
+          Subjects come from the drills, collections, standards and screens already in the app —
+          nothing here is invented. The mix follows the pillars on the Plan tab. Drafting is free:
+          admin tools are pinned to the zero-cost models so a week of captions costs nothing and
+          leaves the paid allowance for athletes.
+        </p>
+        {error && <p className="text-sm text-readiness-red">{error}</p>}
+      </div>
+
+      {posts.map((post) => (
+        <div key={post.date} className="card p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="chip shrink-0">{dayLabel(post.date)}</span>
+                <span className="chip shrink-0 text-accent-400">{post.pillarName}</span>
+                <span className="chip shrink-0">{post.asset}</span>
+              </div>
+              <h4 className="mt-2 text-sm font-bold text-slate-100">{post.subject}</h4>
+              <p className="mt-1 text-sm text-slate-400">{post.topic}</p>
+              {post.href && (
+                <a href={post.href} className="mt-1 inline-block text-xs text-accent-400">
+                  {post.href}
+                </a>
+              )}
+            </div>
+            <button
+              onClick={() => draft(post)}
+              disabled={busy !== null}
+              className="tap-target shrink-0 rounded-xl border border-white/10 px-3 py-2 text-xs font-semibold text-slate-300"
+            >
+              {busy === post.date ? "Writing…" : drafts[post.date] ? "Redraft" : "Draft"}
+            </button>
+          </div>
+
+          {drafts[post.date] && (
+            <div className="mt-3 rounded-2xl border border-white/10 bg-white/[0.02] p-3">
+              <p className="whitespace-pre-wrap text-sm text-slate-200">{drafts[post.date]}</p>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(drafts[post.date]);
+                  setCopied(post.date);
+                  setTimeout(() => setCopied(null), 1500);
+                }}
+                className="tap-target mt-2 rounded-xl border border-white/10 px-3 py-1.5 text-xs font-semibold text-slate-300"
+              >
+                {copied === post.date ? "Copied" : "Copy"}
+              </button>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** "2026-09-07" → "Mon 7 Sep". UTC, so a label never slips a day. */
+function dayLabel(iso: string): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  const day = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d.getUTCDay()];
+  const month = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][d.getUTCMonth()];
+  return `${day} ${d.getUTCDate()} ${month}`;
 }
