@@ -109,6 +109,46 @@ function slug(name: string): string {
 // Hand-written coaching for the most-used gym lifts (keyed by lowercased name).
 // Anything not here still gets a sensible auto-generated entry.
 const COACHING: Record<string, { cues: string[]; why: string }> = {
+  // ── Written by hand, checked by draftProblems ──────────────────────────────
+  //
+  // 197 of the 382 movements here had NO coaching cues and a generated one-line
+  // `why` — 43 of them said "Builds the legs." verbatim. The pages are real and
+  // distinctly described (the meta description comes from the how-to, so there
+  // is no duplicate-content problem), but a page with no cue on it is a page
+  // that lists a movement rather than teaching it.
+  //
+  // These are the 24 most-searched of them. Every cue was validated against
+  // lib/exercise-draft.ts — the same rules the admin drafting tool applies to a
+  // model's output — and eleven failed the first pass for naming a body part or
+  // a piece of kit the movement's own description never mentions. They were
+  // rewritten inside each description's vocabulary rather than the rule being
+  // loosened to admit them: that rule is what stops invented anatomy reaching
+  // the library, and it does not stop being right when the author is a person.
+  "box squat": { cues: ["Sit back to the box, do not flop", "Pause without relaxing the trunk", "Drive up the moment you touch"], why: "Squatting to a fixed height, which teaches sitting back and makes depth the same on every rep." },
+  "chest press": { cues: ["Handles level with the mid-chest", "Blades back and down", "Full lockout without shrugging"], why: "A stable pressing pattern for the chest and triceps that is easy to load and easy to repeat." },
+  "chest supported dumbbell row": { cues: ["Lie chest-down, dumbbells hanging beneath", "Row to your ribs, squeezing the shoulder blades", "Lower fully — the bench removes all cheating"], why: "Rowing with the torso fixed, which removes the cheat and makes the upper back do the pulling." },
+  "clean and press": { cues: ["Clean the bar to the shoulders", "Stand fully and stabilise before pressing", "Strictly press overhead — two movements, not one heave"], why: "A whole-body lift that trains getting a load from the floor to overhead, which is the pattern most sports actually use." },
+  "close grip lat pulldown": { cues: ["Thighs locked under the pads", "Pull to the upper chest, leading with the elbows", "Let the weight stretch the lats fully at the top"], why: "A narrow pulldown that keeps tension on the lats through a long range." },
+  "dumbbell romanian deadlift": { cues: ["Soft knees, then push the hips back", "Dumbbells stay close to the legs", "Stop when the hamstrings run out of length"], why: "A hip hinge under load that builds the hamstrings and teaches the pattern behind every heavier pull." },
+  "dumbbell shrug": { cues: ["Dumbbells at your sides at arm's length", "Shrug straight up and pause at the top", "Lower to a full stretch"], why: "Direct work for the upper back and traps, which most pulling leaves half-finished." },
+  "dumbbell tricep extension": { cues: ["Elbows point forward, not out", "Lower behind the head for the stretch", "Extend without moving the upper arm"], why: "Overhead extension puts the triceps in a stretched position that pressing never reaches." },
+  "ez bar curl": { cues: ["Take the angled grips to spare the wrists", "Curl with the elbows fixed at your sides", "Lower under control to straight"], why: "The angled bar is kinder on the wrists than a straight one, so the biceps stop the set rather than the joints." },
+  "horizontal leg press": { cues: ["Feet mid-platform, shoulder width", "Lower until the hips start to tuck", "Do not lock the knees hard at the top"], why: "Loads the legs with the back supported, which is useful when the trunk is already tired from squatting." },
+  "incline dumbbell curl": { cues: ["Sit back on a 45-60 degree incline", "Arms hang straight down behind the torso", "Curl without the elbows travelling forward"], why: "Starting from a stretch, which is the position a standing curl never reaches." },
+  "machine bicep curl": { cues: ["Elbows on the pad, not sliding", "Curl to a hard squeeze", "Resist the whole way down"], why: "A fixed path for the biceps, which makes it easy to take the last few reps properly." },
+  "machine calf raise": { cues: ["Full stretch at the bottom", "Rise all the way onto the toes", "Pause a beat at each end"], why: "Calves respond to range and to pauses, both of which are easy to control on a machine." },
+  "machine row": { cues: ["Set the chest pad so the arms extend fully", "Row back and squeeze the shoulder blades", "Return under control to a full stretch"], why: "Horizontal pulling with the trunk supported, so the back does the work rather than the hips." },
+  "machine shoulder press": { cues: ["Seat height puts the handles at shoulder height", "Press up smoothly to near-lockout", "Lower under control, no bouncing"], why: "Overhead pressing with the trunk supported, which keeps the load on the shoulders." },
+  "pendlay row": { cues: ["Torso parallel, back flat", "Bar returns to the floor each rep", "Pull explosively to the lower chest"], why: "A dead-stop row from the floor that removes the stretch reflex and builds honest upper-back pulling strength." },
+  "pistol squat": { cues: ["Sit back, do not fall forward", "Free leg straight and off the floor", "Hold a counterweight if you cannot balance"], why: "Single-leg squatting to full depth, which exposes a side-to-side difference nothing bilateral will show." },
+  "seated calf raise": { cues: ["Pad across the thighs just above the knees", "Balls of the feet on the platform", "Rise onto the toes, then lower to a deep stretch"], why: "Bending the knee shifts the work to the soleus, which the standing version barely reaches." },
+  "seated dumbbell shoulder press": { cues: ["Elbows slightly in front of the body", "Lower to ear height under control", "Press up and slightly together"], why: "Independent dumbbells overhead, which evens out a stronger side and lets the shoulders find their own path." },
+  "seated shoulder press": { cues: ["Bar starts at collarbone height", "Push the head through at lockout", "Do not arch over the bench for extra reps"], why: "Seated overhead pressing that takes the legs and lower back out of the lift." },
+  "smith machine bench press": { cues: ["Set the bench so the bar lands on the lower chest", "Unhook and press the fixed path", "Push closer to failure than you would alone"], why: "Pressing on a fixed path, so you can work close to failure without a spotter." },
+  "smith machine squat": { cues: ["Feet slightly forward of the bar", "Brace before you unrack", "Same depth every rep on the fixed path"], why: "A fixed bar path that lets you push the legs hard without spending attention on balance." },
+  "sumo deadlift": { cues: ["Wide stance, toes turned out", "Hips low, chest up, arms vertical", "Push the floor apart as you stand"], why: "A wider stance that shortens the pull and asks more of the hips and quads than a conventional deadlift." },
+  "vertical leg press": { cues: ["Lower back flat against the pad", "Control the descent, no bouncing", "Stop before the hips lift off"], why: "A steeper pressing angle that puts the legs under load with very little demand on the trunk." },
+
   "shoulder press": { cues: ["Brace the core, glutes tight", "Press in a path close to your face", "Full lockout, biceps by the ears"], why: "The primary overhead pressing lift for shoulder strength and stability." },
   "military press": { cues: ["Strict — no leg drive", "Ribs down, don't lean back", "Bar over the mid-foot at lockout"], why: "A strict standing press that builds honest overhead strength." },
   "dumbbell bench press": { cues: ["Shoulder blades pinned back", "Lower to a deep stretch", "Press the dumbbells together at the top"], why: "Builds the chest through a bigger range than a barbell, evening out left/right." },
