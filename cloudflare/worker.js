@@ -926,7 +926,7 @@ function isFree(r) {
   return r.provider === "openrouter" && r.model.endsWith(":free");
 }
 __name(isFree, "isFree");
-var BACK_OFFICE_AI = { freeOnly: true };
+var BACK_OFFICE_AI = { backOffice: true };
 function chainFor2(env, p) {
   if (!keyFor(env, p)) return [];
   const raw = p === "groq" ? env.GROQ_FALLBACK_MODELS : p === "nvidia" ? env.NVIDIA_FALLBACK_MODELS : env.OPENROUTER_FREE_MODELS;
@@ -1082,8 +1082,11 @@ async function complete(env, opts) {
     return { text, model: `${rung.provider}/${rung.model}`, cost: 0 };
   }, "attempt");
   const full = opts.image ? visionChain(env) : modelChain(env);
-  const chain = opts.freeOnly ? (() => {
-    const free2 = full.filter((r) => isFree(r) || r.provider === "groq" || r.provider === "nvidia");
+  const chain = opts.backOffice ? (() => {
+    const nvidia = full.filter((r) => r.provider === "nvidia");
+    if (nvidia.length) return nvidia;
+    console.warn("back-office AI: no NVIDIA rung configured \u2014 falling back to the shared free tiers. Set NVIDIA_API_KEY on the Worker to keep admin drafting off the athletes' allowance.");
+    const free2 = full.filter((r) => isFree(r) || r.provider === "groq");
     return free2.length ? free2 : full;
   })() : full;
   if (!chain.length) {
@@ -1140,7 +1143,7 @@ __name(complete, "complete");
 async function meteredComplete(env, userId, opts) {
   try {
     const priority = meetsTier(await tierOf(env, userId), "silver");
-    const { text, model, cost } = await complete(env, { ...opts, priority });
+    const { text, model, cost } = await complete(env, { ...opts, priority: priority && !opts.backOffice });
     await recordSpend(env, userId, cost);
     return { text, model };
   } catch (e) {

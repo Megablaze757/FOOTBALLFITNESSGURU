@@ -166,7 +166,21 @@ export const ARTICLES: Article[] = [
 
   {
     slug: "bench-press-standards",
-    title: "Bench press standards by bodyweight",
+    /**
+     * NOT "Bench press standards by bodyweight" — that is verbatim what
+     * /standards/bench-press/ is titled, and two of your own pages with the
+     * same title are two pages splitting one query's signal between them.
+     * Nothing looks wrong on either; they simply both rank a bit worse.
+     *
+     * They answer different questions, so they are titled as different
+     * questions: the standards page IS the table, and this argues about what
+     * the table means. The article links to it and it links back, which is the
+     * shape that helps both instead of the shape that halves both.
+     *
+     * Still carries the keyword and still fits in 60 characters — articleProblems
+     * enforces both, and the first attempt at this failed on each.
+     */
+    title: "Bench press standards: is your bench actually good?",
     description:
       `Bench press standards as multiples of bodyweight: an intermediate bench at ${REFERENCE_KG}kg is about `
       + `${atRef(bench, 2)}kg, advanced is ${atRef(bench, 3)}kg. The full table, and what the tiers mean.`,

@@ -716,11 +716,20 @@ function isFree(r: Rung): boolean {
  * quota pushes the ATHLETES' requests down onto the paid rung for the rest of
  * the window. Back-office work must not eat the allowance the product runs on.
  *
- * So it is a rule rather than a parameter: no admin endpoint may spend, and no
- * request body may ask it to. See lib/ai-routing.test.ts.
+ * SO BACK-OFFICE WORK GETS NVIDIA, ON ITS OWN.
+ *
+ * Not "anything free" — Groq bills nothing either, and that is not the same as
+ * free of consequence: its quota is the one the athletes' requests run on. A
+ * batch that spends no money can still spend the allowance coach-chat needs and
+ * push the product onto the paid model for the rest of the window. NVIDIA is
+ * the slowest rung, which is precisely why it is the right one for work nobody
+ * is waiting on.
+ *
+ * A rule rather than a parameter: no admin endpoint may spend, and no request
+ * body may ask it to. See lib/ai-routing.test.ts.
  * ═══════════════════════════════════════════════════════════════════════════
  */
-const BACK_OFFICE_AI = { freeOnly: true } as const;
+const BACK_OFFICE_AI = { backOffice: true } as const;
 
 function chainFor(env: Env, p: Provider): Rung[] {
   if (!keyFor(env, p)) return [];
@@ -1018,8 +1027,8 @@ async function complete(
     priority?: boolean;
     /** A `data:image/…` URL. Its presence switches to the vision ladder. */
     image?: string | null;
-    /** Restrict to zero-cost rungs — see the note below the ladder. */
-    freeOnly?: boolean;
+    /** Admin batch work: NVIDIA only — see BACK_OFFICE_AI above the ladder. */
+    backOffice?: boolean;
   }
 ): Promise<{ text: string; model: string; cost: number }> {
   const started = Date.now();
@@ -1074,11 +1083,32 @@ async function complete(
    * retired is added or retired once.
    */
   const full = opts.image ? visionChain(env) : modelChain(env);
-  const chain = opts.freeOnly
+  const chain = opts.backOffice
     ? (() => {
-        const free = full.filter((r) => isFree(r) || r.provider === "groq" || r.provider === "nvidia");
-        // Never empty-handed: if nothing free is configured, the paid rung is
-        // better than failing a queue that would otherwise run all night.
+        /**
+         * NVIDIA ONLY. NOT "anything free".
+         *
+         * This filtered to every zero-cost rung, which included Groq — and
+         * Groq is the rung the ATHLETES depend on. Its free tier is a finite,
+         * shared, rate-limited pot (see the note on isFree), so a drafting run
+         * of two hundred captions that costs nothing in pounds still spends
+         * the allowance coach-chat and program generation run on, and pushes
+         * those onto the paid model for the rest of the window. Free is not
+         * the same as free of consequence.
+         *
+         * So back-office work gets its own provider and leaves the fast one
+         * alone. NVIDIA is the slowest rung on the ladder, which is exactly
+         * why it is the right one here: nobody is waiting.
+         */
+        const nvidia = full.filter((r) => r.provider === "nvidia");
+        if (nvidia.length) return nvidia;
+
+        // No NVIDIA key at all. Widening is better than a tool that cannot run
+        // — but it is a configuration mistake, not a routing decision, so it
+        // says so rather than quietly going back to eating Groq's quota.
+        console.warn("back-office AI: no NVIDIA rung configured — falling back to the shared free tiers. "
+          + "Set NVIDIA_API_KEY on the Worker to keep admin drafting off the athletes' allowance.");
+        const free = full.filter((r) => isFree(r) || r.provider === "groq");
         return free.length ? free : full;
       })()
     : full;
@@ -1187,8 +1217,8 @@ async function meteredComplete(
   opts: {
     system: string; user: string; maxTokens: number;
     validate?: (text: string) => boolean; json?: boolean; image?: string | null;
-    /** Restrict to zero-cost rungs — see the note in complete(). */
-    freeOnly?: boolean;
+    /** Admin batch work: NVIDIA only — see BACK_OFFICE_AI. */
+    backOffice?: boolean;
   }
 ): Promise<{ text: string; model: string }> {
   try {
@@ -1198,7 +1228,14 @@ async function meteredComplete(
     // beta accounts kept the fast path. Asking "did they pay?" survives the
     // next pricing change too.
     const priority = meetsTier(await tierOf(env, userId), "silver");
-    const { text, model, cost } = await complete(env, { ...opts, priority });
+    /**
+     * `priority` SKIPS THE FREE RUNGS, and back-office work must never do
+     * that however the caller is subscribed. The admin account is a paying
+     * one, so without this the tier would override the routing and send every
+     * draft to the paid model — which is exactly the bug BACK_OFFICE_AI
+     * exists to fix, reintroduced one layer down.
+     */
+    const { text, model, cost } = await complete(env, { ...opts, priority: priority && !opts.backOffice });
     await recordSpend(env, userId, cost);
     return { text, model };
   } catch (e) {

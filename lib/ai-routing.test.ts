@@ -59,8 +59,8 @@ test("no admin-only AI endpoint can reach a paid model", () => {
     assert.match(body, /isAdmin\(env, u\.id\)/, `${name} is not actually admin-only`);
     assert.match(body, /\.\.\.BACK_OFFICE_AI/, `${name} does not take the back-office ladder — it can bill`);
   }
-  assert.match(worker, /const BACK_OFFICE_AI = \{ freeOnly: true \} as const;/,
-    "the back-office rule no longer restricts the ladder to zero-cost rungs");
+  assert.match(worker, /const BACK_OFFICE_AI = \{ backOffice: true \} as const;/,
+    "the back-office rule no longer restricts the ladder");
 });
 
 /**
@@ -74,8 +74,8 @@ test("no admin-only AI endpoint can reach a paid model", () => {
 test("the spend decision is not taken from the request body", () => {
   for (const name of BACK_OFFICE) {
     const body = fn(name);
-    assert.ok(!/freeOnly\??:\s*(boolean|freeOnly)/.test(body),
-      `${name} still reads freeOnly from the caller`);
+    assert.ok(!/(freeOnly|backOffice)\??:\s*(boolean|freeOnly|backOffice)/.test(body),
+      `${name} still takes the spend decision from the caller`);
   }
 });
 
@@ -101,4 +101,44 @@ test("the default ladder still reaches a paid rung before the free NVIDIA one", 
   assert.ok(paid !== -1 && nvidia !== -1, "the ladder has been restructured — re-read this rule");
   assert.ok(paid < nvidia,
     "NVIDIA now comes before the paid rung: BACK_OFFICE_AI may be redundant, check before deleting it");
+});
+
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * FREE IS NOT THE SAME AS FREE OF CONSEQUENCE.
+ *
+ * The first version of this rule filtered to every zero-cost rung, which
+ * included Groq. Groq bills nothing — and its free tier is a finite, shared,
+ * rate-limited pot, the same one coach-chat and program generation run on. A
+ * drafting run of two hundred captions costs £0 and still spends the allowance
+ * the product depends on, pushing athletes onto the paid model for the rest of
+ * the window. The invoice would have shown nothing wrong.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("back-office batches take NVIDIA and leave Groq to the athletes", () => {
+  const complete = worker.slice(worker.indexOf("async function complete("), worker.indexOf("async function meteredComplete("));
+  const branch = complete.slice(complete.indexOf("opts.backOffice"), complete.indexOf(": full;"));
+
+  assert.match(branch, /full\.filter\(\(r\) => r\.provider === "nvidia"\)/,
+    "back-office work is not pinned to NVIDIA");
+  assert.match(branch, /if \(nvidia\.length\) return nvidia;/,
+    "the NVIDIA rungs are not returned on their own");
+
+  // Groq may appear only in the no-NVIDIA-key fallback, and that path must say
+  // so rather than widening in silence.
+  const groqAt = branch.indexOf('r.provider === "groq"');
+  const warnAt = branch.indexOf("console.warn");
+  assert.ok(groqAt === -1 || (warnAt !== -1 && warnAt < groqAt),
+    "Groq is reachable from back-office work without the misconfiguration warning");
+});
+
+/**
+ * `priority` is derived from the caller's TIER and skips the free rungs. The
+ * admin account is a paying one, so without an override the subscription would
+ * beat the routing — the same bug, one layer down, and invisible.
+ */
+test("a paying admin's tier cannot override the back-office ladder", () => {
+  assert.match(worker, /priority: priority && !opts\.backOffice/,
+    "a subscribed admin still skips the free rungs on back-office work");
 });

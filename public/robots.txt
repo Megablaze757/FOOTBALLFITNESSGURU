@@ -69,6 +69,20 @@ Disallow: /nutrition
 Disallow: /library
 Disallow: /essentials
 Disallow: /squad
+# ADDED AFTER THEY TURNED UP IN THE INDEXABLE SET.
+#
+# /ask, /injury and /partner sit in app/(app) like every route above and were
+# simply missed off this list — which is not a small omission: a signed-in
+# route exported statically is a five-word shell that inherits the ROOT
+# title and description, so Google was free to index three empty pages
+# competing with the homepage for its own name. Nothing on any screen would
+# ever have shown that.
+#
+# The list is now derived from app/(app)/* by lib/robots.test.ts, so the next
+# signed-in route cannot be forgotten the same way.
+Disallow: /ask
+Disallow: /injury
+Disallow: /partner
 Disallow: /profile
 Disallow: /admin
 Disallow: /dashboard
