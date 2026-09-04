@@ -10,6 +10,7 @@ import { useAsync } from "@/lib/use-async";
 import { summarizeTraining, summarizeNutrition } from "@/lib/history";
 import { MiniBars } from "@/components/MiniBars";
 import { ShareButton } from "@/components/ShareButton";
+import { athleteShareLink } from "@/lib/share-card";
 import { ExerciseProgress } from "@/components/ExerciseProgress";
 import { StrengthRanks } from "@/components/StrengthRanks";
 import { MuscleGains } from "@/components/MuscleGains";
@@ -53,7 +54,7 @@ export function ProgressPanel({ userId }: { userId: string }) {
       // daily_check_ins and body_logs — and naming it made PostgREST reject this
       // whole query, so this panel also had no name and no sex. See
       // lib/schema-columns.test.ts.
-      supabase.from("profiles").select("full_name, sex, sport, distance_unit, birth_year").eq("id", userId).maybeSingle(),
+      supabase.from("profiles").select("full_name, sex, sport, distance_unit, birth_year, username, public_profile").eq("id", userId).maybeSingle(),
       supabase.from("subscriptions").select("*").eq("user_id", userId).maybeSingle(),
       /**
        * BODYWEIGHT, FROM WHEREVER IT WAS ACTUALLY ENTERED.
@@ -104,6 +105,12 @@ export function ProgressPanel({ userId }: { userId: string }) {
       trainingLong: all,
       nutrition: (nutrition ?? []) as NutritionLog[],
       name: profile?.full_name ?? "Athlete",
+      // What address goes on a shared card. Everything else here is about
+      // training; this is the one field that decides whether a share comes back.
+      shareLink: athleteShareLink(
+        (profile as { username?: string | null } | null)?.username,
+        !!(profile as { public_profile?: boolean | null } | null)?.public_profile,
+      ),
       // One number, one definition, every reader.
       bodyweight: latestBodyweight({
         checkIns: (weighCheck ?? []).map((r) => ({ date: r.check_in_date as string, kg: r.weight_kg as number })),
@@ -131,7 +138,12 @@ export function ProgressPanel({ userId }: { userId: string }) {
     // v4: the payload gained sport + benchmark history for the runner-specific
     // Performance view. A cached v3 entry would briefly render strength ranks
     // for a runner until background revalidation landed.
-  }, [userId], `history:v4:${userId}`);
+    //
+    // v5: shareLink. Bumped rather than left to revalidate because a stale entry
+    // has no link at all, and the symptom — a card that quietly falls back to
+    // the bare domain — is exactly the attribution this was built to stop
+    // losing. Not visibly wrong, which is why it would never get reported.
+  }, [userId], `history:v5:${userId}`);
 
     /**
    * The single best-ranked lift, for the share prompt.
@@ -155,7 +167,8 @@ export function ProgressPanel({ userId }: { userId: string }) {
   const shareInput = useMemo(() => ({
     name: data?.name ?? "Athlete",
     lift: bestLift,
-  }), [data?.name, bestLift]);
+    link: data?.shareLink,
+  }), [data?.name, bestLift, data?.shareLink]);
 
   if (loading) {
     return (
@@ -182,6 +195,7 @@ export function ProgressPanel({ userId }: { userId: string }) {
         benchmarks={data.benchmarks ?? []}
         name={data.name ?? "Runner"}
         distanceUnit={data.distanceUnit ?? "km"}
+        shareLink={data.shareLink}
       />
     );
   }
@@ -331,6 +345,7 @@ export function ProgressPanel({ userId }: { userId: string }) {
             ...(n.avgProtein != null ? [{ label: "Avg protein", value: `${n.avgProtein}g` }] : []),
           ].slice(0, 3),
           caption: "Train smarter. Recover faster.",
+          link: data?.shareLink,
         }}
       />
 

@@ -35,6 +35,7 @@ export function MarketingShell({ children }: { children: React.ReactNode }) {
           <Link href="/exercises" className="hover:text-slate-300">Exercises</Link>
           <Link href="/collections" className="hover:text-slate-300">Collections</Link>
           <Link href="/cheapest-protein" className="hover:text-slate-300">Cheapest protein</Link>
+          <Link href="/a" className="hover:text-slate-300">Athletes</Link>
           <Link href="/privacy" className="hover:text-slate-300">Privacy</Link>
           <Link href="/terms" className="hover:text-slate-300">Terms</Link>
         </div>

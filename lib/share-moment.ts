@@ -31,6 +31,15 @@ export interface MomentInput {
   lift?: { name: string; tier: string; weightKg: number } | null;
   /** Badges earned, by id — the newest last. */
   achievements?: string[];
+  /**
+   * The address that goes on the card, already display-shaped.
+   *
+   * Passed in rather than derived here because it depends on the profile —
+   * whether they have a username, whether their page is public — and this
+   * module is about which moment wins, not about who the athlete is. See
+   * athleteShareLink in lib/share-card.ts.
+   */
+  link?: string;
 }
 
 export interface ShareMoment {
@@ -72,6 +81,7 @@ export function shareMoment(input: MomentInput): ShareMoment | null {
         headlineLabel: lift,
         stats: [{ label: "Standard", value: tier }],
         caption: "Ranked against lifters at my bodyweight.",
+        link: input.link,
       },
     };
   }
@@ -88,6 +98,7 @@ export function shareMoment(input: MomentInput): ShareMoment | null {
           ...(input.streak ? [{ label: "Day streak", value: String(input.streak) }] : []),
         ],
         caption: "Earned by turning up, not by paying for it.",
+        link: input.link,
       },
     };
   }
@@ -104,6 +115,7 @@ export function shareMoment(input: MomentInput): ShareMoment | null {
         headlineLabel: "days in a row",
         stats: [],
         caption: "Every day logged. No skipped weeks.",
+        link: input.link,
       },
     };
   }

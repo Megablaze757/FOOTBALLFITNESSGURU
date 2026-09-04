@@ -7,6 +7,7 @@ import { publishableRecipeHubs, recipeHubPath } from "@/lib/recipe-hubs";
 import { ARTICLES } from "@/lib/articles";
 import { standardPages } from "@/lib/standards-page";
 import { collectionSlugs } from "@/lib/collections";
+import { publicAthletes } from "@/lib/public-athletes";
 
 // Generated at build time from lib/seo.ts, which is the same source the pages
 // and the internal links use — so the sitemap can't list a URL that 404s.
@@ -15,7 +16,7 @@ import { collectionSlugs } from "@/lib/collections";
 // listing it here would contradict that.
 export const dynamic = "force-static";
 
-export default function sitemap(): MetadataRoute.Sitemap {
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date();
 
   const core = [
@@ -29,6 +30,9 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${SITE}/collections/`, changeFrequency: "monthly" as const, priority: 0.85 },
     { url: `${SITE}/standards/`, changeFrequency: "monthly" as const, priority: 0.85 },
     { url: `${SITE}/articles/`, changeFrequency: "weekly" as const, priority: 0.8 },
+    // The index that stops every athlete page being an orphan — see the note
+    // at the top of app/a/page.tsx.
+    { url: `${SITE}/a/`, changeFrequency: "daily" as const, priority: 0.6 },
     // The one page here no competitor can compute. Highest of the content
     // pages because it is the one worth earning a link.
     { url: `${SITE}/cheapest-protein/`, changeFrequency: "weekly" as const, priority: 0.9 },
@@ -118,6 +122,31 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: 0.8,
   }));
 
-  return [...core, ...drills, ...guides, ...collections, ...hubs, ...recipeHubs, ...standards, ...articles, ...recipes, ...exercises]
-    .map((e) => ({ ...e, lastModified: now }));
+  /**
+   * The opted-in athletes — the only entries here that are not in the source
+   * tree. Every other URL in this file is computed from data that ships with
+   * the build; these come from the database at build time, which is also what
+   * makes them the only part of this sitemap that grows on its own.
+   *
+   * Lower than a recipe. A profile is a real page and worth indexing, but it is
+   * thin next to a costed recipe, and saying otherwise about the newest and
+   * least-established pages on the site would be the wrong hint.
+   *
+   * The always-present miss page is deliberately absent: it is noindex, and a
+   * sitemap that lists a page telling crawlers not to index it is a
+   * contradiction they are entitled to distrust the rest of the file over.
+   */
+  const athletes = (await publicAthletes()).map((a) => ({
+    url: `${SITE}/a/${a.username}/`,
+    changeFrequency: "weekly" as const,
+    priority: 0.5,
+  }));
+
+  return [...core, ...drills, ...guides, ...collections, ...hubs, ...recipeHubs, ...standards, ...articles, ...recipes, ...exercises, ...athletes]
+    // SPREAD AFTER THE DEFAULT, not before. This was `{ ...e, lastModified: now }`,
+    // which overwrote the real publication date the articles above take care to
+    // set — so every article claimed to have been modified at build time, on
+    // every build. A lastmod that is always "just now" is the exact signal
+    // Google is documented to stop trusting.
+    .map((e) => ({ lastModified: now, ...e }));
 }

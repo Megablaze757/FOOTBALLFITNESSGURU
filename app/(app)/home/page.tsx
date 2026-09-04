@@ -15,6 +15,7 @@ import { checkInStreak, computeACWR } from "@/lib/load";
 import { dailyQuests, rotatingQuest } from "@/lib/gamification";
 import { biometricSignal, type Biometric } from "@/lib/biometrics";
 import { sportProfile } from "@/lib/sport-profile";
+import { athleteShareLink } from "@/lib/share-card";
 import { ReadinessGauge } from "@/components/ReadinessGauge";
 import { TodayCard } from "@/components/TodayCard";
 import { HomeStats } from "@/components/HomeStats";
@@ -60,7 +61,11 @@ export default function HomePage() {
       { data: recentTraining },
       { count: videoCount }, { count: checkInCount }, { count: nutritionCount },
     ] = await Promise.all([
-      supabase.from("profiles").select("full_name, onboarded, sport").eq("id", user.id).maybeSingle(),
+      // username and public_profile ride along on a query that already runs:
+      // they decide what address goes on a shared card, and a second round
+      // trip for two columns on the first screen of the app would be a
+      // strange thing to spend.
+      supabase.from("profiles").select("full_name, onboarded, sport, username, public_profile").eq("id", user.id).maybeSingle(),
       supabase.from("daily_check_ins").select("*").eq("user_id", user.id).eq("check_in_date", today).maybeSingle(),
       // 40 days covers the streak; the 7-day count is taken from the same rows
       // rather than a second full scan.
@@ -258,10 +263,18 @@ export default function HomePage() {
    * Memoised because ShareMomentCard reads it in an effect keyed on the object:
    * a fresh literal every render would re-run the lookup on every render.
    */
+  const shareLink = athleteShareLink(
+    (data?.profile as { username?: string | null } | null)?.username,
+    !!(data?.profile as { public_profile?: boolean | null } | null)?.public_profile,
+  );
   const momentInput = useMemo(() => ({
     name: firstName,
     streak,
-  }), [firstName, streak]);
+    // The card said "pocketathlete.com" for everybody. Migrations 0107 and 0108
+    // both exist to make a share creditable to the person who made it, and
+    // neither did anything until something passed this.
+    link: shareLink,
+  }), [firstName, streak, shareLink]);
   // Tool order, accent and tagline all come from here — see lib/sport-profile.ts.
   const sport = sportProfile((data?.profile as { sport?: string } | null)?.sport);
 

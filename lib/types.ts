@@ -310,6 +310,13 @@ export interface Profile {
   onboarded?: boolean | null;
   level?: string | null;
   leaderboard_opt_out?: boolean | null;
+  /**
+   * Opt-in, and opt-in in the column too — unlike the leaderboard above.
+   *
+   * A board is inside the app; /a/<username> is on the open web and indexed.
+   * A default of "visible" is defensible for the first and not for the second.
+   */
+  public_profile?: boolean | null;
   goals?: import("./program-preferences").GoalPreference[] | null;
   saved_exercises?: string[] | null;
   distance_unit?: "km" | "mi" | null;

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildShareSvg, displayLink, SHARE_FALLBACK_LINK, type ShareStats } from "./share-card";
+import { athleteShareLink, buildShareSvg, displayLink, SHARE_FALLBACK_LINK, type ShareStats } from "./share-card";
 
 const base: ShareStats = {
   name: "Sam",
@@ -54,4 +54,44 @@ test("text on the card is escaped", () => {
   const svg = buildShareSvg({ ...base, name: "A & B", caption: "5 < 6" });
   assert.ok(!/<text[^>]*>[^<]*&(?!amp;|lt;|gt;)/.test(svg));
   assert.ok(svg.includes("&amp;"));
+});
+
+// --- whose link goes on the card --------------------------------------------
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * TWO MIGRATIONS EXISTED FOR THIS AND NEITHER DID ANYTHING.
+ *
+ * 0107 made every username a referral code that resolves; 0108 gave opted-in
+ * athletes a page. But nothing in the app ever set `link`, so every card
+ * printed the bare domain and no share was attributable to anybody. The bug was
+ * invisible: the card looked right, it just credited nobody.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("an athlete's card carries their own address, not the bare domain", () => {
+  // Public page: short enough to read off a screenshot, and the page itself
+  // records the referral, so no query string.
+  assert.equal(athleteShareLink("sam", true), "pocketathlete.com/a/sam");
+  // No page: the credit still has to land somewhere.
+  assert.equal(athleteShareLink("sam", false), "pocketathlete.com/?ref=sam");
+  // Neither is a link the card must invent — displayLink falls back.
+  assert.equal(athleteShareLink(null, true), undefined);
+  assert.equal(athleteShareLink(undefined, false), undefined);
+  assert.equal(athleteShareLink("   ", true), undefined);
+  assert.equal(displayLink(athleteShareLink(null, false)), SHARE_FALLBACK_LINK);
+});
+
+test("the link on the card is the link in the share text", () => {
+  const link = athleteShareLink("sam", true)!;
+  const svg = buildShareSvg({
+    name: "Sam", headlineValue: "7", headlineLabel: "days in a row", stats: [], link,
+  });
+  assert.ok(svg.includes(link), "the card must show the athlete's own address");
+  assert.ok(!svg.includes(`>${SHARE_FALLBACK_LINK}<`), "and not also the bare domain");
+});
+
+/** Usernames are lowercase in the database; a link that is not cannot resolve. */
+test("a link is never a shape the database would not match", () => {
+  assert.equal(athleteShareLink("SAM", true), "pocketathlete.com/a/sam");
+  assert.equal(athleteShareLink(" Sam ", false), "pocketathlete.com/?ref=sam");
 });

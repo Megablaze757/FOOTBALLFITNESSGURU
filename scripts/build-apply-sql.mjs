@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // =============================================================================
-// Rebuild supabase/apply-0088-0107.sql from the migrations it claims to be.
+// Rebuild supabase/apply-0088-0108.sql from the migrations it claims to be.
 //
 // WHY A SCRIPT AND NOT A HAND-EDITED FILE. A paste-ready copy of four
 // migrations is a second source of truth, and the failure mode is silent: the
@@ -50,9 +50,10 @@ export const PARTS = [
   "0105_leaderboard_rank",
   "0106_exercise_review_notes",
   "0107_athlete_share_codes",
+  "0108_public_profiles",
 ];
 
-const OUT = "supabase/apply-0088-0107.sql";
+const OUT = "supabase/apply-0088-0108.sql";
 const HEADER_END = "-- =============================================================================\n\n\n";
 
 // Importing this module must not rebuild anything — lib/apply-sql.test.ts

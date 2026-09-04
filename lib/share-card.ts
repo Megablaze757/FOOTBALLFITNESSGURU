@@ -36,6 +36,44 @@ export interface ShareStats {
 export const SHARE_FALLBACK_LINK = "pocketathlete.com";
 
 /**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE LINK THAT GOES ON AN ATHLETE'S CARD.
+ *
+ * Migration 0107 made every username a referral code that resolves, and 0108
+ * gave opted-in athletes a page. Neither did anything on its own: nothing in
+ * the app ever set `link`, so every card printed the bare domain and no share
+ * has ever been attributable to the person who made it.
+ *
+ * Two shapes, in order of what a person would rather post:
+ *
+ *   public page  → pocketathlete.com/a/sam
+ *       Short enough to read off a screenshot, it is about THEM rather than
+ *       about the app, and the page itself records the referral — see
+ *       CaptureAthleteRef — so there is no query string to make it ugly.
+ *
+ *   username only → pocketathlete.com/?ref=sam
+ *       No page to send anyone to, but the credit still lands.
+ *
+ * `undefined` for anybody with no username at all, which displayLink turns
+ * into the plain domain. A card is never worse off than it was.
+ *
+ * NOT A COMMISSION. A username matches nothing in public.affiliates, so this
+ * brings signups in and creates no payout — see the long note at the foot of
+ * migration 0107.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export function athleteShareLink(
+  username: string | null | undefined,
+  isPublic: boolean,
+): string | undefined {
+  const name = username?.trim().toLowerCase();
+  if (!name) return undefined;
+  return isPublic
+    ? `${SHARE_FALLBACK_LINK}/a/${name}`
+    : `${SHARE_FALLBACK_LINK}/?ref=${encodeURIComponent(name)}`;
+}
+
+/**
  * The address as it should READ on a card: no scheme, no trailing slash.
  *
  * "https://pocketathlete.com/?ref=ABC" is a URL bar; "pocketathlete.com/?ref=ABC"

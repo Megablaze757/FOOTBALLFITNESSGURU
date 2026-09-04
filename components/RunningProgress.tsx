@@ -14,11 +14,14 @@ export function RunningProgress({
   benchmarks,
   name,
   distanceUnit,
+  shareLink,
 }: {
   logs: TrainingLog[];
   benchmarks: StrengthBenchmark[];
   name: string;
   distanceUnit: "km" | "mi";
+  /** The athlete's own address for the share card — see athleteShareLink. */
+  shareLink?: string;
 }) {
   const summary = summarizeRunProgress(logs, benchmarks, todayLocal());
   const hasRuns = summary.current.runs > 0 || summary.previous.runs > 0;
@@ -265,6 +268,7 @@ export function RunningProgress({
             { label: "Longest run", value: summary.current.longestKm ? `${distance(summary.current.longestKm)}${distanceUnit}` : "—" },
           ],
           caption: "Build the engine. Keep the easy days easy.",
+          link: shareLink,
         }}
       />
 

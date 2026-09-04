@@ -21,6 +21,32 @@ export function getRef(): string | null {
   return localStorage.getItem(REF_KEY) ?? localStorage.getItem(LEGACY_REF_KEY);
 }
 
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * A VISIT TO AN ATHLETE'S PAGE IS A REFERRAL, BUT ONLY IF NOTHING ELSE IS.
+ *
+ * /a/sam has no ?ref= on it — that is the point, the link stays short enough
+ * to read off a screenshot — so the page credits `sam` itself.
+ *
+ * WRITES ONLY WHEN THE SLOT IS EMPTY, which is the whole guard. captureRef()
+ * above is last-touch: every ?ref= it sees overwrites. If this behaved the same
+ * way, somebody who clicked a paid affiliate's link and then happened to open
+ * an athlete profile before signing up would have that affiliate's commission
+ * silently replaced by a username that pays nobody. That is money leaving a
+ * real person's account because of an incidental page view.
+ *
+ * So an explicit code always wins: on the profile page captureRef() runs first,
+ * and if it wrote anything this does nothing.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export function setRefIfUnset(code: string): void {
+  if (typeof window === "undefined") return;
+  const clean = code.trim().slice(0, 40);
+  if (!clean) return;
+  if (getRef()) return;
+  localStorage.setItem(REF_KEY, clean);
+}
+
 export function clearRef(): void {
   if (typeof window === "undefined") return;
   localStorage.removeItem(REF_KEY);

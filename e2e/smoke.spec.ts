@@ -27,6 +27,14 @@ const PUBLIC_ROUTES = [
   // sideways on a phone if it is going to.
   { path: "/collections/vegetarian-high-protein/", name: "a collection" },
   { path: "/cheapest-protein/", name: "cheapest protein" },
+  // The athlete index in its EMPTY state, which is what a local build renders
+  // and what production renders until somebody opts in — so it is the state
+  // that ships first and the one nobody would otherwise look at.
+  { path: "/a/", name: "athlete index" },
+  // The always-present miss page. It exists so the export does not fail on an
+  // empty athlete list (see MISS_PARAM), which means it is also the one page
+  // under /a/ guaranteed to be in every build.
+  { path: "/a/not-found/", name: "athlete miss page" },
 ];
 
 /**

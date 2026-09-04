@@ -32,6 +32,15 @@ export function ProfileForm({ profile, email }: { profile: Profile; email: strin
   // new row defaults to visible, which is what makes a leaderboard work at all;
   // showing it as "show me on leaderboards" is what makes the choice legible.
   const [onBoards, setOnBoards] = useState(!profile.leaderboard_opt_out);
+  /**
+   * The public page. OPT-IN both ways round, unlike the leaderboard above.
+   *
+   * A leaderboard is inside the app and among people who joined the same
+   * thing; a page at /a/<name> is on the open web and indexed. Defaulting that
+   * to on would publish somebody's rank because a feature shipped, which is not
+   * a decision the product gets to make for them.
+   */
+  const [publicProfile, setPublicProfile] = useState(profile.public_profile ?? false);
   const [emailWeekly, setEmailWeekly] = useState(profile.email_weekly_summary ?? true);
   const [emailCheckins, setEmailCheckins] = useState(profile.email_checkin_reminders ?? true);
   const [emailWorkouts, setEmailWorkouts] = useState(profile.email_workout_reminders ?? true);
@@ -85,6 +94,9 @@ export function ProfileForm({ profile, email }: { profile: Profile; email: strin
         experience_years: experience ? Number(experience) : null,
         role, sport, positions, position: positions[0] ?? null, level,
         leaderboard_opt_out: !onBoards,
+        // A page needs a name to live at. Ticking the box without a username
+        // would set a flag that does nothing and read as broken.
+        public_profile: publicProfile && !!check.value,
         email_weekly_summary: emailWeekly,
         email_checkin_reminders: emailCheckins,
         email_workout_reminders: emailWorkouts,
@@ -210,6 +222,33 @@ export function ProfileForm({ profile, email }: { profile: Profile; email: strin
             checked={onBoards}
             onChange={(e) => setOnBoards(e.target.checked)}
             className="mt-0.5 h-5 w-5 shrink-0 accent-pitch-500"
+          />
+        </label>
+
+        {/* Separate from the leaderboard, and said plainly. A board is inside
+            the app among people who joined the same thing; a page is on the
+            open web and in search results, and conflating the two would be the
+            app deciding something on somebody's behalf. */}
+        <label className="mt-3 flex items-start justify-between gap-3">
+          <span>
+            <span className="block text-sm font-medium text-slate-200">Give me a public page</span>
+            <span className="mt-0.5 block text-xs text-slate-500">
+              A page at <b>pocketathlete.com/a/{username || "yourname"}</b> with your rank, sport and
+              position — and nothing else. It is on the open web and search engines can find it.
+              Off unless you turn it on, and it needs a username.{" "}
+              {/* Said out loud because the alternative is somebody ticking the
+                  box, opening the link, getting a 404 and concluding the app is
+                  broken. The pages are built at deploy time — see the note at
+                  the top of app/a/[username]/page.tsx for why. */}
+              <b className="text-slate-400">It goes live at the next update, not straight away.</b>
+            </span>
+          </span>
+          <input
+            type="checkbox"
+            checked={publicProfile}
+            onChange={(e) => setPublicProfile(e.target.checked)}
+            disabled={!username.trim()}
+            className="mt-0.5 h-5 w-5 shrink-0 accent-pitch-500 disabled:opacity-40"
           />
         </label>
       </div>

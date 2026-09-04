@@ -123,8 +123,19 @@ needed. Includes rehab and mobility work, not only lifts.
 - [Cheapest protein](${SITE}/cheapest-protein/)
 - [Strength standards](${SITE}/standards/)
 - [Articles](${SITE}/articles/)
+- [Athlete profiles](${SITE}/a/)
 - [Privacy policy](${SITE}/privacy/)
 - [Terms](${SITE}/terms/)
+
+### Athlete profiles
+
+Pages at ${SITE}/a/<username> for athletes who chose to publish one. They are
+opt-in and off by default, and show only a rank, a sport and a position —
+never weight, injuries, food or a real name. The rank comes from sessions
+logged, daily logs kept and food tracked; it cannot be bought.
+
+There is no directory of everybody who uses the app, and the absence of a page
+means only that the athlete has not published one.
 
 ## Important limitations
 
