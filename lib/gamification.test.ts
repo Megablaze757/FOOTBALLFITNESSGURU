@@ -1,10 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { RANKABLE_MUSCLES, TOP_TIER } from "./strength-standards";
-import {
-  computeXp, levelFor, rankFor, rankLadder, evaluateAchievements, dailyQuests, EMPTY_STATS,
-  ACHIEVEMENTS, activitySpans, standingRank, LADDER_MIN_ATHLETES, type ActivityStats,
-} from "./gamification";
+import { computeXp, levelFor, rankFor, rankLadder, evaluateAchievements, dailyQuests, EMPTY_STATS, ACHIEVEMENTS, activitySpans, standingRank, LADDER_MIN_ATHLETES, type ActivityStats, rotatingQuest, ROTATING_QUESTS, type RotatingState } from "./gamification";
 
 test("XP accumulates from activity and levels rise", () => {
   assert.equal(computeXp(EMPTY_STATS), 0);
@@ -455,4 +452,89 @@ test("nonsense standings are refused rather than rendered", () => {
 test("the standing ranks say what they mean", () => {
   assert.match(standingRank({ athletes: 500, position: 1 })?.note ?? "", /No\. 1 in the world/);
   assert.match(standingRank({ athletes: 500, position: 3 })?.note ?? "", /Top 1%/);
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE BOARD HAS TO BE ABLE TO CHANGE.
+ *
+ * Check in, train, log food is a good list and it is the same list on day 1 and
+ * day 400. Nothing on it could be different tomorrow, so after the first week
+ * it stops being an incentive and becomes furniture.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+const rotBase: RotatingState = {
+  dayOfYear: 0,
+  sessionsThisWeek: 0,
+  minutesThisWeek: 0,
+  streak: 0,
+  weighedToday: false,
+  hasProgram: false,
+};
+
+test("the extra quest changes from day to day, and holds within one", () => {
+  const seen = new Set<string>();
+  for (let day = 0; day < 30; day++) {
+    const q = rotatingQuest({ ...rotBase, dayOfYear: day });
+    assert.ok(q, `day ${day} offered nothing`);
+    seen.add(q!.id);
+    // Same day, same answer — a quest that changes on a refresh is a quest
+    // nobody can finish.
+    assert.equal(rotatingQuest({ ...rotBase, dayOfYear: day })!.id, q!.id);
+  }
+  assert.ok(seen.size >= 3, `only ${seen.size} different quests across a month`);
+});
+
+test("an absurd day index does not fall off the end of the pool", () => {
+  for (const dayOfYear of [-1, -400, 0.7, 99999]) {
+    assert.ok(rotatingQuest({ ...rotBase, dayOfYear }), `${dayOfYear} produced nothing`);
+  }
+});
+
+/** A goal the app cannot see you complete teaches you the board is decorative. */
+test("every rotating quest is one the app can actually tick", () => {
+  const done: RotatingState = {
+    dayOfYear: 0,
+    sessionsThisWeek: 5,
+    minutesThisWeek: 200,
+    streak: 10,
+    weighedToday: true,
+    hasProgram: true,
+  };
+  for (const q of ROTATING_QUESTS) {
+    assert.equal(typeof q.done(done), "boolean");
+    assert.ok(q.done(done), `${q.id} cannot be completed even by an athlete who did everything`);
+    assert.ok(!q.done(rotBase), `${q.id} is already done by somebody who has done nothing`);
+    assert.ok(q.xp > 0, `${q.id} is worth no XP`);
+    assert.match(q.href, /^\//, `${q.id} does not link anywhere in the app`);
+  }
+});
+
+test("nothing irrelevant is offered", () => {
+  // Somebody 200 days in is not shown "get to a seven-day streak", and
+  // somebody with a block is not told to build one.
+  const veteran: RotatingState = { ...rotBase, streak: 200, hasProgram: true, sessionsThisWeek: 4 };
+  for (let day = 0; day < 20; day++) {
+    const q = rotatingQuest({ ...veteran, dayOfYear: day })!;
+    assert.notEqual(q.id, "streak7");
+    assert.notEqual(q.id, "block");
+  }
+
+  // And "train five days" waits until three is behind them.
+  for (let day = 0; day < 20; day++) {
+    assert.notEqual(rotatingQuest({ ...rotBase, dayOfYear: day })!.id, "week5");
+  }
+});
+
+test("an athlete who has cleared the pool gets nothing rather than a wrong quest", () => {
+  const impossible = ROTATING_QUESTS.map((q) => q.id);
+  assert.ok(impossible.length > 0);
+  // Every quest gated behind `relevant` off at once.
+  const none = rotatingQuest({
+    ...rotBase, streak: 200, hasProgram: true, sessionsThisWeek: 0,
+  });
+  // week3, weigh and minutes have no relevance gate, so something is always
+  // offered — which is the intended behaviour, and this pins it.
+  assert.ok(none, "the board lost its fourth line entirely");
+  assert.ok(!["streak7", "block", "week5"].includes(none!.id));
 });

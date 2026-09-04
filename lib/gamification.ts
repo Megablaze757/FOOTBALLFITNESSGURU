@@ -820,3 +820,108 @@ export function dailyQuests(d: DailyState): Quest[] {
     { id: "nutrition", label: "Log your nutrition", xp: XP.nutritionLog, done: d.nutritionToday, href: "/nutrition" },
   ];
 }
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE SAME THREE THINGS, EVERY DAY, FOREVER.
+ *
+ * Check in, train, log food — that is the whole board, and it is the whole
+ * board on day 1 and on day 400. It is a good list and it stops being an
+ * incentive the moment it becomes familiar, because there is nothing on it
+ * that could be different tomorrow.
+ *
+ * So one more, and it changes. Not random: picked by the day, so it is stable
+ * from morning to night and different from one day to the next, and nobody has
+ * to store which one somebody got.
+ *
+ * Every one is verifiable from state the home page already loads. A goal the
+ * app cannot see you complete is worse than no goal — the athlete does it, the
+ * tick never lands, and they learn the board is decorative.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export interface RotatingState {
+  /** 0-365. Which quest today is, and nothing else. */
+  dayOfYear: number;
+  sessionsThisWeek: number;
+  minutesThisWeek: number;
+  streak: number;
+  weighedToday: boolean;
+  hasProgram: boolean;
+}
+
+interface RotatingQuest {
+  id: string;
+  label: string;
+  xp: number;
+  href: string;
+  done: (s: RotatingState) => boolean;
+  /**
+   * Whether it is worth offering at all.
+   *
+   * "Build a training block" to somebody who has one is not a goal, it is the
+   * app not paying attention — and one irrelevant quest teaches an athlete to
+   * stop reading the board.
+   */
+  relevant?: (s: RotatingState) => boolean;
+}
+
+export const ROTATING_QUESTS: RotatingQuest[] = [
+  {
+    id: "week3",
+    label: "Train three days this week",
+    xp: XP.completedSession * 2,
+    href: "/coach",
+    done: (s) => s.sessionsThisWeek >= 3,
+  },
+  {
+    id: "weigh",
+    label: "Log your weight",
+    xp: XP.checkIn,
+    href: "/journal",
+    done: (s) => s.weighedToday,
+  },
+  {
+    id: "minutes",
+    label: "Reach 150 minutes this week",
+    xp: XP.completedSession,
+    href: "/coach",
+    done: (s) => s.minutesThisWeek >= 150,
+  },
+  {
+    id: "streak7",
+    label: "Get to a seven-day streak",
+    xp: XP.checkIn * 2,
+    href: "/journal",
+    done: (s) => s.streak >= 7,
+    // Offered while it is still ahead of them. Somebody 200 days in does not
+    // need a goal they cleared in February.
+    relevant: (s) => s.streak < 7,
+  },
+  {
+    id: "block",
+    label: "Build a training block",
+    xp: XP.completedSession * 2,
+    href: "/coach",
+    done: (s) => s.hasProgram,
+    relevant: (s) => !s.hasProgram,
+  },
+  {
+    id: "week5",
+    label: "Train five days this week",
+    xp: XP.completedSession * 3,
+    href: "/coach",
+    done: (s) => s.sessionsThisWeek >= 5,
+    // Only once three is behind them: five is a goal, not a rebuke.
+    relevant: (s) => s.sessionsThisWeek >= 3,
+  },
+];
+
+/** Today's extra quest, or null when nothing in the pool applies. */
+export function rotatingQuest(s: RotatingState): Quest | null {
+  const eligible = ROTATING_QUESTS.filter((q) => q.relevant?.(s) ?? true);
+  if (eligible.length === 0) return null;
+  // Floored and wrapped: a negative or absurd day must not index off the end.
+  const index = ((Math.floor(s.dayOfYear) % eligible.length) + eligible.length) % eligible.length;
+  const q = eligible[index];
+  return { id: q.id, label: q.label, xp: q.xp, done: q.done(s), href: q.href };
+}

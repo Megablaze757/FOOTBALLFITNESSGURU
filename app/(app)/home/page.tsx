@@ -12,7 +12,7 @@ import { useAsync } from "@/lib/use-async";
 import { assessReadiness } from "@/lib/readiness";
 import { actionLabel } from "@/lib/insights";
 import { checkInStreak, computeACWR } from "@/lib/load";
-import { dailyQuests } from "@/lib/gamification";
+import { dailyQuests, rotatingQuest } from "@/lib/gamification";
 import { biometricSignal, type Biometric } from "@/lib/biometrics";
 import { sportProfile } from "@/lib/sport-profile";
 import { ReadinessGauge } from "@/components/ReadinessGauge";
@@ -190,6 +190,22 @@ export default function HomePage() {
       checkIns: checkInsLast7,
       days,
     };
+    /**
+     * The fourth line, and the only one that can be different tomorrow.
+     *
+     * Computed here rather than beside the other three because it needs the
+     * week totals, which are worked out above — and a quest the app cannot
+     * tick is worse than no quest at all.
+     */
+    const extra = rotatingQuest({
+      dayOfYear: Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86_400_000),
+      sessionsThisWeek: week.sessions,
+      minutesThisWeek: week.minutes,
+      streak,
+      weighedToday: (checkIn as { weight_kg?: number | null } | null)?.weight_kg != null,
+      hasProgram: programCount > 0,
+    });
+
     // "Getting started" asks whether they've EVER done each thing. It used to
     // ask whether they'd checked in TODAY, so the onboarding checklist rose from
     // the dead every morning they hadn't — a first-run card nagging month-old
@@ -226,7 +242,9 @@ export default function HomePage() {
     }
 
     return {
-      profile, checkIn, insight, streak, quests, bioSignal, setup,
+      profile, checkIn, insight, streak,
+      quests: extra ? [...quests, extra] : quests,
+      bioSignal, setup,
       week, acwr, activity,
       nextSession, hasProgram: programCount > 0, trainedToday,
       nutriToday: (nutriToday ?? null) as { calories_eaten: number | null; daily_calorie_target: number | null } | null,

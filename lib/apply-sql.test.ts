@@ -22,7 +22,7 @@ import { PARTS } from "../scripts/build-apply-sql.mjs";
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
 
 
-const combined = read("../supabase/apply-0088-0106.sql");
+const combined = read("../supabase/apply-0088-0107.sql");
 
 /**
  * Split SQL into statements, without cutting a function body in half.

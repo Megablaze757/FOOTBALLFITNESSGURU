@@ -29,13 +29,25 @@ export function ShareButton({ stats }: { stats: ShareStats }) {
     let cancelled = false;
     void (async () => {
       try {
-        const { data } = await createClient()
-          .from("affiliates").select("code").eq("user_id", user.id).maybeSingle();
-        const code = (data as { code?: string } | null)?.code;
+        const supabase = createClient();
+        /**
+         * The affiliate code first, then the username.
+         *
+         * An affiliate link pays; a username link is attribution only. Both
+         * are the athlete's own, and either is worth infinitely more than the
+         * plain address — a share nothing comes back from is a share nobody
+         * does twice. See migration 0107.
+         */
+        const [{ data: affiliate }, { data: profile }] = await Promise.all([
+          supabase.from("affiliates").select("code").eq("user_id", user.id).maybeSingle(),
+          supabase.from("profiles").select("username").eq("id", user.id).maybeSingle(),
+        ]);
+        const code = (affiliate as { code?: string } | null)?.code
+          ?? (profile as { username?: string | null } | null)?.username;
         if (!cancelled && code) setLink(referralLink(code));
       } catch {
-        // No affiliate row, no table, or no permission — all mean "no code",
-        // and the card has a perfectly good fallback.
+        // No row, no table, or no permission — all mean "no code", and the
+        // card has a perfectly good fallback.
       }
     })();
     return () => { cancelled = true; };
