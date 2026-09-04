@@ -65,7 +65,18 @@ returns table (
   streak int,
   xp int,
   sport text,
-  position text
+  -- QUOTED, AND IT HAS TO BE.
+  --
+  -- `position` is a reserved word in Postgres — POSITION(x IN y) is SQL
+  -- standard function syntax — so an unquoted `position text` in a RETURNS
+  -- TABLE list is a syntax error, not a column. It fails at CREATE FUNCTION
+  -- time with `42601: syntax error at or near "position"`, which is a paste
+  -- that stops halfway rather than a database that quietly behaves oddly.
+  --
+  -- Quoted lowercase is the SAME identifier as unquoted lowercase, so
+  -- PostgREST still exposes it as `position` and the client's select is
+  -- unchanged. lib/sql-reserved.test.ts now checks every migration for this.
+  "position" text
 )
 language plpgsql
 stable
@@ -90,7 +101,7 @@ begin
            p.xp as lifetime_xp,
            p.streak as published_streak,
            p.sport as sport,
-           p.position as position
+           p.position as "position"
       from public.profiles p
      where p.leaderboard_opt_out = false
        and (
@@ -142,7 +153,7 @@ begin
     -- than the Iron one migration 0105 exists to stop.
     pe.lifetime_xp,
     pe.sport::text,
-    pe.position::text
+    pe."position"::text
   from people pe;
 end;
 $$;
