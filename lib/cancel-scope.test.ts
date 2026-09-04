@@ -90,3 +90,47 @@ test("the confirmation refuses to lie about a partial cancellation", () => {
   assert.match(flow, /res\?\.stillBilling/, "a partial cancellation is shown as a success");
   assert.match(flow, /may still be charged/, "it does not say what the consequence is");
 });
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * AND THE DUPLICATE SHOULD NEVER HAVE BEEN CREATED.
+ *
+ * The customer with two live Pro subscriptions dates from early development,
+ * so this is not an ongoing leak — but the hole that allowed it is real and
+ * still open: createCheckout reused the Stripe customer and opened another
+ * Checkout for the same price with nothing checking whether one was already
+ * running. Stripe will bill a customer twice for the same product if asked.
+ *
+ * Everything else in this file is cleanup for a duplicate. This is the part
+ * that stops one being made.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("checkout refuses to start a second subscription to the same plan", () => {
+  const body = fn("createCheckout");
+  assert.match(body, /hasLiveSubscription\(env, customerId, priceId/,
+    "nothing checks for an existing subscription before opening a second checkout");
+  assert.match(body, /alreadySubscribed: true/, "the refusal is not distinguishable by the caller");
+
+  const check = fn("hasLiveSubscription");
+  /**
+   * BOTH paths, counted. Asserting the string appears once passed while the
+   * main listing scan had its price comparison removed — the fallback still
+   * contained the phrase, so the guard matched a line that was not the one
+   * doing the work.
+   */
+  const priceChecks = (check.match(/priceOf\(sub\) === priceId/g) ?? []).length;
+  assert.equal(priceChecks, 2,
+    "the listing scan and the single-subscription fallback must BOTH compare the price, "
+    + "or a Team subscription blocks a Pro checkout");
+  assert.match(check, /STILL_BILLING\.includes\(sub\.status\)/, "a trialing subscription would not count as live");
+  assert.match(check, /return false;/, "a Stripe outage blocks every new subscriber");
+});
+
+/** A refusal the athlete can act on, not a guess about server configuration. */
+test("the upgrade button shows the reason it was refused", () => {
+  const src = readFileSync(new URL("../components/UpgradeButton.tsx", import.meta.url), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, " ")
+    .replace(/^\s*\/\/.*$/gm, " ");
+  assert.match(src, /catch \(e\)/, "the error is still discarded");
+  assert.match(src, /e instanceof Error \? e\.message/, "the server's reason never reaches the screen");
+});

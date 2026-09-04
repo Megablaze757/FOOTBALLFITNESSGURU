@@ -969,7 +969,7 @@ function overBudget(state) {
   return json({ error: `${reason} The on-device coach still works, and your allowance resets \u2014 upgrade for more.` }, 429);
 }
 __name(overBudget, "overBudget");
-var WORKER_VERSION = "2026-09-04.3";
+var WORKER_VERSION = "2026-09-04.4";
 var ATTEMPT_TIMEOUT_MS = {
   groq: 1e4,
   openrouter: 2e4,
@@ -1981,6 +1981,25 @@ async function supa(env, path, init = {}) {
   });
 }
 __name(supa, "supa");
+async function hasLiveSubscription(env, customerId, priceId, knownSubId) {
+  if (!customerId)
+    return false;
+  try {
+    const list = await stripe(env, `subscriptions?customer=${encodeURIComponent(customerId)}&status=all&limit=100`);
+    return (list?.data ?? []).some((sub) => STILL_BILLING.includes(sub.status) && !sub.cancel_at_period_end && priceOf(sub) === priceId);
+  } catch (e) {
+    console.error(`could not check for an existing subscription on ${customerId}: ${String(e)}`);
+    if (!knownSubId)
+      return false;
+    try {
+      const sub = await stripe(env, `subscriptions/${knownSubId}`);
+      return STILL_BILLING.includes(sub.status) && !sub.cancel_at_period_end && priceOf(sub) === priceId;
+    } catch {
+      return false;
+    }
+  }
+}
+__name(hasLiveSubscription, "hasLiveSubscription");
 async function createCheckout(req, env) {
   const user = await authUser(req, env);
   if (!user)
@@ -2002,6 +2021,13 @@ async function createCheckout(req, env) {
   }
   const trialDays = Math.max(0, Math.min(90, Number(env.TRIAL_DAYS ?? "14") || 0));
   const eligibleForTrial = trialDays > 0 && !prior?.stripe_subscription_id;
+  const alreadyLive = await hasLiveSubscription(env, customerId, priceId, prior?.stripe_subscription_id ?? null);
+  if (alreadyLive) {
+    return json({
+      error: "You are already subscribed to Pro. Manage or cancel it from your profile \u2014 starting a second subscription would charge you twice.",
+      alreadySubscribed: true
+    }, 409);
+  }
   const session = await stripe(env, "checkout/sessions", {
     mode: "subscription",
     customer: customerId,

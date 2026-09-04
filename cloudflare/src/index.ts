@@ -512,7 +512,7 @@ function overBudget(state: BudgetState): Response {
 // nobody is watching a spinner and the budget can be what the work actually
 // needs. Callers pass their own client-side timeout to match.
 // Bump on every paste into the Cloudflare dashboard. GET /health reports it.
-const WORKER_VERSION = "2026-09-04.3";
+const WORKER_VERSION = "2026-09-04.4";
 
 const CHAIN_BUDGET_MS = 55_000;
 /**
@@ -2361,6 +2361,43 @@ async function supa(env: Env, path: string, init: RequestInit = {}): Promise<Res
   });
 }
 
+/**
+ * Is this customer already paying for this exact price?
+ *
+ * Asked of Stripe, because Stripe is what will bill them. Our own row is the
+ * fallback for when the listing cannot be read — it holds one subscription per
+ * user and is exactly the cache whose single-row shape created this problem, so
+ * it is evidence rather than authority.
+ */
+async function hasLiveSubscription(
+  env: Env,
+  customerId: string,
+  priceId: string,
+  knownSubId: string | null,
+): Promise<boolean> {
+  if (!customerId) return false;
+  try {
+    const list = await stripe(env, `subscriptions?customer=${encodeURIComponent(customerId)}&status=all&limit=100`);
+    return ((list?.data ?? []) as StripeSub[]).some((sub) =>
+      STILL_BILLING.includes(sub.status)
+      && !sub.cancel_at_period_end
+      && priceOf(sub) === priceId);
+  } catch (e) {
+    console.error(`could not check for an existing subscription on ${customerId}: ${String(e)}`);
+    if (!knownSubId) return false;
+    // One more attempt, on the single subscription we do know about.
+    try {
+      const sub = (await stripe(env, `subscriptions/${knownSubId}`)) as StripeSub;
+      return STILL_BILLING.includes(sub.status) && !sub.cancel_at_period_end && priceOf(sub) === priceId;
+    } catch {
+      // Two failed reads in a row. Let the checkout through rather than
+      // blocking a genuine new subscriber on a Stripe outage — the duplicate
+      // is now caught by the cancel path either way.
+      return false;
+    }
+  }
+}
+
 async function createCheckout(req: Request, env: Env): Promise<Response> {
   const user = await authUser(req, env);
   if (!user) return json({ error: "unauthorized" }, 401);
@@ -2404,6 +2441,41 @@ async function createCheckout(req: Request, env: Env): Promise<Response> {
   // lib/subscription.ts, which is what the pricing page tells people.
   const trialDays = Math.max(0, Math.min(90, Number(env.TRIAL_DAYS ?? "14") || 0));
   const eligibleForTrial = trialDays > 0 && !prior?.stripe_subscription_id;
+
+  /**
+   * ═══════════════════════════════════════════════════════════════════════════
+   * REFUSE A SECOND SUBSCRIPTION TO THE SAME PLAN. THIS IS WHERE THE DUPLICATE
+   * WAS BORN.
+   *
+   * Confirmed on a real customer: two live subscriptions to Pro. This endpoint
+   * reused the Stripe customer and then opened another Checkout for the same
+   * price with nothing checking whether one was already running — and Stripe
+   * will cheerfully bill a customer twice for the same product if you ask it
+   * to.
+   *
+   * Then upsertSub writes one row per user, the second subscription overwrote
+   * the first, and the first became invisible to the entire app: not shown, not
+   * cancellable, billing every month. Everything downstream of this — the
+   * cancel fix, the "still billing" warning — is cleanup for a duplicate that
+   * should never have been created.
+   *
+   * It takes almost nothing to do it by accident: a bookmarked /pricing, a
+   * double-tap on a slow connection, coming back to the tab after subscribing
+   * on another device.
+   *
+   * WHEN STRIPE WILL NOT ANSWER, fall back to our own row rather than blocking
+   * every checkout on a transient. A wrong "no" here is a lost sale somebody
+   * retries; a wrong "yes" is a charge somebody has to notice on a statement.
+   * ═══════════════════════════════════════════════════════════════════════════
+   */
+  const alreadyLive = await hasLiveSubscription(env, customerId, priceId, prior?.stripe_subscription_id ?? null);
+  if (alreadyLive) {
+    return json({
+      error: "You are already subscribed to Pro. Manage or cancel it from your profile — "
+        + "starting a second subscription would charge you twice.",
+      alreadySubscribed: true,
+    }, 409);
+  }
 
   const session = await stripe(env, "checkout/sessions", {
     mode: "subscription",

@@ -36,8 +36,23 @@ export function UpgradeButton({
         return;
       }
       window.location.href = json.url; // hand off to Stripe
-    } catch {
-      setError("Payments aren't configured yet. Add your Stripe keys to the API worker.");
+    } catch (e) {
+      /**
+       * THE SERVER'S REASON, NOT A GUESS AT IT.
+       *
+       * This swallowed the error and always said payments were unconfigured.
+       * invokeAI throws with the message the Worker sent, so the one case that
+       * matters most — "you are already subscribed, a second one would charge
+       * you twice" — was shown to the athlete as a setup problem with the
+       * product. They would reasonably have tried again.
+       *
+       * The configuration message stays as the fallback for a genuinely empty
+       * failure, which is what it was written for.
+       */
+      const message = e instanceof Error ? e.message : "";
+      setError(message && !/^api \d+$/.test(message)
+        ? message
+        : "Payments aren't configured yet. Add your Stripe keys to the API worker.");
       setLoading(false);
     }
   }
