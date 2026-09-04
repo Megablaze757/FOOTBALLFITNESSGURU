@@ -121,12 +121,30 @@ export function recipeHubMembers(hub: RecipeHub, all: RecipeFacts[]): RecipeFact
  */
 let cached: { hub: RecipeHub; members: RecipeFacts[] }[] | null = null;
 
-export function publishableRecipeHubs(all?: RecipeFacts[]): { hub: RecipeHub; members: RecipeFacts[] }[] {
+/**
+ * EVERY candidate hub, including the ones too thin to publish.
+ *
+ * An ingredient two recipes short of a page is a page that does not exist, and
+ * only the already-published set could be seen — so what was nearly ready was
+ * invisible by construction. See lib/content-gaps.ts.
+ *
+ * The memoisation lives here rather than on publishableRecipeHubs because this
+ * is the expensive half: computeHubs walks every recipe once per candidate, and
+ * a quadratic version of it was found by a mutation test TIMING OUT rather than
+ * failing. Filtering a cached list costs nothing.
+ */
+export function allRecipeHubs(all?: RecipeFacts[]): { hub: RecipeHub; members: RecipeFacts[] }[] {
   if (!all && cached) return cached;
   const facts = all ?? recipeFacts();
   const result = computeHubs(facts);
   if (!all) cached = result;
   return result;
+}
+
+/** Only the hubs with enough behind them to be worth a page. A filter over
+ *  allRecipeHubs, so the two cannot disagree about what a hub contains. */
+export function publishableRecipeHubs(all?: RecipeFacts[]): { hub: RecipeHub; members: RecipeFacts[] }[] {
+  return allRecipeHubs(all).filter(({ members }) => members.length >= MIN_RECIPE_HUB);
 }
 
 function computeHubs(all: RecipeFacts[]): { hub: RecipeHub; members: RecipeFacts[] }[] {
@@ -141,8 +159,7 @@ function computeHubs(all: RecipeFacts[]): { hub: RecipeHub; members: RecipeFacts
     }
     for (const name of seen.values()) {
       const hub: RecipeHub = { kind, name, slug: slugify(name) };
-      const members = recipeHubMembers(hub, all);
-      if (members.length >= MIN_RECIPE_HUB) out.push({ hub, members });
+      out.push({ hub, members: recipeHubMembers(hub, all) });
     }
   }
 

@@ -203,7 +203,16 @@ const COACHING: Record<string, { cues: string[]; why: string }> = {
   "romanian deadlift": { cues: ["Soft knees, push the hips back", "Bar close to the legs", "Feel the hamstring stretch, then stand"], why: "The best hamstring and glute builder through a big hip hinge." },
 };
 
-function build(raw: string): Exercise[] {
+/**
+ * Exported for the tests, not for callers.
+ *
+ * Two of its rules — a row with no muscle, and a row with a second one — cannot
+ * be exercised through IMPORTED_EXERCISES, because no row in RAW is malformed
+ * and the fixture is the whole point. Mutation testing found both guards
+ * unreachable and therefore unproven, which is a guard that will not be there
+ * when it is finally needed.
+ */
+export function build(raw: string): Exercise[] {
   // Blank lines are dropped rather than parsed into an entry with no name. The
   // list is now built from two blocks joined together, and the seam between
   // them is exactly where an empty line appears.
@@ -225,7 +234,27 @@ function build(raw: string): Exercise[] {
   const seen = new Set<string>();
   const built: Exercise[] = [];
   for (const line of lines) {
-    const [name, muscle] = line.split("|").map((s) => s.trim());
+    const [name, muscleField] = line.split("|").map((s) => s.trim());
+    /**
+     * A SECOND MUSCLE, COMMA-SEPARATED, AND WHY THE FORMAT HAD TO CHANGE.
+     *
+     * Every imported row carried exactly one muscle, which is fine for a
+     * filter and not fine for the topic hubs: five genuine lat exercises —
+     * Close Grip Lat Pulldown, Dumbbell Pullover, Straight Arm Pulldown among
+     * them — were tagged "Back" and nothing else, so /exercises/muscle/lats/
+     * sat on 8 of the 12 it needs and did not exist. Four pull-downs that
+     * plainly train the lats were four exercises short of a page about the
+     * lats.
+     *
+     * The FIRST muscle stays the primary one: categoryOf and the fallback
+     * `why` both read it, so a row that gains a second muscle does not
+     * silently change category or copy.
+     */
+    const muscles = (muscleField ?? "").split(",").map((m) => m.trim()).filter(Boolean);
+    // A row with no muscle would previously build an entry with [undefined]
+    // in it, which renders as an empty chip and matches no hub.
+    if (!name || muscles.length === 0) continue;
+    const muscle = muscles[0];
     const id = slug(name);
     if (seen.has(id)) continue;
     seen.add(id);
@@ -238,7 +267,7 @@ function build(raw: string): Exercise[] {
       category: categoryOf(muscle),
       demo: demoOf(name),
       equipment,
-      muscles: [muscle],
+      muscles,
       tempo: "Controlled",
       cues: coach?.cues ?? [],
       why: coach?.why ?? `Builds the ${muscle.toLowerCase()}.`,
@@ -321,7 +350,7 @@ Pendlay Row|Back
 Incline Dumbbell Curl|Biceps
 Cable Bicep Curl|Biceps
 Seated Calf Raise|Legs
-Close Grip Lat Pulldown|Back
+Close Grip Lat Pulldown|Back,Lats
 Upright Row|Shoulders
 Vertical Leg Press|Legs
 Machine Bicep Curl|Biceps
@@ -343,7 +372,7 @@ Seated Dip Machine|Triceps
 Tricep Extension|Triceps
 Good Morning|Legs
 Floor Press|Chest
-Dumbbell Pullover|Back
+Dumbbell Pullover|Back,Lats
 Hip Abduction|Legs
 Cable Fly|Chest
 Dumbbell Floor Press|Chest
@@ -380,7 +409,7 @@ Reverse Barbell Curl|Forearms
 Sissy Squat|Legs
 Dumbbell Tricep Kickback|Triceps
 Decline Dumbbell Bench Press|Chest
-Reverse Grip Lat Pulldown|Back
+Reverse Grip Lat Pulldown|Back,Lats
 Close Grip Dumbbell Bench Press|Chest
 Single Leg Press|Legs
 Barbell Reverse Lunge|Legs
@@ -392,7 +421,7 @@ Reverse Lunge|Legs
 Standing Leg Curl|Legs
 Cable Pull Through|Legs
 Landmine Squat|Legs
-Straight Arm Pulldown|Back
+Straight Arm Pulldown|Back,Lats
 Safety Bar Squat|Legs
 Dumbbell Wrist Curl|Forearms
 Dumbbell Upright Row|Shoulders
@@ -412,7 +441,7 @@ Seated Dumbbell Tricep Extension|Triceps
 Side Lunge|Legs
 Jefferson Deadlift|Whole Body
 Bicycle Crunch|Core
-Yates Row|Back
+Yates Row|Back,Lats
 Reverse Wrist Curl|Forearms
 Pin Squat|Legs
 Side Crunch|Core

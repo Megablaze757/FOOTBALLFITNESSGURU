@@ -75,7 +75,20 @@ export function hubMembers(hub: Hub, all: Exercise[]): Exercise[] {
  * did not classify, so a page for it would be a hundred unrelated movements
  * under a heading that means nothing to a reader or a crawler.
  */
+/** Only the hubs with enough behind them to be worth a page. A filter over
+ *  allHubs, so the two cannot disagree about what a hub contains. */
 export function publishableHubs(all: Exercise[]): { hub: Hub; members: Exercise[] }[] {
+  return allHubs(all).filter(({ members }) => members.length >= MIN_HUB_MEMBERS);
+}
+
+/**
+ * EVERY candidate hub, including the ones too thin to publish.
+ *
+ * A muscle two exercises short of a page is a page that does not exist, and
+ * the only function here returned the ones already over the line — so what was
+ * nearly ready could not be seen. See lib/content-gaps.ts.
+ */
+export function allHubs(all: Exercise[]): { hub: Hub; members: Exercise[] }[] {
   const out: { hub: Hub; members: Exercise[] }[] = [];
 
   for (const kind of ["muscle", "equipment"] as const) {
@@ -89,7 +102,7 @@ export function publishableHubs(all: Exercise[]): { hub: Hub; members: Exercise[
     for (const name of seen.values()) {
       const hub: Hub = { kind, name, slug: slugify(name) };
       const members = hubMembers(hub, all);
-      if (members.length >= MIN_HUB_MEMBERS) out.push({ hub, members });
+      out.push({ hub, members });
     }
   }
 

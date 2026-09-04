@@ -197,11 +197,23 @@ export function membersOf(collection: Collection): RecipeFacts[] {
   return recipeFacts().filter(collection.match).sort(collection.rank);
 }
 
-/** Only the collections the data can actually answer. */
+/**
+ * EVERY collection with what it currently holds, including the ones too thin
+ * to publish.
+ *
+ * The near misses are the interesting ones: a collection two recipes short is a
+ * page that does not exist, and nothing anywhere said so — the only function
+ * here returned the ones that had already cleared the floor, so what was almost
+ * ready was invisible by construction. See lib/content-gaps.ts.
+ */
+export function allCollections(): { collection: Collection; members: RecipeFacts[] }[] {
+  return COLLECTIONS.map((collection) => ({ collection, members: membersOf(collection) }));
+}
+
+/** Only the collections the data can actually answer. A filter over the above,
+ *  so the two can never disagree about what a collection contains. */
 export function publishableCollections(): { collection: Collection; members: RecipeFacts[] }[] {
-  return COLLECTIONS
-    .map((collection) => ({ collection, members: membersOf(collection) }))
-    .filter(({ members }) => members.length >= MIN_MEMBERS);
+  return allCollections().filter(({ members }) => members.length >= MIN_MEMBERS);
 }
 
 export function findCollection(slug: string): { collection: Collection; members: RecipeFacts[] } | null {

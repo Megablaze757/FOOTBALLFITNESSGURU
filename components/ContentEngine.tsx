@@ -10,6 +10,7 @@ import { FACT_GROUPS, PILLARS, LAUNCH_SEQUENCE, CHANNELS, NEVER_CLAIM, allFacts 
 import { guideSports, sportLabel } from "@/lib/seo";
 import { plannedPosts, type PlannedPost } from "@/lib/post-plan";
 import { postTriggers, type Trigger } from "@/lib/post-triggers";
+import { nearMisses, gapSummary } from "@/lib/content-gaps";
 import { invokeAI } from "@/lib/api";
 import type { SportId } from "@/lib/exercises";
 
@@ -554,6 +555,7 @@ function ScheduleTab() {
    * has them.
    */
   const triggers = useMemo(() => postTriggers(), []);
+  const gaps = useMemo(() => nearMisses(), []);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -642,6 +644,41 @@ function ScheduleTab() {
         </p>
         {error && <p className="text-sm text-readiness-red">{error}</p>}
       </div>
+
+      {gaps.length > 0 && (
+        /* ═══════════════════════════════════════════════════════════════════
+           THE PAGES THAT ALMOST EXIST.
+
+           Not a post — a to-do list, and the only one on this project that is
+           derived rather than written. Every line is an indexable page that
+           does not exist, priced in how many things it is short of. It sits on
+           the social tab because "publish a page that answers a search" is the
+           same job as posting, done once and for good.
+
+           See lib/content-gaps.ts. Some entries are a tagging fix rather than
+           new content, and the copy says which — but says to check, because
+           one of the first two it suggested was wrong.
+           ═══════════════════════════════════════════════════════════════════ */
+        <details className="rounded-2xl border border-white/10 p-4">
+          <summary className="min-h-[44px] cursor-pointer text-sm font-semibold text-slate-200">
+            📄 {gapSummary()}
+          </summary>
+          <ul className="mt-3 space-y-2">
+            {gaps.map((g) => (
+              <li key={g.href} className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="chip shrink-0 text-accent-400">{g.short} short</span>
+                  <span className="chip shrink-0">{g.kind}</span>
+                  <span className="text-sm font-bold text-slate-100">{g.name}</span>
+                  <span className="text-xs text-slate-500">{g.have}/{g.need}</span>
+                </div>
+                <p className="mt-1 text-sm text-slate-400">{g.todo}</p>
+                <span className="text-xs text-slate-600">{g.href}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
 
       {triggers.filter((t) => t.heat === "news").length > 0 && (
         <div className="rounded-2xl border border-pitch-400/30 bg-pitch-400/[0.05] p-4">
