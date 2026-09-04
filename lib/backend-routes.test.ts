@@ -98,6 +98,15 @@ const WORKER_ONLY = new Set([
   "delete-account",
   // Wearable OAuth/token exchange — needs the provider secrets.
   "connect-wearable",
+  /**
+   * The calendar subscription key. Worker-only and staying that way: minting it
+   * writes a column the browser is deliberately not allowed to read (migration
+   * 0110), so an Edge equivalent would need the service role in a second place
+   * to do the one thing the Worker already does. The feed it produces is served
+   * from the Worker too — a calendar app polls a URL and cannot log in, so
+   * there is nothing here an on-device fallback could stand in for.
+   */
+  "calendar-token",
   // Have on-device fallbacks, so these degrade rather than break.
   //
   // `generate-challenges` was here and is gone: the challenge board is picked

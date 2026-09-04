@@ -9,6 +9,7 @@ import { CustomExerciseLog } from "@/components/admin/DataLogs";
 import { ExerciseReview } from "@/components/admin/ExerciseReview";
 import { LibraryCues } from "@/components/admin/LibraryCues";
 import { AppleShortcutLink } from "@/components/admin/AppleShortcutLink";
+import { CalendarLink } from "@/components/admin/CalendarLink";
 import { AdminShell, AdminArea, Drawer } from "@/components/admin/AdminShell";
 import type { Video } from "@/lib/types";
 
@@ -61,6 +62,13 @@ export default function AdminOps() {
           require a code change to publish it. */}
       <AdminArea title="Integrations" note="Set once, live for everyone">
         <AppleShortcutLink />
+        {/* The calendar subscription is admin-only for now — the feed itself
+            would work for any athlete, and the gate is one line in the Worker
+            to move when that is wanted. */}
+        <div className="mt-6 border-t border-white/10 pt-6">
+          <h3 className="field-label">Training calendar</h3>
+          <CalendarLink />
+        </div>
       </AdminArea>
 
       <AdminArea title="Library" note="What athletes added, and what is worth keeping">

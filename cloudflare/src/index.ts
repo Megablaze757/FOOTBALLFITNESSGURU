@@ -41,6 +41,7 @@ import { parseOuraSleep, parseIngestPayload } from "../../lib/biometrics";
 import { checkinReminderSince, daysBetween } from "../../lib/checkin-reminder";
 import { reminderPlan, silent, type ReminderInput } from "../../lib/reminder-plan";
 import { growthDigest } from "../../lib/growth-digest";
+import { buildIcs, planEvents } from "../../lib/calendar-feed";
 import { currentStreak, isStreakMilestone, goalAchieved, metricLabel, STREAK_MILESTONES } from "../../lib/milestones";
 
 export interface Env {
@@ -154,6 +155,10 @@ export default {
       if (pathname.endsWith("/announce-launch")) return await announceLaunch(req, env);
       if (pathname.endsWith("/connect-wearable")) return await connectWearable(req, env);
       if (pathname.endsWith("/ingest-token")) return await mintIngestToken(req, env);
+      if (pathname.endsWith("/calendar-token")) return await mintCalendarToken(req, env);
+      // GET, and before the auth-bearing routes: a calendar client sends no
+      // Authorization header and no body.
+      if (pathname.endsWith("/calendar")) return await calendarFeed(req, env);
       // Admin email tooling. See emailStatus for why this cannot be answered
       // from the app: the provider key is a Worker secret and secrets cannot be
       // read back out, so only the Worker knows whether email can send at all.
@@ -513,7 +518,7 @@ function overBudget(state: BudgetState): Response {
 // nobody is watching a spinner and the budget can be what the work actually
 // needs. Callers pass their own client-side timeout to match.
 // Bump on every paste into the Cloudflare dashboard. GET /health reports it.
-const WORKER_VERSION = "2026-09-04.5";
+const WORKER_VERSION = "2026-09-04.6";
 
 const CHAIN_BUDGET_MS = 55_000;
 /**
@@ -1789,6 +1794,109 @@ async function connectWearable(req: Request, env: Env): Promise<Response> {
  * no way to refresh anything. Rotating is just calling this again — the old
  * token stops working the moment the new one is written.
  */
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE TRAINING PLAN AS A CALENDAR SUBSCRIPTION.
+ *
+ * A FEED RATHER THAN AN API, because a calendar app cannot log in. Apple
+ * Calendar, Google Calendar and Outlook all poll a URL; none can hold a session
+ * or refresh a token. So the address IS the credential — the same constraint
+ * the Apple Health shortcut hit, answered the same way.
+ *
+ * NOT SESSION-AUTHENTICATED, and therefore:
+ *   · GET, because that is all a calendar client sends.
+ *   · The token in the query string, because a subscription URL carries no
+ *     headers. That means it can end up in a server log, which is exactly why
+ *     it is scoped to one read-only feed and revocable by re-minting.
+ *   · A token matching nobody is a 404, not an empty calendar. A silent empty
+ *     feed is indistinguishable from "no sessions yet", and a mistyped URL
+ *     would look like it worked for weeks.
+ *
+ * ADMIN ONLY, for now, at the minting end — the feed itself would work for any
+ * athlete and the gate is one line to move when that is wanted.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+async function calendarFeed(req: Request, env: Env): Promise<Response> {
+  const token = new URL(req.url).searchParams.get("token")?.trim() ?? "";
+  // Format-checked before querying: PostgREST errors on a non-uuid comparison
+  // rather than returning nothing.
+  if (!/^[0-9a-f-]{36}$/i.test(token)) return new Response("Not found", { status: 404 });
+
+  const who = await supa(env, `profiles?calendar_token=eq.${token}&select=id,full_name`);
+  if (!who.ok) return new Response("Not found", { status: 404 });
+  const rows = (await who.json()) as { id: string; full_name: string | null }[];
+  const profile = rows?.[0];
+  if (!profile) return new Response("Not found", { status: 404 });
+
+  const programs = await supa(env,
+    `programs?user_id=eq.${profile.id}&status=eq.active&select=start_date,plan,completed_sessions&limit=1`);
+  const active = programs.ok
+    ? ((await programs.json()) as {
+        start_date: string | null;
+        plan: { weeks?: { week: number; sessions?: { day: number; title: string; drills?: { name?: string }[] }[] }[] } | null;
+        completed_sessions: string[] | null;
+      }[])[0]
+    : undefined;
+
+  const done = new Set(active?.completed_sessions ?? []);
+  const weeks = (active?.plan?.weeks ?? []).map((w) => ({
+    week: w.week,
+    sessions: (w.sessions ?? []).map((session) => ({
+      key: `w${w.week}d${session.day}`,
+      title: session.title,
+      week: w.week,
+      day: session.day,
+      drills: (session.drills ?? []).map((d) => d.name ?? "").filter(Boolean),
+      done: done.has(`w${w.week}d${session.day}`),
+    })),
+  }));
+
+  const name = profile.full_name?.split(" ")[0]
+    ? `${profile.full_name.split(" ")[0]}'s training`
+    : "PocketAthlete training";
+  const ics = buildIcs(planEvents(active?.start_date ?? "", weeks), name);
+
+  return new Response(ics, {
+    headers: {
+      "Content-Type": "text/calendar; charset=utf-8",
+      // A subscription is refetched constantly; a stale copy for an hour is
+      // fine and a cache MISS every few minutes from every device is not.
+      "Cache-Control": "private, max-age=3600",
+      // The filename a client uses if somebody downloads it rather than
+      // subscribing.
+      "Content-Disposition": 'inline; filename="pocketathlete.ics"',
+    },
+  });
+}
+
+/**
+ * Mint (or re-mint) the calendar token. Re-minting REVOKES the old URL, which
+ * is the only way to un-share a link that has already been given out.
+ */
+async function mintCalendarToken(req: Request, env: Env): Promise<Response> {
+  const u = await authUser(req, env);
+  if (!u) return json({ error: "unauthorized" }, 401);
+  if (!(await isAdmin(env, u.id))) return json({ error: "admins only" }, 403);
+
+  const token = crypto.randomUUID();
+  const r = await supa(env, `profiles?id=eq.${u.id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ calendar_token: token }),
+  });
+  if (!r.ok) return json({ error: "could not create a token — has migration 0110 run?" }, 500);
+
+  const base = new URL(req.url);
+  const url = `${base.origin}${base.pathname.replace(/\/calendar-token$/, "/calendar")}?token=${token}`;
+  return json({
+    token,
+    url,
+    // webcal:// is what makes a phone offer to SUBSCRIBE rather than download a
+    // one-off snapshot, which is the difference between a live calendar and a
+    // file that is wrong by next week.
+    webcal: url.replace(/^https?:/, "webcal:"),
+  });
+}
+
 async function mintIngestToken(req: Request, env: Env): Promise<Response> {
   const u = await authUser(req, env);
   if (!u) return json({ error: "unauthorized" }, 401);

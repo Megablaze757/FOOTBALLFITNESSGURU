@@ -684,6 +684,115 @@ function growthDigest(input) {
 }
 __name(growthDigest, "growthDigest");
 
+// ../lib/calendar-feed.ts
+function dayOffset(index, count) {
+  if (count <= 1)
+    return 0;
+  const spread = Math.min(count, 7);
+  return Math.min(6, Math.round(index * 7 / spread));
+}
+__name(dayOffset, "dayOffset");
+function addDays(iso, days) {
+  return new Date(Date.parse(`${iso}T00:00:00Z`) + days * 864e5).toISOString().slice(0, 10);
+}
+__name(addDays, "addDays");
+var APP_URL = "https://pocketathlete.com";
+function planEvents(startDate, weeks) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate))
+    return [];
+  const out = [];
+  for (const w of weeks) {
+    const count = w.sessions.length;
+    w.sessions.forEach((session, i) => {
+      const date = addDays(startDate, (w.week - 1) * 7 + dayOffset(i, count));
+      const drills = session.drills.filter(Boolean);
+      out.push({
+        // Stable across polls, so a calendar UPDATES the event rather than
+        // adding a second copy every time it refreshes. Getting this wrong
+        // produces a calendar that fills with duplicates and gets unsubscribed.
+        uid: `${session.key}@pocketathlete.com`,
+        date,
+        title: `${session.done ? "\u2713 " : ""}${session.title}`,
+        description: [
+          drills.length ? `${drills.length} exercises: ${drills.slice(0, 8).join(", ")}` : "Session",
+          "",
+          "Planned day \u2014 the app tracks your programme in order, not by date,",
+          "so move this if you train on a different day."
+        ].join("\n"),
+        url: `${APP_URL}/train`
+      });
+    });
+  }
+  return out;
+}
+__name(planEvents, "planEvents");
+function escapeText(value) {
+  return value.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n");
+}
+__name(escapeText, "escapeText");
+function fold(line) {
+  const bytes = new TextEncoder().encode(line);
+  if (bytes.length <= 75)
+    return line;
+  const out = [];
+  let current = "";
+  let width = 0;
+  for (const char of line) {
+    const size = new TextEncoder().encode(char).length;
+    if (width + size > (out.length === 0 ? 75 : 74)) {
+      out.push(current);
+      current = "";
+      width = 0;
+    }
+    current += char;
+    width += size;
+  }
+  if (current)
+    out.push(current);
+  return out.map((part, i) => i === 0 ? part : ` ${part}`).join("\r\n");
+}
+__name(fold, "fold");
+var stamp = /* @__PURE__ */ __name((d) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, ""), "stamp");
+function buildIcs(events, name, now = /* @__PURE__ */ new Date()) {
+  const lines2 = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//PocketAthlete//Training//EN",
+    "CALSCALE:GREGORIAN",
+    // Not in the spec, and every major client reads it. Without it the
+    // subscription is named after the URL.
+    `X-WR-CALNAME:${escapeText(name)}`,
+    // How often to poll. Clients treat it as a hint; saying nothing means
+    // some of them poll once a day and some once a week.
+    "X-PUBLISHED-TTL:PT6H",
+    "REFRESH-INTERVAL;VALUE=DURATION:PT6H"
+  ];
+  for (const event of events) {
+    const day = event.date.replace(/-/g, "");
+    lines2.push(
+      "BEGIN:VEVENT",
+      `UID:${event.uid}`,
+      `DTSTAMP:${stamp(now)}`,
+      // All-day. The app has no session times, and inventing 18:00 would be a
+      // fact it does not have — DTEND is exclusive, so it is the next day.
+      `DTSTART;VALUE=DATE:${day}`,
+      `DTEND;VALUE=DATE:${event.date.replace(/-/g, "") === day ? nextDay(event.date) : day}`,
+      `SUMMARY:${escapeText(event.title)}`,
+      `DESCRIPTION:${escapeText(event.description)}`,
+      `URL:${escapeText(event.url)}`,
+      "TRANSP:TRANSPARENT",
+      "END:VEVENT"
+    );
+  }
+  lines2.push("END:VCALENDAR");
+  return lines2.map(fold).join("\r\n") + "\r\n";
+}
+__name(buildIcs, "buildIcs");
+function nextDay(iso) {
+  return addDays(iso, 1).replace(/-/g, "");
+}
+__name(nextDay, "nextDay");
+
 // ../lib/milestones.ts
 var STREAK_MILESTONES = [7, 14, 21, 30, 60, 100, 180, 365];
 var LOWER_IS_BETTER = /* @__PURE__ */ new Set([
@@ -793,6 +902,10 @@ var src_default = {
         return await connectWearable(req, env);
       if (pathname.endsWith("/ingest-token"))
         return await mintIngestToken(req, env);
+      if (pathname.endsWith("/calendar-token"))
+        return await mintCalendarToken(req, env);
+      if (pathname.endsWith("/calendar"))
+        return await calendarFeed(req, env);
       if (pathname.endsWith("/email-status"))
         return await emailStatus(req, env);
       if (pathname.endsWith("/email-test"))
@@ -1051,7 +1164,7 @@ function overBudget(state) {
   return json({ error: `${reason} The on-device coach still works, and your allowance resets \u2014 upgrade for more.` }, 429);
 }
 __name(overBudget, "overBudget");
-var WORKER_VERSION = "2026-09-04.5";
+var WORKER_VERSION = "2026-09-04.6";
 var ATTEMPT_TIMEOUT_MS = {
   groq: 1e4,
   openrouter: 2e4,
@@ -1681,6 +1794,74 @@ async function connectWearable(req, env) {
   return json({ ok: true, days: saved });
 }
 __name(connectWearable, "connectWearable");
+async function calendarFeed(req, env) {
+  const token = new URL(req.url).searchParams.get("token")?.trim() ?? "";
+  if (!/^[0-9a-f-]{36}$/i.test(token))
+    return new Response("Not found", { status: 404 });
+  const who = await supa(env, `profiles?calendar_token=eq.${token}&select=id,full_name`);
+  if (!who.ok)
+    return new Response("Not found", { status: 404 });
+  const rows = await who.json();
+  const profile = rows?.[0];
+  if (!profile)
+    return new Response("Not found", { status: 404 });
+  const programs = await supa(
+    env,
+    `programs?user_id=eq.${profile.id}&status=eq.active&select=start_date,plan,completed_sessions&limit=1`
+  );
+  const active = programs.ok ? (await programs.json())[0] : void 0;
+  const done = new Set(active?.completed_sessions ?? []);
+  const weeks = (active?.plan?.weeks ?? []).map((w) => ({
+    week: w.week,
+    sessions: (w.sessions ?? []).map((session) => ({
+      key: `w${w.week}d${session.day}`,
+      title: session.title,
+      week: w.week,
+      day: session.day,
+      drills: (session.drills ?? []).map((d) => d.name ?? "").filter(Boolean),
+      done: done.has(`w${w.week}d${session.day}`)
+    }))
+  }));
+  const name = profile.full_name?.split(" ")[0] ? `${profile.full_name.split(" ")[0]}'s training` : "PocketAthlete training";
+  const ics = buildIcs(planEvents(active?.start_date ?? "", weeks), name);
+  return new Response(ics, {
+    headers: {
+      "Content-Type": "text/calendar; charset=utf-8",
+      // A subscription is refetched constantly; a stale copy for an hour is
+      // fine and a cache MISS every few minutes from every device is not.
+      "Cache-Control": "private, max-age=3600",
+      // The filename a client uses if somebody downloads it rather than
+      // subscribing.
+      "Content-Disposition": 'inline; filename="pocketathlete.ics"'
+    }
+  });
+}
+__name(calendarFeed, "calendarFeed");
+async function mintCalendarToken(req, env) {
+  const u = await authUser(req, env);
+  if (!u)
+    return json({ error: "unauthorized" }, 401);
+  if (!await isAdmin(env, u.id))
+    return json({ error: "admins only" }, 403);
+  const token = crypto.randomUUID();
+  const r = await supa(env, `profiles?id=eq.${u.id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ calendar_token: token })
+  });
+  if (!r.ok)
+    return json({ error: "could not create a token \u2014 has migration 0110 run?" }, 500);
+  const base = new URL(req.url);
+  const url = `${base.origin}${base.pathname.replace(/\/calendar-token$/, "/calendar")}?token=${token}`;
+  return json({
+    token,
+    url,
+    // webcal:// is what makes a phone offer to SUBSCRIBE rather than download a
+    // one-off snapshot, which is the difference between a live calendar and a
+    // file that is wrong by next week.
+    webcal: url.replace(/^https?:/, "webcal:")
+  });
+}
+__name(mintCalendarToken, "mintCalendarToken");
 async function mintIngestToken(req, env) {
   const u = await authUser(req, env);
   if (!u)
