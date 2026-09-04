@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   shareMoment, pendingMoment, browserStore, STREAK_MILESTONES,
   type MomentInput, type MomentStore,
@@ -112,4 +113,43 @@ test("a broken store degrades to asking, never to failing", () => {
     if (original) Object.defineProperty(globalThis, "localStorage", { configurable: true, value: original });
     else delete (globalThis as { localStorage?: unknown }).localStorage;
   }
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * EVERY CALLER HAS TO HAND THIS A STABLE OBJECT.
+ *
+ * ShareMomentCard reads its input in an effect keyed on the object, and the
+ * effect calls setMoment with a newly built one. A fresh literal at the call
+ * site therefore does not cost a wasted lookup — it renders, sets state,
+ * re-renders, builds a new literal, and runs the effect again. A loop, which
+ * ships looking like a hung screen rather than like a mistake.
+ *
+ * Two of the three call sites memoised for this reason and said so in a
+ * comment. The third did not, which is how a comment on one line fails to
+ * protect the next file.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("no screen hands the share prompt a freshly built object", () => {
+  const dir = new URL("../", import.meta.url);
+  const files = ["app/(app)/home/page.tsx", "app/(app)/rewards/page.tsx", "components/ProgressPanel.tsx"];
+
+  for (const file of files) {
+    const src = readFileSync(new URL(file, dir), "utf8");
+    const prop = /<ShareMomentCard\s+input=\{([A-Za-z0-9_.]+)\}/.exec(src);
+    if (!prop) continue;
+    const name = prop[1].split(".")[0];
+    assert.match(
+      src,
+      new RegExp(`const ${name}\\s*=\\s*useMemo\\(`),
+      `${file} passes ${name} to ShareMomentCard without memoising it — that is a render loop`,
+    );
+  }
+
+  // And at least one file was actually checked, so a rename cannot turn this
+  // into a test that passes by matching nothing.
+  assert.ok(
+    files.some((f) => /<ShareMomentCard/.test(readFileSync(new URL(f, dir), "utf8"))),
+    "no screen renders ShareMomentCard any more — has it been renamed?",
+  );
 });

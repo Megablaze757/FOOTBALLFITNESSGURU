@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/lib/auth";
 import { useAsync } from "@/lib/use-async";
 import { streakState } from "@/lib/load";
 import { StreakCard } from "@/components/StreakCard";
+import { ShareMomentCard } from "@/components/ShareMomentCard";
+import { athleteShareLink } from "@/lib/share-card";
 import {
   computeXp, levelFor, rankFor, evaluateAchievements, dailyQuests, activitySpans,
   type ActivityStats, type DailyState, EMPTY_STATS } from "@/lib/gamification";
@@ -107,7 +109,7 @@ export default function RewardsPage() {
       // NOT weight_kg: no such column on profiles. Naming it rejected this
       // whole query, so sport, position and training focus were all null too —
       // every challenge on this page was picked for a generic athlete.
-      supabase.from("profiles").select("sport, position, positions, training_focus, sex").eq("id", user.id).maybeSingle(),
+      supabase.from("profiles").select("sport, position, positions, training_focus, sex, full_name, username, public_profile").eq("id", user.id).maybeSingle(),
       supabase.from("programs").select("goal_type").eq("user_id", user.id).eq("status", "active").maybeSingle(),
       /**
        * Every logged drill, NOT the 60-day window everything else here uses.
@@ -314,10 +316,16 @@ export default function RewardsPage() {
     return {
       stats, state, boards, ctx, streakNow,
       xp: computeXp(stats) + earnedFromChallenges,
+      name: ((profile as { full_name?: string | null } | null)?.full_name ?? "").split(" ")[0] || "Athlete",
+      shareLink: athleteShareLink(
+        (profile as { username?: string | null } | null)?.username,
+        !!(profile as { public_profile?: boolean | null } | null)?.public_profile,
+      ),
     };
-    // v2: streakNow. A cached v1 entry has no rest days on it, and the card
-    // would render an empty bank to somebody who has two.
-  }, [user.id], `rewards:v2:${user.id}`);
+    // v3: streakNow, then the name and share link. A cached entry without them
+    // renders an empty rest-day bank to somebody who has two, and a share card
+    // addressed to nobody.
+  }, [user.id], `rewards:v3:${user.id}`);
 
   /**
    * Rarity, and the write that makes it possible.
@@ -385,6 +393,26 @@ export default function RewardsPage() {
     });
   }, [data, user.id]);
 
+  /**
+   * MEMOISED, ABOVE THE EARLY RETURN, AND BOTH MATTER.
+   *
+   * ShareMomentCard reads this in an effect keyed on the object. A fresh
+   * literal every render makes that effect re-run, and the effect calls
+   * setMoment with a newly built object — which re-renders, which builds a new
+   * literal. That is not a wasted lookup, it is a render loop, and it would
+   * have shipped looking like a hung page.
+   *
+   * Above the return because it is a hook: below one it runs on some renders
+   * and not others.
+   */
+  const shareInput = useMemo(() => ({
+    name: data?.name ?? "Athlete",
+    rank: data ? levelFor(data.xp).rank : null,
+    tier: data ? levelFor(data.xp).tier : null,
+    streak: data?.streakNow.streak ?? 0,
+    link: data?.shareLink,
+  }), [data]);
+
   if (loading || !data) return <div className="card mx-auto max-w-2xl h-96 animate-pulse" />;
 
   const xp = data.xp;
@@ -442,6 +470,22 @@ export default function RewardsPage() {
           </div>
         </div>
       </div>
+
+      {/* ═══════════════════════════════════════════════════════════════════
+          THE RANK MOMENT, ON THE SCREEN THE RANK IS ON.
+
+          shareMoment ranks what a person would actually tell somebody about:
+          a lift crossing a standard, then a rank, then a streak. The lift
+          moment reaches people on Performance and the streak one on Home — the
+          rank moment reached nobody, because no screen that knew a rank ever
+          asked.
+
+          NOT ON HOME, which is where it would get the most views. Home
+          deliberately has no XP and no rank on it — see the guard in
+          lib/home-stats.test.ts — and a prompt naming somebody's tier is that
+          rank on that screen, whatever it is dressed as. This is the screen
+          they opened to look at it. */}
+      <ShareMomentCard input={shareInput} />
 
       <RankLadder level={level} />
 
