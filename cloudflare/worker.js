@@ -533,6 +533,35 @@ function checkinReminderSince(today) {
 }
 __name(checkinReminderSince, "checkinReminderSince");
 
+// ../lib/reminder-plan.ts
+function workoutReminderDue(lastLog, joined, today) {
+  const anchor = lastLog ?? joined;
+  const gap = daysBetween(anchor, today);
+  if (gap < CHECKIN_REMINDER_GAP_DAYS) return false;
+  if (gap > CHECKIN_REMINDER_STOP_DAYS) return false;
+  return gap % CHECKIN_REMINDER_GAP_DAYS === 0;
+}
+__name(workoutReminderDue, "workoutReminderDue");
+function reminderPlan(input) {
+  const checkedInToday = input.lastCheckIn === input.today;
+  const loggedToday = input.lastTrainingLog === input.today;
+  const checkinCard = !checkedInToday;
+  const workoutCard = input.hasActiveProgram && !loggedToday;
+  const checkinEmail = checkinCard && input.wantsCheckinEmail && checkinReminderDue(input.lastCheckIn, input.joined, input.today, input.checkInsEver);
+  const workoutEmail = workoutCard && input.wantsWorkoutEmail && !checkinEmail && workoutReminderDue(input.lastTrainingLog, input.joined, input.today);
+  return {
+    checkinCard: checkinCard && (input.wantsCards || checkinEmail),
+    checkinEmail,
+    workoutCard: workoutCard && (input.wantsCards || workoutEmail),
+    workoutEmail
+  };
+}
+__name(reminderPlan, "reminderPlan");
+function silent(plan) {
+  return !plan.checkinCard && !plan.checkinEmail && !plan.workoutCard && !plan.workoutEmail;
+}
+__name(silent, "silent");
+
 // ../lib/milestones.ts
 var STREAK_MILESTONES = [7, 14, 21, 30, 60, 100, 180, 365];
 var LOWER_IS_BETTER = /* @__PURE__ */ new Set([
@@ -861,7 +890,7 @@ function overBudget(state) {
   return json({ error: `${reason} The on-device coach still works, and your allowance resets \u2014 upgrade for more.` }, 429);
 }
 __name(overBudget, "overBudget");
-var WORKER_VERSION = "2026-08-24.7";
+var WORKER_VERSION = "2026-09-04.1";
 var ATTEMPT_TIMEOUT_MS = {
   groq: 1e4,
   openrouter: 2e4,
@@ -2409,34 +2438,66 @@ async function queueNotifications(env, rows) {
   return r.ok;
 }
 __name(queueNotifications, "queueNotifications");
-async function sendDailyReminders(env) {
-  const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-  const [doneResponse, profiles] = await Promise.all([
+async function reminderFacts(env, today) {
+  const since = checkinReminderSince(today);
+  const [checkResponse, trainResponse, profiles] = await Promise.all([
     // The whole window the rule can read, not just today — a lapsed athlete and
     // one who has never checked in look identical through a one-day query, and
     // they are owed different things.
-    supa(env, `daily_check_ins?check_in_date=gte.${checkinReminderSince(today)}&select=user_id,check_in_date`),
+    supa(env, `daily_check_ins?check_in_date=gte.${since}&select=user_id,check_in_date`),
+    // WIDENED FROM log_date=eq.today, which is what made the evening email
+    // daily: "did they log today" cannot tell a rest day from a person who
+    // stopped a month ago, so every morning looked identical and got mail.
+    supa(env, `training_logs?log_date=gte.${since}&select=user_id,log_date`),
     reminderProfiles(env)
   ]);
-  if (!doneResponse.ok) throw new Error(`daily check-ins for reminders: ${doneResponse.status}`);
-  const done = await doneResponse.json();
+  if (!checkResponse.ok) throw new Error(`daily check-ins for reminders: ${checkResponse.status}`);
+  if (!trainResponse.ok) throw new Error(`training logs for reminders: ${trainResponse.status}`);
+  const checks = await checkResponse.json();
+  const logs = await trainResponse.json();
   const lastCheckIn = /* @__PURE__ */ new Map();
   const seen = /* @__PURE__ */ new Map();
-  for (const row2 of done ?? []) {
+  for (const row2 of checks ?? []) {
     const held = lastCheckIn.get(row2.user_id);
     if (!held || row2.check_in_date > held) lastCheckIn.set(row2.user_id, row2.check_in_date);
     seen.set(row2.user_id, (seen.get(row2.user_id) ?? 0) + 1);
   }
-  const rows = [];
+  const lastLog = /* @__PURE__ */ new Map();
+  for (const row2 of logs ?? []) {
+    const held = lastLog.get(row2.user_id);
+    if (!held || row2.log_date > held) lastLog.set(row2.user_id, row2.log_date);
+  }
+  const programResponse = await supa(env, "programs?status=eq.active&select=user_id");
+  if (!programResponse.ok) throw new Error(`active programs for reminders: ${programResponse.status}`);
+  const active = new Set((await programResponse.json()).map((r) => r.user_id));
+  const out = /* @__PURE__ */ new Map();
   for (const profile of profiles.values()) {
-    if (!wants(profile, "checkin")) continue;
-    const last = lastCheckIn.get(profile.id) ?? null;
-    if (last === today) continue;
-    const inApp = profile.in_app_training_reminders !== false;
-    const email2 = emailEnabled(profile, "checkin") && checkinReminderDue(last, profile.created_at.slice(0, 10), today, seen.get(profile.id) ?? 0);
-    if (!inApp && !email2) continue;
+    if (!profile.health_data_consent_at) continue;
+    out.set(profile.id, {
+      today,
+      joined: profile.created_at.slice(0, 10),
+      lastCheckIn: lastCheckIn.get(profile.id) ?? null,
+      checkInsEver: seen.get(profile.id) ?? 0,
+      lastTrainingLog: lastLog.get(profile.id) ?? null,
+      hasActiveProgram: active.has(profile.id),
+      wantsCheckinEmail: profile.email_checkin_reminders !== false,
+      wantsWorkoutEmail: profile.email_workout_reminders !== false,
+      wantsCards: profile.in_app_training_reminders !== false
+    });
+  }
+  return out;
+}
+__name(reminderFacts, "reminderFacts");
+async function sendDailyReminders(env) {
+  const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+  const facts = await reminderFacts(env, today);
+  const rows = [];
+  for (const [userId, input] of facts) {
+    const plan = reminderPlan(input);
+    if (!plan.checkinCard && !plan.checkinEmail) continue;
+    const last = input.lastCheckIn;
     rows.push({
-      user_id: profile.id,
+      user_id: userId,
       kind: "check_in_reminder",
       title: "Your daily log",
       // Prose, then figures. The gap is the reason this email exists, so it is
@@ -2448,8 +2509,8 @@ Days since your last log: ${last ? daysBetween(last, today) : "\u2014"}
 Last logged: ${last ?? "not yet"}`,
       href: "/journal",
       dedupe_key: `check-in:${today}`,
-      show_in_app: inApp,
-      email_category: email2 ? "checkin" : "none"
+      show_in_app: plan.checkinCard,
+      email_category: plan.checkinEmail ? "checkin" : "none"
     });
   }
   await queueNotifications(env, rows);
@@ -2457,27 +2518,24 @@ Last logged: ${last ?? "not yet"}`,
 __name(sendDailyReminders, "sendDailyReminders");
 async function sendWorkoutReminders(env) {
   const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-  const [programResponse, logResponse, profiles] = await Promise.all([
-    supa(env, "programs?status=eq.active&select=user_id"),
-    supa(env, `training_logs?log_date=eq.${today}&select=user_id`),
-    reminderProfiles(env)
-  ]);
-  if (!programResponse.ok || !logResponse.ok) throw new Error("workout reminder inputs unavailable");
-  const active = new Set((await programResponse.json()).map((row2) => row2.user_id));
-  const logged = new Set((await logResponse.json()).map((row2) => row2.user_id));
+  const facts = await reminderFacts(env, today);
   const rows = [];
-  for (const userId of active) {
-    const profile = profiles.get(userId);
-    if (logged.has(userId) || !wants(profile, "workout")) continue;
+  for (const [userId, input] of facts) {
+    const plan = reminderPlan(input);
+    if (silent(plan) || !plan.workoutCard && !plan.workoutEmail) continue;
+    const last = input.lastTrainingLog;
     rows.push({
       user_id: userId,
       kind: "workout_reminder",
       title: "Log today's training or rest day",
-      body: "A quick entry keeps training load, streaks and coach advice accurate.",
+      body: `A quick entry keeps training load, streaks and coach advice accurate.
+
+Days since your last entry: ${last ? daysBetween(last, today) : "\u2014"}
+Last logged: ${last ?? "not yet"}`,
       href: "/journal",
       dedupe_key: `workout:${today}`,
-      show_in_app: profile.in_app_training_reminders !== false,
-      email_category: "workout"
+      show_in_app: plan.workoutCard,
+      email_category: plan.workoutEmail ? "workout" : "none"
     });
   }
   await queueNotifications(env, rows);
@@ -2679,7 +2737,19 @@ async function createTrialEndingReminders(env) {
         title: "Your free trial ends soon",
         body: `Your trial ends on ${gbDate(trialEnd)}. Pro will charge ${amount}${interval} unless you cancel before then. Cancel from Profile \u2192 Cancel or pause.`,
         href: "/profile",
-        dedupe_key: `trial-ending:${subscription.id}:${trialEndSeconds}`,
+        /**
+         * ONE PER SUBSCRIPTION, EVER. The key used to carry the trial's end
+         * time, so any Stripe change to trial_end — an extension, a plan
+         * change, a proration — minted a fresh key and a second "your free
+         * trial ends soon" to the same person. `trial_reminder_created_at`
+         * normally stops that a step earlier, which is exactly why the second
+         * key looked harmless: it only matters on the day something clears the
+         * marker, and then it is an email nobody can recall.
+         *
+         * The database index on (user_id, dedupe_key) now enforces it rather
+         * than a column the sender has to remember to set.
+         */
+        dedupe_key: `trial-ending:${subscription.id}`,
         show_in_app: true,
         email_category: "essential"
       }]);
@@ -2906,16 +2976,32 @@ async function emailNotifications(env) {
       },
       footerHtml: notification.email_category === "essential" ? "This is an essential account or billing notice, so it is sent whatever your email preferences say." : `You are getting this because training emails are on. <a href="${settings}" style="color:#8a6510;">Change that in your profile</a>.`
     };
-    const result = await email(env, address, title, renderEmail(title, shell), renderText(shell));
-    await logEmail(env, notification.user_id, `notification_${notification.kind}`, result);
-    if (result.ok) completed.push(notification.id);
-  }
-  if (completed.length) {
-    await supa(env, `notifications?id=in.(${completed.join(",")})`, {
-      method: "PATCH",
-      headers: { Prefer: "return=minimal" },
-      body: JSON.stringify({ emailed_at: (/* @__PURE__ */ new Date()).toISOString() })
-    });
+    let result;
+    try {
+      result = await email(env, address, title, renderEmail(title, shell), renderText(shell));
+    } catch (e) {
+      result = { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
+    if (result.ok) {
+      try {
+        const marked = await supa(env, `notifications?id=eq.${notification.id}`, {
+          method: "PATCH",
+          headers: { Prefer: "return=minimal" },
+          body: JSON.stringify({ emailed_at: (/* @__PURE__ */ new Date()).toISOString() })
+        });
+        if (!marked.ok) {
+          console.error(`emailed ${notification.id} but could not mark it (${marked.status}) \u2014 it may send again`);
+        }
+      } catch (e) {
+        console.error(`emailed ${notification.id} but could not mark it (${String(e)}) \u2014 it may send again`);
+      }
+      completed.push(notification.id);
+    }
+    try {
+      await logEmail(env, notification.user_id, `notification_${notification.kind}`, result);
+    } catch (e) {
+      console.error(`could not log delivery of ${notification.id}: ${String(e)}`);
+    }
   }
   console.log(`notifications: emailed ${completed.length} of ${rows.length}`);
 }

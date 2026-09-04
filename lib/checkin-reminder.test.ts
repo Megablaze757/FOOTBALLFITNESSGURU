@@ -77,9 +77,18 @@ test("there is exactly one sender, and it is the Worker", () => {
    * every screen in the product.
    */
   const worker = readFileSync(new URL("../cloudflare/src/index.ts", import.meta.url), "utf8");
-  assert.match(worker, /checkinReminderDue\(last, profile\.created_at/, "the Worker no longer applies the rule");
-  assert.ok(!/daily_check_ins\?check_in_date=eq\.\$\{today\}&select=user_id`\),\s*\n\s*reminderProfiles/.test(worker),
-    "the Worker is back to deciding from today's check-ins alone");
+  /**
+   * Asserted as a property, not as a line of source. This used to match
+   * `checkinReminderDue(last, profile.created_at…` exactly, and went red when
+   * the decision moved into lib/reminder-plan.ts — which was a refactor that
+   * strengthened the rule rather than removing it. What matters is that the
+   * Worker asks the shared rule and reads a WINDOW of check-ins to do it.
+   */
+  assert.match(worker, /reminderPlan\(input\)/, "the Worker no longer applies the shared rule");
+  assert.match(worker, /check_in_date=gte\.\$\{since\}/,
+    "the Worker is back to deciding from today's check-ins alone, which cannot tell a lapsed athlete from a new one");
+  assert.ok(!/check_in_date=eq\.\$\{today\}&select=user_id/.test(worker),
+    "the Worker is back to a one-day query");
 
   for (const gone of [
     "supabase/functions/send-daily-reminders",

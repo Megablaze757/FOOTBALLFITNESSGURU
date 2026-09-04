@@ -38,7 +38,8 @@ import { splitCommission, estimateStripeFee } from "../../lib/affiliate";
 // what an athlete's readiness is built from, so it should be the code the unit
 // tests cover rather than a second copy that drifts.
 import { parseOuraSleep, parseIngestPayload } from "../../lib/biometrics";
-import { checkinReminderDue, checkinReminderSince, daysBetween } from "../../lib/checkin-reminder";
+import { checkinReminderSince, daysBetween } from "../../lib/checkin-reminder";
+import { reminderPlan, silent, type ReminderInput } from "../../lib/reminder-plan";
 import { currentStreak, isStreakMilestone, goalAchieved, metricLabel, STREAK_MILESTONES } from "../../lib/milestones";
 
 export interface Env {
@@ -511,7 +512,7 @@ function overBudget(state: BudgetState): Response {
 // nobody is watching a spinner and the budget can be what the work actually
 // needs. Callers pass their own client-side timeout to match.
 // Bump on every paste into the Cloudflare dashboard. GET /health reports it.
-const WORKER_VERSION = "2026-08-24.7";
+const WORKER_VERSION = "2026-09-04.1";
 
 const CHAIN_BUDGET_MS = 55_000;
 /**
@@ -3317,52 +3318,100 @@ async function queueNotifications(env: Env, rows: NotificationInput[]): Promise<
  * trying. `email_category: "none"` is what turns the email off while leaving
  * the card on; pending_notification_emails() skips those rows.
  */
-async function sendDailyReminders(env: Env): Promise<void> {
-  const today = new Date().toISOString().slice(0, 10);
-  const [doneResponse, profiles] = await Promise.all([
+/**
+ * The facts both runs decide from.
+ *
+ * ONE SHAPE, FETCHED THE SAME WAY AT 08:00 AND AT 19:00. The two senders never
+ * speak — they are separate cron invocations eleven hours apart — so the only
+ * thing that can make them agree is asking the same question of the same rows.
+ * See lib/reminder-plan.ts.
+ */
+async function reminderFacts(env: Env, today: string): Promise<Map<string, ReminderInput>> {
+  const since = checkinReminderSince(today);
+  const [checkResponse, trainResponse, profiles] = await Promise.all([
     // The whole window the rule can read, not just today — a lapsed athlete and
     // one who has never checked in look identical through a one-day query, and
     // they are owed different things.
-    supa(env, `daily_check_ins?check_in_date=gte.${checkinReminderSince(today)}&select=user_id,check_in_date`),
+    supa(env, `daily_check_ins?check_in_date=gte.${since}&select=user_id,check_in_date`),
+    // WIDENED FROM log_date=eq.today, which is what made the evening email
+    // daily: "did they log today" cannot tell a rest day from a person who
+    // stopped a month ago, so every morning looked identical and got mail.
+    supa(env, `training_logs?log_date=gte.${since}&select=user_id,log_date`),
     reminderProfiles(env),
   ]);
-  if (!doneResponse.ok) throw new Error(`daily check-ins for reminders: ${doneResponse.status}`);
-  const done = (await doneResponse.json()) as { user_id: string; check_in_date: string }[];
+  if (!checkResponse.ok) throw new Error(`daily check-ins for reminders: ${checkResponse.status}`);
+  if (!trainResponse.ok) throw new Error(`training logs for reminders: ${trainResponse.status}`);
+
+  const checks = (await checkResponse.json()) as { user_id: string; check_in_date: string }[];
+  const logs = (await trainResponse.json()) as { user_id: string; log_date: string }[];
+
   const lastCheckIn = new Map<string, string>();
   /**
    * HOW MANY THEY HAVE EVER DONE, near enough.
    *
-   * Counted over the same thirty-day window already fetched rather than with a
-   * second query: the only decision it feeds is whether somebody is inside
-   * their first week, and anybody with more than seven logs in the last month
-   * is not — whatever the true lifetime total is. See reminderStep.
+   * Counted over the same window already fetched rather than with a second
+   * query: the only decision it feeds is whether somebody is inside their first
+   * week, and anybody with more than seven logs in the last month is not —
+   * whatever the true lifetime total is. See reminderStep.
    */
   const seen = new Map<string, number>();
-  for (const row of done ?? []) {
+  for (const row of checks ?? []) {
     const held = lastCheckIn.get(row.user_id);
     if (!held || row.check_in_date > held) lastCheckIn.set(row.user_id, row.check_in_date);
     seen.set(row.user_id, (seen.get(row.user_id) ?? 0) + 1);
   }
+  const lastLog = new Map<string, string>();
+  for (const row of logs ?? []) {
+    const held = lastLog.get(row.user_id);
+    if (!held || row.log_date > held) lastLog.set(row.user_id, row.log_date);
+  }
+
+  const programResponse = await supa(env, "programs?status=eq.active&select=user_id");
+  if (!programResponse.ok) throw new Error(`active programs for reminders: ${programResponse.status}`);
+  const active = new Set(((await programResponse.json()) as { user_id: string }[]).map((r) => r.user_id));
+
+  const out = new Map<string, ReminderInput>();
+  for (const profile of profiles.values()) {
+    // Consent gates every training reminder, as it always has — see wants().
+    if (!profile.health_data_consent_at) continue;
+    out.set(profile.id, {
+      today,
+      joined: profile.created_at.slice(0, 10),
+      lastCheckIn: lastCheckIn.get(profile.id) ?? null,
+      checkInsEver: seen.get(profile.id) ?? 0,
+      lastTrainingLog: lastLog.get(profile.id) ?? null,
+      hasActiveProgram: active.has(profile.id),
+      wantsCheckinEmail: profile.email_checkin_reminders !== false,
+      wantsWorkoutEmail: profile.email_workout_reminders !== false,
+      wantsCards: profile.in_app_training_reminders !== false,
+    });
+  }
+  return out;
+}
+
+/**
+ * THE NUDGE IS DAILY; THE EMAIL IS NOT.
+ *
+ * Both used to fire on any morning somebody had not checked in yet, which is
+ * right for a notification inside an app they chose to open and wrong for mail:
+ * an athlete who checks in most days got a message for being an hour late, and
+ * one who had stopped got one every morning indefinitely.
+ *
+ * So the in-app card still appears the same day, and the email waits for a real
+ * absence. `email_category: "none"` is what turns the email off while leaving
+ * the card on; pending_notification_emails() skips those rows.
+ */
+async function sendDailyReminders(env: Env): Promise<void> {
+  const today = new Date().toISOString().slice(0, 10);
+  const facts = await reminderFacts(env, today);
 
   const rows: NotificationInput[] = [];
-  for (const profile of profiles.values()) {
-    if (!wants(profile, "checkin")) continue;
-    const last = lastCheckIn.get(profile.id) ?? null;
-    if (last === today) continue; // today is already done; there is nothing to ask for
-    const inApp = profile.in_app_training_reminders !== false;
-    const email = emailEnabled(profile, "checkin")
-      /**
-       * The count is passed so a day-one athlete hears on day one rather than
-       * day three. Three days of grace suits somebody with a habit who missed a
-       * Tuesday; for a new joiner it is a week of silence across the only days
-       * that decide anything. Same total mail, moved to where it can still do
-       * something — see lib/checkin-reminder.ts.
-       */
-      && checkinReminderDue(last, profile.created_at.slice(0, 10), today, seen.get(profile.id) ?? 0);
-    // A row that shows nowhere and sends nothing is a row nobody asked for.
-    if (!inApp && !email) continue;
+  for (const [userId, input] of facts) {
+    const plan = reminderPlan(input);
+    if (!plan.checkinCard && !plan.checkinEmail) continue;
+    const last = input.lastCheckIn;
     rows.push({
-      user_id: profile.id,
+      user_id: userId,
       kind: "check_in_reminder",
       title: "Your daily log",
       // Prose, then figures. The gap is the reason this email exists, so it is
@@ -3373,36 +3422,47 @@ async function sendDailyReminders(env: Env): Promise<void> {
         + `Last logged: ${last ?? "not yet"}`,
       href: "/journal",
       dedupe_key: `check-in:${today}`,
-      show_in_app: inApp,
-      email_category: email ? "checkin" : "none",
+      show_in_app: plan.checkinCard,
+      email_category: plan.checkinEmail ? "checkin" : "none",
     });
   }
   await queueNotifications(env, rows);
 }
 
+/**
+ * The evening run, which is the one that was mailing people every single day.
+ *
+ * It had no cadence rule at all: an active program plus nothing logged yet was
+ * the whole test, so anybody who stopped training kept getting an email each
+ * evening until they unsubscribed. lib/checkin-reminder.ts exists because the
+ * morning sender did exactly that and it was fixed — and this one, in the same
+ * file, was left as it was.
+ *
+ * 19:00 rather than 08:00 is deliberate and stays: calling a day's training
+ * "missing" before the day has happened would be absurd. It is also why the
+ * pair went unnoticed for so long — the two emails are eleven hours apart, so
+ * neither looks like a duplicate of the other.
+ */
 async function sendWorkoutReminders(env: Env): Promise<void> {
   const today = new Date().toISOString().slice(0, 10);
-  const [programResponse, logResponse, profiles] = await Promise.all([
-    supa(env, "programs?status=eq.active&select=user_id"),
-    supa(env, `training_logs?log_date=eq.${today}&select=user_id`),
-    reminderProfiles(env),
-  ]);
-  if (!programResponse.ok || !logResponse.ok) throw new Error("workout reminder inputs unavailable");
-  const active = new Set(((await programResponse.json()) as { user_id: string }[]).map((row) => row.user_id));
-  const logged = new Set(((await logResponse.json()) as { user_id: string }[]).map((row) => row.user_id));
+  const facts = await reminderFacts(env, today);
+
   const rows: NotificationInput[] = [];
-  for (const userId of active) {
-    const profile = profiles.get(userId);
-    if (logged.has(userId) || !wants(profile, "workout")) continue;
+  for (const [userId, input] of facts) {
+    const plan = reminderPlan(input);
+    if (silent(plan) || (!plan.workoutCard && !plan.workoutEmail)) continue;
+    const last = input.lastTrainingLog;
     rows.push({
       user_id: userId,
       kind: "workout_reminder",
       title: "Log today's training or rest day",
-      body: "A quick entry keeps training load, streaks and coach advice accurate.",
+      body: "A quick entry keeps training load, streaks and coach advice accurate.\n\n"
+        + `Days since your last entry: ${last ? daysBetween(last, today) : "\u2014"}\n`
+        + `Last logged: ${last ?? "not yet"}`,
       href: "/journal",
       dedupe_key: `workout:${today}`,
-      show_in_app: profile.in_app_training_reminders !== false,
-      email_category: "workout",
+      show_in_app: plan.workoutCard,
+      email_category: plan.workoutEmail ? "workout" : "none",
     });
   }
   await queueNotifications(env, rows);
@@ -3634,7 +3694,19 @@ async function createTrialEndingReminders(env: Env): Promise<void> {
         title: "Your free trial ends soon",
         body: `Your trial ends on ${gbDate(trialEnd)}. Pro will charge ${amount}${interval} unless you cancel before then. Cancel from Profile → Cancel or pause.`,
         href: "/profile",
-        dedupe_key: `trial-ending:${subscription.id}:${trialEndSeconds}`,
+        /**
+         * ONE PER SUBSCRIPTION, EVER. The key used to carry the trial's end
+         * time, so any Stripe change to trial_end — an extension, a plan
+         * change, a proration — minted a fresh key and a second "your free
+         * trial ends soon" to the same person. `trial_reminder_created_at`
+         * normally stops that a step earlier, which is exactly why the second
+         * key looked harmless: it only matters on the day something clears the
+         * marker, and then it is an email nobody can recall.
+         *
+         * The database index on (user_id, dedupe_key) now enforces it rather
+         * than a column the sender has to remember to set.
+         */
+        dedupe_key: `trial-ending:${subscription.id}`,
         show_in_app: true,
         email_category: "essential",
       }]);
@@ -3975,16 +4047,78 @@ async function emailNotifications(env: Env): Promise<void> {
         ? "This is an essential account or billing notice, so it is sent whatever your email preferences say."
         : `You are getting this because training emails are on. <a href="${settings}" style="color:#8a6510;">Change that in your profile</a>.`,
     };
-    const result = await email(env, address, title, renderEmail(title, shell), renderText(shell));
-    await logEmail(env, notification.user_id, `notification_${notification.kind}`, result);
-    if (result.ok) completed.push(notification.id);
-  }
-  if (completed.length) {
-    await supa(env, `notifications?id=in.(${completed.join(",")})`, {
-      method: "PATCH",
-      headers: { Prefer: "return=minimal" },
-      body: JSON.stringify({ emailed_at: new Date().toISOString() }),
-    });
+    /**
+     * ═══════════════════════════════════════════════════════════════════════
+     * MARKED ONE AT A TIME, AND WRAPPED, BECAUSE THE ALTERNATIVE RE-SENDS THE
+     * WHOLE BATCH.
+     *
+     * This collected ids through the loop and wrote emailed_at once at the
+     * end. Every send before a thrown error therefore went out and was never
+     * recorded — so the next cron run posted all of them again, and the run
+     * after that, for as long as one bad row kept throwing. A provider timeout
+     * on the twentieth email re-sent the first nineteen.
+     *
+     * Nothing about it looked wrong: the retry-on-failure design is correct and
+     * deliberate, and the batch write is the efficient shape. It is the failure
+     * path through the two together that nobody walked.
+     *
+     * One PATCH per email is a few extra round trips on a queue that runs twice
+     * a day. Duplicate mail is the thing people unsubscribe over.
+     * ═══════════════════════════════════════════════════════════════════════
+     */
+    /**
+     * ═══════════════════════════════════════════════════════════════════════
+     * MARKED ONE AT A TIME, BECAUSE THE ALTERNATIVE RE-SENDS THE WHOLE BATCH.
+     *
+     * This collected ids through the loop and wrote emailed_at once at the end.
+     * Every send before a thrown error therefore went out and was never
+     * recorded — so the next cron run posted all of them again, and the run
+     * after that, for as long as one bad row kept throwing. A provider timeout
+     * on the twentieth email re-sent the first nineteen.
+     *
+     * Nothing about it looked wrong: retry-on-failure is correct and
+     * deliberate, and one batch write is the efficient shape. It is the failure
+     * path through the two together that nobody walked.
+     *
+     * One PATCH per email is a few extra round trips on a queue that runs twice
+     * a day. Duplicate mail is the thing people unsubscribe over.
+     * ═══════════════════════════════════════════════════════════════════════
+     */
+    let result: EmailResult;
+    try {
+      result = await email(env, address, title, renderEmail(title, shell), renderText(shell));
+    } catch (e) {
+      // One unreachable provider must not cost the rest of the queue. The row
+      // keeps emailed_at null, so it is retried next run — which is what the
+      // design always intended and what the batch write quietly undid.
+      result = { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
+
+    if (result.ok) {
+      try {
+        const marked = await supa(env, `notifications?id=eq.${notification.id}`, {
+          method: "PATCH",
+          headers: { Prefer: "return=minimal" },
+          body: JSON.stringify({ emailed_at: new Date().toISOString() }),
+        });
+        // A send we cannot record is a send that will happen again. Say so
+        // loudly: it is the only warning before somebody gets it twice.
+        if (!marked.ok) {
+          console.error(`emailed ${notification.id} but could not mark it (${marked.status}) — it may send again`);
+        }
+      } catch (e) {
+        console.error(`emailed ${notification.id} but could not mark it (${String(e)}) — it may send again`);
+      }
+      completed.push(notification.id);
+    }
+
+    // An audit row is not worth losing a delivery over, and a throw here would
+    // otherwise be recorded as the EMAIL having failed when it did not.
+    try {
+      await logEmail(env, notification.user_id, `notification_${notification.kind}`, result);
+    } catch (e) {
+      console.error(`could not log delivery of ${notification.id}: ${String(e)}`);
+    }
   }
   console.log(`notifications: emailed ${completed.length} of ${rows.length}`);
 }

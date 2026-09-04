@@ -120,8 +120,16 @@ test("push is asked for in the check-in, not only buried in Profile", () => {
 
 test("the Worker tells the reminder rule how new somebody is", () => {
   const worker = readFileSync(new URL("../cloudflare/src/index.ts", import.meta.url), "utf8");
-  assert.match(worker, /checkinReminderDue\(last, profile\.created_at\.slice\(0, 10\), today, seen\.get/,
+  // The count and the join date both have to reach the rule. Since the decision
+  // moved into lib/reminder-plan.ts this is about the Worker FILLING them in —
+  // a hardcoded 0 there would put every established athlete on the new-joiner
+  // cadence, and a hardcoded large number would take the first week away.
+  assert.match(worker, /joined: profile\.created_at\.slice\(0, 10\)/,
+    "the Worker no longer tells the rule when somebody joined");
+  assert.match(worker, /checkInsEver: seen\.get\(profile\.id\) \?\? 0/,
     "a day-one athlete is still waiting three days for the first email");
+  assert.match(worker, /seen\.set\(row\.user_id, \(seen\.get\(row\.user_id\) \?\? 0\) \+ 1\)/,
+    "the count is not being derived from real check-ins");
 });
 
 import { MILESTONES, nextMilestone } from "./first-week";

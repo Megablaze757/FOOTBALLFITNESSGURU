@@ -36,7 +36,11 @@ test("both checkout backends grant the trial only on a first Stripe subscription
 });
 
 test("email delivery failures stay retryable and both notification times are configured", () => {
-  assert.match(worker, /if \(result\.ok\) completed\.push\(notification\.id\)/);
+  // The property, not the line — see the long note in lib/email-ops.test.ts.
+  // A send is recorded only when it succeeded, and recorded as it happens.
+  assert.match(worker, /if \(result\.ok\) \{[\s\S]{0,600}?emailed_at/);
+  assert.ok(!/notifications\?id=in\.\(\$\{completed\.join/.test(worker),
+    "emailed_at is batched to the end of the run again — a throw re-sends the lot");
   assert.match(worker, /return response\.ok\s*\? \{ ok: true/);
   assert.match(wrangler, /"0 8 \* \* \*"/);
   assert.match(wrangler, /"0 19 \* \* \*"/);
@@ -47,4 +51,36 @@ test("the consent version is recorded consistently and terms avoid a blanket inj
   assert.ok(version, "health consent version is missing");
   assert.match(migration, new RegExp(version!.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   assert.doesNotMatch(legal, /not liable for injury, loss or damage arising from following guidance/i);
+});
+
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE TRIAL REMINDER IS SENT ONCE. NOT ONCE PER TRIAL END DATE.
+ *
+ * The dedupe key carried the trial's end timestamp, so any Stripe change to
+ * trial_end — an extension, a plan change, a proration — minted a fresh key
+ * and a second "your free trial ends soon" to the same person.
+ *
+ * `trial_reminder_created_at` normally stops that a step earlier, which is
+ * exactly why the second key looked harmless: it only mattered on a day
+ * something cleared the marker, and then it is an email nobody can recall.
+ * Two independent guards, neither of them expensive.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("a free trial reminder can only ever be sent once", () => {
+  const job = worker.slice(
+    worker.indexOf("async function createTrialEndingReminders"),
+    worker.indexOf("// --- Notification email delivery"),
+  );
+  assert.ok(job.length > 0, "createTrialEndingReminders has moved — this guard is reading nothing");
+
+  const key = /dedupe_key: `trial-ending:\$\{([^}]+)\}([^`]*)`/.exec(job);
+  assert.ok(key, "the trial reminder has no dedupe key, so the unique index cannot stop a second one");
+  assert.equal(key![2], "",
+    "the key carries more than the subscription id — anything that changes mints a second reminder");
+
+  // And the column that stops it being re-queued at all.
+  assert.match(job, /trial_reminder_created_at=is\.null/, "already-reminded subscriptions are candidates again");
+  assert.match(job, /trial_reminder_created_at: new Date\(\)\.toISOString\(\)/, "nothing marks the reminder as sent");
 });

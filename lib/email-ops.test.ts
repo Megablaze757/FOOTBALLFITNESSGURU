@@ -111,8 +111,46 @@ test("retrying is safe by construction", () => {
   const body = worker.slice(worker.indexOf("async function emailRetry"), worker.indexOf("async function emailRetry") + 900);
   assert.match(body, /isAdmin\(env, user\.id\)/);
   assert.match(body, /await emailNotifications\(env\)/);
-  assert.match(worker, /if \(result\.ok\) completed\.push\(notification\.id\)/,
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * TWO PROPERTIES, NEITHER OF THEM A LINE OF SOURCE.
+   *
+   * This matched `if (result.ok) completed.push(…)` exactly, which pinned one
+   * spelling of half the rule and said nothing about the half that was
+   * actually broken: emailed_at was collected through the loop and written
+   * ONCE at the end, so a throw on any row meant every email already sent that
+   * run was never recorded — and went out again on the next run, and the one
+   * after. The guard was green throughout.
+   *
+   * So: a send is marked only when it succeeded, AND it is marked inside the
+   * loop rather than banked until the end.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  // Comments stripped first. The note above the fix explains the batch bug and
+  // names emailed_at while doing it, so a positional check that reads the prose
+  // finds the word forty lines before the code — the second time this session a
+  // guard has tripped on the sentence promising the thing it checks for.
+  const send = worker
+    .slice(
+      worker.indexOf("async function emailNotifications"),
+      worker.indexOf("// Preferred sender is a Google Apps Script"),
+    )
+    .replace(/\/\*[\s\S]*?\*\//g, " ")
+    .replace(/^\s*\/\/.*$/gm, " ");
+  assert.ok(send.length > 0, "emailNotifications has moved — this guard is reading nothing");
+
+  const marking = send.indexOf("emailed_at");
+  const loopEnd = send.lastIndexOf("console.log(`notifications: emailed");
+  assert.ok(marking !== -1 && marking < loopEnd,
+    "emailed_at is written after the loop — one throw re-sends every email in the batch");
+  assert.ok(!/completed\.join/.test(send),
+    "the batch PATCH is back: a failure mid-run re-sends everything already delivered");
+
+  const ok = send.indexOf("if (result.ok) {");
+  assert.ok(ok !== -1 && ok < marking,
     "a failed send is being marked as emailed, which would make retry impossible");
+  assert.match(send, /catch \(e\) \{[\s\S]{0,400}?result = \{ ok: false/,
+    "a provider that throws still aborts the whole queue");
 });
 
 test("all six email types the spec asks for have a category", () => {
