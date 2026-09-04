@@ -76,21 +76,78 @@ try {
   process.exit(2);
 }
 
-if (repo === live) {
+// =============================================================================
+// WHICH WAY THE GAP GOES IS THE WHOLE QUESTION.
+//
+// This compared the two versions with `===` and refused on any difference —
+// which sounds cautious and made the deploy IMPOSSIBLE. Bump the version to
+// ship a fix and the gate refuses, because the versions now differ; leave it
+// alone and there is nothing to ship. Every push to cloudflare/ has therefore
+// failed this job since it was written, the red X became part of the scenery,
+// and the Worker has been pasted by hand ever since — which is exactly the
+// hand-editing the gate exists to protect against. A guard that blocks the
+// correct action teaches people to route around it.
+//
+// The safety property was never about difference. It is: NEVER OVERWRITE
+// PRODUCTION WITH SOMETHING OLDER. So compare the versions in order.
+//
+//   repo AHEAD   → this is a deploy. That is the point of the workflow.
+//   equal        → nothing to do, and nothing to lose by doing it.
+//   repo BEHIND  → refuse. Production has changes that exist nowhere else.
+//   unorderable  → refuse. "I cannot tell" must never read as "they match",
+//                  which is the same reason an unreachable Worker exits 2.
+// =============================================================================
+
+/** "2026-09-04.2" → [2026, 9, 4, 2]. Null when it is not that shape. */
+function order(version) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})\.(\d+)$/.exec(version.trim());
+  return m ? [Number(m[1]), Number(m[2]), Number(m[3]), Number(m[4])] : null;
+}
+
+function compare(a, b) {
+  const x = order(a);
+  const y = order(b);
+  if (!x || !y) return null;
+  for (let i = 0; i < x.length; i++) {
+    if (x[i] !== y[i]) return x[i] < y[i] ? -1 : 1;
+  }
+  return 0;
+}
+
+const direction = compare(repo, live);
+
+if (direction === 0) {
   console.log(`Worker in sync: ${repo}`);
   process.exit(0);
 }
 
+if (direction === 1) {
+  console.log(
+    `Deploying ${live} → ${repo}.\n` +
+      `The repo is ahead of production, which is what this workflow is for.`
+  );
+  process.exit(0);
+}
+
+if (direction === null) {
+  console.error(
+    `CANNOT ORDER THESE VERSIONS\n` +
+      `  deployed: ${live}\n` +
+      `  ${SOURCE}: ${repo}\n\n` +
+      `Expected YYYY-MM-DD.N. Refusing rather than guessing which is newer —\n` +
+      `guessing wrong overwrites production with older code.`
+  );
+  process.exit(2);
+}
+
 console.error(
-  `WORKER DRIFT\n` +
+  `PRODUCTION IS AHEAD OF THIS REPO\n` +
     `  deployed: ${live}\n` +
     `  ${SOURCE}: ${repo}\n\n` +
-    `The deployed Worker is not the one in this repo, so anything read from\n` +
-    `${SOURCE} may not be what production is running.\n\n` +
-    `If the DEPLOYED one is newer (the usual case, since it is edited in the\n` +
-    `dashboard), copy it back first — Cloudflare dashboard → Workers & Pages →\n` +
-    `apex-api → Edit code → select all → paste into ${SOURCE} and commit.\n` +
-    `Do NOT deploy from this repo to close the gap: that overwrites production\n` +
-    `with the older script and loses whatever was changed in the dashboard.`
+    `The deployed Worker is NEWER than the one here, so it was edited in the\n` +
+    `dashboard and those changes exist nowhere else. Deploying would overwrite\n` +
+    `them with older code.\n\n` +
+    `Copy it back first — Cloudflare dashboard → Workers & Pages → apex-api →\n` +
+    `Edit code → select all → paste into ${SOURCE} and commit.`
 );
 process.exit(1);

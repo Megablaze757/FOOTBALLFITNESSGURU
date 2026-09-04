@@ -11,12 +11,17 @@ name: Deploy API Worker
 # One-time setup: add a repo secret CLOUDFLARE_API_TOKEN (Cloudflare dashboard →
 # My Profile → API Tokens → Create Token → "Edit Cloudflare Workers" template).
 #
-# THE DRIFT GATE BELOW IS NOT OPTIONAL. Production is edited by hand in the
-# dashboard, so the deployed Worker is routinely AHEAD of this repository — it
-# is 2026-08-04.2 against 2026-08-01.1 as this is written. Deploying from here
-# would overwrite that with older code and lose changes that exist nowhere else.
-# The path filter makes that a live risk: editing cloudflare/README.md is enough
-# to trigger this workflow.
+# THE DRIFT GATE BELOW IS NOT OPTIONAL, and it used to make this workflow
+# impossible. It compared the deployed and repo versions for EQUALITY and
+# refused on any difference — so bumping the version to ship a fix was refused
+# because they now differed, and not bumping it left nothing to ship. Every push
+# to cloudflare/ failed this job, the red X became scenery, and the Worker got
+# pasted into the dashboard by hand instead: precisely the hand-editing the gate
+# exists to protect against.
+#
+# It now compares them in ORDER. Repo ahead deploys, which is the whole point of
+# this workflow; production ahead refuses, because those changes exist nowhere
+# else. See scripts/worker-drift.mjs and lib/worker-drift.test.ts.
 #
 # `npm run deploy` has a predeploy hook that checks the same thing, but
 # wrangler-action does not go through npm, so the check has to be repeated here.
@@ -65,7 +70,7 @@ jobs:
       # when it cannot tell, because deploying without knowing what you are
       # about to overwrite is the whole risk. Override deliberately by running
       # the workflow with `force` set.
-      - name: Refuse to overwrite a newer Worker
+      - name: Refuse to overwrite a NEWER Worker
         if: env.CF_TOKEN != '' && inputs.force != true
         working-directory: .
         run: node scripts/worker-drift.mjs "$WORKER_URL"
