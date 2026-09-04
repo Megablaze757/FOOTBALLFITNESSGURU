@@ -5,7 +5,8 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/lib/auth";
 import { useAsync } from "@/lib/use-async";
-import { checkInStreak } from "@/lib/load";
+import { streakState } from "@/lib/load";
+import { StreakCard } from "@/components/StreakCard";
 import {
   computeXp, levelFor, rankFor, evaluateAchievements, dailyQuests, activitySpans,
   type ActivityStats, type DailyState, EMPTY_STATS } from "@/lib/gamification";
@@ -156,12 +157,16 @@ export default function RewardsPage() {
     const nutriDates = (nutrition.data ?? []).map((r) => r.log_date as string);
     const progs = (programs.data ?? []) as { completed_sessions: string[] | null; status: string }[];
 
+    // The streak, and what is insuring it. Same dates, one walk — see the note
+    // at the top of streakState.
+    const streakNow = streakState(checkDates);
+
     const stats: ActivityStats = {
       // Spread first so a new stat added to ActivityStats defaults sensibly
       // here instead of breaking every call site that builds one by hand.
       ...EMPTY_STATS,
       checkIns: checkC.count ?? 0,
-      streak: checkInStreak(checkDates),
+      streak: streakNow.streak,
       trainingSessions: trainC.count ?? 0,
       completedSessions: progs.reduce((n, p) => n + (p.completed_sessions?.length ?? 0), 0),
       completedBlocks: progs.filter((p) => p.status === "archived").length,
@@ -307,10 +312,12 @@ export default function RewardsPage() {
     const earnedFromChallenges = (await fetchXpExtras(supabase, user.id)).challengeXp;
 
     return {
-      stats, state, boards, ctx,
+      stats, state, boards, ctx, streakNow,
       xp: computeXp(stats) + earnedFromChallenges,
     };
-  }, [user.id], `rewards:${user.id}`);
+    // v2: streakNow. A cached v1 entry has no rest days on it, and the card
+    // would render an empty bank to somebody who has two.
+  }, [user.id], `rewards:v2:${user.id}`);
 
   /**
    * Rarity, and the write that makes it possible.
@@ -432,6 +439,11 @@ export default function RewardsPage() {
       </div>
 
       <RankLadder level={level} />
+
+      {/* ABOVE the badges and the quests, because it is the one thing on this
+          page that changes what somebody does on a bad evening. A rest day
+          nobody knows about does not stop anybody giving up. */}
+      <StreakCard state={data.streakNow} />
 
       {/* HOW STRONG, not just how consistent.
           Every other card here counts turning up — days, sessions, quests. This

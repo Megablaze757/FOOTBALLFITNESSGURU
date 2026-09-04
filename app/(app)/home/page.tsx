@@ -11,7 +11,7 @@ import { useCurrentUser } from "@/lib/auth";
 import { useAsync } from "@/lib/use-async";
 import { assessReadiness } from "@/lib/readiness";
 import { actionLabel } from "@/lib/insights";
-import { checkInStreak, computeACWR } from "@/lib/load";
+import { streakState, computeACWR } from "@/lib/load";
 import { dailyQuests, rotatingQuest } from "@/lib/gamification";
 import { biometricSignal, type Biometric } from "@/lib/biometrics";
 import { sportProfile } from "@/lib/sport-profile";
@@ -123,7 +123,8 @@ export default function HomePage() {
         }
       }
     }
-    const streak = checkInStreak((streakRows ?? []).map((r) => r.check_in_date));
+    const streakNow = streakState((streakRows ?? []).map((r) => r.check_in_date));
+    const streak = streakNow.streak;
     const trainedToday = !!trainToday && trainToday.session_type !== "rest_day";
     const quests = dailyQuests({ checkedInToday: !!checkIn, trainedToday, nutritionToday: !!nutriToday });
 
@@ -247,14 +248,16 @@ export default function HomePage() {
     }
 
     return {
-      profile, checkIn, insight, streak,
+      profile, checkIn, insight, streak, banked: streakNow.banked,
       quests: extra ? [...quests, extra] : quests,
       bioSignal, setup,
       week, acwr, activity,
       nextSession, hasProgram: programCount > 0, trainedToday,
       nutriToday: (nutriToday ?? null) as { calories_eaten: number | null; daily_calorie_target: number | null } | null,
     };
-  }, [user.id], `home:${user.id}`);
+    // v2: banked. A cached v1 entry shows no shields to somebody who has two,
+    // and the shields are the part that stops a bad evening ending the streak.
+  }, [user.id], `home:v2:${user.id}`);
 
   const firstName = data?.profile?.full_name?.split(" ")[0] ?? "athlete";
   const streak = data?.streak ?? 0;
@@ -341,7 +344,7 @@ export default function HomePage() {
 
   return (
     <div className="animate-fade-up space-y-5">
-      <Greeting name={firstName} sub="Here's your day." streak={streak} />
+      <Greeting name={firstName} sub="Here's your day." streak={streak} banked={data!.banked} />
 
       {/* Same promise as Progress: the numbers on this page are being redone,
           and nothing disappears while that happens. */}
@@ -647,7 +650,7 @@ function GettingStarted({ setup, showingProgramCta }: {
 }
 
 
-function Greeting({ name, sub, streak = 0 }: { name: string; sub: string; streak?: number }) {
+function Greeting({ name, sub, streak = 0, banked = 0 }: { name: string; sub: string; streak?: number; banked?: number }) {
   return (
     <header className="flex items-start justify-between">
       <div>
@@ -657,7 +660,21 @@ function Greeting({ name, sub, streak = 0 }: { name: string; sub: string; streak
         <p className="mt-1 text-sm text-slate-400">{sub}</p>
       </div>
       {streak > 0 && (
-        <span className="chip text-accent-400" title="Consecutive days logged">🔥 {streak}-day streak</span>
+        <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
+          <span className="chip text-accent-400" title="Consecutive days logged">🔥 {streak}-day streak</span>
+          {/* THE SHIELDS BELONG NEXT TO THE FIRE, not on a page nobody opens
+              on a bad day. Somebody deciding at 11pm whether to bother needs to
+              already know a missed day is survivable — Rewards explains the
+              rule, this is what makes them go and read it. */}
+          {banked > 0 && (
+            <span
+              className="chip text-slate-300"
+              title={`${banked} rest day${banked === 1 ? "" : "s"} banked — a missed day won't end your streak`}
+            >
+              {"🛡️".repeat(banked)}
+            </span>
+          )}
+        </div>
       )}
     </header>
   );

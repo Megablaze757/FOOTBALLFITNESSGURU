@@ -204,20 +204,142 @@ export function computeACWR(logs: TrainingLog[], asOf = new Date()): ACWR {
   return { acute, chronic, ratio, zone, message };
 }
 
-/** Consecutive check-in days ending today (or yesterday). */
-// The athlete's day, not UTC's — a streak is a human thing. See lib/day.ts for
-// the check-ins this lost before it was fixed.
-export function checkInStreak(dates: string[], today = todayLocal()): number {
-  const set = new Set(dates);
+// =============================================================================
+// STREAK INSURANCE.
+//
+// ═══════════════════════════════════════════════════════════════════════════
+// A STREAK THAT ONE BAD DAY DESTROYS TEACHES PEOPLE TO STOP TRYING.
+//
+// The old rule was absolute: miss a day, back to zero. Which sounds like
+// discipline and behaves like the opposite — the day after a 60-day run ends
+// is the day somebody uninstalls, because the thing they were protecting is
+// already gone and there is nothing left to protect. A flight, a fever, a
+// funeral. The app cannot tell the difference and should not try.
+//
+// So a missed day can be covered by a rest day the athlete EARNED by turning
+// up. Not given, not bought, not refilled on a timer:
+//
+//   · one per EARN_EVERY logged days, so a lost day costs ten days of work to
+//     replace;
+//   · at most MAX_BANKED held, so a long streak never becomes uninterruptible;
+//   · never two days running — two in a row is a break, whatever is banked;
+//   · gone when the chain breaks, because insurance you keep through a reset
+//     is not insurance.
+//
+// AND THE NUMBER STILL ONLY COUNTS DAYS THEY ACTUALLY TURNED UP. A covered day
+// keeps the chain alive but adds nothing to the total, so "37 days" is never a
+// claim about 37 days of work that did not happen. That is the line between a
+// forgiving streak and a dishonest one.
+//
+// DERIVED, NOT STORED. Everything here comes out of the same check-in dates
+// the streak always came from — no column, no table, no counter to drift, and
+// nothing an athlete could lose by using a different device. A banked rest day
+// that existed as a number somewhere would eventually disagree with the
+// calendar, and the calendar is the thing people remember.
+// ═══════════════════════════════════════════════════════════════════════════
+// =============================================================================
+
+/** Logged days that earn one rest day. */
+export const EARN_EVERY = 10;
+
+/** The most that can be held at once. Two is a bad week, not a season off. */
+export const MAX_BANKED = 2;
+
+export interface StreakState {
+  /** Days actually logged in the current chain. Never counts a covered day. */
+  streak: number;
+  /** Rest days in hand right now. */
+  banked: number;
+  /** Days the chain survived on insurance, oldest first. */
+  covered: string[];
+  /** Logged days still needed for the next rest day, or null when full. */
+  toNextBanked: number | null;
+}
+
+const DAY_MS = 86400_000;
+
+function addDays(iso: string, n: number): string {
+  return new Date(new Date(`${iso}T00:00:00Z`).getTime() + n * DAY_MS).toISOString().slice(0, 10);
+}
+
+/**
+ * The current chain, walked FORWARDS.
+ *
+ * Forwards because that is the order the rules happen in: a rest day has to be
+ * earned before the day it covers. Walking back from today — the obvious way,
+ * and how the old counter worked — you meet the gap before you know whether
+ * anything had been banked by then, and the only way to answer that is to walk
+ * forwards anyway.
+ */
+export function streakState(dates: string[], today = todayLocal()): StreakState {
+  const set = new Set(dates.filter(Boolean));
+  if (set.size === 0) return { streak: 0, banked: 0, covered: [], toNextBanked: EARN_EVERY };
+
   let streak = 0;
-  let cursor = new Date(today);
-  // Allow the streak to count if today isn't logged yet but yesterday was.
-  if (!set.has(today)) cursor = new Date(cursor.getTime() - 86400_000);
-  while (set.has(cursor.toISOString().slice(0, 10))) {
-    streak++;
-    cursor = new Date(cursor.getTime() - 86400_000);
+  let banked = 0;
+  let sinceEarn = 0;
+  let covered: string[] = [];
+  let prevCovered = false;
+
+  const start = [...set].sort()[0];
+  for (let day = start; day <= today; day = addDays(day, 1)) {
+    if (set.has(day)) {
+      streak++;
+      prevCovered = false;
+      if (++sinceEarn >= EARN_EVERY) {
+        sinceEarn = 0;
+        // Capped, not accumulated. Without this a year-long streak carries
+        // three dozen rest days and stops meaning anything at all.
+        banked = Math.min(banked + 1, MAX_BANKED);
+      }
+      continue;
+    }
+
+    /**
+     * TODAY IS NOT A MISSED DAY YET.
+     *
+     * It is the middle of it. Charging a rest day at midnight for a check-in
+     * somebody is going to make this evening would spend their insurance on
+     * nothing — the old counter got this right by starting from yesterday, and
+     * it is much easier to get wrong here.
+     */
+    if (day === today) break;
+
+    // Two in a row is a break, whatever is in the bank. A rest day covers an
+    // interruption; a week off is not an interruption.
+    if (banked > 0 && !prevCovered) {
+      banked--;
+      covered.push(day);
+      prevCovered = true;
+      continue;
+    }
+
+    streak = 0;
+    banked = 0;
+    sinceEarn = 0;
+    covered = [];
+    prevCovered = false;
   }
-  return streak;
+
+  return {
+    streak,
+    banked,
+    covered,
+    toNextBanked: banked >= MAX_BANKED ? null : EARN_EVERY - sinceEarn,
+  };
+}
+
+/**
+ * Consecutive check-in days ending today (or yesterday).
+ *
+ * The athlete's day, not UTC's — a streak is a human thing. See lib/day.ts for
+ * the check-ins this lost before it was fixed.
+ *
+ * Now insurance-aware, and deliberately still a plain number: five screens read
+ * this and only two of them have anywhere to put a shield icon.
+ */
+export function checkInStreak(dates: string[], today = todayLocal()): number {
+  return streakState(dates, today).streak;
 }
 
 export interface WeeklyReport {

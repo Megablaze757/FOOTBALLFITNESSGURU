@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { sessionLoad, computeACWR, checkInStreak, weeklyReport, tonnage, totalDistanceKm, averagePaceSeconds, hasTrainingContent } from "./load";
+import { sessionLoad, computeACWR, checkInStreak, streakState, EARN_EVERY, MAX_BANKED, weeklyReport, tonnage, totalDistanceKm, averagePaceSeconds, hasTrainingContent } from "./load";
 import type { DailyCheckIn, NutritionLog, TrainingLog } from "./types";
 
 const day = (offset: number, from = new Date("2026-06-28")) =>
@@ -212,4 +212,111 @@ test("pace is read to the second, not to the rounded minute", () => {
 test("a row written before duration_seconds existed still has a pace", () => {
   // durationSeconds falls back to total_minutes, so old logs keep counting.
   assert.equal(averagePaceSeconds([{ distance_km: 10, total_minutes: 50 } as TrainingLog]), 300);
+});
+
+// --- streak insurance --------------------------------------------------------
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE RULES HAVE TO BE MEAN ENOUGH TO MEAN SOMETHING.
+ *
+ * A forgiving streak is the point; a streak that forgives everything is a
+ * participation number. Each test below is one of the four limits, and each one
+ * exists because removing it produces something that still looks like it works.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+
+/** Every day from `from` to `to` inclusive. */
+function days(from: string, to: string): string[] {
+  const out: string[] = [];
+  for (let d = from; d <= to; d = new Date(new Date(`${d}T00:00:00Z`).getTime() + 86400_000).toISOString().slice(0, 10)) {
+    out.push(d);
+  }
+  return out;
+}
+
+test("a rest day has to be earned before it can be spent", () => {
+  // Nine logged days, then a miss. Nothing banked yet — EARN_EVERY is ten.
+  const nine = days("2026-06-01", "2026-06-09");
+  const after = days("2026-06-11", "2026-06-14");
+  assert.equal(checkInStreak([...nine, ...after], "2026-06-14"), 4, "the gap should have broken it");
+
+  // Ten, and the same gap is covered.
+  const ten = days("2026-06-01", "2026-06-10");
+  assert.equal(checkInStreak([...ten, ...after], "2026-06-14"), 14);
+});
+
+test("a covered day is never counted as a day they turned up", () => {
+  const s = streakState([...days("2026-06-01", "2026-06-10"), ...days("2026-06-12", "2026-06-14")], "2026-06-14");
+  assert.equal(s.streak, 13, "ten plus three logged — the covered day adds nothing");
+  assert.deepEqual(s.covered, ["2026-06-11"]);
+  assert.equal(s.banked, 0, "and it cost the rest day it had");
+});
+
+test("two missed days in a row is a break, however much is banked", () => {
+  // Thirty logged days: two banked, which is the cap.
+  const month = days("2026-06-01", "2026-06-30");
+  const s = streakState([...month, ...days("2026-07-03", "2026-07-05")], "2026-07-05");
+  assert.equal(s.streak, 3, "1 and 2 July were both missed — that is a break, not an interruption");
+  assert.deepEqual(s.covered, []);
+});
+
+test("rest days do not accumulate over a long run", () => {
+  // A hundred days would earn ten. Two is the most anyone can hold.
+  const s = streakState(days("2026-03-01", "2026-06-08"), "2026-06-08");
+  assert.equal(s.banked, MAX_BANKED);
+  assert.equal(s.toNextBanked, null, "nothing to work towards when the bank is full");
+});
+
+/**
+ * Written twice. The first version asserted the bank after a long gap, which
+ * proves nothing: four missed days in a row drain the bank on their way past
+ * whether or not the break clears it, so leaving the reset out looked correct.
+ *
+ * This one breaks the chain with the SHORTEST gap that can break it — two days,
+ * the first covered and the second fatal — and then hands the new run a missed
+ * day it must not be able to cover.
+ */
+test("insurance does not survive a break", () => {
+  const dates = [
+    ...days("2026-06-01", "2026-06-30"), // 30 logged: two banked, the cap
+    // 1 July covered, 2 July breaks it.
+    ...days("2026-07-03", "2026-07-07"), // 5 into the new run — not enough to earn
+    // 8 July missed, and there must be nothing left to cover it with.
+    ...days("2026-07-09", "2026-07-11"),
+  ];
+  const s = streakState(dates, "2026-07-11");
+  assert.equal(s.streak, 3, "8 July must break the new run, not be quietly insured by the old one");
+  assert.equal(s.banked, 0);
+  assert.deepEqual(s.covered, []);
+});
+
+/**
+ * The one that is easiest to get wrong: at 00:01 today is a day with no
+ * check-in in it. Spending a rest day on it would take the athlete's insurance
+ * for a check-in they are going to make after work.
+ */
+test("today is not a missed day until it is over", () => {
+  const s = streakState(days("2026-06-01", "2026-06-10"), "2026-06-11");
+  assert.equal(s.streak, 10, "yesterday was logged — the streak stands");
+  assert.equal(s.banked, 1, "and nothing has been spent on a day still in progress");
+  assert.deepEqual(s.covered, []);
+});
+
+test("what it takes to earn the next one", () => {
+  assert.equal(streakState([], "2026-06-10").toNextBanked, EARN_EVERY);
+  assert.equal(streakState(days("2026-06-01", "2026-06-04"), "2026-06-04").toNextBanked, 6);
+  assert.equal(streakState(days("2026-06-01", "2026-06-10"), "2026-06-10").toNextBanked, 10);
+});
+
+test("duplicate and empty dates cannot inflate a streak", () => {
+  const doubled = [...days("2026-06-01", "2026-06-05"), ...days("2026-06-01", "2026-06-05"), "", ""];
+  assert.equal(checkInStreak(doubled, "2026-06-05"), 5);
+});
+
+/** A month boundary is where date arithmetic done by hand goes wrong. */
+test("the chain crosses months and years", () => {
+  assert.equal(checkInStreak(days("2026-12-20", "2027-01-10"), "2027-01-10"), 22);
+  // And a leap day is a day like any other.
+  assert.equal(checkInStreak(days("2028-02-26", "2028-03-02"), "2028-03-02"), 6);
 });
