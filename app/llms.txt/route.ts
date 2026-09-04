@@ -3,6 +3,7 @@ import { MEALS } from "@/lib/meals-data";
 import { EXERCISES, isRunEntry } from "@/lib/exercises";
 import { publishableCollections } from "@/lib/collections";
 import { indexFacts, money, REFERENCE_PROTEIN } from "@/lib/protein-index";
+import { history } from "@/lib/protein-history";
 import { skillsForSport } from "@/lib/skills";
 import { PLANS, TRIAL_DAYS } from "@/lib/subscription";
 import { STRENGTH_TIERS } from "@/lib/strength-standards";
@@ -100,7 +101,11 @@ ${protein ? `A ranked table of what ${REFERENCE_PROTEIN}g of protein costs from 
 high-protein food a person could eat a portion of. Cheapest is
 ${protein.cheapest.name.toLowerCase()} at ${money(protein.cheapest.cost)}; dearest is
 ${protein.dearest.name.toLowerCase()} at ${money(protein.dearest.cost)} — a ${protein.spread.toFixed(1)}x spread for
-the same protein. Computed from pack sizes and shelf prices, not written.` : ""}
+the same protein. Computed from pack sizes and shelf prices, not written.
+
+Tracked over time: readings are recorded as prices change, starting
+${history()[0].date}. The series is what was measured — it is not
+reconstructed, so there is no history before that date.` : ""}
 
 - [Cheapest protein, ranked](${SITE}/cheapest-protein/)
 

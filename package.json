@@ -18,7 +18,8 @@
     "audit:ui": "node scripts/ui-audit.mjs",
     "worker:drift": "node scripts/worker-drift.mjs",
     "draft:cues": "node --import tsx scripts/draft-exercise-cues.mts",
-    "brief": "node --import tsx scripts/weekly-brief.mts"
+    "brief": "node --import tsx scripts/weekly-brief.mts",
+    "protein:snapshot": "node --import tsx scripts/snapshot-protein.mts"
   },
   "engines": {
     "//": "Node 22+: `node --test` only learned to expand globs in 22, and the test script relies on it.",

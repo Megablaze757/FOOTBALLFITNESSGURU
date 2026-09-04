@@ -11,6 +11,7 @@ import {
   proteinIndex,
 } from "@/lib/protein-index";
 import { SITE } from "@/lib/seo";
+import { ProteinTrend } from "@/components/ProteinTrend";
 import { MarketingShell, GuideCta } from "@/components/MarketingShell";
 import { jsonLd, graph, itemList, breadcrumbs } from "@/lib/schema";
 
@@ -141,6 +142,12 @@ export default function CheapestProteinPage() {
         somebody is right to distrust — and the two rules are the interesting
         part anyway.
       */}
+      {/* THE HISTORY, WHICH IS WHAT TURNS THIS FROM A PAGE INTO A REFERENCE.
+          A single figure is read once; a tracked one is checked again. See
+          lib/protein-history.ts for why the series starts today rather than
+          being reconstructed. */}
+      <ProteinTrend />
+
       <section className="mt-12 max-w-2xl">
         <h2 className="text-xl font-extrabold tracking-tight">How this is worked out</h2>
         <p className="mt-3 text-sm text-slate-400">
