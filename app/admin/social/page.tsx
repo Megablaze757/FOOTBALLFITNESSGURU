@@ -3,6 +3,7 @@
 import { AdminShell, AdminArea } from "@/components/admin/AdminShell";
 import { ContentEngine } from "@/components/ContentEngine";
 import { ReelStudio } from "@/components/ReelStudio";
+import { ReelRecorder } from "@/components/ReelRecorder";
 import { ShareLoop } from "@/components/admin/ShareLoop";
 
 /**
@@ -15,6 +16,10 @@ import { ShareLoop } from "@/components/admin/ShareLoop";
  *
  * The share loop leads, because it is the only one of these that scales
  * without somebody sitting here doing it.
+ *
+ * Then the recorder, then the generator. The reels here were slideshows —
+ * every figure on them true and the whole thing skippable — and the fix was not
+ * a better card, it was pointing the camera at the app.
  */
 export default function AdminSocial() {
   return (
@@ -23,7 +28,23 @@ export default function AdminSocial() {
         <ShareLoop />
       </AdminArea>
 
-      <AdminArea title="Reels" note="Vertical video, recorded here, from content that already exists">
+      {/* ═══════════════════════════════════════════════════════════════════
+          THE SCREEN RECORDER LEADS, AND THE CARD GENERATOR STAYS.
+
+          They are not the same tool doing the same job better. Filming the app
+          is the footage nobody else can fake — a readiness score moving because
+          of a bad night is a moving picture of something happening. A generated
+          card is text sliding over a gradient, which is what people scroll past
+          fastest, and it is still the right answer when there is no screen to
+          film: a price table, a strength standard, a fact.
+
+          Recording first because that is the one worth reaching for by default.
+          ═══════════════════════════════════════════════════════════════════ */}
+      <AdminArea title="Film the app" note="Screen recording with your voice over it — the footage a competitor cannot fake">
+        <ReelRecorder />
+      </AdminArea>
+
+      <AdminArea title="Generated cards" note="Vertical video built from content that already exists, for what has no screen to film">
         <ReelStudio />
       </AdminArea>
 
