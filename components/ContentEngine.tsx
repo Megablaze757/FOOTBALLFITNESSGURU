@@ -9,6 +9,7 @@ import { buildDemoCardSvg, DEMO_SCREENS, type DemoScreen } from "@/lib/demo-card
 import { FACT_GROUPS, PILLARS, LAUNCH_SEQUENCE, CHANNELS, NEVER_CLAIM, allFacts } from "@/lib/content";
 import { guideSports, sportLabel } from "@/lib/seo";
 import { plannedPosts, type PlannedPost } from "@/lib/post-plan";
+import { postTriggers, type Trigger } from "@/lib/post-triggers";
 import { invokeAI } from "@/lib/api";
 import type { SportId } from "@/lib/exercises";
 
@@ -538,6 +539,21 @@ function Picker({ label, options, value, onChange }: {
 function ScheduleTab() {
   const [from, setFrom] = useState(() => new Date().toISOString().slice(0, 10));
   const posts = useMemo(() => plannedPosts(from, 7), [from]);
+  /**
+   * WHAT HAPPENED, ABOVE WHAT WAS PLANNED.
+   *
+   * The schedule covers an ordinary Tuesday. It cannot cover the day the
+   * protein index moves or the first athlete publishes a page — those are news
+   * rather than content, they are the posts with a reason to exist, and they
+   * are exactly the ones that go unposted because the data changed in a file
+   * and no screen ever mentioned it. See lib/post-triggers.ts.
+   *
+   * Not fetched: every trigger is computed from catalogues compiled into this
+   * bundle, so the list is right the moment the page renders. The two that
+   * need a count from the database are passed in by the panel that already
+   * has them.
+   */
+  const triggers = useMemo(() => postTriggers(), []);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -550,23 +566,39 @@ function ScheduleTab() {
    * writer tab's default of everything, because a post about one drill has no
    * business quoting the protein index.
    */
-  async function draft(post: PlannedPost) {
-    setBusy(post.date);
+  /** A trigger drafts exactly like a scheduled post — same writer, same rule
+   *  about which facts it may use. Only the key differs. */
+  function draftTrigger(t: Trigger) {
+    return write(t.id, t.topic, t.factGroups);
+  }
+
+  async function write(key: string, topic: string, factGroups: string[]) {
+    setBusy(key);
     setError(null);
     try {
-      const facts = FACT_GROUPS.filter((g) => post.factGroups.includes(g.id)).flatMap((g) => g.facts);
+      const facts = FACT_GROUPS.filter((g) => factGroups.includes(g.id)).flatMap((g) => g.facts);
       const r = await invokeAI<{ options?: { title: string; body: string }[] }>(
         "generate-content",
-        { format: "caption", topic: post.topic, facts, count: 1 },
+        { format: "caption", topic, facts, count: 1 },
         45_000,
       );
       const body = r.options?.[0]?.body?.trim();
-      setDrafts((d) => ({ ...d, [post.date]: body || "Nothing usable came back — try again." }));
+      setDrafts((d) => ({ ...d, [key]: body || "Nothing usable came back — try again." }));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(null);
     }
+  }
+
+  /**
+   * ONE IMPLEMENTATION. A scheduled post and a trigger differ in where the
+   * topic came from and in nothing else — two copies of this fetch would be
+   * two things to keep in step, and the one that drifts is always the one
+   * nobody is looking at.
+   */
+  function draft(post: PlannedPost) {
+    return write(post.date, post.topic, post.factGroups);
   }
 
   /**
@@ -610,6 +642,36 @@ function ScheduleTab() {
         </p>
         {error && <p className="text-sm text-readiness-red">{error}</p>}
       </div>
+
+      {triggers.filter((t) => t.heat === "news").length > 0 && (
+        <div className="rounded-2xl border border-pitch-400/30 bg-pitch-400/[0.05] p-4">
+          <h4 className="text-sm font-extrabold text-accent-400">Worth posting now</h4>
+          <p className="mt-1 text-xs text-slate-400">
+            These are things that have actually changed. Post one instead of the day&apos;s scheduled
+            subject — news beats rotation.
+          </p>
+          <ul className="mt-3 space-y-2">
+            {triggers.filter((t) => t.heat === "news").map((t) => (
+              <li key={t.id} className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+                <p className="text-sm font-bold text-slate-100">{t.headline}</p>
+                <p className="mt-1 text-sm text-slate-400">{t.topic}</p>
+                <button
+                  onClick={() => draftTrigger(t)}
+                  disabled={busy !== null}
+                  className="tap-target mt-2 rounded-xl border border-white/10 px-3 py-1.5 text-xs font-semibold text-slate-300"
+                >
+                  {busy === t.id ? "Writing…" : drafts[t.id] ? "Redraft" : "Draft"}
+                </button>
+                {drafts[t.id] && (
+                  <p className="mt-2 whitespace-pre-wrap rounded-xl border border-white/10 bg-white/[0.02] p-3 text-sm text-slate-200">
+                    {drafts[t.id]}
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {posts.map((post) => (
         <div key={post.date} className="card p-4">

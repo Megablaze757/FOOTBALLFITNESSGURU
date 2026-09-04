@@ -187,13 +187,18 @@ test("the content engine opens on the schedule and drafts from it", () => {
   assert.match(src, /useState<Tab>\("schedule"\)/,
     "the engine still opens on advice rather than on what to post today");
 
-  // The topic goes to the writer verbatim — the whole point is that nobody has
-  // to type one.
-  assert.match(src, /topic: post\.topic/, "the draft button does not use the planned topic");
-  // And with the post's OWN fact groups, not everything: a post about one drill
-  // has no business quoting the protein index.
-  assert.match(src, /post\.factGroups\.includes\(g\.id\)/,
+  /**
+   * The property, not the spelling. This matched `topic: post.topic` and went
+   * red when the two draft paths — scheduled post and trigger — were collapsed
+   * into one function, which was a refactor that removed a duplicate rather
+   * than a regression. What matters is that the PLANNED topic reaches the
+   * writer with that post's OWN facts, and that nobody types either.
+   */
+  assert.match(src, /write\(post\.date, post\.topic, post\.factGroups\)/,
+    "the draft button does not use the planned topic");
+  assert.match(src, /factGroups\.includes\(g\.id\)/,
     "the writer is handed every fact rather than the ones this post may use");
+  assert.match(src, /topic,\s*facts,/, "the topic never reaches the request");
 
   // Seven at once against a rate-limited free tier fails as five drafts and two
   // errors, which is worse than waiting.
