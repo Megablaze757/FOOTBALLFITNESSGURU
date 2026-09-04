@@ -2,12 +2,17 @@
 
 import { RankBadge } from "@/components/RankBadge";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAsync } from "@/lib/use-async";
 import { computeXp, levelFor, EMPTY_STATS, type Standing } from "@/lib/gamification";
 import { lastPublished } from "@/lib/xp-publish";
-import { BOARDS, rankBoard, boardView, placeAbove, type AthleteStats, type BoardId, type Ranked } from "@/lib/leaderboard";
+import { sportLabel } from "@/lib/seo";
+import type { SportId } from "@/lib/exercises";
+import {
+  BOARDS, rankBoard, boardView, placeAbove, inScope, scopeReady, MIN_FIELD,
+  type AthleteStats, type BoardId, type Ranked, type ScopeId,
+} from "@/lib/leaderboard";
 
 interface Row {
   user_id: string;
@@ -18,6 +23,9 @@ interface Row {
   minutes_7: number;
   completed_7: number;
   streak: number;
+  /** Migration 0109. Undefined on a database without it — see `sport` below. */
+  sport?: string | null;
+  position?: string | null;
   /**
    * Lifetime XP, written by that athlete's own client — see migration 0105.
    *
@@ -38,14 +46,23 @@ interface Row {
  * weekly, so the boards stay winnable.
  */
 export function Leaderboards({ userId }: { userId: string }) {
-  const [scope, setScope] = useState<"squad" | "world">("world");
+  const [scope, setScope] = useState<ScopeId>("world");
   const [boardId, setBoardId] = useState<BoardId>("consistent");
 
   const { data, loading, error } = useAsync(async () => {
-    const { data, error } = await createClient().rpc("leaderboard_stats", { p_scope: scope });
+    /**
+     * ONE FETCH FOR THREE SCOPES.
+     *
+     * Only "squad" changes what the database returns — sport and position are
+     * subsets of the world board, so refetching for them would be three round
+     * trips to filter a list already in memory, and a visible pause every time
+     * somebody taps a tab.
+     */
+    const p_scope = scope === "squad" ? "squad" : "world";
+    const { data, error } = await createClient().rpc("leaderboard_stats", { p_scope });
     if (error) throw error;
     return (data ?? []) as Row[];
-  }, [scope]);
+  }, [scope === "squad" ? "squad" : "world"]);
 
   const athletes = useMemo<AthleteStats[]>(() => (data ?? []).map((r) => {
     const xp = computeXp({
@@ -85,11 +102,24 @@ export function Leaderboards({ userId }: { userId: string }) {
       streak: r.streak,
       xp,
       level: levelFor(xp).level,
+      // Undefined on a database without 0109, which inScope reads as "no
+      // sport" — so those tabs are simply not offered rather than showing an
+      // empty board with no explanation.
+      sport: r.sport ?? null,
+      position: r.position ?? null,
     };
   }), [data]);
 
   const board = BOARDS.find((b) => b.id === boardId)!;
-  const ranked = useMemo(() => rankBoard(board, athletes), [board, athletes]);
+  /**
+   * The field first, the ranking second.
+   *
+   * Ranking the world and then filtering would leave the ranks belonging to the
+   * world board: the best centre back would be "47th" on a list of centre
+   * backs. A rank is only meaningful against the field it was computed over.
+   */
+  const field = useMemo(() => inScope(athletes, scope, userId), [athletes, scope, userId]);
+  const ranked = useMemo(() => rankBoard(board, field), [board, field]);
   const { top, below } = boardView(ranked, userId);
   const mine = below ?? top.find((r) => r.stats.userId === userId) ?? null;
 
@@ -103,7 +133,12 @@ export function Leaderboards({ userId }: { userId: string }) {
    * needs LADDER_MIN_ATHLETES anyway, so this is belt and braces.
    */
   const standings = useMemo(() => {
-    if (scope !== "world") return new Map<string, Standing>();
+    // Squad scope gets no standing rather than a squad-shaped one. The sport
+    // and position boards are filtered from the world fetch, so the ladder
+    // behind them IS the world ladder and the standing is real.
+    if (scope === "squad") return new Map<string, Standing>();
+    // `athletes`, not `field`: standing is a fact about the whole ladder, and
+    // being top of the centre backs is not being no. 1 in the world.
     const byXp = rankBoard(BOARDS.find((b) => b.id === "xp")!, athletes);
     return new Map(byXp.map((r) => [r.stats.userId, { athletes: byXp.length, position: r.rank }]));
   }, [scope, athletes]);
@@ -137,6 +172,35 @@ export function Leaderboards({ userId }: { userId: string }) {
    */
   const ownXp = useMemo(() => lastPublished(userId), [userId]);
 
+  /**
+   * The tabs on offer, labelled with the athlete's OWN sport and position.
+   *
+   * "Centre backs" rather than "My position", because the point of the tab is
+   * that the field is people like you and a generic label hides that. Read off
+   * the viewer's own row so the label and the filter cannot disagree.
+   */
+  const me = athletes.find((a) => a.userId === userId);
+  const scopes = useMemo(() => {
+    const out: { id: ScopeId; label: string }[] = [{ id: "world", label: "World" }];
+    if (me?.position && scopeReady(athletes, "position", userId)) {
+      out.push({ id: "position", label: plural(me.position) });
+    }
+    if (me?.sport && scopeReady(athletes, "sport", userId)) {
+      out.push({ id: "sport", label: sportLabel(me.sport as SportId) });
+    }
+    out.push({ id: "squad", label: "My squad" });
+    return out;
+  }, [athletes, me?.position, me?.sport, userId]);
+
+  /**
+   * A scope can stop being available while it is selected — somebody edits
+   * their position, or the fetch comes back smaller. Falling back to World is
+   * better than rendering a tab strip with nothing pressed on it.
+   */
+  useEffect(() => {
+    if (!scopes.some((s) => s.id === scope)) setScope("world");
+  }, [scopes, scope]);
+
   const xpFor = (r: Ranked) =>
     r.stats.userId === userId ? r.stats.lifetimeXp ?? ownXp : r.stats.lifetimeXp;
 
@@ -149,20 +213,31 @@ export function Leaderboards({ userId }: { userId: string }) {
     <div className="card p-5">
       <div className="mb-3 flex items-center justify-between gap-2">
         <h2 className="field-label !mb-0">🏆 Leaderboards</h2>
-        <div className="flex shrink-0 gap-1 rounded-full bg-white/[0.04] p-0.5">
-          {(["squad", "world"] as const).map((s) => (
+        {/* ═══════════════════════════════════════════════════════════════
+            THE SMALL BOARDS ARE THE ONES WORTH BEING ON.
+
+            World is one list for everybody: the same ten names every week, and
+            everyone else looking at strangers they will never catch. Against
+            other centre backs, an ordinary athlete can be third — and being
+            third at something is the entire mechanism this runs on.
+
+            Offered only when there is a field to rank against. A tab that
+            opens onto an empty board reads as broken rather than as a fact
+            about how many other left-backs have signed up. */}
+        <div className="flex shrink-0 flex-wrap justify-end gap-1 rounded-full bg-white/[0.04] p-0.5">
+          {scopes.map((s) => (
             <button
-              key={s}
-              onClick={() => setScope(s)}
-              aria-pressed={scope === s}
+              key={s.id}
+              onClick={() => setScope(s.id)}
+              aria-pressed={scope === s.id}
               // A filled segmented control, so it keeps its own colours rather
               // than the outlined chip look — but it takes the 44px floor, and
               // the aria-pressed it never had.
               className={`min-h-[44px] rounded-full px-3 text-xs font-semibold transition ${
-                scope === s ? "bg-pitch-400 text-on-accent" : "text-slate-400 hover:text-slate-200"
+                scope === s.id ? "bg-pitch-400 text-on-accent" : "text-slate-400 hover:text-slate-200"
               }`}
             >
-              {s === "squad" ? "My squad" : "World"}
+              {s.label}
             </button>
           ))}
         </div>
@@ -192,6 +267,13 @@ export function Leaderboards({ userId }: { userId: string }) {
       ) : ranked.length === 0 ? (
         <p className="py-6 text-center text-sm text-slate-500">
           Nobody on this board yet{scope === "squad" ? " in your squad" : ""} — log a few days and it&apos;s yours.
+        </p>
+      ) : ranked.length < MIN_FIELD && scope !== "world" ? (
+        /* Said out loud rather than shown as a one-row ladder. "1st of 1" is
+           not an achievement and looks like a bug. */
+        <p className="py-6 text-center text-sm text-slate-500">
+          Only {ranked.length} {ranked.length === 1 ? "athlete" : "athletes"} here so far — not enough
+          for a ranking yet. Try World.
         </p>
       ) : (
         <>
@@ -327,4 +409,22 @@ function gapTo(ranked: Ranked[], myRank: number): string {
   if (!me || !above) return "";
   const gap = Math.round((above.value - me.value) * 10) / 10;
   return gap > 0 ? `${gap} behind ${ordinal(above.rank)}` : `level with ${ordinal(above.rank)}`;
+}
+
+
+/**
+ * "Centre back" → "Centre backs". Enough English for the position labels this
+ * app actually has, and no more.
+ *
+ * Deliberately not a general pluraliser. The positions come from
+ * lib/coach.ts and are a closed list — "Goalkeeper", "Winger", "Centre back",
+ * "Fly-half", "Point guard". A library for that would be a dependency to
+ * handle the words nobody here will ever type.
+ */
+function plural(position: string): string {
+  const p = position.trim();
+  if (!p) return p;
+  if (/(s|x|z|ch|sh)$/i.test(p)) return `${p}es`;
+  if (/[^aeiou]y$/i.test(p)) return `${p.slice(0, -1)}ies`;
+  return `${p}s`;
 }

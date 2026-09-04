@@ -1,6 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { BOARDS, rankBoard, placeOf, boardView, placeAbove, type AthleteStats } from "./leaderboard";
+import { readFileSync } from "node:fs";
+import {
+  BOARDS, rankBoard, placeOf, boardView, placeAbove, inScope, scopeReady, MIN_FIELD,
+  type AthleteStats,
+} from "./leaderboard";
 
 const athlete = (over: Partial<AthleteStats> & { userId: string; name: string }): AthleteStats => ({
   checkInsLast7: 0, avgSleep: null, sessionsLast7: 0, minutesLast7: 0,
@@ -169,4 +173,112 @@ test("the place above is found even when that rank does not exist", () => {
   assert.equal(above.rank, 1);
 
   assert.equal(placeAbove(ranked, 1), null, "nobody is above first");
+});
+
+// --- who you are ranked against ---------------------------------------------
+
+const member = (over: Partial<AthleteStats> & { userId: string }): AthleteStats => ({
+  name: over.userId, checkInsLast7: 5, avgSleep: 7, sessionsLast7: 3, minutesLast7: 180,
+  streak: 5, completedLast7: 2, xp: 100, level: 2, ...over,
+});
+
+const FIELD: AthleteStats[] = [
+  member({ userId: "me", sport: "football", position: "Centre back" }),
+  member({ userId: "b", sport: "football", position: "Centre back" }),
+  member({ userId: "c", sport: "football", position: "Striker" }),
+  member({ userId: "d", sport: "rugby", position: "Centre back" }),
+  member({ userId: "e", sport: null, position: null }),
+];
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * A GLOBAL BOARD IS A BOARD ALMOST NOBODY IS ON.
+ *
+ * One list for everybody means the same ten names every week. The whole value
+ * of a smaller field is that an ordinary athlete can be near the top of it —
+ * so the filter has to actually be the field, and the rank has to be computed
+ * over the field rather than sliced out of the world's.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("a scope narrows to people like you, taken from your own row", () => {
+  assert.deepEqual(inScope(FIELD, "sport", "me").map((a) => a.userId), ["me", "b", "c"]);
+  assert.deepEqual(inScope(FIELD, "position", "me").map((a) => a.userId), ["me", "b", "d"]);
+  assert.equal(inScope(FIELD, "world", "me").length, FIELD.length);
+  assert.equal(inScope(FIELD, "squad", "me").length, FIELD.length, "squad is filtered by the query, not here");
+});
+
+test("nobody is ranked against a field they are not in", () => {
+  // An athlete who never set a position gets an empty board, not everyone else's.
+  assert.deepEqual(inScope(FIELD, "position", "e"), []);
+  assert.deepEqual(inScope(FIELD, "sport", "e"), []);
+  // And a viewer who is not in the rows at all.
+  assert.deepEqual(inScope(FIELD, "sport", "nobody"), []);
+});
+
+/** "Centre back" and "centre back" are one position. A board that splits them
+ *  in two is worse than no board. */
+test("case and spacing do not fork a position into two boards", () => {
+  const messy = [
+    member({ userId: "me", position: "Centre back" }),
+    member({ userId: "b", position: "centre back" }),
+    member({ userId: "c", position: "  Centre Back " }),
+  ];
+  assert.equal(inScope(messy, "position", "me").length, 3);
+});
+
+test("the rank is computed over the field, not sliced out of the world's", () => {
+  const board = BOARDS.find((b) => b.id === "work")!;
+  const world = [
+    member({ userId: "x", minutesLast7: 900, sport: "rugby" }),
+    member({ userId: "y", minutesLast7: 800, sport: "rugby" }),
+    member({ userId: "me", minutesLast7: 100, sport: "football" }),
+    member({ userId: "b", minutesLast7: 50, sport: "football" }),
+    member({ userId: "c", minutesLast7: 10, sport: "football" }),
+  ];
+  assert.equal(rankBoard(board, world).find((r) => r.stats.userId === "me")!.rank, 3);
+  assert.equal(
+    rankBoard(board, inScope(world, "sport", "me")).find((r) => r.stats.userId === "me")!.rank, 1,
+    "top of your own sport must read as 1st, not as your position in the world list",
+  );
+});
+
+/** A tab that opens onto "nobody here" reads as broken, not as a fact about
+ *  how many other left-backs have signed up. */
+test("a scope is only offered when there is a field to rank against", () => {
+  assert.equal(scopeReady(FIELD, "sport", "me"), true, "three footballers is a board");
+  assert.equal(scopeReady(FIELD, "position", "me"), true);
+  assert.equal(scopeReady(FIELD, "sport", "c"), true);
+
+  const thin = FIELD.filter((a) => a.userId !== "c");
+  assert.equal(scopeReady(thin, "sport", "me"), false, `two is below MIN_FIELD (${MIN_FIELD})`);
+  assert.equal(scopeReady(thin, "world", "me"), true);
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * AND THE COMPONENT HAS TO ACTUALLY USE IT.
+ *
+ * Every rule above passes with `inScope` written, exported, tested and called
+ * by nobody — the mutation that swapped the component back to ranking the
+ * whole world went straight through a green suite. This is the same guard
+ * lib/xp-publish.test.ts keeps over the badge, for the same reason: a pure
+ * function is only as good as the one line that reaches for it.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("the board ranks the field it is showing", () => {
+  const src = readFileSync(new URL("../components/Leaderboards.tsx", import.meta.url), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, " ")
+    .replace(/^\s*\/\/.*$/gm, " ");
+
+  assert.match(src, /inScope\(athletes, scope, userId\)/,
+    "the field is not narrowed to the selected scope");
+  assert.match(src, /rankBoard\(board, field\)/,
+    "the rows are ranked against the world and then filtered, so the best centre back is 47th");
+  assert.ok(!/rankBoard\(board, athletes\)/.test(src),
+    "the displayed board is ranked over every athlete, not the field on screen");
+  // The XP ladder behind the rank badge is the one thing that MUST stay global.
+  assert.match(src, /rankBoard\(BOARDS\.find\(\(b\) => b\.id === "xp"\)!, athletes\)/,
+    "standing is being computed over the filtered field — top of the centre backs is not no. 1 in the world");
+  assert.match(src, /scopeReady\(athletes, "position", userId\)/,
+    "a scope tab is offered without checking there is anybody on it");
 });

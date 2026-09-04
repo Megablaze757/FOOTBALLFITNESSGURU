@@ -377,7 +377,12 @@ export default function RewardsPage() {
    */
   useEffect(() => {
     if (!data) return;
-    void publishXp(createClient() as unknown as XpWriter, user.id, data.xp);
+    // The streak rides along in the same write — the board counted it the
+    // strict old way and disagreed with Home. See lib/xp-publish.ts.
+    void publishXp(createClient() as unknown as XpWriter, user.id, {
+      xp: data.xp,
+      streak: data.streakNow.streak,
+    });
   }, [data, user.id]);
 
   if (loading || !data) return <div className="card mx-auto max-w-2xl h-96 animate-pulse" />;

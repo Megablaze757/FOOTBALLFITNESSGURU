@@ -1,12 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { publishXp, shouldPublish, type PublishedStore, type XpWriter } from "./xp-publish";
+import { publishXp, shouldPublish, type PublishedStats, type PublishedStore, type XpWriter } from "./xp-publish";
 
 /** localStorage does not exist here, so the memory is injected. */
 const memoryStore = (): PublishedStore => {
-  const seen = new Map<string, number>();
-  return { get: (id) => seen.get(id) ?? null, set: (id, xp) => { seen.set(id, xp); } };
+  const seen = new Map<string, PublishedStats>();
+  return { get: (id) => seen.get(id) ?? null, set: (id, stats) => { seen.set(id, stats); } };
 };
 
 const strip = (src: string) => src
@@ -74,36 +74,55 @@ test("publishing writes once, then only when the number moves", async () => {
   const { client, writes } = fakeClient();
   const store = memoryStore();
 
-  assert.equal(await publishXp(client, "a", 4820, store), true, "the first publish should write");
-  assert.deepEqual(writes, [{ xp: 4820 }]);
+  assert.equal(await publishXp(client, "a", { xp: 4820, streak: 12 }, store), true, "the first publish should write");
+  assert.deepEqual(writes, [{ xp: 4820, streak: 12 }]);
 
-  assert.equal(await publishXp(client, "a", 4820, store), false, "an unchanged total should not write again");
+  assert.equal(await publishXp(client, "a", { xp: 4820, streak: 12 }, store), false, "an unchanged total should not write again");
   assert.equal(writes.length, 1);
 
-  assert.equal(await publishXp(client, "a", 4835, store), true);
-  assert.deepEqual(writes[1], { xp: 4835 });
+  assert.equal(await publishXp(client, "a", { xp: 4835, streak: 12 }, store), true);
+  assert.deepEqual(writes[1], { xp: 4835, streak: 12 });
+
+  // THE STREAK ON ITS OWN IS ENOUGH TO WRITE. A day where somebody checked in
+  // and did nothing else moves the streak and not the XP, and that is exactly
+  // the day the board would otherwise be behind by.
+  assert.equal(await publishXp(client, "a", { xp: 4835, streak: 13 }, store), true);
+  assert.deepEqual(writes[2], { xp: 4835, streak: 13 });
 
   // A different athlete on the same device is a different memory.
-  assert.equal(await publishXp(client, "b", 4820, store), true);
+  assert.equal(await publishXp(client, "b", { xp: 4820, streak: 1 }, store), true);
 });
 
 test("a value the column would reject is never sent", async () => {
   const { client, writes } = fakeClient();
   for (const bad of [-1, Number.NaN, Number.POSITIVE_INFINITY]) {
-    assert.equal(await publishXp(client, `bad-${bad}`, bad, memoryStore()), false, `${bad} was published`);
+    assert.equal(await publishXp(client, `bad-${bad}`, { xp: bad, streak: 3 }, memoryStore()), false, `xp ${bad} was published`);
+    assert.equal(await publishXp(client, `bads-${bad}`, { xp: 10, streak: bad }, memoryStore()), false, `streak ${bad} was published`);
   }
   assert.deepEqual(writes, [], "a rejected write is a console error on a screen somebody is looking at");
-  assert.equal(shouldPublish(0, null), true, "zero XP is a real value and must publish");
+  assert.equal(shouldPublish({ xp: 0, streak: 0 }, null), true, "zero is a real value and must publish");
+});
+
+/**
+ * The key held a bare number before the streak went in, and real browsers
+ * still hold one. Reading it as corrupt would look harmless — the next publish
+ * is unconditional either way — but it would throw away a known XP and make
+ * every returning athlete write again for nothing.
+ */
+test("the old single-number memory still means what it said", () => {
+  assert.equal(shouldPublish({ xp: 4820, streak: 12 }, { xp: 4820, streak: Number.NaN }), true,
+    "an unknown streak must publish — that is how it reaches the board at all");
+  assert.equal(shouldPublish({ xp: 4820, streak: 12 }, { xp: 4820, streak: 12 }), false);
 });
 
 test("a database without the column does not break the screen", async () => {
   const failing = {
     from: () => ({ update: () => ({ eq: async () => ({ error: { message: "column does not exist" } }) }) }),
   } as unknown as XpWriter;
-  assert.equal(await publishXp(failing, "someone", 100, memoryStore()), false);
+  assert.equal(await publishXp(failing, "someone", { xp: 100, streak: 2 }, memoryStore()), false);
 
   const throwing = { from: () => { throw new Error("offline"); } } as unknown as XpWriter;
-  assert.equal(await publishXp(throwing, "someone-else", 100, memoryStore()), false,
+  assert.equal(await publishXp(throwing, "someone-else", { xp: 100, streak: 2 }, memoryStore()), false,
     "an offline athlete must not see an error for a badge on somebody else's board");
 });
 

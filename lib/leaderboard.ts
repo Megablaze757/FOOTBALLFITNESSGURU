@@ -35,6 +35,10 @@ export interface AthleteStats {
   lifetimeXp?: number | null;
   xp: number;
   level: number;
+  /** Their sport, for the sport board. Null means they never said. */
+  sport?: string | null;
+  /** Their primary position, for the position board. */
+  position?: string | null;
 }
 
 export type BoardId = "consistent" | "sleep" | "work" | "streak" | "adherence" | "xp";
@@ -177,4 +181,76 @@ export function placeAbove(ranked: Ranked[], myRank: number): Ranked | null {
     if (!best || r.rank > best.rank) best = r;
   }
   return best;
+}
+
+
+// =============================================================================
+// WHO YOU ARE RANKED AGAINST.
+//
+// ═══════════════════════════════════════════════════════════════════════════
+// A GLOBAL BOARD IS A BOARD ALMOST NOBODY IS ON.
+//
+// One list for everybody means the same ten names every week and ninety
+// percent of people looking at strangers they will never catch. A board only
+// motivates the people who can imagine being near the top of it, so the useful
+// boards are the small ones: other centre backs, other footballers.
+//
+// Nothing here is fetched separately. The same rows serve every scope, so
+// switching is instant and costs no round trip — the filter is the whole
+// feature.
+// ═══════════════════════════════════════════════════════════════════════════
+// =============================================================================
+
+export type ScopeId = "world" | "squad" | "sport" | "position";
+
+export interface Scope {
+  id: ScopeId;
+  label: string;
+  /** What it says when it is the only person on it. */
+  lonely: string;
+}
+
+/**
+ * How many others it takes before a board is a board.
+ *
+ * Two. "You are 1st of 1" is not an achievement and reads as a bug; at three
+ * there is somebody above or below you, which is the only thing a rank can
+ * tell you.
+ */
+export const MIN_FIELD = 3;
+
+/**
+ * Narrow the field, using the viewer's own row as the yardstick.
+ *
+ * TAKEN FROM THE VIEWER'S ROW, not from a profile passed in beside it. The
+ * board and the filter then cannot disagree about what sport somebody plays:
+ * there is one source, and it is the same row everyone else is compared to.
+ *
+ * Case- and space-insensitive, because "Centre back" and "centre back" are one
+ * position and a board that splits them in two is worse than no board.
+ */
+export function inScope(athletes: AthleteStats[], scope: ScopeId, userId: string): AthleteStats[] {
+  if (scope === "world" || scope === "squad") return athletes;
+  const me = athletes.find((a) => a.userId === userId);
+  const key = (a: AthleteStats) => (scope === "sport" ? a.sport : a.position);
+  const mine = norm(me ? key(me) : null);
+  // Nobody can be ranked against a field they are not in. An athlete who has
+  // not set a position gets an empty board, not everybody else's.
+  if (!mine) return [];
+  return athletes.filter((a) => norm(key(a)) === mine);
+}
+
+function norm(v: string | null | undefined): string {
+  return (v ?? "").trim().toLowerCase();
+}
+
+/**
+ * Whether a scope is worth offering at all.
+ *
+ * A tab that opens onto "nobody here" is worse than a tab that is not there:
+ * the athlete reads it as the feature being broken rather than as a fact about
+ * how many other left-backs have signed up.
+ */
+export function scopeReady(athletes: AthleteStats[], scope: ScopeId, userId: string): boolean {
+  return inScope(athletes, scope, userId).length >= MIN_FIELD;
 }
