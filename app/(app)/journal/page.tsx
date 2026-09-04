@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/lib/auth";
 import { useAsync } from "@/lib/use-async";
@@ -20,6 +20,8 @@ import type { TrainingState } from "@/components/TrainingLogInput";
 import { biometricSignal, type Biometric } from "@/lib/biometrics";
 import type { CheckInInput, TrainingDrill, TrainingLog } from "@/lib/types";
 import { todayLocal, daysAgoLocal } from "@/lib/day";
+import { loadDraft } from "@/lib/drafts";
+import { TRAINING_ANCHORS, guideTo } from "@/lib/restore-focus";
 import { measuredTrainingFields } from "@/lib/exercise-measure";
 
 export default function JournalPage() {
@@ -206,6 +208,38 @@ export default function JournalPage() {
     };
   }, [user.id], `journal:${user.id}`);
 
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * COMING BACK TO FINISH AN EVENING'S SESSION.
+   *
+   * Reported as "when i reclick on the log to restor it should auto reguide me
+   * to restore button rather to middle of oage".
+   *
+   * Check in at 7am, train at 8pm, get three drills in and put the phone down.
+   * The draft is on the device — but this page has a saved check-in, so it
+   * renders the done card and the form that owns the restore banner is not
+   * mounted at all. NOTHING on screen said the evening's work still existed.
+   * The only route to it was to tap "Add today's training", which mounted the
+   * form and scrolled straight past the banner to the training section.
+   *
+   * So the page opens the form itself and goes to the banner. Opening it is
+   * safe in a way that restoring silently would not be: with a check-in
+   * present the form OFFERS the draft rather than applying it, so nothing
+   * saved is touched, and Discard is right there next to Restore.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  const autoGuided = useRef(false);
+  const hasCheckIn = !!data?.existing;
+  useEffect(() => {
+    if (loading || autoGuided.current || !hasCheckIn) return;
+    // No check-in means the form is already on screen and applies the draft by
+    // itself — there is no banner to guide to and nothing to decide.
+    if (!loadDraft("checkin", user.id, today)) return;
+    autoGuided.current = true;
+    setEditing(true);
+    return guideTo([]);
+  }, [loading, hasCheckIn, user.id, today]);
+
   if (loading) {
     return (
       <div className="space-y-4">
@@ -285,10 +319,11 @@ export default function JournalPage() {
           onAddTraining={() => {
             setEditing(true);
             // The form mounts in the same tick, so the scroll has to wait for
-            // it to exist. Without the deferral this silently does nothing.
-            requestAnimationFrame(() =>
-              document.getElementById("training")?.scrollIntoView({ behavior: "smooth", block: "start" })
-            );
+            // it to exist. Without the deferral this silently does nothing —
+            // and it waits for the RIGHT one: an unfinished draft outranks the
+            // training section, because restoring it afterwards would replace
+            // whatever was typed here first. See lib/restore-focus.ts.
+            guideTo(TRAINING_ANCHORS);
           }}
         />
       )}

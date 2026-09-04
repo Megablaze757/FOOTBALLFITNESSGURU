@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { TRAINING_ANCHORS } from "./restore-focus";
 
 /**
  * One name for the thing you do every morning.
@@ -124,9 +125,15 @@ test("there is a route straight to the training section", () => {
   const form = readFileSync(new URL("../components/JournalForm.tsx", import.meta.url), "utf8");
   assert.match(form, /get\("log"\) !== "training"/, "the ?log=training deep link is gone");
   assert.match(form, /setLogTraining\(true\)/, "the deep link no longer opens the section");
-  assert.match(form, /scrollIntoView/,
-    "opening a section below the fold looks identical to nothing happening");
-  assert.match(form, /ref=\{trainingRef\}/, "there is nothing for it to scroll to");
+  // Moved, not scrolled-to directly: an unfinished draft outranks the section
+  // (lib/restore-focus.ts), because restoring one after typing here would
+  // replace what was just typed. The property is that the view MOVES —
+  // opening a section below the fold looks identical to nothing happening.
+  assert.match(form, /guideTo\(TRAINING_ANCHORS\)/,
+    "the deep link opens the section and leaves the view where it was");
+  for (const id of TRAINING_ANCHORS) {
+    assert.ok(form.includes(`id="${id}"`), `nothing carries the ${id} anchor to scroll to`);
+  }
 });
 
 test("the screens people look on say a program is not required", () => {

@@ -18,6 +18,7 @@ import { enqueue, browserStore, queueCount } from "@/lib/offline-queue";
 import { track } from "@/lib/funnel";
 import { useCurrentUser } from "@/lib/auth";
 import { saveDraft, loadDraft, clearDraft, draftAge, describeAge, checkInIsDirty } from "@/lib/drafts";
+import { RESTORE_ANCHOR, RESTORE_BUTTON_ATTR, TRAINING_ANCHORS, guideTo } from "@/lib/restore-focus";
 
 /**
  * What a half-finished check-in looks like on disk.
@@ -213,15 +214,15 @@ export function JournalForm({ initial, initialTraining, sport, distanceUnit = "k
    * fold looks identical to nothing happening.
    * ═══════════════════════════════════════════════════════════════════════
    */
-  const trainingRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (new URLSearchParams(window.location.search).get("log") !== "training") return;
     setLogTraining(true);
-    // After paint, or the section it is scrolling to does not exist yet.
-    const id = window.requestAnimationFrame(() =>
-      trainingRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
-    return () => window.cancelAnimationFrame(id);
+    // Not straight to the training row: an unfinished draft outranks it, and
+    // restoring one AFTER typing here would replace what was just typed. See
+    // lib/restore-focus.ts — it also waits out the frame where the banner has
+    // not mounted yet, which is the frame this effect runs on.
+    return guideTo(TRAINING_ANCHORS);
   }, []);
 
   /**
@@ -639,11 +640,15 @@ export function JournalForm({ initial, initialTraining, sport, distanceUnit = "k
           Restoring it silently would be the opposite mistake — overwriting what
           is actually stored — so it is one tap, and it says how old it is. */}
       {pendingDraft && (
-        <div className="flex items-center justify-between gap-3 rounded-2xl border border-pitch-400/30 bg-pitch-400/[0.06] px-4 py-3 text-sm text-slate-200">
+        <div
+          id={RESTORE_ANCHOR}
+          className="flex scroll-mt-20 items-center justify-between gap-3 rounded-2xl border border-pitch-400/30 bg-pitch-400/[0.06] px-4 py-3 text-sm text-slate-200"
+        >
           <span>📝 You have unfinished changes from {restored}.</span>
           <div className="flex shrink-0 items-center gap-2">
             <button
               type="button"
+              {...{ [RESTORE_BUTTON_ATTR]: "" }}
               onClick={() => { applyDraft(pendingDraft); setPendingDraft(null); }}
               className="chip text-accent-400 hover:bg-white/[0.08]"
             >
@@ -820,8 +825,11 @@ export function JournalForm({ initial, initialTraining, sport, distanceUnit = "k
             }}
           />
 
-          {/* The anchor `?log=training` scrolls to. */}
-          <div ref={trainingRef} />
+          {/* The anchor `?log=training` scrolls to. Named rather than a ref
+              because the scroll now CHOOSES between this and the restore
+              banner, and a chooser needs both candidates addressed the same
+              way — see lib/restore-focus.ts. */}
+          <div id="log-training" className="scroll-mt-20" />
           {training.session_type !== "rest_day" && (!logTraining ? (
             <button
               type="button"
