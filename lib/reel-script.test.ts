@@ -173,4 +173,20 @@ test("the recorder films the screen and can carry a voice", () => {
     "it is not choosing a container the platforms accept");
   assert.match(src, /inspectRecording\(head\)/, "nothing checks what actually came out");
   assert.match(src, /isPostable\(info\)/, "the check runs and its answer is thrown away");
+
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * iOS HAS NO getDisplayMedia, AND THE BUTTON WAS OFFERED ANYWAY.
+   *
+   * Tapped on an iPhone it threw "navigator.mediaDevices.getDisplayMedia is
+   * not a function" into the page. Safari on iOS does not implement screen
+   * capture for web pages at all — no flag, no permission — so the capability
+   * has to be absent from the UI rather than discovered by pressing it.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  assert.match(src, /typeof navigator\.mediaDevices\?\.getDisplayMedia === "function"/,
+    "nothing checks whether this browser can record before offering to");
+  assert.match(src, /canRecord === false \?/, "the button is offered on a browser that cannot record");
+  assert.match(src, /Control Centre/,
+    "it says it cannot record and does not say what to do instead — iOS records the screen fine");
 });

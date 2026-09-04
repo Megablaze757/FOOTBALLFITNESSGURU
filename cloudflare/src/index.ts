@@ -512,7 +512,7 @@ function overBudget(state: BudgetState): Response {
 // nobody is watching a spinner and the budget can be what the work actually
 // needs. Callers pass their own client-side timeout to match.
 // Bump on every paste into the Cloudflare dashboard. GET /health reports it.
-const WORKER_VERSION = "2026-09-04.1";
+const WORKER_VERSION = "2026-09-04.2";
 
 const CHAIN_BUDGET_MS = 55_000;
 /**
@@ -2249,6 +2249,24 @@ async function draftExercise(req: Request, env: Env): Promise<Response> {
   const { text, model } = await meteredComplete(env, u.id, {
     ...BACK_OFFICE_AI,
     system: sys,
+    /**
+     * ═══════════════════════════════════════════════════════════════════════
+     * THE SUBMISSION WAS NEVER SENT.
+     *
+     * This object had `system` and `validate` and no `user` at all — so the
+     * model was asked to draft an exercise and never told WHICH exercise. It
+     * answered from the system prompt alone, which is why the drafting produced
+     * plausible nonsense unrelated to the name typed in.
+     *
+     * It is a type error too, and one that has been failing the Deploy API
+     * Worker job on every push. It never failed a build: cloudflare/ has its
+     * own tsconfig and is not covered by the root `tsc`, and the bundle is made
+     * by esbuild, which does not typecheck. So the only thing that ever noticed
+     * was a CI job whose red X had become part of the scenery.
+     * ═══════════════════════════════════════════════════════════════════════
+     */
+    user,
+    maxTokens: 900,
     validate: (t) => {
       try {
         const p = JSON.parse(t) as { cues?: unknown; description?: unknown; error?: unknown };
@@ -2617,6 +2635,67 @@ async function stripeSubIdFor(env: Env, userId: string): Promise<string | null> 
 }
 
 /**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * EVERY SUBSCRIPTION THAT IS STILL BILLING THEM — ASKED OF STRIPE.
+ *
+ * Reported as "I cancelled and I am still being charged", which is the worst
+ * class of bug this product can have: money leaving a real person's account
+ * after they told us to stop.
+ *
+ * THE CAUSE IS THE SHAPE OF OUR OWN TABLE. `subscriptions` holds ONE row per
+ * user — upsertSub writes with on_conflict=user_id — and stripeSubIdFor reads
+ * that single row. So if a customer ever ends up with two live subscriptions in
+ * Stripe (subscribed twice, a checkout completed after an earlier one, a card
+ * retried into a second), the second upsert OVERWRITES the first. From that
+ * moment the app can see exactly one of them, cancel touches exactly that one,
+ * and the other bills every month forever with nothing in the product able to
+ * see it, show it or stop it.
+ *
+ * So the cancel path stops trusting our cache. Stripe is the system of record
+ * for what is billing; the table is a convenience that provably drifts. This
+ * asks Stripe for everything live on the customer and hands back all of it.
+ *
+ * `status=all` rather than `active`, filtered here: a subscription that is
+ * `trialing`, `past_due` or `unpaid` is still going to charge them, and only
+ * `canceled`, `incomplete_expired` and an already-ending one are safe to skip.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+const STILL_BILLING = ["active", "trialing", "past_due", "unpaid", "incomplete"];
+
+async function liveSubscriptionsFor(env: Env, userId: string): Promise<{ id: string; status: string }[]> {
+  const rows = (await (await supa(env,
+    `subscriptions?user_id=eq.${userId}&select=stripe_subscription_id,stripe_customer_id`)).json()) as
+    { stripe_subscription_id: string | null; stripe_customer_id: string | null }[] | null;
+
+  const known = rows?.[0]?.stripe_subscription_id ?? null;
+  const customer = rows?.[0]?.stripe_customer_id ?? null;
+
+  // No customer on file: the one id we hold is all there is to go on. Better
+  // than refusing — it is what the old code did, and it is right when there
+  // genuinely is only one.
+  if (!customer) return known ? [{ id: known, status: "unknown" }] : [];
+
+  try {
+    const list = await stripe(env, `subscriptions?customer=${encodeURIComponent(customer)}&status=all&limit=100`);
+    const live = ((list?.data ?? []) as { id: string; status: string; cancel_at_period_end?: boolean }[])
+      .filter((sub) => STILL_BILLING.includes(sub.status) && !sub.cancel_at_period_end)
+      .map((sub) => ({ id: sub.id, status: sub.status }));
+    // Never come back with less than we already knew about. A listing that
+    // silently returned nothing would turn "cancel" into a no-op that reports
+    // success, which is the same bug wearing a different hat.
+    if (known && !live.some((sub) => sub.id === known)) {
+      const stillOpen = ((list?.data ?? []) as { id: string; cancel_at_period_end?: boolean }[])
+        .find((sub) => sub.id === known && !sub.cancel_at_period_end);
+      if (stillOpen) live.push({ id: known, status: "unknown" });
+    }
+    return live;
+  } catch (e) {
+    console.error(`could not list subscriptions for ${customer}: ${String(e)}`);
+    return known ? [{ id: known, status: "unknown" }] : [];
+  }
+}
+
+/**
  * Cancel at the end of the paid period.
  *
  * Not immediately: they paid for the month, so they keep the month. It also
@@ -2631,18 +2710,47 @@ async function cancelSubscription(req: Request, env: Env): Promise<Response> {
 
   const { reason, detail } = (await req.json().catch(() => ({}))) as { reason?: string; detail?: string };
 
-  const subId = await stripeSubIdFor(env, user.id);
-  if (!subId) return json({ error: "no-billing-account" }, 404);
+  /**
+   * ALL of them, not the one our table happens to hold. See
+   * liveSubscriptionsFor — a customer with two live subscriptions had one
+   * cancelled and the other billing them every month, invisibly.
+   */
+  const live = await liveSubscriptionsFor(env, user.id);
+  if (live.length === 0) return json({ error: "no-billing-account" }, 404);
 
-  const sub = await stripe(env, `subscriptions/${subId}`, { cancel_at_period_end: "true" });
+  const cancelled: { id: string; endsAt: string | null }[] = [];
+  const failed: string[] = [];
+  for (const sub of live) {
+    try {
+      const updated = await stripe(env, `subscriptions/${sub.id}`, { cancel_at_period_end: "true" });
+      cancelled.push({
+        id: sub.id,
+        endsAt: updated.current_period_end ? new Date(updated.current_period_end * 1000).toISOString() : null,
+      });
+      await upsertSub(env, updated);
+    } catch (e) {
+      // One that would not cancel is the whole reason they are here. Named in
+      // the response rather than swallowed, because "ok: true" on a
+      // subscription that is still billing is how this happened.
+      console.error(`cancel failed for ${sub.id}: ${String(e)}`);
+      failed.push(sub.id);
+    }
+  }
+
   await recordCancellationFeedback(env, user.id, reason, detail, "cancelled");
-  // Write it through rather than waiting on the webhook: the athlete is looking
-  // at the screen now, and "cancelled" needs to be true when it repaints.
-  await upsertSub(env, sub);
+
+  if (cancelled.length === 0) {
+    return json({ error: "Stripe would not cancel that subscription. Nothing has changed — contact support." }, 502);
+  }
 
   return json({
     ok: true,
-    endsAt: sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : null,
+    // The soonest one to end, because that is the date the athlete is owed.
+    endsAt: cancelled.map((c) => c.endsAt).filter(Boolean).sort()[0] ?? null,
+    cancelled: cancelled.length,
+    // Present ONLY when something is still live. The screen must not say
+    // "cancelled" while a second subscription is still going to charge them.
+    ...(failed.length ? { stillBilling: failed.length } : {}),
   });
 }
 

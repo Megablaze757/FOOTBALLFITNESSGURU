@@ -47,6 +47,32 @@ export function ReelRecorder() {
   const tracks = useRef<MediaStreamTrack[]>([]);
   const started = useRef(0);
 
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * iOS CANNOT DO THIS AT ALL, AND SAYING SO BEFOREHAND IS THE FEATURE.
+   *
+   * `navigator.mediaDevices.getDisplayMedia is not a function` — which is what
+   * an iPhone gives you, because Safari on iOS does not implement screen
+   * capture from a web page for any origin, secure or not. There is no flag and
+   * no permission to grant.
+   *
+   * Shipped without this check, the button looked available, was tapped, and
+   * threw a stack trace at somebody. A capability that does not exist has to be
+   * absent from the UI, not discovered by pressing it — and the message has to
+   * name the way out, because there is one: iOS records the screen perfectly
+   * well from Control Centre, and the shot list below is the whole value of
+   * this screen anyway.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  const [canRecord, setCanRecord] = useState<boolean | null>(null);
+  useEffect(() => {
+    setCanRecord(
+      typeof navigator !== "undefined"
+      && typeof navigator.mediaDevices?.getDisplayMedia === "function"
+      && typeof MediaRecorder !== "undefined",
+    );
+  }, []);
+
   const script = reelScript(scriptId);
   const problems = script ? scriptProblems(script) : [];
   const beat = script ? currentBeat(script, elapsed) : null;
@@ -73,6 +99,12 @@ export function ReelRecorder() {
     if (!script) return;
     setError(null);
     setResult(null);
+
+    if (typeof navigator.mediaDevices?.getDisplayMedia !== "function") {
+      setError("This browser cannot record the screen. Use Chrome or Edge on a computer, "
+        + "or record from Control Centre on iOS and follow the shot list.");
+      return;
+    }
 
     const mime = pickMimeType((t) => MediaRecorder.isTypeSupported(t));
     if (!mime) {
@@ -223,13 +255,30 @@ export function ReelRecorder() {
           </ul>
         )}
 
-        <div className="flex flex-wrap gap-2">
-          {state !== "recording" ? (
-            <button onClick={start} className="btn-primary">Share a tab and record</button>
-          ) : (
-            <button onClick={stop} className="btn-primary">Stop ({Math.round(elapsed / 1000)}s)</button>
-          )}
-        </div>
+        {canRecord === false ? (
+          /* The shot list still works, and on a phone it is arguably the better
+             half: iOS records the screen from Control Centre with the mic on,
+             which produces exactly the footage this was for. */
+          <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4 text-sm text-slate-300">
+            <p className="font-semibold text-slate-100">This browser cannot record the screen.</p>
+            <p className="mt-1 text-slate-400">
+              Safari on iOS has no screen capture for web pages — there is no setting that turns it
+              on. Record from <b>Control Centre</b> instead (long-press the record button to switch
+              the microphone on), and follow the shot list below as you go. On a computer, Chrome or
+              Edge will record from here.
+            </p>
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {state !== "recording" ? (
+              <button onClick={start} disabled={canRecord === null} className="btn-primary">
+                Share a tab and record
+              </button>
+            ) : (
+              <button onClick={stop} className="btn-primary">Stop ({Math.round(elapsed / 1000)}s)</button>
+            )}
+          </div>
+        )}
         {error && <p className="text-sm text-readiness-yellow">{error}</p>}
       </div>
 

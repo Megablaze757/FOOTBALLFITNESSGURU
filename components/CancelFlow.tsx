@@ -85,9 +85,32 @@ export function CancelFlow({ onClose, onChanged }: { onClose: () => void; onChan
     setBusy(true);
     setError(null);
     try {
-      const res = await invokeAI<{ endsAt?: string }>("cancel-subscription", {
+      const res = await invokeAI<{ endsAt?: string; stillBilling?: number }>("cancel-subscription", {
         reason: reason?.id, detail: detail.trim() || undefined,
       });
+      /**
+       * ═══════════════════════════════════════════════════════════════════
+       * NEVER SAY "CANCELLED" WHILE SOMETHING IS STILL BILLING THEM.
+       *
+       * Reported as "I cancelled and I am still being charged". A customer can
+       * end up with two live subscriptions in Stripe, our table holds one row
+       * per user, and the second one billed every month with the app showing a
+       * cheerful confirmation over the top of it.
+       *
+       * The endpoint now cancels every live one and reports any it could not.
+       * A partial result has to read as a problem, because the athlete's next
+       * move — believing it and closing the app — is the expensive one.
+       * ═══════════════════════════════════════════════════════════════════
+       */
+      if (res?.stillBilling) {
+        setError(
+          `${res.stillBilling} other subscription${res.stillBilling === 1 ? "" : "s"} on your account could not `
+          + "be cancelled, so you may still be charged. Nothing else has changed — please contact support "
+          + "and we will stop it by hand.",
+        );
+        setBusy(false);
+        return;
+      }
       setEndsAt(res?.endsAt ?? null);
       setPhase("done-cancel");
       recordChanged("everything");

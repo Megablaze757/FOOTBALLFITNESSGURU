@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { athleteShareLink, buildShareSvg, displayLink, SHARE_FALLBACK_LINK, type ShareStats } from "./share-card";
 
 const base: ShareStats = {
@@ -94,4 +95,107 @@ test("the link on the card is the link in the share text", () => {
 test("a link is never a shape the database would not match", () => {
   assert.equal(athleteShareLink("SAM", true), "pocketathlete.com/a/sam");
   assert.equal(athleteShareLink(" Sam ", false), "pocketathlete.com/?ref=sam");
+});
+
+
+// --- the card that would not build -------------------------------------------
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * "SHARE MY PROGRESS WORKS FOR SOME OF THE STUFF."
+ *
+ * That is what a silent failure looks like from outside. The SVG is handed to
+ * an <img> as a data: URL, and XML parsing is all-or-nothing: one character
+ * XML 1.0 forbids, or one `undefined` reaching `.replace`, and the image never
+ * decodes. exportShareCard rejected, ShareButton had try/finally and no catch,
+ * so the label stopped saying "Creating…" and nothing else happened at all.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+function wellFormed(svg: string): void {
+  assert.ok(svg.startsWith("<svg "), "not an svg");
+  assert.ok(svg.trimEnd().endsWith("</svg>"), "unterminated");
+  const stray = svg.replace(/&(amp|lt|gt|quot|apos|#\d+);/g, "");
+  assert.ok(!stray.includes("&"), "an unescaped ampersand — the parser stops there");
+  for (const attr of svg.matchAll(/="([^"]*)"/g)) {
+    assert.ok(!attr[1].includes("<"), `a < inside an attribute: ${attr[1]}`);
+  }
+  // eslint-disable-next-line no-control-regex
+  assert.ok(!/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(svg),
+    "a control character XML 1.0 forbids — there is no way to escape one, it just fails");
+}
+
+test("a card still builds when the data is not what the types promise", () => {
+  const hostile: ShareStats[] = [
+    { ...base, name: "Sam & Alex <script>" },
+    { ...base, headlineValue: '18 "sessions"' },
+    { ...base, caption: "It's 100% > last month & rising" },
+    // The ones that threw rather than rendering wrong.
+    { ...base, name: undefined as unknown as string },
+    { ...base, headlineLabel: undefined as unknown as string },
+    { ...base, stats: [{ label: undefined as unknown as string, value: "12" }] },
+    { ...base, stats: [{ label: "Reps", value: undefined as unknown as string }] },
+    // A name pasted out of a spreadsheet, control character and all.
+    { ...base, name: "Sam\u0001 Taylor" },
+    { ...base, headlineValue: "🥇 Gold" },
+  ];
+  for (const stats of hostile) {
+    const svg = buildShareSvg(stats);
+    wellFormed(svg);
+    assert.ok(svg.length > 500, "the card came out empty");
+    /**
+     * AND IT MUST NOT PRINT THE WORD.
+     *
+     * `String(s)` on an absent value is perfectly valid XML that renders
+     * "UNDEFINED" across somebody's progress card — well-formed, so the
+     * parse-level checks above pass it happily. A card that fails to build is a
+     * bug; a card that builds and says UNDEFINED gets posted.
+     */
+    assert.ok(!/>\s*(undefined|null|NaN)\s*</i.test(svg), `the card prints a placeholder: ${stats.name}`);
+  }
+});
+
+/** The escaping must not eat the content it is protecting. */
+test("escaping keeps the words, and the emoji", () => {
+  const svg = buildShareSvg({ ...base, name: "Sam & Alex", caption: "100% > before", headlineValue: "🥇" });
+  assert.ok(svg.includes("Sam &amp; Alex"));
+  assert.ok(svg.includes("100% &gt; before"));
+  assert.ok(svg.includes("🥇"), "an emoji is a perfectly legal character and must survive");
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * A CANCELLED SHARE IS NOT A FAILED ONE.
+ *
+ * Dismissing the share sheet used to drop a PNG in Downloads anyway — a file
+ * for the trouble of saying no thanks.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("the export says what it did, and a dismissal saves nothing", () => {
+  const src = readFileSync(new URL("./share-card.ts", import.meta.url), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, " ")
+    .replace(/^\s*\/\/.*$/gm, " ");
+
+  assert.match(src, /e\.name === "AbortError"\) return "cancelled"/,
+    "a dismissed share sheet still drops a file in Downloads");
+  assert.match(src, /Promise<ShareOutcome>/, "the caller cannot tell a cancel from a break");
+
+  /**
+   * The two mistakes that make a save silently not save: a detached anchor
+   * (Firefox ignores the click) and revoking the object URL on the next line
+   * (click only SCHEDULES the download, so revoking races it). Both fail with
+   * nothing thrown, which is why they survived.
+   */
+  assert.match(src, /document\.body\.appendChild\(a\)/, "the anchor is detached — Firefox ignores the click");
+  assert.match(src, /setTimeout\(\(\) => \{[\s\S]*?revokeObjectURL/,
+    "the object URL is revoked synchronously, which races the download it belongs to");
+});
+
+/** And the button has to show the failure it used to swallow. */
+test("the share button reports what happened", () => {
+  const src = readFileSync(new URL("../components/ShareButton.tsx", import.meta.url), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, " ")
+    .replace(/^\s*\/\/.*$/gm, " ");
+  assert.match(src, /catch \(e\)[\s\S]{0,140}?setNote\(/, "a failure is still silent");
+  assert.match(src, /Save image/, "there is no way to save without going through the share sheet");
+  assert.match(src, /saveBlob\(await shareCardPng/, "the save button does not build a card");
 });

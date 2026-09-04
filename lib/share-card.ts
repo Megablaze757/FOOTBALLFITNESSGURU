@@ -85,8 +85,47 @@ export function displayLink(link: string | undefined): string {
   return clean || SHARE_FALLBACK_LINK;
 }
 
-function esc(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE CARD IS AN SVG PARSED BY THE BROWSER, SO A BAD CHARACTER IS A BLANK
+ * SCREEN, NOT A WONKY LETTER.
+ *
+ * buildShareSvg's output is handed to an <img> as a data: URL. XML parsing is
+ * all-or-nothing: one character that XML 1.0 forbids and the image never
+ * decodes, exportShareCard rejects, and — before the change in ShareButton —
+ * the athlete saw the button say "Creating…", stop, and do nothing at all.
+ * Reported as sharing working "for some of the stuff".
+ *
+ * So three things rather than one:
+ *
+ *   COERCED. The type says string and the data does not always agree: a stat
+ *   built from an absent figure arrives as undefined, and `undefined.replace`
+ *   is a TypeError thrown from inside a template literal.
+ *
+ *   CONTROL CHARACTERS STRIPPED. XML 1.0 permits tab, newline and carriage
+ *   return and forbids every other character below 0x20 — including the ones a
+ *   copy-paste out of a spreadsheet leaves in a profile name. There is no way
+ *   to escape them; they have to go.
+ *
+ *   QUOTES ESCAPED TOO. Every interpolation today lands in element text, where
+ *   a quote is legal. The next one to land in an attribute would not be, and
+ *   the failure would be this same blank card.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+function esc(s: unknown): string {
+  return String(s ?? "")
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+/** Upper-cased without assuming there is anything there to upper-case. */
+function up(value: unknown): string {
+  return String(value ?? "").toUpperCase();
 }
 
 export function buildShareSvg(s: ShareStats): string {
@@ -98,7 +137,7 @@ export function buildShareSvg(s: ShareStats): string {
       const cx = colW * i + colW / 2;
       return `
         <text x="${cx}" y="820" text-anchor="middle" fill="#ffffff" font-size="72" font-weight="800" font-family="Arial, sans-serif">${esc(st.value)}</text>
-        <text x="${cx}" y="864" text-anchor="middle" fill="#8a94a6" font-size="26" font-weight="700" letter-spacing="2" font-family="Arial, sans-serif">${esc(st.label.toUpperCase())}</text>`;
+        <text x="${cx}" y="864" text-anchor="middle" fill="#8a94a6" font-size="26" font-weight="700" letter-spacing="2" font-family="Arial, sans-serif">${esc(up(st.label))}</text>`;
     })
     .join("");
 
@@ -120,7 +159,7 @@ export function buildShareSvg(s: ShareStats): string {
     <text x="1000" y="150" text-anchor="end" fill="#8a94a6" font-size="34" font-weight="600" font-family="Arial, sans-serif">${esc(s.name)}</text>
 
     <text x="540" y="470" text-anchor="middle" fill="url(#acc)" font-size="300" font-weight="800" font-family="Arial, sans-serif">${esc(s.headlineValue)}</text>
-    <text x="540" y="560" text-anchor="middle" fill="#c7d0dd" font-size="42" font-weight="700" letter-spacing="4" font-family="Arial, sans-serif">${esc(s.headlineLabel.toUpperCase())}</text>
+    <text x="540" y="560" text-anchor="middle" fill="#c7d0dd" font-size="42" font-weight="700" letter-spacing="4" font-family="Arial, sans-serif">${esc(up(s.headlineLabel))}</text>
 
     <line x1="80" y1="700" x2="1000" y2="700" stroke="rgba(255,255,255,0.08)" stroke-width="2"/>
     ${statCols}
@@ -144,12 +183,26 @@ async function svgToPngBlob(svg: string): Promise<Blob> {
   );
 }
 
-/** Share the card via the Web Share API when available, else download the PNG. */
-export async function exportShareCard(stats: ShareStats): Promise<void> {
-  const blob = await svgToPngBlob(buildShareSvg(stats));
-  const file = new File([blob], "apex-progress.png", { type: "image/png" });
+export type ShareOutcome = "shared" | "saved" | "cancelled";
 
-  const nav = navigator as Navigator & { canShare?: (d: { files: File[] }) => boolean; share?: (d: unknown) => Promise<void> };
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * WHAT ACTUALLY HAPPENED, RETURNED — BECAUSE THE BUTTON HAS TO SAY.
+ *
+ * This returned void, so every failure was silent: the button said
+ * "Creating…", stopped, and did nothing. There was no way for an athlete to
+ * tell a cancelled share from a broken one, and no way for anybody to report
+ * it beyond "it doesn't work for some of the stuff".
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export async function exportShareCard(stats: ShareStats): Promise<ShareOutcome> {
+  const blob = await svgToPngBlob(buildShareSvg(stats));
+  const file = new File([blob], SHARE_FILENAME, { type: "image/png" });
+
+  const nav = navigator as Navigator & {
+    canShare?: (d: { files: File[] }) => boolean;
+    share?: (d: unknown) => Promise<void>;
+  };
   if (nav.canShare?.({ files: [file] }) && nav.share) {
     try {
       // The link in the TEXT as well as on the card. A shared image with no
@@ -160,15 +213,59 @@ export async function exportShareCard(stats: ShareStats): Promise<void> {
         title: "My progress",
         text: `${stats.headlineValue} ${stats.headlineLabel} — ${displayLink(stats.link)}`,
       });
-      return;
-    } catch {
-      /* user cancelled — fall through to download */
+      return "shared";
+    } catch (e) {
+      /**
+       * A CANCELLED SHARE IS NOT A FAILED ONE, and this used to treat them
+       * identically: dismiss the share sheet and a PNG appeared in Downloads
+       * anyway. Somebody who just said "no thanks" got a file for their
+       * trouble.
+       *
+       * AbortError is what every implementation raises on dismissal. Anything
+       * else genuinely went wrong, and falling through to a download is then
+       * the right answer rather than an imposition.
+       */
+      if (e instanceof Error && e.name === "AbortError") return "cancelled";
     }
   }
+
+  saveBlob(blob, SHARE_FILENAME);
+  return "saved";
+}
+
+export const SHARE_FILENAME = "pocketathlete-progress.png";
+
+/** The card as a PNG, for a caller that wants to show it before sending it. */
+export async function shareCardPng(stats: ShareStats): Promise<Blob> {
+  return svgToPngBlob(buildShareSvg(stats));
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * SAVING A BLOB, WITH THE TWO MISTAKES THAT MAKE IT SILENTLY NOT SAVE.
+ *
+ *   THE ANCHOR HAS TO BE IN THE DOCUMENT. Firefox ignores a click on a
+ *   detached one, so the download simply does not start and nothing is
+ *   thrown.
+ *
+ *   THE OBJECT URL MUST OUTLIVE THE CLICK. This revoked it on the very next
+ *   line. `click()` only SCHEDULES the download, so revoking synchronously
+ *   races it — which is why a save could work on one machine and do nothing
+ *   on another, with no error either way. Revoked on a later turn of the
+ *   event loop instead, which is late enough for the download to have taken
+ *   the reference and soon enough not to leak.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export function saveBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = "apex-progress.png";
+  a.download = filename;
+  a.style.display = "none";
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(url);
+  setTimeout(() => {
+    a.remove();
+    URL.revokeObjectURL(url);
+  }, 30_000);
 }

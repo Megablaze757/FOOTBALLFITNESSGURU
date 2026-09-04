@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && npm --prefix cloudflare run typecheck",
     "build:worker": "esbuild cloudflare/src/index.ts --bundle --format=esm --target=es2022 --platform=neutral --outfile=../worker-paste-me.js",
     "build:theme": "node --import tsx scripts/build-theme-css.mts",
     "shots": "node --import tsx scripts/screenshot-themes.mts",
