@@ -10,6 +10,7 @@ import { FACT_GROUPS, PILLARS, LAUNCH_SEQUENCE, CHANNELS, NEVER_CLAIM, allFacts 
 import { guideSports, sportLabel } from "@/lib/seo";
 import { plannedPosts, type PlannedPost } from "@/lib/post-plan";
 import { postTriggers, type Trigger } from "@/lib/post-triggers";
+import { reelHref, reelKindFor } from "@/lib/reel-link";
 import { nearMisses, gapSummary } from "@/lib/content-gaps";
 import { invokeAI } from "@/lib/api";
 import type { SportId } from "@/lib/exercises";
@@ -727,13 +728,29 @@ function ScheduleTab() {
                 </a>
               )}
             </div>
-            <button
-              onClick={() => draft(post)}
-              disabled={busy !== null}
-              className="tap-target shrink-0 rounded-xl border border-white/10 px-3 py-2 text-xs font-semibold text-slate-300"
-            >
-              {busy === post.date ? "Writing…" : drafts[post.date] ? "Redraft" : "Draft"}
-            </button>
+            <span className="flex shrink-0 flex-wrap gap-2">
+              {/* THE PLAN AND THE THING THAT MAKES IT, JOINED UP.
+                  The row already knows the subject and the asset; finding it in
+                  the studio below meant scrolling, choosing the kind and
+                  retyping the name. Only offered where a reel is honestly the
+                  asset — "Text only" is a caption, and a link to a picker with
+                  nothing in it is worse than no link. */}
+              {reelKindFor(post.asset) && (
+                <a
+                  href={reelHref({ kind: reelKindFor(post.asset)!, query: post.subject })}
+                  className="tap-target rounded-xl border border-white/10 px-3 py-2 text-xs font-semibold text-slate-300"
+                >
+                  Make the reel
+                </a>
+              )}
+              <button
+                onClick={() => draft(post)}
+                disabled={busy !== null}
+                className="tap-target rounded-xl border border-white/10 px-3 py-2 text-xs font-semibold text-slate-300"
+              >
+                {busy === post.date ? "Writing…" : drafts[post.date] ? "Redraft" : "Draft"}
+              </button>
+            </span>
           </div>
 
           {drafts[post.date] && (

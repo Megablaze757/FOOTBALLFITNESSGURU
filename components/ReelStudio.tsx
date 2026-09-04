@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   reelDuration, reelFrameSvg, reelSteps, pickMimeType, fileExtension, REEL_FPS,
   inspectRecording, isPostable, type Scene,
 } from "@/lib/reel";
 import { REEL_KINDS, reelSubjects, type ReelKind } from "@/lib/reel-kinds";
+import { parseReelHash, REEL_ANCHOR } from "@/lib/reel-link";
 import { captionProblems } from "@/lib/caption";
 
 /**
@@ -106,6 +107,30 @@ export function ReelStudio() {
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
 
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * ACCEPT BEING TOLD WHERE TO START.
+   *
+   * The schedule above names the subject and the asset; getting from there to
+   * here meant scrolling down, picking the kind and retyping the name. The
+   * hash carries both, so a row is a link.
+   *
+   * hashchange as well as mount: clicking a second row while already down here
+   * changes only the fragment, which fires no navigation and would otherwise
+   * leave the studio showing the first one.
+   */
+  useEffect(() => {
+    const apply = () => {
+      const target = parseReelHash(window.location.hash, (k) => REEL_KINDS.some((r) => r.id === k));
+      if (!target) return;
+      setKind(target.kind);
+      setQuery(target.query);
+    };
+    apply();
+    window.addEventListener("hashchange", apply);
+    return () => window.removeEventListener("hashchange", apply);
+  }, []);
+
   const subjects = useMemo(() => reelSubjects(kind), [kind]);
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -140,7 +165,9 @@ export function ReelStudio() {
   }
 
   return (
-    <div className="space-y-5">
+    // scroll-mt so the hash lands with the picker under the sticky admin nav
+    // rather than tucked behind it.
+    <div id={REEL_ANCHOR} className="scroll-mt-24 space-y-5">
       <div className="card space-y-4 p-5">
         <div>
           <span className="field-label">What kind of reel</span>

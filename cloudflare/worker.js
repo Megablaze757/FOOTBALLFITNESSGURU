@@ -264,17 +264,17 @@ function emailBrand() {
 }
 __name(emailBrand, "emailBrand");
 function block(text) {
-  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+  const lines2 = text.split("\n").map((l) => l.trim()).filter(Boolean);
   const cell = /* @__PURE__ */ __name((inner) => `<tr><td class="pa-body" style="font-size:16px;line-height:1.55;color:#495751;padding-bottom:18px;">${inner}</td></tr>`, "cell");
-  if (lines.length > 1 && lines.every((l) => /^[-•*]\s+/.test(l))) {
-    const items = lines.map((l) => l.replace(/^[-•*]\s+/, "")).map((l) => `<tr>
+  if (lines2.length > 1 && lines2.every((l) => /^[-•*]\s+/.test(l))) {
+    const items = lines2.map((l) => l.replace(/^[-•*]\s+/, "")).map((l) => `<tr>
         <td width="18" valign="top" class="pa-gold" style="font-size:16px;line-height:1.55;color:#8a6510;">&bull;</td>
         <td valign="top" class="pa-body" style="font-size:16px;line-height:1.55;color:#495751;padding-bottom:6px;">${escapeHtml2(l)}</td>
       </tr>`).join("");
     return cell(`<table role="presentation" cellpadding="0" cellspacing="0" width="100%">${items}</table>`);
   }
-  const pairs = lines.map((l) => l.match(/^([^:]{1,28}):\s*(.{1,24})$/));
-  if (lines.length > 1 && pairs.every(Boolean)) {
+  const pairs = lines2.map((l) => l.match(/^([^:]{1,28}):\s*(.{1,24})$/));
+  if (lines2.length > 1 && pairs.every(Boolean)) {
     const rows = pairs.map((m) => `<tr>
         <td class="pa-body pa-rule" style="font-size:15px;line-height:1.5;color:#495751;border-top:1px solid #e4e8e3;padding:9px 0;">${escapeHtml2(m[1])}</td>
         <td align="right" class="pa-h pa-rule" style="font-size:15px;line-height:1.5;font-weight:800;color:#0e1411;border-top:1px solid #e4e8e3;padding:9px 0;">${escapeHtml2(m[2])}</td>
@@ -300,17 +300,17 @@ function renderEmail(subject, shell) {
 }
 __name(renderEmail, "renderEmail");
 function renderText(shell) {
-  const lines = [shell.heading.toUpperCase(), "", ...shell.paragraphs.filter((p) => p.trim() !== "")];
+  const lines2 = [shell.heading.toUpperCase(), "", ...shell.paragraphs.filter((p) => p.trim() !== "")];
   if (shell.cta)
-    lines.push("", `${shell.cta.label.replace(/\s*→\s*$/, "")}: ${shell.cta.href}`);
+    lines2.push("", `${shell.cta.label.replace(/\s*→\s*$/, "")}: ${shell.cta.href}`);
   if (shell.note)
-    lines.push("", shell.note);
+    lines2.push("", shell.note);
   if (shell.footerHtml) {
     const text = shell.footerHtml.replace(/<a [^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/g, "$2: $1").replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/\s+/g, " ").trim();
     if (text)
-      lines.push("", "\u2014", text);
+      lines2.push("", "\u2014", text);
   }
-  return lines.join("\n");
+  return lines2.join("\n");
 }
 __name(renderText, "renderText");
 
@@ -385,7 +385,7 @@ function splitCommission({
     return [];
   if (payerUserId && chain.some((a) => a.userId && a.userId === payerUserId))
     return [];
-  const lines = [];
+  const lines2 = [];
   let spentPct = 0;
   chain.forEach((affiliate, i) => {
     const level = i + 1;
@@ -399,9 +399,9 @@ function splitCommission({
     const amountPennies = pctOf(net, ratePct);
     if (amountPennies <= 0)
       return;
-    lines.push({ affiliateId: affiliate.id, level, ratePct, amountPennies, netPennies: net });
+    lines2.push({ affiliateId: affiliate.id, level, ratePct, amountPennies, netPennies: net });
   });
-  return lines;
+  return lines2;
 }
 __name(splitCommission, "splitCommission");
 
@@ -466,8 +466,8 @@ function parseIngestPayload(body) {
     const r = raw;
     const pick = /* @__PURE__ */ __name((keys) => {
       for (const k of Object.keys(r)) {
-        const norm = k.toLowerCase().replace(/[^a-z]/g, "");
-        if (keys.includes(norm))
+        const norm2 = k.toLowerCase().replace(/[^a-z]/g, "");
+        if (keys.includes(norm2))
           return r[k];
       }
       return void 0;
@@ -601,6 +601,88 @@ function silent(plan) {
   return !plan.checkinCard && !plan.checkinEmail && !plan.workoutCard && !plan.workoutEmail;
 }
 __name(silent, "silent");
+
+// ../lib/share-loop.ts
+var norm = /* @__PURE__ */ __name((s) => s.trim().toLowerCase(), "norm");
+function classify(code, affiliates, usernames) {
+  const c = norm(code);
+  if (!c)
+    return "unknown";
+  if (affiliates.has(c))
+    return "affiliate";
+  if (usernames.has(c))
+    return "athlete";
+  return "unknown";
+}
+__name(classify, "classify");
+function loopStats(input) {
+  const affiliates = new Set(input.affiliateCodes.map(norm).filter(Boolean));
+  const usernames = new Set(input.usernames.map(norm).filter(Boolean));
+  const counts = /* @__PURE__ */ new Map();
+  const signups = { affiliate: 0, athlete: 0, unknown: 0, total: 0 };
+  for (const raw of input.attributed) {
+    const code = norm(raw);
+    if (!code)
+      continue;
+    const kind = classify(code, affiliates, usernames);
+    signups[kind]++;
+    signups.total++;
+    const held = counts.get(code);
+    if (held)
+      held.signups++;
+    else
+      counts.set(code, { code, kind, signups: 1 });
+  }
+  return {
+    canShare: {
+      affiliates: affiliates.size,
+      // Not `usernames.size - affiliates.size`: 0107's trigger already forbids
+      // a username equalling an affiliate code, so they cannot overlap, and
+      // subtracting would quietly under-report if that trigger ever went.
+      athletes: usernames.size,
+      withPage: input.publicProfiles
+    },
+    signups,
+    sharePct: input.totalProfiles > 0 ? Math.round(signups.total / input.totalProfiles * 100) : 0,
+    sources: [...counts.values()].sort((a, b) => b.signups - a.signups || a.code.localeCompare(b.code))
+  };
+}
+__name(loopStats, "loopStats");
+
+// ../lib/growth-digest.ts
+function lines(input) {
+  const out = [];
+  for (const line of input.extra ?? []) {
+    if (line.trim())
+      out.push(line.trim());
+  }
+  if (input.loop) {
+    const stats = loopStats(input.loop);
+    out.push(`Athletes who can share: ${stats.canShare.athletes}`);
+    out.push(`With a public page: ${stats.canShare.withPage}`);
+    if (stats.signups.total > 0) {
+      out.push(`Attributed signups: ${stats.signups.total} (${stats.signups.athlete} free, ${stats.signups.affiliate} paid)`);
+    }
+    if (stats.signups.unknown > 0) {
+      out.push(`Lost attribution: ${stats.signups.unknown} signup(s) used a code that matches nothing`);
+    }
+  }
+  return out;
+}
+__name(lines, "lines");
+function growthDigest(input) {
+  const body = lines(input);
+  if (body.length === 0)
+    return null;
+  return {
+    // The subject carries the one thing worth knowing, so it is legible in a
+    // list of unread mail without being opened.
+    title: input.headline?.trim() || `Growth this week: ${body[0]}`,
+    body: body.join("\n"),
+    href: "/admin/social"
+  };
+}
+__name(growthDigest, "growthDigest");
 
 // ../lib/milestones.ts
 var STREAK_MILESTONES = [7, 14, 21, 30, 60, 100, 180, 365];
@@ -799,7 +881,7 @@ var src_default = {
       () => sendDeadlineReminders(env),
       () => sendMilestoneNotifications(env),
       () => createTrialEndingReminders(env),
-      ...isMonday ? [() => sendWeeklySummaries(env)] : [],
+      ...isMonday ? [() => sendWeeklySummaries(env), () => sendGrowthDigest(env)] : [],
       () => purgeExpiredVideos(env),
       () => emailNotifications(env)
     ]) {
@@ -969,7 +1051,7 @@ function overBudget(state) {
   return json({ error: `${reason} The on-device coach still works, and your allowance resets \u2014 upgrade for more.` }, 429);
 }
 __name(overBudget, "overBudget");
-var WORKER_VERSION = "2026-09-04.4";
+var WORKER_VERSION = "2026-09-04.5";
 var ATTEMPT_TIMEOUT_MS = {
   groq: 1e4,
   openrouter: 2e4,
@@ -2473,7 +2555,7 @@ async function accrueCommission(env, invoice) {
   const byCode = new Map(nodes.map((n) => [n.code, n]));
   const chargeId = invoice?.charge ?? null;
   const fee = await stripeFeeFor(env, chargeId);
-  const lines = splitCommission({
+  const lines2 = splitCommission({
     referralCode: code,
     paidPennies: paid,
     stripeFeePennies: fee,
@@ -2481,13 +2563,13 @@ async function accrueCommission(env, invoice) {
     byId,
     payerUserId: userId
   });
-  if (!lines.length)
+  if (!lines2.length)
     return;
   const feeUsed = fee ?? estimateStripeFee(paid);
   await supa(env, "affiliate_commissions", {
     method: "POST",
     headers: { Prefer: "resolution=ignore-duplicates,return=minimal" },
-    body: JSON.stringify(lines.map((l) => ({
+    body: JSON.stringify(lines2.map((l) => ({
       affiliate_id: l.affiliateId,
       source_user_id: userId,
       stripe_invoice_id: invoiceId,
@@ -2924,6 +3006,46 @@ async function sendDeadlineReminders(env) {
   await queueNotifications(env, rows);
 }
 __name(sendDeadlineReminders, "sendDeadlineReminders");
+async function sendGrowthDigest(env) {
+  const response = await supa(env, "profiles?role=eq.admin&select=id");
+  if (!response.ok) {
+    console.error(`growth digest: could not list admins (${response.status})`);
+    return;
+  }
+  const admins = await response.json();
+  if (!admins?.length)
+    return;
+  const [affiliatesRes, profilesRes] = await Promise.all([
+    supa(env, "affiliates?select=code&limit=500"),
+    supa(env, "profiles?select=referral_code,username,public_profile&limit=5000")
+  ]);
+  const affiliates = affiliatesRes.ok ? await affiliatesRes.json() : [];
+  const profiles = profilesRes.ok ? await profilesRes.json() : [];
+  const digest = growthDigest({
+    loop: {
+      affiliateCodes: affiliates.map((a) => a.code),
+      usernames: profiles.map((p) => p.username ?? "").filter(Boolean),
+      attributed: profiles.map((p) => p.referral_code ?? "").filter(Boolean),
+      totalProfiles: profiles.length,
+      publicProfiles: profiles.filter((p) => p.public_profile).length
+    }
+  });
+  if (!digest)
+    return;
+  const week = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+  await queueNotifications(env, admins.map((admin) => ({
+    user_id: admin.id,
+    kind: "general",
+    title: digest.title,
+    body: digest.body,
+    href: digest.href,
+    // Weekly, so the key is the week. Re-running the cron cannot send it twice.
+    dedupe_key: `growth-digest:${week}`,
+    show_in_app: true,
+    email_category: "weekly"
+  })));
+}
+__name(sendGrowthDigest, "sendGrowthDigest");
 async function sendWeeklySummaries(env) {
   const through = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
   const weekAgo = new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 10);

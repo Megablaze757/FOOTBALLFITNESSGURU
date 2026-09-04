@@ -7,6 +7,7 @@ import { useCurrentUser } from "@/lib/auth";
 import { useAsync } from "@/lib/use-async";
 import { streakState } from "@/lib/load";
 import { StreakCard } from "@/components/StreakCard";
+import { PublicPageCard } from "@/components/PublicPageCard";
 import { ShareMomentCard } from "@/components/ShareMomentCard";
 import { athleteShareLink } from "@/lib/share-card";
 import {
@@ -317,6 +318,8 @@ export default function RewardsPage() {
       stats, state, boards, ctx, streakNow,
       xp: computeXp(stats) + earnedFromChallenges,
       name: ((profile as { full_name?: string | null } | null)?.full_name ?? "").split(" ")[0] || "Athlete",
+      username: (profile as { username?: string | null } | null)?.username ?? null,
+      publicProfile: !!(profile as { public_profile?: boolean | null } | null)?.public_profile,
       shareLink: athleteShareLink(
         (profile as { username?: string | null } | null)?.username,
         !!(profile as { public_profile?: boolean | null } | null)?.public_profile,
@@ -493,6 +496,15 @@ export default function RewardsPage() {
           page that changes what somebody does on a bad evening. A rest day
           nobody knows about does not stop anybody giving up. */}
       <StreakCard state={data.streakNow} />
+
+      {/* THE RANK, AND WHERE TO PUT IT.
+          Reported as "I can't find where the social profiles are" — and they
+          were not findable: /a/ is linked from the marketing footer only, so
+          from inside the app there was no route to it, and the switch lives in
+          Profile among a dozen checkboxes. This is the screen people open to
+          look at their rank, which makes it the one place the offer explains
+          itself. */}
+      <PublicPageCard username={data.username} isPublic={data.publicProfile} />
 
       {/* HOW STRONG, not just how consistent.
           Every other card here counts turning up — days, sessions, quests. This

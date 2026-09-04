@@ -178,3 +178,29 @@ test("the always-present page can never be shadowed by a real athlete", () => {
   assert.match(constraint, /\^\[a-z0-9\]\[a-z0-9_\]\{1,18\}\[a-z0-9\]\$/);
   assert.ok(MISS_PARAM.includes("-"), "the hyphen IS the guarantee — do not remove it");
 });
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * "I CAN'T FIND WHERE THE SOCIAL PROFILES ARE."
+ *
+ * They were not findable. /a/ is linked from MarketingShell's footer — the
+ * PUBLIC site — so from inside the signed-in app there was no route to it at
+ * all, and the switch that creates a page sits in Profile among a dozen other
+ * checkboxes. A feature nobody can reach is a feature that does not exist, and
+ * this one is the share loop's whole destination.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("a signed-in athlete can reach their own page from inside the app", () => {
+  const card = readFileSync(new URL("../components/PublicPageCard.tsx", import.meta.url), "utf8");
+  assert.match(card, /href=\{`\/a\/\$\{username\}\/`\}/, "there is no way to open your own page");
+  assert.match(card, /href="\/a\/"/, "there is no way to reach anybody else's");
+  assert.match(card, /clipboard\.writeText/, "the address cannot be copied — so it cannot be posted");
+  // Off and no-username are different states and must read differently.
+  assert.match(card, /Turn on my page/);
+  assert.match(card, /Choose a username/);
+
+  const rewards = readFileSync(new URL("../app/(app)/rewards/page.tsx", import.meta.url), "utf8");
+  assert.match(rewards, /<PublicPageCard username=\{data\.username\} isPublic=\{data\.publicProfile\}/,
+    "the card is not rendered where the rank is");
+  assert.match(rewards, /username: \(profile as/, "the page never loads the username the card needs");
+});

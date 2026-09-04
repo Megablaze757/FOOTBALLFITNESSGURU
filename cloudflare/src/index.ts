@@ -40,6 +40,7 @@ import { splitCommission, estimateStripeFee } from "../../lib/affiliate";
 import { parseOuraSleep, parseIngestPayload } from "../../lib/biometrics";
 import { checkinReminderSince, daysBetween } from "../../lib/checkin-reminder";
 import { reminderPlan, silent, type ReminderInput } from "../../lib/reminder-plan";
+import { growthDigest } from "../../lib/growth-digest";
 import { currentStreak, isStreakMilestone, goalAchieved, metricLabel, STREAK_MILESTONES } from "../../lib/milestones";
 
 export interface Env {
@@ -269,7 +270,7 @@ export default {
       () => sendDeadlineReminders(env),
       () => sendMilestoneNotifications(env),
       () => createTrialEndingReminders(env),
-      ...(isMonday ? [() => sendWeeklySummaries(env)] : []),
+      ...(isMonday ? [() => sendWeeklySummaries(env), () => sendGrowthDigest(env)] : []),
       () => purgeExpiredVideos(env),
       () => emailNotifications(env),
     ]) {
@@ -512,7 +513,7 @@ function overBudget(state: BudgetState): Response {
 // nobody is watching a spinner and the budget can be what the work actually
 // needs. Callers pass their own client-side timeout to match.
 // Bump on every paste into the Cloudflare dashboard. GET /health reports it.
-const WORKER_VERSION = "2026-09-04.4";
+const WORKER_VERSION = "2026-09-04.5";
 
 const CHAIN_BUDGET_MS = 55_000;
 /**
@@ -3801,6 +3802,69 @@ async function sendDeadlineReminders(env: Env): Promise<void> {
     });
   }
   await queueNotifications(env, rows);
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE ADMIN PANEL ONLY WORKS ON THE DAYS SOMEBODY OPENS IT.
+ *
+ * A schedule of what to post, a feed of what has changed, a list of pages one
+ * recipe short of existing, a count of who can share with attribution — all of
+ * it correct and all of it behind a tab you have to remember to visit. The
+ * weeks it matters most are the weeks nobody visits.
+ *
+ * Same pipeline as every other notification: one row with an email category,
+ * drained by the queue that already runs on Monday. No new sender, no new
+ * schedule, nothing else to keep alive.
+ *
+ * ADMINS ONLY, and by role rather than by a list of addresses — an address
+ * list is a second place to remember when somebody joins or leaves.
+ */
+async function sendGrowthDigest(env: Env): Promise<void> {
+  const response = await supa(env, "profiles?role=eq.admin&select=id");
+  if (!response.ok) {
+    console.error(`growth digest: could not list admins (${response.status})`);
+    return;
+  }
+  const admins = (await response.json()) as { id: string }[];
+  if (!admins?.length) return;
+
+  // The same three reads the admin panel makes, once for everybody rather than
+  // once per admin: none of it is per-person.
+  const [affiliatesRes, profilesRes] = await Promise.all([
+    supa(env, "affiliates?select=code&limit=500"),
+    supa(env, "profiles?select=referral_code,username,public_profile&limit=5000"),
+  ]);
+  const affiliates = affiliatesRes.ok ? ((await affiliatesRes.json()) as { code: string }[]) : [];
+  const profiles = profilesRes.ok
+    ? ((await profilesRes.json()) as { referral_code: string | null; username: string | null; public_profile: boolean | null }[])
+    : [];
+
+  const digest = growthDigest({
+    loop: {
+      affiliateCodes: affiliates.map((a) => a.code),
+      usernames: profiles.map((p) => p.username ?? "").filter(Boolean),
+      attributed: profiles.map((p) => p.referral_code ?? "").filter(Boolean),
+      totalProfiles: profiles.length,
+      publicProfiles: profiles.filter((p) => p.public_profile).length,
+    },
+  });
+  // Null means there is genuinely nothing to say. A weekly email that arrives
+  // saying nothing teaches you to stop opening the weekly email.
+  if (!digest) return;
+
+  const week = new Date().toISOString().slice(0, 10);
+  await queueNotifications(env, admins.map((admin) => ({
+    user_id: admin.id,
+    kind: "general" as const,
+    title: digest.title,
+    body: digest.body,
+    href: digest.href,
+    // Weekly, so the key is the week. Re-running the cron cannot send it twice.
+    dedupe_key: `growth-digest:${week}`,
+    show_in_app: true,
+    email_category: "weekly" as const,
+  })));
 }
 
 async function sendWeeklySummaries(env: Env): Promise<void> {
