@@ -80,12 +80,13 @@ export function CancelFlow({ onClose, onChanged }: { onClose: () => void; onChan
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [endsAt, setEndsAt] = useState<string | null>(null);
+  const [alsoActive, setAlsoActive] = useState<string[]>([]);
 
   async function cancel() {
     setBusy(true);
     setError(null);
     try {
-      const res = await invokeAI<{ endsAt?: string; stillBilling?: number }>("cancel-subscription", {
+      const res = await invokeAI<{ endsAt?: string; stillBilling?: number; alsoActive?: string[] }>("cancel-subscription", {
         reason: reason?.id, detail: detail.trim() || undefined,
       });
       /**
@@ -111,6 +112,15 @@ export function CancelFlow({ onClose, onChanged }: { onClose: () => void; onChan
         setBusy(false);
         return;
       }
+      /**
+       * A DIFFERENT PRODUCT STAYS RUNNING, AND THEY ARE TOLD.
+       *
+       * Cancelling Pro is not a request to cancel Team, so the endpoint leaves
+       * it alone — and saying so is the difference between respecting that and
+       * hiding it. Somebody who wanted both gone needs to know there is a
+       * second thing to cancel.
+       */
+      setAlsoActive(res?.alsoActive ?? []);
       setEndsAt(res?.endsAt ?? null);
       setPhase("done-cancel");
       recordChanged("everything");
@@ -148,6 +158,18 @@ export function CancelFlow({ onClose, onChanged }: { onClose: () => void; onChan
         <p className="mt-2 text-sm text-slate-400">
           Changed your mind? You can restart any time before then and pick up where you left off.
         </p>
+        {alsoActive.length > 0 && (
+          /* NOT cancelled, and said out loud. A separate product — Team,
+             typically — is still billing, because cancelling Pro was never a
+             request to cancel it. Leaving that unsaid is how somebody ends up
+             charged after seeing the word "Cancelled". */
+          <p className="mt-3 rounded-2xl border border-readiness-yellow/25 bg-readiness-yellow/[0.04] p-3 text-sm text-slate-300">
+            You still have {alsoActive.length === 1 ? "another subscription" : "other subscriptions"} running:{" "}
+            <b>{alsoActive.join(", ")}</b>. {alsoActive.length === 1 ? "It was" : "They were"} left alone
+            because {alsoActive.length === 1 ? "it is" : "they are"} a different plan — cancel separately if
+            you want {alsoActive.length === 1 ? "it" : "them"} stopped too.
+          </p>
+        )}
         <button onClick={onClose} className="btn-primary mt-4">Done</button>
       </Panel>
     );

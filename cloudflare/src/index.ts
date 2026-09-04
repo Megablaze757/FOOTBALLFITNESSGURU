@@ -512,7 +512,7 @@ function overBudget(state: BudgetState): Response {
 // nobody is watching a spinner and the budget can be what the work actually
 // needs. Callers pass their own client-side timeout to match.
 // Bump on every paste into the Cloudflare dashboard. GET /health reports it.
-const WORKER_VERSION = "2026-09-04.2";
+const WORKER_VERSION = "2026-09-04.3";
 
 const CHAIN_BUDGET_MS = 55_000;
 /**
@@ -2636,7 +2636,7 @@ async function stripeSubIdFor(env: Env, userId: string): Promise<string | null> 
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- * EVERY SUBSCRIPTION THAT IS STILL BILLING THEM — ASKED OF STRIPE.
+ * THE DUPLICATES OF THE PLAN THEY ARE CANCELLING — AND NOTHING ELSE.
  *
  * Reported as "I cancelled and I am still being charged", which is the worst
  * class of bug this product can have: money leaving a real person's account
@@ -2644,25 +2644,53 @@ async function stripeSubIdFor(env: Env, userId: string): Promise<string | null> 
  *
  * THE CAUSE IS THE SHAPE OF OUR OWN TABLE. `subscriptions` holds ONE row per
  * user — upsertSub writes with on_conflict=user_id — and stripeSubIdFor reads
- * that single row. So if a customer ever ends up with two live subscriptions in
- * Stripe (subscribed twice, a checkout completed after an earlier one, a card
- * retried into a second), the second upsert OVERWRITES the first. From that
- * moment the app can see exactly one of them, cancel touches exactly that one,
- * and the other bills every month forever with nothing in the product able to
- * see it, show it or stop it.
+ * that single row. So a customer who ends up with two live subscriptions in
+ * Stripe has the second upsert OVERWRITE the first, and from that moment the
+ * app can see exactly one of them. Cancel touched that one; the other billed
+ * every month with nothing in the product able to see it, show it, or stop it.
  *
- * So the cancel path stops trusting our cache. Stripe is the system of record
- * for what is billing; the table is a convenience that provably drifts. This
- * asks Stripe for everything live on the customer and hands back all of it.
+ * ─────────────────────────────────────────────────────────────────────────
+ * BUT "CANCEL EVERYTHING LIVE" IS THE WRONG FIX, AND THE FIRST VERSION OF
+ * THIS DID EXACTLY THAT.
  *
- * `status=all` rather than `active`, filtered here: a subscription that is
- * `trialing`, `past_due` or `unpaid` is still going to charge them, and only
- * `canceled`, `incomplete_expired` and an already-ending one are safe to skip.
+ * The Team plan is sold separately at £150/mo. A coach holding Pro AND Team
+ * who cancels Pro would have had their Team subscription cancelled too —
+ * silently, from a button that says nothing about it. Fixing an overcharge by
+ * cancelling something somebody is still paying for on purpose is not a fix,
+ * it is the same failure pointing the other way.
+ *
+ * So the rule is DUPLICATE, not live. A subscription joins the cancellation
+ * only if it is the same thing: the same Stripe price, or the same tier in the
+ * metadata the checkout wrote. That covers what the bug actually produces —
+ * two subscriptions to the same plan — and cannot touch a different product.
+ *
+ * Anything else still billing is REPORTED rather than cancelled, because the
+ * athlete needs to know it exists. Leaving it running silently is how this
+ * started.
  * ═══════════════════════════════════════════════════════════════════════════
  */
 const STILL_BILLING = ["active", "trialing", "past_due", "unpaid", "incomplete"];
 
-async function liveSubscriptionsFor(env: Env, userId: string): Promise<{ id: string; status: string }[]> {
+interface StripeSub {
+  id: string;
+  status: string;
+  cancel_at_period_end?: boolean;
+  metadata?: { tier?: string };
+  items?: { data?: { price?: { id?: string; nickname?: string | null } }[] } | null;
+}
+
+const priceOf = (sub: StripeSub) => sub.items?.data?.[0]?.price?.id ?? null;
+const nameOf = (sub: StripeSub) =>
+  sub.items?.data?.[0]?.price?.nickname || sub.metadata?.tier || sub.id;
+
+export interface CancelPlan {
+  /** The subscription they asked to cancel, plus duplicates of the same plan. */
+  cancel: string[];
+  /** Live, a DIFFERENT product, and deliberately left alone. */
+  keep: { id: string; name: string }[];
+}
+
+async function cancellationPlanFor(env: Env, userId: string): Promise<CancelPlan> {
   const rows = (await (await supa(env,
     `subscriptions?user_id=eq.${userId}&select=stripe_subscription_id,stripe_customer_id`)).json()) as
     { stripe_subscription_id: string | null; stripe_customer_id: string | null }[] | null;
@@ -2670,29 +2698,41 @@ async function liveSubscriptionsFor(env: Env, userId: string): Promise<{ id: str
   const known = rows?.[0]?.stripe_subscription_id ?? null;
   const customer = rows?.[0]?.stripe_customer_id ?? null;
 
-  // No customer on file: the one id we hold is all there is to go on. Better
-  // than refusing — it is what the old code did, and it is right when there
-  // genuinely is only one.
-  if (!customer) return known ? [{ id: known, status: "unknown" }] : [];
+  // No customer on file: the one id we hold is all there is to go on. That is
+  // what the old code did, and it is right when there genuinely is only one.
+  if (!customer) return { cancel: known ? [known] : [], keep: [] };
 
+  let all: StripeSub[];
   try {
     const list = await stripe(env, `subscriptions?customer=${encodeURIComponent(customer)}&status=all&limit=100`);
-    const live = ((list?.data ?? []) as { id: string; status: string; cancel_at_period_end?: boolean }[])
-      .filter((sub) => STILL_BILLING.includes(sub.status) && !sub.cancel_at_period_end)
-      .map((sub) => ({ id: sub.id, status: sub.status }));
-    // Never come back with less than we already knew about. A listing that
-    // silently returned nothing would turn "cancel" into a no-op that reports
-    // success, which is the same bug wearing a different hat.
-    if (known && !live.some((sub) => sub.id === known)) {
-      const stillOpen = ((list?.data ?? []) as { id: string; cancel_at_period_end?: boolean }[])
-        .find((sub) => sub.id === known && !sub.cancel_at_period_end);
-      if (stillOpen) live.push({ id: known, status: "unknown" });
-    }
-    return live;
+    all = (list?.data ?? []) as StripeSub[];
   } catch (e) {
+    // A listing we could not read must not silently narrow the cancellation to
+    // nothing. Fall back to the single known id rather than reporting success
+    // over an untouched subscription.
     console.error(`could not list subscriptions for ${customer}: ${String(e)}`);
-    return known ? [{ id: known, status: "unknown" }] : [];
+    return { cancel: known ? [known] : [], keep: [] };
   }
+
+  const live = all.filter((sub) => STILL_BILLING.includes(sub.status) && !sub.cancel_at_period_end);
+
+  /**
+   * WHAT ARE THEY CANCELLING? The recorded one when we have it; otherwise the
+   * only live one, and if there are several with nothing on record we cannot
+   * tell them apart — so nothing is assumed and the caller reports that.
+   */
+  const anchor = live.find((sub) => sub.id === known) ?? (live.length === 1 ? live[0] : null);
+  if (!anchor) return { cancel: known ? [known] : [], keep: live.map((s) => ({ id: s.id, name: nameOf(s) })) };
+
+  const sameThing = (sub: StripeSub) =>
+    sub.id === anchor.id
+    || (priceOf(sub) !== null && priceOf(sub) === priceOf(anchor))
+    || (!!sub.metadata?.tier && sub.metadata.tier === anchor.metadata?.tier);
+
+  return {
+    cancel: live.filter(sameThing).map((sub) => sub.id),
+    keep: live.filter((sub) => !sameThing(sub)).map((sub) => ({ id: sub.id, name: nameOf(sub) })),
+  };
 }
 
 /**
@@ -2711,20 +2751,20 @@ async function cancelSubscription(req: Request, env: Env): Promise<Response> {
   const { reason, detail } = (await req.json().catch(() => ({}))) as { reason?: string; detail?: string };
 
   /**
-   * ALL of them, not the one our table happens to hold. See
-   * liveSubscriptionsFor — a customer with two live subscriptions had one
-   * cancelled and the other billing them every month, invisibly.
+   * The plan they asked to cancel AND its duplicates — not everything they
+   * pay for. See cancellationPlanFor: a coach on Pro and Team must not lose
+   * Team by cancelling Pro.
    */
-  const live = await liveSubscriptionsFor(env, user.id);
-  if (live.length === 0) return json({ error: "no-billing-account" }, 404);
+  const plan = await cancellationPlanFor(env, user.id);
+  if (plan.cancel.length === 0) return json({ error: "no-billing-account" }, 404);
 
   const cancelled: { id: string; endsAt: string | null }[] = [];
   const failed: string[] = [];
-  for (const sub of live) {
+  for (const id of plan.cancel) {
     try {
-      const updated = await stripe(env, `subscriptions/${sub.id}`, { cancel_at_period_end: "true" });
+      const updated = await stripe(env, `subscriptions/${id}`, { cancel_at_period_end: "true" });
       cancelled.push({
-        id: sub.id,
+        id,
         endsAt: updated.current_period_end ? new Date(updated.current_period_end * 1000).toISOString() : null,
       });
       await upsertSub(env, updated);
@@ -2732,8 +2772,8 @@ async function cancelSubscription(req: Request, env: Env): Promise<Response> {
       // One that would not cancel is the whole reason they are here. Named in
       // the response rather than swallowed, because "ok: true" on a
       // subscription that is still billing is how this happened.
-      console.error(`cancel failed for ${sub.id}: ${String(e)}`);
-      failed.push(sub.id);
+      console.error(`cancel failed for ${id}: ${String(e)}`);
+      failed.push(id);
     }
   }
 
@@ -2751,6 +2791,13 @@ async function cancelSubscription(req: Request, env: Env): Promise<Response> {
     // Present ONLY when something is still live. The screen must not say
     // "cancelled" while a second subscription is still going to charge them.
     ...(failed.length ? { stillBilling: failed.length } : {}),
+    /**
+     * Deliberately untouched, and deliberately named. A separate product —
+     * Team, typically — stays running because cancelling Pro is not a request
+     * to cancel it. Saying so is the difference between respecting that and
+     * hiding it.
+     */
+    ...(plan.keep.length ? { alsoActive: plan.keep.map((k) => k.name) } : {}),
   });
 }
 

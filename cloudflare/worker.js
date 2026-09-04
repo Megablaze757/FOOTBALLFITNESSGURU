@@ -969,7 +969,7 @@ function overBudget(state) {
   return json({ error: `${reason} The on-device coach still works, and your allowance resets \u2014 upgrade for more.` }, 429);
 }
 __name(overBudget, "overBudget");
-var WORKER_VERSION = "2026-09-04.2";
+var WORKER_VERSION = "2026-09-04.3";
 var ATTEMPT_TIMEOUT_MS = {
   groq: 1e4,
   openrouter: 2e4,
@@ -2136,7 +2136,9 @@ async function stripeSubIdFor(env, userId) {
 }
 __name(stripeSubIdFor, "stripeSubIdFor");
 var STILL_BILLING = ["active", "trialing", "past_due", "unpaid", "incomplete"];
-async function liveSubscriptionsFor(env, userId) {
+var priceOf = /* @__PURE__ */ __name((sub) => sub.items?.data?.[0]?.price?.id ?? null, "priceOf");
+var nameOf = /* @__PURE__ */ __name((sub) => sub.items?.data?.[0]?.price?.nickname || sub.metadata?.tier || sub.id, "nameOf");
+async function cancellationPlanFor(env, userId) {
   const rows = await (await supa(
     env,
     `subscriptions?user_id=eq.${userId}&select=stripe_subscription_id,stripe_customer_id`
@@ -2144,22 +2146,26 @@ async function liveSubscriptionsFor(env, userId) {
   const known = rows?.[0]?.stripe_subscription_id ?? null;
   const customer = rows?.[0]?.stripe_customer_id ?? null;
   if (!customer)
-    return known ? [{ id: known, status: "unknown" }] : [];
+    return { cancel: known ? [known] : [], keep: [] };
+  let all;
   try {
     const list = await stripe(env, `subscriptions?customer=${encodeURIComponent(customer)}&status=all&limit=100`);
-    const live = (list?.data ?? []).filter((sub) => STILL_BILLING.includes(sub.status) && !sub.cancel_at_period_end).map((sub) => ({ id: sub.id, status: sub.status }));
-    if (known && !live.some((sub) => sub.id === known)) {
-      const stillOpen = (list?.data ?? []).find((sub) => sub.id === known && !sub.cancel_at_period_end);
-      if (stillOpen)
-        live.push({ id: known, status: "unknown" });
-    }
-    return live;
+    all = list?.data ?? [];
   } catch (e) {
     console.error(`could not list subscriptions for ${customer}: ${String(e)}`);
-    return known ? [{ id: known, status: "unknown" }] : [];
+    return { cancel: known ? [known] : [], keep: [] };
   }
+  const live = all.filter((sub) => STILL_BILLING.includes(sub.status) && !sub.cancel_at_period_end);
+  const anchor = live.find((sub) => sub.id === known) ?? (live.length === 1 ? live[0] : null);
+  if (!anchor)
+    return { cancel: known ? [known] : [], keep: live.map((s) => ({ id: s.id, name: nameOf(s) })) };
+  const sameThing = /* @__PURE__ */ __name((sub) => sub.id === anchor.id || priceOf(sub) !== null && priceOf(sub) === priceOf(anchor) || !!sub.metadata?.tier && sub.metadata.tier === anchor.metadata?.tier, "sameThing");
+  return {
+    cancel: live.filter(sameThing).map((sub) => sub.id),
+    keep: live.filter((sub) => !sameThing(sub)).map((sub) => ({ id: sub.id, name: nameOf(sub) }))
+  };
 }
-__name(liveSubscriptionsFor, "liveSubscriptionsFor");
+__name(cancellationPlanFor, "cancellationPlanFor");
 async function cancelSubscription(req, env) {
   const user = await authUser(req, env);
   if (!user)
@@ -2167,22 +2173,22 @@ async function cancelSubscription(req, env) {
   if (!env.STRIPE_SECRET_KEY)
     return json({ error: "billing not configured" }, 503);
   const { reason, detail } = await req.json().catch(() => ({}));
-  const live = await liveSubscriptionsFor(env, user.id);
-  if (live.length === 0)
+  const plan = await cancellationPlanFor(env, user.id);
+  if (plan.cancel.length === 0)
     return json({ error: "no-billing-account" }, 404);
   const cancelled = [];
   const failed = [];
-  for (const sub of live) {
+  for (const id of plan.cancel) {
     try {
-      const updated = await stripe(env, `subscriptions/${sub.id}`, { cancel_at_period_end: "true" });
+      const updated = await stripe(env, `subscriptions/${id}`, { cancel_at_period_end: "true" });
       cancelled.push({
-        id: sub.id,
+        id,
         endsAt: updated.current_period_end ? new Date(updated.current_period_end * 1e3).toISOString() : null
       });
       await upsertSub(env, updated);
     } catch (e) {
-      console.error(`cancel failed for ${sub.id}: ${String(e)}`);
-      failed.push(sub.id);
+      console.error(`cancel failed for ${id}: ${String(e)}`);
+      failed.push(id);
     }
   }
   await recordCancellationFeedback(env, user.id, reason, detail, "cancelled");
@@ -2196,7 +2202,14 @@ async function cancelSubscription(req, env) {
     cancelled: cancelled.length,
     // Present ONLY when something is still live. The screen must not say
     // "cancelled" while a second subscription is still going to charge them.
-    ...failed.length ? { stillBilling: failed.length } : {}
+    ...failed.length ? { stillBilling: failed.length } : {},
+    /**
+     * Deliberately untouched, and deliberately named. A separate product —
+     * Team, typically — stays running because cancelling Pro is not a request
+     * to cancel it. Saying so is the difference between respecting that and
+     * hiding it.
+     */
+    ...plan.keep.length ? { alsoActive: plan.keep.map((k) => k.name) } : {}
   });
 }
 __name(cancelSubscription, "cancelSubscription");
