@@ -41,6 +41,7 @@ import { parseOuraSleep, parseIngestPayload } from "../../lib/biometrics";
 import { checkinReminderSince, daysBetween } from "../../lib/checkin-reminder";
 import { reminderPlan, silent, type ReminderInput } from "../../lib/reminder-plan";
 import { growthDigest } from "../../lib/growth-digest";
+import { trialIsRunning } from "../../lib/notice-staleness";
 import { buildIcs, planEvents } from "../../lib/calendar-feed";
 import { currentStreak, isStreakMilestone, goalAchieved, metricLabel, STREAK_MILESTONES } from "../../lib/milestones";
 
@@ -518,7 +519,7 @@ function overBudget(state: BudgetState): Response {
 // nobody is watching a spinner and the budget can be what the work actually
 // needs. Callers pass their own client-side timeout to match.
 // Bump on every paste into the Cloudflare dashboard. GET /health reports it.
-const WORKER_VERSION = "2026-09-04.6";
+const WORKER_VERSION = "2026-09-05.1";
 
 const CHAIN_BUDGET_MS = 55_000;
 /**
@@ -3386,6 +3387,38 @@ async function reverseCommission(env: Env, opts: {
  * the customer on their paid tier for good. A caller that already knows who the
  * subscription belongs to should say so rather than hope.
  */
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * A TRIAL WARNING OUTLIVES THE TRIAL IT WARNED ABOUT.
+ *
+ * Reported as trial-ending reminders still showing to paying customers. The
+ * notice is required and was correct when queued — but an unread row is shown
+ * until it is dismissed, so somebody who converted a week ago was still being
+ * told "your free trial ends soon, Pro will charge £X unless you cancel", by
+ * the app that had already charged them, with Cancel underneath.
+ *
+ * Marked read rather than deleted: the row is the record that the notice we
+ * are required to give was given, and deleting it would destroy that.
+ *
+ * The client filters these too (lib/notice-staleness.ts), because this only
+ * reaches anybody once the Worker is deployed and the rows are already out
+ * there. Both halves are wanted: this stops the backlog growing, the client
+ * drains what exists.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+async function clearTrialNotices(env: Env, userId: string): Promise<void> {
+  try {
+    await supa(env, `notifications?user_id=eq.${userId}&kind=eq.trial_ending&read_at=is.null`, {
+      method: "PATCH",
+      headers: { Prefer: "return=minimal" },
+      body: JSON.stringify({ read_at: new Date().toISOString() }),
+    });
+  } catch (error) {
+    // Tidying. A subscription update must not fail because of it.
+    console.error(`clearTrialNotices failed for ${userId}: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
 async function upsertSub(env: Env, sub: any, known?: { userId?: string; tier?: string }): Promise<void> {
   const uid = sub.metadata?.user_id ?? known?.userId;
   const tier = sub.metadata?.tier ?? known?.tier;
@@ -3424,6 +3457,11 @@ async function upsertSub(env: Env, sub: any, known?: { userId?: string; tier?: s
       cancel_at_period_end: !!sub.cancel_at_period_end,
     }]),
   });
+
+  // Any status but `trialing` means the warning is about something that is no
+  // longer happening — converted, cancelled, lapsed or paused alike. The rule
+  // is shared with the client so the two cannot drift apart.
+  if (!trialIsRunning(s)) await clearTrialNotices(env, uid);
 }
 
 // How old a webhook may be and still be accepted. Stripe signs the timestamp

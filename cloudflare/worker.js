@@ -684,6 +684,13 @@ function growthDigest(input) {
 }
 __name(growthDigest, "growthDigest");
 
+// ../lib/notice-staleness.ts
+var TRIALING = "trialing";
+function trialIsRunning(stripeStatus) {
+  return stripeStatus === TRIALING;
+}
+__name(trialIsRunning, "trialIsRunning");
+
 // ../lib/calendar-feed.ts
 function dayOffset(index, count) {
   if (count <= 1)
@@ -1164,7 +1171,7 @@ function overBudget(state) {
   return json({ error: `${reason} The on-device coach still works, and your allowance resets \u2014 upgrade for more.` }, 429);
 }
 __name(overBudget, "overBudget");
-var WORKER_VERSION = "2026-09-04.6";
+var WORKER_VERSION = "2026-09-05.1";
 var ATTEMPT_TIMEOUT_MS = {
   groq: 1e4,
   openrouter: 2e4,
@@ -2785,6 +2792,18 @@ async function reverseCommission(env, opts) {
   console.log(`commission: ${opts.reason} touched ${n} line(s) for ${opts.chargeId ?? opts.invoiceId}`);
 }
 __name(reverseCommission, "reverseCommission");
+async function clearTrialNotices(env, userId) {
+  try {
+    await supa(env, `notifications?user_id=eq.${userId}&kind=eq.trial_ending&read_at=is.null`, {
+      method: "PATCH",
+      headers: { Prefer: "return=minimal" },
+      body: JSON.stringify({ read_at: (/* @__PURE__ */ new Date()).toISOString() })
+    });
+  } catch (error) {
+    console.error(`clearTrialNotices failed for ${userId}: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+__name(clearTrialNotices, "clearTrialNotices");
 async function upsertSub(env, sub, known) {
   const uid = sub.metadata?.user_id ?? known?.userId;
   const tier = sub.metadata?.tier ?? known?.tier;
@@ -2816,6 +2835,8 @@ async function upsertSub(env, sub, known) {
       cancel_at_period_end: !!sub.cancel_at_period_end
     }])
   });
+  if (!trialIsRunning(s))
+    await clearTrialNotices(env, uid);
 }
 __name(upsertSub, "upsertSub");
 var STRIPE_TOLERANCE_S = 300;

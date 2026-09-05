@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { sortNotices, subscriptionState } from "@/lib/notice-staleness";
 
 interface Notification {
   id: string;
@@ -36,17 +37,53 @@ const ICON: Record<string, string> = {
 export function Notifications({ userId }: { userId: string }) {
   const [items, setItems] = useState<Notification[]>([]);
 
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * A NOTICE IS A MOMENT, AND THIS TABLE STORES IT FOREVER.
+   *
+   * Reported as trial-ending reminders still showing to people who are
+   * already paying. The reminder was right when it was written — we are
+   * required to send it — but an unread row is displayed until somebody
+   * dismisses it, so "your free trial ends soon, Pro will charge £X unless
+   * you cancel" was still on the home screen a week after the charge, from
+   * the app that took the money, with a Cancel link under it.
+   *
+   * So the subscription is loaded ALONGSIDE the notices and the stale ones
+   * are dropped — see lib/notice-staleness.ts, which also explains why the
+   * decision waits for both queries rather than racing them.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
   useEffect(() => {
     let active = true;
-    createClient()
-      .from("notifications")
-      .select("id, kind, title, body, href, created_at")
-      .eq("user_id", userId)
-      .eq("show_in_app", true)
-      .is("read_at", null)
-      .order("created_at", { ascending: false })
-      .limit(5)
-      .then(({ data }) => { if (active) setItems((data ?? []) as Notification[]); });
+    const supabase = createClient();
+    void (async () => {
+      const [notices, sub] = await Promise.all([
+        supabase.from("notifications")
+          .select("id, kind, title, body, href, created_at")
+          .eq("user_id", userId)
+          .eq("show_in_app", true)
+          .is("read_at", null)
+          .order("created_at", { ascending: false })
+          .limit(5),
+        supabase.from("subscriptions").select("stripe_status").eq("user_id", userId).maybeSingle(),
+      ]);
+      if (!active) return;
+
+      // A failed subscription read is not "no subscription" — see
+      // subscriptionState, which is where that distinction is tested.
+      const state = subscriptionState(sub);
+
+      const { show, stale } = sortNotices((notices.data ?? []) as Notification[], state);
+      setItems(show);
+
+      // Cleared, not merely hidden: otherwise every device re-decides the
+      // same rows forever and the backlog never drains.
+      if (stale.length) {
+        void supabase.from("notifications")
+          .update({ read_at: new Date().toISOString() })
+          .in("id", stale.map((n) => n.id));
+      }
+    })();
     return () => { active = false; };
   }, [userId]);
 
