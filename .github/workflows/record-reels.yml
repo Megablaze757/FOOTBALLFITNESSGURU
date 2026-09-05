@@ -60,12 +60,54 @@ jobs:
       # set/not-set only — never a value.
       # ═══════════════════════════════════════════════════════════════════
       - name: What is configured
+        env:
+          RAW_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL || 'https://txqhstackgidjqkkrzyj.supabase.co' }}
+          RAW_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_kr26XwyR0HZxS3HR3UJI2Q_YLLT7Sfl' }}
+          RAW_API: ${{ vars.NEXT_PUBLIC_API_URL || '' }}
         run: |
           echo "REEL_EMAIL:    ${{ secrets.REEL_EMAIL != '' && 'set' || 'NOT SET' }}"
           echo "REEL_PASSWORD: ${{ secrets.REEL_PASSWORD != '' && 'set' || 'NOT SET' }}"
           echo ""
           echo "Both must be repository SECRETS — Settings → Secrets and variables → Actions,"
           echo "the Secrets tab rather than Variables. Names are exact and case-sensitive."
+          echo ""
+
+          # ───────────────────────────────────────────────────────────────
+          # THE TRAILING NEWLINE, REMOVED ONCE, HERE.
+          #
+          # NEXT_PUBLIC_SUPABASE_URL was saved with a carriage return on the
+          # end. Invisible in the settings box, invisible in the log, and
+          # fatal: curl answered "URL rejected: Malformed input to a URL
+          # function" and quit before making a request. Three runs recorded a
+          # reel perfectly and put none of them in the dashboard because of one
+          # character nobody could see.
+          #
+          # Copy-and-paste is how every one of these gets configured, so a
+          # stray newline is the NORMAL case. Stripped once, up front, and
+          # every later step reads the cleaned value out of $GITHUB_ENV — a
+          # second place to fix is a second place to forget.
+          # ───────────────────────────────────────────────────────────────
+          url=$(printf '%s' "$RAW_URL" | tr -d '[:space:]')
+          key=$(printf '%s' "$RAW_KEY" | tr -d '[:space:]')
+          api=$(printf '%s' "$RAW_API" | tr -d '[:space:]')
+
+          if [ "$url" != "$RAW_URL" ] || [ "$key" != "$RAW_KEY" ]; then
+            echo "::warning::A repository VARIABLE has whitespace in it (usually a newline from a paste)."
+            echo "::warning::This run strips it, so nothing breaks — but re-saving the variable without"
+            echo "::warning::the trailing newline is worth doing: Settings -> Secrets and variables -> Actions -> Variables."
+          fi
+
+          case "$url" in
+            https://*.supabase.co) ;;
+            *) echo "::error::NEXT_PUBLIC_SUPABASE_URL does not look like a Supabase URL: $url"; exit 1 ;;
+          esac
+
+          echo "Supabase URL:  $url"
+          {
+            echo "SUPABASE_URL=$url"
+            echo "SUPABASE_KEY=$key"
+            echo "SUPABASE_API=$api"
+          } >> "$GITHUB_ENV"
 
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -99,9 +141,12 @@ jobs:
       - name: Build the site to film
         run: npm run build
         env:
-          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL || 'https://txqhstackgidjqkkrzyj.supabase.co' }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_kr26XwyR0HZxS3HR3UJI2Q_YLLT7Sfl' }}
-          NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL || '' }}
+          # From $GITHUB_ENV, already stripped of paste damage above. A URL with
+          # a carriage return in it would be baked into the bundle and every
+          # request the filmed app makes would fail.
+          NEXT_PUBLIC_SUPABASE_URL: ${{ env.SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ env.SUPABASE_KEY }}
+          NEXT_PUBLIC_API_URL: ${{ env.SUPABASE_API }}
 
       # 325MB, and it never changes. Downloading it on every run is most of the
       # job's time and all of it is avoidable.
@@ -187,10 +232,20 @@ jobs:
         env:
           REEL_EMAIL: ${{ secrets.REEL_EMAIL }}
           REEL_PASSWORD: ${{ secrets.REEL_PASSWORD }}
-          SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL || 'https://txqhstackgidjqkkrzyj.supabase.co' }}
-          SUPABASE_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_kr26XwyR0HZxS3HR3UJI2Q_YLLT7Sfl' }}
+          # SUPABASE_URL and SUPABASE_KEY come from $GITHUB_ENV, cleaned.
         run: |
           set -uo pipefail
+
+          # A newline cannot be typed into a password field, so one here is
+          # always paste damage. Spaces are NOT stripped — a password may
+          # legitimately end in one, and silently trimming it would break a
+          # working credential — but they are reported, because an invisible
+          # trailing space is otherwise an unexplainable HTTP 400.
+          REEL_EMAIL=$(printf '%s' "$REEL_EMAIL" | tr -d '\r\n')
+          REEL_PASSWORD=$(printf '%s' "$REEL_PASSWORD" | tr -d '\r\n')
+          case "$REEL_PASSWORD" in
+            " "*|*" ") echo "::warning::REEL_PASSWORD starts or ends with a space. If sign-in fails, that is why." ;;
+          esac
           if [ -z "${REEL_EMAIL:-}" ] || [ -z "${REEL_PASSWORD:-}" ]; then
             echo "::warning::REEL_EMAIL/REEL_PASSWORD are empty, so the reel was not uploaded to the dashboard."
             echo "::warning::They must be repository SECRETS (Settings -> Secrets and variables -> Actions -> Secrets),"
@@ -212,18 +267,27 @@ jobs:
           # a Supabase auth error names the reason ("invalid_grant",
           # "email_not_confirmed") without ever echoing what was sent.
           # ─────────────────────────────────────────────────────────────────
+          #
+          # `|| echo "000"` APPENDED to curl's own output rather than replacing
+          # it: curl already prints 000 through -w when it fails, so a failure
+          # produced the code "000000", which matched no case below and left
+          # the run with a bare "HTTP 000000" and no explanation at all. The
+          # exit status is captured separately now.
           auth=$(mktemp)
-          code=$(curl -sS -o "$auth" -w "%{http_code}" \
+          body=$(python3 -c 'import json,os; print(json.dumps({"email": os.environ["REEL_EMAIL"], "password": os.environ["REEL_PASSWORD"]}))')
+          if ! code=$(curl -sS -o "$auth" -w "%{http_code}" \
             -X POST "$SUPABASE_URL/auth/v1/token?grant_type=password" \
             -H "apikey: $SUPABASE_KEY" \
             -H "Content-Type: application/json" \
-            --data-raw "$(python3 -c 'import json,os; print(json.dumps({"email": os.environ["REEL_EMAIL"], "password": os.environ["REEL_PASSWORD"]}))')" \
-            || echo "000")
+            --data-raw "$body" 2>"$auth.err"); then
+            code="000"
+          fi
 
           if [ "$code" != "200" ]; then
             echo "::error::Sign-in to Supabase failed (HTTP $code) — the reel was not uploaded to the dashboard."
             case "$code" in
-              000) echo "::error::The request did not complete at all. Check NEXT_PUBLIC_SUPABASE_URL." ;;
+              000) echo "::error::The request did not complete at all. Check NEXT_PUBLIC_SUPABASE_URL."
+                   head -c 200 "$auth.err" 2>/dev/null | tr -d '\n'; echo ;;
               400) echo "::error::Supabase rejected the credentials. Check REEL_EMAIL and REEL_PASSWORD, and that the account is confirmed." ;;
               401|403) echo "::error::The publishable key was refused. Check NEXT_PUBLIC_SUPABASE_ANON_KEY." ;;
             esac
@@ -247,10 +311,12 @@ jobs:
             name="$SCRIPT-$stamp.${file##*.}"
             type=$([ "${file##*.}" = "mp4" ] && echo video/mp4 || echo application/x-subrip)
             out=$(mktemp)
-            up=$(curl -sS -o "$out" -w "%{http_code}" -X POST \
+            if ! up=$(curl -sS -o "$out" -w "%{http_code}" -X POST \
               "$SUPABASE_URL/storage/v1/object/reels/$name" \
               -H "apikey: $SUPABASE_KEY" -H "Authorization: Bearer $token" \
-              -H "Content-Type: $type" --data-binary "@$file" || echo "000")
+              -H "Content-Type: $type" --data-binary "@$file"); then
+              up="000"
+            fi
             if [ "$up" = "200" ]; then
               echo "$name uploaded"
               uploaded=$((uploaded + 1))
