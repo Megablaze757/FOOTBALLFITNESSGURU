@@ -171,28 +171,48 @@ function drillScript(drillId: string): ReelScript | null {
   const drill = SKILL_DRILLS.find((d) => d.id === drillId) ?? SKILL_DRILLS[0];
   if (!drill) return null;
   const sport = sportLabel(drill.sport as SportId);
-  return build(`drill-${drill.id}`, `Most people do ${drill.name.toLowerCase()} wrong.`, [
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * REBUILT AGAINST lib/reel-retention.ts, WHICH FAILED THE FIRST VERSION ON
+   * TWO COUNTS AND WAS RIGHT ABOUT BOTH.
+   *
+   * The hook was "Most people do X wrong" — no number, no question, nothing
+   * addressed to the viewer, so it labelled the video instead of starting it.
+   * It is second-person now, which is the form the retention data supports.
+   *
+   * And 88% of it happened on one route, because there is no per-drill page:
+   * /drills/<sport>/ is the whole thing. Four beats saying "show the setup",
+   * "show the steps", "stop on the cue" were three captions over one static
+   * screen — a screenshot with words on it, which is the format this rule
+   * exists to catch. It moves now: the index for breadth, the drill for the
+   * substance, and the log screen to show the drill being used.
+   *
+   * The numbered steps are gone deliberately. They are the least watchable
+   * thing on the page and the reel is not a substitute for reading it.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  return build(`drill-${drill.id}`, `You are doing ${drill.name.toLowerCase()} wrong.`, [
     {
-      route: `/drills/${drill.sport}/`,
-      action: `Find ${drill.name} in the list and open it.`,
-      say: `${drill.name}, for ${sport.toLowerCase()}.`,
+      route: "/drills/",
+      action: "The drill index. Scroll a little so the breadth reads.",
+      say: `Free drills for ${sport.toLowerCase()}, sorted by what they fix.`,
     },
     {
       route: `/drills/${drill.sport}/`,
-      action: "Show the setup section.",
+      action: `Find ${drill.name} and show its setup.`,
       say: drill.setup,
-    },
-    {
-      route: `/drills/${drill.sport}/`,
-      action: "Show the numbered steps, scrolling at reading pace.",
-      say: drill.reps,
     },
     {
       route: `/drills/${drill.sport}/`,
       action: "Stop on the coaching cue and hold it.",
       say: `The bit that matters: ${drill.coaching}`,
     },
-    { route: "/drills/", action: "The drill index, so the breadth shows.", say: "" },
+    {
+      route: "/journal?log=training",
+      action: "The training row, open and ready for the session.",
+      say: "Then log it, so next week is built on what you actually did.",
+    },
+    { route: "/", action: "Front page, so the address is on screen.", say: "" },
   ]);
 }
 

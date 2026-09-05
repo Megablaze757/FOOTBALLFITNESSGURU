@@ -52,3 +52,7 @@ scripts/out/
 
 # Theme screenshots — regenerate with `npm run shots`, do not commit.
 screenshots/
+
+# Recorded reels. Video is build output, not source — scripts/record-reel.mts
+# remakes any of them from the script in lib/reel-script.ts.
+/reels/

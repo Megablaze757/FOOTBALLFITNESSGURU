@@ -94,7 +94,22 @@ test("no beat points at a page that does not exist", () => {
   const known = /^\/(|home|journal|nutrition|benchmarks|drills|standards|recipes|cheapest-protein|exercises|a|articles|collections|plans)(\/|$)/;
   for (const script of all()) {
     for (const beat of script.beats) {
-      assert.match(beat.route, known, `${script.id}: ${beat.route}`);
+      /**
+       * The PATH, without the query.
+       *
+       * A beat may legitimately deep-link — "/journal?log=training" opens the
+       * training section rather than the top of the check-in, which is the
+       * difference between filming the thing and filming four wellbeing
+       * questions above it. This guard was matching the whole string, so a
+       * real route with a real parameter read as a page that does not exist.
+       */
+      const [path] = beat.route.split("?");
+      assert.match(path, known, `${script.id}: ${beat.route}`);
+      // And the query, if there is one, has to BE a query rather than a typo
+      // that would be sent to the browser verbatim.
+      const query = beat.route.slice(path.length);
+      assert.ok(query === "" || /^\?[\w-]+=[\w-]+(&[\w-]+=[\w-]+)*$/.test(query),
+        `${script.id}: "${query}" is not a query string`);
     }
   }
 });
