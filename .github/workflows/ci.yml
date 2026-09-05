@@ -68,6 +68,26 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+
+      # ═══════════════════════════════════════════════════════════════════
+      # THE WORKER'S DEPENDENCIES, BECAUSE THE ROOT TYPECHECK NEEDS THEM.
+      #
+      # `npm run typecheck` is `tsc --noEmit && npm --prefix cloudflare run
+      # typecheck` — it was widened to cover the Worker after a real type error
+      # shipped through the gap. But cloudflare/ has its OWN package.json and
+      # its own @cloudflare/workers-types, and the `npm ci` above installs only
+      # the root. So CI ran a typecheck whose types were not on disk and failed
+      # every push with TS2688, while the identical command passed on every
+      # machine that had ever run it locally.
+      #
+      # Three commits' worth of deploys were blocked by this before anybody
+      # looked, because the failing job is named `test` and the thing that
+      # stopped was the site.
+      # ═══════════════════════════════════════════════════════════════════
+      - name: Install the Worker's dependencies
+        working-directory: cloudflare
+        run: npm ci
+
       # Typecheck BEFORE the tests. `next build` is currently the only thing
       # that checks types, which means a missing import is discovered by the
       # deploy — the most expensive place to find it, and it blocks shipping

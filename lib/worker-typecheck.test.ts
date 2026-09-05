@@ -39,6 +39,69 @@ test("the root typecheck covers the Worker as well as the app", () => {
 });
 
 /**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * A CHECK WHOSE DEPENDENCIES ARE NOT INSTALLED IS NOT A CHECK.
+ *
+ * Widening the root typecheck to cover the Worker (above) had a cost nobody
+ * paid until CI did: `npm --prefix cloudflare run typecheck` needs
+ * cloudflare/node_modules, and the workflow's `npm ci` installs only the root.
+ * So every push failed with TS2688 — "cannot find type definition file for
+ * @cloudflare/workers-types" — while the identical command passed on every
+ * machine that had ever run it, because a local checkout has that directory.
+ *
+ * Three commits' worth of deploys were blocked before anybody looked. The job
+ * that goes red is called `test`; the thing that stops is the SITE, because
+ * deploy.yml gates on it. That distance between the symptom and the
+ * consequence is why this is worth a test rather than a memory.
+ *
+ * Derived from the script rather than hardcoded: point the root typecheck at
+ * another workspace tomorrow and this asks for its install too.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("CI installs the dependencies of every workspace the typecheck reaches", () => {
+  const script = pkg("../package.json").scripts?.typecheck ?? "";
+  const workspaces = [...script.matchAll(/--prefix[= ]+([\w./-]+)/g)].map((m) => m[1]);
+  assert.ok(
+    workspaces.length > 0,
+    "the root typecheck no longer reaches another workspace — has it stopped covering the Worker?",
+  );
+
+  const ci = readFileSync(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8")
+    // Comments in this file describe the very bug being guarded, by name.
+    .replace(/^\s*#.*$/gm, "");
+
+  /**
+   * SPLIT INTO STEPS FIRST, and this is not tidiness.
+   *
+   * The version of this that searched the whole file passed while the install
+   * sat AFTER the typecheck: a pattern allowed to span two hundred characters
+   * matched the root `run: npm ci` in one step and the `working-directory:` of
+   * a completely different step below it. The order it then reported was of
+   * two halves that never appear in the same step.
+   */
+  const steps = ci.split(/\n {6}- /).slice(1);
+  const runsTypecheck = steps.findIndex((step) => /npm run typecheck/.test(step));
+  assert.ok(runsTypecheck >= 0, "CI does not run the typecheck at all");
+
+  for (const dir of workspaces) {
+    const scoped = new RegExp(`(working-directory:\\s*\\.?/?${dir}/?\\s)|(--prefix[= ]+\\.?/?${dir}/?)`);
+    const installs = steps
+      .map((step, i) => (/npm ci/.test(step) && scoped.test(step) ? i : -1))
+      .filter((i) => i >= 0);
+
+    assert.ok(
+      installs.length > 0,
+      `CI runs a typecheck that needs ${dir}/node_modules and never installs it — `
+      + "the run fails with TS2688 and takes the deploy with it",
+    );
+    assert.ok(
+      Math.min(...installs) < runsTypecheck,
+      `CI installs ${dir}'s dependencies AFTER running the typecheck that needs them`,
+    );
+  }
+});
+
+/**
  * And the reason it matters, pinned: every AI call has to carry the thing it is
  * being asked about. A `system` with no `user` is a model answering from the
  * instructions alone — which looks like a working feature returning bad output,
