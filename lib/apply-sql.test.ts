@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 // The list lives with the generator. A second copy here is a list that can go
 // stale and then validate the combined file against migrations it no longer
 // contains — which is exactly what happened when 0104 was added.
@@ -22,7 +22,15 @@ import { PARTS } from "../scripts/build-apply-sql.mjs";
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
 
 
-const combined = read("../supabase/apply-0088-0110.sql");
+/**
+ * DERIVED, not spelled out. The name carries the migration range, so it
+ * changes every time the range does — and a hardcoded copy here fails with an
+ * ENOENT that reads like a missing file rather than a rename. The guard at the
+ * bottom of this file already works this out from PARTS; there is no reason
+ * for a second answer.
+ */
+const COMBINED = `supabase/apply-0088-${PARTS[PARTS.length - 1].slice(0, 4)}.sql`;
+const combined = read(`../${COMBINED}`);
 
 /**
  * Split SQL into statements, without cutting a function body in half.
@@ -162,6 +170,16 @@ test("running it twice is safe", () => {
      * session_type note in 0088.
      */
     /^update [\w.]+ set .* where /is,
+    /**
+     * An insert, but ONLY one that says what to do about a row already there.
+     *
+     * `on conflict` is the whole of it. A bare insert is the one kind of
+     * statement in this file that genuinely fails on a second run, so this
+     * pattern demands the clause rather than trusting the verb — the storage
+     * bucket in 0111 has it, and an insert written without it should still
+     * fail this test.
+     */
+    /^insert into [\w.]+[\s\S]*\bon conflict\b/i,
   ];
 
   /**
@@ -210,12 +228,25 @@ test("it says how to run it and what is still outstanding", () => {
  * screen leaves an admin looking for a path that does not exist.
  */
 test("everything that names the combined file names the one that exists", () => {
-  const expected = `supabase/apply-0088-${PARTS[PARTS.length - 1].slice(0, 4)}.sql`;
+  const expected = COMBINED;
 
+  /**
+   * EVERY file that names it, found rather than listed.
+   *
+   * This was a hand-written list of two, and lib/share-code.test.ts named the
+   * file as well — so a rename left it opening a path that no longer existed,
+   * with an ENOENT that reads like a missing file rather than a stale name.
+   * A guard against drift that itself has to be kept in step is half a guard.
+   */
   const quoted = [
     "../components/admin/AppleShortcutLink.tsx",
     "../scripts/build-apply-sql.mjs",
-  ];
+    ...readdirSync(new URL("./", import.meta.url))
+      .filter((f) => f.endsWith(".ts"))
+      .map((f) => `./${f}`),
+  ].filter((file) => /supabase\/apply-0088-\d{4}\.sql/.test(read(file)));
+
+  assert.ok(quoted.length >= 2, "nothing names the combined file — has it stopped being quoted anywhere?");
   for (const file of quoted) {
     const src = read(file);
     const names = [...src.matchAll(/supabase\/apply-0088-\d{4}\.sql/g)].map((m) => m[0]);

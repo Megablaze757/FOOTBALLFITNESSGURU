@@ -117,6 +117,14 @@ const WORKER_ONLY = new Set([
    * publish", which the admin tool says plainly.
    */
   "publish-cues",
+  /**
+   * Starting a recording. Worker-only permanently and for the same reason as
+   * publish-cues: it asks GitHub to run a workflow using a repository token
+   * held as a Worker secret. There is nothing an on-device fallback could
+   * stand in for — the fallback for "cannot record" is "no reel", which the
+   * panel says plainly.
+   */
+  "record-reel",
   // Have on-device fallbacks, so these degrade rather than break.
   //
   // `generate-challenges` was here and is gone: the challenge board is picked

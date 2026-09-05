@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // =============================================================================
-// Rebuild supabase/apply-0088-0110.sql from the migrations it claims to be.
+// Rebuild supabase/apply-0088-0111.sql from the migrations it claims to be.
 //
 // WHY A SCRIPT AND NOT A HAND-EDITED FILE. A paste-ready copy of four
 // migrations is a second source of truth, and the failure mode is silent: the
@@ -53,9 +53,19 @@ export const PARTS = [
   "0108_public_profiles",
   "0109_leaderboard_sport_position",
   "0110_calendar_token",
+  "0111_reels",
 ];
 
-const OUT = "supabase/apply-0088-0110.sql";
+/**
+ * EXPORTED, so nothing else has to spell it.
+ *
+ * The name carries the migration range, so it changes every time the range
+ * does — and it was written out by hand in this script, in the test, and in
+ * the admin panel's instructions. Renaming it broke the test with an ENOENT
+ * on the old name, which is the cheap version of the failure; the expensive
+ * one is the panel telling somebody to run a file that no longer exists.
+ */
+export const OUT = "supabase/apply-0088-0111.sql";
 const HEADER_END = "-- =============================================================================\n\n\n";
 
 // Importing this module must not rebuild anything — lib/apply-sql.test.ts

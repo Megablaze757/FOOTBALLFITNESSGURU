@@ -825,6 +825,44 @@ function trialIsRunning(stripeStatus) {
 }
 __name(trialIsRunning, "trialIsRunning");
 
+// ../lib/reel-dispatch.ts
+var REEL_EVENT = "record-reel";
+var REEL_SCRIPTS = ["demo-readiness", "demo-cost", "drill", "standards"];
+function reelRequestProblem(request) {
+  const script = String(request?.script ?? "").trim();
+  if (!script)
+    return "no script named";
+  if (!REEL_SCRIPTS.includes(script))
+    return `"${script}" is not a reel script`;
+  const subject = request?.subject;
+  if (subject !== void 0) {
+    if (typeof subject !== "string")
+      return "the subject is not text";
+    if (subject.length > 120)
+      return "the subject is longer than any drill name";
+    if (!/^[\p{L}\p{N} &'\u2019(),./:%+\u00a3\u00b0\u2013\u2014-]*$/u.test(subject)) {
+      return "the subject has characters a drill name would not";
+    }
+  }
+  return null;
+}
+__name(reelRequestProblem, "reelRequestProblem");
+function dispatchBody(request) {
+  return {
+    event_type: REEL_EVENT,
+    client_payload: {
+      script: request.script,
+      // STRINGS, not booleans. A GitHub Actions expression comparing a JSON
+      // boolean from client_payload against a string is a comparison nobody
+      // can read and half the internet gets wrong; "true"/"false" compares the
+      // same way on both trigger paths.
+      voice: request.voice ? "true" : "false",
+      subject: request.subject ?? ""
+    }
+  };
+}
+__name(dispatchBody, "dispatchBody");
+
 // ../lib/calendar-feed.ts
 function dayOffset(index, count) {
   if (count <= 1)
@@ -1047,6 +1085,8 @@ var src_default = {
         return await mintCalendarToken(req, env);
       if (pathname.endsWith("/publish-cues"))
         return await publishCues(req, env);
+      if (pathname.endsWith("/record-reel"))
+        return await recordReel(req, env);
       if (pathname.endsWith("/calendar"))
         return await calendarFeed(req, env);
       if (pathname.endsWith("/email-status"))
@@ -1065,6 +1105,13 @@ var src_default = {
           version: WORKER_VERSION,
           model: chain[0] ? `${chain[0].provider}/${chain[0].model}` : null,
           providers: [...new Set(chain.map((r) => r.provider))],
+          /**
+           * Whether the repository token is configured — a BOOLEAN, never the
+           * value. It decides whether "publish these cues" and "make a reel"
+           * can work at all, and the admin panel saying so up front beats a
+           * button that fails on click with a message about a secret.
+           */
+          github: !!env.GITHUB_TOKEN,
           chain: chain.map((r) => `${r.provider}/${r.model}`),
           // The client routes photos on this field: present means "this server
           // can see", absent means send them elsewhere or don't offer a camera.
@@ -1307,7 +1354,7 @@ function overBudget(state) {
   return json({ error: `${reason} The on-device coach still works, and your allowance resets \u2014 upgrade for more.` }, 429);
 }
 __name(overBudget, "overBudget");
-var WORKER_VERSION = "2026-09-05.2";
+var WORKER_VERSION = "2026-09-05.3";
 var ATTEMPT_TIMEOUT_MS = {
   groq: 1e4,
   openrouter: 2e4,
@@ -1980,6 +2027,41 @@ async function calendarFeed(req, env) {
   });
 }
 __name(calendarFeed, "calendarFeed");
+async function recordReel(req, env) {
+  const u = await authUser(req, env);
+  if (!u)
+    return json({ error: "unauthorized" }, 401);
+  if (!await isAdmin(env, u.id))
+    return json({ error: "admins only" }, 403);
+  if (!env.GITHUB_TOKEN) {
+    return json({ error: "No GITHUB_TOKEN secret on the Worker. Recording runs on GitHub and cannot start without one." }, 501);
+  }
+  const body = await req.json().catch(() => null);
+  const problem = reelRequestProblem(body);
+  if (problem)
+    return json({ error: problem }, 400);
+  const repo = env.GITHUB_REPO || "Megablaze757/FOOTBALLFITNESSGURU";
+  const sent = await fetch(`https://api.github.com/repos/${repo}/dispatches`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${env.GITHUB_TOKEN}`,
+      Accept: "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
+      "User-Agent": "pocketathlete-worker",
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(dispatchBody(body))
+  });
+  if (sent.status === 204) {
+    return json({ started: true, runs: `https://github.com/${repo}/actions/workflows/record-reels.yml` });
+  }
+  if (sent.status === 401 || sent.status === 403) {
+    return json({ error: "GitHub refused the token. It needs Contents: Read and write on this repository." }, 502);
+  }
+  const detail = await sent.text().catch(() => "");
+  return json({ error: `GitHub would not start the run (${sent.status}).`, detail: detail.slice(0, 300) }, 502);
+}
+__name(recordReel, "recordReel");
 async function publishCues(req, env) {
   const u = await authUser(req, env);
   if (!u)

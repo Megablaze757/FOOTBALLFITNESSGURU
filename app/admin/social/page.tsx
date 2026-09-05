@@ -4,6 +4,7 @@ import { AdminShell, AdminArea } from "@/components/admin/AdminShell";
 import { ContentEngine } from "@/components/ContentEngine";
 import { ReelStudio } from "@/components/ReelStudio";
 import { ReelRecorder } from "@/components/ReelRecorder";
+import { ReelLibrary } from "@/components/admin/ReelLibrary";
 import { ShareLoop } from "@/components/admin/ShareLoop";
 
 /**
@@ -40,7 +41,24 @@ export default function AdminSocial() {
 
           Recording first because that is the one worth reaching for by default.
           ═══════════════════════════════════════════════════════════════════ */}
-      <AdminArea title="Film the app" note="Screen recording with your voice over it — the footage a competitor cannot fake">
+      {/* ═══════════════════════════════════════════════════════════════════
+          ONE BUTTON, FIRST, BECAUSE IT IS THE ONE ANYBODY WANTS.
+
+          Making a reel used to mean opening GitHub, finding Actions, running a
+          workflow, waiting, finding the run and unzipping an artefact —
+          reported as "too complex" and then, plainly, "I want it in admin
+          dashboard not github".
+
+          This does the whole thing: press a button, wait three minutes, watch
+          the video here. The studio below still exists for a take you want to
+          perform yourself, which is a different job and a rarer one — so it is
+          no longer the first thing on the page.
+          ═══════════════════════════════════════════════════════════════════ */}
+      <AdminArea title="Make a reel" note="One button. Filmed, narrated and captioned for you — no editing, nothing to install">
+        <ReelLibrary />
+      </AdminArea>
+
+      <AdminArea title="Film it yourself" note="Screen recording with your own voice over it, for a take you want to perform">
         <ReelRecorder />
       </AdminArea>
 

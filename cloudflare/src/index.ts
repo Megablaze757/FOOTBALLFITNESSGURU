@@ -46,6 +46,7 @@ import {
   encodeFileContent, mergeCues, parseCuesFile, renderCuesFile, type CueEntry,
 } from "../../lib/cues-file";
 import { trialIsRunning } from "../../lib/notice-staleness";
+import { dispatchBody, reelRequestProblem, type ReelRequest } from "../../lib/reel-dispatch";
 import { buildIcs, planEvents } from "../../lib/calendar-feed";
 import { currentStreak, isStreakMilestone, goalAchieved, metricLabel, STREAK_MILESTONES } from "../../lib/milestones";
 
@@ -174,6 +175,7 @@ export default {
       if (pathname.endsWith("/ingest-token")) return await mintIngestToken(req, env);
       if (pathname.endsWith("/calendar-token")) return await mintCalendarToken(req, env);
       if (pathname.endsWith("/publish-cues")) return await publishCues(req, env);
+      if (pathname.endsWith("/record-reel")) return await recordReel(req, env);
       // GET, and before the auth-bearing routes: a calendar client sends no
       // Authorization header and no body.
       if (pathname.endsWith("/calendar")) return await calendarFeed(req, env);
@@ -203,6 +205,13 @@ export default {
           version: WORKER_VERSION,
           model: chain[0] ? `${chain[0].provider}/${chain[0].model}` : null,
           providers: [...new Set(chain.map((r) => r.provider))],
+          /**
+           * Whether the repository token is configured — a BOOLEAN, never the
+           * value. It decides whether "publish these cues" and "make a reel"
+           * can work at all, and the admin panel saying so up front beats a
+           * button that fails on click with a message about a secret.
+           */
+          github: !!env.GITHUB_TOKEN,
           chain: chain.map((r) => `${r.provider}/${r.model}`),
           // The client routes photos on this field: present means "this server
           // can see", absent means send them elsewhere or don't offer a camera.
@@ -536,7 +545,7 @@ function overBudget(state: BudgetState): Response {
 // nobody is watching a spinner and the budget can be what the work actually
 // needs. Callers pass their own client-side timeout to match.
 // Bump on every paste into the Cloudflare dashboard. GET /health reports it.
-const WORKER_VERSION = "2026-09-05.2";
+const WORKER_VERSION = "2026-09-05.3";
 
 const CHAIN_BUDGET_MS = 55_000;
 /**
@@ -1910,6 +1919,60 @@ async function calendarFeed(req: Request, env: Env): Promise<Response> {
  * repository.
  * ═══════════════════════════════════════════════════════════════════════════
  */
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * ASK GITHUB TO MAKE A REEL.
+ *
+ * Reported as "make the admin one click to make the reel — it's too complex",
+ * and it was: seven steps in GitHub's own UI to build a thing the schedule had
+ * already decided on.
+ *
+ * repository_dispatch rather than workflow_dispatch, because the two need
+ * different permissions and this one needs Contents: write — exactly what the
+ * publish-cues token already has. Same button, no second setup step, and no
+ * widening of what that credential can do.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+async function recordReel(req: Request, env: Env): Promise<Response> {
+  const u = await authUser(req, env);
+  if (!u) return json({ error: "unauthorized" }, 401);
+  if (!(await isAdmin(env, u.id))) return json({ error: "admins only" }, 403);
+  if (!env.GITHUB_TOKEN) {
+    return json({ error: "No GITHUB_TOKEN secret on the Worker. Recording runs on GitHub and cannot start without one." }, 501);
+  }
+
+  const body = await req.json().catch(() => null) as Partial<ReelRequest> | null;
+  // Checked HERE, not trusted from the browser: this ends up as an argument in
+  // a workflow that runs shell, and "it came from our own admin page" is not a
+  // reason to hand an arbitrary string to one.
+  const problem = reelRequestProblem(body);
+  if (problem) return json({ error: problem }, 400);
+
+  const repo = env.GITHUB_REPO || "Megablaze757/FOOTBALLFITNESSGURU";
+  const sent = await fetch(`https://api.github.com/repos/${repo}/dispatches`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${env.GITHUB_TOKEN}`,
+      Accept: "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
+      "User-Agent": "pocketathlete-worker",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(dispatchBody(body as ReelRequest)),
+  });
+
+  // 204 with no body is success here, which is worth saying because a check for
+  // `ok` on a 204 is the kind of thing that gets "fixed" into a bug.
+  if (sent.status === 204) {
+    return json({ started: true, runs: `https://github.com/${repo}/actions/workflows/record-reels.yml` });
+  }
+  if (sent.status === 401 || sent.status === 403) {
+    return json({ error: "GitHub refused the token. It needs Contents: Read and write on this repository." }, 502);
+  }
+  const detail = await sent.text().catch(() => "");
+  return json({ error: `GitHub would not start the run (${sent.status}).`, detail: detail.slice(0, 300) }, 502);
+}
+
 async function publishCues(req: Request, env: Env): Promise<Response> {
   const u = await authUser(req, env);
   if (!u) return json({ error: "unauthorized" }, 401);

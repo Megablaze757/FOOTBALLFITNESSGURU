@@ -213,8 +213,23 @@ test("the repository token never leaves the Worker", () => {
    * rather than the token. Counting interpolations catches the real thing: a
    * second `${env.GITHUB_TOKEN}` anywhere is the token going somewhere else.
    */
-  const uses = worker.match(/\$\{env\.GITHUB_TOKEN\}/g) ?? [];
-  assert.equal(uses.length, 1, `the token's value is interpolated ${uses.length} times, not once`);
+  /**
+   * EVERY interpolation is an Authorization header.
+   *
+   * This counted them and demanded exactly one, which was true while
+   * publish-cues was the only route using the token and became false the
+   * moment record-reel was added — a guard that fails on a correct second use
+   * teaches people to relax it. What actually matters is not how many times
+   * the value appears but that it never appears anywhere except a bearer
+   * header.
+   */
+  // The text BEFORE each interpolation, so the anchor has something to sit on.
+  const before = [...worker.matchAll(/(.{0,40})\$\{env\.GITHUB_TOKEN\}/g)].map((m) => m[1]);
+  assert.ok(before.length > 0, "nothing sends the token anywhere");
+  for (const prefix of before) {
+    assert.match(prefix, /Authorization: `Bearer $/,
+      `the token's value is used outside an Authorization header, after: "${prefix}"`);
+  }
   for (const file of ["components/admin/LibraryCues.tsx", "lib/cues-file.ts", "lib/api.ts"]) {
     assert.ok(!/GITHUB_TOKEN/.test(readFileSync(file, "utf8")), `${file} mentions the repository token`);
   }

@@ -14,6 +14,18 @@ name: Record reels
 # artefacts nobody opens.
 
 on:
+  # ═════════════════════════════════════════════════════════════════════════
+  # THE ADMIN PANEL'S BUTTON LANDS HERE.
+  #
+  # repository_dispatch and not workflow_dispatch: they do the same job and
+  # need different permissions. workflow_dispatch wants Actions: write on the
+  # token; repository_dispatch wants Contents: write, which is exactly what the
+  # publish-cues token already has. One button, no second setup step, and no
+  # widening of what that credential can do.
+  # ═════════════════════════════════════════════════════════════════════════
+  repository_dispatch:
+    types: [record-reel]
+
   workflow_dispatch:
     inputs:
       script:
@@ -28,6 +40,17 @@ on:
 jobs:
   record:
     runs-on: ubuntu-latest
+    # RESOLVED ONCE, at the top. Two triggers carry the same values in
+    # different places, and a workflow that reaches for both at every use is a
+    # workflow where one of them is eventually forgotten.
+    env:
+      SCRIPT: ${{ inputs.script || github.event.client_payload.script || 'demo-cost' }}
+      SUBJECT: ${{ github.event.client_payload.subject || '' }}
+      # A STRING on both paths. A GitHub expression comparing a JSON boolean
+      # from client_payload against a workflow input is a comparison nobody can
+      # read and half the internet gets wrong.
+      VOICE: ${{ github.event.client_payload.voice || (inputs.voice && 'true') || 'false' }}
+      REEL_EMAIL: ${{ secrets.REEL_EMAIL }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -50,7 +73,7 @@ jobs:
       # 325MB, and it never changes. Downloading it on every run is most of the
       # job's time and all of it is avoidable.
       - name: Cache the voice model
-        if: inputs.voice
+        if: env.VOICE == 'true'
         id: voice-cache
         uses: actions/cache@v4
         with:
@@ -58,7 +81,7 @@ jobs:
           key: kokoro-v1.0
 
       - name: Fetch the voice model
-        if: inputs.voice && steps.voice-cache.outputs.cache-hit != 'true'
+        if: env.VOICE == 'true' && steps.voice-cache.outputs.cache-hit != 'true'
         run: |
           mkdir -p .voice
           base=https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0
@@ -66,7 +89,7 @@ jobs:
           curl -sSfL -o .voice/voices-v1.0.bin  "$base/voices-v1.0.bin"
 
       - name: Install the voice
-        if: inputs.voice
+        if: env.VOICE == 'true'
         run: pip install --quiet kokoro-onnx soundfile
 
       - name: Serve the export
@@ -77,7 +100,11 @@ jobs:
           for _ in $(seq 1 40); do curl -sf http://localhost:8899/ >/dev/null && break; sleep 0.25; done
 
       - name: Record
-        run: node --import tsx scripts/record-reel.mts "${{ inputs.script }}" ${{ inputs.voice && '--voice' || '' }} --out reels
+        run: |
+          node --import tsx scripts/record-reel.mts "$SCRIPT" \
+            $([ "$VOICE" = "true" ] && echo --voice) \
+            $([ -n "$SUBJECT" ] && echo --subject "$SUBJECT") \
+            --out reels
         env:
           KOKORO_MODEL: .voice/kokoro-v1.0.onnx
           KOKORO_VOICES: .voice/voices-v1.0.bin
@@ -90,23 +117,63 @@ jobs:
       # H.264 in an MP4 is what the platforms accept. The runner's ffmpeg can
       # do it; Playwright's cannot.
       - name: Mux to MP4
-        if: inputs.voice
+        if: env.VOICE == 'true'
         run: |
-          id="${{ inputs.script }}"
+          id="$SCRIPT"
           lead=$(cat reels/*.lead 2>/dev/null || echo 0)
           ffmpeg -hide_banner -loglevel error -y -ss "$lead" -i reels/*.webm -i reels/*.wav \
             -c:v libx264 -preset slow -crf 20 -pix_fmt yuv420p -c:a aac -b:a 128k \
             -shortest "reels/$id.mp4"
 
       - name: Mux silent
-        if: ${{ !inputs.voice }}
+        if: env.VOICE != 'true'
         run: |
           ffmpeg -hide_banner -loglevel error -y -i reels/*.webm \
-            -c:v libx264 -preset slow -crf 20 -pix_fmt yuv420p -an "reels/${{ inputs.script }}.mp4"
+            -c:v libx264 -preset slow -crf 20 -pix_fmt yuv420p -an "reels/$SCRIPT.mp4"
+
+      # ═══════════════════════════════════════════════════════════════════
+      # BACK INTO THE APP, WHICH IS THE WHOLE POINT.
+      #
+      # "I want it in admin dashboard not github." An artefact means opening
+      # GitHub, finding the run, downloading a zip and unzipping it — to watch
+      # a twenty-second video the app asked for in the first place.
+      #
+      # Signed in as the SAME demo account that filmed it, so there is no new
+      # credential: these are the secrets that already exist. The bucket is
+      # private and admin-read (migration 0111).
+      #
+      # Not fatal if it fails. The artefact below is still there, and losing a
+      # reel to a storage hiccup should not lose the run that made it.
+      # ═══════════════════════════════════════════════════════════════════
+      - name: Put it in the dashboard
+        if: env.REEL_EMAIL != ''
+        continue-on-error: true
+        env:
+          REEL_EMAIL: ${{ secrets.REEL_EMAIL }}
+          REEL_PASSWORD: ${{ secrets.REEL_PASSWORD }}
+          SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL || 'https://txqhstackgidjqkkrzyj.supabase.co' }}
+          SUPABASE_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_kr26XwyR0HZxS3HR3UJI2Q_YLLT7Sfl' }}
+        run: |
+          set -euo pipefail
+          token=$(curl -sS -X POST "$SUPABASE_URL/auth/v1/token?grant_type=password"             -H "apikey: $SUPABASE_KEY" -H "Content-Type: application/json"             -d "{\"email\":\"$REEL_EMAIL\",\"password\":\"$REEL_PASSWORD\"}"             | python3 -c "import json,sys; print(json.load(sys.stdin).get('access_token',''))")
+          if [ -z "$token" ]; then echo "::warning::could not sign in to upload the reel"; exit 0; fi
+
+          # Named by script and day, so a second run of the same reel does not
+          # silently replace the first — an admin comparing two takes is the
+          # normal case, not an edge one.
+          stamp=$(date -u +%Y-%m-%dT%H-%M)
+          for file in reels/*.mp4 reels/*.srt; do
+            [ -e "$file" ] || continue
+            name="$SCRIPT-$stamp.${file##*.}"
+            type=$([ "${file##*.}" = "mp4" ] && echo video/mp4 || echo application/x-subrip)
+            code=$(curl -sS -o /dev/null -w "%{http_code}" -X POST               "$SUPABASE_URL/storage/v1/object/reels/$name"               -H "apikey: $SUPABASE_KEY" -H "Authorization: Bearer $token"               -H "Content-Type: $type" --data-binary "@$file")
+            echo "$name -> HTTP $code"
+            [ "$code" = "200" ] || echo "::warning::$name did not upload (HTTP $code) — is migration 0111 applied?"
+          done
 
       - uses: actions/upload-artifact@v4
         with:
-          name: reel-${{ inputs.script }}
+          name: reel-${{ env.SCRIPT }}
           path: |
             reels/*.mp4
             reels/*.srt
