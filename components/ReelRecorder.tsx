@@ -2,9 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
-  SCRIPTS, reelScript, scriptProblems, readTimeMs, type ReelScript, type ScriptId,
+  SCRIPTS, reelScript, scriptProblems, readTimeMs, beatAt, type ScriptId,
 } from "@/lib/reel-script";
 import { pickMimeType, inspectRecording, isPostable, fileExtension } from "@/lib/reel";
+import {
+  STAGE_NAME, STAGE_ROUTE, stageBox, stageFeatures, isStageRoute,
+} from "@/lib/reel-stage";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -20,19 +23,33 @@ import { pickMimeType, inspectRecording, isPostable, fileExtension } from "@/lib
  * those are moving pictures of something happening, and they are the only
  * footage the app can offer that a competitor cannot fake.
  *
+ * IT FILMS A SECOND WINDOW, and that is the correction rather than a
+ * refinement. This told you to share THIS tab and then handed you a shot list
+ * saying "go to /journal" — and the app is a single-page app, so following the
+ * first instruction unmounted this component and its cleanup stopped every
+ * track. Do as it said and you got no file; ignore it and you filmed the shot
+ * list. The stage is its own phone-shaped window now (lib/reel-stage.ts): the
+ * studio never unmounts, the teleprompter is not on camera, and the footage is
+ * 9:16 because it was framed that way rather than cropped to it afterwards.
+ *
  * WHAT IT CANNOT DO, said plainly because the alternative is somebody expecting
  * it to. It cannot start recording on its own — getDisplayMedia needs a click
  * and then a human choosing what to share, by design, and no amount of code
- * gets around that. It cannot drive the app for you: the recording is of
- * whatever you do. What it CAN do is hold the shot list on screen, count you
- * through the beats at the pace the narration needs, and hand you a file the
- * platforms will accept.
+ * gets around that. It can put the stage on the right SCREEN for each beat, but
+ * it cannot drag a slider for you: where a beat says to do something, you do
+ * it. What it CAN do is hold the shot list, count you through the beats at the
+ * pace the narration needs, and hand you a file the platforms will accept.
  *
- * THE VOICE IS YOURS. Browser speech synthesis cannot be captured into a
- * MediaStream in any browser this would ship to, so a generated voiceover
- * cannot be recorded — and an AI voice on a reel about doing the work properly
- * would be the wrong instinct anyway. The microphone is mixed into the
- * recording live, and the line to say is on screen when it is due.
+ * THE VOICE IS YOURS. `speechSynthesis` writes to the speakers and not to a
+ * MediaStream, so the browser's own voice cannot be captured — and an AI voice
+ * on a reel about doing the work properly would be the wrong instinct anyway.
+ * The microphone is mixed in live and the line to say is on screen when it is
+ * due, which is why the stage is a separate window: you cannot read a
+ * teleprompter that is inside the shot.
+ *
+ * A SHARED WINDOW CARRIES NO SYSTEM AUDIO — Chrome offers that for tabs only.
+ * The app makes no sound, so nothing is lost, but it does mean the microphone
+ * is usually the ONLY audio track and the mixer below must not assume two.
  * ═══════════════════════════════════════════════════════════════════════════
  */
 export function ReelRecorder() {
@@ -46,6 +63,19 @@ export function ReelRecorder() {
   const recorder = useRef<MediaRecorder | null>(null);
   const tracks = useRef<MediaStreamTrack[]>([]);
   const started = useRef(0);
+
+  /**
+   * THE STAGE — the second window the app is filmed in. See lib/reel-stage.ts.
+   *
+   * A ref for the handle and state for whether it is open, because a window
+   * closed from its own title bar tells nobody: `stage.current.closed` has to
+   * be looked at, and the button that says "Open the stage" has to change back.
+   */
+  const stage = useRef<Window | null>(null);
+  const [stageOpen, setStageOpen] = useState(false);
+  const [autoDrive, setAutoDrive] = useState(true);
+  /** The route the stage was last SENT to, so it is not reloaded every frame. */
+  const droveTo = useRef<string | null>(null);
 
   /**
    * ═══════════════════════════════════════════════════════════════════════
@@ -75,7 +105,7 @@ export function ReelRecorder() {
 
   const script = reelScript(scriptId);
   const problems = script ? scriptProblems(script) : [];
-  const beat = script ? currentBeat(script, elapsed) : null;
+  const beat = script ? beatAt(script, elapsed) : null;
 
   // The clock that drives the teleprompter. requestAnimationFrame rather than
   // an interval: it is a readout, and one that stutters is one nobody can
@@ -92,8 +122,76 @@ export function ReelRecorder() {
   }, [state]);
 
   // Every track has to be stopped, or the browser keeps the "sharing" bar up
-  // and the microphone light on after the page is closed.
-  useEffect(() => () => { for (const t of tracks.current) t.stop(); }, []);
+  // and the microphone light on after the page is closed. The stage goes with
+  // it: a popup nobody owns any more is a window they have to hunt for.
+  useEffect(() => () => {
+    for (const t of tracks.current) t.stop();
+    stage.current?.close();
+  }, []);
+
+  /**
+   * A window can be closed from its own title bar, and says nothing when it is.
+   * Polled rather than listened to: `beforeunload` on a cross-window handle is
+   * unreliable once the popup navigates, which it does on every beat.
+   */
+  useEffect(() => {
+    if (!stageOpen) return;
+    const id = setInterval(() => {
+      if (stage.current?.closed !== false) {
+        stage.current = null;
+        droveTo.current = null;
+        setStageOpen(false);
+      }
+    }, 700);
+    return () => clearInterval(id);
+  }, [stageOpen]);
+
+  /**
+   * PUT THE STAGE ON THE RIGHT SCREEN, one beat at a time.
+   *
+   * Only when the ROUTE changes. Most scripts hold a screen for two or three
+   * beats — "open the log", "drag sleep to 3", "watch the score move" are all
+   * /journal — and re-assigning location.href on every frame would reload the
+   * app underneath the person mid-sentence.
+   *
+   * It cannot drag the slider. Getting somebody to the right screen with their
+   * hands free is still most of the job, and the beat says the rest.
+   */
+  useEffect(() => {
+    if (state !== "recording" || !autoDrive || !beat) return;
+    const route = beat.beat.route;
+    if (route === droveTo.current) return;
+    if (!isStageRoute(route)) return;
+    const win = stage.current;
+    if (!win || win.closed) return;
+    droveTo.current = route;
+    try { win.location.href = route; } catch { /* the stage went somewhere else */ }
+  }, [state, autoDrive, beat]);
+
+  function openStage() {
+    const screen = typeof window !== "undefined" && window.screen
+      ? { width: window.screen.availWidth, height: window.screen.availHeight }
+      : { width: 1440, height: 900 };
+    const box = stageBox(screen);
+    const win = window.open(STAGE_ROUTE, STAGE_NAME, stageFeatures(box));
+    if (!win) {
+      setError("The browser blocked the second window. Allow pop-ups for this site and try again.");
+      return;
+    }
+    stage.current = win;
+    droveTo.current = STAGE_ROUTE;
+    setStageOpen(true);
+    setError(null);
+    win.focus();
+  }
+
+  function sendStage(route: string) {
+    const win = stage.current;
+    if (!win || win.closed || !isStageRoute(route)) return;
+    droveTo.current = route;
+    win.location.href = route;
+    win.focus();
+  }
 
   async function start() {
     if (!script) return;
@@ -245,8 +343,9 @@ export function ReelRecorder() {
 
         <p className="text-xs text-slate-500">
           {Math.round(script.totalMs / 1000)}s of film · {script.words} words to say
-          {" "}(about {Math.round(readTimeMs(script) / 1000)}s). Share <b>this tab</b> when the
-          browser asks — a shared tab is cropped to the page and brings its own audio.
+          {" "}(about {Math.round(readTimeMs(script) / 1000)}s). Pick the{" "}
+          <b>PocketAthlete stage</b> window when the browser asks — not this tab, or the
+          teleprompter is in the video.
         </p>
 
         {problems.length > 0 && (
@@ -254,6 +353,39 @@ export function ReelRecorder() {
             {problems.map((p) => <li key={`${p.beat}-${p.problem}`}>Beat {p.beat + 1}: {p.problem}</li>)}
           </ul>
         )}
+
+        {/* THE SET. Opened before recording, because the share dialog can only
+            offer a window that already exists — and somebody who reaches the
+            dialog with nothing to pick will share this tab, which is the bug
+            this whole panel exists to end. */}
+        <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-slate-100">
+                {stageOpen ? "Stage open — 9:16, phone-sized" : "Open the stage first"}
+              </p>
+              <p className="mt-0.5 text-xs text-slate-400">
+                The app gets its own window so this shot list is not in the shot, and so the
+                footage is the right shape for a reel.
+              </p>
+            </div>
+            <button
+              onClick={openStage}
+              className={stageOpen ? "tap-target rounded-xl border border-white/10 px-3 py-2 text-sm font-semibold text-slate-200" : "btn-primary"}
+            >
+              {stageOpen ? "Bring it to the front" : "Open the stage"}
+            </button>
+          </div>
+          <label className="tap-target mt-3 flex items-center gap-2 text-sm text-slate-300">
+            <input
+              type="checkbox"
+              checked={autoDrive}
+              onChange={(e) => setAutoDrive(e.target.checked)}
+              className="h-5 w-5 accent-pitch-500"
+            />
+            Move the stage to each beat&rsquo;s screen for me
+          </label>
+        </div>
 
         {canRecord === false ? (
           /* The shot list still works, and on a phone it is arguably the better
@@ -271,8 +403,8 @@ export function ReelRecorder() {
         ) : (
           <div className="flex flex-wrap gap-2">
             {state !== "recording" ? (
-              <button onClick={start} disabled={canRecord === null} className="btn-primary">
-                Share a tab and record
+              <button onClick={start} disabled={canRecord === null || !stageOpen} className="btn-primary">
+                {stageOpen ? "Share the stage and record" : "Open the stage first"}
               </button>
             ) : (
               <button onClick={stop} className="btn-primary">Stop ({Math.round(elapsed / 1000)}s)</button>
@@ -294,7 +426,9 @@ export function ReelRecorder() {
 
         {state === "recording" && beat ? (
           <div className="mt-3">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Go to {beat.beat.route}</p>
+            <p className="text-xs uppercase tracking-wide text-slate-500">
+              {autoDrive ? "Stage is on" : "Go to"} {beat.beat.route}
+            </p>
             <p className="mt-1 text-lg font-bold text-slate-100">{beat.beat.action}</p>
             {beat.beat.say && <p className="mt-3 text-2xl font-extrabold leading-snug">“{beat.beat.say}”</p>}
             <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10">
@@ -309,7 +443,16 @@ export function ReelRecorder() {
             {script.beats.map((b, i) => (
               <li key={i} className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
                 <div className="flex items-baseline justify-between gap-3">
-                  <span className="text-xs font-semibold text-slate-400">{b.route}</span>
+                  {/* A rehearsal button. Walking the stage through the script
+                      before recording is how you find out that a screen needs
+                      data on it, which is not a thing to discover on take one. */}
+                  <button
+                    onClick={() => sendStage(b.route)}
+                    disabled={!stageOpen}
+                    className="tap-target text-xs font-semibold text-slate-400 hover:text-accent-400 disabled:hover:text-slate-400"
+                  >
+                    {b.route}
+                  </button>
                   <span className="text-xs text-slate-500">{(b.ms / 1000).toFixed(1)}s</span>
                 </div>
                 <p className="mt-1 text-sm text-slate-200">{b.action}</p>
@@ -337,13 +480,4 @@ export function ReelRecorder() {
       )}
     </div>
   );
-}
-
-/** Which beat the clock is inside, and how far through it. */
-function currentBeat(script: ReelScript, ms: number) {
-  for (const [index, b] of script.beats.entries()) {
-    if (ms < b.at + b.ms) return { beat: b, index, progress: Math.min(1, (ms - b.at) / b.ms) };
-  }
-  const last = script.beats[script.beats.length - 1];
-  return { beat: last, index: script.beats.length - 1, progress: 1 };
 }

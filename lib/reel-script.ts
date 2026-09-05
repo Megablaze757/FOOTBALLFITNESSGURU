@@ -291,3 +291,41 @@ export function scriptProblems(script: ReelScript): ScriptProblem[] {
 export function readTimeMs(script: ReelScript): number {
   return script.words * MS_PER_WORD;
 }
+
+export interface BeatCursor {
+  beat: Beat;
+  index: number;
+  /** 0 to 1 through this beat. */
+  progress: number;
+  /** True once the clock is past the last beat — the take has overrun. */
+  overrun: boolean;
+}
+
+/**
+ * Which beat the clock is inside.
+ *
+ * Lived in the component and was therefore untested, which is a poor place for
+ * the one function the teleprompter is. Two edges matter and neither is
+ * obvious from reading it: time zero must land on the FIRST beat rather than
+ * on nothing, and running past the end must hold the last beat rather than
+ * return null — a prompter that goes blank at the end reads as a crash, at the
+ * exact moment somebody is still talking.
+ */
+export function beatAt(script: ReelScript, ms: number): BeatCursor | null {
+  if (script.beats.length === 0) return null;
+  const at = Math.max(0, ms);
+  for (const [index, beat] of script.beats.entries()) {
+    if (at < beat.at + beat.ms) {
+      /**
+       * No clamp, because the loop already bounds this and a clamp that cannot
+       * fire is a claim that it can. `at` is at least this beat's start — every
+       * earlier beat was skipped for ending before it — and less than its end
+       * by the condition above. Both halves rest on beats being CONTIGUOUS,
+       * which `time()` guarantees by construction and a test asserts.
+       */
+      return { beat, index, progress: (at - beat.at) / beat.ms, overrun: false };
+    }
+  }
+  const index = script.beats.length - 1;
+  return { beat: script.beats[index], index, progress: 1, overrun: true };
+}
