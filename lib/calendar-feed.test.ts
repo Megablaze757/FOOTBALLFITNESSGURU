@@ -151,7 +151,19 @@ test("events are all-day and end the following day", () => {
  */
 test("a token that matches nobody is a 404, never an empty calendar", () => {
   const src = readFileSync(new URL("../cloudflare/src/index.ts", import.meta.url), "utf8");
-  const body = src.slice(src.indexOf("async function calendarFeed"), src.indexOf("async function mintCalendarToken"));
+  /**
+   * Bounded by the NEXT function, not by a named neighbour.
+   *
+   * This used to slice from `calendarFeed` to `mintCalendarToken`, which are
+   * adjacent only by habit. Adding an unrelated function between them widened
+   * the slice to cover it — and the read-only assertion below then failed on a
+   * route that is supposed to write, reporting the calendar feed for somebody
+   * else's code.
+   */
+  const at = src.indexOf("async function calendarFeed");
+  const next = src.indexOf("\nasync function ", at + 1);
+  const body = src.slice(at, next < 0 ? undefined : next);
+  assert.ok(at >= 0 && body.length > 200, "calendarFeed is not in the Worker any more");
 
   assert.match(body, /if \(!profile\) return new Response\("Not found", \{ status: 404 \}\)/,
     "an unknown token gets a calendar instead of a refusal");

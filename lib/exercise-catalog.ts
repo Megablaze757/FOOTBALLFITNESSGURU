@@ -6,6 +6,7 @@
 // =============================================================================
 
 import type { Exercise, ExerciseCategory, DemoPattern, Difficulty } from "./exercises";
+import { GENERATED_CUES } from "./exercise-cues.generated";
 
 // --- classifiers ------------------------------------------------------------
 
@@ -300,7 +301,17 @@ export function build(raw: string): Exercise[] {
     seen.add(id);
 
     const equipment = equipmentOf(name);
-    const coach = COACHING[name.toLowerCase()];
+    /**
+     * HAND-WRITTEN FIRST, GENERATED SECOND.
+     *
+     * COACHING is maintained by a person, one entry at a time. GENERATED_CUES
+     * is rewritten wholesale by the Worker on every publish from the admin
+     * drafting tool. Reading COACHING first means a movement somebody has
+     * written cues for keeps them however many times the other file is
+     * regenerated — machine output never overwrites a person's.
+     */
+    const key = name.toLowerCase();
+    const coach = COACHING[key] ?? GENERATED_CUES[key];
     built.push({
       id,
       name,

@@ -107,6 +107,16 @@ const WORKER_ONLY = new Set([
    * there is nothing here an on-device fallback could stand in for.
    */
   "calendar-token",
+  /**
+   * Publishing coaching cues. Worker-only permanently: it commits a generated
+   * file through the GitHub Contents API using a repository token held as a
+   * Worker secret. An Edge equivalent would mean a second copy of a credential
+   * that can write to the repository the site builds from, to do the one thing
+   * the Worker already does — and there is nothing an on-device fallback could
+   * stand in for, because the fallback for "cannot publish" is "do not
+   * publish", which the admin tool says plainly.
+   */
+  "publish-cues",
   // Have on-device fallbacks, so these degrade rather than break.
   //
   // `generate-challenges` was here and is gone: the challenge board is picked

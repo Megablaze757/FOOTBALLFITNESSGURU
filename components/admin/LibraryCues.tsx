@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { EXERCISES, isRunEntry } from "@/lib/exercises";
 import { draftTargets, draftProblems, parseDraft, type Draft, type DraftTarget } from "@/lib/exercise-draft";
 import { invokeAI } from "@/lib/api";
+import { type CueEntry } from "@/lib/cues-file";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -27,6 +28,13 @@ import { invokeAI } from "@/lib/api";
  */
 const TARGETS = draftTargets(EXERCISES.filter((e) => !isRunEntry(e)));
 
+interface PublishResult {
+  committed?: boolean;
+  published?: number;
+  commit?: string | null;
+  rejected?: { name: string; problems: string[] }[];
+}
+
 interface Drafted {
   target: DraftTarget;
   draft: Draft;
@@ -45,6 +53,8 @@ export function LibraryCues() {
   const [done, setDone] = useState<Drafted[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [published, setPublished] = useState<PublishResult | null>(null);
 
   const clean = useMemo(() => done.filter((d) => d.problems.length === 0), [done]);
   const held = useMemo(() => done.filter((d) => d.problems.length > 0), [done]);
@@ -84,6 +94,39 @@ export function LibraryCues() {
     setBusy(null);
   }
 
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * PUBLISHING, WHICH USED TO BE A PASTE INTO A FILE NOBODY EDITS.
+   *
+   * "It doesn't let me publish the exercises to library and it doesn't do it
+   * automatically." It did not: the library is compiled TypeScript, so this
+   * screen could only hand over lines to paste into the repository by hand.
+   *
+   * The Worker holds a GitHub token and commits a generated file for us —
+   * see lib/cues-file.ts for why it is a file and not a table, and the
+   * Worker's publishCues for what it refuses. CI rebuilds from the commit, so
+   * the cues end up in the prerendered HTML, which is where they were always
+   * meant to go.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  async function publish() {
+    setPublishing(true);
+    setError(null);
+    setPublished(null);
+    try {
+      const entries: CueEntry[] = clean.map((d) => ({
+        name: d.target.name.toLowerCase(),
+        cues: d.draft.cues,
+        why: d.draft.why,
+      }));
+      setPublished(await invokeAI<PublishResult>("publish-cues", { entries }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setPublishing(false);
+    }
+  }
+
   const paste = clean.map(coachingLine).join("\n");
 
   return (
@@ -91,8 +134,9 @@ export function LibraryCues() {
       <p className="text-xs text-slate-400">
         {TARGETS.length} movements have a written how-to and no coaching cues. Drafted on the
         Worker&apos;s free models, checked against each movement&apos;s own description, and output as
-        lines to paste into <code>COACHING</code> in <code>lib/exercise-catalog.ts</code>. Nothing is
-        saved from here — the library is code.
+        published straight to the library. The library is compiled code, so publishing commits a
+        generated file and the site rebuilds itself — every publish is a diff you can read and
+        revert. The lines are still there to paste by hand if you would rather.
       </p>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -135,6 +179,33 @@ export function LibraryCues() {
               >
                 {copied ? `Copied ${clean.length} lines` : `Copy ${clean.length} COACHING lines`}
               </button>
+              <button
+                onClick={publish}
+                disabled={publishing || clean.length === 0}
+                className="btn-primary mt-2 w-full text-xs disabled:opacity-40"
+              >
+                {publishing ? "Committing…" : `Publish ${clean.length} to the library`}
+              </button>
+              {published && (
+                <p className="mt-2 text-[11px] text-slate-400">
+                  {published.committed === false
+                    ? "Already published — nothing changed, so nothing was committed."
+                    : <>Committed {published.published} to the library.{" "}
+                        {published.commit && (
+                          <a href={published.commit} target="_blank" rel="noreferrer" className="text-accent-400 underline">
+                            Read the diff
+                          </a>
+                        )}{" "}
+                        The site rebuilds itself from here — give it a few minutes.
+                      </>}
+                </p>
+              )}
+              {published?.rejected && published.rejected.length > 0 && (
+                <p className="mt-1 text-[11px] text-readiness-yellow">
+                  {published.rejected.length} refused by the Worker:{" "}
+                  {published.rejected.map((r) => `${r.name} (${r.problems.join(", ")})`).join("; ")}
+                </p>
+              )}
             </div>
           )}
 

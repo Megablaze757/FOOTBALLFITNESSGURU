@@ -684,6 +684,140 @@ function growthDigest(input) {
 }
 __name(growthDigest, "growthDigest");
 
+// ../lib/cues-file.ts
+var CUES_REQUIRED = 3;
+var CUE_MIN = 10;
+var CUE_MAX = 70;
+var WHY_MIN = 40;
+var WHY_MAX = 200;
+var CUES_PATH = "lib/exercise-cues.generated.ts";
+var CUES_EXPORT = "GENERATED_CUES";
+var MAX_ENTRIES = 500;
+function cueEntryProblems(entry) {
+  const problems = [];
+  const name = (entry?.name ?? "").trim();
+  if (!name)
+    problems.push("no name");
+  else if (name.length > 80)
+    problems.push("the name is longer than any movement");
+  else if (name !== name.toLowerCase())
+    problems.push("the name must be lowercased \u2014 build() looks it up that way");
+  const cues = Array.isArray(entry?.cues) ? entry.cues : [];
+  if (cues.length < CUES_REQUIRED)
+    problems.push(`${cues.length} cues, needs ${CUES_REQUIRED}`);
+  if (cues.length > 6)
+    problems.push("more cues than anybody reads");
+  for (const cue of cues) {
+    if (typeof cue !== "string" || cue.trim().length < CUE_MIN)
+      problems.push(`a cue is shorter than ${CUE_MIN} characters`);
+    else if (cue.length > CUE_MAX)
+      problems.push(`a cue is longer than ${CUE_MAX} characters`);
+  }
+  const why = typeof entry?.why === "string" ? entry.why.trim() : "";
+  if (why.length < WHY_MIN)
+    problems.push(`the reason is shorter than ${WHY_MIN} characters`);
+  if (why.length > WHY_MAX)
+    problems.push(`the reason is longer than ${WHY_MAX} characters`);
+  for (const text of [name, why, ...cues.filter((c) => typeof c === "string")]) {
+    if (/[<>]/.test(text))
+      problems.push("angle brackets are not coaching");
+    if (/https?:\/\//i.test(text))
+      problems.push("a link is not a cue");
+  }
+  return [...new Set(problems)];
+}
+__name(cueEntryProblems, "cueEntryProblems");
+function toMap(entries) {
+  const map = {};
+  for (const key of [...entries.map((e) => e.name.trim().toLowerCase())].sort()) {
+    const entry = entries.find((e) => e.name.trim().toLowerCase() === key);
+    if (entry)
+      map[key] = { cues: entry.cues, why: entry.why };
+  }
+  return map;
+}
+__name(toMap, "toMap");
+function toEntries(map) {
+  return Object.keys(map).sort().map((name) => ({ name, cues: map[name].cues, why: map[name].why }));
+}
+__name(toEntries, "toEntries");
+function mergeCues(existing, incoming) {
+  const map = toMap(existing);
+  for (const entry of incoming)
+    map[entry.name.trim().toLowerCase()] = { cues: entry.cues, why: entry.why };
+  return toEntries(map);
+}
+__name(mergeCues, "mergeCues");
+var HEADER = `// ============================================================================
+// GENERATED FILE \u2014 DO NOT EDIT BY HAND.
+//
+// Written by the Worker's /publish-cues route from the admin drafting tool,
+// and rewritten wholesale on every publish: an edit made here is lost the next
+// time somebody publishes, without warning and without a conflict.
+//
+// To change a cue, publish it again from Admin \u2192 Ops. To keep one permanently,
+// move it into COACHING in lib/exercise-catalog.ts, which is hand-maintained
+// and always wins over this file.
+//
+// See lib/cues-file.ts for the format and why it is a file rather than a table.
+// ============================================================================
+`;
+function renderCuesFile(entries) {
+  const map = toMap(entries);
+  return `${HEADER}
+export const ${CUES_EXPORT}: Record<string, { cues: string[]; why: string }> = ${JSON.stringify(map, null, 2)};
+`;
+}
+__name(renderCuesFile, "renderCuesFile");
+function cuesJson(source) {
+  const at = source.indexOf(`${CUES_EXPORT}:`);
+  if (at < 0)
+    return null;
+  const marker = source.indexOf("= {", at);
+  if (marker < 0)
+    return null;
+  const open = marker + 2;
+  const close = source.lastIndexOf("}");
+  if (close <= open)
+    return null;
+  return source.slice(open, close + 1);
+}
+__name(cuesJson, "cuesJson");
+function parseCuesFile(source) {
+  const json2 = cuesJson(source);
+  if (json2 === null)
+    return [];
+  try {
+    const map = JSON.parse(json2);
+    if (!map || typeof map !== "object" || Array.isArray(map))
+      return [];
+    return toEntries(map).filter((e) => Array.isArray(e.cues) && typeof e.why === "string");
+  } catch {
+    return [];
+  }
+}
+__name(parseCuesFile, "parseCuesFile");
+function encodeFileContent(text) {
+  const bytes = new TextEncoder().encode(text);
+  let binary = "";
+  for (const byte of bytes)
+    binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+__name(encodeFileContent, "encodeFileContent");
+function decodeFileContent(base64) {
+  const binary = atob((base64 || "").replace(/\s+/g, ""));
+  return new TextDecoder().decode(Uint8Array.from(binary, (c) => c.charCodeAt(0)));
+}
+__name(decodeFileContent, "decodeFileContent");
+function cuesCommitMessage(count) {
+  return `Coaching cues for ${count} movement${count === 1 ? "" : "s"}
+
+Published from Admin \u2192 Ops. Generated file \u2014 see lib/cues-file.ts.
+`;
+}
+__name(cuesCommitMessage, "cuesCommitMessage");
+
 // ../lib/notice-staleness.ts
 var TRIALING = "trialing";
 function trialIsRunning(stripeStatus) {
@@ -911,6 +1045,8 @@ var src_default = {
         return await mintIngestToken(req, env);
       if (pathname.endsWith("/calendar-token"))
         return await mintCalendarToken(req, env);
+      if (pathname.endsWith("/publish-cues"))
+        return await publishCues(req, env);
       if (pathname.endsWith("/calendar"))
         return await calendarFeed(req, env);
       if (pathname.endsWith("/email-status"))
@@ -1171,7 +1307,7 @@ function overBudget(state) {
   return json({ error: `${reason} The on-device coach still works, and your allowance resets \u2014 upgrade for more.` }, 429);
 }
 __name(overBudget, "overBudget");
-var WORKER_VERSION = "2026-09-05.1";
+var WORKER_VERSION = "2026-09-05.2";
 var ATTEMPT_TIMEOUT_MS = {
   groq: 1e4,
   openrouter: 2e4,
@@ -1844,6 +1980,89 @@ async function calendarFeed(req, env) {
   });
 }
 __name(calendarFeed, "calendarFeed");
+async function publishCues(req, env) {
+  const u = await authUser(req, env);
+  if (!u)
+    return json({ error: "unauthorized" }, 401);
+  if (!await isAdmin(env, u.id))
+    return json({ error: "admins only" }, 403);
+  if (!env.GITHUB_TOKEN) {
+    return json({ error: "No GITHUB_TOKEN secret on the Worker. Publishing writes a commit and cannot without one." }, 501);
+  }
+  const body = await req.json().catch(() => null);
+  const incoming = Array.isArray(body?.entries) ? body.entries : [];
+  if (!incoming.length)
+    return json({ error: "nothing to publish" }, 400);
+  if (incoming.length > MAX_ENTRIES) {
+    return json({ error: `${incoming.length} entries is more than one publish may write (${MAX_ENTRIES}).` }, 400);
+  }
+  const rejected = [];
+  const good = [];
+  for (const raw of incoming) {
+    const problems = cueEntryProblems(raw);
+    if (problems.length)
+      rejected.push({ name: String(raw?.name ?? "(no name)"), problems });
+    else
+      good.push({ name: raw.name.trim().toLowerCase(), cues: raw.cues, why: raw.why });
+  }
+  if (!good.length)
+    return json({ error: "every entry was refused", rejected }, 400);
+  const repo = env.GITHUB_REPO || "Megablaze757/FOOTBALLFITNESSGURU";
+  const url = `https://api.github.com/repos/${repo}/contents/${CUES_PATH}`;
+  const headers = {
+    Authorization: `Bearer ${env.GITHUB_TOKEN}`,
+    Accept: "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28",
+    // GitHub refuses a request with no User-Agent, with a 403 that says
+    // nothing about the reason.
+    "User-Agent": "pocketathlete-worker"
+  };
+  let sha;
+  let existing = [];
+  let current = "";
+  const read = await fetch(url, { headers });
+  if (read.ok) {
+    const file = await read.json();
+    sha = file.sha;
+    current = decodeFileContent(file.content ?? "");
+    existing = parseCuesFile(current);
+  } else if (read.status === 404) {
+  } else if (read.status === 401 || read.status === 403) {
+    return json({ error: "GitHub refused the token. It needs Contents: Read and write on this repository." }, 502);
+  } else {
+    return json({ error: `Could not read ${CUES_PATH} from GitHub (${read.status}).` }, 502);
+  }
+  const content = renderCuesFile(mergeCues(existing, good));
+  if (content === current) {
+    return json({ committed: false, reason: "no change", published: good.length, rejected });
+  }
+  const write = await fetch(url, {
+    method: "PUT",
+    headers: { ...headers, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: cuesCommitMessage(good.length),
+      content: encodeFileContent(content),
+      ...sha ? { sha } : {}
+    })
+  });
+  if (!write.ok) {
+    const detail = await write.text().catch(() => "");
+    if (write.status === 409) {
+      return json({ error: "The file changed while this was publishing. Publish again." }, 409);
+    }
+    return json({ error: `GitHub refused the commit (${write.status}).`, detail: detail.slice(0, 300) }, 502);
+  }
+  const committed = await write.json();
+  return json({
+    committed: true,
+    published: good.length,
+    total: mergeCues(existing, good).length,
+    rejected,
+    commit: committed.commit?.html_url ?? null,
+    sha: committed.commit?.sha ?? null
+  });
+}
+__name(publishCues, "publishCues");
 async function mintCalendarToken(req, env) {
   const u = await authUser(req, env);
   if (!u)

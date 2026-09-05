@@ -41,6 +41,10 @@ import { parseOuraSleep, parseIngestPayload } from "../../lib/biometrics";
 import { checkinReminderSince, daysBetween } from "../../lib/checkin-reminder";
 import { reminderPlan, silent, type ReminderInput } from "../../lib/reminder-plan";
 import { growthDigest } from "../../lib/growth-digest";
+import {
+  CUES_PATH, MAX_ENTRIES, cueEntryProblems, cuesCommitMessage, decodeFileContent,
+  encodeFileContent, mergeCues, parseCuesFile, renderCuesFile, type CueEntry,
+} from "../../lib/cues-file";
 import { trialIsRunning } from "../../lib/notice-staleness";
 import { buildIcs, planEvents } from "../../lib/calendar-feed";
 import { currentStreak, isStreakMilestone, goalAchieved, metricLabel, STREAK_MILESTONES } from "../../lib/milestones";
@@ -81,6 +85,18 @@ export interface Env {
   GROQ_VISION_MODELS: string;
   OPENROUTER_VISION_MODELS: string;
   NVIDIA_VISION_MODELS: string;
+  /**
+   * A fine-grained GitHub token with Contents: Read and write on the app
+   * repository, used by /publish-cues to commit generated coaching cues.
+   *
+   * A SECRET, not a var: it can write to the repository that builds the
+   * site. Unset simply disables publishing, with a message saying so —
+   * never a silent no-op, because a publish that reports success and
+   * commits nothing is indistinguishable from one that worked.
+   */
+  GITHUB_TOKEN: string;
+  /** owner/repo. Defaults to this app's own repository. */
+  GITHUB_REPO: string;
   /** NVIDIA NIM — kept as a last-resort rung. See GROQ_SECRET for the pattern. */
   NVIDIA_SECRET: string;
   NVIDIA_MODEL: string;       // primary NVIDIA slug
@@ -157,6 +173,7 @@ export default {
       if (pathname.endsWith("/connect-wearable")) return await connectWearable(req, env);
       if (pathname.endsWith("/ingest-token")) return await mintIngestToken(req, env);
       if (pathname.endsWith("/calendar-token")) return await mintCalendarToken(req, env);
+      if (pathname.endsWith("/publish-cues")) return await publishCues(req, env);
       // GET, and before the auth-bearing routes: a calendar client sends no
       // Authorization header and no body.
       if (pathname.endsWith("/calendar")) return await calendarFeed(req, env);
@@ -519,7 +536,7 @@ function overBudget(state: BudgetState): Response {
 // nobody is watching a spinner and the budget can be what the work actually
 // needs. Callers pass their own client-side timeout to match.
 // Bump on every paste into the Cloudflare dashboard. GET /health reports it.
-const WORKER_VERSION = "2026-09-05.1";
+const WORKER_VERSION = "2026-09-05.2";
 
 const CHAIN_BUDGET_MS = 55_000;
 /**
@@ -1874,6 +1891,127 @@ async function calendarFeed(req: Request, env: Env): Promise<Response> {
  * Mint (or re-mint) the calendar token. Re-minting REVOKES the old URL, which
  * is the only way to un-share a link that has already been given out.
  */
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * PUBLISHING COACHING CUES BY WRITING SOURCE.
+ *
+ * The 173 movements without cues are the last large piece of content work on
+ * the site, and the point of doing it is SEARCH — those pages are under two
+ * hundred words and read as a movement listed rather than taught. The app is a
+ * static export, so cues in a database would reach a signed-in athlete and
+ * never reach Google, which is the reader they were written for.
+ *
+ * So this commits a generated file through the GitHub Contents API and CI does
+ * the rest. Every publish is a commit: a diff somebody can read, and a revert
+ * somebody can do. See lib/cues-file.ts for the format.
+ *
+ * The token is a Worker secret and never leaves it. The browser sends cues and
+ * gets back what was committed; it never holds anything that can write to the
+ * repository.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+async function publishCues(req: Request, env: Env): Promise<Response> {
+  const u = await authUser(req, env);
+  if (!u) return json({ error: "unauthorized" }, 401);
+  if (!(await isAdmin(env, u.id))) return json({ error: "admins only" }, 403);
+  if (!env.GITHUB_TOKEN) {
+    return json({ error: "No GITHUB_TOKEN secret on the Worker. Publishing writes a commit and cannot without one." }, 501);
+  }
+
+  const body = await req.json().catch(() => null) as { entries?: unknown } | null;
+  const incoming = Array.isArray(body?.entries) ? (body.entries as CueEntry[]) : [];
+  if (!incoming.length) return json({ error: "nothing to publish" }, 400);
+  if (incoming.length > MAX_ENTRIES) {
+    return json({ error: `${incoming.length} entries is more than one publish may write (${MAX_ENTRIES}).` }, 400);
+  }
+
+  /**
+   * CHECKED BEFORE GITHUB IS TOUCHED, and checked HERE rather than trusted from
+   * the browser. The caller is an admin, so this is not a trust boundary in the
+   * usual sense — it is that the thing being written is SOURCE CODE, and a
+   * malformed entry is a repository that does not compile: a broken deploy for
+   * everybody, from a bad cue for one movement.
+   */
+  const rejected: { name: string; problems: string[] }[] = [];
+  const good: CueEntry[] = [];
+  for (const raw of incoming) {
+    const problems = cueEntryProblems(raw);
+    if (problems.length) rejected.push({ name: String(raw?.name ?? "(no name)"), problems });
+    else good.push({ name: raw.name.trim().toLowerCase(), cues: raw.cues, why: raw.why });
+  }
+  if (!good.length) return json({ error: "every entry was refused", rejected }, 400);
+
+  const repo = env.GITHUB_REPO || "Megablaze757/FOOTBALLFITNESSGURU";
+  const url = `https://api.github.com/repos/${repo}/contents/${CUES_PATH}`;
+  const headers = {
+    Authorization: `Bearer ${env.GITHUB_TOKEN}`,
+    Accept: "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28",
+    // GitHub refuses a request with no User-Agent, with a 403 that says
+    // nothing about the reason.
+    "User-Agent": "pocketathlete-worker",
+  };
+
+  let sha: string | undefined;
+  let existing: CueEntry[] = [];
+  let current = "";
+  const read = await fetch(url, { headers });
+  if (read.ok) {
+    const file = await read.json() as { sha?: string; content?: string };
+    sha = file.sha;
+    current = decodeFileContent(file.content ?? "");
+    existing = parseCuesFile(current);
+  } else if (read.status === 404) {
+    // First publish — the file does not exist yet and is created without a sha.
+  } else if (read.status === 401 || read.status === 403) {
+    return json({ error: "GitHub refused the token. It needs Contents: Read and write on this repository." }, 502);
+  } else {
+    return json({ error: `Could not read ${CUES_PATH} from GitHub (${read.status}).` }, 502);
+  }
+
+  const content = renderCuesFile(mergeCues(existing, good));
+
+  /**
+   * NOTHING CHANGED, NOTHING COMMITTED.
+   *
+   * Re-publishing the same cues is the normal thing to do after a partial run,
+   * and an empty commit for each one buries the real ones. The render is
+   * deterministic precisely so this comparison is possible.
+   */
+  if (content === current) {
+    return json({ committed: false, reason: "no change", published: good.length, rejected });
+  }
+
+  const write = await fetch(url, {
+    method: "PUT",
+    headers: { ...headers, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: cuesCommitMessage(good.length),
+      content: encodeFileContent(content),
+      ...(sha ? { sha } : {}),
+    }),
+  });
+  if (!write.ok) {
+    const detail = await write.text().catch(() => "");
+    // A 409 is somebody else committing between the read and the write. Saying
+    // so beats "502": the fix is to publish again, and it will work.
+    if (write.status === 409) {
+      return json({ error: "The file changed while this was publishing. Publish again." }, 409);
+    }
+    return json({ error: `GitHub refused the commit (${write.status}).`, detail: detail.slice(0, 300) }, 502);
+  }
+
+  const committed = await write.json() as { commit?: { sha?: string; html_url?: string } };
+  return json({
+    committed: true,
+    published: good.length,
+    total: mergeCues(existing, good).length,
+    rejected,
+    commit: committed.commit?.html_url ?? null,
+    sha: committed.commit?.sha ?? null,
+  });
+}
+
 async function mintCalendarToken(req: Request, env: Env): Promise<Response> {
   const u = await authUser(req, env);
   if (!u) return json({ error: "unauthorized" }, 401);
