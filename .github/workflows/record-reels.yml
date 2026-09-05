@@ -1,0 +1,113 @@
+name: Record reels
+
+# Makes the social videos. Nobody films anything, nobody reads a teleprompter,
+# and nothing is uploaded automatically — the finished MP4s come back as
+# artefacts to look at before anybody posts one.
+#
+# WHY HERE AND NOT ON A LAPTOP. Two things this needs exist on a runner and
+# not necessarily anywhere else: a full ffmpeg (Playwright bundles a VP8-only
+# build with no audio support at all, so it can record and cannot mux), and a
+# machine that can sign in to the app without anybody's own account.
+#
+# Manual by default. A reel that nobody looked at before it went out is worse
+# than no reel, and a schedule that produces one every morning is a folder of
+# artefacts nobody opens.
+
+on:
+  workflow_dispatch:
+    inputs:
+      script:
+        description: "Which reel (demo-readiness, demo-cost, drill, standards)"
+        type: string
+        default: "demo-cost"
+      voice:
+        description: "Narrate it. Off records a silent reel with captions."
+        type: boolean
+        default: true
+
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - run: npx playwright install --with-deps chromium
+
+      # The real credentials, so the export it films is the real app. Both are
+      # public — the publishable key is in the shipped bundle by design.
+      - name: Build the site to film
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL || 'https://txqhstackgidjqkkrzyj.supabase.co' }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_kr26XwyR0HZxS3HR3UJI2Q_YLLT7Sfl' }}
+          NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL || '' }}
+
+      # 325MB, and it never changes. Downloading it on every run is most of the
+      # job's time and all of it is avoidable.
+      - name: Cache the voice model
+        if: inputs.voice
+        id: voice-cache
+        uses: actions/cache@v4
+        with:
+          path: .voice
+          key: kokoro-v1.0
+
+      - name: Fetch the voice model
+        if: inputs.voice && steps.voice-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p .voice
+          base=https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0
+          curl -sSfL -o .voice/kokoro-v1.0.onnx "$base/kokoro-v1.0.onnx"
+          curl -sSfL -o .voice/voices-v1.0.bin  "$base/voices-v1.0.bin"
+
+      - name: Install the voice
+        if: inputs.voice
+        run: pip install --quiet kokoro-onnx soundfile
+
+      - name: Serve the export
+        run: |
+          python3 -m http.server 8899 --directory out &
+          # Waited for, not slept on: a fixed sleep is either too short and the
+          # first navigation fails, or wasted on every run that did not need it.
+          for _ in $(seq 1 40); do curl -sf http://localhost:8899/ >/dev/null && break; sleep 0.25; done
+
+      - name: Record
+        run: node --import tsx scripts/record-reel.mts "${{ inputs.script }}" ${{ inputs.voice && '--voice' || '' }} --out reels
+        env:
+          KOKORO_MODEL: .voice/kokoro-v1.0.onnx
+          KOKORO_VOICES: .voice/voices-v1.0.bin
+          # A DEDICATED DEMO ACCOUNT. Never a real athlete's: no real training,
+          # food or body data goes near a video. Unset simply films the public
+          # pages, which is a worse reel and not a broken one.
+          REEL_EMAIL: ${{ secrets.REEL_EMAIL }}
+          REEL_PASSWORD: ${{ secrets.REEL_PASSWORD }}
+
+      # H.264 in an MP4 is what the platforms accept. The runner's ffmpeg can
+      # do it; Playwright's cannot.
+      - name: Mux to MP4
+        if: inputs.voice
+        run: |
+          id="${{ inputs.script }}"
+          lead=$(cat reels/*.lead 2>/dev/null || echo 0)
+          ffmpeg -hide_banner -loglevel error -y -ss "$lead" -i reels/*.webm -i reels/*.wav \
+            -c:v libx264 -preset slow -crf 20 -pix_fmt yuv420p -c:a aac -b:a 128k \
+            -shortest "reels/$id.mp4"
+
+      - name: Mux silent
+        if: ${{ !inputs.voice }}
+        run: |
+          ffmpeg -hide_banner -loglevel error -y -i reels/*.webm \
+            -c:v libx264 -preset slow -crf 20 -pix_fmt yuv420p -an "reels/${{ inputs.script }}.mp4"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reel-${{ inputs.script }}
+          path: |
+            reels/*.mp4
+            reels/*.srt
+          retention-days: 14

@@ -117,10 +117,21 @@ function readinessScript(): ReelScript {
       action: "Open the check-in. Do not fill it in yet — let the empty form show.",
       say: "Every training app gives you the session it planned last week.",
     },
+    /**
+     * Split for the same reason the cost reel's table beat was: spoken, this
+     * was one six-second shot of one screen, which lib/reel-retention.ts
+     * refuses. "Sixty seconds" is also the claim people actually weigh, and it
+     * deserves its own frame rather than being tacked onto a longer sentence.
+     */
     {
       route: "/journal",
       action: "Log a bad night: sleep 3, fatigue 8, tap two sore areas on the body map.",
-      say: "This one asks how you actually slept, and how sore you actually are. Sixty seconds.",
+      say: "This one asks how you actually slept, and how sore you actually are.",
+    },
+    {
+      route: "/journal",
+      action: "Hold on the completed form.",
+      say: "Sixty seconds.",
     },
     {
       route: "/home",
@@ -147,10 +158,28 @@ function costScript(): ReelScript {
       action: "Show the top of the ranked table.",
       say: `${REFERENCE_PROTEIN} grams of protein costs ${cheap}.`,
     },
+    /**
+     * TWO BEATS, NOT ONE, AND THE RETENTION CHECK IS WHY.
+     *
+     * "The same 30 grams costs £X at the other end. Same protein." is two
+     * sentences and, spoken, six seconds — a single shot of one screen doing
+     * one thing, which lib/reel-retention.ts refuses. It only became visible
+     * once the beats were timed from real audio rather than a word count at
+     * 340 words a minute.
+     *
+     * Splitting it is better anyway: the scroll and the punchline are two
+     * different moments, and "same protein" landing on its own frame is the
+     * whole point of the reel.
+     */
     {
       route: "/cheapest-protein/",
       action: "Scroll slowly to the bottom of the table.",
-      say: `The same ${REFERENCE_PROTEIN} grams costs ${dear} at the other end. Same protein.`,
+      say: `The same ${REFERENCE_PROTEIN} grams costs ${dear} at the other end.`,
+    },
+    {
+      route: "/cheapest-protein/",
+      action: "Hold on the most expensive row.",
+      say: "Same protein.",
     },
     {
       route: "/recipes/",
