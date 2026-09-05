@@ -166,6 +166,83 @@ test("a run that cannot upload says so rather than passing quietly", () => {
   assert.ok(!/echo "\$\{\{ secrets\./.test(workflow), "a secret's value is echoed into the log");
 });
 
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * ONE INVISIBLE CHARACTER, THREE WASTED RUNS.
+ *
+ * The NEXT_PUBLIC_SUPABASE_URL repository variable was saved with a trailing
+ * carriage return. The log showed it and nobody could see it:
+ *
+ *     SUPABASE_URL: https://txqhstackgidjqkkrzyj.supabase.co\r
+ *     curl: (3) URL rejected: Malformed input to a URL function
+ *
+ * curl quit before making a request, so the upload step took ZERO SECONDS and
+ * — under continue-on-error — reported success. Three runs recorded a reel
+ * perfectly and put none of them in the dashboard.
+ *
+ * And the error handler was no better: `code=$(curl -w "%{http_code}" ... ||
+ * echo "000")` APPENDS to curl's output rather than replacing it, and curl
+ * already prints 000 on failure. The code was "000000", which matched no case,
+ * so the run's whole explanation was "HTTP 000000" and a blank line.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("a pasted newline in a settings box cannot break a run again", () => {
+  const workflow = readFileSync(".github/workflows/record-reels.yml", "utf8");
+
+  // Stripped ONCE, up front — a second place to clean is a second place to
+  // forget. Everything downstream reads the cleaned value out of $GITHUB_ENV.
+  const setup = workflow.slice(0, workflow.indexOf("actions/checkout"));
+  /**
+   * THE URL LINE, not merely the string somewhere in the step. A guard that
+   * only asks whether the strip exists passes while the URL — the one value
+   * that actually broke — loses it, because the key and API lines still carry
+   * one. A guard matched by the wrong occurrence is the bug this file has now
+   * caught four times, and it caught this version of itself.
+   */
+  for (const [name, raw] of [["url", "RAW_URL"], ["key", "RAW_KEY"], ["api", "RAW_API"]]) {
+    assert.match(
+      setup,
+      new RegExp(`${name}=\\$\\(printf '%s' "\\$${raw}" \\| tr -d '\\[:space:\\]'\\)`),
+      `${raw} is used without stripping whitespace, so a pasted newline survives into the request`,
+    );
+  }
+  assert.match(setup, /SUPABASE_URL=\$url/,
+    "the cleaned URL never reaches \$GITHUB_ENV, so later steps cannot use it");
+
+  /**
+   * The RAW variable is read in exactly one place. Every later use that
+   * reaches back for `vars.` gets the carriage return again — which is how a
+   * bug fixed in one step survives in the next.
+   */
+  const raws = (workflow.match(/vars\.NEXT_PUBLIC_SUPABASE_URL/g) ?? []).length;
+  assert.equal(raws, 1,
+    `the raw variable is read in ${raws} places; only the step that cleans it may read it`);
+  assert.match(workflow, /NEXT_PUBLIC_SUPABASE_URL: \$\{\{ env\.SUPABASE_URL \}\}/,
+    "the build bakes the raw variable into the bundle, newline and all");
+
+  // A URL that still is not one says so before three minutes are spent.
+  assert.match(setup, /does not look like a Supabase URL/,
+    "a malformed URL is discovered by curl at the last step instead of at the first");
+
+  /**
+   * `|| echo "000"` on a curl that already prints %{http_code} concatenates
+   * two codes. Nothing may do that again — on EITHER request.
+   */
+  const upload = workflow.slice(workflow.indexOf("Put it in the dashboard"));
+  assert.ok(
+    !/%\{http_code\}[\s\S]*?\|\| echo "000"\)/.test(upload),
+    'a curl still appends `|| echo "000"` to its own status code, producing "000000"',
+  );
+  const captured = (upload.match(/^\s*(?:if ! )?(?:code|up)=\$\(curl/gm) ?? []).length;
+  assert.equal(captured, 2, `${captured} of the two requests capture curl's status`);
+  assert.equal((upload.match(/^\s*if ! (?:code|up)=\$\(curl/gm) ?? []).length, 2,
+    "a request does not capture curl's own exit status, so a refused URL is indistinguishable from a reply");
+
+  // A newline pasted into a SECRET is the same hazard as one in a variable.
+  assert.match(upload, /REEL_PASSWORD=\$\(printf '%s' "\$REEL_PASSWORD" \| tr -d/,
+    "a trailing newline on the password is sent to Supabase as part of the password");
+});
+
 test("the workflow listens for the event the Worker sends", () => {
   const workflow = readFileSync(".github/workflows/record-reels.yml", "utf8");
   assert.match(workflow, new RegExp(`types: \\[${REEL_EVENT}\\]`),

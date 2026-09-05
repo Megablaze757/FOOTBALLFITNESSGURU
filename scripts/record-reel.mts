@@ -30,6 +30,7 @@ import { retentionProblems } from "../lib/reel-retention";
 import { phrases } from "../lib/speech-timing";
 import { beatAudio, retime, trackClips, type BeatAudio } from "../lib/narration";
 import { layTrack, readWav, writeWav, type Wav } from "../lib/wav";
+import { secretValue } from "../lib/env-value";
 
 const audioFiles: string[] = [];
 
@@ -75,8 +76,12 @@ if (!script) { console.error(`No script called "${id}".`); process.exit(1); }
  * training, food or body data ever goes near a video.
  */
 async function signIn(page: import("playwright").Page, at: string): Promise<void> {
-  const email = process.env.REEL_EMAIL;
-  const password = process.env.REEL_PASSWORD;
+  // Through secretValue, because these are pasted into a settings box: a
+  // trailing newline on the Supabase URL variable cost three runs, and the
+  // secrets beside it were pasted the same way. A newline cannot be typed into
+  // a password field, so removing one never removes a real character.
+  const email = secretValue(process.env.REEL_EMAIL);
+  const password = secretValue(process.env.REEL_PASSWORD);
   if (!email || !password) return;
 
   await page.goto(`${at}/login`, { waitUntil: "load" });
