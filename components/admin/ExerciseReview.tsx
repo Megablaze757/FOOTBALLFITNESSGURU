@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { draftProblems } from "@/lib/exercise-draft";
 import { createClient } from "@/lib/supabase/client";
 import { invokeAI } from "@/lib/api";
@@ -16,6 +16,10 @@ import {
   EMPTY_DRAFT, type ExerciseDraft,
 } from "@/lib/exercise-review";
 import { screen, blockReasons } from "@/lib/exercise-moderation";
+import { autoPlan, autoSummary, type AutoRow } from "@/lib/exercise-auto";
+
+/** Automatic mode is per-device and sticky — it is a working preference. */
+const AUTO_KEY = "pa:admin:exercise-auto";
 
 /**
  * The queue that turns what somebody typed into a library entry.
@@ -85,6 +89,43 @@ export function ExerciseReview() {
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [bulk, setBulk] = useState<string | null>(null);
 
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * THE QUEUE RUNS ITSELF.
+   *
+   * "It wasn't auto publishing and clearing from the queue, they weren't even
+   * auto drafting — I still needed to click the draft button. I wanted this
+   * completely automated."
+   *
+   * Every step was a button, and for thirty submissions that is ninety
+   * interactions to move text from one place to another. It drafts what is
+   * undrafted and publishes what clears every check, on load, without being
+   * asked. What is left is only what a person has to look at.
+   *
+   * The one thing it will not do is attach a video — see lib/exercise-auto.ts.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  const [auto, setAuto] = useState(true);
+  useEffect(() => {
+    try { setAuto(localStorage.getItem(AUTO_KEY) !== "off"); } catch { /* no storage */ }
+  }, []);
+  const setAutoMode = (on: boolean) => {
+    setAuto(on);
+    try { localStorage.setItem(AUTO_KEY, on ? "on" : "off"); } catch { /* no storage */ }
+  };
+
+  /**
+   * TRIED ONCE EACH, EVER, PER VISIT.
+   *
+   * The pass reloads and re-runs, which terminates only while every pass
+   * strictly reduces the work — and it would not if an update failed silently
+   * behind a policy. Then it is an unbounded loop of AI calls nobody asked
+   * for. A row-and-action that has been attempted is never attempted again,
+   * so termination does not depend on the server behaving.
+   */
+  const attempted = useRef<Set<string>>(new Set());
+  const running = useRef(false);
+
   const rows = useMemo(() => data?.rows ?? [], [data]);
 
   /**
@@ -121,6 +162,30 @@ export function ExerciseReview() {
    * the same prompt again on the same text is paying twice for the same answer.
    */
   const undrafted = useMemo(() => queue.filter((q) => !q.row.ai_drafted_at), [queue]);
+
+  /** The queue as the automatic pass sees it. */
+  const autoRows = useMemo<AutoRow[]>(() => queue.map(({ row }) => ({
+    id: row.id,
+    name: row.name,
+    aiDraftedAt: row.ai_drafted_at,
+    reviewNotes: row.review_notes,
+    draft: { ...EMPTY_DRAFT, ...fromRow(row) },
+  })), [queue]);
+  const plan = useMemo(() => autoPlan(autoRows), [autoRows]);
+  const summary = useMemo(() => autoSummary(plan), [plan]);
+
+  /**
+   * Held in a ref because the runner closes over THIS render's queue, and the
+   * effect must not re-subscribe every time one of those values changes —
+   * that is every render, and the pass fires AI calls.
+   */
+  const runnerRef = useRef<() => Promise<void>>(async () => {});
+  runnerRef.current = runAuto;
+  useEffect(() => {
+    if (!auto || loading || running.current) return;
+    void runnerRef.current();
+    // `plan` is the work: when it stops changing, this stops firing.
+  }, [auto, loading, plan]);
 
   if (data?.error) {
     return (
@@ -206,12 +271,94 @@ export function ExerciseReview() {
     reload();
   }
 
+  /**
+   * Publish the rows that cleared every check, one at a time.
+   *
+   * Only the publish columns: the drafted fields were written to the row when
+   * it was drafted, and re-sending them from a client-side reconstruction is
+   * a chance to write back something stale.
+   */
+  async function publishAll(ids: string[]) {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    for (let i = 0; i < ids.length; i++) {
+      const row = queue.find((q) => q.row.id === ids[i])?.row;
+      if (!row) continue;
+      setBulk(`Publishing ${i + 1} of ${ids.length} — ${row.name}`);
+      const draft = { ...EMPTY_DRAFT, ...fromRow(row) };
+      await supabase.from("custom_exercises")
+        .update(publishRow(draft, user.id)).eq("id", row.id);
+    }
+  }
+
+  /**
+   * One automatic pass: draft what is undrafted, or publish what is ready.
+   *
+   * Drafting FIRST and then returning, rather than doing both in one pass: a
+   * row drafted here has no fields to judge until the reload brings them back,
+   * so publishing in the same pass would be publishing the pre-draft text.
+   */
+  async function runAuto() {
+    const take = (action: "draft" | "publish") => plan
+      .filter((step) => step.action === action)
+      .map((step) => step.id)
+      .filter((id) => !attempted.current.has(`${id}:${action}`));
+
+    const toDraft = take("draft");
+    const toPublish = take("publish");
+    if (!toDraft.length && !toPublish.length) return;
+
+    running.current = true;
+    try {
+      if (toDraft.length) {
+        for (const id of toDraft) attempted.current.add(`${id}:draft`);
+        await draftPicked(toDraft);
+        return;
+      }
+      for (const id of toPublish) attempted.current.add(`${id}:publish`);
+      await publishAll(toPublish);
+      setBulk(null);
+      reload();
+    } finally {
+      running.current = false;
+    }
+  }
+
   return (
     <div className="space-y-4">
       <p className="text-xs text-slate-400">
         Movements athletes added for themselves. Publish one and it joins the main library for
         everybody, as a normal card — and it stops being editable by whoever added it.
       </p>
+
+      {/* WHAT THE AUTOMATIC PASS IS DOING, AND THE ONE THING IT WILL NOT DO.
+          A queue that empties itself is only trustworthy if it says what it
+          emptied and what it left behind. */}
+      <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+        <label className="tap-target flex items-center gap-2 text-sm text-slate-200">
+          <input
+            type="checkbox"
+            checked={auto}
+            onChange={(e) => setAutoMode(e.target.checked)}
+            className="h-5 w-5 accent-pitch-500"
+          />
+          Draft and publish automatically
+        </label>
+        <p className="mt-1 text-[11px] text-slate-500">
+          {bulk ? bulk
+            : summary.draft > 0 ? `${summary.draft} still to draft…`
+            : summary.publish > 0 ? `${summary.publish} ready to publish…`
+            : summary.needVideo > 0
+              ? `${summary.needVideo} ${summary.needVideo === 1 ? "entry needs" : "entries need"} a video before it can go live — open one, watch the clip, paste the link.`
+              : summary.hold > 0 ? `${summary.hold} held for you to read — the reason is on each row.`
+              : "Nothing waiting."}
+        </p>
+        <p className="mt-1 text-[11px] text-slate-600">
+          It never picks the video. A YouTube id is eleven characters a model will invent as
+          readily as recall, and this is a page telling somebody how to load their spine.
+        </p>
+      </div>
 
       {/* THE WHOLE QUEUE, WITHOUT SELECTING IT FIRST.
           Drafting was per-row or per-selection, which is fine for three and a
