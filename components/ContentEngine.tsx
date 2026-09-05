@@ -12,8 +12,9 @@ import { plannedPosts, type PlannedPost } from "@/lib/post-plan";
 import { postTriggers, type Trigger } from "@/lib/post-triggers";
 import { reelHref, reelKindFor } from "@/lib/reel-link";
 import { nearMisses, gapSummary } from "@/lib/content-gaps";
+import { taggable } from "@/lib/muscle-mentions";
 import { invokeAI } from "@/lib/api";
-import type { SportId } from "@/lib/exercises";
+import { EXERCISES, type SportId } from "@/lib/exercises";
 
 /**
  * The content engine.
@@ -674,7 +675,33 @@ function ScheduleTab() {
                   <span className="text-xs text-slate-500">{g.have}/{g.need}</span>
                 </div>
                 <p className="mt-1 text-sm text-slate-400">{g.todo}</p>
-                <span className="text-xs text-slate-600">{g.href}</span>
+                {/* ═══════════════════════════════════════════════════════════
+                    THE NAMES, NOT JUST THE COUNT.
+
+                    "1 existing exercise already mentions this" is a number
+                    somebody has to go and find. The entry and the sentence it
+                    was read from turn a to-do into a decision that takes one
+                    glance — which is the whole difference between a list
+                    people work through and one they scroll past.
+
+                    Shown WITH the evidence because the rule can still be
+                    wrong. It reads the sentence around the mention to tell
+                    "trains this" from "keep the load off this" and from "the
+                    bar rests here" (lib/muscle-mentions.ts), and it is right
+                    far more often than a bare mention was — but it is a
+                    shortlist for a person, not an autopilot.
+                    ═══════════════════════════════════════════════════════════ */}
+                {g.kind === "muscle" && taggable(EXERCISES, g.name).length > 0 && (
+                  <ul className="mt-2 space-y-1 border-l border-white/10 pl-3">
+                    {taggable(EXERCISES, g.name).map((m) => (
+                      <li key={m.id} className="text-xs">
+                        <span className="font-semibold text-slate-300">{m.name}</span>
+                        <span className="block text-slate-500">&ldquo;{m.evidence}&rdquo;</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <span className="mt-1 block text-xs text-slate-600">{g.href}</span>
               </li>
             ))}
           </ul>

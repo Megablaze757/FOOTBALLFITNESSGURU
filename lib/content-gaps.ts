@@ -29,6 +29,7 @@ import { allCollections, MIN_MEMBERS } from "./collections";
 import { allHubs, hubPath, MIN_HUB_MEMBERS } from "./hubs";
 import { allRecipeHubs, recipeHubPath, MIN_RECIPE_HUB } from "./recipe-hubs";
 import { EXERCISES, isRunEntry, type Exercise } from "./exercises";
+import { taggable } from "./muscle-mentions";
 
 /**
  * How far short still counts as "nearly".
@@ -66,15 +67,27 @@ export type GapKind = "collection" | "muscle" | "equipment" | "ingredient" | "me
  * mutation between them passed — the rule is right and was unproven.
  * ═══════════════════════════════════════════════════════════════════════════
  */
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * ONLY THE MENTIONS THAT MEAN "THIS TRAINS IT".
+ *
+ * This counted every occurrence of the muscle's name, which sounds like the
+ * cheap fix for a thin hub page and is not: of 150 such mentions across the
+ * short hubs, roughly 120 were cues saying to keep the load OUT of that place
+ * ("keep your lower back neutral"), the bar RESTING there ("with the bar
+ * racked on your upper back"), or a hand position ("Close Grip Bench Press").
+ *
+ * Tagging on those would put the deadlift on the lower-back hub as an exercise
+ * that trains the lower back. Wrong content on a page built to answer a
+ * question is worse than a thin one — a thin page disappoints and a wrong one
+ * gets somebody hurt.
+ *
+ * lib/muscle-mentions.ts reads the sentence around each mention and tells the
+ * cases apart, and this reports what is left.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
 export function mentionsButUntagged(name: string, all: Exercise[]): number {
-  const needle = name.toLowerCase();
-  // Word-bounded: "abs" must not match "absolute", and "lats" must not match
-  // "flats". The first version used includes() and counted both.
-  const pattern = new RegExp(`\\b${needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i");
-  return all.filter((e) => {
-    if (e.muscles.some((m) => m.toLowerCase() === needle)) return false;
-    return pattern.test(`${e.name} ${e.why} ${e.description ?? ""} ${e.cues.join(" ")}`);
-  }).length;
+  return taggable(all, name).length;
 }
 
 export interface Gap {
