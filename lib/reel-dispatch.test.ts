@@ -67,6 +67,43 @@ test("the payload speaks the workflow's language", () => {
 
 // --- both ends have to agree -------------------------------------------------
 
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE RUNNER HAS NO ffmpeg, AND THREE RUNS DIED PROVING IT.
+ *
+ * The workflow was written asserting "CI runners have one". They do not:
+ * ubuntu-latest ships without it. Every run filmed the app perfectly, produced
+ * the webm, the wav and the srt, and then failed on
+ * `ffmpeg: command not found` at the one step that turns them into something
+ * anybody can post.
+ *
+ * Playwright's bundled build is not a substitute — VP8 only, no audio, and it
+ * cannot even read a wav.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("the workflow installs the ffmpeg it depends on", () => {
+  const workflow = readFileSync(".github/workflows/record-reels.yml", "utf8");
+  assert.match(workflow, /apt-get install[^\n]*ffmpeg/,
+    "the mux step runs ffmpeg and nothing installs it");
+  assert.ok(
+    workflow.indexOf("apt-get install -y -qq ffmpeg") < workflow.indexOf("-c:v libx264"),
+    "ffmpeg is installed after the step that uses it",
+  );
+  assert.match(workflow, /libx264/, "an ffmpeg without H.264 produces a file the platforms refuse");
+});
+
+/**
+ * A run that skips the upload and reports success is a run where nothing
+ * appears in the app and nothing says why. The reel is still an artefact — the
+ * log has to say that too.
+ */
+test("a run that cannot upload says so rather than passing quietly", () => {
+  const workflow = readFileSync(".github/workflows/record-reels.yml", "utf8");
+  assert.match(workflow, /REEL_EMAIL == ''/, "nothing notices that the upload was skipped");
+  assert.match(workflow, /::warning::REEL_EMAIL and REEL_PASSWORD are not set/,
+    "the skip is silent, so the run looks like it worked");
+});
+
 test("the workflow listens for the event the Worker sends", () => {
   const workflow = readFileSync(".github/workflows/record-reels.yml", "utf8");
   assert.match(workflow, new RegExp(`types: \\[${REEL_EVENT}\\]`),
@@ -95,9 +132,66 @@ test("the panel makes a reel and shows the ones that exist", () => {
   assert.match(panel, /invokeAI<[^>]*>\("record-reel"/, "the button does not ask for a recording");
   assert.match(panel, /from\("reels"\)/, "nothing lists the finished reels");
   assert.match(panel, /createSignedUrls/, "a private bucket cannot be played without signed links");
+
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * "IT'S STUCK IN LOADING."
+   *
+   * The panel renders "Loading…" until a request settles, so any request that
+   * never settles is a spinner with no way out and nothing to read. A storage
+   * call can hang on a stalled token refresh or a network that accepted the
+   * connection and went quiet — neither of which rejects.
+   *
+   * The same failure as the share card's image loader, which left a button
+   * reading "Creating…" forever. A timeout is what stops a screen having a
+   * terminal state that says nothing.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  assert.match(panel, /Promise\.race/, "a hung request leaves the panel loading forever with nothing to read");
+  assert.match(panel, /LOAD_TIMEOUT_MS/, "the timeout has no bound");
+
+  // createSignedUrls([]) asks the API to sign nothing — a round trip on the
+  // common case (no reels yet) that can only fail.
+  assert.match(panel, /files\.length\s*\n?\s*\?/,
+    "it signs an empty list, which is a request that should never be made");
   // Said, because a button that appears to do nothing gets pressed again — and
   // again is another three minutes of somebody's compute.
   assert.match(panel, /three minutes/, "nothing says how long it takes");
+
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * IT CARRIES ON WITHOUT THE TAB, AND THE PANEL HAS TO BOTH SAY SO AND
+   * BEHAVE THAT WAY.
+   *
+   * Once GitHub accepts the request the work is server-side — the runner
+   * films, narrates and uploads whether or not anybody is watching. The panel
+   * refreshed on a three-minute setTimeout, which is exactly what a
+   * backgrounded mobile tab throttles into never firing: the one case where a
+   * refresh matters is the case a timer cannot cover.
+   *
+   * Coming back to the tab is the reliable signal and the exact moment
+   * somebody wants to know.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  /**
+   * The ADD, not the remove. Deleting the subscription leaves
+   * `removeEventListener("visibilitychange", ...)` in the cleanup, so a guard
+   * looking for the bare event name passes on a panel that never subscribes.
+   */
+  assert.match(panel, /addEventListener\("visibilitychange"/,
+    "the list only refreshes on a timer, which a backgrounded phone throttles into never firing");
+  // And the handler has to DO something. An empty one subscribes correctly and
+  // refreshes nothing, which passes any guard looking only for the listener.
+  assert.match(panel, /visibilityState === "visible"\) void load\(\)/,
+    "the visibility handler is subscribed but never re-reads the list");
+
+  /**
+   * The message shown after pressing it — not the paragraph above the button,
+   * which also says the recording survives. Two places say it and only one of
+   * them is read at the moment somebody is deciding whether to wait.
+   */
+  assert.match(panel, /setNote\("Recording[^"]*close this/,
+    "the confirmation does not say they can put the phone down");
 });
 
 test("the reels bucket is private and admin-read", () => {

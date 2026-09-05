@@ -351,7 +351,10 @@ if (withVoice) {
   writeFileSync(join(outDir, `${script.id}.wav`), writeWav(first.format, track));
   console.log(`  ${outDir}/${script.id}.wav`);
   console.log(
-    `\n  Mux (needs a full ffmpeg — CI runners have one):\n`
+    // "CI runners have one" was the claim here and it is false: ubuntu-latest
+    // ships no ffmpeg, and the workflow installs it. Playwright's bundled
+    // build is VP8-only with no audio support, so it cannot do this either.
+    `\n  Mux (needs a full ffmpeg — apt-get install ffmpeg):\n`
     + `  ffmpeg -ss ${(leadMs / 1000).toFixed(3)} -i ${outDir}/${script.id}.webm -i ${outDir}/${script.id}.wav \\\n`
     + `    -c:v libx264 -preset slow -crf 20 -pix_fmt yuv420p -c:a aac -b:a 128k \\\n`
     + `    -shortest ${outDir}/${script.id}.mp4`,

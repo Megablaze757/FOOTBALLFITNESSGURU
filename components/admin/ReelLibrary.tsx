@@ -27,6 +27,9 @@ import { SCRIPTS } from "@/lib/reel-script";
  * of somebody else's compute.
  * ═══════════════════════════════════════════════════════════════════════════
  */
+/** Long enough for a slow phone, short enough that nobody sits watching it. */
+const LOAD_TIMEOUT_MS = 15_000;
+
 interface Reel {
   name: string;
   createdAt: string | null;
@@ -45,20 +48,53 @@ export function ReelLibrary({ subject }: { subject?: string }) {
   const load = useCallback(async () => {
     try {
       const supabase = createClient();
-      const { data, error: listError } = await supabase.storage.from("reels").list("", {
-        limit: 40,
-        sortBy: { column: "created_at", order: "desc" },
-      });
+
+      /**
+       * ═══════════════════════════════════════════════════════════════════
+       * "IT'S STUCK IN LOADING."
+       *
+       * It could be. `reels === null` renders "Loading…" and only a settled
+       * request clears it, so ANY request that never settles is a spinner
+       * with no way out and nothing to read. A storage call can hang on a
+       * stalled token refresh, on a network that accepted the connection and
+       * went quiet, or on a captive portal — none of which reject.
+       *
+       * A timeout means the panel always ends up saying something. This is
+       * the same lesson as the share card's image loader, which had exactly
+       * this failure and left a button reading "Creating…" forever.
+       * ═══════════════════════════════════════════════════════════════════
+       */
+      const withTimeout = <T,>(work: PromiseLike<T>, what: string): Promise<T> =>
+        Promise.race([
+          Promise.resolve(work),
+          new Promise<T>((_, reject) =>
+            setTimeout(() => reject(new Error(`${what} took too long — is the app online?`)), LOAD_TIMEOUT_MS)),
+        ]);
+
+      const { data, error: listError } = await withTimeout(
+        supabase.storage.from("reels").list("", {
+          limit: 40,
+          sortBy: { column: "created_at", order: "desc" },
+        }),
+        "Listing the reels",
+      );
       if (listError) throw new Error(listError.message);
 
       const files = (data ?? []).filter((f) => f.name.endsWith(".mp4"));
+
       /**
-       * SIGNED URLS, because the bucket is private and has to be.
-       * They expire; the list is re-fetched when the panel is opened, which is
-       * the only time anybody is looking at it.
+       * NO FILES, NO REQUEST.
+       *
+       * createSignedUrls([]) is a POST asking to sign nothing. It is the
+       * common case on a fresh install — there are no reels yet — and asking
+       * the API to do nothing is a round trip that can only fail.
        */
-      const signed = await supabase.storage.from("reels")
-        .createSignedUrls(files.map((f) => f.name), 60 * 60);
+      const signed = files.length
+        ? await withTimeout(
+            supabase.storage.from("reels").createSignedUrls(files.map((f) => f.name), 60 * 60),
+            "Signing the links",
+          )
+        : { data: [] as { signedUrl: string }[] };
 
       setReels(files.map((f, i) => ({
         name: f.name,
@@ -79,6 +115,31 @@ export function ReelLibrary({ subject }: { subject?: string }) {
 
   useEffect(() => { void load(); }, [load]);
 
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * "DOES MY PHONE NEED TO BE OPEN ON THE TAB FOR IT TO WORK?"
+   *
+   * No — and the honest answer exposed a weakness in how this refreshed.
+   * Once GitHub accepts the request everything after it is server-side: the
+   * runner films, narrates and uploads whether or not anybody is watching.
+   * Closing the tab, locking the phone or killing the browser changes nothing.
+   *
+   * But the refresh was a three-minute setTimeout, which is exactly the thing
+   * that does NOT survive that. iOS throttles timers in a backgrounded tab to
+   * the point of never firing, so the one case where a refresh matters — you
+   * pressed the button and went away — is the case it could not handle, and
+   * the reel would sit there looking absent until a manual reload.
+   *
+   * Coming BACK to the tab is the reliable signal, and it is the exact moment
+   * somebody wants to know. The timer stays for the case where they wait.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === "visible") void load(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [load]);
+
   async function make(script: string) {
     setBusy(script);
     setError(null);
@@ -86,7 +147,10 @@ export function ReelLibrary({ subject }: { subject?: string }) {
     try {
       const request: ReelRequest = { script, voice: true, ...(subject ? { subject } : {}) };
       await invokeAI<{ started?: boolean }>("record-reel", request, 30_000);
-      setNote("Recording. It takes about three minutes — it will appear below when it lands.");
+      // Says the part people actually want to know. A three-minute wait with
+      // no idea whether you have to sit through it is a three-minute wait
+      // somebody sits through.
+      setNote("Recording — about three minutes. You can close this; it carries on without you and will be here when you come back.");
       // Reels arrive minutes later and nothing pushes them here, so the list
       // is re-read when it is plausible one has landed rather than making
       // somebody reload the page to find out.
@@ -112,10 +176,18 @@ export function ReelLibrary({ subject }: { subject?: string }) {
           </button>
         ))}
       </div>
-      <p className="text-xs text-slate-500">
-        Filmed and narrated on a runner, then uploaded here. Nothing is posted anywhere — these are
-        files to watch and download.
-      </p>
+      <div className="flex flex-wrap items-center gap-3">
+        <p className="flex-1 text-xs text-slate-500">
+          Filmed and narrated on a runner, then uploaded here — it keeps going with the app closed.
+          Nothing is posted anywhere; these are files to watch and download.
+        </p>
+        <button
+          onClick={() => void load()}
+          className="tap-target shrink-0 rounded-xl border border-white/10 px-3 py-1.5 text-xs font-semibold text-slate-400"
+        >
+          Refresh
+        </button>
+      </div>
 
       {note && <p className="text-sm text-accent-400">{note}</p>}
       {error && <p className="text-sm text-readiness-yellow">{error}</p>}

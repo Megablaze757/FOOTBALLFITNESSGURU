@@ -61,6 +61,24 @@ jobs:
 
       - run: npx playwright install --with-deps chromium
 
+      # ═══════════════════════════════════════════════════════════════════
+      # ffmpeg, WHICH THE RUNNER DOES NOT HAVE.
+      #
+      # This workflow was written asserting "CI runners have one", which was
+      # wrong and cost three runs: the recording worked every time — webm, wav
+      # and srt all produced — and then died on `ffmpeg: command not found` at
+      # the one step that turns them into something postable.
+      #
+      # Playwright bundles a VP8-only build with no audio support at all, so
+      # this is a real install rather than a path fix.
+      # ═══════════════════════════════════════════════════════════════════
+      - name: Install ffmpeg
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          ffmpeg -hide_banner -encoders | grep -q libx264 || {
+            echo "::error::ffmpeg installed without libx264 — the MP4 would not be postable"; exit 1; }
+
       # The real credentials, so the export it films is the real app. Both are
       # public — the publishable key is in the shipped bundle by design.
       - name: Build the site to film
@@ -145,6 +163,15 @@ jobs:
       # Not fatal if it fails. The artefact below is still there, and losing a
       # reel to a storage hiccup should not lose the run that made it.
       # ═══════════════════════════════════════════════════════════════════
+      # Skipped silently is how a run "succeeds" and nothing appears in the
+      # app. The reel is still an artefact; the log has to say why it went no
+      # further than that.
+      - name: No upload credentials
+        if: env.REEL_EMAIL == ''
+        run: |
+          echo "::warning::REEL_EMAIL and REEL_PASSWORD are not set, so the reel was not uploaded to the dashboard."
+          echo "::warning::Add them under Settings → Secrets and variables → Actions. The MP4 is still attached to this run."
+
       - name: Put it in the dashboard
         if: env.REEL_EMAIL != ''
         continue-on-error: true
