@@ -169,10 +169,78 @@ export function buildShareSvg(s: ShareStats): string {
   </svg>`;
 }
 
+/**
+ * A data: URL for an SVG string, UTF-8 safe.
+ *
+ * `btoa` throws on anything outside Latin-1, and the athlete's own name goes
+ * on this card — an accent or an emoji in it would have thrown from inside the
+ * encoder. The old form went through `unescape`, which is deprecated and does
+ * the same job by accident; this encodes the bytes properly.
+ */
+export function svgDataUrl(svg: string): string {
+  const bytes = new TextEncoder().encode(svg);
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return `data:image/svg+xml;base64,${btoa(binary)}`;
+}
+
+/** Just enough of an <img> to be waited on — so the waiting can be tested. */
+export interface LoadableImage {
+  /**
+   * Deliberately loose. HTMLImageElement types these with a
+   * `GlobalEventHandlers` receiver that no narrower signature is assignable
+   * to, and the point of this interface is only to let a test pass a plain
+   * object in — not to describe DOM events.
+   */
+  onload: ((...args: never[]) => unknown) | null;
+  onerror: ((...args: never[]) => unknown) | null;
+  src: string;
+}
+
+/** How long to wait for a data: URL to rasterise before giving up. */
+export const IMAGE_TIMEOUT_MS = 15_000;
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * WHY THIS IS NOT `await img.decode()`, WHICH IS WHAT IT USED TO BE.
+ *
+ * `HTMLImageElement.decode()` REJECTS FOR SVG IMAGES IN WEBKIT. It throws
+ * "The source image cannot be decoded", every time, on every iPhone and every
+ * Safari — so "Share my progress" could not work on the device most of these
+ * cards are made on. The card was fine; the wait for it was not.
+ *
+ * The load event has no such problem and is what every browser has always
+ * supported. A timeout because an <img> that never fires either event leaves
+ * the button saying "Creating…" forever, which is the failure this whole path
+ * has already been through once.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export function loadImage<T extends LoadableImage>(img: T, src: string, timeoutMs = IMAGE_TIMEOUT_MS): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    const finish = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      img.onload = null;
+      img.onerror = null;
+      fn();
+    };
+    const timer = setTimeout(
+      () => finish(() => reject(new Error("The card took too long to draw."))),
+      timeoutMs,
+    );
+    img.onload = () => finish(() => resolve(img));
+    img.onerror = () => finish(() => reject(new Error("The card could not be drawn.")));
+    // Assigned LAST. A cached data: URL can fire load synchronously on
+    // assignment, before a handler set afterwards would ever see it.
+    img.src = src;
+  });
+}
+
 async function svgToPngBlob(svg: string): Promise<Blob> {
   const img = new Image();
-  img.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svg)));
-  await img.decode();
+  await loadImage(img, svgDataUrl(svg));
   const canvas = document.createElement("canvas");
   canvas.width = 1080;
   canvas.height = 1080;

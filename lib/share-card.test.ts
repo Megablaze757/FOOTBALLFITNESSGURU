@@ -1,7 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { athleteShareLink, buildShareSvg, displayLink, SHARE_FALLBACK_LINK, type ShareStats } from "./share-card";
+import {
+  athleteShareLink, buildShareSvg, displayLink, loadImage, svgDataUrl,
+  IMAGE_TIMEOUT_MS, SHARE_FALLBACK_LINK, type LoadableImage, type ShareStats,
+} from "./share-card";
 
 const base: ShareStats = {
   name: "Sam",
@@ -198,4 +201,105 @@ test("the share button reports what happened", () => {
   assert.match(src, /catch \(e\)[\s\S]{0,140}?setNote\(/, "a failure is still silent");
   assert.match(src, /Save image/, "there is no way to save without going through the share sheet");
   assert.match(src, /saveBlob\(await shareCardPng/, "the save button does not build a card");
+});
+
+// --- turning the card into a picture -----------------------------------------
+
+/** An <img> stand-in whose `src` setter decides what the browser does. */
+function fakeImage(on: "load" | "error" | "silent" | "sync-load"): LoadableImage {
+  const img: LoadableImage = { onload: null, onerror: null, src: "" };
+  let value = "";
+  Object.defineProperty(img, "src", {
+    get: () => value,
+    set(next: string) {
+      value = next;
+      if (on === "sync-load") { img.onload?.(); return; }
+      if (on === "load") setTimeout(() => img.onload?.(), 0);
+      if (on === "error") setTimeout(() => img.onerror?.(), 0);
+      // "silent" fires nothing, which is the case the timeout exists for.
+    },
+  });
+  return img;
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE BUG THIS REPLACED: `await img.decode()`.
+ *
+ * decode() REJECTS FOR SVG IMAGES IN WEBKIT — "the source image cannot be
+ * decoded", every time, on every iPhone and every Safari. So "Share my
+ * progress" could not work on the device most of these cards are made on. The
+ * card was always fine; the wait for it was not.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("a card that loads resolves", async () => {
+  const img = fakeImage("load");
+  assert.equal(await loadImage(img, "data:image/svg+xml;base64,x"), img);
+  assert.equal(img.src, "data:image/svg+xml;base64,x");
+});
+
+/**
+ * A cached data: URL can fire load SYNCHRONOUSLY on assignment. Assigning src
+ * before the handlers means onload is still null when it fires, and the
+ * promise never settles — the button says "Creating…" forever.
+ */
+test("a card that loads instantly still resolves", async () => {
+  const img = fakeImage("sync-load");
+  assert.equal(await loadImage(img, "data:image/svg+xml;base64,x"), img);
+});
+
+test("a card that fails to draw rejects, rather than hanging", async () => {
+  await assert.rejects(loadImage(fakeImage("error"), "x"), /could not be drawn/);
+});
+
+/** An <img> that fires neither event leaves the button saying "Creating…"
+ *  forever — the exact silent failure this whole path has been through once. */
+test("a card that never loads gives up", { timeout: 2_000 }, async () => {
+  // The explicit timeout is the assertion. Without it, removing the timer
+  // leaves this promise pending forever and node:test simply never finishes
+  // the subtest — which the runner does not report as a failure.
+  await assert.rejects(loadImage(fakeImage("silent"), "x", 20), /too long/);
+});
+
+test("handlers are dropped once it has settled, and a late event changes nothing", async () => {
+  const img = fakeImage("load");
+  await loadImage(img, "x");
+  assert.equal(img.onload, null, "the load handler outlives the promise");
+  assert.equal(img.onerror, null, "a late error would still be handled");
+});
+
+test("the timeout is long enough to draw a card and short enough to notice", () => {
+  assert.ok(IMAGE_TIMEOUT_MS >= 5_000 && IMAGE_TIMEOUT_MS <= 30_000, `${IMAGE_TIMEOUT_MS}ms`);
+});
+
+/**
+ * `btoa` throws on anything outside Latin-1 — and the athlete's own NAME goes
+ * on this card, so an accent or an emoji in it threw from inside the encoder.
+ */
+test("a name with characters outside Latin-1 does not break the encoder", () => {
+  for (const name of ["Sam", "Zoë", "Ríoghnach", "Håkon", "田中", "Sam 🏋️"]) {
+    const svg = buildShareSvg({ ...base, name });
+    const url = svgDataUrl(svg);
+    assert.match(url, /^data:image\/svg\+xml;base64,/);
+    const bytes = Uint8Array.from(atob(url.split(",")[1]), (c) => c.charCodeAt(0));
+    assert.equal(new TextDecoder().decode(bytes), svg, `${name} did not survive the round trip`);
+  }
+});
+
+/**
+ * THE REGRESSION, GUARDED WHERE IT WAS.
+ *
+ * Everything above tests loadImage in isolation, and none of it would notice
+ * the rasteriser going back to `img.decode()` — which is the actual bug, and
+ * which cannot be reached from here because it needs a canvas.
+ */
+test("the rasteriser never goes back to decode()", () => {
+  const src = readFileSync(new URL("./share-card.ts", import.meta.url), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, " ").replace(/(^|[^:])\/\/.*$/gm, "$1");
+  assert.ok(
+    !/\.decode\(\)/.test(src),
+    "decode() rejects for SVG in WebKit — this is the bug that stopped every iPhone making a card",
+  );
+  assert.match(src, /await loadImage\(img, svgDataUrl\(svg\)\)/,
+    "the rasteriser does not wait through loadImage, so none of the tests above cover it");
 });

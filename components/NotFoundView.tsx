@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { AthleteFallback } from "@/components/AthleteFallback";
+import { athleteFromPath } from "@/lib/athlete-path";
 import Link from "next/link";
 
 /**
@@ -36,6 +38,15 @@ const LINKS: { href: string; label: string; icon: string }[] = [
 const LEGACY_PREFIXES = ["/FOOTBALLFITNESSGURU", "/footballfitnessguru"];
 
 export function NotFoundView() {
+  /**
+   * An athlete whose page is newer than the last build reaches this file —
+   * see components/AthleteFallback.tsx. While it is looking, and if it finds
+   * them, the "page not found" body underneath must not be on screen: two
+   * answers to one address, one of them wrong.
+   */
+  const [athleteFound, setAthleteFound] = useState<boolean | null>(null);
+  const onResolved = useCallback((found: boolean) => setAthleteFound(found), []);
+
   const [redirecting, setRedirecting] = useState(false);
 
   useEffect(() => {
@@ -57,6 +68,19 @@ export function NotFoundView() {
           <p className="mt-4 text-sm text-slate-300">Taking you to the right page…</p>
           <p className="mt-1 text-xs text-slate-500">That link used our old address.</p>
         </div>
+      </main>
+    );
+  }
+
+  /**
+   * The athlete answer REPLACES this one rather than sitting above it.
+   * `athleteFound === null` means the lookup has not answered yet, and showing
+   * "page not found" during it would be the wrong answer arriving first.
+   */
+  if (athleteFound !== false && isAthleteAddress()) {
+    return (
+      <main className="flex min-h-screen items-center justify-center px-5 py-10">
+        <AthleteFallback onResolved={onResolved} />
       </main>
     );
   }
@@ -107,4 +131,16 @@ export function NotFoundView() {
       </div>
     </main>
   );
+}
+
+/**
+ * Read at render time rather than held in state.
+ *
+ * The address cannot change without this component unmounting — a static host
+ * serves 404.html for one path at a time — and a second copy in state is a
+ * second thing that can be stale.
+ */
+function isAthleteAddress(): boolean {
+  if (typeof window === "undefined") return false;
+  return athleteFromPath(window.location.pathname) !== null;
 }
