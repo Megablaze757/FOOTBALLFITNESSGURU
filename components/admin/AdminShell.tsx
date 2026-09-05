@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { initialTab, tabForAnchor, type TabDef } from "@/lib/admin-tabs";
 import { createClient } from "@/lib/supabase/client";
 import { useSession } from "@/lib/auth";
 import { useAsync } from "@/lib/use-async";
@@ -113,6 +114,83 @@ export function AdminShell({ title, note, children }: { title: string; note?: st
 
       {children}
     </main>
+  );
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * ONE JOB ON SCREEN AT A TIME.
+ *
+ * Reported as "make the social page easier to navigate" against a screenshot
+ * of five full sections on one scroll — the share loop, three different ways
+ * of making a video, and the whole posting schedule. Each is a separate job,
+ * and reaching the fourth meant scrolling past three you did not come for, on
+ * a phone.
+ *
+ * The choice is remembered per device, and a LINK BEATS THE MEMORY — see
+ * lib/admin-tabs.ts for why that ordering is the whole point.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export function AdminTabs({ tabs, storageKey, children }: {
+  tabs: TabDef[];
+  /** Where the choice is remembered. Per page, so two pages do not fight. */
+  storageKey: string;
+  children: (active: string) => ReactNode;
+}) {
+  const [active, setActive] = useState(tabs[0]?.id ?? "");
+
+  useEffect(() => {
+    let remembered: string | null = null;
+    try { remembered = localStorage.getItem(storageKey); } catch { /* no storage */ }
+    setActive(initialTab(tabs, window.location.hash, remembered));
+    // `tabs` is a literal built on every render; keying the effect on it would
+    // re-run this forever and stamp on the tab somebody just chose.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey]);
+
+  /**
+   * A link arriving while the page is already open.
+   *
+   * The schedule's "build this" link is a plain anchor, so following it from
+   * the Plan tab changes the hash without remounting anything. Without this
+   * the URL updates and the panel it points at stays hidden.
+   */
+  useEffect(() => {
+    const onHash = () => {
+      const linked = tabForAnchor(tabs, window.location.hash);
+      if (linked) setActive(linked);
+    };
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const choose = (id: string) => {
+    setActive(id);
+    try { localStorage.setItem(storageKey, id); } catch { /* no storage */ }
+  };
+
+  return (
+    <>
+      <div role="tablist" aria-label="Sections" className="-mx-6 mb-6 flex gap-2 overflow-x-auto px-6">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            role="tab"
+            aria-selected={active === tab.id}
+            onClick={() => choose(tab.id)}
+            className={`tap-target shrink-0 rounded-full border px-4 text-sm font-semibold transition ${
+              active === tab.id
+                ? "border-pitch-400/50 bg-pitch-400/10 text-accent-400"
+                : "border-white/10 text-slate-400"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+      {children(active)}
+    </>
   );
 }
 

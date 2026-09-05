@@ -1,6 +1,7 @@
 "use client";
 
-import { AdminShell, AdminArea } from "@/components/admin/AdminShell";
+import { AdminShell, AdminArea, AdminTabs, Drawer } from "@/components/admin/AdminShell";
+import { REEL_ANCHOR } from "@/lib/reel-link";
 import { ContentEngine } from "@/components/ContentEngine";
 import { ReelStudio } from "@/components/ReelStudio";
 import { ReelRecorder } from "@/components/ReelRecorder";
@@ -22,53 +23,84 @@ import { ShareLoop } from "@/components/admin/ShareLoop";
  * every figure on them true and the whole thing skippable — and the fix was not
  * a better card, it was pointing the camera at the app.
  */
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THREE JOBS, NOT FIVE SECTIONS.
+ *
+ * Reported as "make the social page easier to navigate" against a screenshot
+ * of the whole thing on one scroll: the share loop, three ways of making a
+ * video, and the posting schedule. Reaching the fourth meant scrolling past
+ * three you did not come for, on a phone.
+ *
+ * They group cleanly, and the grouping is by INTENT rather than by feature:
+ *
+ *   MAKE   — I want a video. Three ways of getting one, easiest first.
+ *   PLAN   — I want to know what to post, and something written for it.
+ *   REACH  — I want to know whether any of it worked.
+ *
+ * MAKE leads because it is what anybody opens this page to do.
+ *
+ * `reel-studio` is claimed by MAKE, and that is load-bearing rather than
+ * tidiness: lib/reel-link.ts builds "#reel-studio" so a planned post can send
+ * you straight to the thing that builds it. Without the claim that link would
+ * land on a panel this page had chosen not to render.
+ */
+const TABS = [
+  { id: "make", label: "🎬 Make", anchors: [REEL_ANCHOR] },
+  { id: "plan", label: "🗓 Plan" },
+  { id: "reach", label: "📈 Reach" },
+];
+
 export default function AdminSocial() {
   return (
     <AdminShell title="Social" note="What goes out, and what comes back.">
-      <AdminArea title="The share loop" note="Athletes posting, which is the channel that scales on its own">
-        <ShareLoop />
-      </AdminArea>
+      <AdminTabs tabs={TABS} storageKey="pa:admin:social-tab">
+        {(active) => (
+          <>
+            {active === "make" && (
+              <>
+                {/* ═══════════════════════════════════════════════════════════
+                    ONE BUTTON FIRST, BECAUSE IT IS THE ONE ANYBODY WANTS.
 
-      {/* ═══════════════════════════════════════════════════════════════════
-          THE SCREEN RECORDER LEADS, AND THE CARD GENERATOR STAYS.
+                    Making a reel used to mean opening GitHub, finding Actions,
+                    running a workflow, waiting, finding the run and unzipping
+                    an artefact — reported as "too complex" and then, plainly,
+                    "I want it in admin dashboard not github".
 
-          They are not the same tool doing the same job better. Filming the app
-          is the footage nobody else can fake — a readiness score moving because
-          of a bad night is a moving picture of something happening. A generated
-          card is text sliding over a gradient, which is what people scroll past
-          fastest, and it is still the right answer when there is no screen to
-          film: a price table, a strength standard, a fact.
+                    The two below are not worse versions of it. Filming it
+                    yourself is for a take you want to perform; a generated card
+                    is the right answer when there is no screen to film — a price
+                    table, a strength standard, a fact. Both are rarer, so both
+                    are folded away.
+                    ═══════════════════════════════════════════════════════════ */}
+                <AdminArea title="Make a reel" note="One button. Filmed, narrated and captioned for you — no editing, nothing to install">
+                  <ReelLibrary />
+                </AdminArea>
 
-          Recording first because that is the one worth reaching for by default.
-          ═══════════════════════════════════════════════════════════════════ */}
-      {/* ═══════════════════════════════════════════════════════════════════
-          ONE BUTTON, FIRST, BECAUSE IT IS THE ONE ANYBODY WANTS.
+                <Drawer summary="Film it yourself — your own voice, your own take">
+                  <ReelRecorder />
+                </Drawer>
 
-          Making a reel used to mean opening GitHub, finding Actions, running a
-          workflow, waiting, finding the run and unzipping an artefact —
-          reported as "too complex" and then, plainly, "I want it in admin
-          dashboard not github".
+                <Drawer summary="Generated cards — for what has no screen to film">
+                  <ReelStudio />
+                </Drawer>
+              </>
+            )}
 
-          This does the whole thing: press a button, wait three minutes, watch
-          the video here. The studio below still exists for a take you want to
-          perform yourself, which is a different job and a rarer one — so it is
-          no longer the first thing on the page.
-          ═══════════════════════════════════════════════════════════════════ */}
-      <AdminArea title="Make a reel" note="One button. Filmed, narrated and captioned for you — no editing, nothing to install">
-        <ReelLibrary />
-      </AdminArea>
+            {active === "plan" && (
+              <AdminArea title="Posts, plan and captions" note="Images, app demos, and a writer held to verified facts">
+                <ContentEngine />
+              </AdminArea>
+            )}
 
-      <AdminArea title="Film it yourself" note="Screen recording with your own voice over it, for a take you want to perform">
-        <ReelRecorder />
-      </AdminArea>
-
-      <AdminArea title="Generated cards" note="Vertical video built from content that already exists, for what has no screen to film">
-        <ReelStudio />
-      </AdminArea>
-
-      <AdminArea title="Posts, plan and captions" note="Images, app demos, and a writer held to verified facts">
-        <ContentEngine />
-      </AdminArea>
+            {active === "reach" && (
+              <AdminArea title="The share loop" note="Athletes posting, which is the channel that scales on its own">
+                <ShareLoop />
+              </AdminArea>
+            )}
+          </>
+        )}
+      </AdminTabs>
     </AdminShell>
   );
 }

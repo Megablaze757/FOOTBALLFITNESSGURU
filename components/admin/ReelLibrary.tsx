@@ -87,6 +87,10 @@ export function ReelLibrary({ subject }: { subject?: string }) {
       const request: ReelRequest = { script, voice: true, ...(subject ? { subject } : {}) };
       await invokeAI<{ started?: boolean }>("record-reel", request, 30_000);
       setNote("Recording. It takes about three minutes — it will appear below when it lands.");
+      // Reels arrive minutes later and nothing pushes them here, so the list
+      // is re-read when it is plausible one has landed rather than making
+      // somebody reload the page to find out.
+      window.setTimeout(() => void load(), 180_000);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {

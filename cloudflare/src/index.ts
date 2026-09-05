@@ -545,7 +545,7 @@ function overBudget(state: BudgetState): Response {
 // nobody is watching a spinner and the budget can be what the work actually
 // needs. Callers pass their own client-side timeout to match.
 // Bump on every paste into the Cloudflare dashboard. GET /health reports it.
-const WORKER_VERSION = "2026-09-05.3";
+const WORKER_VERSION = "2026-09-05.4";
 
 const CHAIN_BUDGET_MS = 55_000;
 /**
@@ -1966,10 +1966,32 @@ async function recordReel(req: Request, env: Env): Promise<Response> {
   if (sent.status === 204) {
     return json({ started: true, runs: `https://github.com/${repo}/actions/workflows/record-reels.yml` });
   }
-  if (sent.status === 401 || sent.status === 403) {
-    return json({ error: "GitHub refused the token. It needs Contents: Read and write on this repository." }, 502);
-  }
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * GITHUB'S OWN WORDS, NOT MINE.
+   *
+   * This said "it needs Contents: Read and write" on any 401 or 403 and threw
+   * away the response — which is the correct advice and useless as a
+   * diagnosis: an expired token, a token whose repository list does not
+   * include this one, and a token with read-only Contents all produce the same
+   * status and three different fixes.
+   *
+   * `x-accepted-github-permissions` is GitHub telling you exactly what the
+   * endpoint wanted, in its own words. Passing both through turns a guess into
+   * something somebody can act on without asking anybody.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
   const detail = await sent.text().catch(() => "");
+  const wanted = sent.headers.get("x-accepted-github-permissions");
+  if (sent.status === 401 || sent.status === 403) {
+    return json({
+      error: sent.status === 401
+        ? "GitHub does not recognise the token at all — it has probably expired. Make a new fine-grained token and set GITHUB_TOKEN again."
+        : "GitHub has the token but will not let it do this. Check the token's Repository access includes this repo, and that Contents is Read and write (not read-only).",
+      needs: wanted,
+      detail: detail.slice(0, 300),
+    }, 502);
+  }
   return json({ error: `GitHub would not start the run (${sent.status}).`, detail: detail.slice(0, 300) }, 502);
 }
 

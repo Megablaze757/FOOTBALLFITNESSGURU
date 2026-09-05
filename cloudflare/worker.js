@@ -1354,7 +1354,7 @@ function overBudget(state) {
   return json({ error: `${reason} The on-device coach still works, and your allowance resets \u2014 upgrade for more.` }, 429);
 }
 __name(overBudget, "overBudget");
-var WORKER_VERSION = "2026-09-05.3";
+var WORKER_VERSION = "2026-09-05.4";
 var ATTEMPT_TIMEOUT_MS = {
   groq: 1e4,
   openrouter: 2e4,
@@ -2055,10 +2055,15 @@ async function recordReel(req, env) {
   if (sent.status === 204) {
     return json({ started: true, runs: `https://github.com/${repo}/actions/workflows/record-reels.yml` });
   }
-  if (sent.status === 401 || sent.status === 403) {
-    return json({ error: "GitHub refused the token. It needs Contents: Read and write on this repository." }, 502);
-  }
   const detail = await sent.text().catch(() => "");
+  const wanted = sent.headers.get("x-accepted-github-permissions");
+  if (sent.status === 401 || sent.status === 403) {
+    return json({
+      error: sent.status === 401 ? "GitHub does not recognise the token at all \u2014 it has probably expired. Make a new fine-grained token and set GITHUB_TOKEN again." : "GitHub has the token but will not let it do this. Check the token's Repository access includes this repo, and that Contents is Read and write (not read-only).",
+      needs: wanted,
+      detail: detail.slice(0, 300)
+    }, 502);
+  }
   return json({ error: `GitHub would not start the run (${sent.status}).`, detail: detail.slice(0, 300) }, 502);
 }
 __name(recordReel, "recordReel");
