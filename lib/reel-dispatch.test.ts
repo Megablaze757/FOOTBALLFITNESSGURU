@@ -125,6 +125,40 @@ test("a run that cannot upload says so rather than passing quietly", () => {
   assert.match(upload, /Variable of the same name will not work/,
     "the commonest way to get this wrong is not named");
 
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * A PARSER IS NOT AN ERROR HANDLER.
+   *
+   * The sign-in was one line: curl piped straight into a JSON parser. When the
+   * response was not JSON, the run's entire explanation was a Python traceback
+   * ending "Expecting value: line 1 column 1" — which says nothing about
+   * sign-in, nothing about which request, and nothing about what to do. And
+   * `continue-on-error` reported the step as SUCCESS, so the job listing said
+   * it had worked.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  /**
+   * BOTH requests, not one. There are two — sign in, then upload — and a
+   * pattern that merely finds the string passes while the first one goes
+   * unchecked, which is the exact request that failed.
+   */
+  const statusChecks = (upload.match(/-w "%\{http_code\}"/g) ?? []).length;
+  assert.ok(statusChecks >= 2, `only ${statusChecks} of the two requests checks its status`);
+  assert.ok(
+    !/curl[^\n]*\|\s*python3/.test(upload),
+    "curl is piped straight into a parser, so a non-JSON response becomes a traceback",
+  );
+  assert.match(upload, /::error::Sign-in to Supabase failed \(HTTP/,
+    "a failed sign-in does not say that it failed");
+  // The likeliest cause of an upload failure, named rather than left to guess.
+  assert.match(upload, /apply-0088-0111\.sql/,
+    "a missing bucket does not point at the migration that creates it");
+
+  // Credentials are built by a JSON encoder, not string-concatenated into a
+  // shell-quoted literal where a quote in a password would break the request.
+  assert.match(upload, /json\.dumps/,
+    "the credentials are interpolated into JSON by hand, which a quote in a password breaks");
+
   // Said BEFORE the three minutes, not after them.
   const early = workflow.slice(0, workflow.indexOf("Put it in the dashboard"));
   assert.match(early, /What is configured/, "nothing reports the configuration up front");

@@ -190,7 +190,7 @@ jobs:
           SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL || 'https://txqhstackgidjqkkrzyj.supabase.co' }}
           SUPABASE_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_kr26XwyR0HZxS3HR3UJI2Q_YLLT7Sfl' }}
         run: |
-          set -euo pipefail
+          set -uo pipefail
           if [ -z "${REEL_EMAIL:-}" ] || [ -z "${REEL_PASSWORD:-}" ]; then
             echo "::warning::REEL_EMAIL/REEL_PASSWORD are empty, so the reel was not uploaded to the dashboard."
             echo "::warning::They must be repository SECRETS (Settings -> Secrets and variables -> Actions -> Secrets),"
@@ -198,21 +198,70 @@ jobs:
             echo "::warning::The MP4 is still attached to this run as an artefact."
             exit 0
           fi
-          token=$(curl -sS -X POST "$SUPABASE_URL/auth/v1/token?grant_type=password"             -H "apikey: $SUPABASE_KEY" -H "Content-Type: application/json"             -d "{\"email\":\"$REEL_EMAIL\",\"password\":\"$REEL_PASSWORD\"}"             | python3 -c "import json,sys; print(json.load(sys.stdin).get('access_token',''))")
-          if [ -z "$token" ]; then echo "::warning::could not sign in to upload the reel"; exit 0; fi
+
+          # ─────────────────────────────────────────────────────────────────
+          # STATUS AND BODY, SEPARATELY.
+          #
+          # This was one line: curl piped straight into a JSON parser. When the
+          # response was not JSON the run's entire explanation was a Python
+          # traceback ending "Expecting value: line 1 column 1" — which says
+          # nothing about sign-in, nothing about which request, and nothing
+          # about what to do. A parser is not an error handler.
+          #
+          # The body is printed only on failure and only its first line, because
+          # a Supabase auth error names the reason ("invalid_grant",
+          # "email_not_confirmed") without ever echoing what was sent.
+          # ─────────────────────────────────────────────────────────────────
+          auth=$(mktemp)
+          code=$(curl -sS -o "$auth" -w "%{http_code}" \
+            -X POST "$SUPABASE_URL/auth/v1/token?grant_type=password" \
+            -H "apikey: $SUPABASE_KEY" \
+            -H "Content-Type: application/json" \
+            --data-raw "$(python3 -c 'import json,os; print(json.dumps({"email": os.environ["REEL_EMAIL"], "password": os.environ["REEL_PASSWORD"]}))')" \
+            || echo "000")
+
+          if [ "$code" != "200" ]; then
+            echo "::error::Sign-in to Supabase failed (HTTP $code) — the reel was not uploaded to the dashboard."
+            case "$code" in
+              000) echo "::error::The request did not complete at all. Check NEXT_PUBLIC_SUPABASE_URL." ;;
+              400) echo "::error::Supabase rejected the credentials. Check REEL_EMAIL and REEL_PASSWORD, and that the account is confirmed." ;;
+              401|403) echo "::error::The publishable key was refused. Check NEXT_PUBLIC_SUPABASE_ANON_KEY." ;;
+            esac
+            head -c 200 "$auth" | tr -d '\n'; echo
+            echo "::warning::The MP4 is still attached to this run as an artefact."
+            exit 0
+          fi
+
+          token=$(python3 -c "import json;print(json.load(open('$auth')).get('access_token',''))" 2>/dev/null || echo "")
+          if [ -z "$token" ]; then
+            echo "::error::Signed in but no access token came back — cannot upload."
+            exit 0
+          fi
 
           # Named by script and day, so a second run of the same reel does not
-          # silently replace the first — an admin comparing two takes is the
-          # normal case, not an edge one.
+          # replace the first — comparing two takes is the normal case.
           stamp=$(date -u +%Y-%m-%dT%H-%M)
+          uploaded=0
           for file in reels/*.mp4 reels/*.srt; do
             [ -e "$file" ] || continue
             name="$SCRIPT-$stamp.${file##*.}"
             type=$([ "${file##*.}" = "mp4" ] && echo video/mp4 || echo application/x-subrip)
-            code=$(curl -sS -o /dev/null -w "%{http_code}" -X POST               "$SUPABASE_URL/storage/v1/object/reels/$name"               -H "apikey: $SUPABASE_KEY" -H "Authorization: Bearer $token"               -H "Content-Type: $type" --data-binary "@$file")
-            echo "$name -> HTTP $code"
-            [ "$code" = "200" ] || echo "::warning::$name did not upload (HTTP $code) — is migration 0111 applied?"
+            out=$(mktemp)
+            up=$(curl -sS -o "$out" -w "%{http_code}" -X POST \
+              "$SUPABASE_URL/storage/v1/object/reels/$name" \
+              -H "apikey: $SUPABASE_KEY" -H "Authorization: Bearer $token" \
+              -H "Content-Type: $type" --data-binary "@$file" || echo "000")
+            if [ "$up" = "200" ]; then
+              echo "$name uploaded"
+              uploaded=$((uploaded + 1))
+            else
+              echo "::error::$name did not upload (HTTP $up)."
+              head -c 200 "$out" | tr -d '\n'; echo
+              # The overwhelmingly likely cause, named rather than guessed at.
+              echo "::error::If this says the bucket is missing, run supabase/apply-0088-0111.sql."
+            fi
           done
+          [ "$uploaded" -gt 0 ] || echo "::warning::Nothing reached the dashboard. The MP4 is attached to this run."
 
       - uses: actions/upload-artifact@v4
         with:
