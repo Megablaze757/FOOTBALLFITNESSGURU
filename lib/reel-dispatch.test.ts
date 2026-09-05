@@ -97,11 +97,39 @@ test("the workflow installs the ffmpeg it depends on", () => {
  * appears in the app and nothing says why. The reel is still an artefact — the
  * log has to say that too.
  */
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * A STEP THAT SKIPS ITSELF REPORTS SUCCESS.
+ *
+ * The upload was gated on `if: env.REEL_EMAIL != ''`. With the secret unset it
+ * skipped, the run went green, the reel was made, and nothing appeared in the
+ * app — the only clue a grey "skipped" on step sixteen that nobody scrolls to.
+ *
+ * So the check moved INSIDE the step, beside the thing it is checking for,
+ * where it can say what to do about it. And the run reports what it can see up
+ * front rather than at the end of three minutes.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
 test("a run that cannot upload says so rather than passing quietly", () => {
   const workflow = readFileSync(".github/workflows/record-reels.yml", "utf8");
-  assert.match(workflow, /REEL_EMAIL == ''/, "nothing notices that the upload was skipped");
-  assert.match(workflow, /::warning::REEL_EMAIL and REEL_PASSWORD are not set/,
+
+  const upload = workflow.slice(workflow.indexOf("Put it in the dashboard"));
+  assert.ok(
+    !/^\s*if:/m.test(upload.split("run: |")[0]),
+    "the upload step gates itself again, so a missing secret is a silent skip",
+  );
+  assert.match(upload, /if \[ -z "\$\{REEL_EMAIL:-\}" \]/,
+    "nothing inside the step notices the credentials are missing");
+  assert.match(upload, /::warning::REEL_EMAIL\/REEL_PASSWORD are empty/,
     "the skip is silent, so the run looks like it worked");
+  assert.match(upload, /Variable of the same name will not work/,
+    "the commonest way to get this wrong is not named");
+
+  // Said BEFORE the three minutes, not after them.
+  const early = workflow.slice(0, workflow.indexOf("Put it in the dashboard"));
+  assert.match(early, /What is configured/, "nothing reports the configuration up front");
+  assert.match(early, /secrets\.REEL_EMAIL != ''/, "the report does not check the secret");
+  assert.ok(!/echo "\$\{\{ secrets\./.test(workflow), "a secret's value is echoed into the log");
 });
 
 test("the workflow listens for the event the Worker sends", () => {

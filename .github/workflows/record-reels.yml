@@ -50,8 +50,23 @@ jobs:
       # from client_payload against a workflow input is a comparison nobody can
       # read and half the internet gets wrong.
       VOICE: ${{ github.event.client_payload.voice || (inputs.voice && 'true') || 'false' }}
-      REEL_EMAIL: ${{ secrets.REEL_EMAIL }}
     steps:
+      # ═══════════════════════════════════════════════════════════════════
+      # WHAT IS CONFIGURED, BEFORE THREE MINUTES ARE SPENT FINDING OUT.
+      #
+      # A missing secret was discovered at the LAST step of a run that then
+      # reported success: the reel was made, nothing appeared in the app, and
+      # the only clue was a skipped step nobody scrolls to. Names and
+      # set/not-set only — never a value.
+      # ═══════════════════════════════════════════════════════════════════
+      - name: What is configured
+        run: |
+          echo "REEL_EMAIL:    ${{ secrets.REEL_EMAIL != '' && 'set' || 'NOT SET' }}"
+          echo "REEL_PASSWORD: ${{ secrets.REEL_PASSWORD != '' && 'set' || 'NOT SET' }}"
+          echo ""
+          echo "Both must be repository SECRETS — Settings → Secrets and variables → Actions,"
+          echo "the Secrets tab rather than Variables. Names are exact and case-sensitive."
+
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
@@ -163,17 +178,11 @@ jobs:
       # Not fatal if it fails. The artefact below is still there, and losing a
       # reel to a storage hiccup should not lose the run that made it.
       # ═══════════════════════════════════════════════════════════════════
-      # Skipped silently is how a run "succeeds" and nothing appears in the
-      # app. The reel is still an artefact; the log has to say why it went no
-      # further than that.
-      - name: No upload credentials
-        if: env.REEL_EMAIL == ''
-        run: |
-          echo "::warning::REEL_EMAIL and REEL_PASSWORD are not set, so the reel was not uploaded to the dashboard."
-          echo "::warning::Add them under Settings → Secrets and variables → Actions. The MP4 is still attached to this run."
-
+      # NO `if:` GATE. A step that skips itself reports success and leaves a
+      # green run with nothing in the app and no line saying why — which is
+      # exactly what happened. The check belongs inside the step, beside the
+      # thing it is checking for, where it can say what to do about it.
       - name: Put it in the dashboard
-        if: env.REEL_EMAIL != ''
         continue-on-error: true
         env:
           REEL_EMAIL: ${{ secrets.REEL_EMAIL }}
@@ -182,6 +191,13 @@ jobs:
           SUPABASE_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_kr26XwyR0HZxS3HR3UJI2Q_YLLT7Sfl' }}
         run: |
           set -euo pipefail
+          if [ -z "${REEL_EMAIL:-}" ] || [ -z "${REEL_PASSWORD:-}" ]; then
+            echo "::warning::REEL_EMAIL/REEL_PASSWORD are empty, so the reel was not uploaded to the dashboard."
+            echo "::warning::They must be repository SECRETS (Settings -> Secrets and variables -> Actions -> Secrets),"
+            echo "::warning::named exactly REEL_EMAIL and REEL_PASSWORD. A Variable of the same name will not work."
+            echo "::warning::The MP4 is still attached to this run as an artefact."
+            exit 0
+          fi
           token=$(curl -sS -X POST "$SUPABASE_URL/auth/v1/token?grant_type=password"             -H "apikey: $SUPABASE_KEY" -H "Content-Type: application/json"             -d "{\"email\":\"$REEL_EMAIL\",\"password\":\"$REEL_PASSWORD\"}"             | python3 -c "import json,sys; print(json.load(sys.stdin).get('access_token',''))")
           if [ -z "$token" ]; then echo "::warning::could not sign in to upload the reel"; exit 0; fi
 
