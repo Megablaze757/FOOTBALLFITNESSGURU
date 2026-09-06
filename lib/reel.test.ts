@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { SKILL_DRILLS } from "./skills";
 import {
-  holdFor, reelScenes, reelDuration, sceneAt, reelFrameSvg, pickMimeType, fileExtension,
+  holdFor, speechMs, reelScenes, reelDuration, sceneAt, reelFrameSvg, pickMimeType, fileExtension,
   MIN_SCENE_MS, MIN_REEL_MS, MAX_REEL_MS, REEL_MIME_TYPES, closingFact,
   inspectRecording, isPostable, requestsH264, reelSteps, REEL_FPS, emphasise, type Scene,
 } from "./reel";
@@ -276,4 +276,48 @@ test("a stat card does not also highlight a figure in its caption", () => {
   const svg = reelFrameSvg(scenes, 1900);
   assert.equal((svg.match(/<tspan/g) ?? []).length, 0,
     "the stat is already the emphasis — a second one competes with it");
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * SPEAKING IS NOT READING.
+ *
+ * These were one function. A model fitted to real speech immediately broke the
+ * drill cards, and rightly: a two-word CARD should sit for the floor, while two
+ * words SPOKEN — "Same protein." — take a second and a half. One number cannot
+ * be both, and the reel planner was using the card number, which under-
+ * estimated every reel by about a fifth.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("speech and reading are estimated separately", () => {
+  // The measured case: two spoken words are not two words' worth of time.
+  assert.ok(speechMs("Same protein.") > 1_400,
+    `${speechMs("Same protein.")}ms — a phrase costs about a second before its first word`);
+  assert.equal(holdFor("Two words"), MIN_SCENE_MS, "the card floor moved with the speech model");
+
+  // A phrase's fixed cost is what a flat per-word rate could not express, so
+  // two sentences must cost more than one of the same total length.
+  assert.ok(speechMs("Build a week. It prices the shop.") > speechMs("Build a week it prices the shop"),
+    "two sentences are estimated the same as one, so the per-phrase cost is gone");
+
+  assert.equal(speechMs(""), 0, "silence is not a phrase");
+  assert.equal(speechMs("   "), 0);
+});
+
+/**
+ * The estimate exists to be believed before three minutes are spent. Measured
+ * against the real recording it replaced: 23.8s estimated, 29.1s actual.
+ */
+test("the estimate is close enough to trust", () => {
+  const spoken = [
+    "Every food here is the same 30 grams of protein, priced from real supermarket packs.",
+    "Cheapest: £0.31.", "Dearest: £3.19. Same protein.",
+    "Every recipe is costed the same way.",
+    "Build a week and it prices the whole shop. Before you go.",
+  ];
+  const total = spoken.reduce((n, t) => n + speechMs(t), 0);
+  // The old model gave these about 12s; measured audio for the longer script
+  // they replace was 29.1s. Anything near the old figure is the old bug back.
+  assert.ok(total > 15_000, `${Math.round(total)}ms — back to the optimistic estimate`);
+  assert.ok(total < 30_000, `${Math.round(total)}ms — now over-estimating instead`);
 });

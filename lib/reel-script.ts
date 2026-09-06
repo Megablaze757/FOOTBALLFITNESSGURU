@@ -31,7 +31,7 @@
 // =============================================================================
 
 import { beatFloorMs } from "./caption-lines";
-import { holdFor, MIN_SCENE_MS, MAX_REEL_MS, MS_PER_WORD } from "./reel";
+import { holdFor, speechMs, MIN_SCENE_MS, MAX_REEL_MS, MS_PER_WORD } from "./reel";
 import { SUSPENSE_MS } from "./narration";
 import { hookText, HOOK_MAX_WORDS } from "./reel-kinds";
 import { SKILL_DRILLS } from "./skills";
@@ -115,8 +115,10 @@ function time(beats: Omit<Beat, "at" | "ms">[]): Beat[] {
      * reel about how long every shot is — and the studio is where a script
      * gets judged before anybody spends three minutes filming it.
      */
+    // speechMs, not holdFor: this beat is SPOKEN. holdFor is the reading time
+    // for a text card, and using it here under-estimated every reel by a fifth.
     const ms = (b.hold ?? 0)
-      + Math.max(MIN_BEAT_MS, b.say ? Math.max(holdFor(b.say), beatFloorMs(b.say)) : 0);
+      + Math.max(MIN_BEAT_MS, b.say ? Math.max(speechMs(b.say), beatFloorMs(b.say)) : 0);
     const beat = { ...b, at, ms };
     at += ms;
     return beat;
@@ -211,12 +213,13 @@ function costScript(): ReelScript {
     {
       route: "/cheapest-protein/",
       action: "Top of the ranked table, the three summary cards in frame.",
-      say: `Every food here gives you the same ${REFERENCE_PROTEIN} grams of protein.`,
-    },
-    {
-      route: "/cheapest-protein/",
-      action: "Scroll slowly down the ranked list, past the middle.",
-      say: "All priced from real supermarket packs.",
+      /**
+       * TWO BEATS MERGED. They made the same point in two shots — the claim
+       * and its credibility — and cost four seconds of a reel that was running
+       * at the 30s ceiling. One sentence carries both, and completion rate is
+       * the strongest signal a reel sends.
+       */
+      say: `Every food here is the same ${REFERENCE_PROTEIN} grams of protein, priced from real supermarket packs.`,
     },
     {
       route: "/cheapest-protein/",
@@ -236,13 +239,15 @@ function costScript(): ReelScript {
     {
       route: "/recipes/",
       action: "Open a recipe and show the costed ingredient list.",
-      say: "Every recipe in the app is costed the same way, down to the ingredient.",
+      say: "Every recipe is costed the same way.",
     },
     {
       route: "/nutrition",
       action: "Show a meal plan with its weekly cost.",
       focus: "kcal left",
-      say: "So build a week of meals and it prices the whole shop. Before you go.",
+      // "Before you go." stays its own sentence: it is the payoff, and
+      // lib/speech-timing.ts puts the suspense gap before exactly that shape.
+      say: "Build a week and it prices the whole shop. Before you go.",
     },
     { route: "/", action: "Front page. Hold two seconds.", say: "" },
   ]);
