@@ -232,6 +232,7 @@ const browser = await chromium.launch({
 const doorway = await browser.newContext({
   viewport: { width: REEL_W, height: REEL_H },
   deviceScaleFactor: REEL_SCALE,
+  colorScheme: "dark",
 });
 const signedIn = await signIn(await doorway.newPage(), base);
 const storageState = await doorway.storageState();
@@ -242,6 +243,23 @@ const context = await browser.newContext({
   viewport: { width: REEL_W, height: REEL_H },
   deviceScaleFactor: REEL_SCALE,
   storageState,
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * DARK, WHICH IS WHAT THE APP ACTUALLY IS.
+   *
+   * Every reel so far filmed a light app, and that was never a choice
+   * anybody made. app/globals.css says it plainly: "Dark is the default
+   * because it always was" — light is opt-in through
+   * `prefers-color-scheme: light`. Playwright's default colorScheme is
+   * `light`, so Chromium reported a preference nobody has and the recorder
+   * filmed a version of the product most athletes never see.
+   *
+   * It is also the better reel. A dark 9:16 video stands out in a feed of
+   * white ones, and the app's own accent colours were picked against a dark
+   * ground.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  colorScheme: "dark",
   /**
    * A SCRATCH DIRECTORY, not the output one.
    *

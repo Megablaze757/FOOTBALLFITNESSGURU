@@ -52,19 +52,26 @@ if (slides.length === 0) {
 }
 
 /**
- * The look, in one place.
+ * The look, in one place — and it is the APP'S look.
  *
- * Light rather than dark: the app's public pages are light, so a dark carousel
- * would be a post that looks like somebody else's product. And a light slide
- * is what a screenshot of a price list looks like, which is the point.
+ * The first version was light, on the reasoning that "the app's public pages
+ * are light". That was simply wrong: app/globals.css says "Dark is the default
+ * because it always was", and light is opt-in through
+ * `prefers-color-scheme: light`. Every page I had looked at was a Playwright
+ * screenshot, and Playwright defaults to reporting a light preference — so I
+ * had been reading my own recorder's setting as a fact about the product.
+ *
+ * The colours below are the app's own tokens, not approximations of them.
+ * A dark 4:5 slide also holds its own in a feed of white ones.
  */
 const CSS = `
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { background: #0b0b0d; }
+  body { background: rgb(9 9 10); }
   .slide {
     width: ${SLIDE_W}px; height: ${SLIDE_H}px; position: relative;
-    background: linear-gradient(170deg, #fdfdfb 0%, #f3f2ee 100%);
-    color: #14140f; display: flex; flex-direction: column;
+    /* --surface-base to --surface-raised, the app's own two darkest tokens. */
+    background: linear-gradient(170deg, rgb(16 16 17) 0%, rgb(9 9 10) 100%);
+    color: rgb(241 245 249); display: flex; flex-direction: column;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
     padding: 86px 76px 120px;
   }
@@ -73,8 +80,8 @@ const CSS = `
   h1 { font-size: 128px; line-height: 0.98; font-weight: 900; letter-spacing: -0.035em; }
   h1.small { font-size: 96px; line-height: 1.02; }
   h2 { font-size: 72px; font-weight: 900; letter-spacing: -0.03em; }
-  .sub { margin-top: 34px; font-size: 40px; line-height: 1.3; font-weight: 500; color: #55554c; }
-  .note { margin-top: 14px; font-size: 32px; font-weight: 600; color: #6a6a60; }
+  .sub { margin-top: 34px; font-size: 40px; line-height: 1.3; font-weight: 500; color: rgb(148 163 184); }
+  .note { margin-top: 14px; font-size: 32px; font-weight: 600; color: rgb(131 145 166); }
   /* SPREAD TO FILL. Eight rows at their natural height left the bottom third
      of the slide empty, which reads as a slide that ran out rather than one
      that was composed. */
@@ -84,10 +91,10 @@ const CSS = `
   }
   li {
     display: flex; align-items: center; gap: 22px;
-    padding: 16px 0; border-bottom: 2px solid rgba(0,0,0,0.07); font-size: 40px;
+    padding: 16px 0; border-bottom: 2px solid rgba(255,255,255,0.08); font-size: 40px;
   }
   li:last-child { border-bottom: 0; }
-  .rank { width: 62px; font-weight: 800; color: #a9a99c; font-size: 34px; }
+  .rank { width: 62px; font-weight: 800; color: rgb(131 145 166); font-size: 34px; }
   /* WRAPS RATHER THAN TRUNCATES. This was text-overflow: ellipsis, which
      turned "Greek style yoghurt (0% fat)" into "Greek style yoghurt (…" and
      "Tuna chunks in spring water" into "Tuna chunks in spring…" — hiding the
@@ -95,17 +102,18 @@ const CSS = `
      whole purpose is being useful in a shop. The price column has a fixed
      width, so a second line cannot push it off the slide. */
   .name { flex: 1; font-weight: 700; line-height: 1.08; }
-  .portion { font-size: 32px; font-weight: 600; color: #8b8b7e; }
+  .portion { font-size: 32px; font-weight: 600; color: rgb(148 163 184); }
   .cost { width: 168px; text-align: right; font-weight: 900; font-variant-numeric: tabular-nums; }
   .swipe, .action {
-    font-size: 40px; font-weight: 800; color: #14140f;
-    background: #ffd83d; align-self: flex-start;
+    /* --accent-400 on --on-accent: the app's own button, not a yellow. */
+    font-size: 40px; font-weight: 800; color: rgb(10 10 11);
+    background: rgb(227 181 63); align-self: flex-start;
     padding: 20px 34px; border-radius: 999px;
   }
   .action { font-size: 34px; }
   .dots { position: absolute; left: 76px; bottom: 56px; display: flex; gap: 12px; }
-  .dots i { width: 14px; height: 14px; border-radius: 999px; background: rgba(0,0,0,0.16); }
-  .dots i.on { background: #14140f; width: 40px; }
+  .dots i { width: 14px; height: 14px; border-radius: 999px; background: rgba(255,255,255,0.18); }
+  .dots i.on { background: rgb(241 245 249); width: 40px; }
 `;
 
 const browser = await chromium.launch({
