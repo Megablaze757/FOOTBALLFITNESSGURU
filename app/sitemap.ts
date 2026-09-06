@@ -22,7 +22,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const core = [
     { url: `${SITE}/`, changeFrequency: "weekly" as const, priority: 1 },
     { url: `${SITE}/plans/`, changeFrequency: "weekly" as const, priority: 0.95 },
-    { url: `${SITE}/waitlist/`, changeFrequency: "weekly" as const, priority: 0.9 },
+    /**
+     * NO /waitlist. It sat here at priority 0.9 — second only to the home
+     * page — while the site's calls to action all point at signup now, and
+     * nothing links to it at all. A high-priority page in the sitemap that no
+     * page links to is an orphan: the crawler is told it matters and given no
+     * reason to believe it. Two tests caught exactly that.
+     *
+     * The page still works for the affiliate links and emails already out
+     * there. It is simply no longer somewhere search should send anybody.
+     */
     { url: `${SITE}/drills/`, changeFrequency: "monthly" as const, priority: 0.8 },
     { url: `${SITE}/guides/`, changeFrequency: "monthly" as const, priority: 0.8 },
     { url: `${SITE}/recipes/`, changeFrequency: "monthly" as const, priority: 0.85 },
