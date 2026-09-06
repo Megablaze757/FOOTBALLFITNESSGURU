@@ -219,7 +219,7 @@ function costScript(): ReelScript {
        * at the 30s ceiling. One sentence carries both, and completion rate is
        * the strongest signal a reel sends.
        */
-      say: `Every food here is the same ${REFERENCE_PROTEIN} grams of protein, priced from real supermarket packs.`,
+      say: `Every food here is the same ${REFERENCE_PROTEIN} grams of protein.`,
     },
     {
       route: "/cheapest-protein/",
@@ -239,7 +239,17 @@ function costScript(): ReelScript {
     {
       route: "/recipes/",
       action: "Open a recipe and show the costed ingredient list.",
-      say: "Every recipe is costed the same way.",
+      /**
+       * "Priced from real supermarket packs" MOVED HERE from the table beat.
+       *
+       * Trimming the closing beats without trimming the table pushed
+       * /cheapest-protein/ to 60% of the reel, and lib/reel-retention.ts
+       * refused to film it — correctly: a reel that spends two thirds of
+       * itself on one screen has nothing to watch. Moving the line takes time
+       * off that route AND puts it where it is actually true, since the
+       * recipes are the thing costed from those packs.
+       */
+      say: "Every recipe is costed the same way, from real supermarket packs.",
     },
     {
       route: "/nutrition",
