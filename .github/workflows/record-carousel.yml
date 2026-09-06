@@ -41,8 +41,25 @@ jobs:
       # documented at length in record-reels.yml — a trailing carriage return
       # on the URL variable cost three runs.
       # ═══════════════════════════════════════════════════════════════════
+      - uses: actions/upload-artifact@v4
+        with:
+          name: carousel
+          path: carousel/
+          retention-days: 14
+
+      # ═══════════════════════════════════════════════════════════════════
+      # THE ARTEFACT IS SAVED FIRST, AND THE DASHBOARD UPLOAD MAY FAIL LOUDLY.
+      #
+      # It was the other way round, under `continue-on-error: true` — which
+      # reports a FAILED step as SUCCESS in the job listing. The carousel run
+      # that could not upload a single slide (the bucket rejected image/png)
+      # showed a green tick, and I have already once read a listing like that
+      # and told somebody the upload worked.
+      #
+      # Saving the artefact first means nothing is lost when the upload fails,
+      # so the upload no longer needs to swallow its own failure to protect it.
+      # ═══════════════════════════════════════════════════════════════════
       - name: Put it in the dashboard
-        continue-on-error: true
         env:
           REEL_EMAIL: ${{ secrets.REEL_EMAIL }}
           REEL_PASSWORD: ${{ secrets.REEL_PASSWORD }}
@@ -71,10 +88,11 @@ jobs:
           if [ "$code" != "200" ]; then
             echo "::error::Sign-in to Supabase failed (HTTP $code) — the slides were not uploaded."
             head -c 200 "$auth" | tr -d '\n'; echo
-            exit 0
+            # FAILS THE JOB. The slides are already attached above.
+            exit 1
           fi
           token=$(python3 -c "import json;print(json.load(open('$auth')).get('access_token',''))" 2>/dev/null || echo "")
-          [ -n "$token" ] || { echo "::error::Signed in but no access token came back."; exit 0; }
+          [ -n "$token" ] || { echo "::error::Signed in but no access token came back."; exit 1; }
 
           stamp=$(date -u +%Y-%m-%dT%H-%M)
           uploaded=0
@@ -97,10 +115,10 @@ jobs:
               head -c 200 "$out" | tr -d '\n'; echo
             fi
           done
-          [ "$uploaded" -gt 0 ] || echo "::warning::Nothing reached the dashboard. The slides are attached to this run."
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: carousel
-          path: carousel/
-          retention-days: 14
+          if [ "$uploaded" -eq 0 ]; then
+            # The bucket refusing image/png looked exactly like success before
+            # this: five ::error:: lines and a green tick.
+            echo "::error::Nothing reached the dashboard. The slides are attached to this run."
+            echo "::error::If this says invalid_mime_type, run supabase/migrations/0112_reels_images.sql."
+            exit 1
+          fi
