@@ -44,7 +44,29 @@
      * audience is READING this rather than hearing it.
      */
     caption.style.cssText =
-      "max-width:100%;text-align:center;font-size:40px;line-height:1.25;font-weight:800;"
+      /**
+       * ═══════════════════════════════════════════════════════════════════
+       * POSITIONED, OR THE SPOTLIGHT DIMS THE WORDS IT IS POINTING WITH.
+       *
+       * This was a plain flex child with no `position`, and the spotlight's
+       * dim panels are `position:fixed`. CSS paints POSITIONED elements above
+       * every non-positioned one in the same stacking context, and DOM order
+       * only ranks elements within the same phase — so the panels covered the
+       * caption no matter where in the layer the spot was inserted. The
+       * insertBefore that was supposed to prevent this, and the comment on it
+       * saying the caption "is never dimmed by it", were both doing nothing.
+       *
+       * Measured on the recorded reel: caption text averaged 79 of 255 on the
+       * two spotlight beats and 149 on the beats without one. Those two are
+       * the reveals — "Cheapest: 31p", "Dearest: £3.19" — so the shots the
+       * whole reel is built around were the ones with a half-lit caption.
+       *
+       * The hook never had this: its wrapper is already `position:fixed`,
+       * which is why it looked right and the captions did not.
+       * ═══════════════════════════════════════════════════════════════════
+       */
+      "position:relative;z-index:1;"
+      + "max-width:100%;text-align:center;font-size:40px;line-height:1.25;font-weight:800;"
       /**
        * OPAQUE, AND WITH A RIM.
        *
@@ -91,7 +113,9 @@
      * leaving the proof visible above and clearing the caption band below.
      */
     hookWrap.style.cssText =
-      "position:fixed;left:0;right:0;top:42%;display:flex;justify-content:center;"
+      // z-index alongside the caption's, so both sit above the dim panels for
+      // the same stated reason rather than one of them by accident.
+      "position:fixed;z-index:1;left:0;right:0;top:42%;display:flex;justify-content:center;"
       + "padding:0 30px;pointer-events:none;";
 
     var hook = document.createElement("div");
@@ -137,7 +161,13 @@
     ring.style.cssText = "position:fixed;border:3px solid rgba(227,181,63,0.95);"
       + "border-radius:16px;box-shadow:0 0 0 2px rgba(0,0,0,0.35),0 8px 40px rgba(0,0,0,0.5);";
     spot.appendChild(ring);
-    // BEFORE the caption in the layer, so the caption is never dimmed by it.
+    /**
+     * First in the layer AND below it in z-index. The DOM order alone did
+     * nothing — see the caption's own note — so the z-index on the caption
+     * and the hook is what actually keeps them above the dimming. This stays
+     * because a reader expecting paint order to follow the document should
+     * not find the spotlight last.
+     */
     layer.insertBefore(spot, layer.firstChild);
 
     // documentElement, not body: a page that replaces its own body mid-render
@@ -280,25 +310,69 @@
    * only draws what it is handed. A string still works, so anything that has
    * not been updated keeps rendering plain white.
    *
-   * accent-400 on the pill measures 10.3:1, past WCAG AAA for large text, and
-   * it is the app's own colour rather than the generic yellow every reel uses.
+   * ─────────────────────────────────────────────────────────────────────
+   * WORD BY WORD, AND BRIGHTER THAN THE BRAND.
+   *
+   * This drew a static line with one word in accent-400 — the app's own
+   * colour, chosen deliberately over "the generic yellow every reel uses".
+   * That decision is reversed on purpose. The measured caption style for this
+   * format is a word-by-word highlight in a HIGH-SATURATION colour, reported
+   * at a 12-25% lift in average watch time, and the reason the generic yellow
+   * is generic is that it survives whatever the app is showing behind it. A
+   * muted gold is the better brand colour and the worse caption.
+   *
+   * accent-400 measured 10.3:1 on this pill; #FFE81A measures higher still,
+   * so nothing is given up on legibility to gain it.
+   *
+   * Two emphases, two jobs — see lib/caption-karaoke.ts. The figure is
+   * coloured the whole time because colour is found without scanning; the
+   * sweep is about pacing, so the viewer never has to work out where the
+   * voice is. The active word also grows slightly, because colour alone
+   * cannot mark the one word that is already coloured.
    * ═══════════════════════════════════════════════════════════════════════
    */
+  var HIGHLIGHT = "rgb(255,232,26)";
+  var captionTimers = [];
+
+  var clearTimers = function () {
+    for (var i = 0; i < captionTimers.length; i++) clearTimeout(captionTimers[i]);
+    captionTimers = [];
+  };
+
   window.__reelCaption = function (value) {
     install();
     var el = document.getElementById("__reel_caption");
     if (!el) return;
+    // Any previous line's sweep is cancelled before the next is drawn, or a
+    // word from the caption before last lights up under the current one.
+    clearTimers();
     if (typeof value === "string") { set("__reel_caption", value); return; }
 
-    var runs = value || [];
+    var words = value || [];
     el.textContent = "";
-    for (var i = 0; i < runs.length; i++) {
+    var spans = [];
+    for (var i = 0; i < words.length; i++) {
+      if (i) el.appendChild(document.createTextNode(" "));
       var span = document.createElement("span");
-      span.textContent = runs[i].text;
-      if (runs[i].key) span.style.color = "rgb(227,181,63)";
+      span.textContent = words[i].text;
+      span.style.cssText = "display:inline-block;transition:color 90ms linear,transform 90ms linear;"
+        + "color:" + (words[i].key ? HIGHLIGHT : "#fff") + ";";
       el.appendChild(span);
+      spans.push(span);
     }
-    el.style.opacity = runs.length ? "1" : "0";
+    el.style.opacity = words.length ? "1" : "0";
+
+    // One timer per word rather than a per-frame poll: the browser is also
+    // running a screen recording, and this is the cheaper of the two.
+    for (var j = 0; j < words.length; j++) {
+      (function (span, previous) {
+        captionTimers.push(setTimeout(function () {
+          if (previous) { previous.style.transform = "none"; }
+          span.style.color = HIGHLIGHT;
+          span.style.transform = "scale(1.06)";
+        }, words[j].at));
+      })(spans[j], j ? spans[j - 1] : null);
+    }
   };
   window.__reelHook = function (text) { set("__reel_hook", text); };
 

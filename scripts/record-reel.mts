@@ -29,7 +29,7 @@ import { reelPlan, srt, endCardAt, REEL_W, REEL_H, REEL_SCALE } from "../lib/ree
 import { retentionProblems } from "../lib/reel-retention";
 import { driftTarget } from "../lib/reel-scroll";
 import { SIGNUP_CTA } from "../lib/signup-link";
-import { emphasise } from "../lib/caption-emphasis";
+import { karaokeWords } from "../lib/caption-karaoke";
 import { phrases } from "../lib/speech-timing";
 import { spokenForm } from "../lib/spoken-numbers";
 import { BASE_SPEED, VOICE, shapeGains, shapeRates } from "../lib/speech-prosody";
@@ -503,11 +503,15 @@ for (const step of plan.steps) {
 
   for (const [i, caption] of step.captions.entries()) {
     await sleep(Math.max(0, caption.at - elapsed()));
-    // Runs, not a string: the figure in the line is coloured. The rule is in
-    // lib/caption-emphasis.ts, tested; the page only draws what it is handed.
+    /**
+     * Timed words, not a string. The figure is coloured for the whole line
+     * and the highlight sweeps across it as the voice does — the rules for
+     * both are in lib/caption-karaoke.ts, tested; the page only draws what it
+     * is handed and runs one timer per word.
+     */
     await page.evaluate(
-      (runs) => (window as never as { __reelCaption: (r: unknown) => void }).__reelCaption(runs),
-      emphasise(caption.text),
+      (words) => (window as never as { __reelCaption: (r: unknown) => void }).__reelCaption(words),
+      karaokeWords(caption.text, caption.ms),
     );
     /**
      * ═══════════════════════════════════════════════════════════════════════

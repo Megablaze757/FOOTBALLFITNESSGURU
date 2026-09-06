@@ -142,6 +142,56 @@ export function ReelLibrary({ subject }: { subject?: string }) {
     }
   }, []);
 
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * START FRESH, IN ONE ACTION.
+   *
+   * "Clear the old demo vids, start fresh." Deleting a library one post at a
+   * time is a confirm dialog per post, and the whole reason to clear it is
+   * that the old ones are not worth keeping — so nobody wants to agree to
+   * that fourteen times.
+   *
+   * TYPED, NOT CLICKED. Every other destructive thing in this panel takes one
+   * confirm, and that is right for one post. This is every post there is and
+   * the files are not recoverable, so it asks for the count to be typed:
+   * enough friction that it cannot be the button you meant to press next to
+   * it, and not so much that it stops being usable.
+   *
+   * Admins only, enforced in the DATABASE (migration 0111, `reels: delete
+   * admin` using public.is_admin()) rather than by hiding the button — a
+   * non-admin pressing this gets a refusal from Postgres, not a deletion.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  const clearAll = useCallback(async () => {
+    const all = reels ?? [];
+    if (!all.length) return;
+    const posts = groupPosts(all).length;
+    const typed = window.prompt(
+      `Delete ALL ${posts} post${posts === 1 ? "" : "s"} — ${all.length} file${all.length === 1 ? "" : "s"}, permanently.\n\n`
+      + `This cannot be undone. Type ${posts} to confirm.`,
+    );
+    if (typed === null) return;
+    if (typed.trim() !== String(posts)) {
+      setError(`Nothing deleted — you typed "${typed.trim()}" rather than ${posts}.`);
+      return;
+    }
+
+    setRemoving("__all__");
+    setError(null);
+    try {
+      const { error: delError } = await createClient().storage.from("reels").remove(all.map((f) => f.name));
+      if (delError) throw new Error(delError.message);
+      setReels([]);
+      setNote(`Cleared ${posts} post${posts === 1 ? "" : "s"}. The library is empty.`);
+    } catch (e) {
+      setError(e instanceof Error
+        ? `Could not clear: ${e.message}. Only an admin may remove reels.`
+        : "Could not clear.");
+    } finally {
+      setRemoving(null);
+    }
+  }, [reels]);
+
   const load = useCallback(async () => {
     try {
       const supabase = createClient();
@@ -308,6 +358,15 @@ export function ReelLibrary({ subject }: { subject?: string }) {
         >
           Refresh
         </button>
+        {!!reels?.length && (
+          <button
+            onClick={() => void clearAll()}
+            disabled={removing === "__all__"}
+            className="tap-target shrink-0 rounded-xl border border-readiness-yellow/30 px-3 py-1.5 text-xs font-semibold text-readiness-yellow disabled:opacity-50"
+          >
+            {removing === "__all__" ? "Clearing…" : "Clear all"}
+          </button>
+        )}
       </div>
 
       {note && <p className="text-sm text-accent-400">{note}</p>}

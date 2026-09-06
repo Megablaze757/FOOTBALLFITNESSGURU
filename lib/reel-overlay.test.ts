@@ -243,14 +243,30 @@ test("the spotlight converts out of visual pixels", () => {
  * gets one movement; this makes it land on the number.
  * ═══════════════════════════════════════════════════════════════════════════
  */
-test("the caption can colour one run without losing the rest", () => {
+test("the caption colours the figure and sweeps the rest word by word", () => {
   const src = overlay();
   const fn = src.slice(src.indexOf("window.__reelCaption = function"));
-  assert.match(fn, /runs\[i\]\.key/, "nothing distinguishes the coloured run");
-  assert.match(fn, /rgb\(227,181,63\)/, "the highlight is not the app's accent");
+  assert.match(fn, /words\[i\]\.key/, "nothing distinguishes the figure");
+  assert.match(fn, /setTimeout/, "there is no sweep — the caption is static again");
+  assert.match(fn, /words\[j\]\.at/, "the sweep is not driven by the measured word timings");
   assert.match(fn, /typeof value === "string"/,
     "a plain string no longer renders, so any un-updated caller draws nothing");
-  assert.match(fn, /el\.textContent = ""/, "runs are appended to the previous caption");
+  assert.match(fn, /el\.textContent = ""/, "words are appended to the previous caption");
+});
+
+/**
+ * The one that bit. Timers from a caption that has been replaced will still
+ * fire and light a word inside the line that came after it, and the words are
+ * different objects each time so the wrong span simply turns yellow forever.
+ */
+test("a replaced caption cancels its own sweep", () => {
+  const src = overlay();
+  const fn = src.slice(src.indexOf("window.__reelCaption = function"));
+  assert.match(fn, /clearTimers\(\)/, "the previous line's timers keep running under the new one");
+  assert.ok(
+    fn.indexOf("clearTimers()") < fn.indexOf("el.textContent = \"\""),
+    "the timers are cleared after the new caption is drawn, which is too late",
+  );
 });
 
 /** 10.3:1 against the pill — past WCAG AAA for large text. */
@@ -261,17 +277,18 @@ test("the highlight is legible, not just bright", () => {
     const [x, y] = [L(a[0], a[1], a[2]), L(b[0], b[1], b[2])];
     return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
   };
-  const accent = ratio([227, 181, 63], [10, 10, 11]);
+  const accent = ratio([255, 232, 26], [10, 10, 11]);
   assert.ok(accent >= 4.5, `${accent.toFixed(1)}:1 is under WCAG AAA for large text`);
   // And it must still read as a different colour from the white around it.
   assert.ok(ratio([227, 181, 63], [255, 255, 255]) >= 1.6,
     "the highlight is too close to white to be seen as a highlight");
 });
 
-test("the recorder hands the caption runs, not a string", () => {
+test("the recorder hands the caption timed words, not a string", () => {
   const src = readFileSync("scripts/record-reel.mts", "utf8");
-  assert.match(src, /__reelCaption\(runs\)/, "the caption is drawn without emphasis");
-  assert.match(src, /emphasise\(caption\.text\)/, "nothing computes which run to colour");
+  assert.match(src, /__reelCaption\(words\)/, "the caption is drawn without emphasis");
+  assert.match(src, /karaokeWords\(caption\.text, caption\.ms\)/,
+    "the sweep is timed from something other than the caption's own duration");
 });
 
 /**

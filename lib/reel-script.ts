@@ -144,16 +144,29 @@ function build(id: string, hook: string, raw: Omit<Beat, "at" | "ms">[]): ReelSc
  * demo is a list that could have been a screenshot.
  */
 function readinessScript(): ReelScript {
-  return build("demo-readiness", "Your app does not know you slept badly.", [
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * THE FIRST LINE SPOKEN IS THE CLAIM, NOT THE RUN-UP TO IT.
+   *
+   * This opened on "Every training app gives you the session it planned last
+   * week" — true, and a preamble. The measured rule is that the spoken hook
+   * has to land inside about 1.5 seconds and the whole hook stack by 3; this
+   * reel made its claim at ten. 71% of viewers have decided by then.
+   *
+   * The shape that survives is a MISTAKE WARNING: name the thing the viewer
+   * is already doing wrong, in the second person, before any context.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  return build("demo-readiness", "Bad night? Your app doesn't care.", [
     {
       route: "/journal",
       action: "Open the check-in. Do not fill it in yet — let the empty form show.",
-      say: "Every training app gives you the session it planned last week.",
+      say: "Three hours' sleep, and your app still hands you the session it planned last week.",
     },
     {
       route: "/journal",
       action: "Log a bad night: sleep 3, fatigue 8, tap two sore areas on the body map.",
-      say: "This one asks how you slept and how sore you are. It takes sixty seconds.",
+      say: "This one asks first. Sixty seconds: sleep, soreness, fatigue.",
     },
     {
       route: "/home",
@@ -165,12 +178,12 @@ function readinessScript(): ReelScript {
        * score itself — narrating a thing the viewer can already see.
        */
       hold: SUSPENSE_MS,
-      say: "Today you are a fifty-four.",
+      say: "Fifty-four out of a hundred.",
     },
     {
       route: "/home",
       action: "Scroll to today's session so the adjusted work is visible.",
-      say: "So the session changed. Not a warning you can ignore — the work itself is lighter.",
+      say: "So it rebuilt today. Not a warning you can swipe away — the work itself is lighter. Free, on your phone.",
     },
     { route: "/", action: "Land on the front page so the address is on screen.", say: "" },
   ]);
@@ -185,6 +198,16 @@ function costScript(): ReelScript {
   const gap = facts ? `${Math.round(facts.dearest.cost / facts.cheapest.cost)}x` : "10x";
   /** The price on its own — the line names the food itself. */
   const cheapPrice = facts ? money(facts.cheapest.cost) : "under a pound";
+  /**
+   * THE NAMES COME FROM THE INDEX, NOT FROM MEMORY.
+   *
+   * I first wrote these lines with the prices and foods spelled out as words —
+   * "Thirty-one pence... The cheap one is red lentils" — which reads fine and
+   * is a reel that starts lying the day a shelf price moves. A test caught it
+   * by looking for the app's own figures in the script and finding none.
+   */
+  const cheapName = facts ? facts.cheapest.name.toLowerCase() : "red lentils";
+  const dearName = facts ? facts.dearest.name.toLowerCase() : "king prawns";
   /**
    * THE HOOK IS A CONTRAST, NOT A LABEL.
    *
@@ -219,7 +242,16 @@ function costScript(): ReelScript {
        * at the 30s ceiling. One sentence carries both, and completion rate is
        * the strongest signal a reel sends.
        */
-      say: `Every food here is the same ${REFERENCE_PROTEIN} grams of protein.`,
+      /**
+       * THE CONTRAST, SPOKEN, IN THE FIRST LINE.
+       *
+       * This said "Every food here is the same 30 grams of protein" — the
+       * premise, not the claim, and a premise gives a viewer nothing to stay
+       * for. The two prices ARE the reel; naming both in the opening line is
+       * the contrarian-claim shape, and the beats after it are then evidence
+       * for something already promised rather than a slow walk toward it.
+       */
+      say: `${cheapPrice}, or ${dear}. Same ${REFERENCE_PROTEIN} grams of protein.`,
     },
     {
       route: "/cheapest-protein/",
@@ -228,13 +260,13 @@ function costScript(): ReelScript {
       // THE REVEAL. Everything before it was setup; this is what the hook
       // promised. The silence is the reel telling the viewer to look.
       hold: SUSPENSE_MS,
-      say: `Cheapest: ${cheapPrice}.`,
+      say: `The cheap one is ${cheapName}.`,
     },
     {
       route: "/cheapest-protein/",
       action: "Hold on the most expensive row.",
       focus: facts ? facts.dearest.name : "",
-      say: `Dearest: ${dear}. Same protein.`,
+      say: `The dear one is ${dearName}. ${gap} the money for the same protein.`,
     },
     {
       route: "/recipes/",
@@ -249,7 +281,7 @@ function costScript(): ReelScript {
        * off that route AND puts it where it is actually true, since the
        * recipes are the thing costed from those packs.
        */
-      say: "Every recipe is costed the same way, from real supermarket packs.",
+      say: "Every recipe in the app is priced from real supermarket packs.",
     },
     {
       route: "/nutrition",
@@ -266,7 +298,7 @@ function costScript(): ReelScript {
        * which is what lib/speech-timing.ts puts the suspense gap in front of.
        * It just says something now.
        */
-      say: "Build a week of meals and it prices the whole shop. Before you spend a penny.",
+      say: "Build a week and it prices your whole shop. Free, before you spend a penny.",
     },
     { route: "/", action: "Front page. Hold two seconds.", say: "" },
   ]);
@@ -301,7 +333,16 @@ function drillScript(drillId: string): ReelScript | null {
     {
       route: "/drills/",
       action: "The drill index. Scroll a little so the breadth reads.",
-      say: `Free drills for ${sport.toLowerCase()}, sorted by what they fix.`,
+      /**
+       * A DIRECTORY DESCRIPTION IS NOT A HOOK.
+       *
+       * This opened on "Free drills for football, sorted by what they fix" —
+       * a sentence about a page, said to nobody, over a list. The hook two
+       * lines above already names a mistake the viewer is making; the first
+       * spoken line now says the same thing, so the promise arrives in the
+       * window the retention data actually cares about.
+       */
+      say: `Your ${drill.name.toLowerCase()} are not working, and it is one detail, not fitness.`,
     },
     {
       route: `/drills/${drill.sport}/`,
@@ -311,12 +352,12 @@ function drillScript(drillId: string): ReelScript | null {
     {
       route: `/drills/${drill.sport}/`,
       action: "Stop on the coaching cue and hold it.",
-      say: `The bit that matters: ${drill.coaching}`,
+      say: drill.coaching,
     },
     {
       route: "/journal?log=training",
       action: "The training row, open and ready for the session.",
-      say: "Then log it, so next week is built on what you actually did.",
+      say: "Log it and next week builds on what you actually did. All of it free.",
     },
     { route: "/", action: "Front page, so the address is on screen.", say: "" },
   ]);
@@ -326,16 +367,28 @@ function drillScript(drillId: string): ReelScript | null {
 function standardsScript(): ReelScript | null {
   const page = standardPages().find((p) => p.slug === "bench-press") ?? standardPages()[0];
   if (!page) return null;
-  return build(`standards-${page.slug}`, `Is your ${page.lift.label.toLowerCase()} any good?`, [
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * A CONTRARIAN CLAIM WITH TWO NUMBERS IN IT.
+   *
+   * The hook asked "Is your bench press any good?" and the first line then
+   * answered "that question has no answer" — a question followed by its own
+   * refusal, which is two beats spent arriving where it started. The same
+   * fact stated as a contradiction does the whole job in one line, and the
+   * numbers are what make it impossible to scroll past: the viewer has to
+   * work out which one they are.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  return build(`standards-${page.slug}`, `A 100kg ${page.lift.label.toLowerCase()} means nothing`, [
     {
       route: "/standards/",
       action: "Show the list of lifts.",
-      say: `"Is my ${page.lift.label.toLowerCase()} good" has no answer without your bodyweight.`,
+      say: `A hundred kilo ${page.lift.label.toLowerCase()} at sixty kilos bodyweight is elite. At a hundred and twenty, it is average.`,
     },
     {
       route: `/standards/${page.slug}/`,
       action: "Open the table and stop on the middle rows.",
-      say: "So here it is as a multiple of bodyweight, from untrained to world class.",
+      say: "So the table is a multiple of your bodyweight, untrained to world class.",
     },
     {
       route: "/benchmarks",
