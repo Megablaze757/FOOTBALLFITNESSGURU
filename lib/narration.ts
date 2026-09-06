@@ -99,12 +99,22 @@ export function beatAudio(phrases: readonly SpokenPhrase[], holdMs = 0): BeatAud
   return { ms: Math.round(at + TAIL_MS), clips };
 }
 
+/**
+ * A beat with its real timing, and EVERYTHING ELSE IT CAME WITH.
+ *
+ * The index signature is deliberate. This used to name five fields, and a beat
+ * that carried a sixth — `focus`, which aims the spotlight — lost it here
+ * without a word. Typing the extras loosely is worth it to make the type stop
+ * being a list somebody has to remember to extend.
+ */
 export interface RetimedBeat {
   at: number;
   ms: number;
   route: string;
   action: string;
   say: string;
+  hold?: number;
+  focus?: string;
 }
 
 /**
@@ -115,7 +125,7 @@ export interface RetimedBeat {
  * with no gaps, and a plan with a hole in it puts the teleprompter and the
  * captions on the wrong beat for the rest of the reel.
  */
-export function retime<T extends { route: string; action: string; say: string; hold?: number }>(
+export function retime<T extends { route: string; action: string; say: string; hold?: number; focus?: string }>(
   beats: readonly T[],
   audio: readonly BeatAudio[],
 ): { beats: RetimedBeat[]; totalMs: number } {
@@ -129,7 +139,23 @@ export function retime<T extends { route: string; action: string; say: string; h
      * screen it has never seen. See beatFloorMs in lib/caption-lines.ts.
      */
     const ms = Math.max(audio[i]?.ms ?? SILENT_BEAT_MS, beatFloorMs(beat.say));
-    const placed = { at, ms, route: beat.route, action: beat.action, say: beat.say };
+    /**
+     * ═══════════════════════════════════════════════════════════════════════
+     * SPREAD THE BEAT. Do not list its fields.
+     *
+     * This built `{ at, ms, route, action, say }` by hand, so anything else a
+     * beat carried was silently dropped here — and every narrated reel goes
+     * through this function. `focus` was added to Beat, wired through the
+     * plan, tested end to end in a unit test, and then thrown away on this
+     * line: the spotlight never appeared in a single recording, and the
+     * warning that would have said so never fired either, because the value
+     * was empty rather than wrong.
+     *
+     * That is twice now that a new field on a beat has died in transit. A
+     * spread cannot forget the next one.
+     * ═══════════════════════════════════════════════════════════════════════
+     */
+    const placed = { ...beat, at, ms };
     at += ms;
     return placed;
   });

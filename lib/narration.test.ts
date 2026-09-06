@@ -122,3 +122,36 @@ test("the suspense pause is long enough to be heard as deliberate", () => {
   assert.ok(SUSPENSE_MS >= 600, `${SUSPENSE_MS}ms reads as a cut, not a pause`);
   assert.ok(SUSPENSE_MS <= 1500, `${SUSPENSE_MS}ms is long enough for a thumb to move`);
 });
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * A BEAT KEEPS WHAT IT CAME WITH.
+ *
+ * retime built `{ at, ms, route, action, say }` by hand, so anything else a
+ * beat carried was dropped — and every narrated reel goes through it. `focus`
+ * was added to Beat, wired through the plan, covered by a unit test, and then
+ * thrown away on that one line. The spotlight never appeared in a single
+ * recording, and the warning that would have said so never fired either,
+ * because the value arrived empty rather than wrong.
+ *
+ * Checked generically rather than field by field: the point is that the NEXT
+ * field survives too.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("retiming keeps every field a beat carried", () => {
+  const beat = {
+    route: "/x", action: "do a thing", say: "Cheapest: thirty-one pence.",
+    focus: "Red lentils", hold: 900, somethingAddedLater: "keep me",
+  };
+  const { beats } = retime([beat], [{ ms: 2000, clips: [] }]);
+  for (const key of Object.keys(beat)) {
+    assert.deepEqual(
+      (beats[0] as unknown as Record<string, unknown>)[key],
+      (beat as Record<string, unknown>)[key],
+      `"${key}" was dropped in retime — it would be silently missing from the reel`,
+    );
+  }
+  // And it still applies the timing it exists to apply.
+  assert.equal(beats[0].at, 0);
+  assert.ok(beats[0].ms >= 2000);
+});
