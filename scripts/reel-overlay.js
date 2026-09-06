@@ -160,7 +160,7 @@
    * not own, and it breaks silently the next time a class is renamed. The
    * words on screen are the same words the script is already talking about.
    */
-  var findByText = function (needle) {
+  var findByText = function (needle, anywhere) {
     var want = String(needle || "").trim().toLowerCase();
     if (!want) return null;
     var all = document.querySelectorAll("body *");
@@ -171,8 +171,9 @@
       if (text.indexOf(want) === -1) continue;
       var box = el.getBoundingClientRect();
       if (box.width < 40 || box.height < 16) continue;
-      // Off screen entirely is not what the shot is pointing at.
-      if (box.bottom < 0 || box.top > window.innerHeight) continue;
+      // Off screen entirely is not what the shot is pointing at — unless we
+      // are looking for something to scroll TO, which is the whole point.
+      if (!anywhere && (box.bottom < 0 || box.top > window.innerHeight)) continue;
       // The SMALLEST element that still contains the words: every ancestor
       // contains them too, and <body> is not a spotlight.
       if (!best || box.width * box.height < best.box.width * best.box.height) {
@@ -193,7 +194,31 @@
     install();
     var spot = document.getElementById("__reel_spot");
     if (!spot) return false;
-    var found = needle ? findByText(needle) : null;
+    if (!needle) { spot.style.opacity = "0"; return false; }
+
+    /**
+     * ═══════════════════════════════════════════════════════════════════════
+     * SCROLL TO IT FIRST. A spotlight only helps if the thing is on screen.
+     *
+     * findByText deliberately ignores anything outside the viewport, and the
+     * shot drifts down the page as a beat plays — so by the time the reveal
+     * arrived, the row it was meant to ring had scrolled past and the
+     * spotlight correctly did nothing. The reel showed the page FOOTER under
+     * the words "Cheapest: £0.31."
+     *
+     * Naming a focus is the script saying "this is the shot". So it moves the
+     * shot: instant rather than smooth, because the beat's timing is already
+     * fixed against the audio and a 400ms glide would eat the reveal.
+     * ═══════════════════════════════════════════════════════════════════════
+     */
+    var anywhere = findByText(needle, true);
+    if (anywhere) {
+      var box = anywhere.el.getBoundingClientRect();
+      var centred = window.scrollY + box.top - (window.innerHeight / 2) + (box.height / 2);
+      window.scrollTo({ top: Math.max(0, centred), behavior: "instant" });
+    }
+
+    var found = findByText(needle);
     if (!found) { spot.style.opacity = "0"; return false; }
 
     /**
@@ -241,7 +266,40 @@
     return true;
   };
 
-  window.__reelCaption = function (text) { set("__reel_caption", text); };
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * ONE COLOURED WORD, DECIDED IN NODE AND RENDERED HERE.
+   *
+   * Colour is a pre-attentive feature: a uniquely coloured item is located in
+   * roughly constant time however much else is on screen, without the viewer
+   * scanning for it. A caption is up for under two seconds and most of the
+   * audience has the sound off, so the eye gets one movement — this makes it
+   * land on "£0.31" rather than on "from".
+   *
+   * The RULE lives in lib/caption-emphasis.ts where it can be tested; this
+   * only draws what it is handed. A string still works, so anything that has
+   * not been updated keeps rendering plain white.
+   *
+   * accent-400 on the pill measures 10.3:1, past WCAG AAA for large text, and
+   * it is the app's own colour rather than the generic yellow every reel uses.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  window.__reelCaption = function (value) {
+    install();
+    var el = document.getElementById("__reel_caption");
+    if (!el) return;
+    if (typeof value === "string") { set("__reel_caption", value); return; }
+
+    var runs = value || [];
+    el.textContent = "";
+    for (var i = 0; i < runs.length; i++) {
+      var span = document.createElement("span");
+      span.textContent = runs[i].text;
+      if (runs[i].key) span.style.color = "rgb(227,181,63)";
+      el.appendChild(span);
+    }
+    el.style.opacity = runs.length ? "1" : "0";
+  };
   window.__reelHook = function (text) { set("__reel_hook", text); };
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", install);

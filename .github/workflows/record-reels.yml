@@ -198,6 +198,16 @@ jobs:
       # ═══════════════════════════════════════════════════════════════════
       # NO UPSCALE ANY MORE — the recorder captures 1080x1920 natively.
       #
+      # UNSHARP AFTER THE SCALE, because the capture cannot be bigger.
+      #
+      # Recording at 1080x1920 with the page zoomed is measurably sharper —
+      # 1.64x more fine detail — and renders the DESKTOP layout, because CSS
+      # media queries answer against the viewport and not a zoomed box. That
+      # shipped once and came back as a dense multi-column table.
+      #
+      # So the capture stays at phone size and the detail is recovered here:
+      # lanczos then an unsharp mask, measured at 1.45x of the 1.64x.
+      #
       # This used to scale 540x960 up to 1080x1920 with lanczos, because
       # Playwright's screencast records CSS pixels and asking it for a bigger
       # canvas just pads it. The recorder now uses a 1080x1920 viewport with
@@ -211,6 +221,7 @@ jobs:
           id="$SCRIPT"
           lead=$(cat reels/*.lead 2>/dev/null || echo 0)
           ffmpeg -hide_banner -loglevel error -y -ss "$lead" -i reels/*.webm -i reels/*.wav \
+            -vf "scale=1080:1920:flags=lanczos,unsharp=5:5:0.9:5:5:0.0" \
             -c:v libx264 -preset slow -crf 20 -pix_fmt yuv420p -c:a aac -b:a 128k \
             -shortest "reels/$id.mp4"
 
@@ -218,6 +229,7 @@ jobs:
         if: env.VOICE != 'true'
         run: |
           ffmpeg -hide_banner -loglevel error -y -i reels/*.webm \
+            -vf "scale=1080:1920:flags=lanczos,unsharp=5:5:0.9:5:5:0.0" \
             -c:v libx264 -preset slow -crf 20 -pix_fmt yuv420p -an "reels/$SCRIPT.mp4"
 
       # ═══════════════════════════════════════════════════════════════════

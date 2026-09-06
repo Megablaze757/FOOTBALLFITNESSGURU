@@ -28,6 +28,7 @@ import { reelScript, type ScriptId } from "../lib/reel-script";
 import { reelPlan, srt, REEL_W, REEL_H, REEL_SCALE } from "../lib/reel-plan";
 import { retentionProblems } from "../lib/reel-retention";
 import { driftTarget } from "../lib/reel-scroll";
+import { emphasise } from "../lib/caption-emphasis";
 import { phrases } from "../lib/speech-timing";
 import { spokenForm } from "../lib/spoken-numbers";
 import { BASE_SPEED, VOICE, shapeRates } from "../lib/speech-prosody";
@@ -241,8 +242,8 @@ const browser = await chromium.launch({
  * ═══════════════════════════════════════════════════════════════════════════
  */
 const doorway = await browser.newContext({
-  viewport: { width: REEL_W * REEL_SCALE, height: REEL_H * REEL_SCALE },
-  deviceScaleFactor: 1,
+  viewport: { width: REEL_W, height: REEL_H },
+  deviceScaleFactor: REEL_SCALE,
   colorScheme: "dark",
 });
 const signedIn = await signIn(await doorway.newPage(), base);
@@ -253,25 +254,29 @@ console.log(signedIn ? "Signed in off camera." : "No credentials — filming the
 const context = await browser.newContext({
   /**
    * ═══════════════════════════════════════════════════════════════════════
-   * CAPTURED AT 1080x1920, NOT UPSCALED TO IT. "The videos feel low quality."
+   * 540x960, BECAUSE MEDIA QUERIES ANSWER THE VIEWPORT.
    *
-   * They were: a 540x960 capture stretched 2x by ffmpeg. deviceScaleFactor
-   * was 2, which looks like it should have helped and does nothing here —
-   * Playwright's screencast records CSS PIXELS, so the extra device pixels
-   * were rendered and thrown away.
+   * "The videos feel low quality" is true — this is a 540x960 capture that
+   * ffmpeg scales up — and the obvious fix does not work. Recording at
+   * 1080x1920 with the page zoomed 2x IS sharper: measured 1.64x more fine
+   * detail. It also renders the DESKTOP layout, because CSS media queries
+   * answer against the viewport and not against a zoomed box:
    *
-   * So the viewport is the real frame size and the page is zoomed instead.
-   * The app still LAYS OUT at 540 CSS px — measured: 540 wide either way, so
-   * it is the same mobile layout — but every pixel is rendered rather than
-   * interpolated.
+   *   viewport 540              body layout 540px   mobile media query TRUE
+   *   viewport 1080 + zoom 2    body layout 540px   mobile media query FALSE
+   *   viewport 1080 + transform body layout 540px   mobile media query FALSE
    *
-   * Measured on this machine against a page of small text and prices, mean
-   * absolute Laplacian (how much fine detail survives): upscaled 6.76,
-   * native 11.08. 1.64x sharper, and text is exactly what an upscale smears.
+   * I shipped that, and the reel came back as a dense multi-column table with
+   * a page footer in shot — sharper, and of the wrong app. Nothing in the page
+   * can fix it: the breakpoint is decided before any of this runs.
+   *
+   * So the capture stays at the phone size and the sharpness is recovered in
+   * the mux with an unsharp mask after the scale, which measured 1.45x of the
+   * 1.64x — nearly all of it, on the layout people actually use.
    * ═══════════════════════════════════════════════════════════════════════
    */
-  viewport: { width: REEL_W * REEL_SCALE, height: REEL_H * REEL_SCALE },
-  deviceScaleFactor: 1,
+  viewport: { width: REEL_W, height: REEL_H },
+  deviceScaleFactor: REEL_SCALE,
   storageState,
   /**
    * ═══════════════════════════════════════════════════════════════════════
@@ -315,7 +320,7 @@ const context = await browser.newContext({
    * See the mux step in .github/workflows/record-reels.yml.
    * ═══════════════════════════════════════════════════════════════════════
    */
-  recordVideo: { dir: rawDir, size: { width: REEL_W * REEL_SCALE, height: REEL_H * REEL_SCALE } },
+  recordVideo: { dir: rawDir, size: { width: REEL_W, height: REEL_H } },
   // The reel is a demo, and a demo that plays an animation twice as fast as
   // the athlete will see it is a lie about the product.
   reducedMotion: "no-preference",
@@ -349,22 +354,7 @@ await context.addInitScript(() => {
   try { localStorage.setItem("pa:install-dismissed", "1"); } catch { /* no storage, no prompt */ }
 });
 
-/**
- * THE ZOOM THAT KEEPS IT A PHONE.
- *
- * The viewport is 1080x1920 so the recording is native, and this puts the
- * layout back to 540 CSS px — the app renders its mobile layout at twice the
- * pixel density rather than its desktop one.
- *
- * On documentElement rather than body: the app has a fixed bottom nav, and a
- * fixed element inside a zoomed BODY is positioned against the unzoomed
- * viewport — it would render at half scale while everything around it doubled.
- */
-await context.addInitScript((zoom) => {
-  const apply = () => { document.documentElement.style.zoom = String(zoom); };
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", apply);
-  else apply();
-}, REEL_SCALE);
+
 
 const page = await context.newPage();
 // Loud, because an overlay that fails to install produces a video that
@@ -500,10 +490,18 @@ for (const step of plan.steps) {
     want,
   ).catch(() => false);
   if (want && !aimed) console.warn(`  focus "${want}" is not on ${step.route} — no spotlight for that beat`);
+  // The focus moved the page, so the drift for this beat starts from there
+  // rather than from wherever the previous beat left off.
+  if (aimed) driftFrom = await page.evaluate(() => window.scrollY).catch(() => driftFrom);
 
   for (const [i, caption] of step.captions.entries()) {
     await sleep(Math.max(0, caption.at - elapsed()));
-    await page.evaluate((t) => (window as never as { __reelCaption: (s: string) => void }).__reelCaption(t), caption.text);
+    // Runs, not a string: the figure in the line is coloured. The rule is in
+    // lib/caption-emphasis.ts, tested; the page only draws what it is handed.
+    await page.evaluate(
+      (runs) => (window as never as { __reelCaption: (r: unknown) => void }).__reelCaption(runs),
+      emphasise(caption.text),
+    );
     const to = driftTarget({
       ...page_, from: driftFrom, step: i + 1, steps: step.captions.length,
     });

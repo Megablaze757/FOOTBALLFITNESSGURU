@@ -232,3 +232,44 @@ test("the spotlight converts out of visual pixels", () => {
   }
   assert.match(focus, /\|\| 1;/, "an unzoomed page would divide by NaN");
 });
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE COLOURED FIGURE.
+ *
+ * Colour is a pre-attentive feature — a uniquely coloured item is located in
+ * roughly constant time however much else is on screen. A caption is up for
+ * under two seconds and most of the audience has the sound off, so the eye
+ * gets one movement; this makes it land on the number.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("the caption can colour one run without losing the rest", () => {
+  const src = overlay();
+  const fn = src.slice(src.indexOf("window.__reelCaption = function"));
+  assert.match(fn, /runs\[i\]\.key/, "nothing distinguishes the coloured run");
+  assert.match(fn, /rgb\(227,181,63\)/, "the highlight is not the app's accent");
+  assert.match(fn, /typeof value === "string"/,
+    "a plain string no longer renders, so any un-updated caller draws nothing");
+  assert.match(fn, /el\.textContent = ""/, "runs are appended to the previous caption");
+});
+
+/** 10.3:1 against the pill — past WCAG AAA for large text. */
+test("the highlight is legible, not just bright", () => {
+  const lin = (c: number) => (c / 255 <= 0.03928 ? c / 255 / 12.92 : (((c / 255) + 0.055) / 1.055) ** 2.4);
+  const L = (r: number, g: number, b: number) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+  const ratio = (a: number[], b: number[]) => {
+    const [x, y] = [L(a[0], a[1], a[2]), L(b[0], b[1], b[2])];
+    return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+  };
+  const accent = ratio([227, 181, 63], [10, 10, 11]);
+  assert.ok(accent >= 4.5, `${accent.toFixed(1)}:1 is under WCAG AAA for large text`);
+  // And it must still read as a different colour from the white around it.
+  assert.ok(ratio([227, 181, 63], [255, 255, 255]) >= 1.6,
+    "the highlight is too close to white to be seen as a highlight");
+});
+
+test("the recorder hands the caption runs, not a string", () => {
+  const src = readFileSync("scripts/record-reel.mts", "utf8");
+  assert.match(src, /__reelCaption\(runs\)/, "the caption is drawn without emphasis");
+  assert.match(src, /emphasise\(caption\.text\)/, "nothing computes which run to colour");
+});
