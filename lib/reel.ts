@@ -43,14 +43,75 @@ export const REEL_FPS = 30;
  * ═══════════════════════════════════════════════════════════════════════════
  */
 export const MIN_SCENE_MS = 1100;
-export const MS_PER_WORD = 175;
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * MEASURED, NOT ASSUMED — AND A PHRASE COSTS SOMETHING BEFORE ITS FIRST WORD.
+ *
+ * 175ms per word was a guess at roughly 340 words a minute. Measured against
+ * the demo-cost reel's own lines, spoken by the voice and at the rates the
+ * reel actually uses, a whole reel came out 29.1s against a 23.8s estimate —
+ * 22% short. A script author reading the studio preview thought they had six
+ * seconds they did not have.
+ *
+ * Fitting the eight measured phrases gives ms = 1360 + 199 x words, and the
+ * intercept is the interesting half: every phrase costs about a second and a
+ * third in onset, final lengthening and the gap after it, however short it is.
+ * "Same protein." is two words and 1.54 seconds. A pure per-word rate cannot
+ * express that, which is why the old one was most wrong on exactly the short,
+ * punchy lines this format is built from.
+ *
+ * The recorder does not depend on this — it validates the RETIMED plan, built
+ * from real audio, so the 30s ceiling was always checked against reality. This
+ * is so the preview tells the truth before three minutes are spent.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export const MS_PER_WORD = 199;
+
+/** What a phrase costs before its first word. Measured; see above. */
+export const MS_PER_PHRASE = 1_040;
 
 /** How long the last line of a card sits complete before the cut. */
 export const SETTLE_MS = 320;
 
+/**
+ * How long a text CARD stays up — a reading time, not a speaking one.
+ *
+ * Used by the drill-card reels, where nothing is spoken and a two-word card
+ * gets the floor. Speech is a different measurement entirely: see speechMs.
+ */
 export function holdFor(text: string): number {
   const words = text.trim().split(/\s+/).filter(Boolean).length;
   return Math.max(MIN_SCENE_MS, Math.round(words * MS_PER_WORD) + SETTLE_MS);
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * HOW LONG THIS TAKES TO SAY. Measured, and a separate thing from reading it.
+ *
+ * These were the same function, and a change fitted to speech immediately
+ * broke the drill cards: a two-word CARD should sit for the floor, while two
+ * words SPOKEN — "Same protein." — take a second and a half. One number cannot
+ * be both.
+ *
+ * Fitted to the demo-cost reel's own lines, spoken by the voice at the rates
+ * lib/speech-prosody.ts gives them: ms = 1040 + 199 x words + settle. The
+ * intercept is the interesting half — every phrase costs about a second in
+ * onset, final lengthening and the gap after it, however short it is, which is
+ * why a flat per-word rate was most wrong on exactly the short punchy lines
+ * this format is built from.
+ *
+ * The recorder does not depend on this: it validates the RETIMED plan built
+ * from real audio, so the 30s ceiling was always checked against reality. This
+ * is so the studio preview tells the truth before three minutes are spent.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export function speechMs(text: string): number {
+  const trimmed = text.trim();
+  if (!trimmed) return 0;
+  const words = trimmed.split(/\s+/).filter(Boolean).length;
+  // Sentences, because the overhead is per phrase and a beat may hold two.
+  const phrases = Math.max(1, (trimmed.match(/[.!?]+(?:\s|$)/g) ?? []).length);
+  return Math.round(words * MS_PER_WORD) + phrases * MS_PER_PHRASE + SETTLE_MS;
 }
 
 export interface Scene {
