@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { groupPosts, type StoredFile } from "./reel-groups";
 
 const f = (name: string, createdAt = "2026-09-06T12:11:00Z"): StoredFile =>
@@ -86,4 +87,29 @@ test("an unrecognised name is left alone rather than dropped", () => {
 test("the newest post stays at the top", () => {
   const groups = groupPosts([f("newest.mp4"), ...CAROUSEL, f("oldest.mp4")]);
   assert.deepEqual(groups.map((g) => g.id[0]), ["n", "c", "o"]);
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * DELETING A POST DELETES ALL OF IT.
+ *
+ * A carousel is six objects in the bucket — five slides and a caption. Removing
+ * "the post" one file at a time leaves orphans that come back as a broken group
+ * on the next refresh, which is worse than not being able to delete at all.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("a post knows every file it is made of", () => {
+  const [carousel] = groupPosts(CAROUSEL);
+  const names = [...carousel.files.map((f) => f.name), ...(carousel.caption ? [carousel.caption.name] : [])];
+  assert.equal(names.length, CAROUSEL.length,
+    `deleting this post would leave ${CAROUSEL.length - names.length} orphaned file(s)`);
+  assert.deepEqual([...names].sort(), CAROUSEL.map((f) => f.name).sort());
+});
+
+test("the panel deletes the whole group and asks first", () => {
+  const panel = readFileSync("components/admin/ReelLibrary.tsx", "utf8");
+  assert.match(panel, /post\.files\.map\(\(f\) => f\.name\)[\s\S]{0,120}post\.caption/,
+    "delete does not gather the caption, so it would be orphaned");
+  assert.match(panel, /window\.confirm\(/, "a reel takes three minutes to make and deletes without asking");
+  assert.match(panel, /storage\.from\("reels"\)\.remove\(/, "nothing actually removes the files");
 });

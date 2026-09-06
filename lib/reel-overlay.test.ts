@@ -139,3 +139,63 @@ test("the caption and hook stay legible on a dark page", () => {
       `the ${name} has no rim, so it has no edge against a dark page`);
   }
 });
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE SPOTLIGHT. "The app demo isn't clear what's what."
+ *
+ * A reel shows a whole app screen — a ring, four macro rows, a coaching
+ * paragraph, a nav bar — while the voice talks about one of them, and nothing
+ * on screen says which. The viewer spends the shot hunting and mostly does not
+ * find it before the cut.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("the overlay can point at one thing", () => {
+  const src = overlay();
+  assert.match(src, /window\.__reelFocus = function/, "nothing can aim the shot");
+
+  /**
+   * A spotlight on nothing is worse than no spotlight, and it would be
+   * invisible until somebody watched the finished reel.
+   */
+  assert.match(src, /if \(!found\) \{ spot\.style\.opacity = "0"; return false; \}/,
+    "text that is not on screen dims the whole frame instead of doing nothing");
+
+  // The smallest element containing the words, or every ancestor matches and
+  // the spotlight is <body>.
+  assert.match(src, /box\.width \* box\.height < best\.box\.width \* best\.box\.height/,
+    "the spotlight does not prefer the smallest match, so it will pick a container");
+
+  // Text, not a selector: a selector is a promise about markup this file does
+  // not own, and it breaks silently when a class is renamed.
+  assert.doesNotMatch(src, /querySelector\((?!"body \*")/,
+    "the spotlight targets a CSS selector, which breaks silently on a rename");
+});
+
+test("the spotlight never dims the caption", () => {
+  const src = overlay();
+  assert.match(src, /layer\.insertBefore\(spot, layer\.firstChild\)/,
+    "the spotlight is appended after the caption, so it dims the words too");
+});
+
+/** A beat that names something not on screen must say so, not fail silently. */
+test("the recorder reports a spotlight that found nothing", () => {
+  const src = readFileSync("scripts/record-reel.mts", "utf8");
+  assert.match(src, /if \(want && !aimed\)/, "a missed spotlight is silent");
+  assert.match(src, /step\.focus/, "the recorder never reads the beat's focus");
+});
+
+/**
+ * The plan has to CARRY focus, not be cast to it. The first version read
+ * `focus` off a PlanStep that never had one — a cast made it typecheck, and it
+ * would have been undefined on every beat, so the whole feature would have
+ * shipped doing nothing.
+ */
+test("focus survives the trip from script to plan", async () => {
+  const { reelPlan } = await import("./reel-plan");
+  const plan = reelPlan({
+    id: "t", hook: "h", totalMs: 1000,
+    beats: [{ at: 0, ms: 1000, route: "/", action: "a", say: "Something", focus: "Red lentils" }],
+  });
+  assert.equal(plan.steps[0].focus, "Red lentils", "the spotlight would never be aimed");
+});

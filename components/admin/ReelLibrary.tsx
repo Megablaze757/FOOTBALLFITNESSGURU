@@ -105,6 +105,42 @@ export function ReelLibrary({ subject }: { subject?: string }) {
   }, []);
 
   const [error, setError] = useState<string | null>(null);
+  const [removing, setRemoving] = useState<string | null>(null);
+
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * DELETING A POST DELETES ALL OF IT.
+   *
+   * A carousel is six objects in the bucket — five slides and a caption — so
+   * removing "the post" one file at a time leaves orphans that reappear as a
+   * broken group on the next refresh. The group already knows its files.
+   *
+   * Admins only, and that is enforced in the DATABASE (migration 0111,
+   * `reels: delete admin` using public.is_admin()), not by hiding the button.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  const removePost = useCallback(async (post: PostGroup) => {
+    const names = [...post.files.map((f) => f.name), ...(post.caption ? [post.caption.name] : [])];
+    if (names.length === 0) return;
+    // A reel takes three minutes to make. One confirm is not friction.
+    if (!window.confirm(`Delete ${post.title}? ${names.length} file${names.length === 1 ? "" : "s"}, permanently.`)) return;
+
+    setRemoving(post.id);
+    setError(null);
+    try {
+      const { error: delError } = await createClient().storage.from("reels").remove(names);
+      if (delError) throw new Error(delError.message);
+      // Drop them locally rather than re-listing: the list is already right,
+      // and a round trip here is a spinner on an action that has happened.
+      setReels((current) => (current ?? []).filter((f) => !names.includes(f.name)));
+    } catch (e) {
+      setError(e instanceof Error
+        ? `Could not delete: ${e.message}. Only an admin may remove reels.`
+        : "Could not delete.");
+    } finally {
+      setRemoving(null);
+    }
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -338,6 +374,14 @@ export function ReelLibrary({ subject }: { subject?: string }) {
                       : post.files.length > 1
                         ? `Save all ${post.files.length} slides`
                         : "Save to camera roll"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => removePost(post)}
+                    disabled={removing === post.id}
+                    className="tap-target ml-2 mt-2 inline-block rounded-xl border border-readiness-red/30 px-3 py-1.5 text-xs font-semibold text-readiness-red disabled:opacity-60"
+                  >
+                    {removing === post.id ? "Deleting…" : "Delete"}
                   </button>
                   {saved[post.id] && <p className="mt-1 text-xs text-slate-400">{saved[post.id]}</p>}
                 </>

@@ -30,6 +30,7 @@ import { retentionProblems } from "../lib/reel-retention";
 import { driftTarget } from "../lib/reel-scroll";
 import { phrases } from "../lib/speech-timing";
 import { spokenForm } from "../lib/spoken-numbers";
+import { BASE_SPEED, VOICE, shapeRates } from "../lib/speech-prosody";
 import { beatAudio, retime, trackClips, type BeatAudio } from "../lib/narration";
 import { layTrack, readWav, writeWav, type Wav } from "../lib/wav";
 import { secretValue } from "../lib/env-value";
@@ -103,7 +104,7 @@ async function signIn(page: import("playwright").Page, at: string): Promise<bool
   return true;
 }
 
-async function narrate(beats: readonly { say: string }[]): Promise<BeatAudio[]> {
+async function narrate(beats: readonly { say: string; hold?: number }[]): Promise<BeatAudio[]> {
   const model = process.env.KOKORO_MODEL;
   const voices = process.env.KOKORO_VOICES;
   if (!model || !voices) {
@@ -131,17 +132,25 @@ async function narrate(beats: readonly { say: string }[]): Promise<BeatAudio[]> 
 
   const job = {
     model, voices, out: tmp,
-    voice: process.env.KOKORO_VOICE || "bf_emma",
     /**
-     * UNDER natural pace, not over it. "Too fast paced."
-     *
-     * This was 1.05 — the narration was deliberately sped up by five percent,
-     * on top of a model that already reads briskly. Explainer voiceover is
-     * read slightly SLOW: the listener is also reading captions and looking at
-     * a screen they have never seen, and every one of those costs time the
-     * speaker has to give back.
+     * MEASURED, NOT CHOSEN. bf_emma — what this used — came LAST of the eight
+     * British voices for pitch variability at 2.20 semitones, which is inside
+     * the range speech research calls monotone. bf_alice reaches 3.96 on the
+     * same line and carries the most energy in the band a phone speaker can
+     * reproduce. scripts/measure-voice.py is the measurement, checked in.
      */
-    speed: Number(process.env.KOKORO_SPEED || "0.94"),
+    voice: process.env.KOKORO_VOICE || VOICE,
+    /**
+     * A RATE PER PHRASE, not one for the whole reel.
+     *
+     * The base is still under natural pace — this was 1.05, deliberately sped
+     * up, on a model that already reads briskly. But a constant rate is heard
+     * as flat even when the pitch contour is fine, because tempo is the other
+     * half of prosody: the hook is given room, connective material moves, a
+     * figure is slowed so it lands as a number, and the payoff is the slowest
+     * thing in the reel. See lib/speech-prosody.ts.
+     */
+    speeds: shapeRates(flat.map((p) => p.text), Number(process.env.KOKORO_SPEED || BASE_SPEED)),
     phrases: flat.map((p) => p.text),
   };
 
@@ -162,14 +171,16 @@ async function narrate(beats: readonly { say: string }[]): Promise<BeatAudio[]> 
   }
 
   let cursor = 0;
-  return perBeat.map((list) => {
+  return perBeat.map((list, beatIndex) => {
     const spoken = list.map((phrase) => {
       const audio = said[cursor];
       audioFiles.push(audio.path);
       cursor += 1;
       return { text: phrase.text, gapMs: phrase.gapMs, audioMs: audio.ms };
     });
-    return beatAudio(spoken);
+    // The script's own suspense pause, at the beat boundary where the shot
+    // changes to the thing being revealed. See lib/narration.ts.
+    return beatAudio(spoken, beats[beatIndex]?.hold ?? 0);
   });
 }
 
@@ -230,8 +241,8 @@ const browser = await chromium.launch({
  * ═══════════════════════════════════════════════════════════════════════════
  */
 const doorway = await browser.newContext({
-  viewport: { width: REEL_W, height: REEL_H },
-  deviceScaleFactor: REEL_SCALE,
+  viewport: { width: REEL_W * REEL_SCALE, height: REEL_H * REEL_SCALE },
+  deviceScaleFactor: 1,
   colorScheme: "dark",
 });
 const signedIn = await signIn(await doorway.newPage(), base);
@@ -240,8 +251,27 @@ await doorway.close();
 console.log(signedIn ? "Signed in off camera." : "No credentials — filming the public pages only.");
 
 const context = await browser.newContext({
-  viewport: { width: REEL_W, height: REEL_H },
-  deviceScaleFactor: REEL_SCALE,
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * CAPTURED AT 1080x1920, NOT UPSCALED TO IT. "The videos feel low quality."
+   *
+   * They were: a 540x960 capture stretched 2x by ffmpeg. deviceScaleFactor
+   * was 2, which looks like it should have helped and does nothing here —
+   * Playwright's screencast records CSS PIXELS, so the extra device pixels
+   * were rendered and thrown away.
+   *
+   * So the viewport is the real frame size and the page is zoomed instead.
+   * The app still LAYS OUT at 540 CSS px — measured: 540 wide either way, so
+   * it is the same mobile layout — but every pixel is rendered rather than
+   * interpolated.
+   *
+   * Measured on this machine against a page of small text and prices, mean
+   * absolute Laplacian (how much fine detail survives): upscaled 6.76,
+   * native 11.08. 1.64x sharper, and text is exactly what an upscale smears.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  viewport: { width: REEL_W * REEL_SCALE, height: REEL_H * REEL_SCALE },
+  deviceScaleFactor: 1,
   storageState,
   /**
    * ═══════════════════════════════════════════════════════════════════════
@@ -285,7 +315,7 @@ const context = await browser.newContext({
    * See the mux step in .github/workflows/record-reels.yml.
    * ═══════════════════════════════════════════════════════════════════════
    */
-  recordVideo: { dir: rawDir, size: { width: REEL_W, height: REEL_H } },
+  recordVideo: { dir: rawDir, size: { width: REEL_W * REEL_SCALE, height: REEL_H * REEL_SCALE } },
   // The reel is a demo, and a demo that plays an animation twice as fast as
   // the athlete will see it is a lie about the product.
   reducedMotion: "no-preference",
@@ -318,6 +348,23 @@ await context.addInitScript({ path: new URL("./reel-overlay.js", import.meta.url
 await context.addInitScript(() => {
   try { localStorage.setItem("pa:install-dismissed", "1"); } catch { /* no storage, no prompt */ }
 });
+
+/**
+ * THE ZOOM THAT KEEPS IT A PHONE.
+ *
+ * The viewport is 1080x1920 so the recording is native, and this puts the
+ * layout back to 540 CSS px — the app renders its mobile layout at twice the
+ * pixel density rather than its desktop one.
+ *
+ * On documentElement rather than body: the app has a fixed bottom nav, and a
+ * fixed element inside a zoomed BODY is positioned against the unzoomed
+ * viewport — it would render at half scale while everything around it doubled.
+ */
+await context.addInitScript((zoom) => {
+  const apply = () => { document.documentElement.style.zoom = String(zoom); };
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", apply);
+  else apply();
+}, REEL_SCALE);
 
 const page = await context.newPage();
 // Loud, because an overlay that fails to install produces a video that
@@ -439,6 +486,21 @@ for (const step of plan.steps) {
    * See lib/reel-scroll.ts — both halves of that were wrong and both were
    * visible in the finished file.
    */
+  /**
+   * POINT AT THE THING THE BEAT IS ABOUT, before its first caption.
+   *
+   * Cleared on every beat, then set if this one names something — otherwise a
+   * spotlight from three beats ago is still dimming the screen. A beat whose
+   * words are not on screen says so rather than dimming everything, because
+   * that would be invisible until somebody watched the finished reel.
+   */
+  const want = step.focus ?? "";
+  const aimed = await page.evaluate(
+    (t) => (window as never as { __reelFocus: (s: string) => boolean }).__reelFocus(t),
+    want,
+  ).catch(() => false);
+  if (want && !aimed) console.warn(`  focus "${want}" is not on ${step.route} — no spotlight for that beat`);
+
   for (const [i, caption] of step.captions.entries()) {
     await sleep(Math.max(0, caption.at - elapsed()));
     await page.evaluate((t) => (window as never as { __reelCaption: (s: string) => void }).__reelCaption(t), caption.text);

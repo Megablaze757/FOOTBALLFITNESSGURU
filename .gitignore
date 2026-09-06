@@ -56,3 +56,7 @@ screenshots/
 # Recorded reels. Video is build output, not source — scripts/record-reel.mts
 # remakes any of them from the script in lib/reel-script.ts.
 /reels/
+
+# The Kokoro voice model: 350MB, downloaded by the workflow and by
+# scripts/measure-voice.py. Never committed.
+.voice/

@@ -78,18 +78,28 @@ test("text without numbers is left exactly alone", () => {
  * ═══════════════════════════════════════════════════════════════════════════
  */
 test("the recorder never asks the voice to hurry", () => {
-  const src = readFileSync("scripts/record-reel.mts", "utf8");
-  const match = src.match(/KOKORO_SPEED \|\| "([0-9.]+)"/);
-  assert.ok(match, "the narration speed is no longer set where this can check it");
-  const speed = Number(match![1]);
-  assert.ok(speed <= 1.0, `the voice is set to ${speed}x — faster than natural`);
-  assert.ok(speed >= 0.8, `${speed}x is slow enough to sound wrong`);
+  /**
+   * The rate lives in lib/speech-prosody.ts now — one per phrase rather than
+   * one for the reel — so this checks the BASE the roles multiply, and that
+   * no role is allowed to push past natural pace.
+   */
+  const src = readFileSync("lib/speech-prosody.ts", "utf8");
+  const base = Number(src.match(/BASE_SPEED = ([0-9.]+)/)?.[1]);
+  assert.ok(base <= 1.0, `the base rate is ${base}x — faster than natural`);
+  assert.ok(base >= 0.8, `${base}x is slow enough to sound wrong`);
+
+  const rates = [...src.matchAll(/^\s{2}(hook|setup|figure|payoff): ([0-9.]+),/gm)]
+    .map((m) => Number(m[2]));
+  assert.equal(rates.length, 4, "a role lost its rate");
+  for (const r of rates) {
+    assert.ok(base * r <= 1.0, `a role reaches ${(base * r).toFixed(2)}x, which is a rush`);
+  }
 
   // The Python fallback must agree, or a run without the env var set gets a
   // different reel from one with it.
   const py = readFileSync("scripts/kokoro-say.py", "utf8");
-  const pyMatch = py.match(/speed=job\.get\("speed", ([0-9.]+)\)/);
+  const pyMatch = py.match(/job\.get\("speed", ([0-9.]+)\)/);
   assert.ok(pyMatch, "kokoro-say.py no longer has a default speed");
-  assert.equal(Number(pyMatch![1]), speed,
+  assert.equal(Number(pyMatch![1]), base,
     "the recorder and its fallback disagree about how fast to read");
 });
