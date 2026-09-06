@@ -44,7 +44,29 @@
      * audience is READING this rather than hearing it.
      */
     caption.style.cssText =
-      "max-width:100%;text-align:center;font-size:40px;line-height:1.25;font-weight:800;"
+      /**
+       * ═══════════════════════════════════════════════════════════════════
+       * POSITIONED, OR THE SPOTLIGHT DIMS THE WORDS IT IS POINTING WITH.
+       *
+       * This was a plain flex child with no `position`, and the spotlight's
+       * dim panels are `position:fixed`. CSS paints POSITIONED elements above
+       * every non-positioned one in the same stacking context, and DOM order
+       * only ranks elements within the same phase — so the panels covered the
+       * caption no matter where in the layer the spot was inserted. The
+       * insertBefore that was supposed to prevent this, and the comment on it
+       * saying the caption "is never dimmed by it", were both doing nothing.
+       *
+       * Measured on the recorded reel: caption text averaged 79 of 255 on the
+       * two spotlight beats and 149 on the beats without one. Those two are
+       * the reveals — "Cheapest: 31p", "Dearest: £3.19" — so the shots the
+       * whole reel is built around were the ones with a half-lit caption.
+       *
+       * The hook never had this: its wrapper is already `position:fixed`,
+       * which is why it looked right and the captions did not.
+       * ═══════════════════════════════════════════════════════════════════
+       */
+      "position:relative;z-index:1;"
+      + "max-width:100%;text-align:center;font-size:40px;line-height:1.25;font-weight:800;"
       /**
        * OPAQUE, AND WITH A RIM.
        *
@@ -91,7 +113,9 @@
      * leaving the proof visible above and clearing the caption band below.
      */
     hookWrap.style.cssText =
-      "position:fixed;left:0;right:0;top:42%;display:flex;justify-content:center;"
+      // z-index alongside the caption's, so both sit above the dim panels for
+      // the same stated reason rather than one of them by accident.
+      "position:fixed;z-index:1;left:0;right:0;top:42%;display:flex;justify-content:center;"
       + "padding:0 30px;pointer-events:none;";
 
     var hook = document.createElement("div");
@@ -137,7 +161,13 @@
     ring.style.cssText = "position:fixed;border:3px solid rgba(227,181,63,0.95);"
       + "border-radius:16px;box-shadow:0 0 0 2px rgba(0,0,0,0.35),0 8px 40px rgba(0,0,0,0.5);";
     spot.appendChild(ring);
-    // BEFORE the caption in the layer, so the caption is never dimmed by it.
+    /**
+     * First in the layer AND below it in z-index. The DOM order alone did
+     * nothing — see the caption's own note — so the z-index on the caption
+     * and the hook is what actually keeps them above the dimming. This stays
+     * because a reader expecting paint order to follow the document should
+     * not find the spotlight last.
+     */
     layer.insertBefore(spot, layer.firstChild);
 
     // documentElement, not body: a page that replaces its own body mid-render
