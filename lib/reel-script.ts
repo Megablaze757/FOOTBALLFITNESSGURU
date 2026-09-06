@@ -32,6 +32,7 @@
 
 import { beatFloorMs } from "./caption-lines";
 import { holdFor, MIN_SCENE_MS, MAX_REEL_MS, MS_PER_WORD } from "./reel";
+import { SUSPENSE_MS } from "./narration";
 import { hookText, HOOK_MAX_WORDS } from "./reel-kinds";
 import { SKILL_DRILLS } from "./skills";
 import { indexFacts, money, REFERENCE_PROTEIN } from "./protein-index";
@@ -52,6 +53,27 @@ export interface Beat {
   action: string;
   /** The line to say over it. Empty means let the screen speak. */
   say: string;
+  /**
+   * Silence before this beat speaks, in milliseconds.
+   *
+   * "No pausing for suspense." The gaps in lib/speech-timing.ts sit BETWEEN
+   * phrases of one beat, and the pause a reel actually needs is at a beat
+   * boundary — the moment the shot changes to the thing being revealed. Set
+   * this on the reveal and nowhere else: a reel that pauses everywhere drags.
+   */
+  hold?: number;
+  /**
+   * Words visible on screen that this beat is about.
+   *
+   * "The app demo isn't clear what's what." The reel shows a whole app screen
+   * while the voice talks about one part of it, and nothing says which. Set
+   * this and the recorder dims the rest and rings that element.
+   *
+   * TEXT, NOT A SELECTOR: a selector is a promise about markup this file does
+   * not own and breaks silently the next time a class is renamed. The words on
+   * screen are the words the script is already talking about.
+   */
+  focus?: string;
 }
 
 export interface ReelScript {
@@ -93,7 +115,8 @@ function time(beats: Omit<Beat, "at" | "ms">[]): Beat[] {
      * reel about how long every shot is — and the studio is where a script
      * gets judged before anybody spends three minutes filming it.
      */
-    const ms = Math.max(MIN_BEAT_MS, b.say ? Math.max(holdFor(b.say), beatFloorMs(b.say)) : 0);
+    const ms = (b.hold ?? 0)
+      + Math.max(MIN_BEAT_MS, b.say ? Math.max(holdFor(b.say), beatFloorMs(b.say)) : 0);
     const beat = { ...b, at, ms };
     at += ms;
     return beat;
@@ -125,31 +148,27 @@ function readinessScript(): ReelScript {
       action: "Open the check-in. Do not fill it in yet — let the empty form show.",
       say: "Every training app gives you the session it planned last week.",
     },
-    /**
-     * Split for the same reason the cost reel's table beat was: spoken, this
-     * was one six-second shot of one screen, which lib/reel-retention.ts
-     * refuses. "Sixty seconds" is also the claim people actually weigh, and it
-     * deserves its own frame rather than being tacked onto a longer sentence.
-     */
     {
       route: "/journal",
       action: "Log a bad night: sleep 3, fatigue 8, tap two sore areas on the body map.",
-      say: "This one asks how you actually slept, and how sore you actually are.",
-    },
-    {
-      route: "/journal",
-      action: "Hold on the completed form.",
-      say: "Sixty seconds.",
+      say: "This one asks how you slept and how sore you are. It takes sixty seconds.",
     },
     {
       route: "/home",
       action: "Show the readiness score. Let it sit — the number is the point.",
-      say: "The score is worked out on the phone, and it changes what you are told to do today.",
+      focus: "Readiness",
+      /**
+       * THE REVEAL, and the reason the beat before it withholds the number.
+       * The old version said "the score is worked out on the phone" over the
+       * score itself — narrating a thing the viewer can already see.
+       */
+      hold: SUSPENSE_MS,
+      say: "Today you are a fifty-four.",
     },
     {
       route: "/home",
       action: "Scroll to today's session so the adjusted work is visible.",
-      say: "Not a warning you can ignore. The session itself is different.",
+      say: "So the session changed. Not a warning you can ignore — the work itself is lighter.",
     },
     { route: "/", action: "Land on the front page so the address is on screen.", say: "" },
   ]);
@@ -174,47 +193,56 @@ function costScript(): ReelScript {
    * reel telling you what it is going to prove.
    */
   return build("demo-cost", `Same protein. ${gap} the price.`, [
-    {
-      route: "/cheapest-protein/",
-      action: "Show the top of the ranked table.",
-      say: `${REFERENCE_PROTEIN}g of protein. Red lentils: ${cheapPrice}.`,
-    },
     /**
-     * TWO BEATS, NOT ONE, AND THE RETENTION CHECK IS WHY.
+     * ═══════════════════════════════════════════════════════════════════════
+     * BUILD, THEN REVEAL. "No reel hook or pausing for suspense."
      *
-     * "The same 30 grams costs £X at the other end. Same protein." is two
-     * sentences and, spoken, six seconds — a single shot of one screen doing
-     * one thing, which lib/reel-retention.ts refuses. It only became visible
-     * once the beats were timed from real audio rather than a word count at
-     * 340 words a minute.
+     * The first version gave the number away in the opening line — "30g of
+     * protein. Red lentils: £0.31." — and then spent fourteen seconds
+     * explaining a fact already told. Nothing was owed to the viewer, so
+     * there was no reason to stay.
      *
-     * Splitting it is better anyway: the scroll and the punchline are two
-     * different moments, and "same protein" landing on its own frame is the
-     * whole point of the reel.
+     * It asks now, shows the evidence, and holds the figure back to the
+     * moment the shot reaches it. lib/speech-timing.ts puts a 1.15s silence
+     * before a short line that follows a long one, which is exactly this
+     * shape, so the pause arrives without anybody timing it by hand.
+     * ═══════════════════════════════════════════════════════════════════════
      */
     {
       route: "/cheapest-protein/",
-      action: "Scroll slowly to the bottom of the table.",
-      say: `The same ${REFERENCE_PROTEIN} grams costs ${dear} at the other end.`,
+      action: "Top of the ranked table, the three summary cards in frame.",
+      say: `Every food here gives you the same ${REFERENCE_PROTEIN} grams of protein.`,
+    },
+    {
+      route: "/cheapest-protein/",
+      action: "Scroll slowly down the ranked list, past the middle.",
+      say: "All priced from real supermarket packs.",
+    },
+    {
+      route: "/cheapest-protein/",
+      action: "Land on the cheapest row and hold.",
+      focus: "Red lentils",
+      // THE REVEAL. Everything before it was setup; this is what the hook
+      // promised. The silence is the reel telling the viewer to look.
+      hold: SUSPENSE_MS,
+      say: `Cheapest: ${cheapPrice}.`,
     },
     {
       route: "/cheapest-protein/",
       action: "Hold on the most expensive row.",
-      say: "Same protein.",
+      focus: facts ? facts.dearest.name : "",
+      say: `Dearest: ${dear}. Same protein.`,
     },
     {
       route: "/recipes/",
-      action: "Open any recipe and show the costed ingredient list.",
-      // "priced to the ingredient, from real pack sizes" was the app's own
-      // documentation read aloud. This is what it means to somebody outside it.
-      say: "Every recipe is costed the same way. Real supermarket pack sizes.",
+      action: "Open a recipe and show the costed ingredient list.",
+      say: "Every recipe in the app is costed the same way, down to the ingredient.",
     },
     {
       route: "/nutrition",
       action: "Show a meal plan with its weekly cost.",
-      // "So the plan it builds you has a number on it before you shop" is not a
-      // sentence anybody says. Two short ones, and the second is the payoff.
-      say: "Build a week of meals and it prices the whole shop. Before you go.",
+      focus: "kcal left",
+      say: "So build a week of meals and it prices the whole shop. Before you go.",
     },
     { route: "/", action: "Front page. Hold two seconds.", say: "" },
   ]);

@@ -71,11 +71,27 @@ export interface BeatAudio {
  * construction (see speech-timing) and adding TAIL_MS as well would leave two
  * silences at the end of every shot.
  */
-export function beatAudio(phrases: readonly SpokenPhrase[]): BeatAudio {
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * SILENCE BEFORE A BEAT, WHICH IS WHERE SUSPENSE LIVES.
+ *
+ * lib/speech-timing.ts can put a pause between two phrases, but only inside
+ * one beat — and the interesting pause in a reel is almost always at a beat
+ * BOUNDARY, because that is where the shot changes. So the moment the script
+ * builds to got LEAD_MS + TAIL_MS, about a third of a second, the same as any
+ * other cut.
+ *
+ * `hold` is the script saying "wait here". Used at the reveal and nowhere
+ * else: a reel that pauses everywhere is a reel that drags.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export const SUSPENSE_MS = 900;
+
+export function beatAudio(phrases: readonly SpokenPhrase[], holdMs = 0): BeatAudio {
   if (!phrases.length) return { ms: SILENT_BEAT_MS, clips: [] };
 
   const clips: Placed[] = [];
-  let at = LEAD_MS;
+  let at = LEAD_MS + Math.max(0, holdMs);
   for (const phrase of phrases) {
     clips.push({ atMs: at, phrase });
     at += Math.max(0, phrase.audioMs) + Math.max(0, phrase.gapMs);
@@ -99,7 +115,7 @@ export interface RetimedBeat {
  * with no gaps, and a plan with a hole in it puts the teleprompter and the
  * captions on the wrong beat for the rest of the reel.
  */
-export function retime<T extends { route: string; action: string; say: string }>(
+export function retime<T extends { route: string; action: string; say: string; hold?: number }>(
   beats: readonly T[],
   audio: readonly BeatAudio[],
 ): { beats: RetimedBeat[]; totalMs: number } {

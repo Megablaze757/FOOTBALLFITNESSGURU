@@ -54,10 +54,32 @@ export const GAP = {
    * same words with a 0.4s gap are a list.
    */
   payoff: 900,
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * THE BEAT BEFORE A REVEAL. "No pausing for suspense."
+   *
+   * `payoff` only ever fired before the LAST phrase of a reel, so a reel that
+   * builds to a number in the middle — which is the shape of every good one —
+   * got the same 200ms clause gap there as it got between two ordinary
+   * clauses. There was nowhere for the tension to sit.
+   *
+   * A silence before the reveal is the most-used device in retention editing
+   * for a reason: it is the moment a viewer stops scrolling to find out. Long
+   * enough to be heard as deliberate, short enough that a thumb does not move
+   * — this is the top of that range, not past it.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  reveal: 1_150,
 } as const;
 
 /** A punchline is short. Longer than this and the gap before it is a stall. */
 export const PAYOFF_MAX_WORDS = 8;
+
+/**
+ * How much setup has to come before a short line for it to read as a reveal
+ * rather than as one more short line. Below this the pause is a stutter.
+ */
+export const REVEAL_MIN_SETUP_WORDS = 7;
 
 export interface Phrase {
   text: string;
@@ -117,9 +139,23 @@ export function phrases(line: string): Phrase[] {
     if (last) return { text: phrase, gapMs: 0 };
 
     const next = spoken[i + 1];
+    const words = (t: string) => t.split(/\s+/).filter(Boolean).length;
     const nextIsLast = i === spoken.length - 2;
-    const nextIsShort = next.split(/\s+/).filter(Boolean).length <= PAYOFF_MAX_WORDS;
+    const nextIsShort = words(next) <= PAYOFF_MAX_WORDS;
     if (nextIsLast && nextIsShort) return { text: phrase, gapMs: GAP.payoff };
+
+    /**
+     * A SHORT LINE AFTER A LONG ONE IS A REVEAL, wherever it falls.
+     *
+     * That shape — build, then a snap — is what a script does when it is about
+     * to land something, and it used to be given the same gap as any other
+     * sentence break. Requiring the CURRENT phrase to be long is what stops
+     * this firing on a run of short lines, where it would read as a stutter
+     * rather than suspense.
+     */
+    if (nextIsShort && words(phrase) >= REVEAL_MIN_SETUP_WORDS) {
+      return { text: phrase, gapMs: GAP.reveal };
+    }
 
     if (phrase.endsWith("?")) return { text: phrase, gapMs: GAP.question };
     if (/[.!]$/.test(phrase)) return { text: phrase, gapMs: GAP.sentence };

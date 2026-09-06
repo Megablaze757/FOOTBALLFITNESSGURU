@@ -130,3 +130,34 @@ test("every line the app would narrate splits into real phrases", () => {
     }
   }
 });
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * SOMEWHERE FOR THE TENSION TO SIT. "No pausing for suspense."
+ *
+ * `payoff` only ever fired before the LAST phrase of a reel, so a script that
+ * builds to something in the middle — the shape of every good one — got the
+ * same 200ms clause gap at the reveal as between two ordinary clauses.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("a short line after a long one gets a real pause, wherever it falls", () => {
+  const list = phrases(
+    "Every food here gives you the same thirty grams of protein. Thirty-one pence. And it goes on.",
+  );
+  assert.equal(list.length, 3);
+  assert.equal(list[0].gapMs, GAP.reveal,
+    `the reveal got ${list[0].gapMs}ms — the same as any other sentence break`);
+  assert.ok(GAP.reveal > GAP.sentence, "the reveal pause is no longer than an ordinary one");
+});
+
+/** A run of short lines is a stutter, not suspense. */
+test("short lines in a row do not each get a suspense pause", () => {
+  for (const p of phrases("Same protein. Same day. Same shop. Big difference.").slice(0, -1)) {
+    assert.notEqual(p.gapMs, GAP.reveal, `"${p.text}" was treated as a setup for a reveal`);
+  }
+});
+
+test("the reveal pause is long enough to hear and short enough to hold", () => {
+  assert.ok(GAP.reveal >= 800, `${GAP.reveal}ms is not heard as deliberate`);
+  assert.ok(GAP.reveal <= 1400, `${GAP.reveal}ms is long enough for a thumb to move`);
+});

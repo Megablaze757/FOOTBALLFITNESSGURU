@@ -63,6 +63,8 @@ export interface PlanStep {
   at: number;
   ms: number;
   route: string;
+  /** Words on screen this beat is about — the recorder spotlights them. */
+  focus?: string;
   /** The human-readable intent, kept for the run log. */
   action: string;
   /** Timed absolutely, so the driver never does arithmetic of its own. */
@@ -160,7 +162,11 @@ export function captionsFor(beat: { at: number; ms: number; say: string }): Capt
 export interface PlannableScript {
   id: string;
   hook: string;
-  beats: { at: number; ms: number; route: string; action: string; say: string }[];
+  beats: {
+    at: number; ms: number; route: string; action: string; say: string;
+    /** Words on screen this beat is about. Optional — most beats have none. */
+    focus?: string;
+  }[];
   totalMs: number;
 }
 
@@ -178,6 +184,13 @@ export function reelPlan(script: PlannableScript, hookMs = HOOK_MS): ReelPlan {
     ms: beat.ms,
     route: beat.route,
     action: beat.action,
+    /**
+     * CARRIED THROUGH, not cast to. The recorder reads this to aim the
+     * spotlight, and the first version read `focus` off a PlanStep that never
+     * had one — a cast made it typecheck and it would have been undefined on
+     * every beat, so the feature would have shipped doing nothing at all.
+     */
+    focus: beat.focus,
     captions: captionsFor(beat),
   }));
   return {

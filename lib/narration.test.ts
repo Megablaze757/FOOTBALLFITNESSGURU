@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { LEAD_MS, SILENT_BEAT_MS, TAIL_MS, beatAudio, retime, trackClips, type SpokenPhrase } from "./narration";
+import { SUSPENSE_MS, LEAD_MS, SILENT_BEAT_MS, TAIL_MS, beatAudio, retime, trackClips, type SpokenPhrase } from "./narration";
 import { GAP } from "./speech-timing";
 
 const said = (audioMs: number, gapMs = 0): SpokenPhrase => ({ text: "x", gapMs, audioMs });
@@ -94,4 +94,31 @@ test("every clip knows where it sits in the finished reel", () => {
 test("no audio at all produces no clips rather than throwing", () => {
   assert.deepEqual(trackClips(retime(beats, []).beats, []), []);
   assert.deepEqual(trackClips([], []), []);
+});
+
+/**
+ * The pause a reel actually needs is at a beat BOUNDARY — where the shot
+ * changes to the thing being revealed. Before this, that moment got LEAD_MS +
+ * TAIL_MS, about a third of a second, the same as any other cut.
+ */
+test("a beat can hold before it speaks", () => {
+  const spoken = [{ text: "Cheapest: thirty-one pence.", gapMs: 0, audioMs: 1400 }];
+  const plain = beatAudio(spoken);
+  const held = beatAudio(spoken, SUSPENSE_MS);
+
+  assert.equal(held.clips[0].atMs - plain.clips[0].atMs, SUSPENSE_MS,
+    "the hold did not delay the speech");
+  assert.equal(held.ms - plain.ms, SUSPENSE_MS, "the beat did not grow to contain its own pause");
+  assert.equal(plain.clips[0].atMs, LEAD_MS, "an unheld beat drifted");
+});
+
+test("a hold is silence, not a negative offset", () => {
+  const spoken = [{ text: "x", gapMs: 0, audioMs: 500 }];
+  assert.equal(beatAudio(spoken, -900).clips[0].atMs, LEAD_MS, "a negative hold pulled speech earlier");
+  assert.equal(beatAudio(spoken, 0).clips[0].atMs, LEAD_MS);
+});
+
+test("the suspense pause is long enough to be heard as deliberate", () => {
+  assert.ok(SUSPENSE_MS >= 600, `${SUSPENSE_MS}ms reads as a cut, not a pause`);
+  assert.ok(SUSPENSE_MS <= 1500, `${SUSPENSE_MS}ms is long enough for a thumb to move`);
 });

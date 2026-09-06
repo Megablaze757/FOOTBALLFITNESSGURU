@@ -105,6 +105,41 @@
     hookWrap.appendChild(hook);
     layer.appendChild(hookWrap);
 
+    /**
+     * ═══════════════════════════════════════════════════════════════════════
+     * THE SPOTLIGHT. "The app demo isn't clear what's what."
+     *
+     * A reel shows a whole app screen — a ring, four macro rows, a coaching
+     * paragraph, a nav bar — while the voice talks about one of them, and
+     * nothing on screen says which. The viewer spends the shot hunting for the
+     * thing being described, and mostly does not find it before the cut.
+     *
+     * So the script can point. Four dim panels around the element and a bright
+     * outline on it: everything else recedes, the eye lands in one movement,
+     * and it still reads at the size a reel is actually watched.
+     *
+     * FOUR PANELS RATHER THAN A CLIP-PATH: a box-shadow spread or an SVG mask
+     * both work, and both are one property away from dimming the wrong side of
+     * the hole. Four rectangles cannot be ambiguous about which side is dark.
+     */
+    var spot = document.createElement("div");
+    spot.id = "__reel_spot";
+    spot.style.cssText = "position:fixed;inset:0;pointer-events:none;opacity:0;"
+      + "transition:opacity 220ms linear;";
+    ["t", "b", "l", "r"].forEach(function (side) {
+      var panel = document.createElement("div");
+      panel.setAttribute("data-side", side);
+      panel.style.cssText = "position:fixed;background:rgba(4,4,6,0.72);";
+      spot.appendChild(panel);
+    });
+    var ring = document.createElement("div");
+    ring.id = "__reel_ring";
+    ring.style.cssText = "position:fixed;border:3px solid rgba(227,181,63,0.95);"
+      + "border-radius:16px;box-shadow:0 0 0 2px rgba(0,0,0,0.35),0 8px 40px rgba(0,0,0,0.5);";
+    spot.appendChild(ring);
+    // BEFORE the caption in the layer, so the caption is never dimmed by it.
+    layer.insertBefore(spot, layer.firstChild);
+
     // documentElement, not body: a page that replaces its own body mid-render
     // would take the overlay with it.
     document.documentElement.appendChild(layer);
@@ -116,6 +151,72 @@
     if (!el) return;
     el.textContent = text;
     el.style.opacity = text ? "1" : "0";
+  };
+
+  /**
+   * Find what the beat is about, BY ITS VISIBLE TEXT.
+   *
+   * Not a CSS selector: a selector is a promise about markup this script does
+   * not own, and it breaks silently the next time a class is renamed. The
+   * words on screen are the same words the script is already talking about.
+   */
+  var findByText = function (needle) {
+    var want = String(needle || "").trim().toLowerCase();
+    if (!want) return null;
+    var all = document.querySelectorAll("body *");
+    var best = null;
+    for (var i = 0; i < all.length; i++) {
+      var el = all[i];
+      var text = (el.textContent || "").trim().toLowerCase();
+      if (text.indexOf(want) === -1) continue;
+      var box = el.getBoundingClientRect();
+      if (box.width < 40 || box.height < 16) continue;
+      // Off screen entirely is not what the shot is pointing at.
+      if (box.bottom < 0 || box.top > window.innerHeight) continue;
+      // The SMALLEST element that still contains the words: every ancestor
+      // contains them too, and <body> is not a spotlight.
+      if (!best || box.width * box.height < best.box.width * best.box.height) {
+        best = { el: el, box: box };
+      }
+    }
+    return best;
+  };
+
+  /**
+   * Point at something, or at nothing.
+   *
+   * An empty string clears it. Text that is not on screen ALSO clears it
+   * rather than dimming the whole frame — a spotlight on nothing is worse than
+   * no spotlight, and it would be invisible until somebody watched the reel.
+   */
+  window.__reelFocus = function (needle) {
+    install();
+    var spot = document.getElementById("__reel_spot");
+    if (!spot) return false;
+    var found = needle ? findByText(needle) : null;
+    if (!found) { spot.style.opacity = "0"; return false; }
+
+    var pad = 12;
+    var b = found.box;
+    var top = Math.max(0, b.top - pad);
+    var left = Math.max(0, b.left - pad);
+    var right = Math.min(window.innerWidth, b.right + pad);
+    var bottom = Math.min(window.innerHeight, b.bottom + pad);
+
+    var panels = spot.querySelectorAll("[data-side]");
+    var put = function (el, css) { el.style.cssText += ";" + css; };
+    for (var i = 0; i < panels.length; i++) {
+      var side = panels[i].getAttribute("data-side");
+      if (side === "t") put(panels[i], "left:0;top:0;width:100%;height:" + top + "px;");
+      if (side === "b") put(panels[i], "left:0;top:" + bottom + "px;width:100%;bottom:0;height:auto;");
+      if (side === "l") put(panels[i], "left:0;top:" + top + "px;width:" + left + "px;height:" + (bottom - top) + "px;");
+      if (side === "r") put(panels[i], "left:" + right + "px;top:" + top + "px;right:0;width:auto;height:" + (bottom - top) + "px;");
+    }
+    var ring = document.getElementById("__reel_ring");
+    ring.style.cssText += ";left:" + left + "px;top:" + top + "px;width:"
+      + (right - left) + "px;height:" + (bottom - top) + "px;";
+    spot.style.opacity = "1";
+    return true;
   };
 
   window.__reelCaption = function (text) { set("__reel_caption", text); };
