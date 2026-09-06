@@ -1,8 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  CHUNK_WORDS, HOOK_MS, REEL_H, REEL_RATIO, REEL_SCALE, REEL_W,
-  captionChunks, captionsFor, reelPlan, srt, srtTime, type PlannableScript,
+  HOOK_MS, REEL_H, REEL_RATIO, REEL_SCALE, REEL_W,
+  captionsFor, reelPlan, srt, srtTime, type PlannableScript,
 } from "./reel-plan";
 
 const script: PlannableScript = {
@@ -32,22 +32,7 @@ test("the frame is exactly 9:16, and records at the native size", () => {
   assert.equal(REEL_H * REEL_SCALE, 1920, "not 1920 tall, so the platform rescales it");
 });
 
-test("words arrive in readable groups", () => {
-  assert.deepEqual(captionChunks("one two three four five six"), ["one two three four", "five six"]);
-  assert.deepEqual(captionChunks("one two three"), ["one two three"]);
-  assert.deepEqual(captionChunks(""), []);
-  assert.deepEqual(captionChunks("   "), []);
-  for (const chunk of captionChunks("a b c d e f g h i j k l")) {
-    assert.ok(chunk.split(" ").length <= CHUNK_WORDS, chunk);
-  }
-});
 
-/** A lone word on screen for a quarter of a second reads as a glitch. */
-test("a single trailing word is never left on its own", () => {
-  const chunks = captionChunks("one two three four five");
-  assert.deepEqual(chunks, ["one two three four five"]);
-  assert.ok(!chunks.some((c) => c.split(" ").length === 1), chunks.join(" | "));
-});
 
 test("captions fill their beat exactly, with no gap at the end", () => {
   for (const words of [1, 2, 5, 7, 9, 13, 20]) {

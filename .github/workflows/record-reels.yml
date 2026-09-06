@@ -194,12 +194,26 @@ jobs:
 
       # H.264 in an MP4 is what the platforms accept. The runner's ffmpeg can
       # do it; Playwright's cannot.
+      #
+      # ═══════════════════════════════════════════════════════════════════
+      # THE UPSCALE HAPPENS HERE, because ffmpeg can actually resample.
+      #
+      # Playwright records at the CSS viewport size (540x960). Asking it for
+      # 1080x1920 does NOT scale the page up — it pads the canvas and leaves
+      # the app sitting in the top-left quarter, which is what shipped: three
+      # quarters of every frame empty. So the recorder captures 540x960 and
+      # this scales it to the 1080x1920 the platforms want.
+      #
+      # lanczos rather than the default bicubic: this is a 2x upscale of text,
+      # which is the case bicubic softens most.
+      # ═══════════════════════════════════════════════════════════════════
       - name: Mux to MP4
         if: env.VOICE == 'true'
         run: |
           id="$SCRIPT"
           lead=$(cat reels/*.lead 2>/dev/null || echo 0)
           ffmpeg -hide_banner -loglevel error -y -ss "$lead" -i reels/*.webm -i reels/*.wav \
+            -vf "scale=1080:1920:flags=lanczos" \
             -c:v libx264 -preset slow -crf 20 -pix_fmt yuv420p -c:a aac -b:a 128k \
             -shortest "reels/$id.mp4"
 
@@ -207,6 +221,7 @@ jobs:
         if: env.VOICE != 'true'
         run: |
           ffmpeg -hide_banner -loglevel error -y -i reels/*.webm \
+            -vf "scale=1080:1920:flags=lanczos" \
             -c:v libx264 -preset slow -crf 20 -pix_fmt yuv420p -an "reels/$SCRIPT.mp4"
 
       # ═══════════════════════════════════════════════════════════════════

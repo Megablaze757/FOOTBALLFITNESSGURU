@@ -30,6 +30,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 // =============================================================================
 
+import { beatFloorMs } from "./caption-lines";
 import { holdFor, MIN_SCENE_MS, MAX_REEL_MS, MS_PER_WORD } from "./reel";
 import { hookText, HOOK_MAX_WORDS } from "./reel-kinds";
 import { SKILL_DRILLS } from "./skills";
@@ -85,7 +86,14 @@ export const MIN_BEAT_MS = MIN_SCENE_MS;
 function time(beats: Omit<Beat, "at" | "ms">[]): Beat[] {
   let at = 0;
   return beats.map((b) => {
-    const ms = Math.max(MIN_BEAT_MS, b.say ? holdFor(b.say) : 0);
+    /**
+     * The SAME floor the recorder applies (lib/narration.ts retime): a beat
+     * lasts at least as long as its captions take to read. Without it here,
+     * the teleprompter and the retention check disagree with the finished
+     * reel about how long every shot is — and the studio is where a script
+     * gets judged before anybody spends three minutes filming it.
+     */
+    const ms = Math.max(MIN_BEAT_MS, b.say ? Math.max(holdFor(b.say), beatFloorMs(b.say)) : 0);
     const beat = { ...b, at, ms };
     at += ms;
     return beat;
@@ -152,11 +160,24 @@ function costScript(): ReelScript {
   const facts = indexFacts();
   const cheap = facts ? `${money(facts.cheapest.cost)} from ${facts.cheapest.name.toLowerCase()}` : "under a pound";
   const dear = facts ? `${money(facts.dearest.cost)}` : "over three pounds";
-  return build("demo-cost", `${REFERENCE_PROTEIN}g of protein: ${cheap}.`, [
+  /** "10x" reads better in a hook than "10.2x", and the table shows the exact figure. */
+  const gap = facts ? `${Math.round(facts.dearest.cost / facts.cheapest.cost)}x` : "10x";
+  /** The price on its own — the line names the food itself. */
+  const cheapPrice = facts ? money(facts.cheapest.cost) : "under a pound";
+  /**
+   * THE HOOK IS A CONTRAST, NOT A LABEL.
+   *
+   * It was "30g of protein: £0.31." — which states the subject and asks
+   * nothing. A hook has three seconds to make stopping feel like the cheaper
+   * option, and a fact you can finish reading is a fact you can scroll past.
+   * The gap between the two prices is the whole reel; putting it first is the
+   * reel telling you what it is going to prove.
+   */
+  return build("demo-cost", `Same protein. ${gap} the price.`, [
     {
       route: "/cheapest-protein/",
       action: "Show the top of the ranked table.",
-      say: `${REFERENCE_PROTEIN} grams of protein costs ${cheap}.`,
+      say: `${REFERENCE_PROTEIN}g of protein. Red lentils: ${cheapPrice}.`,
     },
     /**
      * TWO BEATS, NOT ONE, AND THE RETENTION CHECK IS WHY.
@@ -184,12 +205,16 @@ function costScript(): ReelScript {
     {
       route: "/recipes/",
       action: "Open any recipe and show the costed ingredient list.",
-      say: "Every recipe in here is priced to the ingredient, from real pack sizes.",
+      // "priced to the ingredient, from real pack sizes" was the app's own
+      // documentation read aloud. This is what it means to somebody outside it.
+      say: "Every recipe is costed the same way. Real supermarket pack sizes.",
     },
     {
       route: "/nutrition",
       action: "Show a meal plan with its weekly cost.",
-      say: "So the plan it builds you has a number on it before you shop.",
+      // "So the plan it builds you has a number on it before you shop" is not a
+      // sentence anybody says. Two short ones, and the second is the payoff.
+      say: "Build a week of meals and it prices the whole shop. Before you go.",
     },
     { route: "/", action: "Front page. Hold two seconds.", say: "" },
   ]);

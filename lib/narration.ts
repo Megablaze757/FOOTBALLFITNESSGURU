@@ -1,3 +1,4 @@
+import { beatFloorMs } from "./caption-lines";
 // =============================================================================
 // FITTING THE PICTURE TO THE VOICE, RATHER THAN THE OTHER WAY ROUND.
 //
@@ -104,7 +105,14 @@ export function retime<T extends { route: string; action: string; say: string }>
 ): { beats: RetimedBeat[]; totalMs: number } {
   let at = 0;
   const out = beats.map((beat, i) => {
-    const ms = audio[i]?.ms ?? SILENT_BEAT_MS;
+    /**
+     * The LONGER of what it takes to say and what it takes to read.
+     *
+     * Timed to the speech alone, a beat gave its captions exactly as long as
+     * the voice needed — and the voice reads faster than an eye does on a
+     * screen it has never seen. See beatFloorMs in lib/caption-lines.ts.
+     */
+    const ms = Math.max(audio[i]?.ms ?? SILENT_BEAT_MS, beatFloorMs(beat.say));
     const placed = { at, ms, route: beat.route, action: beat.action, say: beat.say };
     at += ms;
     return placed;

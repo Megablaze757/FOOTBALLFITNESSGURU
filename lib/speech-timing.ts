@@ -33,13 +33,19 @@
  * rhythm is not a metronome. These are the numbers to argue with if a reel
  * sounds rushed or slow — everything else here is about WHICH one applies.
  */
+/**
+ * Widened after "too fast paced". Every one of these was the shortest pause
+ * that still registered as a pause; a reel needs the pause a listener would
+ * take to LOOK at what is being described, which is longer than the one they
+ * need to hear the end of a clause.
+ */
 export const GAP = {
   /** Inside a sentence. Barely a pause; enough to stop two clauses running on. */
-  clause: 200,
+  clause: 260,
   /** Between sentences. */
-  sentence: 420,
+  sentence: 540,
   /** After a question. Longer, because a question asks for a moment. */
-  question: 560,
+  question: 700,
   /**
    * Before the last thing said.
    *
@@ -47,7 +53,7 @@ export const GAP = {
    * leaves on its own. A punchline arriving 0.7s after the setup lands; the
    * same words with a 0.4s gap are a list.
    */
-  payoff: 720,
+  payoff: 900,
 } as const;
 
 /** A punchline is short. Longer than this and the gap before it is a stall. */
