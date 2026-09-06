@@ -199,3 +199,36 @@ test("focus survives the trip from script to plan", async () => {
   });
   assert.equal(plan.steps[0].focus, "Red lentils", "the spotlight would never be aimed");
 });
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE SPOTLIGHT HAS TO SURVIVE THE ZOOM.
+ *
+ * The recorder zooms documentElement so a 1080x1920 viewport still lays out as
+ * a 540px phone. getBoundingClientRect and window.innerHeight report VISUAL
+ * pixels — the full 1920 — but the overlay lives inside the zoomed element, so
+ * a CSS pixel it sets is multiplied on the way to the screen.
+ *
+ * Setting top to a visual 750 drew the ring at 1500. Measured on the live
+ * page before the fix: styleTop 1483px produced a rect at 2966px, in a
+ * viewport 1920 tall — the spotlight was off-frame for anything below the top
+ * of the screen, and nothing would have caught it except watching the reel.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("the spotlight converts out of visual pixels", () => {
+  const src = overlay();
+  const focus = src.slice(src.indexOf("window.__reelFocus = function"));
+  assert.match(focus, /getComputedStyle\(document\.documentElement\)\.zoom/,
+    "the spotlight never reads the zoom, so it is drawn at the wrong scale");
+
+  // Every measured coordinate, not just some of them: a ring in the right
+  // place with dim panels in the wrong one is still a broken shot.
+  for (const name of ["top", "left", "right", "bottom"]) {
+    assert.match(
+      focus,
+      new RegExp(`var ${name} = Math\\.(?:max|min)\\([^;]*\\) / zoom;`),
+      `${name} is not converted out of visual pixels`,
+    );
+  }
+  assert.match(focus, /\|\| 1;/, "an unzoomed page would divide by NaN");
+});
