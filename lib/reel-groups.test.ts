@@ -113,3 +113,47 @@ test("the panel deletes the whole group and asks first", () => {
   assert.match(panel, /window\.confirm\(/, "a reel takes three minutes to make and deletes without asking");
   assert.match(panel, /storage\.from\("reels"\)\.remove\(/, "nothing actually removes the files");
 });
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * CLEARING THE WHOLE LIBRARY.
+ *
+ * "Clear the old demo vids, start fresh." One confirm per post is right for
+ * one post and absurd for fourteen, so there is a single action — and because
+ * it is every file there is, and none of them are recoverable, it asks for a
+ * number to be TYPED rather than for a button to be clicked. A confirm dialog
+ * next to a Refresh button is one misplaced press away from an empty library.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("clearing the library takes more than a click, and takes every file", () => {
+  const panel = readFileSync("components/admin/ReelLibrary.tsx", "utf8");
+  const fn = panel.slice(panel.indexOf("const clearAll"), panel.indexOf("const load ="));
+
+  assert.ok(fn.length > 0, "there is no clear-all action at all");
+  assert.match(fn, /window\.prompt\(/,
+    "clearing everything asks the same single confirm as deleting one post");
+  assert.match(fn, /typed\.trim\(\) !== String\(posts\)/,
+    "the typed answer is not checked, so anything dismisses the guard");
+  assert.match(fn, /all\.map\(\(f\) => f\.name\)/,
+    "it deletes something other than every file it listed");
+  assert.match(fn, /storage\.from\("reels"\)\.remove\(/, "nothing actually removes the files");
+});
+
+/** A cancelled prompt returns null, and null must not read as a match. */
+test("dismissing the prompt deletes nothing", () => {
+  const panel = readFileSync("components/admin/ReelLibrary.tsx", "utf8");
+  const fn = panel.slice(panel.indexOf("const clearAll"), panel.indexOf("const load ="));
+  assert.match(fn, /if \(typed === null\) return;/,
+    "a dismissed prompt falls through to the comparison instead of returning");
+  assert.ok(
+    fn.indexOf("typed === null") < fn.indexOf("typed.trim()"),
+    "null is compared before it is checked, which throws instead of cancelling",
+  );
+});
+
+/** The button cannot be there when there is nothing to clear. */
+test("the button only exists when the library has something in it", () => {
+  const panel = readFileSync("components/admin/ReelLibrary.tsx", "utf8");
+  assert.match(panel, /\{!!reels\?\.length && \([\s\S]{0,400}Clear all/,
+    "Clear all is offered on an empty library");
+});
