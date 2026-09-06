@@ -25,15 +25,16 @@ import { tmpdir } from "node:os";
 import { spawn } from "node:child_process";
 import { join } from "node:path";
 import { reelScript, type ScriptId } from "../lib/reel-script";
-import { reelPlan, srt, REEL_W, REEL_H, REEL_SCALE } from "../lib/reel-plan";
+import { reelPlan, srt, endCardAt, REEL_W, REEL_H, REEL_SCALE } from "../lib/reel-plan";
 import { retentionProblems } from "../lib/reel-retention";
 import { driftTarget } from "../lib/reel-scroll";
+import { SIGNUP_CTA } from "../lib/signup-link";
 import { emphasise } from "../lib/caption-emphasis";
 import { phrases } from "../lib/speech-timing";
 import { spokenForm } from "../lib/spoken-numbers";
-import { BASE_SPEED, VOICE, shapeRates } from "../lib/speech-prosody";
+import { BASE_SPEED, VOICE, shapeGains, shapeRates } from "../lib/speech-prosody";
 import { beatAudio, retime, trackClips, type BeatAudio } from "../lib/narration";
-import { layTrack, readWav, writeWav, type Wav } from "../lib/wav";
+import { layTrack, normalised, readWav, writeWav, type Wav } from "../lib/wav";
 import { secretValue } from "../lib/env-value";
 
 const audioFiles: string[] = [];
@@ -129,6 +130,12 @@ async function narrate(beats: readonly { say: string; hold?: number }[]): Promis
    */
   const perBeat = beats.map((b) => phrases(spokenForm(b.say)));
   const flat = perBeat.flat();
+  /**
+   * The loudness each line is laid at. A voice that never changes volume
+   * sounds flat however much its pitch moves, and pitch is already at this
+   * model's ceiling — see lib/speech-prosody.ts.
+   */
+  const gains = shapeGains(flat.map((p) => p.text));
   if (!flat.length) return beats.map(() => beatAudio([]));
 
   const job = {
@@ -177,7 +184,7 @@ async function narrate(beats: readonly { say: string; hold?: number }[]): Promis
       const audio = said[cursor];
       audioFiles.push(audio.path);
       cursor += 1;
-      return { text: phrase.text, gapMs: phrase.gapMs, audioMs: audio.ms };
+      return { text: phrase.text, gapMs: phrase.gapMs, audioMs: audio.ms, gainDb: gains[cursor - 1] };
     });
     // The script's own suspense pause, at the beat boundary where the shot
     // changes to the thing being revealed. See lib/narration.ts.
@@ -528,7 +535,34 @@ for (const step of plan.steps) {
     }
     if (i === step.captions.length - 1) driftFrom = to;
   }
-  await sleep(Math.max(0, step.at + step.ms - elapsed()));
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * THE END CARD, IN THE SILENCE THAT WAS ALREADY THERE.
+   *
+   * The recorded reel ended on the app with nothing written on it — the last
+   * caption cleared and 1.8 seconds of tail played out blank. That is the
+   * frame somebody is looking at when they decide whether to do anything,
+   * and it was the only part of the reel asking them for nothing.
+   *
+   * It reuses the hook pill rather than inventing a second overlay: that one
+   * is already drawn opaque with a border and measured at 10.3:1 against the
+   * app behind it, and a second thing to keep legible is a second thing to
+   * get wrong. See lib/reel-plan.ts for why it can never cover a caption.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  const last = step.index === plan.steps.length - 1;
+  if (!last) {
+    await sleep(Math.max(0, step.at + step.ms - elapsed()));
+  } else {
+    await sleep(Math.max(0, endCardAt(step.at + step.ms, step.captions) - elapsed()));
+    await page.evaluate(() => (window as never as { __reelCaption: (s: string) => void }).__reelCaption("")).catch(() => {});
+    await page.evaluate(() => (window as never as { __reelFocus: (s: string) => boolean }).__reelFocus("")).catch(() => {});
+    await page.evaluate(
+      (t) => (window as never as { __reelHook: (s: string) => void }).__reelHook(t),
+      SIGNUP_CTA,
+    ).catch(() => {});
+    await sleep(Math.max(0, step.at + step.ms - elapsed()));
+  }
   await page.evaluate(() => (window as never as { __reelCaption: (s: string) => void }).__reelCaption("")).catch(() => {});
 }
 
@@ -576,10 +610,23 @@ if (withVoice) {
 
   const track = layTrack(
     first.format,
-    clips.map((clip, i) => ({ atMs: clip.atMs, data: read[i]?.data ?? new Uint8Array(0) })),
+    clips.map((clip, i) => ({
+      atMs: clip.atMs,
+      data: read[i]?.data ?? new Uint8Array(0),
+      gainDb: clip.phrase.gainDb,
+    })),
     plan.totalMs,
   );
-  writeFileSync(join(outDir, `${script.id}.wav`), writeWav(first.format, track));
+  /**
+   * The per-role loudness above can only CUT — see lib/speech-prosody.ts — so
+   * the assembled track is quieter than the voice as synthesised, by however
+   * much this particular reel leans on its quiet roles. One pass brings it
+   * back to a fixed level, the same one every reel gets.
+   */
+  writeFileSync(
+    join(outDir, `${script.id}.wav`),
+    writeWav(first.format, normalised(first.format, track)),
+  );
   console.log(`  ${outDir}/${script.id}.wav`);
   console.log(
     // "CI runners have one" was the claim here and it is false: ubuntu-latest

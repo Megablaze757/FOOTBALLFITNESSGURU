@@ -50,6 +50,14 @@ export interface SpokenPhrase {
   gapMs: number;
   /** How long the synthesised audio actually is. Measured, never estimated. */
   audioMs: number;
+  /**
+   * How loud to lay this line, in dB relative to as-synthesised.
+   *
+   * From lib/speech-prosody.ts by the phrase's role. A voice that never
+   * changes volume sounds flat however much its pitch moves, and pitch was
+   * already at this model's ceiling.
+   */
+  gainDb?: number;
 }
 
 export interface Placed {

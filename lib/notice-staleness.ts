@@ -37,6 +37,12 @@ export type SubscriptionState =
 export interface Notice {
   id: string;
   kind: string;
+  /**
+   * Optional so a caller that only cares about staleness need not supply it.
+   * Without it, a recurring kind cannot be ordered and sortNotices keeps the
+   * first it meets rather than silently keeping none.
+   */
+  created_at?: string;
 }
 
 /**
@@ -104,11 +110,71 @@ export interface Sorted<T> {
   stale: T[];
 }
 
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * A STANDING NAG IS ONE NOTICE, NOT ONE PER DAY.
+ *
+ * Found by watching a recorded reel: the demo account's home screen showed
+ * FIVE identical "Your daily log" cards, reading "Days since your last log:
+ * 20", then 19, 18, 17, 16. Five cards, one message, filling the screen — and
+ * the only reason it was five rather than twenty is that the query asks for
+ * five.
+ *
+ * The Worker is not wrong to write them. It dedupes on `check-in:<today>`, so
+ * one row per day is exactly what it means to do, and the row is a record of a
+ * reminder that really was sent. The mistake is displaying every one of them:
+ * these kinds all say the same standing thing ("you have not logged"), so the
+ * newest is the only one carrying information and the rest are noise.
+ *
+ * NOT every kind. "Your coach assigned a program" twice is two programs, and
+ * collapsing those hides work somebody is expected to do. Only the ones below,
+ * which restate a condition rather than report an event.
+ *
+ * Superseded ones are returned as `stale` rather than merely dropped, because
+ * this file already learned that lesson: a row that is hidden and not cleared
+ * is re-decided by every device forever and the backlog never drains.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export const RECURRING_KINDS = [
+  "check_in_reminder",
+  "workout_reminder",
+  "weekly_summary",
+  "program_deadline",
+  "trial_ending",
+];
+
 export function sortNotices<T extends Notice>(notices: readonly T[], state: SubscriptionState): Sorted<T> {
   const show: T[] = [];
   const stale: T[] = [];
+  /**
+   * Newest first is what the caller orders by, so the FIRST of a recurring
+   * kind is the one to keep. Ordering this on the caller would be a rule
+   * nobody can see from here, so it does not depend on it: the newest is
+   * chosen by created_at below rather than by arrival.
+   */
+  const newest = new Map<string, string>();
   for (const notice of notices) {
-    (staleReason(notice, state) === null ? show : stale).push(notice);
+    if (!RECURRING_KINDS.includes(notice.kind)) continue;
+    const at = notice.created_at ?? "";
+    if (at >= (newest.get(notice.kind) ?? "")) newest.set(notice.kind, at);
+  }
+
+  const kept = new Set<string>();
+  for (const notice of notices) {
+    if (staleReason(notice, state) !== null) {
+      stale.push(notice);
+      continue;
+    }
+    if (RECURRING_KINDS.includes(notice.kind)) {
+      // Ties on created_at keep exactly one: whichever is met first.
+      const isNewest = (notice.created_at ?? "") === newest.get(notice.kind);
+      if (!isNewest || kept.has(notice.kind)) {
+        stale.push(notice);
+        continue;
+      }
+      kept.add(notice.kind);
+    }
+    show.push(notice);
   }
   return { show, stale };
 }

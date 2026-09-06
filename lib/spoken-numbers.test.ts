@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { spokenForm, words } from "./spoken-numbers";
+import { BASE_SPEED, RATE } from "./speech-prosody";
 
 test("numbers become words", () => {
   const cases: [number, string][] = [
@@ -83,16 +84,21 @@ test("the recorder never asks the voice to hurry", () => {
    * one for the reel — so this checks the BASE the roles multiply, and that
    * no role is allowed to push past natural pace.
    */
-  const src = readFileSync("lib/speech-prosody.ts", "utf8");
-  const base = Number(src.match(/BASE_SPEED = ([0-9.]+)/)?.[1]);
-  assert.ok(base <= 1.0, `the base rate is ${base}x — faster than natural`);
-  assert.ok(base >= 0.8, `${base}x is slow enough to sound wrong`);
+  /**
+   * IMPORTED, NOT SCRAPED. This read the file and pulled every
+   * `  <role>: <number>,` out of it, which is a guard that matches whatever
+   * happens to be written in that shape — and the moment a second table of
+   * roles appeared (GAIN, the per-role loudness) it started scraping that one
+   * too and counting `payoff: 0` as a speech rate. The values are exported;
+   * reading the export cannot pick up the wrong table.
+   */
+  assert.ok(BASE_SPEED <= 1.0, `the base rate is ${BASE_SPEED}x — faster than natural`);
+  assert.ok(BASE_SPEED >= 0.8, `${BASE_SPEED}x is slow enough to sound wrong`);
 
-  const rates = [...src.matchAll(/^\s{2}(hook|setup|figure|payoff): ([0-9.]+),/gm)]
-    .map((m) => Number(m[2]));
+  const rates = Object.values(RATE);
   assert.equal(rates.length, 4, "a role lost its rate");
   for (const r of rates) {
-    assert.ok(base * r <= 1.0, `a role reaches ${(base * r).toFixed(2)}x, which is a rush`);
+    assert.ok(BASE_SPEED * r <= 1.0, `a role reaches ${(BASE_SPEED * r).toFixed(2)}x, which is a rush`);
   }
 
   // The Python fallback must agree, or a run without the env var set gets a
@@ -100,6 +106,6 @@ test("the recorder never asks the voice to hurry", () => {
   const py = readFileSync("scripts/kokoro-say.py", "utf8");
   const pyMatch = py.match(/job\.get\("speed", ([0-9.]+)\)/);
   assert.ok(pyMatch, "kokoro-say.py no longer has a default speed");
-  assert.equal(Number(pyMatch![1]), base,
+  assert.equal(Number(pyMatch![1]), BASE_SPEED,
     "the recorder and its fallback disagree about how fast to read");
 });
