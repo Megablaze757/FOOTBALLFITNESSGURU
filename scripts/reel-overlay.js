@@ -196,18 +196,40 @@
     var found = needle ? findByText(needle) : null;
     if (!found) { spot.style.opacity = "0"; return false; }
 
+    /**
+     * ═══════════════════════════════════════════════════════════════════════
+     * DIVIDED BY THE ZOOM, and this was wrong until it was measured.
+     *
+     * The recorder zooms documentElement so a 1080x1920 viewport still lays
+     * out as a 540px phone. getBoundingClientRect and window.innerHeight both
+     * report VISUAL pixels — the full 1920 — but this overlay lives inside the
+     * zoomed element, so a CSS pixel it sets is multiplied by the zoom on the
+     * way to the screen.
+     *
+     * Setting top to a visual 750 therefore drew the ring at 1500, and
+     * anything below the top of the screen landed off-frame entirely. Measured
+     * on the live page: styleTop 1483px produced a rect at 2966px, in a
+     * viewport 1920 tall.
+     *
+     * A spotlight in the wrong place is worse than none, and nothing would
+     * have caught it except watching the reel.
+     * ═══════════════════════════════════════════════════════════════════════
+     */
+    var zoom = parseFloat(window.getComputedStyle(document.documentElement).zoom) || 1;
     var pad = 12;
     var b = found.box;
-    var top = Math.max(0, b.top - pad);
-    var left = Math.max(0, b.left - pad);
-    var right = Math.min(window.innerWidth, b.right + pad);
-    var bottom = Math.min(window.innerHeight, b.bottom + pad);
+    var top = Math.max(0, b.top - pad) / zoom;
+    var left = Math.max(0, b.left - pad) / zoom;
+    var right = Math.min(window.innerWidth, b.right + pad) / zoom;
+    var bottom = Math.min(window.innerHeight, b.bottom + pad) / zoom;
 
     var panels = spot.querySelectorAll("[data-side]");
     var put = function (el, css) { el.style.cssText += ";" + css; };
     for (var i = 0; i < panels.length; i++) {
       var side = panels[i].getAttribute("data-side");
       if (side === "t") put(panels[i], "left:0;top:0;width:100%;height:" + top + "px;");
+      // 100%, bottom:0 and right:0 are relative to the zoomed box and need no
+      // conversion; only the measured numbers above do.
       if (side === "b") put(panels[i], "left:0;top:" + bottom + "px;width:100%;bottom:0;height:auto;");
       if (side === "l") put(panels[i], "left:0;top:" + top + "px;width:" + left + "px;height:" + (bottom - top) + "px;");
       if (side === "r") put(panels[i], "left:" + right + "px;top:" + top + "px;right:0;width:auto;height:" + (bottom - top) + "px;");
