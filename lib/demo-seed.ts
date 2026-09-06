@@ -74,7 +74,9 @@ export interface BodyLog { log_date: string; weight_kg: number; }
 export interface NutritionLog {
   log_date: string;
   daily_calorie_target: number;
+  /** What was EATEN, not the target. The column names below say so. */
   macros: { protein: number; carbs: number; fats: number };
+  calories_eaten: number;
   daily_water_intake_ml: number;
 }
 
@@ -134,18 +136,41 @@ export function bodyLogs(today: Date): BodyLog[] {
  * demo that does is the one detail that gives it away.
  */
 export function nutritionLogs(today: Date, days = 7): NutritionLog[] {
+  const TARGET = 3100;
   return Array.from({ length: days }, (_, i) => {
     const ago = days - 1 - i;
+
+    /**
+     * TODAY IS A PARTIAL DAY, and the days before it are whole ones.
+     *
+     * The first version logged a complete day's food for today as well, so a
+     * reel filmed at lunchtime showed somebody who had already eaten three
+     * thousand calories. A day in progress is both more honest and a better
+     * shot: the ring is part-filled, which is what the ring is for.
+     */
+    const share = ago === 0 ? 0.58 : 1;
     const swing = [0, -120, 80, -60, 140, -40, 20][i % 7];
+
+    const macros = {
+      protein: Math.round((175 + (i % 3) * 5) * share),
+      carbs: Math.round((355 + swing / 4) * share),
+      fats: Math.round((92 + (i % 2) * 4) * share),
+    };
+
     return {
       log_date: iso(back(today, ago)),
-      daily_calorie_target: 3100,
-      macros: {
-        protein: 175 + (i % 3) * 5,
-        carbs: 355 + swing / 4,
-        fats: 92 + (i % 2) * 4,
-      },
-      daily_water_intake_ml: 2600 + (i % 4) * 200,
+      daily_calorie_target: TARGET,
+      macros,
+      /**
+       * DERIVED FROM THE MACROS, not chosen separately.
+       *
+       * These are two columns the app shows side by side, and the first seed
+       * set the macros and left calories_eaten null — so the card read "0 kcal"
+       * next to "175g protein" on the same day. Anybody who tracks food would
+       * spot that in the first second of the shot.
+       */
+      calories_eaten: Math.round(macros.protein * 4 + macros.carbs * 4 + macros.fats * 9),
+      daily_water_intake_ml: Math.round((2600 + (i % 4) * 200) * (ago === 0 ? 0.85 : 1)),
     };
   });
 }

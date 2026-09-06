@@ -79,3 +79,32 @@ test("the recorder starts moving under the hook", () => {
   assert.match(hookBlock, /scrollTo/,
     "the hook holds a still frame for its whole duration again");
 });
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE APP IS DARK. THE REEL SHOULD BE TOO.
+ *
+ * Every reel so far filmed a light app, and that was never a choice anybody
+ * made. app/globals.css says it plainly — "Dark is the default because it
+ * always was" — and light is opt-in through `prefers-color-scheme: light`.
+ * Playwright's default colorScheme is `light`, so Chromium reported a
+ * preference nobody has and the recorder filmed a version of the product most
+ * athletes never see.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("the recorder films the app in the theme it actually ships", () => {
+  const src = readFileSync("scripts/record-reel.mts", "utf8");
+  const contexts = src.split("browser.newContext(").slice(1);
+  assert.equal(contexts.length, 2, "the number of browser contexts changed — check both are dark");
+  for (const [i, ctx] of contexts.entries()) {
+    const options = ctx.slice(0, ctx.indexOf("});"));
+    assert.match(options, /colorScheme: "dark"/,
+      `context ${i + 1} films in Playwright's default light, which is a preference nobody set`);
+  }
+
+  // And the default really is dark, or this whole argument is backwards.
+  const css = readFileSync("app/globals.css", "utf8");
+  const root = css.slice(css.indexOf(":root {"), css.indexOf("}", css.indexOf(":root {")));
+  assert.match(root, /color-scheme: dark/,
+    "the app's default theme is no longer dark, so the recorder is now the odd one out");
+});

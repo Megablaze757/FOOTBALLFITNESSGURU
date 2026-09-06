@@ -93,7 +93,9 @@ test("weigh-ins are weekly and go back further than the check-ins", () => {
  * hours a week does not maintain on 1,800 calories or 300g of protein.
  */
 test("the intake is plausible for the athlete it belongs to", () => {
-  for (const log of nutritionLogs(TODAY)) {
+  const logs = nutritionLogs(TODAY);
+  // Today is deliberately part-eaten, so the whole-day checks skip it.
+  for (const log of logs.slice(0, -1)) {
     assert.ok(log.daily_calorie_target >= 2400 && log.daily_calorie_target <= 4200,
       `${log.daily_calorie_target} kcal is not a maintaining 88kg athlete`);
     // Roughly 1.6-2.6 g/kg is the range anybody sane recommends.
@@ -103,12 +105,17 @@ test("the intake is plausible for the athlete it belongs to", () => {
     assert.ok(log.daily_water_intake_ml >= 1500 && log.daily_water_intake_ml <= 5000,
       `${log.daily_water_intake_ml}ml of water`);
 
-    // And the macros have to add up to roughly the target, or the card
-    // contradicts itself on screen.
+    /**
+     * CALORIES EATEN AND MACROS EATEN ARE THE SAME MEAL.
+     *
+     * The app shows them side by side. The first seed set the macros and left
+     * calories_eaten null, so the card read "0 kcal" next to "175g protein" on
+     * the same day — which anybody who tracks food spots instantly.
+     */
     const kcal = log.macros.protein * 4 + log.macros.carbs * 4 + log.macros.fats * 9;
-    const drift = Math.abs(kcal - log.daily_calorie_target) / log.daily_calorie_target;
-    assert.ok(drift <= 0.12,
-      `macros come to ${Math.round(kcal)} kcal against a ${log.daily_calorie_target} target`);
+    assert.ok(Math.abs(kcal - log.calories_eaten) <= 2,
+      `${log.calories_eaten} kcal logged against macros worth ${Math.round(kcal)}`);
+    assert.ok(log.calories_eaten > 0, "a day with macros and no calories");
   }
 });
 
@@ -142,4 +149,28 @@ test("the profile is complete enough to unlock targets", () => {
   assert.ok(["sedentary", "moderate", "high", "athlete"].includes(DEMO_PROFILE.activity_level));
   const age = 2026 - DEMO_PROFILE.birth_year;
   assert.ok(age >= 18 && age <= 45, `a ${age}-year-old is not the demo we want`);
+});
+
+/**
+ * A day in progress, not a day already finished.
+ *
+ * The first seed logged a full day's food for today as well, so a reel filmed
+ * at lunchtime showed somebody who had already eaten three thousand calories.
+ * A part-filled ring is both honest and the better shot — it is what the ring
+ * is for.
+ */
+test("today is a day in progress", () => {
+  const logs = nutritionLogs(TODAY);
+  const today = logs[logs.length - 1];
+  const yesterday = logs[logs.length - 2];
+  assert.equal(today.log_date, "2026-09-06");
+  assert.ok(today.calories_eaten < today.daily_calorie_target * 0.8,
+    `${today.calories_eaten} of ${today.daily_calorie_target} is a finished day`);
+  assert.ok(today.calories_eaten > today.daily_calorie_target * 0.3,
+    `${today.calories_eaten} is barely anything — the shot would look empty`);
+  assert.ok(yesterday.calories_eaten > today.calories_eaten,
+    "yesterday is not a complete day");
+  // Consistency still holds on the partial day.
+  const kcal = today.macros.protein * 4 + today.macros.carbs * 4 + today.macros.fats * 9;
+  assert.ok(Math.abs(kcal - today.calories_eaten) <= 2);
 });
