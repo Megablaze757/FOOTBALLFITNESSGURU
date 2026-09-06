@@ -385,15 +385,6 @@ for (const step of plan.steps) {
     });
   }
 
-  if (!hookShown) {
-    hookShown = true;
-    await page.evaluate((t) => (window as never as { __reelHook: (s: string) => void }).__reelHook(t), plan.hook);
-    // Held from the first frame, because the decision is made in three seconds
-    // and the hook has to be readable inside them.
-    await sleep(Math.max(0, plan.hookMs - elapsed()));
-    await page.evaluate(() => (window as never as { __reelHook: (s: string) => void }).__reelHook(""));
-  }
-
   /**
    * A slow drift down the page rather than a static shot.
    *
@@ -405,6 +396,25 @@ for (const step of plan.steps) {
     scrollable: Math.max(0, document.documentElement.scrollHeight - window.innerHeight),
     viewport: window.innerHeight,
   })).catch(() => ({ scrollable: 0, viewport: 0 }));
+
+  if (!hookShown) {
+    hookShown = true;
+    await page.evaluate((t) => (window as never as { __reelHook: (s: string) => void }).__reelHook(t), plan.hook);
+    /**
+     * MOVING FROM THE FIRST FRAME.
+     *
+     * The hook used to hold a still image for 1.6 seconds. A frame that does
+     * not move is a frame a scroller has already finished reading, and the
+     * only thing left to do with it is swipe. The drift starts under the hook
+     * now, so the first second of the reel is the app doing something.
+     */
+    await page.evaluate((y) => window.scrollTo({ top: y, behavior: "smooth" }), Math.round(page_.viewport * 0.28)).catch(() => {});
+    driftFrom = Math.round(page_.viewport * 0.28);
+    // Held from the first frame, because the decision is made in three seconds
+    // and the hook has to be readable inside them.
+    await sleep(Math.max(0, plan.hookMs - elapsed()));
+    await page.evaluate(() => (window as never as { __reelHook: (s: string) => void }).__reelHook(""));
+  }
 
   /**
    * MEASURED AGAINST THE SCREEN, and carried over between beats on one route.
