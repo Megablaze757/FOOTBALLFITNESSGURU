@@ -58,7 +58,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # Node 22, not 20: the test script passes a glob to `node --test`, and
       # expanding globs there only arrived in Node 22. On 20 it looks for a file
       # literally called "lib/**/*.test.ts" and exits 1 without running anything
@@ -157,7 +157,7 @@ jobs:
     # would, and that is most of the runs.
     if: github.event_name != 'push' || inputs.e2e
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: 22
