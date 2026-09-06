@@ -25,9 +25,10 @@ import { tmpdir } from "node:os";
 import { spawn } from "node:child_process";
 import { join } from "node:path";
 import { reelScript, type ScriptId } from "../lib/reel-script";
-import { reelPlan, srt, REEL_W, REEL_H, REEL_SCALE } from "../lib/reel-plan";
+import { reelPlan, srt, endCardAt, REEL_W, REEL_H, REEL_SCALE } from "../lib/reel-plan";
 import { retentionProblems } from "../lib/reel-retention";
 import { driftTarget } from "../lib/reel-scroll";
+import { SIGNUP_CTA } from "../lib/signup-link";
 import { emphasise } from "../lib/caption-emphasis";
 import { phrases } from "../lib/speech-timing";
 import { spokenForm } from "../lib/spoken-numbers";
@@ -534,7 +535,34 @@ for (const step of plan.steps) {
     }
     if (i === step.captions.length - 1) driftFrom = to;
   }
-  await sleep(Math.max(0, step.at + step.ms - elapsed()));
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * THE END CARD, IN THE SILENCE THAT WAS ALREADY THERE.
+   *
+   * The recorded reel ended on the app with nothing written on it — the last
+   * caption cleared and 1.8 seconds of tail played out blank. That is the
+   * frame somebody is looking at when they decide whether to do anything,
+   * and it was the only part of the reel asking them for nothing.
+   *
+   * It reuses the hook pill rather than inventing a second overlay: that one
+   * is already drawn opaque with a border and measured at 10.3:1 against the
+   * app behind it, and a second thing to keep legible is a second thing to
+   * get wrong. See lib/reel-plan.ts for why it can never cover a caption.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  const last = step.index === plan.steps.length - 1;
+  if (!last) {
+    await sleep(Math.max(0, step.at + step.ms - elapsed()));
+  } else {
+    await sleep(Math.max(0, endCardAt(step.at + step.ms, step.captions) - elapsed()));
+    await page.evaluate(() => (window as never as { __reelCaption: (s: string) => void }).__reelCaption("")).catch(() => {});
+    await page.evaluate(() => (window as never as { __reelFocus: (s: string) => boolean }).__reelFocus("")).catch(() => {});
+    await page.evaluate(
+      (t) => (window as never as { __reelHook: (s: string) => void }).__reelHook(t),
+      SIGNUP_CTA,
+    ).catch(() => {});
+    await sleep(Math.max(0, step.at + step.ms - elapsed()));
+  }
   await page.evaluate(() => (window as never as { __reelCaption: (s: string) => void }).__reelCaption("")).catch(() => {});
 }
 

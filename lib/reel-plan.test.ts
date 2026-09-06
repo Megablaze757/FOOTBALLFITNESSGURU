@@ -1,9 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   HOOK_MS, REEL_H, REEL_RATIO, REEL_SCALE, REEL_W,
-  captionsFor, reelPlan, srt, srtTime, type PlannableScript,
-} from "./reel-plan";
+  captionsFor, reelPlan, srt, srtTime, type PlannableScript, endCardAt, END_CARD_MS, } from "./reel-plan";
 
 const script: PlannableScript = {
   id: "demo",
@@ -97,4 +97,55 @@ test("the caption file is numbered from one and separated by blank lines", () =>
 test("a reel with nothing to say still produces a valid, empty caption file", () => {
   const silent = { ...script, beats: script.beats.map((b) => ({ ...b, say: "" })) };
   assert.equal(srt(reelPlan(silent)).trim(), "");
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// THE END CARD.
+//
+// The recorded reel ended on the app with nothing written on it. These fix
+// where the card goes, and the one rule that matters: it never covers a line
+// somebody is still reading.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const cap = (at: number, ms: number) => ({ at, ms, text: "x" });
+
+test("the end card takes the tail, and only the tail", () => {
+  assert.equal(endCardAt(25_700, [cap(21_000, 2_000)]), 25_700 - END_CARD_MS);
+});
+
+/**
+ * The one that matters. A beat with barely any tail must give the card less
+ * time, not draw it over the caption.
+ */
+test("a short tail shortens the card rather than covering the caption", () => {
+  const captions = [cap(0, 1_000), cap(1_000, 4_500)];
+  const at = endCardAt(5_000, captions);
+  assert.equal(at, 5_500, "the card was drawn while the last caption was still up");
+  assert.ok(at >= 1_000 + 4_500, "the card overlaps a caption");
+});
+
+test("the last caption is the latest one, not the last in the array", () => {
+  // captionsFor emits them in order, but nothing here should depend on that.
+  assert.equal(endCardAt(9_000, [cap(6_000, 2_500), cap(0, 1_000)]), 8_500);
+});
+
+test("no captions still puts the card in the tail rather than at zero", () => {
+  assert.equal(endCardAt(4_000, []), 4_000 - END_CARD_MS);
+  assert.equal(endCardAt(1_000, []), 0, "a beat shorter than the card starts it at the beginning, not before it");
+});
+
+test("the card is long enough to read and short enough not to be the reel", () => {
+  assert.ok(END_CARD_MS >= 1_200, `${END_CARD_MS}ms is not long enough to read a call to action`);
+  assert.ok(END_CARD_MS <= 3_000, `${END_CARD_MS}ms of end card is a slide, not a tail`);
+});
+
+/** The card has to actually be drawn, and with the words the site uses. */
+test("the recorder draws the card, and draws the site's own call to action", () => {
+  const src = readFileSync("scripts/record-reel.mts", "utf8");
+  assert.match(src, /endCardAt\(step\.at \+ step\.ms, step\.captions\)/,
+    "the end card is timed by something other than endCardAt");
+  assert.match(src, /__reelHook\(t\).*\n.*SIGNUP_CTA|SIGNUP_CTA,/,
+    "the end card does not use the site's own call to action");
+  assert.match(src, /step\.index === plan\.steps\.length - 1/,
+    "the end card is not restricted to the last beat");
 });

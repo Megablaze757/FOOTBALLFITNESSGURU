@@ -186,3 +186,117 @@ test("the Worker clears trial notices when the trial stops running", () => {
     "the clear is not on the path every subscription status change takes",
   );
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FIVE CARDS SAYING THE SAME THING.
+//
+// A recorded reel showed the demo account's home screen carrying five
+// identical "Your daily log" cards — 20 days since your last log, then 19,
+// 18, 17, 16. The Worker writes one a day on purpose and each row is a real
+// record; showing all of them is what was wrong.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const PAYING: SubscriptionState = { loaded: true, stripeStatus: "active" };
+
+const nag = (id: string, created_at: string, kind = "check_in_reminder") => ({ id, kind, created_at });
+
+test("a standing reminder is shown once, however many times it was sent", () => {
+  const { show, stale } = sortNotices(
+    [nag("e", "2026-09-05"), nag("d", "2026-09-04"), nag("c", "2026-09-03"),
+     nag("b", "2026-09-02"), nag("a", "2026-09-01")],
+    PAYING,
+  );
+  assert.deepEqual(show.map((n) => n.id), ["e"], "the home screen still shows a wall of the same card");
+  assert.deepEqual(stale.map((n) => n.id).sort(), ["a", "b", "c", "d"],
+    "the superseded ones are hidden without being cleared, so every device re-decides them forever");
+});
+
+/** Order is the caller's business, and this must not depend on getting it. */
+test("the newest is kept whatever order they arrive in", () => {
+  const oldestFirst = sortNotices(
+    [nag("a", "2026-09-01"), nag("b", "2026-09-02"), nag("c", "2026-09-03")], PAYING);
+  assert.deepEqual(oldestFirst.show.map((n) => n.id), ["c"]);
+
+  const shuffled = sortNotices(
+    [nag("b", "2026-09-02"), nag("c", "2026-09-03"), nag("a", "2026-09-01")], PAYING);
+  assert.deepEqual(shuffled.show.map((n) => n.id), ["c"]);
+});
+
+test("identical timestamps keep exactly one, not two and not none", () => {
+  const { show, stale } = sortNotices([nag("a", "2026-09-01"), nag("b", "2026-09-01")], PAYING);
+  assert.equal(show.length, 1, `${show.length} shown for a tie`);
+  assert.equal(stale.length, 1);
+});
+
+test("each recurring kind keeps its own newest, not one between them all", () => {
+  const { show } = sortNotices([
+    nag("check-new", "2026-09-05"), nag("check-old", "2026-09-01"),
+    nag("work-new", "2026-09-04", "workout_reminder"),
+    nag("work-old", "2026-09-02", "workout_reminder"),
+  ], PAYING);
+  assert.deepEqual(show.map((n) => n.id).sort(), ["check-new", "work-new"]);
+});
+
+/**
+ * The one that must NOT collapse. Two assigned programmes are two pieces of
+ * work, and hiding one hides something an athlete is expected to do.
+ */
+test("distinct events are never collapsed into one another", () => {
+  const { show, stale } = sortNotices([
+    { id: "p1", kind: "program_assigned", created_at: "2026-09-05" },
+    { id: "p2", kind: "program_assigned", created_at: "2026-09-04" },
+    { id: "c1", kind: "coach_request", created_at: "2026-09-03" },
+    { id: "c2", kind: "coach_request", created_at: "2026-09-02" },
+  ], PAYING);
+  assert.deepEqual(show.map((n) => n.id), ["p1", "p2", "c1", "c2"]);
+  assert.deepEqual(stale, []);
+});
+
+/** Collapsing must not resurrect a notice staleness already refused. */
+test("a stale notice stays stale even when it is the newest of its kind", () => {
+  const { show, stale } = sortNotices([
+    { id: "t1", kind: "trial_ending", created_at: "2026-09-05" },
+    { id: "t2", kind: "trial_ending", created_at: "2026-09-01" },
+  ], PAYING);
+  assert.deepEqual(show, [], "a trial-ending notice is showing to somebody who is already paying");
+  assert.deepEqual(stale.map((n) => n.id).sort(), ["t1", "t2"]);
+});
+
+test("a notice with no timestamp is still shown rather than dropped", () => {
+  const { show } = sortNotices([{ id: "x", kind: "check_in_reminder" }], PAYING);
+  assert.deepEqual(show.map((n) => n.id), ["x"]);
+});
+
+/**
+ * The gap the first version of these tests had. "trial_ending" was tested
+ * only against a PAYING account, where staleness refuses both notices before
+ * collapsing is ever reached — so taking it out of RECURRING_KINDS changed
+ * nothing and no test noticed. A running trial is the state where the rule
+ * has to do the work.
+ */
+test("a repeated trial reminder collapses while the trial is still running", () => {
+  const running: SubscriptionState = { loaded: true, stripeStatus: TRIALING };
+  const { show, stale } = sortNotices([
+    { id: "new", kind: "trial_ending", created_at: "2026-09-05" },
+    { id: "old", kind: "trial_ending", created_at: "2026-09-02" },
+  ], running);
+  assert.deepEqual(show.map((n) => n.id), ["new"],
+    "two live trial-ending notices are both on the home screen");
+  assert.deepEqual(stale.map((n) => n.id), ["old"]);
+});
+
+/**
+ * The collapse is decided from created_at, so a component that stops asking
+ * for it would silently go back to a wall of identical cards — sortNotices
+ * would keep the first it met and every test here would still pass, because
+ * they all supply the field.
+ *
+ * Comments are stripped before matching, so a mention in prose cannot satisfy
+ * this the way one nearly did elsewhere in this repo.
+ */
+test("the home screen still fetches what the collapse is decided from", () => {
+  const src = code("components/Notifications.tsx");
+  assert.match(src, /\.select\([^)]*created_at/, "Notifications no longer selects created_at");
+  assert.match(src, /created_at:\s*string/, "the row type dropped created_at");
+  assert.match(src, /sortNotices\(/, "the home screen no longer runs notices through sortNotices");
+});

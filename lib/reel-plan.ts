@@ -58,6 +58,33 @@ export interface Caption {
   text: string;
 }
 
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE LAST FRAME OF A REEL WAS A SCREENSHOT OF NOTHING.
+ *
+ * Found by pulling the recorded MP4 and looking at it: the reel ends, the
+ * caption clears, and the final ~1.8 seconds are the app sitting there with
+ * no text on it at all. That is the frame a viewer is looking at when they
+ * decide whether to do anything, and it was the only part of the reel asking
+ * them for nothing.
+ *
+ * The trailing time already exists — it is the tail after the last line, and
+ * it was silent and empty. This fills it. It does not lengthen the reel.
+ *
+ * NEVER OVER A CAPTION. The card is placed at the later of "the last caption
+ * has finished" and "END_CARD_MS before the end", so a beat too short to fit
+ * the whole card gets a shorter card rather than one drawn over the line
+ * somebody is still reading.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export const END_CARD_MS = 1_800;
+
+export function endCardAt(beatEndMs: number, captions: readonly Caption[]): number {
+  const lastCaption = captions.reduce((end, c) => Math.max(end, c.at + c.ms), 0);
+  return Math.max(lastCaption, beatEndMs - END_CARD_MS);
+}
+
 export interface PlanStep {
   index: number;
   at: number;
