@@ -255,9 +255,18 @@ function costScript(): ReelScript {
       route: "/nutrition",
       action: "Show a meal plan with its weekly cost.",
       focus: "kcal left",
-      // "Before you go." stays its own sentence: it is the payoff, and
-      // lib/speech-timing.ts puts the suspense gap before exactly that shape.
-      say: "Build a week and it prices the whole shop. Before you go.",
+      /**
+       * "Before you go" was a fragment that landed as "before you leave".
+       *
+       * It was reaching for "before you go shopping" and arrived as a goodbye,
+       * which is the wrong note to end a reel on — and worse, it was the
+       * PAYOFF, the slowest and now the loudest line in the whole thing.
+       *
+       * The payoff shape is kept: a short punchy sentence after a longer one,
+       * which is what lib/speech-timing.ts puts the suspense gap in front of.
+       * It just says something now.
+       */
+      say: "Build a week of meals and it prices the whole shop. Before you spend a penny.",
     },
     { route: "/", action: "Front page. Hold two seconds.", say: "" },
   ]);

@@ -1,7 +1,18 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { BASE_SPEED, RATE, VOICE, roleOf, shapeRates, speedFor } from "./speech-prosody";
+import {
+  BASE_SPEED,
+  GAIN,
+  GAIN_RANGE_DB,
+  RATE,
+  VOICE,
+  gainFor,
+  roleOf,
+  shapeGains,
+  shapeRates,
+  speedFor,
+} from "./speech-prosody";
 
 /**
  * The measurement that chose this voice is checked in as
@@ -115,4 +126,74 @@ test("nothing in, nothing out", () => {
 test("the base rate is under natural pace, not over it", () => {
   assert.ok(BASE_SPEED <= 1.0, `${BASE_SPEED}x is faster than natural`);
   assert.ok(BASE_SPEED >= 0.85, `${BASE_SPEED}x is slow enough to sound wrong`);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LOUDNESS.
+//
+// Measured across all 21 phrases of all four reels, Kokoro speaks every phrase
+// at the same level: 0.30 dB of standard deviation, 1.01 dB from the quietest
+// to the loudest. These are the numbers that put the contrast back.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * The one that matters. The voice already peaks at 1.02 of full scale, so a
+ * positive gain has nowhere to go: it wraps into the clamp in lib/wav.ts and
+ * pegs samples at full scale. Every boosted variant was measured doing exactly
+ * that, which is why the shape is cut downward from a ceiling of zero and the
+ * level is restored on the assembled track instead.
+ */
+test("no line is laid louder than it was spoken", () => {
+  for (const [role, db] of Object.entries(GAIN)) {
+    assert.ok(db <= 0, `${role} is boosted by ${db}dB, and there is no headroom to boost into`);
+  }
+  assert.equal(Math.max(...Object.values(GAIN)), 0, "nothing is at the ceiling, so the whole reel is quiet for no reason");
+});
+
+test("the payoff is the loudest thing in the reel and the setup the quietest", () => {
+  const levels = Object.values(GAIN);
+  assert.equal(gainFor("payoff"), Math.max(...levels));
+  assert.equal(gainFor("setup"), Math.min(...levels));
+  assert.ok(gainFor("figure") > gainFor("setup"), "a number is said at the same volume as the words around it");
+  assert.ok(gainFor("hook") > gainFor("setup"), "the hook does not stand out from the line after it");
+});
+
+test("the spread is wide enough to hear and narrow enough to follow", () => {
+  const levels = Object.values(GAIN);
+  const spread = Math.max(...levels) - Math.min(...levels);
+  assert.equal(spread, GAIN_RANGE_DB, "the documented range and the table disagree");
+  // Read speech is 4-6 dB of phrase-to-phrase variation, animated 8-12. Under
+  // 4 is the flatness this was written to fix; over 12 buries the setup.
+  assert.ok(spread >= 4, `${spread}dB is inside the variation the voice already had`);
+  assert.ok(spread <= 12, `${spread}dB leaves the quiet lines inaudible on a phone`);
+});
+
+test("shaping a whole reel gives every phrase a loudness and varies them", () => {
+  const phrases = [
+    "Same protein. Ten times the price.",
+    "Red lentils: thirty-one pence.",
+    "Every recipe is costed the same way.",
+    "Before you spend a penny.",
+  ];
+  const gains = shapeGains(phrases);
+  assert.equal(gains.length, phrases.length);
+  assert.ok(new Set(gains).size >= 3, `only ${new Set(gains).size} distinct levels across a whole reel`);
+  assert.equal(gains[0], gainFor("hook"));
+  assert.equal(gains[gains.length - 1], gainFor("payoff"));
+  assert.deepEqual(shapeGains([]), []);
+});
+
+/**
+ * Rates are shaped from the spoken phrases; so must these be. Shaping the
+ * written script would hand the wrong loudness to every line after the first
+ * number, because spokenForm splits "£3.19" into words and changes the count.
+ */
+test("the recorder shapes the loudness of the spoken phrases too", () => {
+  const src = readFileSync("scripts/record-reel.mts", "utf8");
+  assert.match(src, /shapeGains\(flat\.map\(\(p\) => p\.text\)/,
+    "the loudness is computed from something other than the phrases actually spoken");
+  assert.match(src, /gainDb: clip\.phrase\.gainDb/,
+    "the shaped loudness never reaches the track");
+  assert.match(src, /normalised\(first\.format, track\)/,
+    "the track is only ever cut, so the reel ships quieter than the last one");
 });

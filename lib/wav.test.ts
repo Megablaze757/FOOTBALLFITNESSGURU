@@ -1,6 +1,17 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { blockAlign, durationMs, layTrack, offsetOf, readWav, writeWav, type WavFormat } from "./wav";
+import {
+  TARGET_PEAK_DBFS,
+  blockAlign,
+  durationMs,
+  layTrack,
+  normalised,
+  offsetOf,
+  peakOf,
+  readWav,
+  writeWav,
+  type WavFormat,
+} from "./wav";
 
 /** What Piper writes. */
 const PIPER: WavFormat = { sampleRate: 22_050, channels: 1, bitsPerSample: 16 };
@@ -147,4 +158,113 @@ test("a degenerate format never divides by zero", () => {
   assert.equal(blockAlign(broken), 1);
   assert.equal(durationMs(broken, 1_000), 0);
   assert.doesNotThrow(() => layTrack(broken, [], 1_000));
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LOUDNESS: CUTTING A LINE, AND BRINGING THE FINISHED TRACK BACK TO LEVEL.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** A 16-bit mono clip of `samples`, each at the given amplitude. */
+function pcm16(values: readonly number[]): Uint8Array {
+  const out = new Uint8Array(values.length * 2);
+  const view = new DataView(out.buffer);
+  values.forEach((v, i) => view.setInt16(i * 2, v, true));
+  return out;
+}
+
+const samplesOf = (bytes: Uint8Array): number[] => {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  return Array.from({ length: bytes.length / 2 }, (_, i) => view.getInt16(i * 2, true));
+};
+
+test("a line laid quieter is quieter, by the decibels asked for", () => {
+  // -6dB is half the amplitude, which is the one decibel figure worth knowing.
+  const track = layTrack(PIPER, [{ atMs: 0, data: pcm16([10_000, -10_000]), gainDb: -6 }], 100);
+  const [a, b] = samplesOf(track.subarray(0, 4));
+  assert.ok(Math.abs(a - 5_012) <= 2, `${a} is not 10000 cut by 6dB`);
+  assert.ok(Math.abs(b + 5_012) <= 2, `${b} is not -10000 cut by 6dB`);
+});
+
+test("a line with no gain asked for is laid byte for byte", () => {
+  const data = pcm16([1, -2, 32_767, -32_768]);
+  const track = layTrack(PIPER, [{ atMs: 0, data }], 100);
+  assert.deepEqual(samplesOf(track.subarray(0, data.length)), [1, -2, 32_767, -32_768]);
+});
+
+/**
+ * Boosting is refused by lib/speech-prosody.ts rather than here, because a
+ * gain of the wrong sign should be caught where it is written down. If one
+ * ever gets this far it must saturate, not wrap: a sample that wraps goes from
+ * loudest-positive to loudest-negative in one step, which is a crack.
+ */
+test("a boost that will not fit saturates instead of wrapping", () => {
+  const track = layTrack(PIPER, [{ atMs: 0, data: pcm16([30_000, -30_000]), gainDb: 12 }], 100);
+  assert.deepEqual(samplesOf(track.subarray(0, 4)), [32_767, -32_768]);
+});
+
+test("the peak is read as a fraction of full scale", () => {
+  assert.equal(peakOf(PIPER, pcm16([0, 16_384, -8_000])), 0.5);
+  assert.equal(peakOf(PIPER, pcm16([0, 0, 0])), 0);
+  assert.equal(peakOf(PIPER, new Uint8Array(0)), 0);
+  // The negative end of the range is the longer one, and full scale is 32768.
+  assert.equal(peakOf(PIPER, pcm16([-32_768])), 1);
+});
+
+/** Reading 24-bit bytes as 16-bit pairs returns a number computed from nonsense. */
+test("a depth this cannot read reports no peak rather than a plausible one", () => {
+  const wide: WavFormat = { sampleRate: 22_050, channels: 1, bitsPerSample: 24 };
+  assert.equal(peakOf(wide, pcm16([16_384, -20_000])), 0);
+  const data = pcm16([16_384, -20_000]);
+  assert.deepEqual(normalised(wide, data), data, "24-bit audio was rescaled by 16-bit arithmetic");
+});
+
+test("normalising puts the loudest sample on the target and nothing above it", () => {
+  const target = 10 ** (TARGET_PEAK_DBFS / 20);
+  for (const quiet of [8_000, 16_384, 30_000, 100]) {
+    const out = normalised(PIPER, pcm16([quiet, -Math.round(quiet / 2), 0]));
+    const peak = peakOf(PIPER, out);
+    assert.ok(Math.abs(peak - target) < 0.001, `peak ${peak.toFixed(4)} is not ${target.toFixed(4)}`);
+    assert.ok(peak < 1, "normalised to full scale, which the AAC encoder will overshoot");
+  }
+});
+
+test("normalising keeps the shape, only the level", () => {
+  const out = samplesOf(normalised(PIPER, pcm16([4_000, -2_000, 1_000])));
+  assert.ok(Math.abs(out[0] / out[1] + 2) < 0.01, "the ratio between samples moved");
+  assert.ok(Math.abs(out[0] / out[2] - 4) < 0.01, "the ratio between samples moved");
+});
+
+/**
+ * The target is a CONSTANT below full scale, and this asserts the constant
+ * because no output can. Normalising to 0 dBFS lands on 32767 of 32768 after
+ * the clamp, which every peak assertion here accepts — the reason for the
+ * headroom is what the AAC encoder does to the samples afterwards, and that
+ * happens outside this file.
+ */
+test("the target leaves headroom for the encoder to overshoot into", () => {
+  assert.ok(TARGET_PEAK_DBFS < 0, "normalised to full scale, and AAC overshoots what it is given");
+  assert.ok(TARGET_PEAK_DBFS >= -3, `${TARGET_PEAK_DBFS}dBFS throws away level for headroom nothing needs`);
+});
+
+/** Silence stays silence. The guard for it is documented as unable to matter. */
+test("normalising silence returns silence rather than dividing by nothing", () => {
+  const silence = pcm16([0, 0, 0, 0]);
+  assert.deepEqual(samplesOf(normalised(PIPER, silence)), [0, 0, 0, 0]);
+  assert.deepEqual(samplesOf(normalised(PIPER, new Uint8Array(0))), []);
+});
+
+/** The point of the pass: the same level whatever mix of roles a reel has. */
+test("two reels cut by different amounts come out at the same level", () => {
+  const target = 10 ** (TARGET_PEAK_DBFS / 20);
+  const mostlyQuiet = layTrack(PIPER, [
+    { atMs: 0, data: pcm16([20_000, -20_000]), gainDb: -7 },
+    { atMs: 50, data: pcm16([20_000, -20_000]), gainDb: -7 },
+  ], 200);
+  const mostlyLoud = layTrack(PIPER, [
+    { atMs: 0, data: pcm16([20_000, -20_000]), gainDb: 0 },
+    { atMs: 50, data: pcm16([20_000, -20_000]), gainDb: -1 },
+  ], 200);
+  for (const track of [mostlyQuiet, mostlyLoud]) {
+    assert.ok(Math.abs(peakOf(PIPER, normalised(PIPER, track)) - target) < 0.001);
+  }
 });

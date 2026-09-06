@@ -139,6 +139,19 @@ export interface Clip {
   /** Where this line starts in the finished reel. */
   atMs: number;
   data: Uint8Array;
+  /**
+   * Loudness for this line, in decibels relative to how it was spoken.
+   *
+   * A voice that never changes volume sounds flat however much its pitch
+   * moves. Measured on a finished reel before this existed: 3.93 dB of
+   * variation across the whole thing, where ordinary read speech is 4-6 and
+   * animated delivery is 8-12. Pitch was already at the model's ceiling; this
+   * is the dimension that was missing.
+   *
+   * Which line gets what is decided by its ROLE in lib/speech-prosody.ts —
+   * the payoff leans in, connective material steps back.
+   */
+  gainDb?: number;
 }
 
 /**
@@ -151,6 +164,92 @@ export interface Clip {
  * track: the video is a fixed length, and a narration longer than the picture
  * is a file the platforms reject rather than a slightly long reel.
  */
+/**
+ * A line at a different volume from the one it was spoken at.
+ *
+ * SIXTEEN-BIT ONLY, and it says so rather than guessing: every other depth is
+ * returned untouched. Silently misreading 24-bit samples as 16 would not throw
+ * — it would produce noise, in a file nobody listens to until it is a reel.
+ *
+ * Clamped, because the gains are relative and a line already near full scale
+ * would otherwise wrap from loud to loud-in-the-other-direction, which is the
+ * ugliest sound a sample can make.
+ */
+function gained(format: WavFormat, data: Uint8Array, gainDb: number | undefined): Uint8Array {
+  if (!gainDb || format.bitsPerSample !== 16) return data;
+  const factor = 10 ** (gainDb / 20);
+  const out = new Uint8Array(data.length - (data.length % 2));
+  const src = new DataView(data.buffer, data.byteOffset, out.length);
+  const dst = new DataView(out.buffer);
+  for (let i = 0; i + 1 < out.length; i += 2) {
+    const scaled = Math.round(src.getInt16(i, true) * factor);
+    dst.setInt16(i, Math.max(-32768, Math.min(32767, scaled)), true);
+  }
+  return out;
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * BRINGING THE FINISHED TRACK BACK UP TO LEVEL.
+ *
+ * The loudness shaping in lib/speech-prosody.ts can only cut, because the
+ * voice already peaks at 1.02 of full scale and there is nowhere above that to
+ * go. Cutting alone would ship a reel several decibels quieter than the last
+ * one, and by a different amount each time depending on which lines it happens
+ * to contain.
+ *
+ * So the shape is made by attenuation and the level is set once, here, on the
+ * assembled track. One multiply, chosen so the loudest sample lands on the
+ * target: it cannot clip by construction, and every reel comes out at the same
+ * level whatever its mix of roles.
+ *
+ * A LITTLE UNDER FULL SCALE rather than at it. The mux re-encodes to AAC, and
+ * a lossy encoder overshoots the samples it was given — a track normalised to
+ * exactly 0 dBFS comes back out of the encoder above it.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export const TARGET_PEAK_DBFS = -1;
+
+/** Full scale for a signed 16-bit sample. The negative end is the longer one. */
+const FULL_SCALE = 32768;
+
+/**
+ * The loudest sample in a track, as a fraction of full scale.
+ *
+ * Zero for anything that is not 16-bit, which is the one depth this file knows
+ * how to read a sample out of. Reading 24-bit bytes as 16-bit pairs would
+ * return a plausible-looking number computed from nonsense.
+ */
+export function peakOf(format: WavFormat, data: Uint8Array): number {
+  if (format.bitsPerSample !== 16 || data.length < 2) return 0;
+  const view = new DataView(data.buffer, data.byteOffset, data.length - (data.length % 2));
+  let peak = 0;
+  for (let i = 0; i + 1 < view.byteLength; i += 2) {
+    const magnitude = Math.abs(view.getInt16(i, true));
+    if (magnitude > peak) peak = magnitude;
+  }
+  return peak / FULL_SCALE;
+}
+
+/**
+ * A track scaled so its loudest sample sits at `targetDbFs`.
+ *
+ * The early return on silence CANNOT CHANGE THE RESULT and is here to be read,
+ * not to catch anything: a track whose peak is zero is all zeroes, and the
+ * arithmetic below takes it through a gain of Infinity to a sample of NaN,
+ * which setInt16 coerces back to zero. It arrives at silence either way. The
+ * guard is so nobody has to work that out, and removing it is safe.
+ */
+export function normalised(
+  format: WavFormat,
+  data: Uint8Array,
+  targetDbFs: number = TARGET_PEAK_DBFS,
+): Uint8Array {
+  const peak = peakOf(format, data);
+  if (peak <= 0) return data;
+  return gained(format, data, targetDbFs - 20 * Math.log10(peak));
+}
+
 export function layTrack(format: WavFormat, clips: readonly Clip[], totalMs: number): Uint8Array {
   const align = blockAlign(format);
   const length = offsetOf(format, Math.max(0, totalMs));
@@ -161,7 +260,7 @@ export function layTrack(format: WavFormat, clips: readonly Clip[], totalMs: num
     if (start >= length) continue;
     const room = length - start;
     const slice = clip.data.length > room ? clip.data.subarray(0, room - (room % align)) : clip.data;
-    track.set(slice, start);
+    track.set(gained(format, slice, clip.gainDb), start);
   }
   return track;
 }

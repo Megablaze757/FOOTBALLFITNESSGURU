@@ -31,9 +31,9 @@ import { driftTarget } from "../lib/reel-scroll";
 import { emphasise } from "../lib/caption-emphasis";
 import { phrases } from "../lib/speech-timing";
 import { spokenForm } from "../lib/spoken-numbers";
-import { BASE_SPEED, VOICE, shapeRates } from "../lib/speech-prosody";
+import { BASE_SPEED, VOICE, shapeGains, shapeRates } from "../lib/speech-prosody";
 import { beatAudio, retime, trackClips, type BeatAudio } from "../lib/narration";
-import { layTrack, readWav, writeWav, type Wav } from "../lib/wav";
+import { layTrack, normalised, readWav, writeWav, type Wav } from "../lib/wav";
 import { secretValue } from "../lib/env-value";
 
 const audioFiles: string[] = [];
@@ -129,6 +129,12 @@ async function narrate(beats: readonly { say: string; hold?: number }[]): Promis
    */
   const perBeat = beats.map((b) => phrases(spokenForm(b.say)));
   const flat = perBeat.flat();
+  /**
+   * The loudness each line is laid at. A voice that never changes volume
+   * sounds flat however much its pitch moves, and pitch is already at this
+   * model's ceiling — see lib/speech-prosody.ts.
+   */
+  const gains = shapeGains(flat.map((p) => p.text));
   if (!flat.length) return beats.map(() => beatAudio([]));
 
   const job = {
@@ -177,7 +183,7 @@ async function narrate(beats: readonly { say: string; hold?: number }[]): Promis
       const audio = said[cursor];
       audioFiles.push(audio.path);
       cursor += 1;
-      return { text: phrase.text, gapMs: phrase.gapMs, audioMs: audio.ms };
+      return { text: phrase.text, gapMs: phrase.gapMs, audioMs: audio.ms, gainDb: gains[cursor - 1] };
     });
     // The script's own suspense pause, at the beat boundary where the shot
     // changes to the thing being revealed. See lib/narration.ts.
@@ -576,10 +582,23 @@ if (withVoice) {
 
   const track = layTrack(
     first.format,
-    clips.map((clip, i) => ({ atMs: clip.atMs, data: read[i]?.data ?? new Uint8Array(0) })),
+    clips.map((clip, i) => ({
+      atMs: clip.atMs,
+      data: read[i]?.data ?? new Uint8Array(0),
+      gainDb: clip.phrase.gainDb,
+    })),
     plan.totalMs,
   );
-  writeFileSync(join(outDir, `${script.id}.wav`), writeWav(first.format, track));
+  /**
+   * The per-role loudness above can only CUT — see lib/speech-prosody.ts — so
+   * the assembled track is quieter than the voice as synthesised, by however
+   * much this particular reel leans on its quiet roles. One pass brings it
+   * back to a fixed level, the same one every reel gets.
+   */
+  writeFileSync(
+    join(outDir, `${script.id}.wav`),
+    writeWav(first.format, normalised(first.format, track)),
+  );
   console.log(`  ${outDir}/${script.id}.wav`);
   console.log(
     // "CI runners have one" was the claim here and it is false: ubuntu-latest
