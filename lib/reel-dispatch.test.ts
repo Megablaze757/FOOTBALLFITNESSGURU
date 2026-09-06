@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { REEL_EVENT, REEL_SCRIPTS, dispatchBody, reelRequestProblem } from "./reel-dispatch";
+import { CAROUSEL_EVENT, REEL_EVENT, REEL_SCRIPTS, dispatchBody, reelRequestProblem } from "./reel-dispatch";
 import { SCRIPTS } from "./reel-script";
 
 const code = (src: string) =>
@@ -329,8 +329,25 @@ test("the panel makes a reel and shows the ones that exist", () => {
    * which also says the recording survives. Two places say it and only one of
    * them is read at the moment somebody is deciding whether to wait.
    */
-  assert.match(panel, /setNote\("Recording[^"]*close this/,
+  assert.match(panel, /"Recording[^"]*close this/,
     "the confirmation does not say they can put the phone down");
+  /**
+   * The carousel gets its OWN wait, and a short one. Telling somebody a
+   * forty-second job takes three minutes is the same lie as the other way
+   * round — they go away and come back long after it finished.
+   */
+  assert.match(panel, /"Making the slides[^"]*"/,
+    "the carousel reuses the reel's three-minute message");
+
+  /**
+   * THE BUTTON AND THE LISTING, both. A carousel that can be made and never
+   * appears is worse than one that cannot be made at all — the whole reason
+   * any of this went into the dashboard was not having to go and find it.
+   */
+  assert.match(panel, /make\("", "carousel"\)/,
+    "nothing in the panel starts a carousel");
+  assert.match(panel, /\\\.\(mp4\|png\)/,
+    "the library still lists only video, so a carousel would never show up");
 });
 
 test("the reels bucket is private and admin-read", () => {
@@ -339,4 +356,42 @@ test("the reels bucket is private and admin-read", () => {
   assert.match(sql, /for select to authenticated\s*\n\s*using \(bucket_id = 'reels' and public\.is_admin\(\)\)/,
     "anybody signed in can read the reels");
   assert.match(sql, /file_size_limit/, "an open insert policy with no size cap is somebody's disk quota");
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE CAROUSEL GOES THROUGH THE SAME DOOR.
+ *
+ * One route, one validator, one place where the admin token is checked. A
+ * second endpoint for the still-image post would be a second copy of all of
+ * that, and one of the two copies is always the one that stops being checked.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("a carousel is dispatched to its own workflow", () => {
+  const body = dispatchBody({ script: "", voice: false, kind: "carousel" });
+  assert.equal(body.event_type, CAROUSEL_EVENT);
+  assert.notEqual(body.event_type, REEL_EVENT, "the carousel starts the reel workflow");
+});
+
+test("a request with no kind is still a reel", () => {
+  // Every caller written before the carousel existed omits it, including the
+  // deployed Worker until it is redeployed.
+  assert.equal(dispatchBody({ script: "demo-cost", voice: true }).event_type, REEL_EVENT);
+  assert.equal(reelRequestProblem({ script: "demo-cost", voice: true }), null);
+});
+
+test("a carousel needs no script, and a reel still does", () => {
+  assert.equal(reelRequestProblem({ kind: "carousel", voice: false }), null,
+    "a carousel is refused for not naming one of four reel scripts");
+  assert.equal(reelRequestProblem({ kind: "carousel", voice: false, script: "" }), null);
+
+  assert.ok(reelRequestProblem({ kind: "reel", voice: false }), "a reel was allowed with no script");
+  assert.ok(reelRequestProblem({ voice: false }), "a request with no kind and no script was allowed");
+});
+
+test("an unknown kind is refused rather than treated as a reel", () => {
+  for (const kind of ["video", "story", "", "REEL", "carousel; rm -rf /"]) {
+    assert.ok(reelRequestProblem({ kind: kind as never, voice: false, script: "demo-cost" }),
+      JSON.stringify(kind));
+  }
 });

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { invokeAI } from "@/lib/api";
-import { REEL_SCRIPTS, type ReelRequest } from "@/lib/reel-dispatch";
+import { REEL_SCRIPTS, type ReelKind, type ReelRequest } from "@/lib/reel-dispatch";
 import { SCRIPTS } from "@/lib/reel-script";
 import { saveVideo } from "@/lib/save-video";
 
@@ -40,6 +40,9 @@ interface Reel {
 
 const LABEL: Record<string, string> = Object.fromEntries(SCRIPTS.map((s) => [s.id, s.label]));
 
+/** A slide rather than a reel. The bucket holds both. */
+const isImage = (name: string) => /\.(png|jpe?g|webp)$/i.test(name);
+
 export function ReelLibrary({ subject }: { subject?: string }) {
   const [reels, setReels] = useState<Reel[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -57,7 +60,11 @@ export function ReelLibrary({ subject }: { subject?: string }) {
     const out = await saveVideo(url, name, {
       fetch: (u) => fetch(u),
       nav: navigator,
-      file: (blob, n) => new File([blob], n, { type: blob.type || "video/mp4" }),
+      file: (blob, n) => new File([blob], n, {
+        // FROM THE NAME when the blob does not say. A slide handed to the
+        // share sheet as video/mp4 is a slide the share sheet refuses.
+        type: blob.type || (isImage(n) ? "image/png" : "video/mp4"),
+      }),
       download: (blob, n) => {
         // A blob URL is SAME-ORIGIN, which is why `download` is honoured here
         // and was not on the signed URL this replaced.
@@ -77,7 +84,7 @@ export function ReelLibrary({ subject }: { subject?: string }) {
     setSaved((s) => ({
       ...s,
       [name]:
-        out.how === "shared" ? "Choose “Save Video” to put it in your camera roll."
+        out.how === "shared" ? `Choose “Save ${isImage(name) ? "Image" : "Video"}” to put it in your camera roll.`
         : out.how === "downloaded" ? "Saved to your downloads."
         : out.how === "cancelled" ? ""
         : out.why,
@@ -120,7 +127,15 @@ export function ReelLibrary({ subject }: { subject?: string }) {
       );
       if (listError) throw new Error(listError.message);
 
-      const files = (data ?? []).filter((f) => f.name.endsWith(".mp4"));
+      /**
+       * VIDEO AND SLIDES. This was `.mp4` only, so a carousel could be made
+       * and would never appear — the whole reason the reel went into the
+       * dashboard in the first place was not having to go and find it.
+       *
+       * .srt, .lead and .wav stay hidden: they are the reel's working files,
+       * not something anybody opens this page to look at.
+       */
+      const files = (data ?? []).filter((f) => /\.(mp4|png)$/i.test(f.name));
 
       /**
        * NO FILES, NO REQUEST.
@@ -180,17 +195,20 @@ export function ReelLibrary({ subject }: { subject?: string }) {
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, [load]);
 
-  async function make(script: string) {
-    setBusy(script);
+  async function make(script: string, kind: ReelKind = "reel") {
+    setBusy(kind === "carousel" ? "carousel" : script);
     setError(null);
     setNote(null);
     try {
-      const request: ReelRequest = { script, voice: true, ...(subject ? { subject } : {}) };
+      const request: ReelRequest = {
+        script, voice: true, kind, ...(subject ? { subject } : {}),
+      };
       await invokeAI<{ started?: boolean }>("record-reel", request, 30_000);
-      // Says the part people actually want to know. A three-minute wait with
-      // no idea whether you have to sit through it is a three-minute wait
-      // somebody sits through.
-      setNote("Recording — about three minutes. You can close this; it carries on without you and will be here when you come back.");
+      // Says the part people actually want to know. A wait with no idea
+      // whether you have to sit through it is a wait somebody sits through.
+      setNote(kind === "carousel"
+        ? "Making the slides — under a minute. They will appear below."
+        : "Recording — about three minutes. You can close this; it carries on without you and will be here when you come back.");
       // Reels arrive minutes later and nothing pushes them here, so the list
       // is re-read when it is plausible one has landed rather than making
       // somebody reload the page to find out.
@@ -215,6 +233,19 @@ export function ReelLibrary({ subject }: { subject?: string }) {
             {busy === id ? "Starting…" : `🎬 ${LABEL[id] ?? id}`}
           </button>
         ))}
+        {/**
+          * A DIFFERENT POST, not a different reel — so it is set apart rather
+          * than sitting fifth in a row of four. Share rate and save rate were
+          * both 0.0% on the reel, and those are what carry a post past the
+          * people already following. Nobody saves a video to use in a shop.
+          */}
+        <button
+          onClick={() => make("", "carousel")}
+          disabled={busy !== null}
+          className="tap-target rounded-xl border border-white/15 bg-white/[0.04] px-3 py-2 text-sm font-semibold text-slate-200 disabled:opacity-50"
+        >
+          {busy === "carousel" ? "Starting…" : "🖼 Protein carousel"}
+        </button>
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <p className="flex-1 text-xs text-slate-500">
@@ -251,7 +282,12 @@ export function ReelLibrary({ subject }: { subject?: string }) {
                 <>
                   {/* Portrait, and capped: a 1080x1920 file at full width is a
                       column of video nobody can see the end of. */}
-                  <video src={reel.url} controls playsInline className="mt-2 max-h-96 rounded-xl" />
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  {isImage(reel.name) ? (
+                    <img src={reel.url} alt={reel.name} className="mt-2 max-h-96 rounded-xl" />
+                  ) : (
+                    <video src={reel.url} controls playsInline className="mt-2 max-h-96 rounded-xl" />
+                  )}
                   {/**
                     * A BUTTON, NOT A LINK. "Won't let me save to camera roll."
                     *
