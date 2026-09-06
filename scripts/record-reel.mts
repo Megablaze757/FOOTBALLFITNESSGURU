@@ -28,6 +28,7 @@ import { reelScript, type ScriptId } from "../lib/reel-script";
 import { reelPlan, srt, REEL_W, REEL_H, REEL_SCALE } from "../lib/reel-plan";
 import { retentionProblems } from "../lib/reel-retention";
 import { driftTarget } from "../lib/reel-scroll";
+import { emphasise } from "../lib/caption-emphasis";
 import { phrases } from "../lib/speech-timing";
 import { spokenForm } from "../lib/spoken-numbers";
 import { BASE_SPEED, VOICE, shapeRates } from "../lib/speech-prosody";
@@ -495,7 +496,12 @@ for (const step of plan.steps) {
 
   for (const [i, caption] of step.captions.entries()) {
     await sleep(Math.max(0, caption.at - elapsed()));
-    await page.evaluate((t) => (window as never as { __reelCaption: (s: string) => void }).__reelCaption(t), caption.text);
+    // Runs, not a string: the figure in the line is coloured. The rule is in
+    // lib/caption-emphasis.ts, tested; the page only draws what it is handed.
+    await page.evaluate(
+      (runs) => (window as never as { __reelCaption: (r: unknown) => void }).__reelCaption(runs),
+      emphasise(caption.text),
+    );
     const to = driftTarget({
       ...page_, from: driftFrom, step: i + 1, steps: step.captions.length,
     });

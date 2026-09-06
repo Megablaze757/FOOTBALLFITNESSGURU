@@ -266,7 +266,40 @@
     return true;
   };
 
-  window.__reelCaption = function (text) { set("__reel_caption", text); };
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * ONE COLOURED WORD, DECIDED IN NODE AND RENDERED HERE.
+   *
+   * Colour is a pre-attentive feature: a uniquely coloured item is located in
+   * roughly constant time however much else is on screen, without the viewer
+   * scanning for it. A caption is up for under two seconds and most of the
+   * audience has the sound off, so the eye gets one movement — this makes it
+   * land on "£0.31" rather than on "from".
+   *
+   * The RULE lives in lib/caption-emphasis.ts where it can be tested; this
+   * only draws what it is handed. A string still works, so anything that has
+   * not been updated keeps rendering plain white.
+   *
+   * accent-400 on the pill measures 10.3:1, past WCAG AAA for large text, and
+   * it is the app's own colour rather than the generic yellow every reel uses.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  window.__reelCaption = function (value) {
+    install();
+    var el = document.getElementById("__reel_caption");
+    if (!el) return;
+    if (typeof value === "string") { set("__reel_caption", value); return; }
+
+    var runs = value || [];
+    el.textContent = "";
+    for (var i = 0; i < runs.length; i++) {
+      var span = document.createElement("span");
+      span.textContent = runs[i].text;
+      if (runs[i].key) span.style.color = "rgb(227,181,63)";
+      el.appendChild(span);
+    }
+    el.style.opacity = runs.length ? "1" : "0";
+  };
   window.__reelHook = function (text) { set("__reel_hook", text); };
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", install);
