@@ -27,6 +27,7 @@ import { join } from "node:path";
 import { reelScript, type ScriptId } from "../lib/reel-script";
 import { reelPlan, srt, REEL_W, REEL_H, REEL_SCALE } from "../lib/reel-plan";
 import { retentionProblems } from "../lib/reel-retention";
+import { driftTarget } from "../lib/reel-scroll";
 import { phrases } from "../lib/speech-timing";
 import { spokenForm } from "../lib/spoken-numbers";
 import { beatAudio, retime, trackClips, type BeatAudio } from "../lib/narration";
@@ -360,6 +361,8 @@ const started = Date.now();
 const leadMs = started - videoStart;
 const elapsed = () => Date.now() - started;
 let onRoute = plan.steps[0]?.route ?? "";
+/** How far down the current screen the drift has reached. */
+let driftFrom = 0;
 
 console.log(`Recording "${script.hook}" — ${Math.round(plan.totalMs / 1000)}s, ${plan.steps.length} beats`);
 
@@ -375,6 +378,8 @@ for (const step of plan.steps) {
    */
   if (step.route !== onRoute) {
     onRoute = step.route;
+    // A new screen starts at the top of it, not wherever the last one ended.
+    driftFrom = 0;
     await page.goto(`${base}${step.route}`, { waitUntil: "load" }).catch((e) => {
       console.warn(`  ${step.route}: ${e instanceof Error ? e.message : e}`);
     });
@@ -396,17 +401,26 @@ for (const step of plan.steps) {
    * is why this reads the document rather than scrolling a fixed amount and
    * bouncing off the bottom of a short one.
    */
-  const scrollable = await page.evaluate(
-    () => Math.max(0, document.documentElement.scrollHeight - window.innerHeight),
-  ).catch(() => 0);
+  const page_ = await page.evaluate(() => ({
+    scrollable: Math.max(0, document.documentElement.scrollHeight - window.innerHeight),
+    viewport: window.innerHeight,
+  })).catch(() => ({ scrollable: 0, viewport: 0 }));
 
-  for (const caption of step.captions) {
+  /**
+   * MEASURED AGAINST THE SCREEN, and carried over between beats on one route.
+   * See lib/reel-scroll.ts — both halves of that were wrong and both were
+   * visible in the finished file.
+   */
+  for (const [i, caption] of step.captions.entries()) {
     await sleep(Math.max(0, caption.at - elapsed()));
     await page.evaluate((t) => (window as never as { __reelCaption: (s: string) => void }).__reelCaption(t), caption.text);
-    if (scrollable > 0) {
-      const to = Math.min(scrollable, (scrollable / Math.max(1, step.captions.length)) * (step.captions.indexOf(caption) + 1));
+    const to = driftTarget({
+      ...page_, from: driftFrom, step: i + 1, steps: step.captions.length,
+    });
+    if (to !== driftFrom || i === 0) {
       await page.evaluate((y) => window.scrollTo({ top: y, behavior: "smooth" }), to).catch(() => {});
     }
+    if (i === step.captions.length - 1) driftFrom = to;
   }
   await sleep(Math.max(0, step.at + step.ms - elapsed()));
   await page.evaluate(() => (window as never as { __reelCaption: (s: string) => void }).__reelCaption("")).catch(() => {});
