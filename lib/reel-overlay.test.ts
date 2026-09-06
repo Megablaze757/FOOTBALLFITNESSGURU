@@ -65,7 +65,9 @@ test("the caption keeps a solid backing", () => {
    * occurrence, in a test written to catch exactly that class of thing.
    */
   const caption = src.slice(src.indexOf("caption.style.cssText"), src.indexOf("layer.appendChild(caption)"));
-  assert.match(caption, /background:rgba/, "the caption lost the pill it is read against");
+  // rgba OR rgb: the fill became opaque so it survives a dark background, and
+  // this check is about the pill existing at all.
+  assert.match(caption, /background:rgba?\(/, "the caption lost the pill it is read against");
   assert.match(caption, /font-weight:800|font-weight:900/, "the caption is no longer heavy enough to read on video");
 });
 
@@ -107,4 +109,33 @@ test("the recorder films the app in the theme it actually ships", () => {
   const root = css.slice(css.indexOf(":root {"), css.indexOf("}", css.indexOf(":root {")));
   assert.match(root, /color-scheme: dark/,
     "the app's default theme is no longer dark, so the recorder is now the odd one out");
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * A PILL THAT WORKS ON ANY BACKGROUND.
+ *
+ * Both fills were translucent near-black. That separated the words from a
+ * LIGHT page perfectly and vanished entirely on a dark one — the app's own
+ * ground is rgb(9,9,10) — so the first dark reel had the page's own text
+ * reading straight through the caption.
+ *
+ * A caption cannot rely on being darker than what is behind it. Opaque fill,
+ * and a light rim so it still has an edge when the thing behind it is as dark
+ * as the fill.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("the caption and hook stay legible on a dark page", () => {
+  const src = overlay();
+  const caption = src.slice(src.indexOf("caption.style.cssText"), src.indexOf("layer.appendChild(caption)"));
+  const hook = src.slice(src.indexOf('hook.id = "__reel_hook"'), src.indexOf("hookWrap.appendChild(hook)"));
+
+  for (const [name, block] of [["caption", caption], ["hook", hook]] as const) {
+    // A translucent fill over a background the same colour is no fill at all.
+    const translucent = block.match(/background:rgba\([^)]*?([0-9.]+)\)/);
+    assert.equal(translucent, null,
+      `the ${name} fill is translucent again, so it disappears on the app's own dark ground`);
+    assert.match(block, /border:2px solid rgba\(255,255,255/,
+      `the ${name} has no rim, so it has no edge against a dark page`);
+  }
 });

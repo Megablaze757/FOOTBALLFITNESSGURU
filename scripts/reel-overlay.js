@@ -45,8 +45,22 @@
      */
     caption.style.cssText =
       "max-width:100%;text-align:center;font-size:40px;line-height:1.25;font-weight:800;"
-      + "color:#fff;background:rgba(8,8,10,0.82);padding:14px 22px;border-radius:18px;"
-      + "box-shadow:0 8px 40px rgba(0,0,0,0.45);opacity:0;transition:opacity 120ms linear;";
+      /**
+       * OPAQUE, AND WITH A RIM.
+       *
+       * The fill was rgba(8,8,10,0.82), which separated the words from a light
+       * page perfectly and vanished entirely on a dark one — the app's own
+       * ground is rgb(9,9,10), so once the recorder started filming in dark
+       * the pill became invisible and the page's text read straight through
+       * the caption. A caption has to work on ANY background, which means it
+       * cannot rely on being darker than what is behind it.
+       *
+       * Opaque fill for the text, and a light rim so the pill still has an
+       * edge when the thing behind it is as dark as the fill.
+       */
+      + "color:#fff;background:rgb(10,10,11);padding:14px 22px;border-radius:18px;"
+      + "border:2px solid rgba(255,255,255,0.22);"
+      + "box-shadow:0 10px 44px rgba(0,0,0,0.6);opacity:0;transition:opacity 120ms linear;";
     layer.appendChild(caption);
 
     /**
@@ -84,8 +98,10 @@
     hook.id = "__reel_hook";
     hook.style.cssText =
       "max-width:100%;font-size:64px;line-height:1.08;font-weight:900;text-align:center;"
-      + "color:#fff;background:rgba(8,8,10,0.9);padding:18px 26px;border-radius:22px;"
-      + "box-shadow:0 10px 50px rgba(0,0,0,0.5);opacity:0;transition:opacity 120ms linear;";
+      // Same rim, same reason as the caption above.
+      + "color:#fff;background:rgb(10,10,11);padding:18px 26px;border-radius:22px;"
+      + "border:2px solid rgba(255,255,255,0.24);"
+      + "box-shadow:0 12px 56px rgba(0,0,0,0.65);opacity:0;transition:opacity 120ms linear;";
     hookWrap.appendChild(hook);
     layer.appendChild(hookWrap);
 
