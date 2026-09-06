@@ -160,7 +160,7 @@
    * not own, and it breaks silently the next time a class is renamed. The
    * words on screen are the same words the script is already talking about.
    */
-  var findByText = function (needle) {
+  var findByText = function (needle, anywhere) {
     var want = String(needle || "").trim().toLowerCase();
     if (!want) return null;
     var all = document.querySelectorAll("body *");
@@ -171,8 +171,9 @@
       if (text.indexOf(want) === -1) continue;
       var box = el.getBoundingClientRect();
       if (box.width < 40 || box.height < 16) continue;
-      // Off screen entirely is not what the shot is pointing at.
-      if (box.bottom < 0 || box.top > window.innerHeight) continue;
+      // Off screen entirely is not what the shot is pointing at — unless we
+      // are looking for something to scroll TO, which is the whole point.
+      if (!anywhere && (box.bottom < 0 || box.top > window.innerHeight)) continue;
       // The SMALLEST element that still contains the words: every ancestor
       // contains them too, and <body> is not a spotlight.
       if (!best || box.width * box.height < best.box.width * best.box.height) {
@@ -193,7 +194,31 @@
     install();
     var spot = document.getElementById("__reel_spot");
     if (!spot) return false;
-    var found = needle ? findByText(needle) : null;
+    if (!needle) { spot.style.opacity = "0"; return false; }
+
+    /**
+     * ═══════════════════════════════════════════════════════════════════════
+     * SCROLL TO IT FIRST. A spotlight only helps if the thing is on screen.
+     *
+     * findByText deliberately ignores anything outside the viewport, and the
+     * shot drifts down the page as a beat plays — so by the time the reveal
+     * arrived, the row it was meant to ring had scrolled past and the
+     * spotlight correctly did nothing. The reel showed the page FOOTER under
+     * the words "Cheapest: £0.31."
+     *
+     * Naming a focus is the script saying "this is the shot". So it moves the
+     * shot: instant rather than smooth, because the beat's timing is already
+     * fixed against the audio and a 400ms glide would eat the reveal.
+     * ═══════════════════════════════════════════════════════════════════════
+     */
+    var anywhere = findByText(needle, true);
+    if (anywhere) {
+      var box = anywhere.el.getBoundingClientRect();
+      var centred = window.scrollY + box.top - (window.innerHeight / 2) + (box.height / 2);
+      window.scrollTo({ top: Math.max(0, centred), behavior: "instant" });
+    }
+
+    var found = findByText(needle);
     if (!found) { spot.style.opacity = "0"; return false; }
 
     /**
