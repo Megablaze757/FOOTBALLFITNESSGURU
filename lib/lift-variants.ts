@@ -234,6 +234,24 @@ export const REFUSED: { pattern: RegExp; why: string }[] = [
     why: "These are ranked by bodyweight plus what you added, which is a different calculation from a barbell multiple. Worth adding properly rather than bolting onto this table.",
   },
   {
+    /**
+     * A kettlebell is not a barbell with a handle. The weights come in fixed
+     * jumps — 8, 12, 16, 20, 24 — so the resolution is far coarser than a
+     * ratio needs, and in every one of these the set ends because the position
+     * failed rather than because the muscle did.
+     */
+    pattern: /kettlebell|bottoms.?up|get.?up|windmill|halo|racked/i,
+    why: "Kettlebells come in fixed jumps too coarse to express a bodyweight ratio, and these end when the position gives out rather than when the muscle does — which is a measure of control, not of strength.",
+  },
+  {
+    /**
+     * A hold is scored in seconds. There is no weight moved and therefore no
+     * one-rep maximum to be a multiple of.
+     */
+    pattern: /\bhold\b|dead hang|pinch/i,
+    why: "Held for time rather than lifted for reps, so there is no repetition maximum for a bodyweight multiple to be taken from. Seconds are the honest unit here, not kilos.",
+  },
+  {
     pattern: /arnold press|z press|behind the neck|viking press|log press|landmine press|jm press|tate press/i,
     why: "Real lifts with no stable published ratio to a strict overhead press.",
   },

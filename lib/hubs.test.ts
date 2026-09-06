@@ -34,7 +34,10 @@ test("the gate can actually shut", () => {
 /** "Neck" has one movement and "Grip" has two. Neither is a page. */
 test("the long tail stays unpublished", () => {
   const names = new Set(publishableHubs(MOVEMENTS).map((h) => h.hub.name.toLowerCase()));
-  for (const tail of ["neck", "hands", "grip", "patellar tendon", "traps"]) {
+  // "grip" came off this list when the grip hub was actually written: it had
+  // two movements and now has sixteen, so refusing to publish it would be
+  // withholding a page that has content. The rest are still genuinely thin.
+  for (const tail of ["neck", "hands", "patellar tendon", "traps"]) {
     assert.ok(!names.has(tail), `${tail} was published as a hub`);
   }
 });

@@ -78,6 +78,101 @@ export interface Exercise {
 }
 
 export const EXERCISES: Exercise[] = [
+  // ═══════════════════════════════════════════════════════════════════════════
+  // THE TWO HUBS THAT HAD NOTHING ON THEM.
+  //
+  // /exercises/equipment/kettlebell/ listed TWO movements and /exercises/
+  // muscle/grip/ listed two. Both are pages the site publishes and links to,
+  // and a hub with two entries is the thin page the hub rules exist to stop.
+  //
+  // The muscle tags here are not padding. A windmill really is an oblique and
+  // t-spine movement, a bottoms-up press really is rotator-cuff work, and a
+  // get-up really is deep-core work — which is why these twenty also lift the
+  // five thinnest muscle hubs in the same pass rather than needing twenty more.
+  // ═══════════════════════════════════════════════════════════════════════════
+  { id: "kb_deadlift", name: "Kettlebell deadlift", category: "Strength", demo: "hinge", equipment: "Kettlebell",
+    muscles: ["Hamstrings", "Glutes", "Lower back"], tempo: "Controlled down · drive up", difficulty: "easy",
+    cues: ["Bell between the arches, not in front", "Push the hips back, keep the back flat", "Stand tall and squeeze the glutes"],
+    why: "The cheapest way into a hinge: the bell sits between the feet, so the load starts where a barbell can only end up." },
+  { id: "kb_goblet_squat", name: "Kettlebell goblet squat", category: "Strength", demo: "squat", equipment: "Kettlebell",
+    muscles: ["Quads", "Glutes", "Deep core"], tempo: "3s down · drive up", difficulty: "easy",
+    cues: ["Hold the horns at chest height", "Elbows inside the knees at the bottom", "Chest tall — the bell counterbalances you"],
+    why: "Holding the weight at the chest makes an upright squat almost automatic, which is why it teaches the pattern faster than a bar." },
+  { id: "kb_clean", name: "Kettlebell clean", category: "Power", demo: "hinge", equipment: "Kettlebell",
+    muscles: ["Glutes", "Shoulders", "Grip"], tempo: "Explosive up · guide down", difficulty: "medium",
+    cues: ["Keep it close, do not swing it out", "Punch the hand through as it rises", "Catch it on the forearm, not the wrist"],
+    why: "A hinge that finishes in the rack position, and the movement everything else with a kettlebell starts from." },
+  { id: "kb_snatch", name: "Kettlebell snatch", category: "Power", demo: "hinge", equipment: "Kettlebell",
+    muscles: ["Glutes", "Shoulders", "Grip"], tempo: "Explosive · one motion", difficulty: "advanced",
+    cues: ["One motion from the hips to overhead", "Punch the hand through at the top", "Learn the clean before you try this"],
+    why: "Floor to overhead in one hinge, and the most conditioning you can buy from a single piece of kit." },
+  { id: "kb_turkish_get_up", name: "Turkish get-up", category: "Strength", demo: "press", equipment: "Kettlebell",
+    muscles: ["Deep core", "Shoulders", "Rotator cuff"], tempo: "Slow · one position at a time", difficulty: "advanced",
+    cues: ["Eyes on the bell the whole way", "Stop at each position before the next", "Practise it with a shoe on the fist first"],
+    why: "Five minutes of shoulder stability and trunk control in one rep, and it exposes every position you cannot hold." },
+  { id: "kb_windmill", name: "Kettlebell windmill", category: "Mobility", demo: "hinge", equipment: "Kettlebell",
+    muscles: ["Obliques", "T-spine", "Shoulders"], tempo: "Slow and controlled", difficulty: "advanced",
+    cues: ["Eyes on the bell overhead throughout", "Push the loaded hip out to the side", "Go only as far as the arm stays locked"],
+    why: "Loads rotation and side-bending at the same time, which is a demand the rest of a programme almost never makes." },
+  { id: "kb_halo", name: "Kettlebell halo", category: "Mobility", demo: "press", equipment: "Kettlebell",
+    muscles: ["Rotator cuff", "T-spine", "Shoulders"], tempo: "Slow circles · both directions", difficulty: "easy",
+    cues: ["Circle it close around the head", "Ribs down, do not lean away from it", "Equal circles in both directions"],
+    why: "Warms the shoulders through a full circle under a little load, which is more useful than swinging the arms about." },
+  { id: "kb_bottoms_up_press", name: "Bottoms-up press", category: "Strength", demo: "press", equipment: "Kettlebell",
+    muscles: ["Rotator cuff", "Shoulders", "Grip"], tempo: "Slow · stop if it wobbles", difficulty: "medium",
+    cues: ["Crush the handle to keep it upright", "Press slowly — speed tips it over", "Stop the set when it starts to wobble"],
+    why: "Balancing the bell upside-down forces the small stabilising muscles to work, and it cannot be faked with a heavier weight." },
+  { id: "kb_single_arm_row", name: "Kettlebell single-arm row", category: "Strength", demo: "pull", equipment: "Kettlebell",
+    muscles: ["Back", "Lats", "Grip"], tempo: "Controlled · pause at the top", difficulty: "easy",
+    cues: ["Hinge forward, other hand braced", "Row to the hip, not the chest", "Let the shoulder stretch down at the bottom"],
+    why: "A one-sided pull that shows up a strength difference between sides, which a barbell row hides completely." },
+  { id: "kb_racked_reverse_lunge", name: "Racked reverse lunge", category: "Strength", demo: "lunge", equipment: "Kettlebell",
+    muscles: ["Quads", "Glutes", "Deep core"], tempo: "Controlled down · drive up", difficulty: "medium",
+    cues: ["Bell racked on one side only", "Step back, torso stays upright", "The load pulls you sideways — refuse it"],
+    why: "Loading one side turns a lunge into a trunk exercise, because staying square is harder than the legs are." },
+
+  // ── Grip ──────────────────────────────────────────────────────────────────
+  { id: "grip_dead_hang", name: "Dead hang", category: "Strength", demo: "pull", equipment: "Bar",
+    muscles: ["Grip", "Lats", "Forearms"], tempo: "Hold for time", difficulty: "easy",
+    cues: ["Full hang, shoulders relaxed down", "Breathe — do not hold your breath", "Time the hang, then add ten seconds"],
+    why: "The simplest way to build a grip, and it decompresses the shoulders while it does it." },
+  { id: "grip_plate_pinch", name: "Plate pinch hold", category: "Strength", demo: "pull", equipment: "Plates",
+    muscles: ["Grip", "Forearms"], tempo: "Hold for time", difficulty: "medium",
+    cues: ["Pinch two plates smooth sides out", "Fingers straight, thumb opposite", "Drop it before the form goes"],
+    why: "Trains the thumb against the fingers, which is the half of a grip that a bar never asks for." },
+  { id: "grip_towel_pull_up", name: "Towel pull-up", category: "Strength", demo: "pull", equipment: "Bar",
+    muscles: ["Grip", "Back", "Forearms"], tempo: "Controlled both ways", difficulty: "advanced",
+    cues: ["One towel over the bar, one end per hand", "Pull until the hands reach the bar", "Expect far fewer reps than normal"],
+    why: "A pull-up where the grip fails first, which is exactly the point and exactly what a bar never does." },
+  { id: "grip_barbell_hold", name: "Barbell hold", category: "Strength", demo: "pull", equipment: "Barbell",
+    muscles: ["Grip", "Forearms", "Upper back"], tempo: "Hold for time", difficulty: "easy",
+    cues: ["Take it out of the rack and stand", "No straps — that defeats the point", "Set it down before the fingers open"],
+    why: "Holding more than you can pull, which is how a grip catches up with the rest of a deadlift." },
+  { id: "grip_thick_bar_curl", name: "Thick-bar curl", category: "Strength", demo: "pull", equipment: "Barbell",
+    muscles: ["Grip", "Forearms", "Biceps"], tempo: "Controlled · full stretch", difficulty: "medium",
+    cues: ["Thick handles or a bar with grips on", "Elbows fixed at the sides", "Go lighter than a normal curl"],
+    why: "A thicker handle makes the hand work through the whole set, so one movement builds the arm and the grip together." },
+  { id: "grip_wrist_roller", name: "Wrist roller", category: "Strength", demo: "pull", equipment: "Other",
+    muscles: ["Grip", "Forearms"], tempo: "Roll up · roll down slowly", difficulty: "medium",
+    cues: ["Arms out in front at shoulder height", "Roll it all the way up, then all the way down", "Lower it slowly — that half is the work"],
+    why: "Takes the forearms through a full range under continuous tension, which almost nothing else in a gym does." },
+  { id: "grip_pinch_carry", name: "Plate pinch carry", category: "Strength", demo: "run", equipment: "Plates",
+    muscles: ["Grip", "Forearms", "Obliques"], tempo: "Walk for distance", difficulty: "medium",
+    cues: ["Pinch a plate in each hand", "Walk tall, shoulders level", "Set them down, do not drop them"],
+    why: "A carry the fingers end, not the legs, and walking adds a trunk demand a standing hold has none of." },
+  { id: "grip_trap_bar_hold", name: "Trap-bar hold", category: "Strength", demo: "pull", equipment: "Trap bar",
+    muscles: ["Grip", "Forearms", "Upper back"], tempo: "Hold for time", difficulty: "easy",
+    cues: ["Stand inside and lift to lockout", "Shoulders back, do not round forward", "Hold until the fingers start to open"],
+    why: "The handles sit beside you, so you can hold more here than anywhere else and the grip gets the whole load." },
+  { id: "grip_bottoms_up_carry", name: "Bottoms-up carry", category: "Strength", demo: "run", equipment: "Kettlebell",
+    muscles: ["Grip", "Rotator cuff", "Shoulders"], tempo: "Walk for distance", difficulty: "advanced",
+    cues: ["Crush the handle to keep it upright", "Elbow tucked, bell above the fist", "Walk slowly — every step tips it"],
+    why: "A carry that trains the hand and the shoulder at once, and the bell tells you immediately when either gives up." },
+  { id: "grip_finger_extension", name: "Band finger extension", category: "Recovery", demo: "pull", equipment: "Band",
+    muscles: ["Grip", "Forearms"], tempo: "Slow open · slow close", difficulty: "easy",
+    cues: ["Band around all five fingertips", "Open the hand slowly and fully", "Close it under control, do not let it snap"],
+    why: "Trains the hand to open as well as close, which balances a programme where everything else asks it to squeeze." },
+
   { id: "ladder_quickfeet", name: "Ladder quick-feet", category: "Agility", demo: "run", equipment: "None",
     muscles: ["Calves", "Hip flexors"], tempo: "Fast · 10–15s bursts",
     cues: ["Stay on the balls of your feet", "Fast ground contacts, quiet landings", "Arms drive in rhythm with the feet"],
@@ -771,6 +866,29 @@ export const EXERCISES: Exercise[] = [
 // Fuller "how to perform it" write-ups — setup, execution, what to feel and the
 // most common mistake. Merged onto EXERCISES below so components can show depth.
 const DESCRIPTIONS: Record<string, string> = {
+  // --- The kettlebell and grip hubs, which had two entries each -------------
+  kb_deadlift: "Stand with the bell between your feet, roughly in line with the arches rather than out in front. Push the hips back, keep the back flat, and take the handle with both hands. Stand by driving the hips forward, then lower under control by pushing the hips back again. Because the weight sits between the feet instead of in front of the shins, the bar path is already correct before you start — which is why this is the hinge to learn on.",
+  kb_goblet_squat: "Hold the bell by the horns at chest height with the elbows tucked in. Squat down between the feet until the elbows pass inside the knees, keeping the chest tall, then drive up. The weight out in front acts as a counterbalance, so the torso stays upright almost by itself and most people squat deeper here than they can with a bar on their back. Start light: the position gets hard long before the legs do.",
+  kb_clean: "From a hinge, pull the bell up and back close to the body, then punch the hand around it and catch it in the rack position on the forearm with the elbow tucked into the ribs. It should land quietly. If it bangs down onto the wrist, the hand went around it too late — the fix is to keep it closer and punch earlier, not to grip harder. Lower it by guiding it back down between the legs into the next rep.",
+  kb_snatch: "From a hinge, drive the hips and pull the bell up close to the body, then punch the hand through and around it so it settles overhead with the arm locked out — one motion, no pause at the shoulder. Lower it by letting it fall in front and guiding it back between the legs. Learn the clean and the swing first; this is those two movements at speed and it is unforgiving of a late hand.",
+  kb_turkish_get_up: "Lying on your back, press the bell up with one arm and stand up without ever taking your eyes off it, then reverse the whole thing to the floor. Roll to the elbow, to the hand, bridge the hips, sweep the leg through to a half-kneeling position, stand, and come back down the same way. Stop at every position rather than flowing through it. Practise the whole sequence balancing a shoe on your fist before you ever load it.",
+  kb_windmill: "Press one bell overhead and turn the feet out roughly forty-five degrees away from it. Keeping your eyes on the bell and that arm locked, push the loaded hip out to the side and hinge down, letting the free hand travel toward the floor. Come back up by driving the hip back under you. Range is limited by the overhead arm staying locked, not by how close the free hand gets to the floor.",
+  kb_halo: "Hold the bell upside-down by the horns at chest height. Circle it around the head, keeping it close, and return to the start, then repeat in the opposite direction. Keep the ribs pulled down so the movement happens at the shoulders rather than by leaning away from the weight. Do the same number of circles each way — going one direction more than the other is how a warm-up creates the asymmetry it was meant to fix.",
+  kb_bottoms_up_press: "Clean one bell to the rack and turn it so the bell sits above the handle, upside-down and balanced. Crush the handle, then press slowly overhead keeping it upright. It will wobble the moment the shoulder stops working properly, which is the feedback the exercise exists for — end the set there rather than fighting it. The weight will be far lighter than a normal press, and that is expected.",
+  kb_single_arm_row: "Hinge forward with a flat back, one hand braced on a bench or your own knee, and let the bell hang at arm's length. Row it to the hip rather than the chest, leading with the elbow, then lower until the shoulder stretches down at the bottom. Do not let the torso rotate to help the arm through — if it turns, the weight is too heavy for the position.",
+  kb_racked_reverse_lunge: "Clean one bell to the rack on one side and hold it there. Step back into a lunge, lower until the back knee is just off the floor, then drive through the front foot to stand. The load on one side will try to bend you toward it the whole time and refusing that is most of the exercise. Do a full set on one side before swapping so the trunk gets a real dose, not two half ones.",
+
+  grip_dead_hang: "Take an overhand grip on a bar and hang with the arms straight and the shoulders relaxed, feet clear of the floor. Breathe normally and hold. Time your first hang, then work to add ten seconds to it. If your hands give out in under twenty seconds, that is the number holding back every pull you do — and it is also the easiest thing in the gym to improve, because all it needs is hanging there more often.",
+  grip_plate_pinch: "Take two plates and put them together with the smooth sides facing out, then pinch them between the thumb and fingers and lift. Keep the fingers straight and the thumb opposite them, and stand tall. Hold for time and set it down deliberately rather than letting it fall. This trains the thumb working against the fingers, which is a job a bar never gives the hand because the fingers wrap all the way round it.",
+  grip_towel_pull_up: "Hang a towel over the bar and take one end in each hand, then pull up until the hands reach bar height. Lower under control to a full hang. The towel removes the bar's help entirely, so the hands do the work a hook grip normally does for them — expect a fraction of your usual reps, and treat the number as the honest one.",
+  grip_barbell_hold: "Load a bar in a rack at about hip height with more than you can deadlift for reps. Take an overhand grip, stand up with it, and hold. No straps, no hook grip: the point is the hands. Set it back on the pins the moment the fingers start to uncurl rather than at the moment they fail. Holding more than you can pull is what lets a grip catch up with the rest of a deadlift.",
+  grip_thick_bar_curl: "Curl using thick handles, or slide grips onto an ordinary bar. Keep the elbows fixed at your sides and lower to a full stretch each rep. The thicker handle means the hand is working the whole way through the set rather than just holding on, so the arms and the grip both get trained by one movement. Go lighter than a normal curl and expect the hands to finish first.",
+  grip_wrist_roller: "Hold the roller out in front at shoulder height with a weight hanging from the cord. Roll the cord all the way up by turning the handle hand over hand, then roll it all the way back down slowly rather than letting it unwind. The lowering is the half that does the work. Arms stay out in front — dropping them to rest turns it into a very short set of shoulder raises instead.",
+  grip_pinch_carry: "Pinch a plate in each hand between the thumb and fingers, stand tall with the shoulders level, and walk for the prescribed distance. Set them down rather than dropping them. Walking adds a trunk demand a standing hold does not have, because each step tries to tip you and the plates give you nothing to brace against. The set ends when the fingers open, not when the legs get tired.",
+  grip_trap_bar_hold: "Stand inside a trap bar loaded heavier than you would pull for reps, lift to lockout, and hold. Keep the shoulders back rather than letting them round forward under the weight. Because the handles sit beside you rather than in front, this is the most weight you can comfortably hold, which makes it the most direct overload the hands can get.",
+  grip_bottoms_up_carry: "Clean a bell to the rack, turn it upside-down so the bell sits above the handle, and walk with it balanced there. Crush the handle, keep the elbow tucked in, and walk slowly — every step tries to tip it over. Swap sides and match the distance. It trains the hand and the shoulder in one go, and the bell tells you the instant either of them stops doing its job.",
+  grip_finger_extension: "Put a light band around all five fingertips and open the hand slowly against it until the fingers are fully spread, then close under control rather than letting the band snap them shut. Everything else in a programme asks the hand to squeeze; this is the only thing that asks it to open, which is what keeps the two sides of the forearm in proportion to each other.",
+
   // --- Depth: the four slots that had one movement each ---------------------
   suitcase_carry: "Pick up one heavy dumbbell in one hand, stand tall with the shoulders level, and walk. The weight will try to bend you sideways and the whole job is refusing to let it — without leaning the other way to compensate, which is the usual cheat. Walk slowly for the prescribed distance, then swap sides. It trains the trunk to resist sideways bending, which is exactly what it does when somebody puts a shoulder into you.",
   front_rack_carry: "Clean two kettlebells to the front rack, elbows tucked in front of the ribs and the bells resting on the forearms. Pull the ribs down, breathe, and walk tall. The set ends when the posture goes — ribs flaring or the shoulders rounding forward — not when the arms get tired. It loads the trunk and upper back in the upright posture that everything else in the gym is performed from.",
