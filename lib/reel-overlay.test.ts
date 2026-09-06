@@ -46,8 +46,12 @@ test("the hook clears the caption band and the platform's own chrome", () => {
   assert.ok(top, "the hook is not positioned by percentage, so it moves with content");
   const pct = Number(top![1]);
   assert.ok(pct >= 8, `${pct}% is under the platform's own header chrome`);
-  // The caption sits 22% up from the bottom — the hook must not land on it.
-  assert.ok(pct <= 40, `${pct}% collides with the caption band`);
+  /**
+   * The caption sits 22% up from the bottom, so its top edge is around 72%.
+   * The pill is roughly 15% tall, which puts the last position that clears it
+   * at about 57%.
+   */
+  assert.ok(pct <= 55, `${pct}% collides with the caption band`);
 });
 
 /** Captions are read by most of the audience, so they keep their backing. */

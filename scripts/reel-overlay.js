@@ -68,10 +68,16 @@
      */
     var hookWrap = document.createElement("div");
     hookWrap.id = "__reel_hook_wrap";
-    // Upper third: clear of the caption band at 22%, and clear of the
-    // platform's own header chrome at the very top.
+    /**
+     * BELOW THE NUMBERS IT IS TALKING ABOUT.
+     *
+     * At 13% the pill sat squarely over the £0.31 / £3.19 / 10.2x cards — so
+     * the hook claiming "same protein, 10x the price" covered the three
+     * figures that prove it. 42% puts it over the paragraph beneath them,
+     * leaving the proof visible above and clearing the caption band below.
+     */
     hookWrap.style.cssText =
-      "position:fixed;left:0;right:0;top:13%;display:flex;justify-content:center;"
+      "position:fixed;left:0;right:0;top:42%;display:flex;justify-content:center;"
       + "padding:0 30px;pointer-events:none;";
 
     var hook = document.createElement("div");
