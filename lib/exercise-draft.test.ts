@@ -219,8 +219,31 @@ test("blank cues are dropped rather than counted", () => {
  * work somebody did.
  */
 test("only rows with real ground truth and a real gap are drafted for", () => {
+  /**
+   * SYNTHETIC, BECAUSE THE QUEUE IS EMPTY NOW.
+   *
+   * This asserted `targets.length > 100` — a guard that the catalogue still
+   * had a backlog. Every one of those 173 movements has cues now, so the real
+   * queue is zero and the assertion had become a demand that the work not be
+   * finished. What is worth testing is the SELECTION, so it is tested against
+   * rows built here; that the catalogue itself needs nothing is asserted in
+   * lib/exercises.test.ts, where it belongs.
+   */
+  const base = MOVEMENTS[0];
+  const synthetic = [
+    { ...base, id: "s_no_cues", name: "No cues", cues: [], why: "A real sentence about a real movement." },
+    { ...base, id: "s_stub_why", name: "Stub why", cues: ["Chest up", "Knees out"], why: "Builds the legs." },
+    { ...base, id: "s_both", name: "Neither", cues: [], why: "Builds the chest." },
+    { ...base, id: "s_done", name: "Done", cues: ["Chest up", "Knees out", "Drive up"], why: "A real sentence about a real movement." },
+    { ...base, id: "s_no_desc", name: "No description", description: "", cues: [], why: "Builds the legs." },
+  ];
+  assert.deepEqual(
+    draftTargets(synthetic).map((t) => t.id).sort(),
+    ["s_both", "s_no_cues", "s_stub_why"],
+    "the wrong rows are queued for drafting",
+  );
+
   const targets = draftTargets(MOVEMENTS);
-  assert.ok(targets.length > 100, `only ${targets.length} targets — has the catalogue changed?`);
 
   for (const t of targets) {
     assert.ok(t.description.length >= 80, `${t.name} has no description to check cues against`);
@@ -288,11 +311,14 @@ test("the placeholder pattern matches the placeholders and nothing else", () => 
     assert.ok(!STUB_WHY.test(why), `a written sentence would be redrafted over: ${why}`);
   }
 
+  /**
+   * This asserted `stubs.length > 150`. There are none left — that was the
+   * backlog, and it is written. Asserting the count is now asserting the
+   * opposite of what it was for, so it asserts zero.
+   */
   const stubs = MOVEMENTS.filter((e) => STUB_WHY.test(e.why));
-  assert.ok(stubs.length > 150, `only ${stubs.length} placeholders found — the queue looks wrong`);
-  for (const e of stubs) {
-    assert.match(e.why, /^Builds the /, `unexpected shape: ${e.why}`);
-  }
+  assert.deepEqual(stubs.map((e) => e.name), [],
+    `${stubs.length} movements still carry a generated placeholder for a why`);
 });
 
 /**

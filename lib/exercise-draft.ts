@@ -229,7 +229,18 @@ const BODY_WORDS = [
  * stop so the window cannot wander into the next sentence: "Fix your eyes
  * ahead and keep the back flat" is a real cue and must stay legal.
  */
-const BANNED = [
+/**
+ * Exported because this half of the rules is not about drafting.
+ *
+ * The vocabulary rules below are a check on a MODEL — they ask whether a cue
+ * stayed inside the description it was given. These are a check on the APP:
+ * it does not tell anybody an exercise will prevent an injury, whoever wrote
+ * the sentence and whenever they wrote it. Three of these were live on the
+ * site ("Bulletproofs the hamstring", "Bulletproofs the shoulders", "the basis
+ * of injury-proof trunk control") because nothing ever ran this list over the
+ * catalogue — only over fresh drafts.
+ */
+export const BANNED_CLAIMS = [
   /\b(prevent|treat|cure|heal|fix|eliminat)\w*\b[^.]{0,25}\b(injur|pain|strain|tear|niggle)/i,
   /\b(injur|pain)\w*\b[^.]{0,25}\b(prevent|proof|free)\b/i,
   /\brehabilitat/i,
@@ -314,7 +325,7 @@ export function draftProblems(draft: Draft, t: DraftTarget): string[] {
   }
 
   for (const text of [why, ...draft.cues]) {
-    for (const pattern of BANNED) {
+    for (const pattern of BANNED_CLAIMS) {
       if (pattern.test(text)) problems.push(`claim this app will not make: "${text}"`);
     }
   }
