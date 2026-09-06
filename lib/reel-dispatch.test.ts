@@ -395,3 +395,50 @@ test("an unknown kind is refused rather than treated as a reel", () => {
       JSON.stringify(kind));
   }
 });
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * A FAILED UPLOAD MUST FAIL THE RUN.
+ *
+ * `continue-on-error: true` reports a FAILED step as SUCCESS in the job
+ * listing. The carousel run that could not upload a single slide — the bucket
+ * rejected image/png — showed a green tick with five ::error:: lines inside
+ * it. I have already once read a listing like that and told somebody the
+ * upload had worked.
+ *
+ * The artefact is saved BEFORE the dashboard upload now, so nothing is lost
+ * when it fails and the upload no longer needs to swallow its own failure to
+ * protect it.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("a run that uploads nothing does not report success", () => {
+  for (const file of [".github/workflows/record-reels.yml", ".github/workflows/record-carousel.yml"]) {
+    const wf = readFileSync(file, "utf8");
+
+    const dashboard = wf.indexOf("Put it in the dashboard");
+    const artifact = wf.indexOf("actions/upload-artifact@v4");
+    assert.ok(artifact >= 0 && artifact < dashboard,
+      `${file}: the artefact is saved after the upload that can fail, so a failure loses it`);
+
+    const step = wf.slice(dashboard);
+    assert.ok(!/^\s*continue-on-error:\s*true/m.test(step.split("run: |")[0]),
+      `${file}: the upload swallows its own failure again`);
+    assert.match(step, /uploaded" -eq 0 \]; then[\s\S]{0,400}?exit 1/,
+      `${file}: uploading nothing still passes`);
+  }
+});
+
+/** The bucket has to accept what the carousel actually produces. */
+test("the reels bucket accepts slides, not only video", () => {
+  const sql = readFileSync("supabase/migrations/0112_reels_images.sql", "utf8");
+
+  /**
+   * THE ARRAY, not the file. The header quotes the 415 this fixes — "mime type
+   * image/png is not supported" — so a check against the whole file matched
+   * the error message and passed with PNG removed from the list it sets.
+   */
+  const list = sql.slice(sql.indexOf("set allowed_mime_types"), sql.indexOf("where id = 'reels'"));
+  assert.match(list, /'image\/png'/, "PNG is still refused, so a carousel cannot be uploaded");
+  assert.match(list, /'video\/mp4'/, "the update drops video, so reels stop uploading");
+  assert.match(sql, /where id = 'reels'/, "the migration does not name the bucket");
+});

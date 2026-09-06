@@ -242,8 +242,27 @@ jobs:
       # green run with nothing in the app and no line saying why — which is
       # exactly what happened. The check belongs inside the step, beside the
       # thing it is checking for, where it can say what to do about it.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reel-${{ env.SCRIPT }}
+          path: |
+            reels/*.mp4
+            reels/*.srt
+          retention-days: 14
+
+      # ═══════════════════════════════════════════════════════════════════
+      # THE ARTEFACT IS SAVED FIRST, AND THE DASHBOARD UPLOAD MAY FAIL LOUDLY.
+      #
+      # It was the other way round, under `continue-on-error: true` — which
+      # reports a FAILED step as SUCCESS in the job listing. The carousel run
+      # that could not upload a single slide (the bucket rejected image/png)
+      # showed a green tick, and I have already once read a listing like that
+      # and told somebody the upload worked.
+      #
+      # Saving the artefact first means nothing is lost when the upload fails,
+      # so the upload no longer needs to swallow its own failure to protect it.
+      # ═══════════════════════════════════════════════════════════════════
       - name: Put it in the dashboard
-        continue-on-error: true
         env:
           REEL_EMAIL: ${{ secrets.REEL_EMAIL }}
           REEL_PASSWORD: ${{ secrets.REEL_PASSWORD }}
@@ -308,13 +327,15 @@ jobs:
             esac
             head -c 200 "$auth" | tr -d '\n'; echo
             echo "::warning::The MP4 is still attached to this run as an artefact."
-            exit 0
+            # FAILS THE JOB. The artefact is already saved above, so there is
+            # nothing left to protect by pretending this worked.
+            exit 1
           fi
 
           token=$(python3 -c "import json;print(json.load(open('$auth')).get('access_token',''))" 2>/dev/null || echo "")
           if [ -z "$token" ]; then
             echo "::error::Signed in but no access token came back — cannot upload."
-            exit 0
+            exit 1
           fi
 
           # Named by script and day, so a second run of the same reel does not
@@ -342,12 +363,7 @@ jobs:
               echo "::error::If this says the bucket is missing, run supabase/apply-0088-0111.sql."
             fi
           done
-          [ "$uploaded" -gt 0 ] || echo "::warning::Nothing reached the dashboard. The MP4 is attached to this run."
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: reel-${{ env.SCRIPT }}
-          path: |
-            reels/*.mp4
-            reels/*.srt
-          retention-days: 14
+          if [ "$uploaded" -eq 0 ]; then
+            echo "::error::Nothing reached the dashboard. The MP4 is attached to this run."
+            exit 1
+          fi
