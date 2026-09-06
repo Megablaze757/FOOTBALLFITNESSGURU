@@ -502,6 +502,24 @@ for (const step of plan.steps) {
       (runs) => (window as never as { __reelCaption: (r: unknown) => void }).__reelCaption(runs),
       emphasise(caption.text),
     );
+    /**
+     * ═══════════════════════════════════════════════════════════════════════
+     * A COMPOSED SHOT HOLDS STILL.
+     *
+     * The spotlight is position:fixed and computed once, when the beat aims
+     * it. The drift then scrolled the page out from under it — so the reveal
+     * frame had a gold ring, correctly drawn, around "Turkey breast mince
+     * £1.06" while the caption said "Cheapest: £0.31". Worse than no
+     * spotlight: it pointed confidently at the wrong row.
+     *
+     * Re-aiming after every scroll would work and is the wrong fix. A reveal
+     * is the one shot in a reel that should not move: the script named the
+     * thing, the camera framed it, and panning off it during the line is not
+     * something an editor would do.
+     * ═══════════════════════════════════════════════════════════════════════
+     */
+    if (aimed) continue;
+
     const to = driftTarget({
       ...page_, from: driftFrom, step: i + 1, steps: step.captions.length,
     });
