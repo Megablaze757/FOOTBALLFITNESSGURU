@@ -310,25 +310,69 @@
    * only draws what it is handed. A string still works, so anything that has
    * not been updated keeps rendering plain white.
    *
-   * accent-400 on the pill measures 10.3:1, past WCAG AAA for large text, and
-   * it is the app's own colour rather than the generic yellow every reel uses.
+   * ─────────────────────────────────────────────────────────────────────
+   * WORD BY WORD, AND BRIGHTER THAN THE BRAND.
+   *
+   * This drew a static line with one word in accent-400 — the app's own
+   * colour, chosen deliberately over "the generic yellow every reel uses".
+   * That decision is reversed on purpose. The measured caption style for this
+   * format is a word-by-word highlight in a HIGH-SATURATION colour, reported
+   * at a 12-25% lift in average watch time, and the reason the generic yellow
+   * is generic is that it survives whatever the app is showing behind it. A
+   * muted gold is the better brand colour and the worse caption.
+   *
+   * accent-400 measured 10.3:1 on this pill; #FFE81A measures higher still,
+   * so nothing is given up on legibility to gain it.
+   *
+   * Two emphases, two jobs — see lib/caption-karaoke.ts. The figure is
+   * coloured the whole time because colour is found without scanning; the
+   * sweep is about pacing, so the viewer never has to work out where the
+   * voice is. The active word also grows slightly, because colour alone
+   * cannot mark the one word that is already coloured.
    * ═══════════════════════════════════════════════════════════════════════
    */
+  var HIGHLIGHT = "rgb(255,232,26)";
+  var captionTimers = [];
+
+  var clearTimers = function () {
+    for (var i = 0; i < captionTimers.length; i++) clearTimeout(captionTimers[i]);
+    captionTimers = [];
+  };
+
   window.__reelCaption = function (value) {
     install();
     var el = document.getElementById("__reel_caption");
     if (!el) return;
+    // Any previous line's sweep is cancelled before the next is drawn, or a
+    // word from the caption before last lights up under the current one.
+    clearTimers();
     if (typeof value === "string") { set("__reel_caption", value); return; }
 
-    var runs = value || [];
+    var words = value || [];
     el.textContent = "";
-    for (var i = 0; i < runs.length; i++) {
+    var spans = [];
+    for (var i = 0; i < words.length; i++) {
+      if (i) el.appendChild(document.createTextNode(" "));
       var span = document.createElement("span");
-      span.textContent = runs[i].text;
-      if (runs[i].key) span.style.color = "rgb(227,181,63)";
+      span.textContent = words[i].text;
+      span.style.cssText = "display:inline-block;transition:color 90ms linear,transform 90ms linear;"
+        + "color:" + (words[i].key ? HIGHLIGHT : "#fff") + ";";
       el.appendChild(span);
+      spans.push(span);
     }
-    el.style.opacity = runs.length ? "1" : "0";
+    el.style.opacity = words.length ? "1" : "0";
+
+    // One timer per word rather than a per-frame poll: the browser is also
+    // running a screen recording, and this is the cheaper of the two.
+    for (var j = 0; j < words.length; j++) {
+      (function (span, previous) {
+        captionTimers.push(setTimeout(function () {
+          if (previous) { previous.style.transform = "none"; }
+          span.style.color = HIGHLIGHT;
+          span.style.transform = "scale(1.06)";
+        }, words[j].at));
+      })(spans[j], j ? spans[j - 1] : null);
+    }
   };
   window.__reelHook = function (text) { set("__reel_hook", text); };
 
