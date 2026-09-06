@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { SIGNUP_CTA, SIGNUP_HREF } from "@/lib/signup-link";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/auth";
@@ -528,8 +529,11 @@ export default function Landing() {
           <span className="text-accent-400">PocketAthlete</span>
         </div>
         <p className="text-xs text-slate-500">Train smarter. Recover faster. Peak when it counts.</p>
-        <Link href="/waitlist" className="mt-2 text-xs font-semibold text-accent-400 hover:underline">
-          Not ready to sign up? Join the waitlist →
+        {/* "Not ready to sign up? Join the waitlist" — an offer that made
+            sense while there was nothing to sign up to. Signing up IS the free
+            option now, so the waitlist was the worse of the two doors. */}
+        <Link href={SIGNUP_HREF} className="mt-2 text-xs font-semibold text-accent-400 hover:underline">
+          {SIGNUP_CTA} →
         </Link>
         <div className="mt-4 flex gap-4 text-xs text-slate-500">
           <Link href="/privacy" className="hover:text-accent-400">Privacy</Link>
