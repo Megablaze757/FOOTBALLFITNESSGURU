@@ -5,7 +5,8 @@ import { createClient } from "@/lib/supabase/client";
 import { invokeAI } from "@/lib/api";
 import { REEL_SCRIPTS, type ReelKind, type ReelRequest } from "@/lib/reel-dispatch";
 import { SCRIPTS } from "@/lib/reel-script";
-import { saveVideo } from "@/lib/save-video";
+import { saveAll } from "@/lib/save-video";
+import { groupPosts, type PostGroup, type StoredFile } from "@/lib/reel-groups";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -54,10 +55,19 @@ export function ReelLibrary({ subject }: { subject?: string }) {
    * The browser halves of the save, kept out of lib/save-video.ts so the
    * decisions in it stay testable without a DOM.
    */
-  const save = useCallback(async (url: string, name: string) => {
-    setSaving(name);
-    setSaved((s) => ({ ...s, [name]: "" }));
-    const out = await saveVideo(url, name, {
+  /**
+   * The browser halves of the save, kept out of lib/save-video.ts so the
+   * decisions in it stay testable without a DOM.
+   */
+  const saveGroup = useCallback(async (post: PostGroup) => {
+    const items = post.files
+      .filter((f): f is StoredFile & { url: string } => Boolean(f.url))
+      .map((f) => ({ url: f.url, name: f.name }));
+    if (items.length === 0) return;
+
+    setSaving(post.id);
+    setSaved((s) => ({ ...s, [post.id]: "" }));
+    const out = await saveAll(items, {
       fetch: (u) => fetch(u),
       nav: navigator,
       file: (blob, n) => new File([blob], n, {
@@ -81,15 +91,19 @@ export function ReelLibrary({ subject }: { subject?: string }) {
       },
     });
     setSaving(null);
+
+    const many = items.length > 1;
     setSaved((s) => ({
       ...s,
-      [name]:
-        out.how === "shared" ? `Choose “Save ${isImage(name) ? "Image" : "Video"}” to put it in your camera roll.`
-        : out.how === "downloaded" ? "Saved to your downloads."
+      [post.id]:
+        out.how === "shared"
+          ? `Choose “Save ${many ? `${items.length} Images` : isImage(items[0].name) ? "Image" : "Video"}” to put ${many ? "them" : "it"} in your camera roll.`
+        : out.how === "downloaded" ? `Saved to your downloads.`
         : out.how === "cancelled" ? ""
         : out.why,
     }));
   }, []);
+
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -269,46 +283,86 @@ export function ReelLibrary({ subject }: { subject?: string }) {
         <p className="text-sm text-slate-500">No reels yet. Make one above.</p>
       ) : (
         <ul className="space-y-3">
-          {reels.map((reel) => (
-            <li key={reel.name} className="rounded-2xl border border-white/10 bg-white/[0.02] p-3">
+          {groupPosts(reels).map((post) => (
+            <li key={post.id} className="rounded-2xl border border-white/10 bg-white/[0.02] p-3">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <span className="text-sm font-bold text-slate-100">{reel.name}</span>
+                <span className="text-sm font-bold text-slate-100">{post.title}</span>
                 <span className="text-xs text-slate-500">
-                  {reel.size ? `${Math.round(reel.size / 1024 / 1024 * 10) / 10}MB` : ""}
-                  {reel.createdAt ? ` · ${reel.createdAt.slice(0, 16).replace("T", " ")}` : ""}
+                  {post.createdAt ? post.createdAt.slice(0, 16).replace("T", " ") : ""}
                 </span>
               </div>
-              {reel.url && (
+
+              {/**
+                * SLIDES SIDE BY SIDE, in posting order.
+                *
+                * A five-slide carousel used to be five full-width rows, which
+                * is a page of scrolling to see one post and no way at all to
+                * tell what order they go in.
+                */}
+              {post.kind === "carousel" ? (
+                <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+                  {post.files.map((file, i) => (
+                    file.url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        key={file.name}
+                        src={file.url}
+                        alt={`Slide ${i + 1}`}
+                        className="h-56 w-auto shrink-0 rounded-lg border border-white/10"
+                      />
+                    ) : null
+                  ))}
+                </div>
+              ) : post.files[0]?.url ? (
+                /* Portrait, and capped: a 1080x1920 file at full width is a
+                   column of video nobody can see the end of. */
+                <video src={post.files[0].url} controls playsInline className="mt-2 max-h-96 rounded-xl" />
+              ) : null}
+
+              {post.files.some((f) => f.url) && (
                 <>
-                  {/* Portrait, and capped: a 1080x1920 file at full width is a
-                      column of video nobody can see the end of. */}
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  {isImage(reel.name) ? (
-                    <img src={reel.url} alt={reel.name} className="mt-2 max-h-96 rounded-xl" />
-                  ) : (
-                    <video src={reel.url} controls playsInline className="mt-2 max-h-96 rounded-xl" />
-                  )}
                   {/**
-                    * A BUTTON, NOT A LINK. "Won't let me save to camera roll."
-                    *
-                    * This was `<a href={signedUrl} download>`, and iOS ignores
-                    * the download attribute on a cross-origin URL — which a
-                    * signed Supabase URL always is. Safari navigated to the
-                    * file and played it, and there is no way from that screen
-                    * to Photos. See lib/save-video.ts.
+                    * ONE TAP FOR THE WHOLE POST. navigator.share takes an
+                    * array, and iOS offers "Save 5 Images" for one — five
+                    * separate saves means five sheets in the right order
+                    * without losing count.
                     */}
                   <button
                     type="button"
-                    onClick={() => save(reel.url as string, reel.name)}
-                    disabled={saving === reel.name}
+                    onClick={() => saveGroup(post)}
+                    disabled={saving === post.id}
                     className="tap-target mt-2 inline-block rounded-xl border border-white/10 px-3 py-1.5 text-xs font-semibold text-slate-300 disabled:opacity-60"
                   >
-                    {saving === reel.name ? "Saving…" : "Save to camera roll"}
+                    {saving === post.id
+                      ? "Saving…"
+                      : post.files.length > 1
+                        ? `Save all ${post.files.length} slides`
+                        : "Save to camera roll"}
                   </button>
-                  {saved[reel.name] && (
-                    <p className="mt-1 text-xs text-slate-400">{saved[reel.name]}</p>
-                  )}
+                  {saved[post.id] && <p className="mt-1 text-xs text-slate-400">{saved[post.id]}</p>}
                 </>
+              )}
+
+              {/* The caption is written by the run, so it can be copied rather
+                  than retyped from a screenshot of itself. */}
+              {post.caption?.url && (
+                <details className="mt-2">
+                  {/* tap-target: a <summary> is a control, and this one was
+                      17px tall against the 44px floor lib/tap-targets.test.ts
+                      enforces. A disclosure nobody can hit is a caption
+                      nobody can copy. */}
+                  <summary className="tap-target inline-flex cursor-pointer items-center text-xs font-semibold text-slate-400">
+                    Caption
+                  </summary>
+                  <a
+                    href={post.caption.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-1 inline-block text-xs text-accent-400 underline"
+                  >
+                    Open caption.txt
+                  </a>
+                </details>
               )}
             </li>
           ))}
