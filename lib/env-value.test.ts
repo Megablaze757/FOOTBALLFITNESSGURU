@@ -33,7 +33,11 @@ test("a password keeps its spaces and loses only the paste damage", () => {
   assert.equal(secretValue("correct horse battery\r\n"), "correct horse battery");
   assert.equal(secretValue(" leading"), " leading", "a leading space is part of the password");
   assert.equal(secretValue("trailing "), "trailing ", "a trailing space is part of the password");
-  assert.equal(secretValue("TESTACCOUNT123"), "TESTACCOUNT123");
+  // A FIXTURE, not a real credential. The first version of this line used the
+  // demo account's actual password, which put a live password into a tracked
+  // file — the exact thing lib/no-secrets.test.ts exists to prevent, done by
+  // hand, in a test about handling passwords safely.
+  assert.equal(secretValue("EXAMPLE-PASSWORD-123"), "EXAMPLE-PASSWORD-123");
   assert.equal(secretValue(undefined), "");
 });
 
