@@ -1,7 +1,7 @@
 "use client";
 
 import { createClient } from "@/lib/supabase/client";
-import { referralLink, waitlistLink } from "@/lib/referral";
+import { referralLink, signupLink } from "@/lib/referral";
 import { useAsync } from "@/lib/use-async";
 import { useState } from "react";
 
@@ -67,9 +67,9 @@ export function Affiliates() {
 
   // Two links per affiliate: the landing page, and straight to the waitlist for
   // pre-launch sharing. Both carry the same ?ref=, so attribution is identical.
-  async function copy(c: string, kind: "site" | "waitlist") {
+  async function copy(c: string, kind: "site" | "signup") {
     try {
-      await navigator.clipboard.writeText(kind === "waitlist" ? waitlistLink(c) : referralLink(c));
+      await navigator.clipboard.writeText(kind === "signup" ? signupLink(c) : referralLink(c));
       setCopied(`${c}:${kind}`);
       setTimeout(() => setCopied(null), 1800);
     } catch { /* clipboard blocked */ }
@@ -156,8 +156,8 @@ export function Affiliates() {
                   <td className="py-2 text-right font-bold text-accent-400">{r.paid}</td>
                   <td className="py-2 text-right">
                     <div className="flex justify-end gap-3">
-                      <button onClick={() => copy(r.code, "waitlist")} className="tap-target whitespace-nowrap text-xs text-slate-400 hover:text-accent-400">
-                        {copied === `${r.code}:waitlist` ? "Copied ✓" : "Waitlist link"}
+                      <button onClick={() => copy(r.code, "signup")} className="tap-target whitespace-nowrap text-xs text-slate-400 hover:text-accent-400">
+                        {copied === `${r.code}:signup` ? "Copied ✓" : "Signup link"}
                       </button>
                       <button onClick={() => copy(r.code, "site")} className="tap-target whitespace-nowrap text-xs text-slate-400 hover:text-accent-400">
                         {copied === `${r.code}:site` ? "Copied ✓" : "Site link"}

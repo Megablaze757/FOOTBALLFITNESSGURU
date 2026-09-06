@@ -827,13 +827,19 @@ __name(trialIsRunning, "trialIsRunning");
 
 // ../lib/reel-dispatch.ts
 var REEL_EVENT = "record-reel";
+var CAROUSEL_EVENT = "record-carousel";
 var REEL_SCRIPTS = ["demo-readiness", "demo-cost", "drill", "standards"];
 function reelRequestProblem(request) {
-  const script = String(request?.script ?? "").trim();
-  if (!script)
-    return "no script named";
-  if (!REEL_SCRIPTS.includes(script))
-    return `"${script}" is not a reel script`;
+  const kind = request?.kind ?? "reel";
+  if (kind !== "reel" && kind !== "carousel")
+    return `"${String(kind)}" is not something this makes`;
+  if (kind === "reel") {
+    const script = String(request?.script ?? "").trim();
+    if (!script)
+      return "no script named";
+    if (!REEL_SCRIPTS.includes(script))
+      return `"${script}" is not a reel script`;
+  }
   const subject = request?.subject;
   if (subject !== void 0) {
     if (typeof subject !== "string")
@@ -849,9 +855,9 @@ function reelRequestProblem(request) {
 __name(reelRequestProblem, "reelRequestProblem");
 function dispatchBody(request) {
   return {
-    event_type: REEL_EVENT,
+    event_type: (request.kind ?? "reel") === "carousel" ? CAROUSEL_EVENT : REEL_EVENT,
     client_payload: {
-      script: request.script,
+      script: request.script ?? "",
       // STRINGS, not booleans. A GitHub Actions expression comparing a JSON
       // boolean from client_payload against a string is a comparison nobody
       // can read and half the internet gets wrong; "true"/"false" compares the
@@ -1354,7 +1360,7 @@ function overBudget(state) {
   return json({ error: `${reason} The on-device coach still works, and your allowance resets \u2014 upgrade for more.` }, 429);
 }
 __name(overBudget, "overBudget");
-var WORKER_VERSION = "2026-09-05.4";
+var WORKER_VERSION = "2026-09-06.1";
 var ATTEMPT_TIMEOUT_MS = {
   groq: 1e4,
   openrouter: 2e4,
@@ -2053,7 +2059,8 @@ async function recordReel(req, env) {
     body: JSON.stringify(dispatchBody(body))
   });
   if (sent.status === 204) {
-    return json({ started: true, runs: `https://github.com/${repo}/actions/workflows/record-reels.yml` });
+    const workflow = body?.kind === "carousel" ? "record-carousel.yml" : "record-reels.yml";
+    return json({ started: true, runs: `https://github.com/${repo}/actions/workflows/${workflow}` });
   }
   const detail = await sent.text().catch(() => "");
   const wanted = sent.headers.get("x-accepted-github-permissions");

@@ -545,7 +545,7 @@ function overBudget(state: BudgetState): Response {
 // nobody is watching a spinner and the budget can be what the work actually
 // needs. Callers pass their own client-side timeout to match.
 // Bump on every paste into the Cloudflare dashboard. GET /health reports it.
-const WORKER_VERSION = "2026-09-05.4";
+const WORKER_VERSION = "2026-09-06.1";
 
 const CHAIN_BUDGET_MS = 55_000;
 /**
@@ -1964,7 +1964,12 @@ async function recordReel(req: Request, env: Env): Promise<Response> {
   // 204 with no body is success here, which is worth saying because a check for
   // `ok` on a 204 is the kind of thing that gets "fixed" into a bug.
   if (sent.status === 204) {
-    return json({ started: true, runs: `https://github.com/${repo}/actions/workflows/record-reels.yml` });
+    // The workflow it actually started, not always the reel one — the link is
+    // the only thing an admin has to check on a run that went wrong.
+    const workflow = (body as ReelRequest | null)?.kind === "carousel"
+      ? "record-carousel.yml"
+      : "record-reels.yml";
+    return json({ started: true, runs: `https://github.com/${repo}/actions/workflows/${workflow}` });
   }
   /**
    * ═══════════════════════════════════════════════════════════════════════

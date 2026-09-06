@@ -1,3 +1,5 @@
+import { captionLines, captionReadMs } from "./caption-lines";
+
 // =============================================================================
 // A REEL AS A LIST OF INSTRUCTIONS, SO NOBODY HAS TO PERFORM IT.
 //
@@ -49,9 +51,6 @@ export const REEL_RATIO = 9 / 16;
  */
 export const HOOK_MS = 1_600;
 
-/** Words per caption group. Four reads in a glance; seven does not. */
-export const CHUNK_WORDS = 4;
-
 export interface Caption {
   /** Milliseconds from the start of the recording. */
   at: number;
@@ -82,51 +81,80 @@ export interface ReelPlan {
 }
 
 /**
- * Split a line into caption groups.
+ * ═══════════════════════════════════════════════════════════════════════════
+ * CAPTIONS COME FROM lib/caption-lines.ts NOW.
  *
- * Most people watch these on mute, so the caption IS the voiceover. A whole
- * sentence appearing at once is read in half a second and then sits there for
- * four; groups arriving in step with the speaking is what holds an eye. Groups
- * rather than single words because one word at a time is the style that reads
- * as a bot, and because a group can be read in a glance while a word cannot be
- * read at all.
- *
- * Never orphans a single trailing word: a lone word on screen for a quarter of
- * a second reads as a glitch. The last two groups are merged instead, even
- * though that makes one longer than CHUNK_WORDS — slightly too long is read; a
- * group of one is noticed.
+ * This used to cut every four words and count nothing else, which put
+ * "builds you has a" and "costs £3.19 at the" into a finished reel. Four
+ * consecutive words are not a phrase, and a caption ending on "the" makes the
+ * reader carry an unfinished thought across the cut — at the exact moment a
+ * reel is cheapest to scroll past.
+ * ═══════════════════════════════════════════════════════════════════════════
  */
-export function captionChunks(say: string, size = CHUNK_WORDS): string[] {
-  const words = String(say ?? "").trim().split(/\s+/).filter(Boolean);
-  if (!words.length) return [];
-  if (size < 1) return [words.join(" ")];
 
-  const chunks: string[] = [];
-  for (let i = 0; i < words.length; i += size) chunks.push(words.slice(i, i + size).join(" "));
-
-  if (chunks.length > 1 && chunks[chunks.length - 1].split(" ").length === 1) {
-    const orphan = chunks.pop() as string;
-    chunks[chunks.length - 1] += ` ${orphan}`;
-  }
-  return chunks;
-}
-
-/**
- * The caption groups for one beat, timed to fill it exactly.
- *
- * The LAST group takes the remainder rather than its share, so rounding never
- * leaves a gap at the end of a beat — a blank frame between two captions reads
- * as the video stalling.
- */
-export function captionsFor(beat: { at: number; ms: number; say: string }, size = CHUNK_WORDS): Caption[] {
-  const chunks = captionChunks(beat.say, size);
+export function captionsFor(beat: { at: number; ms: number; say: string }): Caption[] {
+  const chunks = captionLines(beat.say);
   if (!chunks.length) return [];
-  const each = Math.floor(beat.ms / chunks.length);
-  return chunks.map((text, i) => ({
-    at: beat.at + each * i,
-    ms: i === chunks.length - 1 ? beat.ms - each * i : each,
-    text,
-  }));
+
+  /**
+   * TIME PROPORTIONAL TO LENGTH, not an equal share.
+   *
+   * An equal split gave "Same protein." and "Every recipe in here is priced"
+   * the same time on screen — the short one loitering while the long one is
+   * gone before it is read. Characters track how long a line takes both to say
+   * and to read closely enough, and the two only have to agree with each other.
+   */
+  /**
+   * EACH CAPTION GETS ITS READING TIME FIRST, and only the surplus is shared
+   * out by length.
+   *
+   * A purely proportional split left four captions a few tens of milliseconds
+   * short of what they needed — the beat was long enough overall, but rounding
+   * took it from whichever caption the arithmetic happened to reach last. The
+   * floor is not an average, so it cannot be met on average.
+   *
+   * beatFloorMs guarantees the beat is at least the sum of these, so the
+   * surplus is never negative for a beat this module timed.
+   */
+  const floors = chunks.map((c) => captionReadMs(c));
+  const needed = floors.reduce((a, b) => a + b, 0);
+  const weights = chunks.map((c) => Math.max(1, c.length));
+  const total = weights.reduce((a, b) => a + b, 0);
+
+  /**
+   * FILLING THE BEAT EXACTLY IS THE INVARIANT, and the floor is what it can
+   * afford within it.
+   *
+   * A beat this module timed is at least the sum of the floors (beatFloorMs in
+   * lib/caption-lines.ts), so every caption gets its reading time and the
+   * surplus is shared by length. A beat that is SHORTER than that — one a
+   * script wrote by hand, or a test — cannot have both, and the honest answer
+   * is to divide what there is and let lib/reel-retention.ts report that the
+   * captions are too fast. Silently overrunning the beat instead would leave a
+   * caption still on screen after the shot has cut, which is a fault nothing
+   * downstream could see.
+   */
+  /**
+   * `>= 0` and NOT `> 0`. A beat timed by beatFloorMs is EXACTLY the sum of
+   * the floors, so surplus is zero on the common path — and treating zero as
+   * "cannot afford the floors" sent every well-timed beat down the fallback
+   * and left captions tens of milliseconds short of their own reading time.
+   */
+  const surplus = beat.ms - needed;
+  const affordable = surplus >= 0;
+  const share = (i: number) => Math.floor(((affordable ? surplus : beat.ms) * weights[i]) / total);
+
+  let at = beat.at;
+  return chunks.map((text, i) => {
+    // The last caption takes the remainder, so rounding can never leave a gap
+    // or an overhang at the end of a beat.
+    const ms = i === chunks.length - 1
+      ? beat.at + beat.ms - at
+      : (affordable ? floors[i] + share(i) : share(i));
+    const caption = { at, ms, text };
+    at += ms;
+    return caption;
+  });
 }
 
 export interface PlannableScript {

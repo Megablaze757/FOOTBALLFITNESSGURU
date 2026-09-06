@@ -27,7 +27,9 @@ import { join } from "node:path";
 import { reelScript, type ScriptId } from "../lib/reel-script";
 import { reelPlan, srt, REEL_W, REEL_H, REEL_SCALE } from "../lib/reel-plan";
 import { retentionProblems } from "../lib/reel-retention";
+import { driftTarget } from "../lib/reel-scroll";
 import { phrases } from "../lib/speech-timing";
+import { spokenForm } from "../lib/spoken-numbers";
 import { beatAudio, retime, trackClips, type BeatAudio } from "../lib/narration";
 import { layTrack, readWav, writeWav, type Wav } from "../lib/wav";
 import { secretValue } from "../lib/env-value";
@@ -75,14 +77,14 @@ if (!script) { console.error(`No script called "${id}".`); process.exit(1); }
  * a precaution: seeded with data chosen to film well, and no athlete's real
  * training, food or body data ever goes near a video.
  */
-async function signIn(page: import("playwright").Page, at: string): Promise<void> {
+async function signIn(page: import("playwright").Page, at: string): Promise<boolean> {
   // Through secretValue, because these are pasted into a settings box: a
   // trailing newline on the Supabase URL variable cost three runs, and the
   // secrets beside it were pasted the same way. A newline cannot be typed into
   // a password field, so removing one never removes a real character.
   const email = secretValue(process.env.REEL_EMAIL);
   const password = secretValue(process.env.REEL_PASSWORD);
-  if (!email || !password) return;
+  if (!email || !password) return false;
 
   await page.goto(`${at}/login`, { waitUntil: "load" });
   await page.fill('input[type="email"]', email);
@@ -98,6 +100,7 @@ async function signIn(page: import("playwright").Page, at: string): Promise<void
    */
   await page.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 30_000 })
     .catch(() => { throw new Error("Sign-in did not complete — check REEL_EMAIL and REEL_PASSWORD."); });
+  return true;
 }
 
 async function narrate(beats: readonly { say: string }[]): Promise<BeatAudio[]> {
@@ -113,14 +116,32 @@ async function narrate(beats: readonly { say: string }[]): Promise<BeatAudio[]> 
   const tmp = mkdtempSync(join(tmpdir(), "reel-vo-"));
   // One process for the whole reel: loading a 325MB model per phrase is most
   // of the run time and all of it is avoidable.
-  const perBeat = beats.map((b) => phrases(b.say));
+  /**
+   * THROUGH spokenForm FIRST.
+   *
+   * The model was handed "£0.31" and "30g" verbatim and said "pound zero point
+   * three one" and "thirty gee". Every price in this app is written that way,
+   * so it happened in every reel, on the exact words the reel is about. The
+   * caption still shows the numeral — that is faster to scan — and only the
+   * voice gets the words. See lib/spoken-numbers.ts.
+   */
+  const perBeat = beats.map((b) => phrases(spokenForm(b.say)));
   const flat = perBeat.flat();
   if (!flat.length) return beats.map(() => beatAudio([]));
 
   const job = {
     model, voices, out: tmp,
     voice: process.env.KOKORO_VOICE || "bf_emma",
-    speed: Number(process.env.KOKORO_SPEED || "1.05"),
+    /**
+     * UNDER natural pace, not over it. "Too fast paced."
+     *
+     * This was 1.05 — the narration was deliberately sped up by five percent,
+     * on top of a model that already reads briskly. Explainer voiceover is
+     * read slightly SLOW: the listener is also reading captions and looking at
+     * a screen they have never seen, and every one of those costs time the
+     * speaker has to give back.
+     */
+    speed: Number(process.env.KOKORO_SPEED || "0.94"),
     phrases: flat.map((p) => p.text),
   };
 
@@ -193,9 +214,34 @@ const browser = await chromium.launch({
   executablePath: process.env.PW_CHROMIUM || undefined,
   ...(proxy ? { proxy: { server: proxy } } : {}),
 });
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE SIGN-IN HAPPENS IN A CONTEXT THAT IS NOT BEING FILMED.
+ *
+ * It used to happen in the recorded one, "before the clock" — but the clock
+ * was started after it, while the RECORDING starts the moment the page is
+ * created. So the lead handed to ffmpeg measured only the last navigation, and
+ * the finished reel opened on a login form with the demo account's email
+ * address typed into it, in focus, for the first second.
+ *
+ * A separate context cannot get this wrong by a fraction: the camera does not
+ * exist yet. The session is carried across as storage state, which is where
+ * Supabase keeps it anyway.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+const doorway = await browser.newContext({
+  viewport: { width: REEL_W, height: REEL_H },
+  deviceScaleFactor: REEL_SCALE,
+});
+const signedIn = await signIn(await doorway.newPage(), base);
+const storageState = await doorway.storageState();
+await doorway.close();
+console.log(signedIn ? "Signed in off camera." : "No credentials — filming the public pages only.");
+
 const context = await browser.newContext({
   viewport: { width: REEL_W, height: REEL_H },
   deviceScaleFactor: REEL_SCALE,
+  storageState,
   /**
    * A SCRATCH DIRECTORY, not the output one.
    *
@@ -206,7 +252,22 @@ const context = await browser.newContext({
    * first. Recording elsewhere means the output directory holds exactly the
    * files this script names.
    */
-  recordVideo: { dir: rawDir, size: { width: REEL_W * REEL_SCALE, height: REEL_H * REEL_SCALE } },
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * THE SAME SIZE AS THE VIEWPORT, AND NOT THE FINISHED SIZE.
+   *
+   * This asked for 1080x1920 while the viewport was 540x960. Playwright's
+   * screencast captures CSS pixels and pastes the result into the requested
+   * canvas WITHOUT SCALING IT UP — so the app sat in the top-left quadrant
+   * and three quarters of every frame was empty. Measured on this machine,
+   * red-page against black canvas: mismatched sizes cover 25% of the frame,
+   * matched sizes cover 99%.
+   *
+   * The upscale to 1080x1920 belongs to ffmpeg, which can actually resample.
+   * See the mux step in .github/workflows/record-reels.yml.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  recordVideo: { dir: rawDir, size: { width: REEL_W, height: REEL_H } },
   // The reel is a demo, and a demo that plays an animation twice as fast as
   // the athlete will see it is a lie about the product.
   reducedMotion: "no-preference",
@@ -222,6 +283,23 @@ const context = await browser.newContext({
  * the cause. A plain .js file is never transpiled. See scripts/reel-overlay.js.
  */
 await context.addInitScript({ path: new URL("./reel-overlay.js", import.meta.url).pathname });
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE INSTALL PROMPT IS NOT PART OF THE PRODUCT SHOT.
+ *
+ * "Add PocketAthlete to your home screen" sat across the bottom of the app for
+ * the ENTIRE nineteen seconds of the last reel, over the table the reel was
+ * about. It is a good prompt and it is addressed to somebody already using the
+ * app — which the viewer of a reel is not.
+ *
+ * Dismissed the way a person dismisses it, through the flag components/PWA.tsx
+ * already reads, rather than by hiding it with a selector this would have to
+ * keep in step with the markup.
+ */
+await context.addInitScript(() => {
+  try { localStorage.setItem("pa:install-dismissed", "1"); } catch { /* no storage, no prompt */ }
+});
 
 const page = await context.newPage();
 // Loud, because an overlay that fails to install produces a video that
@@ -245,15 +323,46 @@ const video = page.video();
  * is heard rather than seen and survives every check on the video.
  * ═══════════════════════════════════════════════════════════════════════════
  */
-// BEFORE the clock: a sign-in in the video is a reel of a login form.
-await signIn(page, base);
-
+/**
+ * MEASURED FROM HERE, where the recording actually begins.
+ *
+ * This was read after the sign-in, which is why nineteen seconds of reel
+ * opened on a login screen: everything between the page being created and this
+ * line is in the file, and only what this measures gets trimmed off.
+ */
 const videoStart = Date.now();
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * EVERY ROUTE VISITED ONCE BEFORE THE CLOCK STARTS.
+ *
+ * The app is a static export that fetches its data in the browser, so `load`
+ * fires on an empty shell and the screen is a spinner for a moment afterwards.
+ * Mid-reel that moment lands wherever it lands — the last reel spent its final
+ * two seconds on a spinner, under the closing line of the voiceover.
+ *
+ * The timeline cannot wait for it: the audio is a fixed track, so a beat that
+ * pauses to load puts the voice permanently ahead of the picture. Warming the
+ * routes first is the version that costs nothing at all — it happens before
+ * the trim point, so none of it is in the finished file.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+const settle = async () => {
+  await page.waitForLoadState("networkidle", { timeout: 6_000 }).catch(() => {});
+};
+for (const route of [...new Set(plan.steps.map((b) => b.route))]) {
+  await page.goto(`${base}${route}`, { waitUntil: "load" }).catch(() => {});
+  await settle();
+}
+
 await page.goto(`${base}${plan.steps[0]?.route ?? "/"}`, { waitUntil: "load" }).catch(() => {});
+await settle();
 const started = Date.now();
 const leadMs = started - videoStart;
 const elapsed = () => Date.now() - started;
 let onRoute = plan.steps[0]?.route ?? "";
+/** How far down the current screen the drift has reached. */
+let driftFrom = 0;
 
 console.log(`Recording "${script.hook}" — ${Math.round(plan.totalMs / 1000)}s, ${plan.steps.length} beats`);
 
@@ -269,18 +378,11 @@ for (const step of plan.steps) {
    */
   if (step.route !== onRoute) {
     onRoute = step.route;
+    // A new screen starts at the top of it, not wherever the last one ended.
+    driftFrom = 0;
     await page.goto(`${base}${step.route}`, { waitUntil: "load" }).catch((e) => {
       console.warn(`  ${step.route}: ${e instanceof Error ? e.message : e}`);
     });
-  }
-
-  if (!hookShown) {
-    hookShown = true;
-    await page.evaluate((t) => (window as never as { __reelHook: (s: string) => void }).__reelHook(t), plan.hook);
-    // Held from the first frame, because the decision is made in three seconds
-    // and the hook has to be readable inside them.
-    await sleep(Math.max(0, plan.hookMs - elapsed()));
-    await page.evaluate(() => (window as never as { __reelHook: (s: string) => void }).__reelHook(""));
   }
 
   /**
@@ -290,17 +392,45 @@ for (const step of plan.steps) {
    * is why this reads the document rather than scrolling a fixed amount and
    * bouncing off the bottom of a short one.
    */
-  const scrollable = await page.evaluate(
-    () => Math.max(0, document.documentElement.scrollHeight - window.innerHeight),
-  ).catch(() => 0);
+  const page_ = await page.evaluate(() => ({
+    scrollable: Math.max(0, document.documentElement.scrollHeight - window.innerHeight),
+    viewport: window.innerHeight,
+  })).catch(() => ({ scrollable: 0, viewport: 0 }));
 
-  for (const caption of step.captions) {
+  if (!hookShown) {
+    hookShown = true;
+    await page.evaluate((t) => (window as never as { __reelHook: (s: string) => void }).__reelHook(t), plan.hook);
+    /**
+     * MOVING FROM THE FIRST FRAME.
+     *
+     * The hook used to hold a still image for 1.6 seconds. A frame that does
+     * not move is a frame a scroller has already finished reading, and the
+     * only thing left to do with it is swipe. The drift starts under the hook
+     * now, so the first second of the reel is the app doing something.
+     */
+    await page.evaluate((y) => window.scrollTo({ top: y, behavior: "smooth" }), Math.round(page_.viewport * 0.28)).catch(() => {});
+    driftFrom = Math.round(page_.viewport * 0.28);
+    // Held from the first frame, because the decision is made in three seconds
+    // and the hook has to be readable inside them.
+    await sleep(Math.max(0, plan.hookMs - elapsed()));
+    await page.evaluate(() => (window as never as { __reelHook: (s: string) => void }).__reelHook(""));
+  }
+
+  /**
+   * MEASURED AGAINST THE SCREEN, and carried over between beats on one route.
+   * See lib/reel-scroll.ts — both halves of that were wrong and both were
+   * visible in the finished file.
+   */
+  for (const [i, caption] of step.captions.entries()) {
     await sleep(Math.max(0, caption.at - elapsed()));
     await page.evaluate((t) => (window as never as { __reelCaption: (s: string) => void }).__reelCaption(t), caption.text);
-    if (scrollable > 0) {
-      const to = Math.min(scrollable, (scrollable / Math.max(1, step.captions.length)) * (step.captions.indexOf(caption) + 1));
+    const to = driftTarget({
+      ...page_, from: driftFrom, step: i + 1, steps: step.captions.length,
+    });
+    if (to !== driftFrom || i === 0) {
       await page.evaluate((y) => window.scrollTo({ top: y, behavior: "smooth" }), to).catch(() => {});
     }
+    if (i === step.captions.length - 1) driftFrom = to;
   }
   await sleep(Math.max(0, step.at + step.ms - elapsed()));
   await page.evaluate(() => (window as never as { __reelCaption: (s: string) => void }).__reelCaption("")).catch(() => {});

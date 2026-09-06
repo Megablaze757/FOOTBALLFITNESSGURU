@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useAsync } from "@/lib/use-async";
 import { useCurrentUser } from "@/lib/auth";
 import { poundsFromPennies } from "@/lib/affiliate";
-import { referralLink, waitlistLink } from "@/lib/referral";
+import { referralLink, signupLink } from "@/lib/referral";
 
 /**
  * An affiliate's own dashboard.
@@ -175,10 +175,10 @@ export default function PartnerPage() {
             onCopy={() => copy("site", referralLink(s.code))}
           />
           <LinkRow
-            label="Waitlist"
-            value={waitlistLink(s.code)}
-            copied={copied === "waitlist"}
-            onCopy={() => copy("waitlist", waitlistLink(s.code))}
+            label="Sign up"
+            value={signupLink(s.code)}
+            copied={copied === "signup"}
+            onCopy={() => copy("signup", signupLink(s.code))}
           />
         </div>
         <p className="mt-2 text-[11px] leading-relaxed text-slate-500">

@@ -10,6 +10,15 @@ export const metadata: Metadata = {
     "Get first access to PocketAthlete, founding-member pricing locked in, and a say in what " +
     "gets built. An AI performance coach for athletes who train seriously.",
   alternates: { canonical: `${SITE}/waitlist/` },
+  /**
+   * NOINDEX, because the page still exists and should not be found.
+   *
+   * Links and emails already out there point here, so it keeps working. But
+   * signup is open and free, and a searcher who lands on a waitlist form
+   * instead of the signup page is a lost signup — removing it from the sitemap
+   * stops it being advertised; this stops it being indexed at all.
+   */
+  robots: { index: false, follow: true },
   openGraph: { images: ogImage("default", "PocketAthlete"),
     title: "Join the PocketAthlete waitlist",
     description: "First access, founding-member pricing, and a say in the roadmap.",

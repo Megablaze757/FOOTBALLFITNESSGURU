@@ -109,6 +109,20 @@ jobs:
       # (98.5 line / 88.8 branch / 93.8 func) so this ratchets rather than
       # rubber-stamps: new engine code without tests drops the number and fails.
       - run: npm run test:coverage
+        # ═══════════════════════════════════════════════════════════════════
+        # THE SECRETS ARE HANDED TO THE SUITE ON PURPOSE.
+        #
+        # lib/no-secrets.test.ts scans tracked files for the VALUE of any
+        # secret the environment holds. Patterns cannot recognise an arbitrary
+        # password — the demo account's went into a tracked test file and the
+        # pattern rules had nothing to say about it — but an exact comparison
+        # can, and this is the only place the values exist.
+        #
+        # Nothing is ever printed: the failure names the variable and the file.
+        # ═══════════════════════════════════════════════════════════════════
+        env:
+          REEL_EMAIL: ${{ secrets.REEL_EMAIL }}
+          REEL_PASSWORD: ${{ secrets.REEL_PASSWORD }}
 
       # Advisory, not blocking. Every current `npm audit` high is a Next.js
       # server-side advisory — Image Optimizer, Server Components, Middleware,

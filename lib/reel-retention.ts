@@ -53,8 +53,14 @@ export const HOOK_DEADLINE_MS = 3_000;
  */
 export const HOOK_MAX_WORDS = 10;
 
-/** Below this a caption group is on screen too briefly to read. */
-export const MIN_CAPTION_MS = 450;
+/**
+ * The reading-speed rule lives with the captions it measures, in
+ * lib/caption-lines.ts. Re-exported here because this is where the retention
+ * rules are read, and a reader looking for the caption floor looks here first.
+ */
+import { captionReadMs } from "./caption-lines";
+export { CAPTION_ACQUIRE_MS, CAPTION_CPS, MIN_CAPTION_MS, captionReadMs } from "./caption-lines";
+
 
 /**
  * The longest the screen may go with no caption on it.
@@ -183,12 +189,44 @@ export function retentionProblems(plan: ReelPlan): RetentionProblem[] {
   const onRoute = new Map<string, number>();
   for (const step of plan.steps) {
     for (const caption of step.captions) {
-      if (caption.ms < MIN_CAPTION_MS) {
-        say(`a caption is on screen for ${caption.ms}ms — too brief to read`, step.index);
+      const needs = captionReadMs(caption.text);
+      if (caption.ms < needs) {
+        say(
+          `"${caption.text}" is on screen for ${caption.ms}ms — too brief to read, it needs ${needs}ms`,
+          step.index,
+        );
       }
     }
-    if (step.ms > MAX_HOLD_MS) {
-      say(`${Math.round(step.ms / 1000)}s on one screen doing one thing`, step.index);
+    /**
+     * PER CAPTION, not per beat.
+     *
+     * This measured the beat, which stopped meaning "one screen doing one
+     * thing" the moment beats grew to fit their reading time: a five-second
+     * beat with two captions changing on it is not a static shot, and flagging
+     * it pushed toward cutting the reading time back down — the exact thing
+     * that made the reel too fast in the first place.
+     *
+     * A single caption sitting still for this long is the real fault, and it
+     * is what the rule was always trying to describe.
+     */
+    /**
+     * THE LONGEST STRETCH WITH NOTHING CHANGING, which is what this rule was
+     * always trying to measure.
+     *
+     * It used to measure the whole beat, and that stopped meaning the same
+     * thing once beats grew to fit their reading time: a five-second beat with
+     * two captions changing on it is not a static shot, and flagging it pushed
+     * toward cutting the reading time back down — the exact thing that made
+     * the reel too fast in the first place.
+     *
+     * A beat with no captions at all is the original case and still counts:
+     * nothing changes for its entire length.
+     */
+    const stillFor = step.captions.length
+      ? Math.max(...step.captions.map((c) => c.ms))
+      : step.ms;
+    if (stillFor > MAX_HOLD_MS) {
+      say(`${Math.round(stillFor / 1000)}s on one screen doing one thing`, step.index);
     }
     onRoute.set(step.route, (onRoute.get(step.route) ?? 0) + step.ms);
   }

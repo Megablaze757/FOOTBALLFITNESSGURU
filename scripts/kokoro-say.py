@@ -29,7 +29,7 @@ voice = job.get("voice", "bf_emma")
 lang = "en-gb" if voice.startswith(("b",)) else "en-us"
 
 for index, text in enumerate(job["phrases"]):
-    samples, rate = kokoro.create(text, voice=voice, speed=job.get("speed", 1.05), lang=lang)
+    samples, rate = kokoro.create(text, voice=voice, speed=job.get("speed", 0.94), lang=lang)
     path = f"{job['out']}/{index}.wav"
     sf.write(path, samples, rate)
     with wave.open(path) as handle:

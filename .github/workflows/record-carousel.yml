@@ -1,0 +1,106 @@
+name: Make carousel
+
+# The still-image post, which is a different job from the reel.
+#
+# Instagram reported share rate 0.0% and save rate 0.0% on the reel. Those are
+# the two signals that carry a post past existing followers, and a video earns
+# neither well — nobody saves a video to look something up in a shop.
+#
+# A ranked table of what 30g of protein costs IS reference material, and this
+# posts it as reference material. Same prices as the site, from the same data.
+#
+# Cheap next to the reel: no ffmpeg, no 325MB voice model, no recording. It is
+# a browser taking five screenshots.
+
+on:
+  repository_dispatch:
+    types: [record-carousel]
+  workflow_dispatch:
+
+jobs:
+  carousel:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+
+      - name: Make the slides
+        run: node --import tsx scripts/record-carousel.mts --out carousel
+
+      # ═══════════════════════════════════════════════════════════════════
+      # THE SAME UPLOAD AS THE REEL, and the same reasoning: "I want it in
+      # the admin dashboard, not GitHub." An artefact means opening GitHub,
+      # finding the run, downloading a zip and unzipping it.
+      #
+      # Whitespace is stripped from the pasted settings for the reason
+      # documented at length in record-reels.yml — a trailing carriage return
+      # on the URL variable cost three runs.
+      # ═══════════════════════════════════════════════════════════════════
+      - name: Put it in the dashboard
+        continue-on-error: true
+        env:
+          REEL_EMAIL: ${{ secrets.REEL_EMAIL }}
+          REEL_PASSWORD: ${{ secrets.REEL_PASSWORD }}
+          RAW_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL || 'https://txqhstackgidjqkkrzyj.supabase.co' }}
+          RAW_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_kr26XwyR0HZxS3HR3UJI2Q_YLLT7Sfl' }}
+        run: |
+          set -uo pipefail
+          SUPABASE_URL=$(printf '%s' "$RAW_URL" | tr -d '[:space:]')
+          SUPABASE_KEY=$(printf '%s' "$RAW_KEY" | tr -d '[:space:]')
+          REEL_EMAIL=$(printf '%s' "$REEL_EMAIL" | tr -d '\r\n')
+          REEL_PASSWORD=$(printf '%s' "$REEL_PASSWORD" | tr -d '\r\n')
+
+          if [ -z "${REEL_EMAIL:-}" ] || [ -z "${REEL_PASSWORD:-}" ]; then
+            echo "::warning::REEL_EMAIL/REEL_PASSWORD are empty — the slides are attached to this run instead."
+            exit 0
+          fi
+
+          auth=$(mktemp)
+          body=$(python3 -c 'import json,os; print(json.dumps({"email": os.environ["REEL_EMAIL"], "password": os.environ["REEL_PASSWORD"]}))')
+          if ! code=$(curl -sS -o "$auth" -w "%{http_code}" \
+            -X POST "$SUPABASE_URL/auth/v1/token?grant_type=password" \
+            -H "apikey: $SUPABASE_KEY" -H "Content-Type: application/json" \
+            --data-raw "$body"); then
+            code="000"
+          fi
+          if [ "$code" != "200" ]; then
+            echo "::error::Sign-in to Supabase failed (HTTP $code) — the slides were not uploaded."
+            head -c 200 "$auth" | tr -d '\n'; echo
+            exit 0
+          fi
+          token=$(python3 -c "import json;print(json.load(open('$auth')).get('access_token',''))" 2>/dev/null || echo "")
+          [ -n "$token" ] || { echo "::error::Signed in but no access token came back."; exit 0; }
+
+          stamp=$(date -u +%Y-%m-%dT%H-%M)
+          uploaded=0
+          for file in carousel/*.png carousel/caption.txt; do
+            [ -e "$file" ] || continue
+            base="${file##*/}"
+            type=$([ "${file##*.}" = "png" ] && echo image/png || echo text/plain)
+            out=$(mktemp)
+            if ! up=$(curl -sS -o "$out" -w "%{http_code}" -X POST \
+              "$SUPABASE_URL/storage/v1/object/reels/carousel-$stamp-$base" \
+              -H "apikey: $SUPABASE_KEY" -H "Authorization: Bearer $token" \
+              -H "Content-Type: $type" --data-binary "@$file"); then
+              up="000"
+            fi
+            if [ "$up" = "200" ]; then
+              echo "carousel-$stamp-$base uploaded"
+              uploaded=$((uploaded + 1))
+            else
+              echo "::error::carousel-$stamp-$base did not upload (HTTP $up)."
+              head -c 200 "$out" | tr -d '\n'; echo
+            fi
+          done
+          [ "$uploaded" -gt 0 ] || echo "::warning::Nothing reached the dashboard. The slides are attached to this run."
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: carousel
+          path: carousel/
+          retention-days: 14

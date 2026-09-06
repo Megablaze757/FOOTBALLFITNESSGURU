@@ -119,7 +119,7 @@ needed. Includes rehab and mobility work, not only lifts.
 
 - [Home](${SITE}/)
 - [Pricing](${SITE}/plans/)
-- [Join the waitlist](${SITE}/waitlist/)
+- [Sign up free](${SITE}/login/)
 - [All position guides](${SITE}/guides/)
 - [All drills](${SITE}/drills/)
 - [All recipes](${SITE}/recipes/)

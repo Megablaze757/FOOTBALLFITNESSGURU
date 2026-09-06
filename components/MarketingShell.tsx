@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Logo } from "@/components/Logo";
+import { SIGNUP_CTA, SIGNUP_CTA_SHORT, SIGNUP_HREF } from "@/lib/signup-link";
 
 /**
  * Chrome for the public, indexable pages.
@@ -16,8 +17,11 @@ export function MarketingShell({ children }: { children: React.ReactNode }) {
           <Logo size={32} />
           <span className="text-lg font-extrabold tracking-tight">PocketAthlete</span>
         </Link>
-        <Link href="/waitlist" className="rounded-2xl bg-white/[0.06] px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/[0.1]">
-          Join the waitlist
+        {/* The door is open, so the sign on it says so. This used to read
+            "Join the waitlist", which was right before there was an app to
+            sign up to and is a lost signup now. */}
+        <Link href={SIGNUP_HREF} className="rounded-2xl bg-white/[0.06] px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/[0.1]">
+          {SIGNUP_CTA_SHORT}
         </Link>
       </header>
       {children}
@@ -57,8 +61,11 @@ export function GuideCta({ what }: { what: string }) {
         PocketAthlete builds your program from your sport, your position and how recovered you
         actually are that morning — then adapts it as you log sessions.
       </p>
-      <Link href="/waitlist" className="mt-4 inline-block rounded-2xl bg-pitch-500 px-5 py-2.5 text-sm font-semibold text-on-accent">
-        Join the waitlist →
+      {/* THE HIGHEST-LEVERAGE CTA ON THE SITE: this renders at the foot of
+          every guide, recipe and exercise page — 859 of them, and they are
+          the whole reason anybody arrives from a search. */}
+      <Link href={SIGNUP_HREF} className="mt-4 inline-block rounded-2xl bg-pitch-500 px-5 py-2.5 text-sm font-semibold text-on-accent">
+        {SIGNUP_CTA} →
       </Link>
     </section>
   );

@@ -23,12 +23,26 @@
 /** The `event_type` the workflow listens for. Both sides must agree. */
 export const REEL_EVENT = "record-reel";
 
+/**
+ * The still-image post, which is a different workflow and a different job.
+ *
+ * ONE ROUTE FOR BOTH, and not a second endpoint: the admin token, the
+ * validation and the Worker's error handling are the interesting parts and
+ * duplicating them is how one of the two copies quietly stops being checked.
+ */
+export const CAROUSEL_EVENT = "record-carousel";
+
+export type ReelKind = "reel" | "carousel";
+
 export interface ReelRequest {
+  /** Ignored for a carousel: there is one carousel, not four. */
   script: string;
   /** Narrate it. Off records a silent reel with captions. */
   voice: boolean;
   /** For a drill or a recipe reel, what it is about. */
   subject?: string;
+  /** Defaults to "reel", because every caller before this one meant a reel. */
+  kind?: ReelKind;
 }
 
 /**
@@ -42,9 +56,20 @@ export const REEL_SCRIPTS = ["demo-readiness", "demo-cost", "drill", "standards"
 
 /** Why this request cannot be sent, or null. */
 export function reelRequestProblem(request: Partial<ReelRequest> | null | undefined): string | null {
-  const script = String(request?.script ?? "").trim();
-  if (!script) return "no script named";
-  if (!(REEL_SCRIPTS as readonly string[]).includes(script)) return `"${script}" is not a reel script`;
+  const kind = request?.kind ?? "reel";
+  if (kind !== "reel" && kind !== "carousel") return `"${String(kind)}" is not something this makes`;
+
+  /**
+   * A CAROUSEL NAMES NO SCRIPT, and must not be made to invent one. There is
+   * one carousel — the priced protein list — so requiring a script here would
+   * mean the caller passing a reel's name for a post that is not a reel, and
+   * the next reader believing it meant something.
+   */
+  if (kind === "reel") {
+    const script = String(request?.script ?? "").trim();
+    if (!script) return "no script named";
+    if (!(REEL_SCRIPTS as readonly string[]).includes(script)) return `"${script}" is not a reel script`;
+  }
 
   const subject = request?.subject;
   if (subject !== undefined) {
@@ -81,9 +106,9 @@ export function dispatchBody(request: ReelRequest): {
   client_payload: { script: string; voice: string; subject: string };
 } {
   return {
-    event_type: REEL_EVENT,
+    event_type: (request.kind ?? "reel") === "carousel" ? CAROUSEL_EVENT : REEL_EVENT,
     client_payload: {
-      script: request.script,
+      script: request.script ?? "",
       // STRINGS, not booleans. A GitHub Actions expression comparing a JSON
       // boolean from client_payload against a string is a comparison nobody
       // can read and half the internet gets wrong; "true"/"false" compares the

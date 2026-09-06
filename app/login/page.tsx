@@ -1,5 +1,6 @@
 "use client";
 
+import { wantsSignUp } from "@/lib/signup-link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -15,6 +16,11 @@ export default function LoginPage() {
   const router = useRouter();
   const { user } = useSession();
 
+  /**
+   * "sign_in" until the address bar says otherwise, and the address bar is
+   * read in an effect below rather than here — this renders on the server for
+   * a static export, where there is no window to ask.
+   */
   const [mode, setMode] = useState<"sign_in" | "sign_up" | "forgot">("sign_in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -54,6 +60,10 @@ export default function LoginPage() {
   }, [refCode]);
 
   useEffect(() => {
+    // The link the public site's "Sign up for free today" buttons use. Without
+    // this the button is renamed and the door is still the sign-in form.
+    if (wantsSignUp(window.location.search)) setMode("sign_up");
+
     const plan = new URLSearchParams(window.location.search).get("plan");
     // Only the plan on sale. An old ?plan=gold link shouldn't send someone
     // into a signup expecting a tier they can no longer buy.

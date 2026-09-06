@@ -139,6 +139,75 @@ test("no tracked file contains a credential", () => {
 });
 
 /**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE SECRETS THIS ENVIRONMENT ACTUALLY HOLDS.
+ *
+ * The rules above are patterns, and a pattern cannot recognise an arbitrary
+ * password. The demo account's — an ordinary word and three digits — is not
+ * shaped like anything, and it went into a tracked test file, in a test about
+ * handling passwords safely, and this scanner had nothing to say about it.
+ *
+ * The value is not quoted here either. Writing it into the comment explaining
+ * the mistake puts it straight back, which is what happened on the first
+ * attempt at this paragraph — caught by the check below.
+ *
+ * When a secret is present in the environment, though, the check is exact:
+ * does any tracked file contain this string? That is the case in CI, which is
+ * where it matters, and it catches the whole class rather than the shapes
+ * somebody thought of.
+ *
+ * THE VALUE IS NEVER PRINTED. The failure names the variable and the file, and
+ * a test that helpfully echoes the secret it found is a test that puts it in
+ * the build log for everyone.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("no tracked file contains a secret this environment knows", (t) => {
+  /**
+   * Only values that are actually secret. NEXT_PUBLIC_* is deliberately absent:
+   * the publishable key is compiled into the bundle by design, and flagging it
+   * would teach people to route around this test.
+   */
+  const WATCHED = [
+    "REEL_EMAIL", "REEL_PASSWORD",
+    "SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_DB_PASSWORD",
+    "NVIDIA_API_KEY", "OPENAI_API_KEY", "STRIPE_SECRET_KEY", "GH_TOKEN",
+  ];
+
+  const known = WATCHED
+    .map((name) => [name, (process.env[name] ?? "").trim()] as const)
+    // Under eight characters is not a credential and would match prose.
+    .filter(([, value]) => value.length >= 8);
+
+  if (known.length === 0) {
+    t.skip("no secrets in this environment — this check runs in CI");
+    return;
+  }
+
+  const found: string[] = [];
+  for (const file of trackedFiles()) {
+    if (SKIP_DIR.test(file) || SKIP_FILE.test(file)) continue;
+    let text: string;
+    try {
+      text = readFileSync(file, "utf8");
+    } catch {
+      continue;
+    }
+    if (text.length > 4_000_000) continue;
+    for (const [name, value] of known) {
+      if (text.includes(value)) found.push(`${file} contains the value of ${name}`);
+    }
+  }
+
+  assert.deepEqual(
+    found, [],
+    "A live secret is committed to this repository.\n" +
+      "  Remove it, then ROTATE it — anything pushed is compromised whether or not\n" +
+      "  the commit is reverted, because the history keeps it.\n" +
+      `  ${found.join("\n  ")}`,
+  );
+});
+
+/**
  * A scanner that matches nothing passes forever and protects nothing. This is
  * the check on the check.
  */
