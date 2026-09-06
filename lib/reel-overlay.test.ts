@@ -273,3 +273,28 @@ test("the recorder hands the caption runs, not a string", () => {
   assert.match(src, /__reelCaption\(runs\)/, "the caption is drawn without emphasis");
   assert.match(src, /emphasise\(caption\.text\)/, "nothing computes which run to colour");
 });
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * A COMPOSED SHOT HOLDS STILL.
+ *
+ * The spotlight is position:fixed and computed once, when the beat aims it.
+ * The drift then scrolled the page out from under it — so a reveal frame went
+ * out with a gold ring, correctly drawn, around "Turkey breast mince £1.06"
+ * while the caption said "Cheapest: £0.31". Worse than no spotlight: it
+ * pointed confidently at the wrong row.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("a beat that aimed the shot does not then scroll off it", () => {
+  const src = readFileSync("scripts/record-reel.mts", "utf8");
+  const loop = src.slice(src.indexOf("for (const [i, caption] of step.captions.entries())"));
+  const body = loop.slice(0, loop.indexOf("\n  }"));
+
+  const caption = body.indexOf("__reelCaption");
+  const skip = body.indexOf("if (aimed) continue;");
+  const drift = body.indexOf("driftTarget({");
+
+  assert.ok(skip > 0, "a focused beat still drifts, so the spotlight ends up on the wrong row");
+  assert.ok(caption < skip, "the caption is skipped along with the drift");
+  assert.ok(skip < drift, "the skip comes after the scroll it is meant to prevent");
+});
