@@ -157,3 +157,101 @@ export function speedFor(role: Role, base = BASE_SPEED): number {
 export function shapeRates(phrases: readonly string[], base = BASE_SPEED): number[] {
   return phrases.map((text, i) => speedFor(roleOf(i, phrases.length, text), base));
 }
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE DIMENSION KOKORO DOES NOT HAVE, AND THE ONE THE COMPLAINT IS ABOUT.
+ *
+ * "It needs to feel excited, grab the audience's attention, not just talking
+ * at you like it's reading off a script."
+ *
+ * Rate and loudness above are everything Kokoro exposes, and the note at the
+ * top of this file records where that ran out: pitch variability tops out
+ * around 4.35 semitones however it is tuned, measured across six punctuation
+ * styles and three voices. Excitement is not a knob that model has.
+ *
+ * Chatterbox does have one. Measured on the readiness hook, same tracker, same
+ * two lines:
+ *
+ *   Kokoro, as it ships          F0 SD 4.13 st   range 14.65 st   7.84s
+ *   Chatterbox ex0.5 cfg0.5      F0 SD 6.17 st   range 19.08 st   6.98s
+ *   Chatterbox ex0.7 cfg0.3      F0 SD 5.77 st   range 16.99 st   7.62s
+ *   Chatterbox ex0.9 cfg0.3      F0 SD 5.39 st   range 17.32 st   6.06s
+ *
+ * Every setting clears Kokoro's ceiling on both measures and says the same
+ * words in less time, which is itself part of sounding excited.
+ *
+ * WHAT THE NUMBERS DO NOT SETTLE. Exaggeration barely moves F0 SD — 5.4 to
+ * 6.2 and not even in order — so it changes the CHARACTER of a read rather
+ * than its measurable spread. The level is a judgement and belongs to whoever
+ * is publishing the reels; the SPREAD below is the part with a reason.
+ *
+ * THE SPREAD, not the level, is why this is a table. Same argument as RATE and
+ * GAIN: a listener hears CHANGE, and a reel whose every phrase is delivered at
+ * one setting has none to hear. Offsets rather than absolutes so that picking
+ * a different overall level moves all four together and keeps the contrast.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+
+/** How emphatic a read is overall. Chatterbox's own default is 0.5. */
+export const EXAGGERATION_BASE = 0.5;
+
+/** Chatterbox accepts 0.25 to 2.0; past about 1.2 it stops sounding like a read. */
+export const EXAGGERATION_MIN = 0.25;
+export const EXAGGERATION_MAX = 1.2;
+
+export const EXAGGERATION_OFFSET: Record<Role, number> = {
+  /** It is competing with a thumb, and it gets one and a half seconds. */
+  hook: 0.25,
+  /** Stepping back is what makes everything else step up. */
+  setup: -0.05,
+  /** A number wants weight rather than heat. */
+  figure: 0.1,
+  /** The line people remember. */
+  payoff: 0.3,
+};
+
+/**
+ * Chatterbox's classifier-free-guidance weight: how closely it sticks to a
+ * flat reading of the text. LOWER IS LOOSER AND QUICKER, which is why the hook
+ * and the payoff sit under the base and the connective material sits above it.
+ */
+export const CFG_BASE = 0.5;
+export const CFG_MIN = 0.2;
+export const CFG_MAX = 0.9;
+
+export const CFG_OFFSET: Record<Role, number> = {
+  hook: -0.15,
+  setup: 0.05,
+  figure: 0.1,
+  payoff: -0.1,
+};
+
+const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, Math.round(n * 1000) / 1000));
+
+/** How emphatically to speak one phrase, and how loosely. */
+export function expressionFor(
+  role: Role,
+  base = EXAGGERATION_BASE,
+  cfgBase = CFG_BASE,
+): { exaggeration: number; cfg: number } {
+  return {
+    exaggeration: clamp(base + EXAGGERATION_OFFSET[role], EXAGGERATION_MIN, EXAGGERATION_MAX),
+    cfg: clamp(cfgBase + CFG_OFFSET[role], CFG_MIN, CFG_MAX),
+  };
+}
+
+/**
+ * Every phrase of a reel, with how emphatically each should be said.
+ *
+ * The FLAT list across all beats, for the same reason shapeRates takes one:
+ * "first" and "last" mean first and last of the reel, and a hook that resets
+ * on every beat is four hooks and no reel.
+ */
+export function shapeExpression(
+  phrases: readonly string[],
+  base = EXAGGERATION_BASE,
+  cfgBase = CFG_BASE,
+): { exaggeration: number; cfg: number }[] {
+  return phrases.map((text, i) => expressionFor(roleOf(i, phrases.length, text), base, cfgBase));
+}

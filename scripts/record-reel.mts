@@ -33,7 +33,10 @@ import { SIGNUP_CTA } from "../lib/signup-link";
 import { karaokeWords } from "../lib/caption-karaoke";
 import { phrases } from "../lib/speech-timing";
 import { spokenForm } from "../lib/spoken-numbers";
-import { BASE_SPEED, VOICE, shapeGains, shapeRates } from "../lib/speech-prosody";
+import {
+  BASE_SPEED, VOICE, shapeGains, shapeRates,
+  shapeExpression, EXAGGERATION_BASE, CFG_BASE,
+} from "../lib/speech-prosody";
 import { beatAudio, retime, trackClips, type BeatAudio } from "../lib/narration";
 import { layTrack, normalised, readWav, writeWav, type Wav } from "../lib/wav";
 import { secretValue } from "../lib/env-value";
@@ -107,10 +110,31 @@ async function signIn(page: import("playwright").Page, at: string): Promise<bool
   return true;
 }
 
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * WHICH ENGINE SAYS THE WORDS.
+ *
+ * "The voice is still not good, feels robotic... it needs to feel excited,
+ * grab the audience's attention, not just talking at you like it's reading off
+ * a script."
+ *
+ * Kokoro has no expression control and its pitch variability tops out around
+ * 4.35 semitones however it is tuned — measured, see lib/speech-prosody.ts.
+ * Chatterbox has one, clears that ceiling on every setting, and is free and
+ * offline too; it is bigger, slower, and needs weights cached.
+ *
+ * Kokoro stays the DEFAULT until somebody has listened to both and chosen,
+ * because switching the engine on a recorder nobody has A/B'd is how a reel
+ * goes out sounding worse with a longer changelog. REEL_VOICE=chatterbox is
+ * the switch, and it is one line in the workflow.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+const ENGINE = (process.env.REEL_VOICE || "kokoro").toLowerCase();
+
 async function narrate(beats: readonly { say: string; hold?: number }[]): Promise<BeatAudio[]> {
   const model = process.env.KOKORO_MODEL;
   const voices = process.env.KOKORO_VOICES;
-  if (!model || !voices) {
+  if (ENGINE === "kokoro" && (!model || !voices)) {
     throw new Error(
       "Set KOKORO_MODEL and KOKORO_VOICES to the kokoro-v1.0.onnx and voices-v1.0.bin paths. "
       + "Both are free downloads — see docs/REELS.md.",
@@ -139,6 +163,37 @@ async function narrate(beats: readonly { say: string; hold?: number }[]): Promis
   const gains = shapeGains(flat.map((p) => p.text));
   if (!flat.length) return beats.map(() => beatAudio([]));
 
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * THE SAME ROLES, A DIFFERENT SET OF KNOBS.
+   *
+   * Chatterbox has no `speed`, so the per-phrase RATE shaping does not reach
+   * it. cfg_weight is the equivalent — lower is looser and quicker — and both
+   * it and `exaggeration` are shaped by the same Role table, so tempo and
+   * emphasis still change four times across a reel rather than never.
+   *
+   * The BASE level is an environment variable because it is a judgement about
+   * how hot the read should be, and that belongs to whoever is publishing the
+   * reels rather than to this file.
+   */
+  const expression = shapeExpression(
+    flat.map((p) => p.text),
+    Number(process.env.CHATTERBOX_EXAGGERATION || EXAGGERATION_BASE),
+    Number(process.env.CHATTERBOX_CFG || CFG_BASE),
+  );
+
+  const chatterboxJob = {
+    out: tmp,
+    phrases: flat.map((p) => p.text),
+    exaggerations: expression.map((e) => e.exaggeration),
+    cfgs: expression.map((e) => e.cfg),
+    /**
+     * A reference clip to clone, or nothing. It must be somebody who
+     * consented — the app's own owner reading a hook is the intended case.
+     */
+    prompt: process.env.REEL_VOICE_PROMPT || null,
+  };
+
   const job = {
     model, voices, out: tmp,
     /**
@@ -163,16 +218,17 @@ async function narrate(beats: readonly { say: string; hold?: number }[]): Promis
     phrases: flat.map((p) => p.text),
   };
 
+  const say = ENGINE === "chatterbox" ? "scripts/chatterbox-say.py" : "scripts/kokoro-say.py";
   const said = await new Promise<{ index: number; path: string; ms: number }[]>((resolve, reject) => {
-    const child = spawn("python3", ["scripts/kokoro-say.py"], { stdio: ["pipe", "pipe", "inherit"] });
+    const child = spawn("python3", [say], { stdio: ["pipe", "pipe", "inherit"] });
     let out = "";
     child.stdout.on("data", (chunk) => { out += chunk; });
     child.on("error", reject);
     child.on("close", (code) => {
-      if (code !== 0) return reject(new Error(`kokoro-say.py exited ${code}`));
+      if (code !== 0) return reject(new Error(`${say} exited ${code}`));
       resolve(out.trim().split("\n").filter(Boolean).map((line) => JSON.parse(line)));
     });
-    child.stdin.end(JSON.stringify(job));
+    child.stdin.end(JSON.stringify(ENGINE === "chatterbox" ? chatterboxJob : job));
   });
 
   if (said.length !== flat.length) {

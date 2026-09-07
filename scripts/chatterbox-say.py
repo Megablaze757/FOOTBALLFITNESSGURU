@@ -1,0 +1,64 @@
+"""
+Synthesise phrases to wav files with Chatterbox.
+
+THE SAME CONTRACT AS kokoro-say.py, deliberately: a JSON job on stdin, one
+JSON line per phrase on stdout, <out>/<n>.wav on disk. The recorder should not
+have to know which engine it is talking to beyond building the job.
+
+  {"out": dir, "phrases": [...], "exaggerations": [...], "cfgs": [...],
+   "prompt": "reference.wav" | null}
+
+WHY A SECOND ENGINE AT ALL. "The voice is still not good, feels robotic... it
+needs to feel excited, grab the audience's attention, not just talking at you
+like it's reading off a script."
+
+Kokoro is fast, free, offline and 325MB, and it has no expression control. Its
+pitch variability tops out around 4.35 semitones however it is tuned — see the
+note in lib/speech-prosody.ts, and scripts/measure-voice.py for the
+measurement. Excitement is not a knob it has. Chatterbox is also free (MIT)
+and also offline once the weights are cached; it is bigger and slower, and it
+has the knob.
+
+  Kokoro, as it ships       F0 SD 4.13 st   range 14.65 st   7.84s
+  Chatterbox ex0.5 cfg0.5   F0 SD 6.17 st   range 19.08 st   6.98s
+
+RATE IS GONE AND THAT IS NOT A REGRESSION. Chatterbox has no speed parameter,
+so the per-phrase rate shaping in lib/speech-prosody.ts does not apply here.
+`cfg_weight` is the equivalent lever — lower is looser and quicker — and it is
+shaped per phrase by the same Role table, so the tempo still changes four times
+rather than never. Time-stretching afterwards was the alternative and it is a
+phase vocoder smearing a voice to imitate a control the model already has.
+
+A REFERENCE CLIP IS OPTIONAL AND IS THE BIGGEST LEVER. `prompt` clones the
+speaker in a wav. It must be somebody who consented — the app's own owner
+reading a hook is the intended case. Note that a reference of somebody READING
+fights this: clone a calm reader and no exaggeration setting will make them
+sound excited, because the thing being imitated is a person reading off a page.
+"""
+import json
+import sys
+import wave
+
+import soundfile as sf
+import torch
+from chatterbox.tts import ChatterboxTTS
+
+job = json.load(sys.stdin)
+model = ChatterboxTTS.from_pretrained(device=job.get("device", "cpu"))
+
+phrases = job["phrases"]
+exaggerations = job.get("exaggerations") or []
+cfgs = job.get("cfgs") or []
+prompt = job.get("prompt") or None
+
+for index, text in enumerate(phrases):
+    # Per phrase, or the job's single value, or Chatterbox's own defaults. A
+    # caller that shapes nothing still gets a working reel.
+    ex = exaggerations[index] if index < len(exaggerations) else job.get("exaggeration", 0.5)
+    cfg = cfgs[index] if index < len(cfgs) else job.get("cfg", 0.5)
+    wav = model.generate(text, exaggeration=ex, cfg_weight=cfg, audio_prompt_path=prompt)
+    path = f"{job['out']}/{index}.wav"
+    sf.write(path, wav.squeeze(0).numpy(), model.sr)
+    with wave.open(path) as handle:
+        ms = handle.getnframes() / handle.getframerate() * 1000
+    print(json.dumps({"index": index, "path": path, "ms": ms}), flush=True)

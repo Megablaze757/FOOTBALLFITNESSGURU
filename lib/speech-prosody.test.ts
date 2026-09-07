@@ -12,6 +12,13 @@ import {
   shapeGains,
   shapeRates,
   speedFor,
+  expressionFor,
+  shapeExpression,
+  EXAGGERATION_MIN,
+  EXAGGERATION_MAX,
+  CFG_MIN,
+  CFG_MAX,
+  type Role,
 } from "./speech-prosody";
 
 /**
@@ -196,4 +203,125 @@ test("the recorder shapes the loudness of the spoken phrases too", () => {
     "the shaped loudness never reaches the track");
   assert.match(src, /normalised\(first\.format, track\)/,
     "the track is only ever cut, so the reel ships quieter than the last one");
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE KNOB KOKORO DOES NOT HAVE.
+ *
+ * "It needs to feel excited, grab the audience's attention, not just talking
+ * at you like it's reading off a script."
+ *
+ * Rate and loudness are everything Kokoro exposes and its pitch variability
+ * tops out around 4.35 semitones however it is tuned. Chatterbox measured
+ * 5.4-6.2 on the same two lines with the same tracker, on every setting.
+ *
+ * What these guard is the SPREAD, because that is the part with a reason
+ * behind it: a listener hears CHANGE, and the exact heat of the read is a
+ * judgement for whoever publishes the reels. Same argument as RATE and GAIN.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("a reel is not delivered at one setting from end to end", () => {
+  const roles: Role[] = ["hook", "setup", "figure", "payoff"];
+  const ex = roles.map((r) => expressionFor(r).exaggeration);
+  const cfg = roles.map((r) => expressionFor(r).cfg);
+
+  assert.ok(new Set(ex).size > 1, "every phrase is equally emphatic, which is the flatness being complained about");
+  assert.ok(new Set(cfg).size > 1, "every phrase is paced identically");
+
+  const at = (r: Role) => expressionFor(r);
+  assert.ok(at("hook").exaggeration > at("setup").exaggeration,
+    "the hook is no more emphatic than the connective material it is competing with");
+  assert.ok(at("payoff").exaggeration > at("setup").exaggeration,
+    "the line people remember is delivered like a subordinate clause");
+
+  /** Lower cfg_weight is LOOSER AND QUICKER, so the hook and payoff sit under it. */
+  assert.ok(at("hook").cfg < at("setup").cfg, "the hook is read as tightly as the setup");
+  assert.ok(at("payoff").cfg < at("setup").cfg, "the payoff is read as tightly as the setup");
+});
+
+/**
+ * Chatterbox accepts 0.25-2.0 for exaggeration, and past about 1.2 it stops
+ * sounding like a read at all. A base the caller sets from an environment
+ * variable can be anything, so the offsets must not carry it out of range.
+ */
+test("an extreme base is clamped rather than passed through", () => {
+  for (const base of [0, -5, 5, 100]) {
+    for (const role of ["hook", "setup", "figure", "payoff"] as Role[]) {
+      const { exaggeration, cfg } = expressionFor(role, base, base);
+      assert.ok(exaggeration >= EXAGGERATION_MIN && exaggeration <= EXAGGERATION_MAX,
+        `base ${base} gave ${role} an exaggeration of ${exaggeration}`);
+      assert.ok(cfg >= CFG_MIN && cfg <= CFG_MAX, `base ${base} gave ${role} a cfg of ${cfg}`);
+    }
+  }
+});
+
+/**
+ * OFFSETS, NOT ABSOLUTES, so that picking a hotter read moves all four
+ * together. A table of absolute values would have to be retyped four times
+ * every time somebody listened and wanted more, and three of the four would
+ * eventually be forgotten.
+ */
+test("raising the base moves every role and keeps the contrast", () => {
+  const roles: Role[] = ["hook", "setup", "figure", "payoff"];
+  const cool = roles.map((r) => expressionFor(r, 0.4).exaggeration);
+  const hot = roles.map((r) => expressionFor(r, 0.7).exaggeration);
+
+  for (const [i, role] of roles.entries()) {
+    assert.ok(hot[i] > cool[i], `${role} did not move with the base`);
+  }
+  const spread = (xs: number[]) => Math.max(...xs) - Math.min(...xs);
+  assert.ok(Math.abs(spread(hot) - spread(cool)) < 1e-9,
+    "the contrast between roles changed with the level, so a hotter read is also a flatter one");
+});
+
+/** The flat list across the whole reel, for the same reason shapeRates takes one. */
+test("expression is shaped across the reel, not per beat", () => {
+  const phrases = ["You slept three hours.", "Every training app you own.", "It costs £0.31.", "PocketAthlete, free."];
+  const shaped = shapeExpression(phrases);
+  assert.equal(shaped.length, phrases.length);
+  assert.deepEqual(shaped[0], expressionFor("hook"), "the first phrase of the reel is not the hook");
+  assert.deepEqual(shaped[3], expressionFor("payoff"), "the last phrase of the reel is not the payoff");
+  assert.deepEqual(shaped[2], expressionFor("figure"), "a phrase carrying a price is not read as a figure");
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * TWO ENGINES, ONE CONTRACT.
+ *
+ * scripts/chatterbox-say.py says it uses "the same contract as kokoro-say.py,
+ * deliberately: a JSON job on stdin, one JSON line per phrase on stdout,
+ * <out>/<n>.wav on disk" — so that the recorder does not have to know which it
+ * is talking to beyond building the job.
+ *
+ * That is a claim in a comment about a file it is not in, which is the kind
+ * that rots quietly and is then discovered by a three-minute recording run
+ * failing on a runner. The recorder parses both the same way; if one of them
+ * stops printing `ms`, the reel is timed off undefined.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("both say-scripts read the same job and print the same answer", () => {
+  const kokoro = readFileSync("scripts/kokoro-say.py", "utf8");
+  const chatterbox = readFileSync("scripts/chatterbox-say.py", "utf8");
+
+  for (const [name, src] of [["kokoro", kokoro], ["chatterbox", chatterbox]] as const) {
+    assert.match(src, /job = json\.load\(sys\.stdin\)/, `${name}-say.py no longer reads a job on stdin`);
+    assert.match(src, /job\["phrases"\]/, `${name}-say.py no longer reads the phrases`);
+    assert.match(src, /f"\{job\['out'\]\}\/\{index\}\.wav"/, `${name}-say.py no longer writes <out>/<n>.wav`);
+    /** All three keys: the recorder reads every one of them off each line. */
+    for (const key of ["index", "path", "ms"]) {
+      assert.match(src, new RegExp(`"${key}":`), `${name}-say.py stopped printing ${key}`);
+    }
+    assert.match(src, /flush=True/, `${name}-say.py buffers its output, so a long reel looks hung`);
+  }
+});
+
+/**
+ * A reference clip clones a speaker, and the only person whose voice may be
+ * cloned to advertise this app is somebody who agreed to it. Kept as a note in
+ * the file that does the cloning rather than only in a conversation.
+ */
+test("the reference clip carries the consent note with it", () => {
+  const src = readFileSync("scripts/chatterbox-say.py", "utf8");
+  assert.match(src, /consent/i, "nothing in the cloning path says whose voice may be used");
 });
