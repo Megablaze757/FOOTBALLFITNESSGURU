@@ -238,3 +238,35 @@ test("the screen dump says when it could not inspect the page", () => {
   assert.match(dump, /the page could not be inspected/,
     "a failed dump prints its fallbacks, which read exactly like an empty page");
 });
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE DIAGNOSTIC THAT LIED FOR FIVE RUNS.
+ *
+ * dumpScreen declared `const text = (el) => ...` inside its evaluate
+ * callback. tsx compiles this file with esbuild's keepNames, which wraps a
+ * named arrow in `__name(...)`, and Playwright ships the TRANSPILED source of
+ * a callback to the browser — where `__name` does not exist. Every call threw
+ * ReferenceError, the catch returned its fallbacks, and those printed as "no
+ * headings, no buttons, no labels".
+ *
+ * I read that as "the page has not rendered" and built a hydration fix on it.
+ * The page was fine. A diagnostic that fails silently is worse than none,
+ * because its output is believed.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("no evaluate callback declares an inner named function", () => {
+  const src = code("scripts/record-reel.mts");
+  /**
+   * Matched on the whole file rather than one callback: every page.evaluate
+   * in here has the same exposure, and the one that broke was the one nobody
+   * was looking at.
+   */
+  for (const call of src.matchAll(/page\.evaluate\(([\s\S]*?)\n\s{2}\}\)/g)) {
+    assert.doesNotMatch(call[1], /\bconst\s+\w+\s*=\s*\(/,
+      "an evaluate callback declares an inner arrow — esbuild wraps it in __name(), "
+      + "which does not exist in the browser, and the call throws at runtime");
+    assert.doesNotMatch(call[1], /\bfunction\s+\w+/,
+      "an evaluate callback declares a named function — same __name problem");
+  }
+});

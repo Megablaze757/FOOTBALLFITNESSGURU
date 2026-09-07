@@ -408,8 +408,23 @@ const video = page.video();
  * ═══════════════════════════════════════════════════════════════════════════
  */
 async function dumpScreen(route: string): Promise<void> {
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * NO INNER FUNCTIONS IN HERE. THIS DUMP LIED FOR FIVE RUNS.
+   *
+   * It declared `const text = (el) => ...` inside the callback. tsx compiles
+   * this file with esbuild's keepNames, which wraps a named arrow in a
+   * `__name(...)` call — and Playwright ships the TRANSPILED source of an
+   * evaluate callback to the browser, where no `__name` exists. Every call
+   * threw ReferenceError, the catch returned its fallbacks, and the fallbacks
+   * printed as "no headings, no buttons, no labels".
+   *
+   * I read that as "the page has not rendered" and built a hydration fix on
+   * it. The page was fine; the instrument was broken. A diagnostic that fails
+   * silently is worse than none, because its output is trusted.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
   const seen = await page.evaluate(() => {
-    const text = (el: Element) => (el.textContent ?? "").trim().replace(/\s+/g, " ").slice(0, 40);
     return {
       /**
        * WHERE THE BROWSER ACTUALLY IS, and what it actually shows.
@@ -423,8 +438,12 @@ async function dumpScreen(route: string): Promise<void> {
       url: location.href,
       bodyChars: (document.body?.innerText ?? "").trim().length,
       body: (document.body?.innerText ?? "").trim().replace(/\s+/g, " ").slice(0, 180),
-      headings: [...document.querySelectorAll("h1, h2, h3")].map(text).filter(Boolean).slice(0, 20),
-      buttons: [...document.querySelectorAll("button")].map(text).filter(Boolean).slice(0, 30),
+      headings: [...document.querySelectorAll("h1, h2, h3")]
+        .map((el) => (el.textContent ?? "").trim().replace(/\s+/g, " ").slice(0, 40))
+        .filter(Boolean).slice(0, 20),
+      buttons: [...document.querySelectorAll("button")]
+        .map((el) => (el.textContent ?? "").trim().replace(/\s+/g, " ").slice(0, 40))
+        .filter(Boolean).slice(0, 30),
       named: [...document.querySelectorAll("[aria-label]")]
         .map((el) => el.getAttribute("aria-label") ?? "").filter(Boolean).slice(0, 20),
     };
