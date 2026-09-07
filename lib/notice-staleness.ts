@@ -34,6 +34,20 @@ export type SubscriptionState =
   | { loaded: false }
   | { loaded: true; stripeStatus: string | null };
 
+/**
+ * Everything the hide/show decision is allowed to know.
+ *
+ * SubscriptionState answers one question and is named after it; a notice can
+ * be stale for reasons that have nothing to do with billing. An INTERSECTION
+ * rather than a third arm on the union, so `loaded` keeps discriminating and
+ * every existing caller still typechecks — lastCheckIn is optional, and a
+ * caller that does not know it simply does not get that rule.
+ */
+export type NoticeState = SubscriptionState & {
+  /** The most recent day they checked in, as check_in_date: "2026-09-07". */
+  lastCheckIn?: string | null;
+};
+
 export interface Notice {
   id: string;
   kind: string;
@@ -56,6 +70,33 @@ export const TRIALING = "trialing";
 
 /** Kinds that are only true while a trial is actually running. */
 export const TRIAL_ONLY_KINDS = ["trial_ending"];
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * A NAG THAT HAS ALREADY BEEN OBEYED.
+ *
+ * Found on the last frame of a recorded reel — the frame that asks somebody to
+ * sign up. The reel had filled the check-in on camera, the home screen showed
+ * "Today's log ✓ Recovery day" and a red readiness score computed from it, and
+ * above all of that sat a card reading "Days since your last log: 20. Last
+ * logged: 2026-08-17."
+ *
+ * The Worker is not wrong to have written it: it ran that morning, when the
+ * figures were true, and the row is a record of a reminder that really was
+ * sent. sortNotices already collapses a run of these to the newest one. But
+ * the newest one is still a standing nag, and the thing it was nagging about
+ * has since been DONE — so the app contradicts itself on its own home screen
+ * for the rest of the day.
+ *
+ * The condition is not "the body's figures are out of date", which would mean
+ * parsing prose. It is that the notice asked for something and the something
+ * happened after it was written.
+ *
+ * ONLY THE CHECK-IN. workout_reminder asks for a session, and a check-in is
+ * not a session; answering it with the wrong event would hide a real prompt.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export const ANSWERED_BY_A_CHECK_IN = ["check_in_reminder"];
 
 /**
  * Is there still a trial for a trial warning to be about?
@@ -94,7 +135,23 @@ export function subscriptionState(
  * rule fired — this hides billing copy, and "it disappeared" is not something
  * anybody should have to guess at from a log.
  */
-export function staleReason(notice: Notice, state: SubscriptionState): string | null {
+export function staleReason(notice: Notice, state: NoticeState): string | null {
+  /**
+   * BEFORE the `loaded` gate, which is about the SUBSCRIPTION read. A check-in
+   * is a different question with a different answer, and making this wait on
+   * an unrelated query would leave the nag up whenever billing was slow.
+   */
+  if (ANSWERED_BY_A_CHECK_IN.includes(notice.kind) && state.lastCheckIn && notice.created_at) {
+    /**
+     * DATES, NOT TIMESTAMPS. check_in_date is a day and created_at is an
+     * instant, so comparing them whole would call every notice unanswered:
+     * "2026-09-07" < "2026-09-07T06:00:00Z" as text. Same day counts — the
+     * Worker writes this in the morning and the athlete logs later.
+     */
+    if (state.lastCheckIn >= notice.created_at.slice(0, 10)) {
+      return `they logged on ${state.lastCheckIn}, which is what this was asking for`;
+    }
+  }
   if (!state.loaded) return null;
   if (!TRIAL_ONLY_KINDS.includes(notice.kind)) return null;
   if (trialIsRunning(state.stripeStatus)) return null;
@@ -143,7 +200,7 @@ export const RECURRING_KINDS = [
   "trial_ending",
 ];
 
-export function sortNotices<T extends Notice>(notices: readonly T[], state: SubscriptionState): Sorted<T> {
+export function sortNotices<T extends Notice>(notices: readonly T[], state: NoticeState): Sorted<T> {
   const show: T[] = [];
   const stale: T[] = [];
   /**

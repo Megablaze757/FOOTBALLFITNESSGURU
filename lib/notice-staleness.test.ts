@@ -300,3 +300,90 @@ test("the home screen still fetches what the collapse is decided from", () => {
   assert.match(src, /created_at:\s*string/, "the row type dropped created_at");
   assert.match(src, /sortNotices\(/, "the home screen no longer runs notices through sortNotices");
 });
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * A NAG THAT HAS ALREADY BEEN OBEYED.
+ *
+ * Found on the LAST FRAME of a recorded reel — the frame that asks somebody to
+ * sign up. The reel had filled the check-in on camera; the home screen showed
+ * "Today's log ✓ Recovery day" and a red readiness score computed from it; and
+ * above both of them sat "Days since your last log: 20. Last logged:
+ * 2026-08-17."
+ *
+ * The Worker wrote that row correctly, in the morning, when it was true.
+ * sortNotices already collapses a run of them to the newest. The newest one is
+ * still a standing nag for a thing that has since been done.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("a check-in reminder is answered by checking in", () => {
+  const notice = { kind: "check_in_reminder", created_at: "2026-09-07T06:15:00Z" };
+
+  assert.match(
+    staleReason(notice, { loaded: true, stripeStatus: null, lastCheckIn: "2026-09-07" }) ?? "",
+    /which is what this was asking for/,
+    "the nag survives the thing it was nagging about",
+  );
+  assert.equal(
+    staleReason(notice, { loaded: true, stripeStatus: null, lastCheckIn: "2026-09-06" }),
+    null,
+    "yesterday's log answers today's reminder — the nag disappears while still true",
+  );
+});
+
+/**
+ * DATES AGAINST TIMESTAMPS. check_in_date is a day, created_at is an instant,
+ * and "2026-09-07" < "2026-09-07T06:15:00Z" as text — so comparing them whole
+ * would report every reminder unanswered and the rule would silently do
+ * nothing. It is the same-day case that matters: the Worker writes in the
+ * morning and the athlete logs later.
+ */
+test("a log on the same day as the reminder answers it", () => {
+  for (const at of ["2026-09-07T00:00:01Z", "2026-09-07T06:15:00Z", "2026-09-07T23:59:59Z"]) {
+    assert.notEqual(
+      staleReason({ kind: "check_in_reminder", created_at: at }, { loaded: false, lastCheckIn: "2026-09-07" }),
+      null,
+      `a reminder written at ${at} is not answered by a log the same day`,
+    );
+  }
+});
+
+/** The rule must not wait on a query it has nothing to do with. */
+test("a check-in answers its reminder even when billing has not loaded", () => {
+  assert.notEqual(
+    staleReason({ kind: "check_in_reminder", created_at: "2026-09-07T06:15:00Z" },
+      { loaded: false, lastCheckIn: "2026-09-07" }),
+    null,
+    "an unrelated slow query leaves an answered nag on screen",
+  );
+});
+
+/**
+ * Not knowing is not the same as knowing there was no log — and hiding a
+ * notice MARKS IT READ, so a dropped request would delete a real reminder
+ * permanently. The safe direction is to leave it up.
+ */
+test("an unread check-in date leaves the reminder alone", () => {
+  const notice = { kind: "check_in_reminder", created_at: "2026-09-07T06:15:00Z" };
+  assert.equal(staleReason(notice, { loaded: true, stripeStatus: null }), null);
+  assert.equal(staleReason(notice, { loaded: true, stripeStatus: null, lastCheckIn: null }), null);
+});
+
+/** A check-in is not a session, and answering the wrong prompt hides a real one. */
+test("logging does not silence a workout reminder", () => {
+  assert.equal(
+    staleReason({ kind: "workout_reminder", created_at: "2026-09-07T06:15:00Z" },
+      { loaded: true, stripeStatus: null, lastCheckIn: "2026-09-07" }),
+    null,
+  );
+});
+
+/** And an answered one is CLEARED rather than merely hidden, like every other. */
+test("an answered check-in reminder comes back as stale, not dropped", () => {
+  const { show, stale } = sortNotices(
+    [{ id: "a", kind: "check_in_reminder", created_at: "2026-09-07T06:15:00Z" }],
+    { loaded: true, stripeStatus: null, lastCheckIn: "2026-09-07" },
+  );
+  assert.equal(show.length, 0);
+  assert.deepEqual(stale.map((n) => n.id), ["a"], "it is hidden without ever being marked read");
+});
