@@ -553,6 +553,23 @@ for (const step of plan.steps) {
    * is the only thing that catches a tap which worked and did the wrong job.
    */
   if (want && !aimed) {
+    /**
+     * SAY WHAT WAS THERE INSTEAD.
+     *
+     * "Nothing matches" is true and useless: it sent me guessing at the cause
+     * twice — a stale page, then a slow write — and both were wrong. The
+     * screen knows what is on it, so it is asked, and the next failure
+     * arrives with evidence attached rather than a hypothesis.
+     */
+    const onScreen = await page.evaluate(() => {
+      const named = [...document.querySelectorAll("[aria-label]")]
+        .map((el) => el.getAttribute("aria-label") ?? "").filter(Boolean);
+      const headings = [...document.querySelectorAll("h1, h2, h3")]
+        .map((el) => (el.textContent ?? "").trim()).filter(Boolean);
+      return { named: named.slice(0, 25), headings: headings.slice(0, 25) };
+    }).catch(() => ({ named: [], headings: [] }));
+    console.error(`  headings on ${step.route}: ${JSON.stringify(onScreen.headings)}`);
+    console.error(`  accessible names on ${step.route}: ${JSON.stringify(onScreen.named)}`);
     throw new Error(
       `Nothing on ${step.route} matches the focus "${want}".\n`
       + "The beat is built around pointing at it, so the shot would contradict the line. "
