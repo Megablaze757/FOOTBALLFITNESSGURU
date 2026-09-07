@@ -393,6 +393,35 @@ const video = page.video();
  * opened on a login screen: everything between the page being created and this
  * line is in the file, and only what this measures gets trimmed off.
  */
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * WHAT WAS ACTUALLY ON THE SCREEN, WHEN SOMETHING WAS NOT FOUND.
+ *
+ * "Nothing matches" is true and useless. It sent me guessing three times — a
+ * stale page, a slow write, then the wrong button — and the first two were
+ * wrong. The screen knows what is on it, so it is asked.
+ *
+ * BOTH GUARDS USE IT. The first version of this was attached to the focus
+ * check only, and the very next failure was a move check, which threw with no
+ * evidence at all. A diagnostic on one of two identical failure paths is a
+ * diagnostic that is missing half the time.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+async function dumpScreen(route: string): Promise<void> {
+  const seen = await page.evaluate(() => {
+    const text = (el: Element) => (el.textContent ?? "").trim().replace(/\s+/g, " ").slice(0, 40);
+    return {
+      headings: [...document.querySelectorAll("h1, h2, h3")].map(text).filter(Boolean).slice(0, 20),
+      buttons: [...document.querySelectorAll("button")].map(text).filter(Boolean).slice(0, 30),
+      named: [...document.querySelectorAll("[aria-label]")]
+        .map((el) => el.getAttribute("aria-label") ?? "").filter(Boolean).slice(0, 20),
+    };
+  }).catch(() => ({ headings: [], buttons: [], named: [] }));
+  console.error(`  headings on ${route}: ${JSON.stringify(seen.headings)}`);
+  console.error(`  buttons on ${route}: ${JSON.stringify(seen.buttons)}`);
+  console.error(`  accessible names on ${route}: ${JSON.stringify(seen.named)}`);
+}
+
 const videoStart = Date.now();
 
 /**
@@ -522,6 +551,7 @@ for (const step of plan.steps) {
      * lib/reel-retention.ts already refuses reels on weaker grounds than this.
      */
     if (!did) {
+      await dumpScreen(step.route);
       throw new Error(
         `Move missed on ${step.route}: ${what}.\n`
         + "Nothing on that screen matches, so the shot would show nothing happening. "
@@ -553,23 +583,7 @@ for (const step of plan.steps) {
    * is the only thing that catches a tap which worked and did the wrong job.
    */
   if (want && !aimed) {
-    /**
-     * SAY WHAT WAS THERE INSTEAD.
-     *
-     * "Nothing matches" is true and useless: it sent me guessing at the cause
-     * twice — a stale page, then a slow write — and both were wrong. The
-     * screen knows what is on it, so it is asked, and the next failure
-     * arrives with evidence attached rather than a hypothesis.
-     */
-    const onScreen = await page.evaluate(() => {
-      const named = [...document.querySelectorAll("[aria-label]")]
-        .map((el) => el.getAttribute("aria-label") ?? "").filter(Boolean);
-      const headings = [...document.querySelectorAll("h1, h2, h3")]
-        .map((el) => (el.textContent ?? "").trim()).filter(Boolean);
-      return { named: named.slice(0, 25), headings: headings.slice(0, 25) };
-    }).catch(() => ({ named: [], headings: [] }));
-    console.error(`  headings on ${step.route}: ${JSON.stringify(onScreen.headings)}`);
-    console.error(`  accessible names on ${step.route}: ${JSON.stringify(onScreen.named)}`);
+    await dumpScreen(step.route);
     throw new Error(
       `Nothing on ${step.route} matches the focus "${want}".\n`
       + "The beat is built around pointing at it, so the shot would contradict the line. "

@@ -143,3 +143,19 @@ test("a reveal with nothing to reveal stops the recording", () => {
     "the failure does not say which screen or which target");
   assert.ok(!/console\.warn/.test(block), "the old warn-and-carry-on path is still there");
 });
+
+/**
+ * A diagnostic on one of two identical failure paths is a diagnostic that is
+ * missing half the time. The screen dump was attached to the focus guard
+ * first, and the very next failure came from the move guard and threw with no
+ * evidence at all — after three wrong theories about the cause.
+ */
+test("both refusals say what was on the screen", () => {
+  const src = readFileSync("scripts/record-reel.mts", "utf8");
+  const moves = src.slice(src.indexOf("for (const move of step.moves"), src.indexOf("const want = step.focus"));
+  const focus = src.slice(src.indexOf("const want = step.focus"), src.indexOf("if (aimed) driftFrom"));
+  assert.match(moves, /dumpScreen\(/, "a missed move throws with no evidence attached");
+  assert.match(focus, /dumpScreen\(/, "a missed focus throws with no evidence attached");
+  assert.match(src, /buttons on \$\{route\}/,
+    "the dump does not list the buttons, which is what a tap is matched against");
+});
