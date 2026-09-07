@@ -31,6 +31,7 @@
 // =============================================================================
 
 import { beatFloorMs } from "./caption-lines";
+import { movesMs, type Move } from "./reel-moves";
 import { holdFor, speechMs, MIN_SCENE_MS, MAX_REEL_MS, MS_PER_WORD } from "./reel";
 import { SUSPENSE_MS } from "./narration";
 import { hookText, HOOK_MAX_WORDS } from "./reel-kinds";
@@ -74,6 +75,15 @@ export interface Beat {
    * screen are the words the script is already talking about.
    */
   focus?: string;
+  /**
+   * What to DO on this screen while the line plays.
+   *
+   * The `action` above is prose for a person holding a phone; this is the
+   * same instruction the recorder can carry out. A beat with moves fills the
+   * form on camera instead of arriving at a filled one — see lib/reel-moves.ts
+   * for why that is the whole point of filming an app at all.
+   */
+  moves?: Move[];
 }
 
 export interface ReelScript {
@@ -118,6 +128,7 @@ function time(beats: Omit<Beat, "at" | "ms">[]): Beat[] {
     // speechMs, not holdFor: this beat is SPOKEN. holdFor is the reading time
     // for a text card, and using it here under-estimated every reel by a fifth.
     const ms = (b.hold ?? 0)
+      + movesMs(b.moves)
       + Math.max(MIN_BEAT_MS, b.say ? Math.max(speechMs(b.say), beatFloorMs(b.say)) : 0);
     const beat = { ...b, at, ms };
     at += ms;
@@ -165,8 +176,27 @@ function readinessScript(): ReelScript {
     },
     {
       route: "/journal",
-      action: "Log a bad night: sleep 3, fatigue 8, tap two sore areas on the body map.",
-      say: "This one asks first. Sixty seconds: sleep, soreness, fatigue.",
+      action: "Log a bad night: sleep 2, fatigue 9, then submit.",
+      /**
+       * ═══════════════════════════════════════════════════════════════════
+       * THE SHOT THAT DOES SOMETHING.
+       *
+       * This beat used to say "this one asks first" over a form nobody
+       * touched, and the next beat arrived at a finished score. The claim of
+       * the whole reel is that a number moves because of something that
+       * happened to you, and the reel was asserting it rather than showing
+       * it — which is the same failure as a slideshow, with better narration.
+       *
+       * The sliders move on camera now, and the score on the next beat is
+       * the one this input produced. See lib/reel-moves.ts.
+       * ═══════════════════════════════════════════════════════════════════
+       */
+      moves: [
+        { type: "2", into: "Sleep quality" },
+        { type: "9", into: "Fatigue" },
+        { tap: "Log it" },
+      ],
+      say: "Watch. Three hours' sleep, legs wrecked, and it takes sixty seconds to say so.",
     },
     {
       route: "/home",
@@ -178,7 +208,20 @@ function readinessScript(): ReelScript {
        * score itself — narrating a thing the viewer can already see.
        */
       hold: SUSPENSE_MS,
-      say: "Fifty-four out of a hundred.",
+      /**
+       * THE NUMBER IS NOT SPOKEN, AND THAT IS DELIBERATE NOW.
+       *
+       * This said "Fifty-four out of a hundred" — a figure typed into a
+       * script, while the beat before it now actually logs a bad night and
+       * the app computes its own answer. The two would agree only by
+       * coincidence, and the first time the scoring changed the reel would
+       * confidently read out a number that was not on screen.
+       *
+       * The spotlight is already pointing at it. A voice reading out a figure
+       * the viewer can see is narration of a screenshot; letting the screen
+       * deliver it is the reveal the suspense pause was put there for.
+       */
+      say: "That is what it thinks of you today.",
     },
     {
       route: "/home",

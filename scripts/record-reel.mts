@@ -28,6 +28,7 @@ import { reelScript, type ScriptId } from "../lib/reel-script";
 import { reelPlan, srt, endCardAt, REEL_W, REEL_H, REEL_SCALE } from "../lib/reel-plan";
 import { retentionProblems } from "../lib/reel-retention";
 import { driftTarget } from "../lib/reel-scroll";
+import { MOVE_GAP_MS } from "../lib/reel-moves";
 import { SIGNUP_CTA } from "../lib/signup-link";
 import { karaokeWords } from "../lib/caption-karaoke";
 import { phrases } from "../lib/speech-timing";
@@ -491,6 +492,29 @@ for (const step of plan.steps) {
    * words are not on screen says so rather than dimming everything, because
    * that would be invisible until somebody watched the finished reel.
    */
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * DO THE THING, BEFORE POINTING AT THE RESULT OF IT.
+   *
+   * Moves run at the top of the beat so the app has reacted by the time the
+   * spotlight aims and the line plays — the readiness score has to have moved
+   * before a caption says what it moved to.
+   *
+   * LOUD ON A MISS. A move that finds nothing films a form nobody filled in
+   * and a number that never changed, which looks exactly like a working reel
+   * to every check that does not watch it. This is the same rule the focus
+   * below already follows, for the same reason.
+   */
+  for (const move of step.moves ?? []) {
+    const did = await page.evaluate(
+      (m) => (window as never as { __reelDo: (m: unknown) => boolean }).__reelDo(m),
+      move,
+    ).catch(() => false);
+    const what = "tap" in move ? `tap "${move.tap}"` : `type "${move.type}" into "${move.into}"`;
+    if (!did) console.error(`  MOVE MISSED on ${step.route}: ${what} — the shot will show nothing happening`);
+    await sleep(MOVE_GAP_MS);
+  }
+
   const want = step.focus ?? "";
   const aimed = await page.evaluate(
     (t) => (window as never as { __reelFocus: (s: string) => boolean }).__reelFocus(t),

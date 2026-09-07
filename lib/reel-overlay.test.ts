@@ -166,10 +166,42 @@ test("the overlay can point at one thing", () => {
   assert.match(src, /box\.width \* box\.height < best\.box\.width \* best\.box\.height/,
     "the spotlight does not prefer the smallest match, so it will pick a container");
 
-  // Text, not a selector: a selector is a promise about markup this file does
-  // not own, and it breaks silently when a class is renamed.
-  assert.doesNotMatch(src, /querySelector\((?!"body \*")/,
-    "the spotlight targets a CSS selector, which breaks silently on a rename");
+  /**
+   * Text, not a selector — but the rule is about WHICH selector.
+   *
+   * This forbade every querySelector outside the spotlight's own "body *".
+   * The moves added in lib/reel-moves.ts have to enumerate the form controls
+   * on a page, and there is no way to ask for "every input" by text.
+   *
+   * The thing that breaks silently on a rename is a CLASS or an ID, because
+   * those are promises about markup this file does not own. An element name
+   * is HTML semantics and does not get renamed; `label[for=...]` is the
+   * relationship the HTML spec defines between a label and its field. So the
+   * rule is now the one that was always meant, and it is stricter about the
+   * dangerous half rather than blanket about all of it.
+   */
+  const selectors = [...src.matchAll(/querySelector(?:All)?\(([^)]*)\)/g)].map((m) => m[1]);
+  /**
+   * Only the STRING LITERALS are the selector. A first version tested the
+   * whole expression and failed on `'label[for="' + f.id + '"]'` — matching
+   * the dot in a JavaScript property access and calling it a CSS class. The
+   * test was wrong, not the code, which is the sort of thing that gets a
+   * correct rule loosened by somebody in a hurry.
+   */
+  const literals = selectors.flatMap((sel) => [...sel.matchAll(/'([^']*)'|"([^"]*)"/g)]
+    .map((m) => m[1] ?? m[2]));
+  for (const literal of literals) {
+    assert.doesNotMatch(literal, /[.#][A-Za-z_-]/,
+      `the overlay targets a class or id ("${literal}"), which breaks silently on a rename`);
+  }
+  assert.ok(literals.length > 0, "the scrape found no selectors at all — the check is not running");
+
+  // The spotlight itself still finds its target by TEXT, not by markup.
+  const focusFn = src.slice(src.indexOf("var findByText"), src.indexOf("window.__reelFocus"));
+  assert.match(focusFn, /querySelectorAll\("body \*"\)/,
+    "the spotlight no longer walks the document looking for words");
+  assert.doesNotMatch(focusFn, /querySelector(?:All)?\((?!"body \*")/,
+    "the spotlight targets something other than the words on screen");
 });
 
 test("the spotlight never dims the caption", () => {

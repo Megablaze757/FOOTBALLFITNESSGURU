@@ -1,4 +1,5 @@
 import { captionLines, captionReadMs } from "./caption-lines";
+import type { Move } from "./reel-moves";
 
 // =============================================================================
 // A REEL AS A LIST OF INSTRUCTIONS, SO NOBODY HAS TO PERFORM IT.
@@ -92,6 +93,8 @@ export interface PlanStep {
   route: string;
   /** Words on screen this beat is about — the recorder spotlights them. */
   focus?: string;
+  /** What to DO on this screen, performed on camera. See lib/reel-moves.ts. */
+  moves?: Move[];
   /** The human-readable intent, kept for the run log. */
   action: string;
   /** Timed absolutely, so the driver never does arithmetic of its own. */
@@ -193,6 +196,8 @@ export interface PlannableScript {
     at: number; ms: number; route: string; action: string; say: string;
     /** Words on screen this beat is about. Optional — most beats have none. */
     focus?: string;
+  /** What to DO on this screen, performed on camera. See lib/reel-moves.ts. */
+  moves?: Move[];
   }[];
   totalMs: number;
 }
@@ -218,6 +223,7 @@ export function reelPlan(script: PlannableScript, hookMs = HOOK_MS): ReelPlan {
      * every beat, so the feature would have shipped doing nothing at all.
      */
     focus: beat.focus,
+    moves: beat.moves,
     captions: captionsFor(beat),
   }));
   return {

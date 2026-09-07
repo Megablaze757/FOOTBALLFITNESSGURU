@@ -374,6 +374,99 @@
       })(spans[j], j ? spans[j - 1] : null);
     }
   };
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * DOING SOMETHING, SO THE REEL SHOWS IT HAPPENING.
+   *
+   * "The videos should actually show them doing the stuff." Every beat used
+   * to navigate and scroll, and the app's own numbers only ever appeared
+   * already-computed. Filling the check-in on camera and letting the
+   * readiness score move is the difference between saying a thing reacts to
+   * you and showing it.
+   *
+   * FOUND BY LABEL, not by selector — the same reason Beat.focus is text.
+   * The label, placeholder, aria-label and neighbouring text are all tried,
+   * because a form in this app labels its fields in all four ways.
+   *
+   * Returns false rather than throwing when nothing matches: the recorder
+   * turns that into a loud warning, and a silent miss films an empty form.
+   */
+  var fieldFor = function (label) {
+    var want = String(label || "").trim().toLowerCase();
+    if (!want) return null;
+    var fields = document.querySelectorAll("input, textarea, select");
+    for (var i = 0; i < fields.length; i++) {
+      var f = fields[i];
+      var hay = [
+        f.getAttribute("aria-label"), f.getAttribute("placeholder"), f.getAttribute("name"), f.id,
+      ];
+      // The <label> pointing at it, and the text of whatever wraps it.
+      if (f.id) {
+        var lab = document.querySelector('label[for="' + f.id + '"]');
+        if (lab) hay.push(lab.textContent);
+      }
+      if (f.closest("label")) hay.push(f.closest("label").textContent);
+      for (var h = 0; h < hay.length; h++) {
+        if (hay[h] && String(hay[h]).trim().toLowerCase().indexOf(want) !== -1) return f;
+      }
+    }
+    return null;
+  };
+
+  var tappable = function (label) {
+    var want = String(label || "").trim().toLowerCase();
+    if (!want) return null;
+    var all = document.querySelectorAll("button, a, [role='button'], summary, input[type='submit']");
+    for (var i = 0; i < all.length; i++) {
+      var el = all[i];
+      var text = ((el.textContent || "") + " " + (el.getAttribute("aria-label") || ""))
+        .trim().toLowerCase();
+      if (text.indexOf(want) === -1) continue;
+      if (el.disabled) continue;
+      var box = el.getBoundingClientRect();
+      if (box.width < 4 || box.height < 4) continue;
+      return el;
+    }
+    return null;
+  };
+
+  window.__reelDo = function (move) {
+    install();
+    try {
+      if (move && move.tap) {
+        var control = tappable(move.tap);
+        if (!control) return false;
+        control.scrollIntoView({ block: "center", behavior: "instant" });
+        control.click();
+        return true;
+      }
+      if (move && move.into) {
+        var field = fieldFor(move.into);
+        if (!field) return false;
+        field.scrollIntoView({ block: "center", behavior: "instant" });
+        field.focus();
+        /**
+         * THE NATIVE SETTER, NOT `field.value = x`.
+         *
+         * React tracks the value on the DOM node and skips its own handler
+         * when the value it sees already matches — so a plain assignment
+         * changes what is on screen and the app never hears about it. The
+         * readiness score would not move, which is the one thing the shot
+         * exists to show.
+         */
+        var proto = field instanceof HTMLTextAreaElement
+          ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+        var setter = Object.getOwnPropertyDescriptor(proto, "value");
+        if (setter && setter.set) setter.set.call(field, String(move.type));
+        else field.value = String(move.type);
+        field.dispatchEvent(new Event("input", { bubbles: true }));
+        field.dispatchEvent(new Event("change", { bubbles: true }));
+        return true;
+      }
+    } catch (e) { return false; }
+    return false;
+  };
+
   window.__reelHook = function (text) { set("__reel_hook", text); };
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", install);
