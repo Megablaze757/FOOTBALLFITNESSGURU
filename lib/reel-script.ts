@@ -40,6 +40,7 @@ import { SIGNUP_SPOKEN } from "./signup-link";
 import { SKILL_DRILLS } from "./skills";
 import { indexFacts, money, REFERENCE_PROTEIN } from "./protein-index";
 import { standardPages } from "./standards-page";
+import { rankLift } from "./strength-standards";
 import { sportLabel } from "./seo";
 import type { SportId } from "./exercises";
 
@@ -330,11 +331,15 @@ function readinessScript(): ReelScript {
      */
     {
       /**
-       * "/" REDIRECTS TO /home FOR A SIGNED-IN VISITOR, and the reel is always
-       * signed in — it has to be, to have an app to film. So this beat used to
-       * say "land on the front page" in its action and land on the home screen
-       * every single time. The prose was describing a reel nobody has ever
-       * recorded.
+       * ═══════════════════════════════════════════════════════════════════
+       * "/" REDIRECTS TO /home FOR A SIGNED-IN VISITOR, AND THE REEL IS
+       * ALWAYS SIGNED IN — it has to be, to have an app to film.
+       *
+       * All four scripts ended on route "/" with an action saying "front
+       * page", and all four landed on the home screen every single time. Four
+       * pieces of prose describing a reel nobody has ever recorded, and a
+       * pointless navigation-and-redirect in the last two seconds of each.
+       * ═══════════════════════════════════════════════════════════════════
        */
       route: "/home",
       action: "Back to the home screen, with the score still on it, for the sign-off.",
@@ -483,12 +488,7 @@ function costScript(): ReelScript {
        */
       say: "Build a week and it prices the whole shop.",
     },
-    {
-      route: "/",
-      action: "Front page. Hold two seconds.",
-      say: SIGNUP_SPOKEN,
-      tail: END_CARD_MS,
-    },
+    { route: "/home", action: "The home screen, held for the sign-off.", say: SIGNUP_SPOKEN, tail: END_CARD_MS },
   ]);
 }
 
@@ -570,12 +570,7 @@ function drillScript(drillId: string): ReelScript | null {
       action: "The training row, open and ready for the session.",
       say: "Log it, and next week builds on what you actually did.",
     },
-    {
-      route: "/",
-      action: "Front page, so the address is on screen.",
-      say: SIGNUP_SPOKEN,
-      tail: END_CARD_MS,
-    },
+    { route: "/home", action: "The home screen, held for the sign-off.", say: SIGNUP_SPOKEN, tail: END_CARD_MS },
   ]);
 }
 
@@ -583,6 +578,29 @@ function drillScript(drillId: string): ReelScript | null {
 function standardsScript(): ReelScript | null {
   const page = standardPages().find((p) => p.slug === "bench-press") ?? standardPages()[0];
   if (!page) return null;
+
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * THE APP'S OWN WORDS, AND THE APP'S OWN ARITHMETIC.
+   *
+   * This said a hundred kilos is "elite" at sixty kilos bodyweight and
+   * "average" at a hundred and twenty. Both were typed. The table on screen
+   * is headed NOVICE, INTERMEDIATE, ADVANCED, EXCEPTIONAL, MASTER — so the
+   * reel used two words the viewer could not find anywhere in the shot, and
+   * would have gone on saying them the first time a threshold moved.
+   *
+   * rankLift is the function the app itself ranks a logged lift with, so the
+   * words are the ones on the screen behind them and stay that way.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  const LOAD = 100;
+  const LIGHT = 60;
+  const HEAVY = 120;
+  const tierAtBodyweight = (kg: number) => rankLift(page.lift, LOAD, kg, "male")?.tier.name.toLowerCase();
+  const light = tierAtBodyweight(LIGHT);
+  const heavy = tierAtBodyweight(HEAVY);
+  if (!light || !heavy) return null;
+
   /**
    * ═══════════════════════════════════════════════════════════════════════
    * A CONTRARIAN CLAIM WITH TWO NUMBERS IN IT.
@@ -595,36 +613,39 @@ function standardsScript(): ReelScript | null {
    * work out which one they are.
    * ═══════════════════════════════════════════════════════════════════════
    */
-  return build(`standards-${page.slug}`, `Your 100kg ${page.lift.label.toLowerCase()} means nothing`, [
+  return build(`standards-${page.slug}`, `Your ${LOAD}kg ${page.lift.label.toLowerCase()} means nothing`, [
     {
       route: "/standards/",
       action: "Show the list of lifts.",
       /**
-       * THE HOOK CARD IS STILL ON SCREEN, so this line does not have to repeat
-       * what it says. The first version opened "A hundred kilo bench press at
-       * sixty kilos bodyweight is elite" under a card reading "Your 100kg
-       * bench press means nothing" — nineteen words to restate six.
+       * THE CLAIM MOVED TO THE BEAT THAT CAN PROVE IT.
+       *
+       * The two-number contradiction used to be said here, over the INDEX of
+       * lifts — a screen with no bodyweights and no tiers on it. The table is
+       * one beat later. Same fault as the readiness reel's session beat: the
+       * line and the picture were on different screens.
        */
-      say: "At sixty kilos bodyweight that's elite. At a hundred and twenty, it's average.",
+      say: "Every lift in here is ranked against your bodyweight, not against the bloke next to you.",
     },
     {
       route: `/standards/${page.slug}/`,
-      action: "Open the table and stop on the middle rows.",
-      // "So the table is a multiple of your bodyweight" narrated the furniture.
-      // The app is the subject of the sentence now, because the app is the pitch.
-      say: "So it ranks you against your own bodyweight, untrained to world class.",
+      action: "Open the table and stop on the bodyweight column.",
+      /**
+       * THE AXIS THE LINE IS ABOUT. The table is a wall of numbers and this
+       * beat had no focus at all, so the shot was wherever the drift reached
+       * — filmed and looked at: rows 50kg to 120kg with nothing to say which
+       * of them mattered. The bodyweight column is the whole point of the
+       * table and it is what the sentence names.
+       */
+      focus: "Bodyweight",
+      say: `So a ${LOAD}kg bench at ${LIGHT}kg bodyweight is ${light}. At ${HEAVY}kg, ${heavy}.`,
     },
     {
       route: "/benchmarks",
       action: "Show a logged lift with its tier beside it.",
       say: "Log one lift and it tells you exactly which tier you're in.",
     },
-    {
-      route: "/",
-      action: "Front page.",
-      say: SIGNUP_SPOKEN,
-      tail: END_CARD_MS,
-    },
+    { route: "/home", action: "The home screen, held for the sign-off.", say: SIGNUP_SPOKEN, tail: END_CARD_MS },
   ]);
 }
 
