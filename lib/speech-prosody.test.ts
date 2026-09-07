@@ -325,3 +325,37 @@ test("the reference clip carries the consent note with it", () => {
   const src = readFileSync("scripts/chatterbox-say.py", "utf8");
   assert.match(src, /consent/i, "nothing in the cloning path says whose voice may be used");
 });
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * STDOUT IS THE ANSWER CHANNEL AND THE LIBRARIES DO NOT KNOW THAT.
+ *
+ * The first Chatterbox run on a runner died with:
+ *
+ *     SyntaxError: Unexpected token 'l', "loaded Per"... is not valid JSON
+ *
+ * Loading the model prints its progress to stdout; the recorder parses every
+ * stdout line as JSON, because that is what the channel is for. One line of
+ * library chatter and a three-minute recording run is gone.
+ *
+ * The fix is to take the real stdout BEFORE importing anything and point
+ * sys.stdout at stderr, so a library that prints ends up in the run log where
+ * it belongs. Ordering is the whole trick and it is invisible: move the
+ * capture below the imports and it still runs, still passes a smoke test, and
+ * still loses a run the first time a dependency is chattier than today's.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("chatterbox keeps its libraries off the answer channel", () => {
+  const src = readFileSync("scripts/chatterbox-say.py", "utf8");
+
+  const capture = src.indexOf("ANSWER = sys.stdout");
+  const silence = src.indexOf("sys.stdout = sys.stderr");
+  const firstHeavyImport = src.indexOf("from chatterbox.tts import");
+  const answer = src.indexOf("file=ANSWER");
+
+  assert.ok(capture > 0, "the real stdout is never taken, so redirecting it loses the answers too");
+  assert.ok(silence > capture, "stdout is pointed at stderr before the answer channel is saved");
+  assert.ok(silence < firstHeavyImport,
+    "chatterbox is imported before stdout is protected, so anything it prints at import time still lands on the answer channel");
+  assert.ok(answer > 0, "the per-phrase answers no longer go to the captured stdout");
+});

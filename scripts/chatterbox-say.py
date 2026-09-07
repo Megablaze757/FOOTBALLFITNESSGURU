@@ -39,9 +39,28 @@ import json
 import sys
 import wave
 
-import soundfile as sf
-import torch
-from chatterbox.tts import ChatterboxTTS
+# ─────────────────────────────────────────────────────────────────────────
+# STDOUT IS THE CONTRACT AND THE LIBRARIES DO NOT KNOW THAT.
+#
+# The first Chatterbox run failed with:
+#
+#     SyntaxError: Unexpected token 'l', "loaded Per"... is not valid JSON
+#
+# Loading the model prints progress to stdout, and the recorder parses every
+# stdout line as JSON because that is what this channel is for. One line of
+# library chatter and a three-minute recording run is lost.
+#
+# The real stdout is taken here, before anything is imported, and everything
+# else in the process writes to stderr — where it belongs, in the run log. A
+# filter on the reader would have been the other option and it is the wrong
+# one: it teaches the pipe to ignore output it cannot parse, which is how a
+# real error becomes silence.
+# ─────────────────────────────────────────────────────────────────────────
+ANSWER = sys.stdout
+sys.stdout = sys.stderr
+
+import soundfile as sf  # noqa: E402
+from chatterbox.tts import ChatterboxTTS  # noqa: E402
 
 job = json.load(sys.stdin)
 model = ChatterboxTTS.from_pretrained(device=job.get("device", "cpu"))
@@ -61,4 +80,4 @@ for index, text in enumerate(phrases):
     sf.write(path, wav.squeeze(0).numpy(), model.sr)
     with wave.open(path) as handle:
         ms = handle.getnframes() / handle.getframerate() * 1000
-    print(json.dumps({"index": index, "path": path, "ms": ms}), flush=True)
+    print(json.dumps({"index": index, "path": path, "ms": ms}), file=ANSWER, flush=True)

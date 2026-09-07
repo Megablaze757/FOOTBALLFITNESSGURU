@@ -226,7 +226,34 @@ async function narrate(beats: readonly { say: string; hold?: number }[]): Promis
     child.on("error", reject);
     child.on("close", (code) => {
       if (code !== 0) return reject(new Error(`${say} exited ${code}`));
-      resolve(out.trim().split("\n").filter(Boolean).map((line) => JSON.parse(line)));
+      /**
+       * ═══════════════════════════════════════════════════════════════════
+       * SAY WHICH LINE WAS NOT JSON.
+       *
+       * This was a bare JSON.parse over every line, and the first Chatterbox
+       * run died on `SyntaxError: Unexpected token 'l', "loaded Per"... is
+       * not valid JSON` — a message that names neither the script, nor the
+       * line, nor the fact that a library had printed to a channel reserved
+       * for answers. Three minutes of recording to learn that a letter was
+       * unexpected.
+       *
+       * The cause is fixed in the script. This is so the NEXT thing that
+       * prints where it should not is one look rather than five runs.
+       * ═══════════════════════════════════════════════════════════════════
+       */
+      const lines = out.trim().split("\n").filter(Boolean);
+      const parsed = [];
+      for (const line of lines) {
+        try {
+          parsed.push(JSON.parse(line));
+        } catch {
+          return reject(new Error(
+            `${say} printed something that is not JSON on the answer channel: ${JSON.stringify(line.slice(0, 200))}\n`
+            + "Everything but the per-phrase answers belongs on stderr — see the note in scripts/chatterbox-say.py.",
+          ));
+        }
+      }
+      resolve(parsed);
     });
     child.stdin.end(JSON.stringify(ENGINE === "chatterbox" ? chatterboxJob : job));
   });
