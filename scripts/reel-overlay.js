@@ -261,6 +261,64 @@
   };
 
   /**
+   * Put the panels and the ring around one element, as it is RIGHT NOW.
+   *
+   * Split out of __reelFocus so the frame loop below can call it again — the
+   * measurement is the part that goes stale, and the search is the part that
+   * must not be repeated (findByText picks the smallest element containing the
+   * words, and a re-search mid-beat could pick a different one).
+   */
+  var place = function (el) {
+    var spot = document.getElementById("__reel_spot");
+    if (!spot || !el) return false;
+    var b = el.getBoundingClientRect();
+    if (!(b.width > 0 && b.height > 0)) { spot.style.opacity = "0"; return false; }
+
+    /**
+     * ═══════════════════════════════════════════════════════════════════════
+     * DIVIDED BY THE ZOOM, and this was wrong until it was measured.
+     *
+     * The recorder zooms documentElement so a 1080x1920 viewport still lays
+     * out as a 540px phone. getBoundingClientRect and window.innerHeight both
+     * report VISUAL pixels — the full 1920 — but this overlay lives inside the
+     * zoomed element, so a CSS pixel it sets is multiplied by the zoom on the
+     * way to the screen.
+     *
+     * Setting top to a visual 750 therefore drew the ring at 1500, and
+     * anything below the top of the screen landed off-frame entirely. Measured
+     * on the live page: styleTop 1483px produced a rect at 2966px, in a
+     * viewport 1920 tall.
+     *
+     * A spotlight in the wrong place is worse than none, and nothing would
+     * have caught it except watching the reel.
+     * ═══════════════════════════════════════════════════════════════════════
+     */
+    var zoom = parseFloat(window.getComputedStyle(document.documentElement).zoom) || 1;
+    var pad = 12;
+    var top = Math.max(0, b.top - pad) / zoom;
+    var left = Math.max(0, b.left - pad) / zoom;
+    var right = Math.min(window.innerWidth, b.right + pad) / zoom;
+    var bottom = Math.min(window.innerHeight, b.bottom + pad) / zoom;
+
+    var panels = spot.querySelectorAll("[data-side]");
+    var put = function (node, css) { node.style.cssText += ";" + css; };
+    for (var i = 0; i < panels.length; i++) {
+      var side = panels[i].getAttribute("data-side");
+      if (side === "t") put(panels[i], "left:0;top:0;width:100%;height:" + top + "px;");
+      // 100%, bottom:0 and right:0 are relative to the zoomed box and need no
+      // conversion; only the measured numbers above do.
+      if (side === "b") put(panels[i], "left:0;top:" + bottom + "px;width:100%;bottom:0;height:auto;");
+      if (side === "l") put(panels[i], "left:0;top:" + top + "px;width:" + left + "px;height:" + (bottom - top) + "px;");
+      if (side === "r") put(panels[i], "left:" + right + "px;top:" + top + "px;right:0;width:auto;height:" + (bottom - top) + "px;");
+    }
+    var ring = document.getElementById("__reel_ring");
+    ring.style.cssText += ";left:" + left + "px;top:" + top + "px;width:"
+      + (right - left) + "px;height:" + (bottom - top) + "px;";
+    spot.style.opacity = "1";
+    return true;
+  };
+
+  /**
    * Point at something, or at nothing.
    *
    * An empty string clears it. Text that is not on screen ALSO clears it
@@ -271,7 +329,7 @@
     install();
     var spot = document.getElementById("__reel_spot");
     if (!spot) return false;
-    if (!needle) { spot.style.opacity = "0"; return false; }
+    if (!needle) { tracking = null; spot.style.opacity = "0"; return false; }
 
     /**
      * ═══════════════════════════════════════════════════════════════════════
@@ -312,7 +370,7 @@
     }
 
     var found = findByText(needle);
-    if (!found) { spot.style.opacity = "0"; return false; }
+    if (!found) { tracking = null; spot.style.opacity = "0"; return false; }
 
     /**
      * ═══════════════════════════════════════════════════════════════════════
@@ -356,30 +414,45 @@
      * have caught it except watching the reel.
      * ═══════════════════════════════════════════════════════════════════════
      */
-    var zoom = parseFloat(window.getComputedStyle(document.documentElement).zoom) || 1;
-    var pad = 12;
-    var b = found.box;
-    var top = Math.max(0, b.top - pad) / zoom;
-    var left = Math.max(0, b.left - pad) / zoom;
-    var right = Math.min(window.innerWidth, b.right + pad) / zoom;
-    var bottom = Math.min(window.innerHeight, b.bottom + pad) / zoom;
-
-    var panels = spot.querySelectorAll("[data-side]");
-    var put = function (el, css) { el.style.cssText += ";" + css; };
-    for (var i = 0; i < panels.length; i++) {
-      var side = panels[i].getAttribute("data-side");
-      if (side === "t") put(panels[i], "left:0;top:0;width:100%;height:" + top + "px;");
-      // 100%, bottom:0 and right:0 are relative to the zoomed box and need no
-      // conversion; only the measured numbers above do.
-      if (side === "b") put(panels[i], "left:0;top:" + bottom + "px;width:100%;bottom:0;height:auto;");
-      if (side === "l") put(panels[i], "left:0;top:" + top + "px;width:" + left + "px;height:" + (bottom - top) + "px;");
-      if (side === "r") put(panels[i], "left:" + right + "px;top:" + top + "px;right:0;width:auto;height:" + (bottom - top) + "px;");
-    }
-    var ring = document.getElementById("__reel_ring");
-    ring.style.cssText += ";left:" + left + "px;top:" + top + "px;width:"
-      + (right - left) + "px;height:" + (bottom - top) + "px;";
-    spot.style.opacity = "1";
+    place(found.el);
+    /**
+     * ═══════════════════════════════════════════════════════════════════════
+     * THE RING FOLLOWS ITS TARGET. IT IS NOT A RECTANGLE DRAWN ONCE.
+     *
+     * Recorded, extracted at two seconds apart, and looked at: at 12s the ring
+     * enclosed the gauge and "44 RED" exactly. At 15s, same beat, same shot,
+     * the number was BELOW the ring and dimmed — the one figure the reveal
+     * exists to show, greyed out by the thing pointing at it.
+     *
+     * Nothing scrolled. The week strip above the gauge finished loading and
+     * got taller, and everything under it moved down 94 pixels. The ring is
+     * position:fixed and was computed once, so the page slid out from under
+     * it while the shot itself held perfectly still.
+     *
+     * The drift already had this exact failure — a ring around the wrong row —
+     * and was fixed by not drifting on an aimed beat. That fixed the scroll
+     * and could never have fixed this one: async data, a lazy image, a
+     * transition, anything that changes layout after the aim. All of them look
+     * identical to the viewer and none of them are scrolling.
+     *
+     * A frame loop is the version that cannot be wrong about any of them.
+     * "A composed shot holds still" is about the CAMERA, and the camera does:
+     * this moves the annotation, not the shot.
+     * ═══════════════════════════════════════════════════════════════════════
+     */
+    tracking = found.el;
+    if (!ticking) { ticking = true; requestAnimationFrame(follow); }
     return true;
+  };
+
+  /** The element the spotlight is on, followed until it is cleared. */
+  var tracking = null;
+  var ticking = false;
+
+  var follow = function () {
+    if (!tracking) { ticking = false; return; }
+    place(tracking);
+    requestAnimationFrame(follow);
   };
 
   /**

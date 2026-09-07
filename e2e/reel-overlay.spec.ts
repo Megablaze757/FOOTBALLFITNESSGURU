@@ -149,3 +149,73 @@ test("the sweep marks where the voice is, not how far it has got", async ({ page
   expect(colours[1], "the figure lost its permanent highlight, which is the one it is there for").toBe(YELLOW);
   expect(colours[2], "the last word the sweep reached is not lit").toBe(YELLOW);
 });
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE RING WAS A RECTANGLE DRAWN ONCE, AND THE PAGE MOVED UNDER IT.
+ *
+ * Extracted two frames of the same beat of the same recording, three seconds
+ * apart. At 12s the ring enclosed the readiness gauge and "44 RED" exactly.
+ * At 15s the number sat BELOW the ring, dimmed — the one figure the reveal
+ * exists to show, greyed out by the thing pointing at it.
+ *
+ * Nothing scrolled. The strip above the gauge finished loading, got taller,
+ * and pushed everything under it down 94 pixels. The ring is position:fixed
+ * and had been computed once.
+ *
+ * The drift had this exact symptom before and was fixed by not drifting on an
+ * aimed beat — which could never have fixed this one. Async data, a lazy
+ * image, a transition: all identical to a viewer, none of them scrolling.
+ *
+ * WHY A BROWSER TEST. The question is whether a rectangle still matches an
+ * element AFTER a reflow, and only a layout engine can answer it.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("the ring follows its target when the page reflows under it", async ({ page }) => {
+  await page.goto("/cheapest-protein/");
+  await page.addScriptTag({ content: OVERLAY });
+
+  const ringBox = () => page.evaluate(() => {
+    const ring = document.getElementById("__reel_ring")!;
+    const target = document.getElementById("__probe_target")!;
+    const zoom = parseFloat(getComputedStyle(document.documentElement).zoom as string) || 1;
+    const t = target.getBoundingClientRect();
+    return {
+      ringTop: parseFloat(ring.style.top) * zoom,
+      ringHeight: parseFloat(ring.style.height) * zoom,
+      targetTop: t.top,
+      targetBottom: t.bottom,
+    };
+  });
+
+  await page.evaluate(() => {
+    const spacer = document.createElement("div");
+    spacer.id = "__probe_spacer";
+    spacer.style.height = "0px";
+    const target = document.createElement("div");
+    target.id = "__probe_target";
+    target.textContent = "Ringmeasurement";
+    target.style.cssText = "height:120px;width:300px;font-size:20px;";
+    document.body.prepend(target);
+    document.body.prepend(spacer);
+    (window as unknown as Record<string, (s: string) => boolean>).__reelFocus("Ringmeasurement");
+  });
+
+  const before = await ringBox();
+  expect(before.ringHeight, "the ring was never drawn, so this proves nothing").toBeGreaterThan(0);
+  expect(before.ringTop).toBeLessThanOrEqual(before.targetTop);
+  expect(before.ringTop + before.ringHeight).toBeGreaterThanOrEqual(before.targetBottom);
+
+  /** Exactly the fault: content ABOVE the target appears and pushes it down. */
+  await page.evaluate(() => { document.getElementById("__probe_spacer")!.style.height = "260px"; });
+  await page.waitForTimeout(300);
+
+  const after = await ringBox();
+  expect(after.targetTop - before.targetTop, "the reflow did not move the target — the test is inert")
+    .toBeGreaterThan(100);
+  expect(after.ringTop, `the ring stayed at ${after.ringTop} while the target moved to ${after.targetTop}`)
+    .toBeLessThanOrEqual(after.targetTop);
+  expect(after.ringTop + after.ringHeight,
+    "the bottom of the target is outside the ring, which is how the score came to be dimmed")
+    .toBeGreaterThanOrEqual(after.targetBottom);
+});

@@ -208,8 +208,15 @@ test("the overlay can point at one thing", () => {
    * A spotlight on nothing is worse than no spotlight, and it would be
    * invisible until somebody watched the finished reel.
    */
-  assert.match(src, /if \(!found\) \{ spot\.style\.opacity = "0"; return false; \}/,
+  assert.match(src, /if \(!found\) \{ tracking = null; spot\.style\.opacity = "0"; return false; \}/,
     "text that is not on screen dims the whole frame instead of doing nothing");
+  /**
+   * Clearing a focus has to stop the follow loop as well as hide the panels.
+   * A loop still measuring a stale element after the shot moved on is a
+   * spotlight that comes back by itself.
+   */
+  assert.match(src, /if \(!needle\) \{ tracking = null;/,
+    "clearing the focus leaves the frame loop running on the old element");
 
   // The smallest element containing the words, or every ancestor matches and
   // the spotlight is <body>.
@@ -246,8 +253,15 @@ test("the overlay can point at one thing", () => {
   }
   assert.ok(literals.length > 0, "the scrape found no selectors at all — the check is not running");
 
-  // The spotlight itself still finds its target by TEXT, not by markup.
-  const focusFn = src.slice(src.indexOf("var findByText"), src.indexOf("window.__reelFocus"));
+  /**
+   * The spotlight's SEARCH still finds its target by TEXT, not by markup — so
+   * the slice ends where the search does. It used to run on to __reelFocus,
+   * which was the same thing until place() was split out between them: that
+   * function asks for the overlay's own panels by [data-side], which is not a
+   * promise about the app's markup and is not what this rule is about.
+   */
+  const focusFn = src.slice(src.indexOf("var findByText"), src.indexOf("var place = function (el)"));
+  assert.ok(focusFn.length > 0, "findByText is gone — the search this checks does not exist");
   assert.match(focusFn, /querySelectorAll\("body \*"\)/,
     "the spotlight no longer walks the document looking for words");
   assert.doesNotMatch(focusFn, /querySelector(?:All)?\((?!"body \*")/,
@@ -299,7 +313,16 @@ test("focus survives the trip from script to plan", async () => {
  */
 test("the spotlight converts out of visual pixels", () => {
   const src = overlay();
-  const focus = src.slice(src.indexOf("window.__reelFocus = function"));
+  /**
+   * BOUNDED BY place(), which is where the geometry lives.
+   *
+   * This sliced from __reelFocus to the END OF THE FILE, so it would have gone
+   * on passing on any zoom division anywhere below — and it stopped passing
+   * the moment the measurement moved OUT of __reelFocus into place(), which is
+   * the honest half of an unbounded slice: it can be wrong in both directions.
+   */
+  const focus = src.slice(src.indexOf("var place = function (el)"), src.indexOf("window.__reelFocus = function"));
+  assert.ok(focus.length > 0, "place() is gone — the spotlight has no geometry to check");
   assert.match(focus, /getComputedStyle\(document\.documentElement\)\.zoom/,
     "the spotlight never reads the zoom, so it is drawn at the wrong scale");
 
