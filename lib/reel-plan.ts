@@ -124,9 +124,27 @@ export interface ReelPlan {
  * ═══════════════════════════════════════════════════════════════════════════
  */
 
-export function captionsFor(beat: { at: number; ms: number; say: string }): Caption[] {
+export function captionsFor(beat: { at: number; ms: number; say: string; tail?: number }): Caption[] {
   const chunks = captionLines(beat.say);
   if (!chunks.length) return [];
+
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * THE TAIL IS NOT THE CAPTIONS' TO SPEND.
+   *
+   * endCardAt below places the card at the later of "the last caption has
+   * finished" and "END_CARD_MS before the end" — and the captions here fill
+   * the beat EXACTLY, by construction, because the last one takes whatever
+   * remains. So a last beat that speaks had its card placed at its own final
+   * millisecond and drawn for none of them.
+   *
+   * Giving the beat a tail in lib/reel-script.ts does nothing on its own: the
+   * tail lands inside beat.ms, and the captions would simply stretch over it.
+   * The budget has to shrink here, which is the one place that knows the
+   * captions are what fills a beat.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  const budget = Math.max(0, beat.ms - (beat.tail ?? 0));
 
   /**
    * TIME PROPORTIONAL TO LENGTH, not an equal share.
@@ -172,16 +190,16 @@ export function captionsFor(beat: { at: number; ms: number; say: string }): Capt
    * "cannot afford the floors" sent every well-timed beat down the fallback
    * and left captions tens of milliseconds short of their own reading time.
    */
-  const surplus = beat.ms - needed;
+  const surplus = budget - needed;
   const affordable = surplus >= 0;
-  const share = (i: number) => Math.floor(((affordable ? surplus : beat.ms) * weights[i]) / total);
+  const share = (i: number) => Math.floor(((affordable ? surplus : budget) * weights[i]) / total);
 
   let at = beat.at;
   return chunks.map((text, i) => {
     // The last caption takes the remainder, so rounding can never leave a gap
     // or an overhang at the end of a beat.
     const ms = i === chunks.length - 1
-      ? beat.at + beat.ms - at
+      ? beat.at + budget - at
       : (affordable ? floors[i] + share(i) : share(i));
     const caption = { at, ms, text };
     at += ms;
@@ -194,6 +212,8 @@ export interface PlannableScript {
   hook: string;
   beats: {
     at: number; ms: number; route: string; action: string; say: string;
+    /** Silence after the line, kept clear of the captions for the end card. */
+    tail?: number;
     /** Words on screen this beat is about. Optional — most beats have none. */
     focus?: string;
   /** What to DO on this screen, performed on camera. See lib/reel-moves.ts. */

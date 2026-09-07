@@ -32,6 +32,45 @@ export const SIGNUP_CTA = "Sign up for free today";
 export const SIGNUP_CTA_SHORT = "Sign up free";
 
 /**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE SAME CALL TO ACTION, OUT LOUD, BECAUSE THE REELS WERE NOT MAKING ONE.
+ *
+ * Every reel ended on the front page in silence with a card on it, and the
+ * voice asked for nothing at any point — which is the whole of "the scripts
+ * feel unpromotional". A reel can be watched to the end and still leave the
+ * viewer with no idea what the thing is called or where it is, and that is a
+ * reel that spent thirty seconds teaching somebody else's audience.
+ *
+ * The published guidance on short-form is blunt about it: the CTA is the beat
+ * creators skip and the one that decides whether a view becomes anything.
+ *   — stratboost.ai/blogs/ai-script-templates-2026-viral-structure
+ *   — automateed.com/content-hooks-for-short-form-videos
+ *
+ * ONE CONSTANT, NOT FOUR HAND-WRITTEN SIGN-OFFS. Four reels with four endings
+ * is four chances to drift, and a sign-off only builds recognition if it is
+ * the same sign-off. lib/reel-script.ts refuses to build a script that does
+ * not end on this line.
+ *
+ * SPOKEN, so it is contracted and short: this is read aloud over the last two
+ * seconds of footage, not set in a button.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+/**
+ * ONE SENTENCE, WHICH IS WHY IT IS PUNCTUATED LIKE THIS.
+ *
+ * The first draft was "PocketAthlete. It's free. Link's in the bio." — three
+ * SENTENCES, and lib/caption-lines.ts never merges those, because the voice
+ * pauses between them. Three captions, each floored at MIN_CAPTION_MS whether
+ * it needs it or not: seven words cost 4.8 seconds on a reel with a 30-second
+ * ceiling. As one sentence it costs 3.0.
+ *
+ * It still comes out as TWO captions, not one — fitSentence breaks on the
+ * comma even though the whole thing fits in a line — and that is fine. The
+ * expensive thing was the full stops, not the commas.
+ */
+export const SIGNUP_SPOKEN = "PocketAthlete, free, link in the bio.";
+
+/**
  * Whether the login page should open on the create-account form.
  *
  * THIS FLAG ONLY. Arriving with `?plan=` also opens sign-up, and that stays in

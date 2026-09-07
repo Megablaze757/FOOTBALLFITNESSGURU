@@ -149,3 +149,46 @@ test("the recorder draws the card, and draws the site's own call to action", () 
   assert.match(src, /step\.index === plan\.steps\.length - 1/,
     "the end card is not restricted to the last beat");
 });
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE END CARD WAS DRAWN FOR ZERO MILLISECONDS THE MOMENT THE REEL SPOKE AT
+ * THE END.
+ *
+ * endCardAt places the card at the LATER of "the last caption has finished"
+ * and "END_CARD_MS before the end" — deliberately, so it can never be drawn
+ * over a line somebody is still reading. And captionsFor fills a beat exactly:
+ * the last caption takes whatever remains, by construction.
+ *
+ * Both are correct on their own. Together they mean a last beat with a line on
+ * it has its card placed at its own final millisecond. Giving the reel a
+ * spoken sign-off would have silently deleted the written one, and the
+ * timeline, the plan JSON and the retention report would all have looked
+ * right. Beat.tail is the room; this is the test that it is actually kept.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("a last beat that speaks still leaves the end card its room", () => {
+  const beat = { at: 0, ms: 6_000, say: "PocketAthlete, free, link in the bio.", tail: END_CARD_MS };
+  const captions = captionsFor(beat);
+
+  assert.ok(captions.length > 0, "the sign-off produced no caption at all");
+  const end = Math.max(...captions.map((c) => c.at + c.ms));
+  assert.equal(end, beat.ms - END_CARD_MS,
+    "the captions spent the tail — the end card is placed after them and gets nothing");
+
+  const card = endCardAt(beat.ms, captions);
+  assert.equal(beat.ms - card, END_CARD_MS, "the end card is on screen for the wrong length");
+
+  /** The captions still fill everything they are allowed, with no gap. */
+  let at = 0;
+  for (const caption of captions) {
+    assert.equal(caption.at, at, "the captions no longer run back to back");
+    at += caption.ms;
+  }
+});
+
+/** Without a tail nothing changes: this is the shape every other beat has. */
+test("a beat with no tail still fills itself exactly", () => {
+  const captions = captionsFor({ at: 0, ms: 4_000, say: "The cheap one's red lentils." });
+  assert.equal(Math.max(...captions.map((c) => c.at + c.ms)), 4_000);
+});

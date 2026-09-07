@@ -35,6 +35,8 @@ import { movesMs, type Move } from "./reel-moves";
 import { holdFor, speechMs, MIN_SCENE_MS, MAX_REEL_MS, MS_PER_WORD } from "./reel";
 import { SUSPENSE_MS } from "./narration";
 import { hookText, HOOK_MAX_WORDS } from "./reel-kinds";
+import { END_CARD_MS } from "./reel-plan";
+import { SIGNUP_SPOKEN } from "./signup-link";
 import { SKILL_DRILLS } from "./skills";
 import { indexFacts, money, REFERENCE_PROTEIN } from "./protein-index";
 import { standardPages } from "./standards-page";
@@ -75,6 +77,17 @@ export interface Beat {
    * screen are the words the script is already talking about.
    */
   focus?: string;
+  /**
+   * Silence AFTER this beat's line, in milliseconds.
+   *
+   * `hold` is the pause before a reveal; this is the room the END CARD needs.
+   * lib/reel-plan.ts draws "Sign up for free today" over the tail of the last
+   * beat and refuses to draw it over a caption — so a last beat that speaks
+   * right up to its own end gets a card for zero milliseconds and loses the
+   * only frame in the reel that asks for anything. Found by reading endCardAt
+   * next to a script that had just been given a spoken sign-off.
+   */
+  tail?: number;
   /**
    * What to DO on this screen while the line plays.
    *
@@ -128,6 +141,7 @@ function time(beats: Omit<Beat, "at" | "ms">[]): Beat[] {
     // speechMs, not holdFor: this beat is SPOKEN. holdFor is the reading time
     // for a text card, and using it here under-estimated every reel by a fifth.
     const ms = (b.hold ?? 0)
+      + (b.tail ?? 0)
       + movesMs(b.moves)
       + Math.max(MIN_BEAT_MS, b.say ? Math.max(speechMs(b.say), beatFloorMs(b.say)) : 0);
     const beat = { ...b, at, ms };
@@ -168,11 +182,35 @@ function readinessScript(): ReelScript {
    * is already doing wrong, in the second person, before any context.
    * ═══════════════════════════════════════════════════════════════════════
    */
-  return build("demo-readiness", "Bad night? Your app doesn't care.", [
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * WRITTEN PROSE IS NOT SPOKEN ENGLISH, AND EVERY LINE HERE WAS WRITTEN.
+   *
+   * "Bad night? Your app doesn't care." is a fine hook and the reel behind it
+   * read like an essay: full sentences, no contractions, a subject and a verb
+   * every time, and the first line REPEATING the hook's own "three hours'
+   * sleep" before the second line said it a third time. Read aloud it is a
+   * man describing software. That is the whole of "the scripts feel awkward".
+   *
+   * What replaces it is the same claim in the shape people actually talk in:
+   * a named antagonist ("every training app you own"), fragments where the
+   * pictures are doing the work, contractions throughout, and one callback —
+   * "last Sunday" in the first line, paid off in the reveal.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  return build("demo-readiness", "You slept three hours. Your app doesn't care.", [
     {
       route: "/journal",
       action: "Open the check-in. Do not fill it in yet — let the empty form show.",
-      say: "Three hours' sleep, and your app still hands you the session it planned last week.",
+      /**
+       * THE HOOK'S OWN WORDS ARE NOT AVAILABLE TO THE FIRST LINE.
+       *
+       * This said "Three hours' sleep, and your app still hands you..." over a
+       * hook card reading "You slept three hours" — the same fact twice inside
+       * four seconds, and then a third time in the beat below. The first line
+       * has to ADD, so it names the thing the hook is accusing.
+       */
+      say: "Every training app you own will still hand you the session it planned last Sunday.",
     },
     {
       route: "/journal",
@@ -223,7 +261,15 @@ function readinessScript(): ReelScript {
          */
         { tap: "Save today's log" },
       ],
-      say: "Watch. Three hours' sleep, legs wrecked, and it takes sixty seconds to say so.",
+      /**
+       * FRAGMENTS, BECAUSE THE PICTURE IS DOING THE SENTENCE.
+       *
+       * "Watch. Three hours' sleep, legs wrecked, and it takes sixty seconds
+       * to say so" is one clause too many and says the sleep figure for the
+       * third time in twelve seconds. The taps happen on camera underneath
+       * this line, so the line only has to name them as they land.
+       */
+      say: "This one asks first — bad night, wrecked legs, ten seconds.",
     },
     {
       route: "/home",
@@ -248,14 +294,25 @@ function readinessScript(): ReelScript {
        * the viewer can see is narration of a screenshot; letting the screen
        * deliver it is the reveal the suspense pause was put there for.
        */
-      say: "That is what it thinks of you today.",
+      say: "That's today's body talking, not last Sunday's plan.",
     },
     {
       route: "/home",
       action: "Scroll to today's session so the adjusted work is visible.",
-      say: "So it rebuilt today. Not a warning you can swipe away — the work itself is lighter. Free, on your phone.",
+      say: "So it rebuilt today's session. Not a warning — the sets themselves got lighter.",
     },
-    { route: "/", action: "Land on the front page so the address is on screen.", say: "" },
+    /**
+     * THE ONLY BEAT THAT ASKS FOR ANYTHING, AND IT USED TO BE SILENT.
+     *
+     * "Free, on your phone" was tacked onto the end of the line above and the
+     * last four seconds of the reel said nothing at all. See SIGNUP_SPOKEN.
+     */
+    {
+      route: "/",
+      action: "Land on the front page so the address is on screen.",
+      say: SIGNUP_SPOKEN,
+      tail: END_CARD_MS,
+    },
   ]);
 }
 
@@ -287,7 +344,15 @@ function costScript(): ReelScript {
    * The gap between the two prices is the whole reel; putting it first is the
    * reel telling you what it is going to prove.
    */
-  return build("demo-cost", `Same protein. ${gap} the price.`, [
+  /**
+   * THE HOOK STATED A FACT ABOUT FOOD; IT ACCUSES THE VIEWER NOW.
+   *
+   * "Same protein. 10x the price." is true, symmetrical and about nothing in
+   * particular. lib/reel-retention.ts wants a number, a question or the
+   * second person and settled for the number — but the second person is the
+   * half that makes stopping feel urgent, and this reel has both available.
+   */
+  return build("demo-cost", `You're paying ${gap} for the same protein.`, [
     /**
      * ═══════════════════════════════════════════════════════════════════════
      * BUILD, THEN REVEAL. "No reel hook or pausing for suspense."
@@ -330,13 +395,13 @@ function costScript(): ReelScript {
       // THE REVEAL. Everything before it was setup; this is what the hook
       // promised. The silence is the reel telling the viewer to look.
       hold: SUSPENSE_MS,
-      say: `The cheap one is ${cheapName}.`,
+      say: `The cheap one's ${cheapName}.`,
     },
     {
       route: "/cheapest-protein/",
       action: "Hold on the most expensive row.",
       focus: facts ? facts.dearest.name : "",
-      say: `The dear one is ${dearName}. ${gap} the money for the same protein.`,
+      say: `The dear one's ${dearName}. ${gap} the money.`,
     },
     {
       route: "/recipes/",
@@ -351,7 +416,19 @@ function costScript(): ReelScript {
        * off that route AND puts it where it is actually true, since the
        * recipes are the thing costed from those packs.
        */
-      say: "Every recipe in the app is priced from real supermarket packs.",
+      /**
+       * ADDRESSED TO THE VIEWER, AND IT IS ALSO WHAT KEEPS THE ROUTE SHARE DOWN.
+       *
+       * It read "Every recipe in the app is priced from real supermarket
+       * packs" — a sentence about the app's methodology, said to nobody.
+       *
+       * The second reason is arithmetic, and it is worth writing down because
+       * it is counter-intuitive: MAX_ONE_ROUTE_SHARE is a RATIO, so trimming
+       * the beats AWAY from /cheapest-protein/ pushed that route from 55% to
+       * 58% without a millisecond being added to it. Cutting this beat to a
+       * fragment made the reel's worst number worse.
+       */
+      say: "Every recipe you cook is priced before you buy it.",
     },
     {
       route: "/nutrition",
@@ -368,9 +445,22 @@ function costScript(): ReelScript {
        * which is what lib/speech-timing.ts puts the suspense gap in front of.
        * It just says something now.
        */
-      say: "Build a week and it prices your whole shop. Free, before you spend a penny.",
+      /**
+       * NINE WORDS, AND THE HEADROOM IS THE REASON.
+       *
+       * This reel measured 29.7s against a 30s ceiling with the sign-off in —
+       * three tenths of a second of margin on a script whose figures come out
+       * of lib/protein-index.ts. A shelf price moves, "£3.19" becomes "£10.45",
+       * and the reel is refused by a rule nobody was thinking about that day.
+       */
+      say: "Build a week and it prices the whole shop.",
     },
-    { route: "/", action: "Front page. Hold two seconds.", say: "" },
+    {
+      route: "/",
+      action: "Front page. Hold two seconds.",
+      say: SIGNUP_SPOKEN,
+      tail: END_CARD_MS,
+    },
   ]);
 }
 
@@ -399,7 +489,7 @@ function drillScript(drillId: string): ReelScript | null {
    * thing on the page and the reel is not a substitute for reading it.
    * ═══════════════════════════════════════════════════════════════════════
    */
-  return build(`drill-${drill.id}`, `You are doing ${drill.name.toLowerCase()} wrong.`, [
+  return build(`drill-${drill.id}`, `You're doing ${drill.name.toLowerCase()} wrong.`, [
     {
       route: "/drills/",
       action: "The drill index. Scroll a little so the breadth reads.",
@@ -412,7 +502,7 @@ function drillScript(drillId: string): ReelScript | null {
        * spoken line now says the same thing, so the promise arrives in the
        * window the retention data actually cares about.
        */
-      say: `Your ${drill.name.toLowerCase()} are not working, and it is one detail, not fitness.`,
+      say: `Your ${drill.name.toLowerCase()} aren't working, and it's one detail, not fitness.`,
     },
     {
       route: `/drills/${drill.sport}/`,
@@ -427,9 +517,14 @@ function drillScript(drillId: string): ReelScript | null {
     {
       route: "/journal?log=training",
       action: "The training row, open and ready for the session.",
-      say: "Log it and next week builds on what you actually did. All of it free.",
+      say: "Log it, and next week builds on what you actually did.",
     },
-    { route: "/", action: "Front page, so the address is on screen.", say: "" },
+    {
+      route: "/",
+      action: "Front page, so the address is on screen.",
+      say: SIGNUP_SPOKEN,
+      tail: END_CARD_MS,
+    },
   ]);
 }
 
@@ -449,23 +544,36 @@ function standardsScript(): ReelScript | null {
    * work out which one they are.
    * ═══════════════════════════════════════════════════════════════════════
    */
-  return build(`standards-${page.slug}`, `A 100kg ${page.lift.label.toLowerCase()} means nothing`, [
+  return build(`standards-${page.slug}`, `Your 100kg ${page.lift.label.toLowerCase()} means nothing`, [
     {
       route: "/standards/",
       action: "Show the list of lifts.",
-      say: `A hundred kilo ${page.lift.label.toLowerCase()} at sixty kilos bodyweight is elite. At a hundred and twenty, it is average.`,
+      /**
+       * THE HOOK CARD IS STILL ON SCREEN, so this line does not have to repeat
+       * what it says. The first version opened "A hundred kilo bench press at
+       * sixty kilos bodyweight is elite" under a card reading "Your 100kg
+       * bench press means nothing" — nineteen words to restate six.
+       */
+      say: "At sixty kilos bodyweight that's elite. At a hundred and twenty, it's average.",
     },
     {
       route: `/standards/${page.slug}/`,
       action: "Open the table and stop on the middle rows.",
-      say: "So the table is a multiple of your bodyweight, untrained to world class.",
+      // "So the table is a multiple of your bodyweight" narrated the furniture.
+      // The app is the subject of the sentence now, because the app is the pitch.
+      say: "So it ranks you against your own bodyweight, untrained to world class.",
     },
     {
       route: "/benchmarks",
       action: "Show a logged lift with its tier beside it.",
-      say: "Log a lift in the app and it tells you which tier you are in, at your weight.",
+      say: "Log one lift and it tells you exactly which tier you're in.",
     },
-    { route: "/", action: "Front page.", say: "" },
+    {
+      route: "/",
+      action: "Front page.",
+      say: SIGNUP_SPOKEN,
+      tail: END_CARD_MS,
+    },
   ]);
 }
 
@@ -516,6 +624,32 @@ export function scriptProblems(script: ReelScript): ScriptProblem[] {
   }
   if (script.totalMs > MAX_REEL_MS) {
     problems.push({ beat: 0, problem: `${Math.round(script.totalMs / 1000)}s — over the ${MAX_REEL_MS / 1000}s ceiling` });
+  }
+
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * A REEL THAT ENDS WITHOUT ASKING FOR ANYTHING.
+   *
+   * All four of these ran to the end and never said what the app was called.
+   * That is not a style note — it is the beat the short-form guidance says
+   * creators skip and the one that decides whether a view becomes a signup.
+   *
+   * And the TAIL half is a fault I would not have found by watching: the end
+   * card is drawn over whatever is left of the last beat after its captions
+   * (endCardAt in lib/reel-plan.ts), and captions fill a beat exactly. Give
+   * the last beat a line without giving it room and the card is drawn for
+   * zero milliseconds — the reel loses its only written call to action and
+   * looks, on the timeline, entirely correct.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  const last = script.beats[script.beats.length - 1];
+  if (!last.say.includes(SIGNUP_SPOKEN)) {
+    problems.push({ beat: script.beats.length - 1, problem: "the reel never says what the app is called or where to get it" });
+  } else if ((last.tail ?? 0) < END_CARD_MS) {
+    problems.push({
+      beat: script.beats.length - 1,
+      problem: `the last beat speaks with ${last.tail ?? 0}ms after it — the end card needs ${END_CARD_MS}ms of its own`,
+    });
   }
 
   script.beats.forEach((beat, i) => {

@@ -42,6 +42,13 @@ const plan = SCRIPTS.flatMap((meta) => {
     beats: script.beats.map((beat, bi) => ({
       route: beat.route,
       hold: beat.hold ?? 0,
+      /**
+       * "after", not "tail": the job already has a `tail`, and that one is
+       * lib/narration.ts TAIL_MS — the silence baked onto the END OF EVERY
+       * SYNTHESISED CLIP. This is the end card's room. Two fields called tail
+       * in one JSON document is a bug waiting for whoever reads it next.
+       */
+      after: beat.tail ?? 0,
       floor: beatFloorMs(beat.say),
       phrases: perBeat[bi].map((p) => ({ text: p.text, rate: rates[i++], gap: p.gapMs })),
     })),

@@ -6,6 +6,8 @@ import {
   type ReelScript,
 } from "./reel-script";
 import { holdFor, MAX_REEL_MS } from "./reel";
+import { END_CARD_MS } from "./reel-plan";
+import { SIGNUP_SPOKEN } from "./signup-link";
 import { HOOK_MAX_WORDS } from "./reel-kinds";
 
 const all = () => SCRIPTS.map((s) => reelScript(s.id)).filter((s): s is ReelScript => s !== null);
@@ -204,4 +206,54 @@ test("the recorder films the screen and can carry a voice", () => {
   assert.match(src, /canRecord === false \?/, "the button is offered on a browser that cannot record");
   assert.match(src, /Control Centre/,
     "it says it cannot record and does not say what to do instead — iOS records the screen fine");
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * A REEL THAT NEVER SAYS WHAT THE APP IS CALLED.
+ *
+ * All four of these ran to the end and asked for nothing. The last beat was
+ * silence over the front page, and "free, on your phone" was tacked onto the
+ * middle of an earlier line where it read as a shrug. That is the beat the
+ * short-form guidance says creators skip and the one that decides whether a
+ * view becomes anything at all.
+ *
+ * ONE CONSTANT rather than four sign-offs, because a sign-off only builds
+ * recognition if it is the same one — and four hand-written endings is four
+ * chances for one of them to quietly stop naming the product.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("every reel says what the app is called and where to get it", () => {
+  for (const meta of SCRIPTS) {
+    const script = reelScript(meta.id, "");
+    assert.ok(script, `${meta.id} does not build`);
+    const last = script!.beats[script!.beats.length - 1];
+    assert.equal(last.say, SIGNUP_SPOKEN, `${meta.id} ends without a call to action`);
+    /**
+     * The room for the WRITTEN card, which lib/reel-plan.ts draws over the
+     * tail of this beat and refuses to draw over a caption. See the test in
+     * lib/reel-plan.test.ts for why speaking here deletes it without one.
+     */
+    assert.ok((last.tail ?? 0) >= END_CARD_MS,
+      `${meta.id} speaks to the last millisecond, so the end card gets none`);
+    assert.equal(scriptProblems(script!).length, 0, `${meta.id}: ${JSON.stringify(scriptProblems(script!))}`);
+  }
+});
+
+test("a reel that ends in silence is refused", () => {
+  const script = reelScript("demo-cost", "")!;
+  const mute = { ...script, beats: script.beats.map((b, i) => (i === script.beats.length - 1 ? { ...b, say: "" } : b)) };
+  assert.match(
+    scriptProblems(mute).map((p) => p.problem).join(" | "),
+    /never says what the app is called/,
+  );
+});
+
+test("a sign-off with no room after it is refused", () => {
+  const script = reelScript("drill", "")!;
+  const crowded = { ...script, beats: script.beats.map((b, i) => (i === script.beats.length - 1 ? { ...b, tail: 0 } : b)) };
+  assert.match(
+    scriptProblems(crowded).map((p) => p.problem).join(" | "),
+    /the end card needs/,
+  );
 });

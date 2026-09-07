@@ -18,13 +18,19 @@ for script in job["plan"]:
         if not b["phrases"]:
             beats.append((b["route"], job["silent"]))
             continue
-        ms = job["lead"] + b["hold"] + job["tail"]
+        # b["after"] is the end card's room (lib/reel-script.ts Beat.tail);
+        # job["tail"] is the silence on every synthesised clip. Different things.
+        ms = job["lead"] + b["hold"] + b.get("after", 0) + job["tail"]
         for ph in b["phrases"]:
             samples, rate = k.create(ph["text"], voice=job["voice"], speed=ph["rate"], lang="en-gb")
             ms += len(samples) / rate * 1000 + ph["gap"]
         # retime() takes the longer of the speech and the time to READ the
         # captions, which is what lib/caption-lines.ts calls beatFloorMs.
-        beats.append((b["route"], max(ms, b["floor"])))
+        # The floor is a CAPTION reading time, so the end card's room is added
+        # to it rather than competing with it — the same arithmetic as time()
+        # in lib/reel-script.ts. Taking max(ms, floor) alone would let a beat
+        # whose captions outlast its speech swallow the card's room whole.
+        beats.append((b["route"], max(ms, b["floor"] + b.get("after", 0))))
 
     total = sum(ms for _, ms in beats)
     share = {}
