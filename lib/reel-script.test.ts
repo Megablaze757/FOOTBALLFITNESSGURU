@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import {
   reelScript, scriptProblems, readTimeMs, SCRIPTS, HOOK_BY_MS, MIN_BEAT_MS,
   type ReelScript,
@@ -92,8 +92,37 @@ test("a script quotes the app's own numbers", () => {
 });
 
 /** Every route has to be somewhere the recorder can actually go. */
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE ROUTES COME FROM THE ROUTER, NOT FROM A LIST IN A TEST.
+ *
+ * This was a hand-written alternation of fourteen segment names — a second
+ * copy of the routing table, kept up to date by whoever remembered it existed.
+ * A beat moved to /coach, which is a real page with a real directory, and the
+ * test called it a page that does not exist.
+ *
+ * A copy of a fact is a fact that can disagree with itself. Reading app/ is
+ * the same work and cannot.
+ */
+function appSegments(): Set<string> {
+  const out = new Set<string>([""]);
+  const walk = (dir: string) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      // (app), (marketing): route GROUPS are not in the URL, so their children
+      // are top-level segments. [slug] and [...rest] are dynamic and match
+      // anything, which is not something this guard can check.
+      if (entry.name.startsWith("(")) walk(`${dir}/${entry.name}`);
+      else if (!entry.name.startsWith("[") && !entry.name.startsWith("_")) out.add(entry.name);
+    }
+  };
+  walk("app");
+  return out;
+}
+
 test("no beat points at a page that does not exist", () => {
-  const known = /^\/(|home|journal|nutrition|benchmarks|drills|standards|recipes|cheapest-protein|exercises|a|articles|collections|plans)(\/|$)/;
+  const known = appSegments();
+  assert.ok(known.size > 10, `only ${known.size} routes found — the scan is not working`);
   for (const script of all()) {
     for (const beat of script.beats) {
       /**
@@ -106,7 +135,8 @@ test("no beat points at a page that does not exist", () => {
        * real route with a real parameter read as a page that does not exist.
        */
       const [path] = beat.route.split("?");
-      assert.match(path, known, `${script.id}: ${beat.route}`);
+      assert.ok(known.has(path.split("/")[1] ?? ""),
+        `${script.id}: ${beat.route} — no directory under app/ serves that`);
       // And the query, if there is one, has to BE a query rather than a typo
       // that would be sent to the browser verbatim.
       const query = beat.route.slice(path.length);

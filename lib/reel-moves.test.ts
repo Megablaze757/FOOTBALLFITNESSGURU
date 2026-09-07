@@ -262,7 +262,40 @@ test("no evaluate callback declares an inner named function", () => {
    * in here has the same exposure, and the one that broke was the one nobody
    * was looking at.
    */
-  for (const call of src.matchAll(/page\.evaluate\(([\s\S]*?)\n\s{2}\}\)/g)) {
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * BALANCED PARENTHESES, BECAUSE THE SHAPE-MATCH WAS SLICING PAST THE CALL.
+   *
+   * This ended each callback at the first `\n  })`, which is the shape of SOME
+   * of them. A page.evaluate written across several arguments closes on
+   * `\n    ).catch(...)` instead, so its match ran on through the rest of the
+   * file to the next `\n  })` — and when a new top-level function appeared
+   * between the two, the guard read that function's body as an evaluate
+   * callback and failed on code that never goes near a browser.
+   *
+   * A guard matched by the wrong occurrence, in a test written to catch a bug
+   * that was itself invisible. Counting brackets is not clever, and it is
+   * right about every call shape rather than about the two that were in the
+   * file the day it was written. (It does not know about parentheses inside
+   * string literals; there are none in these arguments, and a false POSITIVE
+   * here costs a look rather than a bad recording.)
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  const calls: string[] = [];
+  const needle = "page.evaluate(";
+  for (let i = src.indexOf(needle); i >= 0; i = src.indexOf(needle, i + 1)) {
+    let depth = 0;
+    let j = i + needle.length - 1;
+    for (; j < src.length; j += 1) {
+      if (src[j] === "(") depth += 1;
+      else if (src[j] === ")") { depth -= 1; if (depth === 0) break; }
+    }
+    calls.push(src.slice(i + needle.length, j));
+    i = j;
+  }
+  assert.ok(calls.length > 4, `only ${calls.length} evaluate callbacks found — the scan is not working`);
+
+  for (const call of calls.map((c) => [c, c] as const)) {
     assert.doesNotMatch(call[1], /\bconst\s+\w+\s*=\s*\(/,
       "an evaluate callback declares an inner arrow — esbuild wraps it in __name(), "
       + "which does not exist in the browser, and the call throws at runtime");

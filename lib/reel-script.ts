@@ -296,10 +296,31 @@ function readinessScript(): ReelScript {
        */
       say: "That's today's body talking, not last Sunday's plan.",
     },
+    /**
+     * ═══════════════════════════════════════════════════════════════════════
+     * THE BEAT THAT CLAIMED THE SESSION CHANGED, OVER A SCREEN WITHOUT ONE.
+     *
+     * This was on /home with no focus, saying "the sets themselves got
+     * lighter". Extracted the frame: the readiness gauge again, the coach
+     * card, and "WORTH A LOOK — more the app can do". The session was not on
+     * the screen at any point in the beat.
+     *
+     * A beat with no `focus` is a beat with nothing checking that the shot
+     * matches the line — which is the fault the focus guard was built for and
+     * cannot catch when a script declines to declare one. Every beat that
+     * makes a claim about a specific thing on screen should name it.
+     *
+     * /coach, because that is where lib/session-why.ts renders and it is the
+     * app SAYING it, in its own words, rather than the reel asserting it: on
+     * a red day the line reads "Today's log said recover, so this is not the
+     * session the block prescribed."
+     * ═══════════════════════════════════════════════════════════════════════
+     */
     {
-      route: "/home",
-      action: "Scroll to today's session so the adjusted work is visible.",
-      say: "So it rebuilt today's session. Not a warning — the sets themselves got lighter.",
+      route: "/coach",
+      action: "Today's session, with the app's own reason for changing it.",
+      focus: "not the session the block prescribed",
+      say: "So today's session got rebuilt. Not a warning you swipe away — the work itself changed.",
     },
     /**
      * THE ONLY BEAT THAT ASKS FOR ANYTHING, AND IT USED TO BE SILENT.
@@ -308,8 +329,15 @@ function readinessScript(): ReelScript {
      * last four seconds of the reel said nothing at all. See SIGNUP_SPOKEN.
      */
     {
-      route: "/",
-      action: "Land on the front page so the address is on screen.",
+      /**
+       * "/" REDIRECTS TO /home FOR A SIGNED-IN VISITOR, and the reel is always
+       * signed in — it has to be, to have an app to film. So this beat used to
+       * say "land on the front page" in its action and land on the home screen
+       * every single time. The prose was describing a reel nobody has ever
+       * recorded.
+       */
+      route: "/home",
+      action: "Back to the home screen, with the score still on it, for the sign-off.",
       say: SIGNUP_SPOKEN,
       tail: END_CARD_MS,
     },
