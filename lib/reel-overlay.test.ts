@@ -413,7 +413,16 @@ test("a beat that aimed the shot does not then scroll off it", () => {
   const body = loop.slice(0, loop.indexOf("\n  }"));
 
   const caption = body.indexOf("__reelCaption");
-  const skip = body.indexOf("if (aimed) continue;");
+  /**
+   * `willAim`, not `aimed`.
+   *
+   * The caption schedule runs alongside the moves now — it has to, or the
+   * captions arrive after the taps and a second behind the voice — so it
+   * cannot wait for the aim to report back. Whether the beat NAMES a focus is
+   * the question the drift was always asking, and it is known before either
+   * of them starts.
+   */
+  const skip = body.indexOf("if (willAim) continue;");
   const drift = body.indexOf("driftTarget({");
 
   assert.ok(skip > 0, "a focused beat still drifts, so the spotlight ends up on the wrong row");
@@ -465,4 +474,42 @@ test("a focused thing is placed above the caption, not in the middle", () => {
   assert.ok(at < 0.5, `${at} centres or lowers the target, putting it under the caption`);
   assert.ok(at > 0.2, `${at} puts the target so high the shot has nothing under it`);
   assert.match(fn, /window\.innerHeight \* FOCUS_AT/, "the placement is not used by the scroll");
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE CAPTIONS ARE ON THE CLOCK. THE MOVES ARE NOT.
+ *
+ * The caption schedule used to be written after the moves loop, so it did not
+ * begin until every tap had been polled for, clicked and waited out.
+ * Extracted from the recording at 6.8s and 7.3s: the check-in is being filled
+ * in on camera, "Barely" and "Wrecked" already lit, and there is no caption on
+ * the frame at all. The line arrives about a second and a half after the voice
+ * said it, because the VOICE is laid at the plan's absolute times and knows
+ * nothing about moves.
+ *
+ * On the one beat in the reel that shows somebody using the app, the three
+ * quarters of the audience with the sound off got a silent screen.
+ *
+ * Ordering, checked in the source, because the alternative is a three-minute
+ * recording and a frame extraction — which is how it was found, and is not a
+ * regression test.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("the caption schedule starts before the moves, not after them", () => {
+  const src = readFileSync("scripts/record-reel.mts", "utf8");
+  const step = src.slice(src.indexOf("for (const step of plan.steps)"));
+  const body = step.slice(0, step.indexOf("\nasync function runCaptions"));
+
+  const start = body.indexOf("runCaptions(step, willAim)");
+  const moves = body.indexOf("for (const move of step.moves");
+  const awaited = body.indexOf("await captioning;");
+
+  assert.ok(start > 0, "the captions are no longer scheduled as their own job");
+  assert.ok(moves > 0, "the moves loop is gone — this test is checking nothing");
+  assert.ok(start < moves,
+    "the captions are scheduled after the moves again, so they arrive late and behind the voice");
+  assert.ok(awaited > moves, "the beat does not wait for its own captions to finish");
+  assert.match(body, /if \(captionFault\) throw captionFault;/,
+    "a caption that failed while the moves ran would be swallowed");
 });

@@ -571,6 +571,36 @@ for (const step of plan.steps) {
    * to every check that does not watch it. This is the same rule the focus
    * below already follows, for the same reason.
    */
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * THE CAPTIONS RUN ON THE CLOCK. THE MOVES ARE NOT ON IT.
+   *
+   * The captions used to be scheduled AFTER the moves finished, and the moves
+   * take real time — a poll for each target, a click, MOVE_GAP_MS between.
+   * Extracted from the recording: at 6.8s and 7.3s the check-in is being
+   * filled in on camera, "Barely" and "Wrecked" already lit, and there is no
+   * caption on the frame at all. The line arrives at about 7.5s, a second and
+   * a half after the voice said it.
+   *
+   * The VOICE is laid at the plan's absolute times (lib/narration.ts places
+   * clips at LEAD_MS + hold and knows nothing about moves), so the audio was
+   * right and the words underneath it were late. On the one beat in the whole
+   * reel that shows somebody using the app, three quarters of the audience —
+   * the ones with the sound off — got a silent screen.
+   *
+   * So the schedule is started here and awaited after the aim. Both halves
+   * are Playwright calls on one page, which serialises them; they interleave
+   * rather than race.
+   *
+   * `willAim` rather than `aimed`: the drift is skipped on a beat that names
+   * a focus, and whether it names one is known now. Waiting to find out was
+   * the only reason this loop had to come last.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  const willAim = Boolean(step.focus);
+  let captionFault: unknown = null;
+  const captioning = runCaptions(step, willAim).catch((e: unknown) => { captionFault = e; });
+
   for (const move of step.moves ?? []) {
     /**
      * WAITED FOR, NOT ASSUMED. The navigation above uses `waitUntil: "load"`,
@@ -691,6 +721,54 @@ for (const step of plan.steps) {
   // rather than from wherever the previous beat left off.
   if (aimed) driftFrom = await page.evaluate(() => window.scrollY).catch(() => driftFrom);
 
+  await captioning;
+  if (captionFault) throw captionFault;
+
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * THE END CARD, IN THE SILENCE THAT WAS ALREADY THERE.
+   *
+   * The recorded reel ended on the app with nothing written on it — the last
+   * caption cleared and 1.8 seconds of tail played out blank. That is the
+   * frame somebody is looking at when they decide whether to do anything,
+   * and it was the only part of the reel asking them for nothing.
+   *
+   * It reuses the hook overlay rather than inventing a second one: that is
+   * already drawn white on a heavy black outline and legible over anything,
+   * and a second thing to keep legible is a second thing to get wrong. See
+   * lib/reel-plan.ts for why it can never cover a caption.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  const last = step.index === plan.steps.length - 1;
+  if (!last) {
+    await sleep(Math.max(0, step.at + step.ms - elapsed()));
+  } else {
+    await sleep(Math.max(0, endCardAt(step.at + step.ms, step.captions) - elapsed()));
+    await page.evaluate(() => (window as never as { __reelCaption: (s: string) => void }).__reelCaption("")).catch(() => {});
+    await page.evaluate(() => (window as never as { __reelFocus: (s: string) => boolean }).__reelFocus("")).catch(() => {});
+    await page.evaluate(
+      (t) => (window as never as { __reelHook: (s: string) => void }).__reelHook(t),
+      SIGNUP_CTA,
+    ).catch(() => {});
+    await sleep(Math.max(0, step.at + step.ms - elapsed()));
+  }
+  await page.evaluate(() => (window as never as { __reelCaption: (s: string) => void }).__reelCaption("")).catch(() => {});
+}
+
+/**
+ * Draw this beat's captions at the times the plan gave them, and drift the
+ * page between them on a beat that is not pointing at anything.
+ *
+ * A function so it can be STARTED before the moves and awaited after them —
+ * see the note at the call site. Nothing else about it changed.
+ */
+async function runCaptions(step: (typeof plan.steps)[number], willAim: boolean): Promise<void> {
+  let driftAt = driftFrom;
+  const page_ = await page.evaluate(() => ({
+    scrollable: Math.max(0, document.documentElement.scrollHeight - window.innerHeight),
+    viewport: window.innerHeight,
+  })).catch(() => ({ scrollable: 0, viewport: 0 }));
+
   for (const [i, caption] of step.captions.entries()) {
     await sleep(Math.max(0, caption.at - elapsed()));
     /**
@@ -717,47 +795,23 @@ for (const step of plan.steps) {
      * is the one shot in a reel that should not move: the script named the
      * thing, the camera framed it, and panning off it during the line is not
      * something an editor would do.
+     *
+     * `willAim`, not the aim's RESULT. This runs alongside the moves now and
+     * finishes around the same time the aim does, so waiting for the answer
+     * would put it back where it was. Whether the beat names a focus is the
+     * question the drift is actually asking.
      * ═══════════════════════════════════════════════════════════════════════
      */
-    if (aimed) continue;
+    if (willAim) continue;
 
     const to = driftTarget({
-      ...page_, from: driftFrom, step: i + 1, steps: step.captions.length,
+      ...page_, from: driftAt, step: i + 1, steps: step.captions.length,
     });
-    if (to !== driftFrom || i === 0) {
+    if (to !== driftAt || i === 0) {
       await page.evaluate((y) => window.scrollTo({ top: y, behavior: "smooth" }), to).catch(() => {});
     }
-    if (i === step.captions.length - 1) driftFrom = to;
+    if (i === step.captions.length - 1) { driftAt = to; driftFrom = to; }
   }
-  /**
-   * ═══════════════════════════════════════════════════════════════════════
-   * THE END CARD, IN THE SILENCE THAT WAS ALREADY THERE.
-   *
-   * The recorded reel ended on the app with nothing written on it — the last
-   * caption cleared and 1.8 seconds of tail played out blank. That is the
-   * frame somebody is looking at when they decide whether to do anything,
-   * and it was the only part of the reel asking them for nothing.
-   *
-   * It reuses the hook pill rather than inventing a second overlay: that one
-   * is already drawn opaque with a border and measured at 10.3:1 against the
-   * app behind it, and a second thing to keep legible is a second thing to
-   * get wrong. See lib/reel-plan.ts for why it can never cover a caption.
-   * ═══════════════════════════════════════════════════════════════════════
-   */
-  const last = step.index === plan.steps.length - 1;
-  if (!last) {
-    await sleep(Math.max(0, step.at + step.ms - elapsed()));
-  } else {
-    await sleep(Math.max(0, endCardAt(step.at + step.ms, step.captions) - elapsed()));
-    await page.evaluate(() => (window as never as { __reelCaption: (s: string) => void }).__reelCaption("")).catch(() => {});
-    await page.evaluate(() => (window as never as { __reelFocus: (s: string) => boolean }).__reelFocus("")).catch(() => {});
-    await page.evaluate(
-      (t) => (window as never as { __reelHook: (s: string) => void }).__reelHook(t),
-      SIGNUP_CTA,
-    ).catch(() => {});
-    await sleep(Math.max(0, step.at + step.ms - elapsed()));
-  }
-  await page.evaluate(() => (window as never as { __reelCaption: (s: string) => void }).__reelCaption("")).catch(() => {});
 }
 
 // ORDER MATTERS AND IS NOT OBVIOUS. The video file is only finished when the
