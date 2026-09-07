@@ -378,3 +378,18 @@ test("only a graphic is widened, not a text match", () => {
   assert.match(widen, /=== "svg"/,
     "the widening is not restricted to graphics, so a text match would ring its container");
 });
+
+/**
+ * The caption owns the bottom third of the frame. Centring a focused element
+ * put the readiness score — the one thing the reveal exists to show — behind
+ * the words describing it. Recorded twice and looked at both times.
+ */
+test("a focused thing is placed above the caption, not in the middle", () => {
+  const src = overlay();
+  const fn = src.slice(src.indexOf("window.__reelFocus"), src.indexOf("window.__reelDo"));
+  const at = Number(fn.match(/var FOCUS_AT = ([0-9.]+);/)?.[1]);
+  assert.ok(Number.isFinite(at), "nothing decides where a focused element sits");
+  assert.ok(at < 0.5, `${at} centres or lowers the target, putting it under the caption`);
+  assert.ok(at > 0.2, `${at} puts the target so high the shot has nothing under it`);
+  assert.match(fn, /window\.innerHeight \* FOCUS_AT/, "the placement is not used by the scroll");
+});

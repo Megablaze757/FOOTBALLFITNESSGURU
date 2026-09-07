@@ -258,7 +258,23 @@
     var anywhere = findByText(needle, true);
     if (anywhere) {
       var box = anywhere.el.getBoundingClientRect();
-      var centred = window.scrollY + box.top - (window.innerHeight / 2) + (box.height / 2);
+      /**
+       * ═══════════════════════════════════════════════════════════════════
+       * ABOVE THE CAPTION, NOT IN THE MIDDLE OF THE FRAME.
+       *
+       * Centring put the readiness gauge dead centre, and the caption owns
+       * the bottom third — so the score, the one thing the reveal exists to
+       * show, sat behind the words describing it. Recorded twice and looked
+       * at both times: the ring was around the dial and the number was under
+       * the caption.
+       *
+       * FOCUS_AT is where a focused thing should sit. Everything below about
+       * 68% of the frame is caption, so the target is placed in the upper
+       * middle and its lower half still lands clear.
+       * ═══════════════════════════════════════════════════════════════════
+       */
+      var FOCUS_AT = 0.36;
+      var centred = window.scrollY + box.top - (window.innerHeight * FOCUS_AT) + (box.height / 2);
       window.scrollTo({ top: Math.max(0, centred), behavior: "instant" });
     }
 
