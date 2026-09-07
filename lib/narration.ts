@@ -122,6 +122,8 @@ export interface RetimedBeat {
   action: string;
   say: string;
   hold?: number;
+  /** Silence AFTER the line — the end card's room. See lib/reel-script.ts. */
+  tail?: number;
   focus?: string;
 }
 
@@ -133,7 +135,7 @@ export interface RetimedBeat {
  * with no gaps, and a plan with a hole in it puts the teleprompter and the
  * captions on the wrong beat for the rest of the reel.
  */
-export function retime<T extends { route: string; action: string; say: string; hold?: number; focus?: string }>(
+export function retime<T extends { route: string; action: string; say: string; hold?: number; tail?: number; focus?: string }>(
   beats: readonly T[],
   audio: readonly BeatAudio[],
 ): { beats: RetimedBeat[]; totalMs: number } {
@@ -146,7 +148,29 @@ export function retime<T extends { route: string; action: string; say: string; h
      * the voice needed — and the voice reads faster than an eye does on a
      * screen it has never seen. See beatFloorMs in lib/caption-lines.ts.
      */
-    const ms = Math.max(audio[i]?.ms ?? SILENT_BEAT_MS, beatFloorMs(beat.say));
+    /**
+     * ═══════════════════════════════════════════════════════════════════════
+     * AND THE TAIL, WHICH IS THE THIRD PLACE THIS SUM IS WRITTEN DOWN.
+     *
+     * Beat.tail is the room the end card needs — captionsFor budgets around it
+     * and endCardAt hands the card what is left. Three functions compute how
+     * long a beat is: time() in lib/reel-script.ts for the studio, the Python
+     * in scripts/measure-reel.py for the estimate, and THIS one, which is the
+     * only one that makes the video. The first two learned about the tail and
+     * this did not, so the first reel recorded after the sign-off landed was
+     * refused on the runner: "PocketAthlete, free," on screen for 930ms,
+     * needing 1633.
+     *
+     * The captions were being squeezed into the beat MINUS the tail while the
+     * beat had never been made longer to pay for it.
+     *
+     * Note what the spread below did and did not do. `tail` reached the plan
+     * intact — that fix works — and the ARITHMETIC is a separate thing a
+     * spread cannot carry. A field surviving transit is not the same as a
+     * field being accounted for.
+     * ═══════════════════════════════════════════════════════════════════════
+     */
+    const ms = (beat.tail ?? 0) + Math.max(audio[i]?.ms ?? SILENT_BEAT_MS, beatFloorMs(beat.say));
     /**
      * ═══════════════════════════════════════════════════════════════════════
      * SPREAD THE BEAT. Do not list its fields.

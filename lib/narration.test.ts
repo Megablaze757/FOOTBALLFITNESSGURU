@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { SUSPENSE_MS, LEAD_MS, SILENT_BEAT_MS, TAIL_MS, beatAudio, retime, trackClips, type SpokenPhrase } from "./narration";
 import { GAP } from "./speech-timing";
+import { beatFloorMs } from "./caption-lines";
 
 const said = (audioMs: number, gapMs = 0): SpokenPhrase => ({ text: "x", gapMs, audioMs });
 
@@ -154,4 +155,38 @@ test("retiming keeps every field a beat carried", () => {
   // And it still applies the timing it exists to apply.
   assert.equal(beats[0].at, 0);
   assert.ok(beats[0].ms >= 2000);
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE ONE THAT MAKES THE VIDEO IS THE ONE THAT DID NOT KNOW.
+ *
+ * Three functions compute how long a beat is: time() in lib/reel-script.ts,
+ * the Python in scripts/measure-reel.py, and this. Beat.tail — the end card's
+ * room, which captionsFor budgets around — was taught to the first two and not
+ * to the third, and the third is the only one a recording goes through.
+ *
+ * The first reel filmed after the spoken sign-off landed was refused on the
+ * runner, by the retention check, for captions too brief to read: they had
+ * been squeezed into the beat minus the tail while the beat was never made
+ * longer to pay for it. The guard did its job. This is so it does not have to
+ * again.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("a beat with a tail is made longer by it, not squeezed into it", () => {
+  const beats = [
+    { route: "/", action: "front page", say: "PocketAthlete, free, link in the bio.", tail: 1_800 },
+  ];
+  const audio = [{ ms: 3_000, clips: [] }];
+
+  const withTail = retime(beats, audio);
+  const without = retime([{ ...beats[0], tail: 0 }], audio);
+
+  assert.equal(withTail.beats[0].ms - without.beats[0].ms, 1_800,
+    "the tail did not lengthen the beat, so the captions lose exactly that much reading time");
+  assert.equal(withTail.beats[0].tail, 1_800, "the tail did not survive into the plan");
+
+  /** What the captions are actually left with has to still fit them. */
+  assert.ok(withTail.beats[0].ms - 1_800 >= beatFloorMs(beats[0].say),
+    "the captions cannot be read in what is left of the beat");
 });
