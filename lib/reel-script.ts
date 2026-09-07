@@ -201,7 +201,21 @@ function readinessScript(): ReelScript {
       moves: [
         { tap: "Barely" },
         { tap: "Wrecked" },
-        { tap: "Log it" },
+        /**
+         * "Save today's log", NOT "Log it".
+         *
+         * "Log it →" is on screen, is a button, and is happily tappable — and
+         * it belongs to the "Trained today?" row, whose onClick opens the
+         * training section. So the tap succeeded, the recorder reported three
+         * clean moves, and the check-in was never submitted: /home still said
+         * "Days since your last log: 20" under a caption saying "that is what
+         * it thinks of you today".
+         *
+         * A text target cannot catch that on its own — the words existed and
+         * the control worked. Only the OUTCOME can, which is why the beat
+         * below now requires the gauge to be on screen.
+         */
+        { tap: "Save today's log" },
       ],
       say: "Watch. Three hours' sleep, legs wrecked, and it takes sixty seconds to say so.",
     },

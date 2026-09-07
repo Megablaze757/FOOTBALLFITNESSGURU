@@ -537,7 +537,29 @@ for (const step of plan.steps) {
     (t) => (window as never as { __reelFocus: (s: string) => boolean }).__reelFocus(t),
     want,
   ).catch(() => false);
-  if (want && !aimed) console.warn(`  focus "${want}" is not on ${step.route} — no spotlight for that beat`);
+  /**
+   * A DECLARED FOCUS THAT FINDS NOTHING STOPS THE RUN.
+   *
+   * This warned and carried on, and that is how a reel went out whose reveal
+   * beat said "that is what it thinks of you today" over a home screen with
+   * no score on it at all — the check-in it had just performed never saved,
+   * because the tap hit a button called "Log it" that opens the training
+   * section rather than the submit button called "Save today's log". Three
+   * moves reported clean, one warning nobody read, and the reel contradicted
+   * its own narration.
+   *
+   * A focus is the script saying "this is the shot". If the shot is not
+   * there, the reel is about something that did not happen, and the OUTCOME
+   * is the only thing that catches a tap which worked and did the wrong job.
+   */
+  if (want && !aimed) {
+    throw new Error(
+      `Nothing on ${step.route} matches the focus "${want}".\n`
+      + "The beat is built around pointing at it, so the shot would contradict the line. "
+      + "If a move on this beat was supposed to produce it, check that the move did what "
+      + "it meant to rather than merely finding something to click.",
+    );
+  }
   // The focus moved the page, so the drift for this beat starts from there
   // rather than from wherever the previous beat left off.
   if (aimed) driftFrom = await page.evaluate(() => window.scrollY).catch(() => driftFrom);

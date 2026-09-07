@@ -112,9 +112,34 @@ test("the readiness reel taps the quick check-in, not the detailed one", async (
   const script = reelScript("demo-readiness", "");
   assert.ok(script, "there is no demo-readiness script");
   const taps = script!.beats.flatMap((b) => (b.moves ?? []).filter(isTap).map((m) => m.tap));
-  assert.deepEqual(taps, ["Barely", "Wrecked", "Log it"],
+  assert.deepEqual(taps, ["Barely", "Wrecked", "Save today's log"],
     "the taps changed — check them against the view /journal actually opens on");
+  /**
+   * "Log it" was here and it was the wrong control: a button of that name
+   * exists, is tappable, and opens the training section instead of saving.
+   * The recorder reported three clean moves over an unsaved check-in.
+   */
+  assert.ok(!taps.includes("Log it"),
+    "\"Log it\" opens the training section — it does not submit the check-in");
   for (const beat of script!.beats) {
     assert.deepEqual(moveProblems(beat.moves), [], `${beat.route} has moves that cannot work`);
   }
+});
+
+/**
+ * The guard that catches a move which worked and did the wrong thing.
+ *
+ * Three taps reported clean while the check-in went unsaved, because "Log it"
+ * is a real button that opens the training section. No check on the moves
+ * themselves can see that — the words were there and the control responded.
+ * What gives it away is the beat afterwards having nothing to point at.
+ */
+test("a reveal with nothing to reveal stops the recording", () => {
+  const src = readFileSync("scripts/record-reel.mts", "utf8");
+  const block = src.slice(src.indexOf("const want = step.focus"), src.indexOf("if (aimed) driftFrom"));
+  assert.match(block, /throw new Error\(/,
+    "a focus that finds nothing only warns, so a reel can still contradict its own line");
+  assert.match(block, /Nothing on \$\{step\.route\} matches the focus/,
+    "the failure does not say which screen or which target");
+  assert.ok(!/console\.warn/.test(block), "the old warn-and-carry-on path is still there");
 });
