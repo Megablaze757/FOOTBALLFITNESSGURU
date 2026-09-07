@@ -411,12 +411,26 @@ async function dumpScreen(route: string): Promise<void> {
   const seen = await page.evaluate(() => {
     const text = (el: Element) => (el.textContent ?? "").trim().replace(/\s+/g, " ").slice(0, 40);
     return {
+      /**
+       * WHERE THE BROWSER ACTUALLY IS, and what it actually shows.
+       *
+       * Three empty dumps in a row said "nothing on /journal" and I read that
+       * as "the page has not rendered". An empty page and a page that
+       * redirected somewhere else look identical through a list of headings.
+       * The URL distinguishes them, and the body text says whether anything
+       * is there at all.
+       */
+      url: location.href,
+      bodyChars: (document.body?.innerText ?? "").trim().length,
+      body: (document.body?.innerText ?? "").trim().replace(/\s+/g, " ").slice(0, 180),
       headings: [...document.querySelectorAll("h1, h2, h3")].map(text).filter(Boolean).slice(0, 20),
       buttons: [...document.querySelectorAll("button")].map(text).filter(Boolean).slice(0, 30),
       named: [...document.querySelectorAll("[aria-label]")]
         .map((el) => el.getAttribute("aria-label") ?? "").filter(Boolean).slice(0, 20),
     };
-  }).catch(() => ({ headings: [], buttons: [], named: [] }));
+  }).catch(() => ({ url: "?", bodyChars: -1, body: "?", headings: [], buttons: [], named: [] }));
+  console.error(`  url while looking for it: ${seen.url}`);
+  console.error(`  body on ${route}: ${seen.bodyChars} chars — ${JSON.stringify(seen.body)}`);
   console.error(`  headings on ${route}: ${JSON.stringify(seen.headings)}`);
   console.error(`  buttons on ${route}: ${JSON.stringify(seen.buttons)}`);
   console.error(`  accessible names on ${route}: ${JSON.stringify(seen.named)}`);
