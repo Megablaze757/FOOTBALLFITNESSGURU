@@ -39,9 +39,6 @@
      * TikTok and Instagram draw their own caption, handle and buttons over the
      * lower fifth of the frame. A caption under that is a caption nobody reads
      * — and it cannot be fixed after the video is made.
-     *
-     * Heavy weight on a near-black pill, because three quarters of the
-     * audience is READING this rather than hearing it.
      */
     caption.style.cssText =
       /**
@@ -66,23 +63,46 @@
        * ═══════════════════════════════════════════════════════════════════
        */
       "position:relative;z-index:1;"
-      + "max-width:100%;text-align:center;font-size:40px;line-height:1.25;font-weight:800;"
       /**
-       * OPAQUE, AND WITH A RIM.
+       * ═══════════════════════════════════════════════════════════════════
+       * OUTLINE, NOT A BOX. "CAPTIONS SHOULD BE BRIGHT."
        *
-       * The fill was rgba(8,8,10,0.82), which separated the words from a light
-       * page perfectly and vanished entirely on a dark one — the app's own
-       * ground is rgb(9,9,10), so once the recorder started filming in dark
-       * the pill became invisible and the page's text read straight through
-       * the caption. A caption has to work on ANY background, which means it
-       * cannot rely on being darker than what is behind it.
+       * The caption was white on an OPAQUE near-black pill, and the pill was
+       * the right answer to the wrong question. It got there by fixing a
+       * translucent fill that vanished on the app's own dark ground — but the
+       * property that actually makes a caption work on any background is a
+       * heavy outline on the GLYPHS, which is why every short-form caption
+       * preset uses one and none of them use a box.
        *
-       * Opaque fill for the text, and a light rim so the pill still has an
-       * edge when the thing behind it is as dark as the fill.
+       * A box is a black rectangle over a fifth of the frame. The reel is an
+       * app demo; the rectangle is sitting on the app.
+       *
+       * WHY text-shadow AND NOT -webkit-text-stroke: a text-stroke is centred
+       * on the glyph outline, so half of a 4px stroke eats into the letter and
+       * thin strokes close up. paint-order:stroke fill fixes that and is a
+       * thing to be right about in a browser nobody will re-check. Twelve
+       * shadows on a circle is the technique that has always worked, and it
+       * paints behind the fill by definition.
+       *
+       * 46px CSS at deviceScaleFactor 2 is 92px on the 1080x1920 file — inside
+       * the 80-120px band the caption presets specify, where it was at 80.
+       *   — ascynd.io/en/blog/why-hormozi-captions-get-more-views
+       *   — opus.pro/blog/best-caption-presets-styles-boost-retention
+       *
+       * NOT ALL-CAPS, and that is a departure worth stating rather than
+       * hiding: the same guidance says caps, and it says caps alongside ONE
+       * TO THREE WORDS a caption. These captions are phrases, because a
+       * phrase is what lib/caption-lines.ts times and what a mute viewer of an
+       * APP demo needs — and a 42-character phrase set in 92px caps is three
+       * tall lines climbing into the screen the reel is meant to be showing.
+       * Taking half of a preset is how you get the worst of it.
+       * ═══════════════════════════════════════════════════════════════════
        */
-      + "color:#fff;background:rgb(10,10,11);padding:14px 22px;border-radius:18px;"
-      + "border:2px solid rgba(255,255,255,0.22);"
-      + "box-shadow:0 10px 44px rgba(0,0,0,0.6);opacity:0;transition:opacity 120ms linear;";
+      + "max-width:100%;text-align:center;font-size:46px;line-height:1.2;font-weight:900;"
+      + "letter-spacing:-0.01em;"
+      + "color:#fff;"
+      + "text-shadow:4px 0px 0 #000,3.5px 2px 0 #000,2px 3.5px 0 #000,0px 4px 0 #000,-2px 3.5px 0 #000,-3.5px 2px 0 #000,-4px 0px 0 #000,-3.5px -2px 0 #000,-2px -3.5px 0 #000,-0px -4px 0 #000,2px -3.5px 0 #000,3.5px -2px 0 #000,0 2px 14px rgba(0,0,0,0.9),0 10px 30px rgba(0,0,0,0.55);"
+      + "opacity:0;transition:opacity 120ms linear;";
     layer.appendChild(caption);
 
     /**
@@ -122,10 +142,23 @@
     hook.id = "__reel_hook";
     hook.style.cssText =
       "max-width:100%;font-size:64px;line-height:1.08;font-weight:900;text-align:center;"
-      // Same rim, same reason as the caption above.
-      + "color:#fff;background:rgb(10,10,11);padding:18px 26px;border-radius:22px;"
-      + "border:2px solid rgba(255,255,255,0.24);"
-      + "box-shadow:0 12px 56px rgba(0,0,0,0.65);opacity:0;transition:opacity 120ms linear;";
+      /**
+       * SAME OUTLINE, SAME REASON AS THE CAPTION ABOVE — and one more that
+       * belongs to the hook alone.
+       *
+       * The note above this element records the whole history: a 93% opaque
+       * blackout across the frame, a 91.7% skip rate, then a pill so the
+       * ranked table would show behind it. The pill was the second step of
+       * that argument and this is the third. The hook is the first 1.6
+       * seconds; every pixel of it that is a black slab is a pixel not
+       * showing the thing being claimed.
+       *
+       * A wider ring than the caption because the type is larger: both are
+       * about 8% of the font size, which is where the presets put it.
+       */
+      + "color:#fff;"
+      + "text-shadow:5px 0px 0 #000,4.3px 2.5px 0 #000,2.5px 4.3px 0 #000,0px 5px 0 #000,-2.5px 4.3px 0 #000,-4.3px 2.5px 0 #000,-5px 0px 0 #000,-4.3px -2.5px 0 #000,-2.5px -4.3px 0 #000,-0px -5px 0 #000,2.5px -4.3px 0 #000,4.3px -2.5px 0 #000,0 3px 18px rgba(0,0,0,0.9),0 12px 40px rgba(0,0,0,0.6);"
+      + "opacity:0;transition:opacity 120ms linear;";
     hookWrap.appendChild(hook);
     layer.appendChild(hookWrap);
 
@@ -417,14 +450,34 @@
 
     // One timer per word rather than a per-frame poll: the browser is also
     // running a screen recording, and this is the cheaper of the two.
+    /**
+     * ═══════════════════════════════════════════════════════════════════════
+     * THE SWEEP PUT THE WHOLE LINE YELLOW AND LEFT IT THERE.
+     *
+     * Only the transform was ever undone. Every word the sweep touched kept
+     * HIGHLIGHT, so a seven-word caption finished as seven yellow words — and
+     * the comment above, which says the FIGURE is coloured the whole time
+     * "because colour is found without scanning", described a uniqueness the
+     * code destroyed one word at a time. By the end of the line the £0.31 the
+     * whole reel is about was the same colour as "the".
+     *
+     * The colour goes back to the word's own base now. A key word's base IS
+     * the highlight, so it is yellow throughout and everything else is yellow
+     * only while it is being said — which is what makes the yellow mean
+     * "here" rather than "read so far".
+     * ═══════════════════════════════════════════════════════════════════════
+     */
     for (var j = 0; j < words.length; j++) {
-      (function (span, previous) {
+      (function (span, previous, previousBase) {
         captionTimers.push(setTimeout(function () {
-          if (previous) { previous.style.transform = "none"; }
+          if (previous) {
+            previous.style.transform = "none";
+            previous.style.color = previousBase;
+          }
           span.style.color = HIGHLIGHT;
-          span.style.transform = "scale(1.06)";
+          span.style.transform = "scale(1.1)";
         }, words[j].at));
-      })(spans[j], j ? spans[j - 1] : null);
+      })(spans[j], j ? spans[j - 1] : null, j && words[j - 1].key ? HIGHLIGHT : "#fff");
     }
   };
   /**

@@ -109,3 +109,43 @@ test("the hook sits above the dimming too", async ({ page }) => {
     .not.toBe("static");
   expect(Number(positioned.captionZ) >= 1, "the caption has no z-index above the spotlight").toBeTruthy();
 });
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE SWEEP LEFT EVERY WORD IT TOUCHED YELLOW.
+ *
+ * scripts/reel-overlay.js lights each word as the voice reaches it and only
+ * ever undid the SCALE, never the colour. So a seven-word caption ended as
+ * seven yellow words, and the one word marked `key` — the figure the whole
+ * beat is about, coloured because a unique colour is found without scanning —
+ * was by then the same colour as "the".
+ *
+ * WHY A BROWSER TEST, AGAIN. The bug is in what the element ENDS UP as after
+ * a sequence of timers, and the only thing that can answer that is a renderer
+ * running the timers. Grepping the source for `previous.style.color` would
+ * pass on code that set it to the wrong value.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("the sweep marks where the voice is, not how far it has got", async ({ page }) => {
+  await page.goto("/cheapest-protein/");
+  await page.addScriptTag({ content: OVERLAY });
+
+  const colours = await page.evaluate(async () => {
+    const w = window as unknown as Record<string, (r: unknown) => unknown>;
+    w.__reelCaption([
+      { text: "The", key: false, at: 0 },
+      { text: "31p", key: true, at: 40 },
+      { text: "row", key: false, at: 80 },
+    ]);
+    await new Promise((r) => setTimeout(r, 400));
+    const spans = [...document.getElementById("__reel_caption")!.querySelectorAll("span")];
+    return spans.map((el) => getComputedStyle(el).color);
+  });
+
+  const YELLOW = "rgb(255, 232, 26)";
+  const WHITE = "rgb(255, 255, 255)";
+
+  expect(colours[0], `"The" is still lit after the sweep passed it — [${colours.join(" | ")}]`).toBe(WHITE);
+  expect(colours[1], "the figure lost its permanent highlight, which is the one it is there for").toBe(YELLOW);
+  expect(colours[2], "the last word the sweep reached is not lit").toBe(YELLOW);
+});

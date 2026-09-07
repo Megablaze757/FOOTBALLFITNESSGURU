@@ -54,8 +54,24 @@ test("the hook clears the caption band and the platform's own chrome", () => {
   assert.ok(pct <= 55, `${pct}% collides with the caption band`);
 });
 
-/** Captions are read by most of the audience, so they keep their backing. */
-test("the caption keeps a solid backing", () => {
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE CAPTION IS READ ON MUTE, SO SOMETHING HAS TO SEPARATE IT FROM THE APP.
+ *
+ * This asserted a `background:` — the pill — because that was the mechanism.
+ * It is an outline on the glyphs now, which is what every published caption
+ * preset uses and what lets the app show through. The PROPERTY is the same
+ * one it always was: legible over anything. The mechanism changed, so the
+ * assertion has to, or it guards a thing nobody is doing any more.
+ *
+ * Counting the offsets rather than matching "text-shadow": one shadow is a
+ * drop shadow, and a drop shadow disappears against a dark page exactly like
+ * the translucent fill did. A ring needs to be a ring.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+const RING = /(-?[0-9.]+px\s+-?[0-9.]+px\s+0\s+#000)/g;
+
+test("the caption is outlined, not boxed", () => {
   const src = overlay();
   /**
    * Bounded by the line that USES it, not by the next declaration. The wider
@@ -65,10 +81,34 @@ test("the caption keeps a solid backing", () => {
    * occurrence, in a test written to catch exactly that class of thing.
    */
   const caption = src.slice(src.indexOf("caption.style.cssText"), src.indexOf("layer.appendChild(caption)"));
-  // rgba OR rgb: the fill became opaque so it survives a dark background, and
-  // this check is about the pill existing at all.
-  assert.match(caption, /background:rgba?\(/, "the caption lost the pill it is read against");
-  assert.match(caption, /font-weight:800|font-weight:900/, "the caption is no longer heavy enough to read on video");
+
+  assert.doesNotMatch(caption, /background:/,
+    "the caption has a box behind it again — that is a black rectangle over the app it is demonstrating");
+  const ring = caption.match(RING) ?? [];
+  assert.ok(ring.length >= 8,
+    `${ring.length} solid outline offsets — under eight the ring has gaps and the caption dissolves into a busy screen`);
+  assert.match(caption, /font-weight:900/, "the caption is no longer heavy enough to read on video");
+
+  /**
+   * ABOVE THE FLOOR OF THE BAND, NOT INSIDE IT — and the difference is a
+   * mutation that should have gone red and did not.
+   *
+   * 80-120px on the 1080x1920 file is what the presets specify, and the
+   * recorder films at deviceScaleFactor 2, so the CSS number is half. The
+   * caption was at 40px. Putting it back to 40 is the exact regression this
+   * assertion exists to catch, and `>= 80` passed it happily: 80 IS in the
+   * band. A guard that permits the value that caused the complaint is not a
+   * guard, it is a restatement of the spec.
+   *
+   * So: strictly above the floor. 80px is inside the published range and it is
+   * also the size somebody looked at and said the captions were not bright
+   * enough to be worth reading, which is the fact this file is for.
+   */
+  const size = caption.match(/font-size:([0-9]+)px/);
+  assert.ok(size, "the caption has no size of its own");
+  const onFile = Number(size![1]) * 2;
+  assert.ok(onFile > 80 && onFile <= 120,
+    `${onFile}px on the recorded file — the band is 80-120 and 80 itself is the size that was too small`);
 });
 
 /**
@@ -125,6 +165,14 @@ test("the recorder films the app in the theme it actually ships", () => {
  * as the fill.
  * ═══════════════════════════════════════════════════════════════════════════
  */
+/**
+ * The app's own ground is rgb(9,9,10). Anything that relies on being darker
+ * than what is behind it — a translucent scrim, a soft drop shadow — is
+ * nothing at all on a dark page, which is how the caption came to be read
+ * straight through once the recorder started filming in dark.
+ *
+ * A black ring on white glyphs is the one treatment that does not care.
+ */
 test("the caption and hook stay legible on a dark page", () => {
   const src = overlay();
   const caption = src.slice(src.indexOf("caption.style.cssText"), src.indexOf("layer.appendChild(caption)"));
@@ -135,8 +183,10 @@ test("the caption and hook stay legible on a dark page", () => {
     const translucent = block.match(/background:rgba\([^)]*?([0-9.]+)\)/);
     assert.equal(translucent, null,
       `the ${name} fill is translucent again, so it disappears on the app's own dark ground`);
-    assert.match(block, /border:2px solid rgba\(255,255,255/,
-      `the ${name} has no rim, so it has no edge against a dark page`);
+    const ring = block.match(RING) ?? [];
+    assert.ok(ring.length >= 8,
+      `the ${name} has no outline ring, so it has no edge against a dark page`);
+    assert.match(block, /color:#fff/, `the ${name} is not white, so the black ring is not an outline`);
   }
 });
 
