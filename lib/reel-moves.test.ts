@@ -1,7 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { MOVE_GAP_MS, isTap, isType, moveProblems, movesMs, type Move } from "./reel-moves";
+import {
+  MOVE_GAP_MS, MOVE_POLL_MS, MOVE_WAIT_MS,
+  isTap, isType, moveProblems, movesMs, type Move,
+} from "./reel-moves";
 
 test("a move is one of exactly two things, and says which", () => {
   const typed: Move = { type: "80", into: "Weight" };
@@ -158,4 +161,35 @@ test("both refusals say what was on the screen", () => {
   assert.match(focus, /dumpScreen\(/, "a missed focus throws with no evidence attached");
   assert.match(src, /buttons on \$\{route\}/,
     "the dump does not list the buttons, which is what a tap is matched against");
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE PAGE IS EMPTY WHEN THE BEAT BEGINS.
+ *
+ * The recorder navigates with `waitUntil: "load"`, which in a Next.js app
+ * fires while the document has nothing in it. The recorder's own screen dump
+ * proved it: no headings, no buttons, no accessible names on /journal at the
+ * moment the first move ran. Four theories preceded that one measurement.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("a move waits for its target rather than assuming it is there", () => {
+  const src = readFileSync("scripts/record-reel.mts", "utf8");
+  const block = src.slice(src.indexOf("for (const move of step.moves"), src.indexOf("await sleep(MOVE_GAP_MS)"));
+  assert.match(block, /MOVE_WAIT_MS/, "a move gives up the instant the page is not ready");
+  assert.match(block, /while \(!did\)/, "there is no retry — one look at an empty page and it fails");
+  assert.match(block, /Date\.now\(\) >= deadline/, "the retry has no deadline, so a real miss hangs");
+});
+
+test("the spotlight waits too, and does not spin when nothing was asked for", () => {
+  const src = readFileSync("scripts/record-reel.mts", "utf8");
+  const block = src.slice(src.indexOf("const focusBy"), src.indexOf("if (want && !aimed)"));
+  assert.match(block, /MOVE_WAIT_MS/, "a beat with no moves aims at a page that may still be hydrating");
+  assert.match(block, /!want/, "a beat with no focus burns the whole wait doing nothing");
+});
+
+test("the wait is long enough for a cold runner and short enough to notice a real miss", () => {
+  assert.ok(MOVE_WAIT_MS >= 3_000, `${MOVE_WAIT_MS}ms will fail on a slow runner and look like a bug`);
+  assert.ok(MOVE_WAIT_MS <= 15_000, `${MOVE_WAIT_MS}ms a move means a broken script takes a minute to say so`);
+  assert.ok(MOVE_POLL_MS <= 500, `polling every ${MOVE_POLL_MS}ms adds visible lag to every move`);
 });

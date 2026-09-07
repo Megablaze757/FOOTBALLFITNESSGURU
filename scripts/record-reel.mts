@@ -28,7 +28,7 @@ import { reelScript, type ScriptId } from "../lib/reel-script";
 import { reelPlan, srt, endCardAt, REEL_W, REEL_H, REEL_SCALE } from "../lib/reel-plan";
 import { retentionProblems } from "../lib/reel-retention";
 import { driftTarget } from "../lib/reel-scroll";
-import { MOVE_GAP_MS } from "../lib/reel-moves";
+import { MOVE_GAP_MS, MOVE_POLL_MS, MOVE_WAIT_MS } from "../lib/reel-moves";
 import { SIGNUP_CTA } from "../lib/signup-link";
 import { karaokeWords } from "../lib/caption-karaoke";
 import { phrases } from "../lib/speech-timing";
@@ -535,10 +535,23 @@ for (const step of plan.steps) {
    * below already follows, for the same reason.
    */
   for (const move of step.moves ?? []) {
-    const did = await page.evaluate(
-      (m) => (window as never as { __reelDo: (m: unknown) => boolean }).__reelDo(m),
-      move,
-    ).catch(() => false);
+    /**
+     * WAITED FOR, NOT ASSUMED. The navigation above uses `waitUntil: "load"`,
+     * which in a Next.js app fires while the document is still empty — the
+     * recorder's own screen dump showed /journal with no headings, no buttons
+     * and no labels when the first move ran. A move looks for its target
+     * until MOVE_WAIT_MS is up, which is what a person does.
+     */
+    const deadline = Date.now() + MOVE_WAIT_MS;
+    let did = false;
+    while (!did) {
+      did = await page.evaluate(
+        (m) => (window as never as { __reelDo: (m: unknown) => boolean }).__reelDo(m),
+        move,
+      ).catch(() => false);
+      if (did || Date.now() >= deadline) break;
+      await sleep(MOVE_POLL_MS);
+    }
     const what = "tap" in move ? `tap "${move.tap}"` : `type "${move.type}" into "${move.into}"`;
     /**
      * A MISS STOPS THE RUN. It used to warn and carry on, and the first set of
@@ -563,10 +576,20 @@ for (const step of plan.steps) {
   }
 
   const want = step.focus ?? "";
-  const aimed = await page.evaluate(
-    (t) => (window as never as { __reelFocus: (s: string) => boolean }).__reelFocus(t),
-    want,
-  ).catch(() => false);
+  /**
+   * The same wait, for the same reason: a beat with no moves aims its
+   * spotlight at a page that may still be hydrating.
+   */
+  const focusBy = Date.now() + MOVE_WAIT_MS;
+  let aimed = false;
+  while (!aimed) {
+    aimed = await page.evaluate(
+      (t) => (window as never as { __reelFocus: (s: string) => boolean }).__reelFocus(t),
+      want,
+    ).catch(() => false);
+    if (aimed || !want || Date.now() >= focusBy) break;
+    await sleep(MOVE_POLL_MS);
+  }
   /**
    * A DECLARED FOCUS THAT FINDS NOTHING STOPS THE RUN.
    *

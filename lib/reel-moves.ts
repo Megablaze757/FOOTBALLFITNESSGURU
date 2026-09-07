@@ -55,6 +55,29 @@ export const isTap = (m: Move): m is TapMove => "tap" in m;
 export const MOVE_GAP_MS = 420;
 
 /**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * HOW LONG TO WAIT FOR A CONTROL TO EXIST.
+ *
+ * The recorder navigates with `waitUntil: "load"`, which fires when the HTML
+ * and its resources have arrived — and this app is a Next.js SPA, so at that
+ * moment the document is EMPTY. The first move then found nothing and, once
+ * misses became fatal, failed the run.
+ *
+ * The evidence took four theories to reach: a stale page, a slow write, the
+ * wrong button, then leftover account state. The recorder's own screen dump
+ * settled it in one run — no headings, no buttons, no labels at all.
+ *
+ * So a move waits for its target the way a person does. A deadline rather
+ * than a fixed sleep: hydration is fast when it is fast, and a fixed sleep
+ * would be both too short on a cold runner and wasted time on a warm one.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export const MOVE_WAIT_MS = 6_000;
+
+/** How often to look while waiting. Cheap, and 150ms is imperceptible. */
+export const MOVE_POLL_MS = 150;
+
+/**
  * The extra time a beat needs because it is performing moves.
  *
  * A beat's duration is otherwise the longer of its speech and its caption
