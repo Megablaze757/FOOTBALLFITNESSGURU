@@ -218,7 +218,12 @@ jobs:
       - name: Mux to MP4
         if: env.VOICE == 'true'
         run: |
-          id="$SCRIPT"
+          # THE RECORDER'S OWN STEM, NOT THE INPUT. A drill reel is filmed as
+          # "drill" and written as "drill-fb_wall_pass" — the script id carries
+          # the subject. Naming the MP4 from $SCRIPT put drill.mp4 next to
+          # drill-fb_wall_pass.srt in the artefact, so the subtitle file no
+          # longer matched its video for anybody downloading the pair to post.
+          id="$(basename "$(ls reels/*.srt | head -1)" .srt)"
           lead=$(cat reels/*.lead 2>/dev/null || echo 0)
           ffmpeg -hide_banner -loglevel error -y -ss "$lead" -i reels/*.webm -i reels/*.wav \
             -vf "scale=1080:1920:flags=lanczos,unsharp=5:5:0.9:5:5:0.0" \
@@ -230,7 +235,8 @@ jobs:
         run: |
           ffmpeg -hide_banner -loglevel error -y -i reels/*.webm \
             -vf "scale=1080:1920:flags=lanczos,unsharp=5:5:0.9:5:5:0.0" \
-            -c:v libx264 -preset slow -crf 20 -pix_fmt yuv420p -an "reels/$SCRIPT.mp4"
+            -c:v libx264 -preset slow -crf 20 -pix_fmt yuv420p -an \
+            "reels/$(basename "$(ls reels/*.srt | head -1)" .srt).mp4"
 
       # ═══════════════════════════════════════════════════════════════════
       # BACK INTO THE APP, WHICH IS THE WHOLE POINT.

@@ -532,14 +532,37 @@ function drillScript(drillId: string): ReelScript | null {
        */
       say: `Your ${drill.name.toLowerCase()} aren't working, and it's one detail, not fitness.`,
     },
+    /**
+     * ═══════════════════════════════════════════════════════════════════════
+     * "FIND THE DRILL" WAS AN INSTRUCTION TO A PERSON, NOT TO THE RECORDER.
+     *
+     * These two beats had no focus, so the shot was wherever the slow drift
+     * had reached. Extracted at 12s: a wall of prose about "Switching play"
+     * and "Switching the play" — two drills that are not this one — under a
+     * caption quoting THIS one's coaching point. The page is an index of every
+     * football drill and the reel was reading one card's words over another
+     * card's picture.
+     *
+     * Naming the focus makes the recorder scroll to it, ring it and dim the
+     * rest, which is also the only thing that turns a page of instructional
+     * text into a shot. And it makes a miss FATAL: if the drill this reel is
+     * about is not on the page it claims, the run stops instead of filming
+     * somebody else's drill and narrating over it.
+     * ═══════════════════════════════════════════════════════════════════════
+     */
     {
       route: `/drills/${drill.sport}/`,
       action: `Find ${drill.name} and show its setup.`,
+      focus: drill.name,
       say: drill.setup,
     },
     {
       route: `/drills/${drill.sport}/`,
       action: "Stop on the coaching cue and hold it.",
+      // The cue itself, not the drill again: the beat is about this sentence,
+      // and it is rendered from the same SKILL_DRILLS entry the line comes
+      // from, so the words on screen cannot drift from the words spoken.
+      focus: drill.coaching,
       say: drill.coaching,
     },
     {
