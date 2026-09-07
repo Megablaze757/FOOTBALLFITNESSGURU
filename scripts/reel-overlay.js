@@ -197,7 +197,21 @@
     var best = null;
     for (var i = 0; i < all.length; i++) {
       var el = all[i];
-      var text = (el.textContent || "").trim().toLowerCase();
+      /**
+       * THE ACCESSIBLE NAME COUNTS AS TEXT.
+       *
+       * This read textContent only, and the readiness gauge is an <svg> whose
+       * name lives in aria-label — "Readiness ready, 54 of 100". So the one
+       * beat whose whole job is to point at that number could never find it,
+       * and said so in the run log while the reel went out with no spotlight
+       * on the reveal.
+       *
+       * An aria-label is a deliberate, human-written name for something on
+       * screen, which is exactly what this is looking for. A drawing that
+       * names itself is not a special case; it is the case.
+       */
+      var text = ((el.textContent || "") + " " + (el.getAttribute("aria-label") || ""))
+        .trim().toLowerCase();
       if (text.indexOf(want) === -1) continue;
       var box = el.getBoundingClientRect();
       if (box.width < 40 || box.height < 16) continue;

@@ -86,3 +86,35 @@ test("the recorder performs a beat's moves, and says so when one misses", () => 
   assert.match(src, /console\.(warn|error)/,
     "a move that finds nothing films an empty form in silence");
 });
+
+/**
+ * The guard that cannot be fooled by an environment.
+ *
+ * A browser check for these targets was written and removed: a stubbed athlete
+ * always meets the consent gate, and stubbing enough to get past it would have
+ * made the test assert against a fixture instead of the app. The recorder
+ * refuses instead, which needs no environment to be reproduced because it runs
+ * in the real one.
+ */
+test("a move that finds nothing stops the recording rather than filming it", () => {
+  const src = readFileSync("scripts/record-reel.mts", "utf8");
+  const block = src.slice(src.indexOf("for (const move of step.moves"), src.indexOf("const want = step.focus"));
+  assert.match(block, /throw new Error\(/,
+    "a missed move only warns, so a reel of an untouched form still gets published");
+  assert.match(block, /Move missed on \$\{step\.route\}/,
+    "the failure does not say which screen or which move");
+  assert.ok(!/console\.(warn|error)\(`  MOVE MISSED/.test(block),
+    "the old warn-and-carry-on path is still there");
+});
+
+test("the readiness reel taps the quick check-in, not the detailed one", async () => {
+  const { reelScript } = await import("./reel-script");
+  const script = reelScript("demo-readiness", "");
+  assert.ok(script, "there is no demo-readiness script");
+  const taps = script!.beats.flatMap((b) => (b.moves ?? []).filter(isTap).map((m) => m.tap));
+  assert.deepEqual(taps, ["Barely", "Wrecked", "Log it"],
+    "the taps changed — check them against the view /journal actually opens on");
+  for (const beat of script!.beats) {
+    assert.deepEqual(moveProblems(beat.moves), [], `${beat.route} has moves that cannot work`);
+  }
+});

@@ -187,13 +187,20 @@ function readinessScript(): ReelScript {
        * happened to you, and the reel was asserting it rather than showing
        * it — which is the same failure as a slideshow, with better narration.
        *
-       * The sliders move on camera now, and the score on the next beat is
-       * the one this input produced. See lib/reel-moves.ts.
+       * The check-in is filled on camera now, and the score on the next beat
+       * is the one this input produced. See lib/reel-moves.ts.
+       *
+       * TAPS, BECAUSE THE QUICK CHECK-IN HAS NO SLIDERS. The first version
+       * typed into "Sleep quality" and "Fatigue" — the labels on the DETAILED
+       * view's sliders. The quick view somebody actually lands on is a row of
+       * emoji buttons, so there was no input to type into and both moves
+       * missed. The recorder said so twice in the run log and filmed a form
+       * nobody had touched anyway; it refuses to now.
        * ═══════════════════════════════════════════════════════════════════
        */
       moves: [
-        { type: "2", into: "Sleep quality" },
-        { type: "9", into: "Fatigue" },
+        { tap: "Barely" },
+        { tap: "Wrecked" },
         { tap: "Log it" },
       ],
       say: "Watch. Three hours' sleep, legs wrecked, and it takes sixty seconds to say so.",

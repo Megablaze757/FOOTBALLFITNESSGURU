@@ -269,3 +269,31 @@ test("the one-off session says it is not saved, before it is gone", async ({ pag
   await expect(note).toBeVisible();
   await expect(page.getByRole("link", { name: /Log what you do/i })).toBeVisible();
 });
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * WHY THERE IS NO BROWSER CHECK FOR THE REEL'S MOVES.
+ *
+ * There was one, and it could not reproduce the screen the recorder films. A
+ * stubbed athlete is always brand new, so /journal opens on the consent gate;
+ * clearing that needs a write the stub does not serve, and the click hangs.
+ * Getting it green would have meant stubbing consent, preferences and seeded
+ * check-ins until the test passed — at which point it asserts against a
+ * fixture rather than the app, and passes for the wrong reason. That is worse
+ * than no test and is the failure this file keeps finding elsewhere.
+ *
+ * The guard lives where it cannot be fooled instead: scripts/record-reel.mts
+ * FAILS THE RUN when a move finds nothing, so a reel that would film an
+ * untouched form is never produced. See lib/reel-moves.ts.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+
+/** The reveal beat points at the gauge, whose name is an aria-label on an svg. */
+test("the readiness reel's spotlight can find the gauge", async ({ page }) => {
+  await stubSupabase(page, { check_ins: [{ id: "c1", sleep_quality: 3, fatigue_score: 8 }] });
+  await signIn(page);
+  await page.goto("/home/", { waitUntil: "networkidle" });
+  const named = page.locator('[aria-label*="Readiness" i], :text("Readiness")');
+  expect(await named.count(), 'nothing on /home is named "Readiness" for the spotlight to ring')
+    .toBeGreaterThan(0);
+});

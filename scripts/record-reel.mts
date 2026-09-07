@@ -511,7 +511,24 @@ for (const step of plan.steps) {
       move,
     ).catch(() => false);
     const what = "tap" in move ? `tap "${move.tap}"` : `type "${move.type}" into "${move.into}"`;
-    if (!did) console.error(`  MOVE MISSED on ${step.route}: ${what} — the shot will show nothing happening`);
+    /**
+     * A MISS STOPS THE RUN. It used to warn and carry on, and the first set of
+     * moves ever written missed twice — the labels belonged to a view the reel
+     * never opens — so a reel was recorded, muxed and uploaded showing a form
+     * nobody had touched, with the warning sitting in a log nobody reads.
+     *
+     * A reel whose whole claim is "watch this happen" and which shows nothing
+     * happening is worse than no reel, so it is refused rather than published.
+     * lib/reel-retention.ts already refuses reels on weaker grounds than this.
+     */
+    if (!did) {
+      throw new Error(
+        `Move missed on ${step.route}: ${what}.\n`
+        + "Nothing on that screen matches, so the shot would show nothing happening. "
+        + "Check the label against the view the reel actually opens — the quick "
+        + "check-in and the detailed one carry different ones.",
+      );
+    }
     await sleep(MOVE_GAP_MS);
   }
 
