@@ -428,7 +428,11 @@ async function dumpScreen(route: string): Promise<void> {
       named: [...document.querySelectorAll("[aria-label]")]
         .map((el) => el.getAttribute("aria-label") ?? "").filter(Boolean).slice(0, 20),
     };
-  }).catch(() => ({ url: "?", bodyChars: -1, body: "?", headings: [], buttons: [], named: [] }));
+  }).catch((e: unknown) => {
+    // Saying so, rather than printing "?" and letting it read as an empty page.
+    console.error(`  the page could not be inspected: ${e instanceof Error ? e.message.split("\n")[0] : e}`);
+    return { url: "?", bodyChars: -1, body: "?", headings: [], buttons: [], named: [] };
+  });
   console.error(`  url while looking for it: ${seen.url}`);
   console.error(`  body on ${route}: ${seen.bodyChars} chars — ${JSON.stringify(seen.body)}`);
   console.error(`  headings on ${route}: ${JSON.stringify(seen.headings)}`);
@@ -558,14 +562,34 @@ for (const step of plan.steps) {
      */
     const deadline = Date.now() + MOVE_WAIT_MS;
     let did = false;
+    /**
+     * ═══════════════════════════════════════════════════════════════════════
+     * WHY THE ASK FAILED, NOT JUST THAT IT DID.
+     *
+     * This was `.catch(() => false)`, which reports "the control was not
+     * found" for every possible failure — including the page being unable to
+     * answer at all. It was the second: the dump came back with the catch
+     * fallbacks in it, meaning page.evaluate itself was throwing, most likely
+     * an execution context destroyed by a navigation in flight.
+     *
+     * So four runs were spent looking for a missing button that was never
+     * missing. A catch-all that turns every fault into the same message is
+     * worse than no catch: it invents a diagnosis and hides the evidence.
+     * ═══════════════════════════════════════════════════════════════════════
+     */
+    let lastError = "";
     while (!did) {
       did = await page.evaluate(
         (m) => (window as never as { __reelDo: (m: unknown) => boolean }).__reelDo(m),
         move,
-      ).catch(() => false);
+      ).catch((e: unknown) => {
+        lastError = e instanceof Error ? e.message.split("\n")[0] : String(e);
+        return false;
+      });
       if (did || Date.now() >= deadline) break;
       await sleep(MOVE_POLL_MS);
     }
+    if (!did && lastError) console.error(`  the page could not be asked: ${lastError}`);
     const what = "tap" in move ? `tap "${move.tap}"` : `type "${move.type}" into "${move.into}"`;
     /**
      * A MISS STOPS THE RUN. It used to warn and carry on, and the first set of
@@ -596,14 +620,22 @@ for (const step of plan.steps) {
    */
   const focusBy = Date.now() + MOVE_WAIT_MS;
   let aimed = false;
+  // Same as the moves above: a page that cannot answer is not a page that
+  // does not contain the words, and reporting both the same way is what sent
+  // four runs after a button that was never missing.
+  let focusError = "";
   while (!aimed) {
     aimed = await page.evaluate(
       (t) => (window as never as { __reelFocus: (s: string) => boolean }).__reelFocus(t),
       want,
-    ).catch(() => false);
+    ).catch((e: unknown) => {
+      focusError = e instanceof Error ? e.message.split("\n")[0] : String(e);
+      return false;
+    });
     if (aimed || !want || Date.now() >= focusBy) break;
     await sleep(MOVE_POLL_MS);
   }
+  if (want && !aimed && focusError) console.error(`  the page could not be asked: ${focusError}`);
   /**
    * A DECLARED FOCUS THAT FINDS NOTHING STOPS THE RUN.
    *

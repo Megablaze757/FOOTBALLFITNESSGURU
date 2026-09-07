@@ -193,3 +193,48 @@ test("the wait is long enough for a cold runner and short enough to notice a rea
   assert.ok(MOVE_WAIT_MS <= 15_000, `${MOVE_WAIT_MS}ms a move means a broken script takes a minute to say so`);
   assert.ok(MOVE_POLL_MS <= 500, `polling every ${MOVE_POLL_MS}ms adds visible lag to every move`);
 });
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * A CATCH-ALL THAT INVENTS A DIAGNOSIS.
+ *
+ * The move was `page.evaluate(...).catch(() => false)`, so every possible
+ * fault reported as "the control was not found" — including the page being
+ * unable to answer at all. It was the second: the screen dump came back
+ * holding its own catch fallbacks, which means evaluate was throwing.
+ *
+ * Four runs were spent hunting a missing button that was never missing. A
+ * catch that flattens every failure into one message is worse than no catch,
+ * because it hides the evidence and supplies a wrong answer in its place.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+/**
+ * Comments are stripped first. The first version of this matched the sentence
+ * in record-reel.mts describing the OLD `.catch(() => false)` — prose about
+ * the bug reading as the bug, which is the same wrong-occurrence trap that has
+ * bitten this repo repeatedly.
+ */
+const code = (path: string) =>
+  readFileSync(path, "utf8").replace(/\/\*[\s\S]*?\*\//g, " ").replace(/(^|[^:])\/\/.*$/gm, "$1");
+
+test("a failure to ask the page is reported as that, not as a missing control", () => {
+  const src = code("scripts/record-reel.mts");
+  for (const [from, to] of [
+    ["for (const move of step.moves", "await sleep(MOVE_GAP_MS)"],
+    ["const focusBy", "if (want && !aimed) {"],
+  ] as const) {
+    const block = src.slice(src.indexOf(from), src.indexOf(to));
+    assert.ok(block.length > 0, `could not find the ${from} block to check`);
+    assert.ok(!/\.catch\(\(\)\s*=>\s*false\)/.test(block),
+      `${from}: swallows every error into 'not found', which is how four runs chased the wrong fault`);
+    assert.match(block, /the page could not be asked/,
+      `${from}: nothing reports why the page could not answer`);
+  }
+});
+
+test("the screen dump says when it could not inspect the page", () => {
+  const src = readFileSync("scripts/record-reel.mts", "utf8");
+  const dump = src.slice(src.indexOf("async function dumpScreen"), src.indexOf("const videoStart"));
+  assert.match(dump, /the page could not be inspected/,
+    "a failed dump prints its fallbacks, which read exactly like an empty page");
+});
