@@ -347,3 +347,34 @@ test("a beat that aimed the shot does not then scroll off it", () => {
   assert.ok(caption < skip, "the caption is skipped along with the drift");
   assert.ok(skip < drift, "the skip comes after the scroll it is meant to prevent");
 });
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * A GRAPHIC THAT NAMES ITSELF IS NAMING THE THING IT IS PART OF.
+ *
+ * The readiness gauge is an <svg> with aria-label "Readiness ready, 44 of
+ * 100". The score is a sibling <div> beneath it, so the ring enclosed the arc
+ * and a strip of empty space while the number the beat is about sat outside
+ * it, dimmed, behind the caption. Found by recording the reel and looking at
+ * the frame — it reads as a highlight around nothing.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("the spotlight rings a graphic's whole component, not just the drawing", () => {
+  const src = overlay();
+  const fn = src.slice(src.indexOf("window.__reelFocus"), src.indexOf("window.__reelDo"));
+  assert.match(fn, /tagName.*svg/,
+    "an svg match rings the drawing alone, leaving its own number outside the ring");
+  assert.match(fn, /parentElement/, "nothing widens the match to the component");
+  assert.match(fn, /whole\.width > 0 && whole\.height > 0/,
+    "a parent with no box would replace a good match with an invisible one");
+});
+
+/** Widening every match would ring a container instead of the row asked for. */
+test("only a graphic is widened, not a text match", () => {
+  const src = overlay();
+  const fn = src.slice(src.indexOf("window.__reelFocus"), src.indexOf("window.__reelDo"));
+  const start = fn.indexOf("found.el.tagName");
+  const widen = fn.slice(start, fn.indexOf("}", fn.indexOf("found = { el: found.el.parentElement")));
+  assert.match(widen, /=== "svg"/,
+    "the widening is not restricted to graphics, so a text match would ring its container");
+});

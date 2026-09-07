@@ -267,6 +267,29 @@
 
     /**
      * ═══════════════════════════════════════════════════════════════════════
+     * AN ACCESSIBLE NAME NAMES A COMPONENT, NOT AN ELEMENT.
+     *
+     * The readiness gauge is an <svg> carrying aria-label "Readiness ready,
+     * 44 of 100". The SCORE is not inside it — it is a sibling <div> under
+     * the drawing. So the ring enclosed the arc and a strip of empty space
+     * above it, while the number the whole beat is about sat outside the
+     * ring, dimmed, behind the caption. Recorded and looked at: it reads as a
+     * highlight around nothing.
+     *
+     * A drawing that names itself is naming the thing it is part of. Ringing
+     * the parent gets the picture and its number, which is what the viewer is
+     * being pointed at. Only for a graphic: a text match is already the
+     * smallest element containing the words, and widening that would ring a
+     * container instead of a row.
+     * ═══════════════════════════════════════════════════════════════════════
+     */
+    if (found.el.tagName && found.el.tagName.toLowerCase() === "svg" && found.el.parentElement) {
+      var whole = found.el.parentElement.getBoundingClientRect();
+      if (whole.width > 0 && whole.height > 0) found = { el: found.el.parentElement, box: whole };
+    }
+
+    /**
+     * ═══════════════════════════════════════════════════════════════════════
      * DIVIDED BY THE ZOOM, and this was wrong until it was measured.
      *
      * The recorder zooms documentElement so a 1080x1920 viewport still lays
