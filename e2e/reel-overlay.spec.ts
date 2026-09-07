@@ -219,3 +219,51 @@ test("the ring follows its target when the page reflows under it", async ({ page
     "the bottom of the target is outside the ring, which is how the score came to be dimmed")
     .toBeGreaterThanOrEqual(after.targetBottom);
 });
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE REVEAL OF A PRICE, WITH THE PRICE OUTSIDE THE RING.
+ *
+ * Photographed at 10s of a recorded demo-cost: the caption reads "The cheap
+ * one's red lentils", the ring is drawn neatly around the words "Red lentils",
+ * and £0.31 — directly above them, in the same card, the entire point of the
+ * reel — is outside it and dimmed.
+ *
+ * findByText takes the SMALLEST element containing the words, because every
+ * ancestor contains them too. That is right for FINDING and wrong for RINGING,
+ * and this is the second photograph of the same mistake: the readiness gauge
+ * left its own score outside the ring for the same reason.
+ *
+ * THE REAL PAGE, not a fixture. The rule is "grow while the parent is still
+ * about the same thing", and whether a summary card is within three times the
+ * height of its own label is a fact about this app's markup. A fixture would
+ * be me deciding the answer and then checking my own arithmetic.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("the ring around a name includes the figure beside it", async ({ page }) => {
+  await page.goto("/cheapest-protein/");
+  await page.addScriptTag({ content: OVERLAY });
+
+  const result = await page.evaluate(() => {
+    const w = window as unknown as Record<string, (s: string) => boolean>;
+    const aimed = w.__reelFocus("Red lentils");
+    const ring = document.getElementById("__reel_ring")!;
+    const zoom = parseFloat(getComputedStyle(document.documentElement).zoom as string) || 1;
+    const top = parseFloat(ring.style.top) * zoom;
+    const bottom = top + parseFloat(ring.style.height) * zoom;
+
+    /** The summary card's own price, found the way a reader finds it. */
+    const price = [...document.querySelectorAll("body *")]
+      .filter((el) => (el.textContent ?? "").trim() === "£0.31" && el.children.length === 0)
+      .map((el) => el.getBoundingClientRect())
+      .find((b) => b.height > 0);
+
+    return { aimed, top, bottom, price: price ? { top: price.top, bottom: price.bottom } : null };
+  });
+
+  expect(result.aimed, "the spotlight found nothing to aim at").toBe(true);
+  expect(result.price, "£0.31 is not on this page any more — the test is checking nothing").not.toBeNull();
+  expect(result.top, `the ring starts at ${result.top}, below the price at ${result.price!.top}`)
+    .toBeLessThanOrEqual(result.price!.top);
+  expect(result.bottom).toBeGreaterThanOrEqual(result.price!.bottom);
+});

@@ -317,7 +317,7 @@ test("the home screen still fetches what the collapse is decided from", () => {
  * ═══════════════════════════════════════════════════════════════════════════
  */
 test("a check-in reminder is answered by checking in", () => {
-  const notice = { kind: "check_in_reminder", created_at: "2026-09-07T06:15:00Z" };
+  const notice = { id: "n1", kind: "check_in_reminder", created_at: "2026-09-07T06:15:00Z" };
 
   assert.match(
     staleReason(notice, { loaded: true, stripeStatus: null, lastCheckIn: "2026-09-07" }) ?? "",
@@ -341,7 +341,7 @@ test("a check-in reminder is answered by checking in", () => {
 test("a log on the same day as the reminder answers it", () => {
   for (const at of ["2026-09-07T00:00:01Z", "2026-09-07T06:15:00Z", "2026-09-07T23:59:59Z"]) {
     assert.notEqual(
-      staleReason({ kind: "check_in_reminder", created_at: at }, { loaded: false, lastCheckIn: "2026-09-07" }),
+      staleReason({ id: "n1", kind: "check_in_reminder", created_at: at }, { loaded: false, lastCheckIn: "2026-09-07" }),
       null,
       `a reminder written at ${at} is not answered by a log the same day`,
     );
@@ -351,7 +351,7 @@ test("a log on the same day as the reminder answers it", () => {
 /** The rule must not wait on a query it has nothing to do with. */
 test("a check-in answers its reminder even when billing has not loaded", () => {
   assert.notEqual(
-    staleReason({ kind: "check_in_reminder", created_at: "2026-09-07T06:15:00Z" },
+    staleReason({ id: "n1", kind: "check_in_reminder", created_at: "2026-09-07T06:15:00Z" },
       { loaded: false, lastCheckIn: "2026-09-07" }),
     null,
     "an unrelated slow query leaves an answered nag on screen",
@@ -364,7 +364,7 @@ test("a check-in answers its reminder even when billing has not loaded", () => {
  * permanently. The safe direction is to leave it up.
  */
 test("an unread check-in date leaves the reminder alone", () => {
-  const notice = { kind: "check_in_reminder", created_at: "2026-09-07T06:15:00Z" };
+  const notice = { id: "n1", kind: "check_in_reminder", created_at: "2026-09-07T06:15:00Z" };
   assert.equal(staleReason(notice, { loaded: true, stripeStatus: null }), null);
   assert.equal(staleReason(notice, { loaded: true, stripeStatus: null, lastCheckIn: null }), null);
 });
@@ -372,7 +372,7 @@ test("an unread check-in date leaves the reminder alone", () => {
 /** A check-in is not a session, and answering the wrong prompt hides a real one. */
 test("logging does not silence a workout reminder", () => {
   assert.equal(
-    staleReason({ kind: "workout_reminder", created_at: "2026-09-07T06:15:00Z" },
+    staleReason({ id: "n2", kind: "workout_reminder", created_at: "2026-09-07T06:15:00Z" },
       { loaded: true, stripeStatus: null, lastCheckIn: "2026-09-07" }),
     null,
   );

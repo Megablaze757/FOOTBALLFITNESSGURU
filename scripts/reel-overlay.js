@@ -374,46 +374,56 @@
 
     /**
      * ═══════════════════════════════════════════════════════════════════════
-     * AN ACCESSIBLE NAME NAMES A COMPONENT, NOT AN ELEMENT.
+     * A NAME NAMES A THING, AND THE THING IS BIGGER THAN THE WORDS.
      *
-     * The readiness gauge is an <svg> carrying aria-label "Readiness ready,
-     * 44 of 100". The SCORE is not inside it — it is a sibling <div> under
-     * the drawing. So the ring enclosed the arc and a strip of empty space
-     * above it, while the number the whole beat is about sat outside the
-     * ring, dimmed, behind the caption. Recorded and looked at: it reads as a
-     * highlight around nothing.
+     * findByText deliberately takes the SMALLEST element containing the words,
+     * because every ancestor contains them too and <body> is not a spotlight.
+     * That is right for finding it and wrong for ringing it, and the wrongness
+     * has now been photographed twice:
      *
-     * A drawing that names itself is naming the thing it is part of. Ringing
-     * the parent gets the picture and its number, which is what the viewer is
-     * being pointed at. Only for a graphic: a text match is already the
-     * smallest element containing the words, and widening that would ring a
-     * container instead of a row.
+     *   The readiness gauge is an <svg> with aria-label "Readiness red, 44 of
+     *   100". The score is a SIBLING div underneath. The ring went round the
+     *   drawing and left the number outside it, dimmed.
+     *
+     *   "Red lentils" on /cheapest-protein/ is one line of a card whose other
+     *   line is £0.31. The ring went round the name and left the PRICE outside
+     *   it, dimmed — on the reveal beat of the reel about prices.
+     *
+     * Both were fixed for one shape and would have come back on the next. The
+     * first version of this widened only an <svg> to its parent, which is the
+     * gauge and nothing else.
+     *
+     * The rule that covers both: grow while the parent is still ABOUT THE SAME
+     * THING as the words. Two bounds, because either alone is a container
+     * waiting to be ringed — the ratio stops a wrapper that is merely tall,
+     * the share stops a page whose every element is short.
+     *
+     * MEASURED ON THE PAGE, not chosen and hoped for. The ancestry above "Red
+     * lentils" at a 540x960 viewport:
+     *
+     *   0  the words           16px    1.0x    2% of the frame
+     *   1  the CHEAPEST card  110px    6.9x   13%     <- the ring
+     *   2  the panel of three 354px   22.1x   42%     <- stop
+     *   3  <main>            3321px  207.6x  396%
+     *
+     * The first draft of this used 3x, which stops at level 0 — the fix would
+     * have shipped doing nothing, and the only reason it did not is that the
+     * test measured a real page instead of a fixture I had built to agree with
+     * me. Both bounds reject level 2 independently.
      * ═══════════════════════════════════════════════════════════════════════
      */
-    if (found.el.tagName && found.el.tagName.toLowerCase() === "svg" && found.el.parentElement) {
-      var whole = found.el.parentElement.getBoundingClientRect();
-      if (whole.width > 0 && whole.height > 0) found = { el: found.el.parentElement, box: whole };
+    var GROW_TIMES = 8;
+    var GROW_SHARE = 0.3;
+    for (var up = 0; up < 4; up++) {
+      var parent = found.el.parentElement;
+      if (!parent || parent === document.body) break;
+      var grown = parent.getBoundingClientRect();
+      if (!(grown.width > 0 && grown.height > 0)) break;
+      if (grown.height > found.box.height * GROW_TIMES) break;
+      if (grown.height > window.innerHeight * GROW_SHARE) break;
+      found = { el: parent, box: grown };
     }
 
-    /**
-     * ═══════════════════════════════════════════════════════════════════════
-     * DIVIDED BY THE ZOOM, and this was wrong until it was measured.
-     *
-     * The recorder zooms documentElement so a 1080x1920 viewport still lays
-     * out as a 540px phone. getBoundingClientRect and window.innerHeight both
-     * report VISUAL pixels — the full 1920 — but this overlay lives inside the
-     * zoomed element, so a CSS pixel it sets is multiplied by the zoom on the
-     * way to the screen.
-     *
-     * Setting top to a visual 750 therefore drew the ring at 1500, and
-     * anything below the top of the screen landed off-frame entirely. Measured
-     * on the live page: styleTop 1483px produced a rect at 2966px, in a
-     * viewport 1920 tall.
-     *
-     * A spotlight in the wrong place is worse than none, and nothing would
-     * have caught it except watching the reel.
-     * ═══════════════════════════════════════════════════════════════════════
-     */
     place(found.el);
     /**
      * ═══════════════════════════════════════════════════════════════════════

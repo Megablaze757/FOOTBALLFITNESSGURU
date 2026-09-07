@@ -432,33 +432,52 @@ test("a beat that aimed the shot does not then scroll off it", () => {
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- * A GRAPHIC THAT NAMES ITSELF IS NAMING THE THING IT IS PART OF.
+ * A NAME NAMES A THING, AND THE THING IS BIGGER THAN THE WORDS.
  *
- * The readiness gauge is an <svg> with aria-label "Readiness ready, 44 of
- * 100". The score is a sibling <div> beneath it, so the ring enclosed the arc
- * and a strip of empty space while the number the beat is about sat outside
- * it, dimmed, behind the caption. Found by recording the reel and looking at
- * the frame — it reads as a highlight around nothing.
+ * These two tests used to say "only a GRAPHIC is widened, not a text match",
+ * which was a belief with a reason behind it — widening every match would ring
+ * a container instead of the row asked for — and it has since been
+ * photographed being wrong:
+ *
+ *   The readiness gauge is an <svg> with aria-label "Readiness red, 44 of
+ *   100" and the score is a sibling div. The ring went round the drawing and
+ *   left the number outside it, dimmed.
+ *
+ *   "Red lentils" on /cheapest-protein/ is one line of a card whose other line
+ *   is £0.31. The ring went round the name and left the PRICE outside it,
+ *   dimmed — on the reveal beat of the reel about prices.
+ *
+ * The svg rule fixed the first shape and could not have fixed the second. The
+ * rule that covers both is "grow while the parent is still about the same
+ * thing", and what it must not do is grow to a container — so the bounds are
+ * what these check. The BEHAVIOUR is checked against real markup in
+ * e2e/reel-overlay.spec.ts, because whether a card is three times the height
+ * of its own label is a question about a page, not about this source.
  * ═══════════════════════════════════════════════════════════════════════════
  */
-test("the spotlight rings a graphic's whole component, not just the drawing", () => {
+test("the ring grows past the words, and stops before the container", () => {
   const src = overlay();
   const fn = src.slice(src.indexOf("window.__reelFocus"), src.indexOf("window.__reelDo"));
-  assert.match(fn, /tagName.*svg/,
-    "an svg match rings the drawing alone, leaving its own number outside the ring");
-  assert.match(fn, /parentElement/, "nothing widens the match to the component");
-  assert.match(fn, /whole\.width > 0 && whole\.height > 0/,
-    "a parent with no box would replace a good match with an invisible one");
-});
 
-/** Widening every match would ring a container instead of the row asked for. */
-test("only a graphic is widened, not a text match", () => {
-  const src = overlay();
-  const fn = src.slice(src.indexOf("window.__reelFocus"), src.indexOf("window.__reelDo"));
-  const start = fn.indexOf("found.el.tagName");
-  const widen = fn.slice(start, fn.indexOf("}", fn.indexOf("found = { el: found.el.parentElement")));
-  assert.match(widen, /=== "svg"/,
-    "the widening is not restricted to graphics, so a text match would ring its container");
+  const times = Number(fn.match(/var GROW_TIMES = ([0-9.]+);/)?.[1]);
+  const share = Number(fn.match(/var GROW_SHARE = ([0-9.]+);/)?.[1]);
+  /**
+   * The ancestry above "Red lentils" measured 1.0x, 6.9x, 22.1x, so anything
+   * at or under 6.9 shipped doing nothing and anything over 22 rings the
+   * panel. This is deliberately wider than that one page — the numbers are one
+   * measurement, and the e2e test is what holds the actual behaviour.
+   */
+  assert.ok(Number.isFinite(times) && times >= 2 && times <= 12,
+    `${times}x is not a bound: too small and nothing ever grows, too large and a row becomes its table`);
+  assert.ok(Number.isFinite(share) && share > 0.05 && share <= 0.4,
+    `${share} of the frame is not a spotlight, it is a dimmer switch`);
+
+  assert.match(fn, /grown\.width > 0 && grown\.height > 0/,
+    "a parent with no box would replace a good match with an invisible one");
+  assert.match(fn, /parent === document\.body/,
+    "nothing stops the walk at the body, so a short page could ring the whole document");
+  assert.match(fn, /for \(var up = 0; up < \d+; up\+\+\)/,
+    "the walk has no step limit of its own");
 });
 
 /**
