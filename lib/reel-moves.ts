@@ -37,6 +37,26 @@ export interface TypeMove {
 /** Press the control whose visible text or label is `tap`. */
 export interface TapMove {
   tap: string;
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * A MOVE THAT PUTS THE SCREEN BACK, RATHER THAN ONE THAT DEMONSTRATES.
+   *
+   * The reel WRITES to the account it films. One run saved a check-in, and
+   * every run after it found /journal showing "✓ Checked in today — you're
+   * done for today" with a "Change my answers" button where the tap-scale
+   * used to be. The same script, the same code, a different film.
+   *
+   * That control only exists when there is something to change, so it cannot
+   * be a normal move: a missing one fails the run, correctly, because a
+   * demonstration that did not happen must not be published. This says the
+   * move is state-normalisation — do it if the screen needs it, carry on if
+   * it does not.
+   *
+   * Deliberately only on a TAP. "Type this if the field happens to exist" is
+   * a script that does not know what it is filming.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  optional?: boolean;
 }
 
 export type Move = TypeMove | TapMove;

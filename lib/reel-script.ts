@@ -199,6 +199,12 @@ function readinessScript(): ReelScript {
        * ═══════════════════════════════════════════════════════════════════
        */
       moves: [
+        /**
+         * The reel writes to the account it films, so the second run onward
+         * lands on "✓ Checked in today" with the tap-scale replaced by this
+         * button. Optional because on a clean account it is not there.
+         */
+        { tap: "Change my answers", optional: true },
         { tap: "Barely" },
         { tap: "Wrecked" },
         /**

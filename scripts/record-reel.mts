@@ -608,8 +608,16 @@ for (const step of plan.steps) {
       if (did || Date.now() >= deadline) break;
       await sleep(MOVE_POLL_MS);
     }
-    if (!did && lastError) console.error(`  the page could not be asked: ${lastError}`);
     const what = "tap" in move ? `tap "${move.tap}"` : `type "${move.type}" into "${move.into}"`;
+    if (!did && lastError) console.error(`  the page could not be asked: ${lastError}`);
+    /**
+     * An optional move is putting the screen into a known state, not showing
+     * anything off. If it is not needed it is not there, and that is fine.
+     */
+    if (!did && "optional" in move && move.optional) {
+      console.log(`  skipped optional ${what} — not on ${step.route}, which is expected`);
+      continue;
+    }
     /**
      * A MISS STOPS THE RUN. It used to warn and carry on, and the first set of
      * moves ever written missed twice — the labels belonged to a view the reel

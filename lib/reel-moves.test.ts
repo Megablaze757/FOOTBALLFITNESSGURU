@@ -115,7 +115,7 @@ test("the readiness reel taps the quick check-in, not the detailed one", async (
   const script = reelScript("demo-readiness", "");
   assert.ok(script, "there is no demo-readiness script");
   const taps = script!.beats.flatMap((b) => (b.moves ?? []).filter(isTap).map((m) => m.tap));
-  assert.deepEqual(taps, ["Barely", "Wrecked", "Save today's log"],
+  assert.deepEqual(taps, ["Change my answers", "Barely", "Wrecked", "Save today's log"],
     "the taps changed — check them against the view /journal actually opens on");
   /**
    * "Log it" was here and it was the wrong control: a button of that name
@@ -269,4 +269,48 @@ test("no evaluate callback declares an inner named function", () => {
     assert.doesNotMatch(call[1], /\bfunction\s+\w+/,
       "an evaluate callback declares a named function — same __name problem");
   }
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE REEL WRITES TO THE ACCOUNT IT FILMS.
+ *
+ * One run saved a check-in. Every run after it found /journal showing
+ * "✓ Checked in today — you're done for today", with a "Change my answers"
+ * button where the tap-scale had been. Same script, same code, different film.
+ *
+ * That control exists only when there is something to change, so it cannot be
+ * an ordinary move: a missing ordinary move fails the run, correctly, because
+ * a demonstration that did not happen must not be published. An optional move
+ * is state-normalisation — do it if the screen needs it, carry on if not.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("an optional move is skipped rather than fatal", () => {
+  const src = code("scripts/record-reel.mts");
+  const block = src.slice(src.indexOf("for (const move of step.moves"), src.indexOf("await sleep(MOVE_GAP_MS)"));
+  assert.match(block, /move\.optional/, "optional moves are treated as ordinary ones and will fail the run");
+  assert.match(block, /continue;/, "an optional move that is absent still falls through to the throw");
+  assert.ok(block.indexOf("move.optional") < block.indexOf("if (!did) {"),
+    "the optional check runs after the refusal, so it can never be reached");
+});
+
+test("only a tap may be optional", () => {
+  const src = readFileSync("lib/reel-moves.ts", "utf8");
+  const tapBlock = src.slice(src.indexOf("export interface TapMove"), src.indexOf("export type Move"));
+  const typeBlock = src.slice(src.indexOf("export interface TypeMove"), src.indexOf("export interface TapMove"));
+  assert.match(tapBlock, /optional\?: boolean/, "a tap cannot be optional");
+  assert.doesNotMatch(typeBlock, /optional/,
+    '"type this if the field happens to exist" is a script that does not know what it is filming');
+});
+
+test("the readiness reel normalises the screen before it demonstrates", async () => {
+  const { reelScript } = await import("./reel-script");
+  const beats = reelScript("demo-readiness", "")!.beats.filter((b) => b.moves?.length);
+  const moves = beats.flatMap((b) => b.moves!);
+  assert.equal(moves[0] && "tap" in moves[0] && moves[0].tap, "Change my answers",
+    "the reel does not clear a check-in it may have written on a previous run");
+  assert.ok(moves[0] && "optional" in moves[0] && moves[0].optional,
+    "clearing is mandatory, so a clean account would fail the run");
+  assert.ok(moves.slice(1).every((m) => !("optional" in m && m.optional)),
+    "a move that demonstrates something is optional, so the reel could film nothing and pass");
 });
