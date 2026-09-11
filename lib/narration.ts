@@ -1,4 +1,4 @@
-import { beatFloorMs } from "./caption-lines";
+import { MIN_SCENE_MS } from "./reel";
 // =============================================================================
 // FITTING THE PICTURE TO THE VOICE, RATHER THAN THE OTHER WAY ROUND.
 //
@@ -179,7 +179,33 @@ export function retime<T extends { route: string; action: string; say: string; h
      * field being accounted for.
      * ═══════════════════════════════════════════════════════════════════════
      */
-    const ms = (beat.tail ?? 0) + Math.max(audio[i]?.ms ?? SILENT_BEAT_MS, beatFloorMs(beat.say));
+    /**
+     * ═══════════════════════════════════════════════════════════════════════
+     * AS LONG AS THE AUDIO, NOT AS LONG AS READING IT COLD WOULD TAKE.
+     *
+     * This padded every beat out to beatFloorMs — the time the captions need
+     * to be read as static text. On a NARRATED reel that pad is slack with
+     * nowhere to go: the captions are anchored to the phrases, so the last
+     * phrase's caption absorbs whatever is left over. "Same bar." is three
+     * syllables and its caption sat on screen for six seconds, which the
+     * retention check refused as "6s on one screen doing one thing". Rightly.
+     *
+     * The pad was already the wrong idea for this case and lib/reel-retention
+     * says so: a narrated caption is held to MIN_CAPTION_MS, the time an eye
+     * needs to land on new text, and not to a cold-reading rate — because the
+     * words are drawn one at a time with the spoken one lit, and the sweep's
+     * pace is the speaking pace. Padding the BEAT to a rate that no longer
+     * applies to its CAPTIONS was the inconsistency.
+     *
+     * So a beat is its audio, its hold and its tail. Shorter reels fall out of
+     * it, which helps the one number that matters.
+     *
+     * MIN_SCENE_MS survives: a shot too short for the eye to land on is a shot
+     * whether or not anybody is talking over it. retime is only reached with a
+     * voice, so the silent path and its full reading rate are untouched.
+     * ═══════════════════════════════════════════════════════════════════════
+     */
+    const ms = (beat.tail ?? 0) + Math.max(MIN_SCENE_MS, audio[i]?.ms ?? SILENT_BEAT_MS);
     /**
      * ═══════════════════════════════════════════════════════════════════════
      * SPREAD THE BEAT. Do not list its fields.

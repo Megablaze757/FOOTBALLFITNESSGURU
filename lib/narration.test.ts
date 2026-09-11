@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { SUSPENSE_MS, LEAD_MS, SILENT_BEAT_MS, TAIL_MS, beatAudio, retime, trackClips, type SpokenPhrase } from "./narration";
 import { GAP } from "./speech-timing";
+import { MIN_SCENE_MS } from "./reel";
 import { beatFloorMs } from "./caption-lines";
 
 const said = (audioMs: number, gapMs = 0): SpokenPhrase => ({ text: "x", gapMs, audioMs });
@@ -189,4 +190,42 @@ test("a beat with a tail is made longer by it, not squeezed into it", () => {
   /** What the captions are actually left with has to still fit them. */
   assert.ok(withTail.beats[0].ms - 1_800 >= beatFloorMs(beats[0].say),
     "the captions cannot be read in what is left of the beat");
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * A NARRATED BEAT IS AS LONG AS ITS AUDIO, NOT AS LONG AS READING IT COLD.
+ *
+ * retime used to pad every beat out to beatFloorMs — the time its captions
+ * need as static text. With the captions anchored to the phrases that pad is
+ * slack with nowhere to go: the last phrase's caption absorbs it. "Same bar."
+ * is three syllables and its caption sat on screen for six seconds, which the
+ * retention check refused as "6s on one screen doing one thing".
+ *
+ * The pad contradicted a decision already made one file over: a narrated
+ * caption is held to MIN_CAPTION_MS, not to a cold-reading rate, because the
+ * words are drawn one at a time with the spoken one lit. Padding the BEAT to a
+ * rate that no longer applies to its CAPTIONS was the inconsistency.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("a beat is its audio, not the time its captions would take to read cold", () => {
+  /** Long enough to read slowly, spoken quickly — the shape that had slack. */
+  const say = "A hundred kilos at sixty kilos bodyweight is exceptional. Same bar.";
+  const { beats } = retime([{ route: "/", action: "a", say }], [{ ms: 4_000, clips: [] }]);
+  assert.equal(beats[0].ms, 4_000,
+    `the beat is ${beats[0].ms}ms for 4000ms of audio — the surplus becomes a caption nobody asked for`);
+});
+
+/** A shot too short for the eye to land on is a shot, talking or not. */
+test("a very short clip still gets a watchable beat", () => {
+  const { beats } = retime([{ route: "/", action: "a", say: "Free." }], [{ ms: 300, clips: [] }]);
+  assert.equal(beats[0].ms, MIN_SCENE_MS);
+});
+
+/** And the tail is still added on top rather than competing with it. */
+test("the end card's room survives the change", () => {
+  const audio = [{ ms: 4_000, clips: [] }];
+  const withTail = retime([{ route: "/", action: "a", say: "Free.", tail: 1_800 }], audio);
+  const without = retime([{ route: "/", action: "a", say: "Free." }], audio);
+  assert.equal(withTail.beats[0].ms - without.beats[0].ms, 1_800);
 });
