@@ -41,6 +41,10 @@ on:
         type: choice
         options: [kokoro, chatterbox]
         default: kokoro
+      music:
+        description: "Path to a music track you have the right to use. Blank records no bed."
+        type: string
+        default: ""
 
 jobs:
   record:
@@ -83,6 +87,9 @@ jobs:
       # the axis it was picked for, and that axis was not the broken one.
       # ═══════════════════════════════════════════════════════════════════
       REEL_VOICE: ${{ inputs.engine || github.event.client_payload.engine || 'kokoro' }}
+      # A path to a track, not a track. Nothing in this repository picks music,
+      # and nothing in it ships music it does not have the right to.
+      REEL_MUSIC: ${{ inputs.music || github.event.client_payload.music || '' }}
     steps:
       # ═══════════════════════════════════════════════════════════════════
       # WHAT IS CONFIGURED, BEFORE THREE MINUTES ARE SPENT FINDING OUT.
@@ -314,11 +321,44 @@ jobs:
           # single pass lands three decibels short and why a gain alone cannot
           # do it at all.
           audio="$(python3 scripts/loudnorm-args.py reels/*.wav)"
-          ffmpeg -hide_banner -loglevel error -y -ss "$lead" -i reels/*.webm -i reels/*.wav \
-            -vf "scale=1080:1920:flags=lanczos,unsharp=5:5:0.9:5:5:0.0" \
-            -af "$audio" \
-            -c:v libx264 -preset slow -crf 20 -pix_fmt yuv420p -c:a aac -b:a 128k \
-            -shortest "reels/$id.mp4"
+
+          # ═══════════════════════════════════════════════════════════════
+          # A BED, WHEN THERE IS ONE TO MIX.
+          #
+          # Measured on the finished files: 29% to 47% of a reel is under the
+          # silence floor with nothing at all in it, which on a phone reads as
+          # a video that has stopped. A ducked bed carries those gaps — the
+          # pause before a number is a device with music under it and a fault
+          # without.
+          #
+          # NOTHING PICKS THE MUSIC. REEL_MUSIC is a path to a track whoever
+          # runs this has the right to use; absent it, the reel is mixed
+          # exactly as before. See lib/reel-music.ts, which also records the
+          # larger lever this cannot pull: a trending sound chosen in the
+          # platform's own editor at posting time.
+          # ═══════════════════════════════════════════════════════════════
+          if [ -n "${REEL_MUSIC:-}" ] && [ -f "$REEL_MUSIC" ]; then
+            # The wrong KIND of music is silent until it is posted. An acoustic
+            # ballad under a reel about a 100kg bench is wrong in a way nobody
+            # notices in a log. This refuses a track outside the tempo and bass
+            # profile this audience listens to — see lib/reel-music.ts.
+            python3 scripts/check-music.py "$REEL_MUSIC"
+            ms=$(python3 -c "import json,sys;print(int(json.load(open(sys.argv[1]))['totalMs']))" reels/*.sync.json)
+            ffmpeg -hide_banner -loglevel error -y -ss "$lead" -i reels/*.webm -i reels/*.wav \
+              -i "$REEL_MUSIC" \
+              -vf "scale=1080:1920:flags=lanczos,unsharp=5:5:0.9:5:5:0.0" \
+              -filter_complex "[1:a]${audio}[voiced];$(node --import tsx scripts/bed-args.mts voiced 2:a mix "$ms")" \
+              -map 0:v -map "[mix]" \
+              -c:v libx264 -preset slow -crf 20 -pix_fmt yuv420p -c:a aac -b:a 128k \
+              -shortest "reels/$id.mp4"
+            echo "mixed a bed from $REEL_MUSIC"
+          else
+            ffmpeg -hide_banner -loglevel error -y -ss "$lead" -i reels/*.webm -i reels/*.wav \
+              -vf "scale=1080:1920:flags=lanczos,unsharp=5:5:0.9:5:5:0.0" \
+              -af "$audio" \
+              -c:v libx264 -preset slow -crf 20 -pix_fmt yuv420p -c:a aac -b:a 128k \
+              -shortest "reels/$id.mp4"
+          fi
 
       - name: Mux silent
         if: env.VOICE != 'true'
