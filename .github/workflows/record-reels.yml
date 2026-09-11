@@ -289,6 +289,14 @@ jobs:
             -c:v libx264 -preset slow -crf 20 -pix_fmt yuv420p -an \
             "reels/$(basename "$(ls reels/*.srt | head -1)" .srt).mp4"
 
+      # Subtraction, not a waveform. The recorder wrote down where it put
+      # every caption and where every phrase's audio starts; this checks they
+      # agree. Three earlier attempts inferred it from voice onsets and were
+      # wrong three different ways — see scripts/record-reel.mts.
+      - name: Check the captions are in step with the voice
+        if: env.VOICE == 'true'
+        run: node --import tsx scripts/check-sync.mts reels/*.sync.json
+
       # ═══════════════════════════════════════════════════════════════════
       # BACK INTO THE APP, WHICH IS THE WHOLE POINT.
       #
@@ -313,6 +321,7 @@ jobs:
           path: |
             reels/*.mp4
             reels/*.srt
+            reels/*.sync.json
           retention-days: 14
 
       # ═══════════════════════════════════════════════════════════════════

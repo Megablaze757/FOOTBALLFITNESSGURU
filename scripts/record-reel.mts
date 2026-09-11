@@ -916,6 +916,49 @@ await context.close();
 await video?.saveAs(join(outDir, `${script.id}.webm`));
 await browser.close();
 writeFileSync(join(outDir, `${script.id}.srt`), srt(plan));
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE NUMBERS THE RECORDER ACTUALLY USED, SO SYNC STOPS BEING INFERRED.
+ *
+ * Caption sync was checked three times by finding voice onsets in the muxed
+ * audio and comparing them with the SRT, and the heuristic was wrong three
+ * times, in three different ways:
+ *
+ *   walking the captions   every caption that is not the first of its
+ *                          sentence reports a large error, because the voice
+ *                          does not stop mid-sentence and there is no onset
+ *                          near it — a fixed reel looked broken
+ *   walking the onsets     a voice that breathes after a colon produces more
+ *                          onsets than there are phrases, and each extra one
+ *                          is matched to a caption it has nothing to do with
+ *   matching the firsts    two sentences run together with no detectable
+ *                          pause produce no onset between them, so the
+ *                          second one is matched to the next phrase entirely
+ *                          — an error of 2.27s that was not in the reel
+ *
+ * Every one of those was a property of the DETECTOR. The recorder already
+ * knows both numbers exactly: where it put each caption, and where the audio
+ * for each phrase actually starts. Writing them down turns sync from something
+ * inferred off a waveform into something checked with subtraction.
+ *
+ * A broken instrument is worse than none, because its output gets believed.
+ * This file has that lesson in it twice already.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+writeFileSync(join(outDir, `${script.id}.sync.json`), JSON.stringify({
+  id: script.id,
+  totalMs: plan.totalMs,
+  leadMs,
+  steps: plan.steps.map((step) => ({
+    index: step.index,
+    route: step.route,
+    /** Beat-relative, as measured from the synthesised audio. */
+    clips: (step.clips ?? []).map((c) => ({ atMs: c.atMs, ms: c.ms })),
+    at: step.at,
+    captions: step.captions.map((c) => ({ at: c.at, ms: c.ms, text: c.text })),
+  })),
+}, null, 2));
 /**
  * The lead, on disk, because the mux needs it and the mux is a separate step.
  *
