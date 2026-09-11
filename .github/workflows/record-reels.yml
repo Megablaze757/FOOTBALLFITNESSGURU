@@ -189,9 +189,23 @@ jobs:
           curl -sSfL -o .voice/kokoro-v1.0.onnx "$base/kokoro-v1.0.onnx"
           curl -sSfL -o .voice/voices-v1.0.bin  "$base/voices-v1.0.bin"
 
+      # ═══════════════════════════════════════════════════════════════════
+      # PINNED, BECAUSE AN UNPINNED RESOLVE CHANGED UNDER US.
+      #
+      # `pip install kokoro-onnx` alongside chatterbox-tts resolved to a
+      # version whose Kokoro() reads the voices argument as JSON, and the
+      # voices file is a .bin — so a three-minute recording died on
+      # "UnicodeDecodeError: 'utf-8' codec can't decode byte 0xff in position
+      # 18". The traceback's config.py:56 is a different function from the one
+      # at that line locally, which is what gave it away.
+      #
+      # 0.6.1 is what these scripts are written against and what the .bin is
+      # for. Both steps pin it: the Kokoro-only path has been resolving to
+      # something compatible by luck, and luck is not a version constraint.
+      # ═══════════════════════════════════════════════════════════════════
       - name: Install the voice
         if: env.VOICE == 'true' && env.REEL_VOICE != 'chatterbox'
-        run: pip install --quiet kokoro-onnx soundfile
+        run: pip install --quiet "kokoro-onnx==0.6.1" soundfile
 
       # ~3GB of weights from Hugging Face, and they never change either. The
       # same argument as the Kokoro cache above, with a bigger number.
@@ -204,7 +218,7 @@ jobs:
 
       - name: Install Chatterbox
         if: env.VOICE == 'true' && env.REEL_VOICE == 'chatterbox'
-        run: pip install --quiet chatterbox-tts kokoro-onnx soundfile
+        run: pip install --quiet chatterbox-tts "kokoro-onnx==0.6.1" soundfile
 
       - name: Serve the export
         run: |
