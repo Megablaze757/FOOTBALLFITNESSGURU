@@ -300,9 +300,13 @@ jobs:
           # while the payoffs are fine. TP -1.5 leaves headroom for the AAC
           # encoder, which can overshoot a sample-peak ceiling.
           # ═══════════════════════════════════════════════════════════════
+          # Measured first, then applied — see scripts/loudnorm-args.py for why a
+          # single pass lands three decibels short and why a gain alone cannot
+          # do it at all.
+          audio="$(python3 scripts/loudnorm-args.py reels/*.wav)"
           ffmpeg -hide_banner -loglevel error -y -ss "$lead" -i reels/*.webm -i reels/*.wav \
             -vf "scale=1080:1920:flags=lanczos,unsharp=5:5:0.9:5:5:0.0" \
-            -af "loudnorm=I=-14:TP=-1.5:LRA=9" \
+            -af "$audio" \
             -c:v libx264 -preset slow -crf 20 -pix_fmt yuv420p -c:a aac -b:a 128k \
             -shortest "reels/$id.mp4"
 

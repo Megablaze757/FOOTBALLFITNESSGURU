@@ -1,11 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { captionReadMs } from "./caption-lines";
+import { captionReadMs, MIN_CAPTION_MS } from "./caption-lines";
 import { LEAD_MS } from "./narration";
+import { MAX_HOLD_MS } from "./reel-retention";
 import {
   HOOK_MS, REEL_H, REEL_RATIO, REEL_SCALE, REEL_W,
-  captionsFor, reelPlan, srt, srtTime, type PlannableScript, endCardAt, END_CARD_MS, } from "./reel-plan";
+  captionsFor, MAX_CAPTION_MS, reelPlan, srt, srtTime, type PlannableScript, endCardAt, END_CARD_MS, } from "./reel-plan";
 
 const script: PlannableScript = {
   id: "demo",
@@ -281,4 +282,47 @@ test("a clip count that does not match the sentences is not guessed at", () => {
   const beat = { at: 0, ms: 6_000, say: "One sentence only." };
   const nonsense = [{ atMs: 0, ms: 1_000 }, { atMs: 2_000, ms: 1_000 }, { atMs: 4_000, ms: 1_000 }];
   assert.deepEqual(captionsFor(beat, nonsense), captionsFor(beat));
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * AS MANY CAPTIONS AS THE PHRASE HAS TIME FOR.
+ *
+ * captionLines cuts by LENGTH and says nothing about how long a phrase takes
+ * to say. Once the captions are anchored to real audio the two have to agree,
+ * and one recording failed twice from the same mismatch: "next to you." on
+ * screen for 792ms, and a caption holding one screen for five seconds.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("a phrase spoken quickly does not get more captions than it has time for", () => {
+  const say = "PocketAthlete ranks every lift against your bodyweight, not against the bloke next to you.";
+  const fast = captionsFor({ at: 0, ms: 2_600, say }, [{ atMs: 0, ms: 2_600 }]);
+  for (const c of fast) {
+    assert.ok(c.ms >= MIN_CAPTION_MS,
+      `"${c.text}" flashes for ${c.ms}ms — under ${MIN_CAPTION_MS}ms the eye does not land on it`);
+  }
+});
+
+test("a phrase spoken slowly does not leave one caption sitting still", () => {
+  const say = "PocketAthlete ranks every lift against your bodyweight, not against the bloke next to you.";
+  const slow = captionsFor({ at: 0, ms: 12_000, say }, [{ atMs: 0, ms: 12_000 }]);
+  for (const c of slow) {
+    assert.ok(c.ms <= MAX_CAPTION_MS,
+      `"${c.text}" holds for ${c.ms}ms, which reads as a still frame`);
+  }
+});
+
+/** Short text cannot be split forever, and must not loop trying. */
+test("a phrase too short to fill its span is left alone", () => {
+  const caps = captionsFor({ at: 0, ms: 9_000, say: "Same bar." }, [{ atMs: 0, ms: 9_000 }]);
+  assert.equal(caps.length, 1, "three syllables were cut into pieces to fill time");
+  assert.equal(caps[0].text, "Same bar.");
+});
+
+/**
+ * The ceiling is MAX_HOLD_MS's, repeated rather than imported because
+ * reel-retention imports this module for its types. Repeated numbers drift.
+ */
+test("the caption ceiling is the one the retention rule enforces", () => {
+  assert.equal(MAX_CAPTION_MS, MAX_HOLD_MS);
 });

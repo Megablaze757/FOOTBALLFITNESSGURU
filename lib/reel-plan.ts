@@ -1,4 +1,4 @@
-import { captionLines, captionReadMs } from "./caption-lines";
+import { captionLines, captionReadMs, MAX_LINE_CHARS, MAX_LINE_WORDS, MIN_CAPTION_MS } from "./caption-lines";
 import { phrases } from "./speech-timing";
 import { LEAD_MS } from "./narration";
 import type { Move } from "./reel-moves";
@@ -227,7 +227,8 @@ export function captionsFor(
          */
         const from = beat.at + (i === 0 ? Math.max(0, clips[0].atMs - LEAD_MS) : clips[i].atMs);
         const until = beat.at + (i + 1 < clips.length ? clips[i + 1].atMs : budget);
-        out.push(...spread(captionLines(phrase.text), from, Math.max(1, until - from)));
+        const span = Math.max(1, until - from);
+        out.push(...spread(fitToSpan(phrase.text, span), from, span));
       });
       if (out.length) return out;
     }
@@ -278,6 +279,82 @@ export function captionsFor(
    */
   return spread(chunks, beat.at, budget);
 }
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * AS MANY CAPTIONS AS THE PHRASE HAS TIME FOR.
+ *
+ * captionLines cuts by LENGTH — 42 characters, seven words, punctuation. That
+ * is the right shape for a line and says nothing about how long the phrase
+ * takes to say, and once the captions are anchored to real audio the two have
+ * to agree. Two failures on one recording, from the same mismatch:
+ *
+ *   "next to you." on screen for 792ms — three captions sharing a phrase
+ *   that is spoken in two and a half seconds, so the short one flashes
+ *
+ *   "5s on one screen doing one thing" — one caption holding a phrase for
+ *   longer than anything should sit still
+ *
+ * So the count is bracketed by the time available. At least enough that none
+ * of them lingers, at most as many as can each be seen — and the text is
+ * re-cut to hit it rather than the timing being bent to fit the text.
+ *
+ * MERGING IS SAFE AND SPLITTING IS THE GUESS, which is why splitting narrows
+ * the width and lets captionLines decide again rather than chopping at a word
+ * count: the sticky-word and orphan rules in there are the whole reason the
+ * lines read as phrases.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+function fitToSpan(text: string, span: number): string[] {
+  const base = captionLines(text);
+  if (base.length < 2 && span >= MIN_CAPTION_MS) return base;
+
+  /**
+   * CANDIDATE CUTS, WIDEST FIRST, THEN MERGED DOWN.
+   *
+   * Re-cutting at a narrower width rather than chopping at a word count,
+   * because the sticky-word and orphan rules in captionLines are the whole
+   * reason the lines read as phrases rather than as slices.
+   */
+  const candidates: string[][] = [];
+  const add = (cut: string[]) => {
+    if (cut.length && !candidates.some((c) => c.length === cut.length)) candidates.push(cut);
+  };
+  for (let width = MAX_LINE_CHARS; width >= 12; width -= 4) add(captionLines(text, width, MAX_LINE_WORDS));
+
+  let merged = candidates[0] ?? base;
+  while (merged.length > 1) {
+    let at = 0;
+    for (let i = 1; i < merged.length - 1; i += 1) {
+      if (merged[i].length + merged[i + 1].length < merged[at].length + merged[at + 1].length) at = i;
+    }
+    merged = [...merged.slice(0, at), `${merged[at]} ${merged[at + 1]}`, ...merged.slice(at + 2)];
+    add(merged);
+  }
+
+  /**
+   * MEASURED, NOT PREDICTED. The first version computed how many captions the
+   * span "should" hold from span/MAX and span/MIN — and three captions over
+   * twelve seconds satisfies that arithmetic while still putting one on screen
+   * for 5.09s, because spread shares the time by LENGTH and the shares are
+   * uneven. Laying them out and looking is the only thing that knows.
+   */
+  const fits = (cut: string[]) =>
+    spread(cut, 0, span).every((c) => c.ms >= MIN_CAPTION_MS && c.ms <= MAX_CAPTION_MS);
+
+  /** Nothing fits when the span itself is impossible — say so downstream. */
+  return candidates.find(fits) ?? base;
+}
+
+/**
+ * The longest one caption may sit still.
+ *
+ * MAX_HOLD_MS in lib/reel-retention.ts is the rule this serves; it is repeated
+ * rather than imported because that module imports this one for its types, and
+ * a runtime import back would be a cycle for one number. A test asserts they
+ * are the same number.
+ */
+export const MAX_CAPTION_MS = 5_000;
 
 /**
  * Lay a run of captions end to end across one span of time.
