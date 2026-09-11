@@ -34,18 +34,34 @@
  * sounds rushed or slow — everything else here is about WHICH one applies.
  */
 /**
- * Widened after "too fast paced". Every one of these was the shortest pause
- * that still registered as a pause; a reel needs the pause a listener would
- * take to LOOK at what is being described, which is longer than the one they
- * need to hear the end of a clause.
+ * ═══════════════════════════════════════════════════════════════════════════
+ * WIDENED AFTER "TOO FAST PACED", THEN SPLIT AFTER "PUTTING ME TO SLEEP".
+ *
+ * Both notes are real and they are not opposites, which is why the fix is not
+ * to put the first one back. Every gap here was widened at once, and widening
+ * the ROUTINE ones is what made the reel drag: an ordinary sentence break at
+ * 540ms and a deliberate pause before a punchline at 900ms are nearly the same
+ * length, so the punchline pause stopped reading as a pause at all.
+ *
+ * The note at the top of this file already says what matters — "the VARIATION
+ * is what the ear reads as human" — and a table whose five values sit inside
+ * one factor of two has very little of it. So the two DEVICES below keep their
+ * lengths and the three routine gaps come down under them. Nothing that was
+ * doing dramatic work got shorter; the ratio of a payoff pause to an ordinary
+ * sentence break goes from 1.7x to 3x.
+ *
+ * Measured on the standards narration, whose nine phrases carried 3.58s of
+ * gaps in a 20s reel: 2.86s, with the whole reduction taken out of dead air
+ * between ordinary clauses.
+ * ═══════════════════════════════════════════════════════════════════════════
  */
 export const GAP = {
   /** Inside a sentence. Barely a pause; enough to stop two clauses running on. */
-  clause: 260,
+  clause: 150,
   /** Between sentences. */
-  sentence: 540,
+  sentence: 300,
   /** After a question. Longer, because a question asks for a moment. */
-  question: 700,
+  question: 420,
   /**
    * Before the last thing said.
    *

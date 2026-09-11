@@ -161,3 +161,40 @@ test("the reveal pause is long enough to hear and short enough to hold", () => {
   assert.ok(GAP.reveal >= 800, `${GAP.reveal}ms is not heard as deliberate`);
   assert.ok(GAP.reveal <= 1400, `${GAP.reveal}ms is long enough for a thumb to move`);
 });
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * A PAUSE IS ONLY A PAUSE RELATIVE TO THE ONES AROUND IT.
+ *
+ * "The voice is putting me to sleep." Every gap in the table had been widened
+ * at once after an earlier "too fast paced", which left a deliberate pause
+ * before a punchline only 1.7x an ordinary sentence break — close enough that
+ * the device stopped registering as one, and the reel just got slower.
+ *
+ * This guards the SHAPE rather than the values, so the numbers can still be
+ * argued with: what may not happen again is every gap being moved together
+ * until the contrast is gone.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("the dramatic pauses stand well clear of the routine ones", () => {
+  assert.ok(GAP.payoff >= GAP.sentence * 2.5,
+    `a payoff pause is ${(GAP.payoff / GAP.sentence).toFixed(1)}x an ordinary sentence break — not heard as a device`);
+  assert.ok(GAP.reveal >= GAP.sentence * 2.5,
+    `a reveal pause is ${(GAP.reveal / GAP.sentence).toFixed(1)}x an ordinary sentence break — not heard as a device`);
+  assert.ok(GAP.clause < GAP.sentence && GAP.sentence < GAP.question,
+    "the routine gaps are no longer in order");
+});
+
+/**
+ * Dead air is most of what "slow" is, and it is the one thing here that is
+ * spent rather than earned: a reel has thirty seconds and every millisecond of
+ * silence between two ordinary clauses is one not spent saying something.
+ *
+ * Measured on the standards narration as it shipped: 96 words per minute and
+ * 37% of the reel silent, against 180-220 wpm for the register this is aiming
+ * at. See scripts/measure-excitement.py.
+ */
+test("an ordinary sentence break does not cost half a second", () => {
+  assert.ok(GAP.sentence <= 350, `${GAP.sentence}ms between two ordinary sentences reads as a stall`);
+  assert.ok(GAP.clause <= 200, `${GAP.clause}ms inside one sentence is a stutter the ear hears as hesitation`);
+});
