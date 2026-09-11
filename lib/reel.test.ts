@@ -339,6 +339,14 @@ test("a number counts as the words it is actually said in", () => {
   assert.equal(spokenWords("100kg"), 3);
   // "three pounds nineteen" — the punctuation is not a word and the digits are.
   assert.equal(spokenWords("£3.19"), 3);
+  /**
+   * A ONE-DIGIT NUMBER IS STILL TWO WORDS, and this is the floor's whole job:
+   * "5kg" is "five kilograms". Without it a single digit counts as one word,
+   * which is the bug this function exists to fix, just smaller — and a mutant
+   * that removed the floor passed every other assertion here.
+   */
+  assert.equal(spokenWords("5kg"), 2);
+  assert.equal(spokenWords("3 sets"), 3);
   assert.ok(spokenWords("100kg at 60kg bodyweight") > "100kg at 60kg bodyweight".split(" ").length,
     "a line of weights is counted as if the digits were silent");
 });
