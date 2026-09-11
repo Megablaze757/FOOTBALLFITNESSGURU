@@ -51,7 +51,17 @@ for script in job["plan"]:
     # screen next to the length rather than in a document. See RETENTION_BANDS
     # in lib/reel-retention.ts for the figures and where they come from.
     aim = next(b["aim"] for b in job["bands"] if total < (b["underMs"] or float("inf")))
+    # KOKORO'S TIMING, AND THE PIPELINE RECORDS WITH CHATTERBOX. Loading
+    # Chatterbox to estimate four reels costs ten minutes, which is not what a
+    # studio check is for — but an unlabelled number from the wrong engine is
+    # how a reel passes here and is refused on the runner. Observed on one
+    # recording: Chatterbox ran 2.2% longer than this said. One sample, so it
+    # is printed rather than applied.
     print(f"{script['id']:<16} {total/1000:5.1f}s   busiest {route} {pct:.0%}"
           f"   needs {aim:.0%} completion{flag}")
+
+print("\nTimed with Kokoro. Recording uses Chatterbox by default, which ran 2.2%"
+      "\nlonger on the one reel where both were measured — so treat anything"
+      "\nwithin a second of the ceiling as over it.")
 
 sys.exit(1 if bad else 0)

@@ -123,13 +123,20 @@ async function signIn(page: import("playwright").Page, at: string): Promise<bool
  * Chatterbox has one, clears that ceiling on every setting, and is free and
  * offline too; it is bigger, slower, and needs weights cached.
  *
- * Kokoro stays the DEFAULT until somebody has listened to both and chosen,
- * because switching the engine on a recorder nobody has A/B'd is how a reel
- * goes out sounding worse with a longer changelog. REEL_VOICE=chatterbox is
- * the switch, and it is one line in the workflow.
+ * Chatterbox is the DEFAULT now, and it was not until it had been listened to
+ * and measured on a finished recording rather than on a sample:
+ *
+ *   bf_alice, Kokoro, as it shipped   F0 SD 3.94 st   median 222 Hz
+ *   bm_lewis through Chatterbox       F0 SD 5.27 st   median 124 Hz
+ *
+ * A British male voice for a British football audience, +34% on pitch
+ * variation, and the recorded reel's captions land on the voice to the
+ * millisecond. Kokoro remains behind REEL_VOICE=kokoro: it needs no 3GB of
+ * weights and runs several times faster, which is what a silent smoke test or
+ * a machine without the cache wants.
  * ═══════════════════════════════════════════════════════════════════════════
  */
-const ENGINE = (process.env.REEL_VOICE || "kokoro").toLowerCase();
+const ENGINE = (process.env.REEL_VOICE || "chatterbox").toLowerCase();
 
 async function narrate(beats: readonly { say: string; hold?: number }[]): Promise<BeatAudio[]> {
   const model = process.env.KOKORO_MODEL;

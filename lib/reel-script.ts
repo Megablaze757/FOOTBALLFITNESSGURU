@@ -350,17 +350,44 @@ function readinessScript(): ReelScript {
     {
       /**
        * ═══════════════════════════════════════════════════════════════════
-       * "/" REDIRECTS TO /home FOR A SIGNED-IN VISITOR, AND THE REEL IS
-       * ALWAYS SIGNED IN — it has to be, to have an app to film.
+       * THE LAST SHOT IS THE FIRST SHOT, SO THE REEL LOOPS.
        *
-       * All four scripts ended on route "/" with an action saying "front
-       * page", and all four landed on the home screen every single time. Four
-       * pieces of prose describing a reel nobody has ever recorded, and a
-       * pointless navigation-and-redirect in the last two seconds of each.
+       * Replay rate — total plays over unique viewers — is the signal none of
+       * this was designed for. Above 1.2 distribution is reported as
+       * substantially stronger, and a reel that loops cleanly plays again
+       * before the viewer has consciously decided to replay it, which is how
+       * watch time goes over 100%. See REPLAY_RATE_TARGET.
+       *
+       * Two things carry a loop: the words, when the closing line sets up the
+       * opening one, and the PICTURE, when the last shot matches the framing
+       * of the first. The words are spoken for: every reel ends on the same
+       * call to action, which is worth more than a loop. The picture is free —
+       * it only requires ending on the screen the reel opened on.
+       *
+       * AND IT DOES NOT FIT EVERY REEL, WHICH IS WORTH WRITING DOWN RATHER
+       * THAN WORKING AROUND. Coming back to the opening screen concentrates
+       * the reel on it: this one went to 61% of its running time on /journal
+       * and demo-cost to 74% on the protein table, both past
+       * MAX_ONE_ROUTE_SHARE. That rule is there because a reel that never
+       * leaves one screen is a screenshot with captions over it, and it is a
+       * better rule than this is an idea — so the two reels that trip it end
+       * on /home instead and go without the picture loop. drill and standards
+       * open on an index they can return to cheaply, and they loop.
+       *
+       * Bending the share rule to fit the loop was the other option. It would
+       * have meant deciding that the final beat somehow does not count, which
+       * is true of the 1.8s of end card and false of the three seconds of app
+       * screen before it.
+       *
+       * (Before this, all four ended on route "/" with an action reading
+       * "front page". "/" redirects a signed-in visitor to /home, and the reel
+       * is always signed in — so four pieces of prose described a reel nobody
+       * had ever recorded, and each paid for a navigation and a redirect in
+       * its final two seconds.)
        * ═══════════════════════════════════════════════════════════════════
        */
       route: "/home",
-      action: "Back to the home screen, with the score still on it, for the sign-off.",
+      action: "The home screen, with the score still on it, for the sign-off.",
       say: SIGNUP_SPOKEN,
       tail: END_CARD_MS,
     },
@@ -506,6 +533,11 @@ function costScript(): ReelScript {
        */
       say: "Build a week and it prices the whole shop.",
     },
+    /**
+     * NOT looping to /cheapest-protein/. This reel already spends 55% of
+     * itself on that table; returning there for the sign-off took it to 74%,
+     * well past MAX_ONE_ROUTE_SHARE. See the note on demo-readiness.
+     */
     { route: "/home", action: "The home screen, held for the sign-off.", say: SIGNUP_SPOKEN, tail: END_CARD_MS },
   ]);
 }
@@ -597,7 +629,8 @@ function drillScript(drillId: string): ReelScript | null {
       action: "The training row, open and ready for the session.",
       say: "Log it in PocketAthlete and next week builds on what you actually did.",
     },
-    { route: "/home", action: "The home screen, held for the sign-off.", say: SIGNUP_SPOKEN, tail: END_CARD_MS },
+    // Back to the index it opened on, so the reel loops. See demo-readiness.
+    { route: "/drills/", action: "Back to the screen it opened on, for the sign-off.", say: SIGNUP_SPOKEN, tail: END_CARD_MS },
   ]);
 }
 
@@ -674,7 +707,8 @@ function standardsScript(): ReelScript | null {
       action: "Show a logged lift with its tier beside it.",
       say: "Log one lift and it tells you exactly which tier you're in.",
     },
-    { route: "/home", action: "The home screen, held for the sign-off.", say: SIGNUP_SPOKEN, tail: END_CARD_MS },
+    // Back to the list it opened on, so the reel loops. See demo-readiness.
+    { route: "/standards/", action: "Back to the screen it opened on, for the sign-off.", say: SIGNUP_SPOKEN, tail: END_CARD_MS },
   ]);
 }
 

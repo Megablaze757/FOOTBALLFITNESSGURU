@@ -39,8 +39,8 @@ on:
       engine:
         description: "Which voice. Chatterbox has expression control; Kokoro is faster."
         type: choice
-        options: [kokoro, chatterbox]
-        default: kokoro
+        options: [chatterbox, kokoro]
+        default: chatterbox
 
 jobs:
   record:
@@ -66,11 +66,13 @@ jobs:
       # on the same two lines with the same tracker, on every setting, and is
       # free and offline too — it is just bigger and slower.
       #
-      # Kokoro is still the default: switching the engine on a recorder
-      # nobody has A/B'd is how a reel goes out sounding worse with a longer
-      # changelog. Change this line once somebody has listened and chosen.
+      # Chatterbox is the default, measured on a finished recording rather
+      # than a sample: F0 SD 5.27 against Kokoro's 3.94, median 124 Hz against
+      # 222, and a British male voice for a British football audience. Kokoro
+      # stays one word away — it needs no weights cache and runs several times
+      # faster, which is what a smoke test wants.
       # ═══════════════════════════════════════════════════════════════════
-      REEL_VOICE: ${{ inputs.engine || github.event.client_payload.engine || 'kokoro' }}
+      REEL_VOICE: ${{ inputs.engine || github.event.client_payload.engine || 'chatterbox' }}
     steps:
       # ═══════════════════════════════════════════════════════════════════
       # WHAT IS CONFIGURED, BEFORE THREE MINUTES ARE SPENT FINDING OUT.
