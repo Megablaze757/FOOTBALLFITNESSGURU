@@ -25,7 +25,44 @@ Measured, in order, on a real reel that started at -21.7:
 
 The transients are the limit: plosives set the true peak while the sustained
 speech sits far below, so the peaks have to come down before the body can come
-up. A gentle 4:1 does that without flattening the read.
+up.
+
+─────────────────────────────────────────────────────────────────────────
+"A GENTLE 4:1 DOES THAT WITHOUT FLATTENING THE READ" — MEASURED, AND FALSE.
+
+That sentence stood here unmeasured. lib/speech-prosody.ts deliberately builds
+7.3 dB of phrase-to-phrase loudness contrast, on the argument that "the point
+of a sentence is habitually several decibels above the clause that set it up,
+and that contrast is most of what excitement is". Measuring the same phrases
+either side of this chain:
+
+  intended, as the prosody lays it        2.85 dB SD    7.3 dB range
+  after this chain                        1.17 dB SD    3.4 dB range
+
+More than half of it is gone before anybody hears it, and 3.4 dB is under the
+4-6 dB that file cites for ordinary read speech.
+
+AND IT IS NOT MOSTLY THE COMPRESSOR. loudnorm reports normalization_type
+"dynamic" and takes the loudness range from 7.20 LU to 4.50. It falls back to
+dynamic because linear is impossible here: lib/wav.ts normalises to -1 dBFS
+PEAK, so the true peak arrives at -1.0 dBTP and a single gain toward -14 has
+no headroom at all. LRA=20 and linear=true were both measured and change
+almost nothing for the same reason.
+
+What does recover contrast is taking the peaks down with a gentler compressor
+and then applying ONE measured gain with a limiter for strays, rather than
+letting loudnorm ride the level:
+
+  compressor 2:1 @ -16dB, +11.2dB, ceiling -3dBFS   -16.6 LUFS  5.0 dB range
+  compressor 3:1 @ -18dB, +12.2dB, ceiling -3dBFS   -16.3 LUFS  4.6 dB range
+  this chain, as it ships                           -15.3 LUFS  3.4 dB range
+
+That is 1.6 dB more contrast for 1.3 dB less loudness, both inside the band
+check-loudness.sh allows. It is left UNCHANGED deliberately: the defect that
+built this chain was "I can't hear the voice" at -21.7 LUFS, and trading
+measured loudness for measured contrast is a judgement about which the ear
+prefers that nobody has made by listening. The numbers are here so that it can
+be made rather than guessed.
 
 -15 IS THE ANSWER, NOT -14. Reaching exactly -14 needs 6:1 at -24 dB, which
 takes the loudness range to 4.0 LU — speech sits at 5-8, and past that it

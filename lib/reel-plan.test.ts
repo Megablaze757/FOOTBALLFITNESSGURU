@@ -377,7 +377,7 @@ const briefTail = {
   at: 0,
   ms: 4_000,
   say: "One hundred kilos at sixty is exceptional. At one twenty, novice. Same bar.",
-  clips: [{ atMs: LEAD_MS }, { atMs: 1_900 }, { atMs: 3_100 }],
+  clips: [{ atMs: LEAD_MS, ms: 1_600 }, { atMs: 1_900, ms: 1_000 }, { atMs: 3_100, ms: 700 }],
 };
 
 test("a short last phrase is merged backward rather than flashed", () => {
@@ -397,7 +397,7 @@ test("a short middle phrase shares a card with the one after it", () => {
     at: 0,
     ms: 5_000,
     say: "Means nothing. Against your bodyweight? Means everything. And that is the whole idea.",
-    clips: [{ atMs: LEAD_MS }, { atMs: 700 }, { atMs: 1_400 }, { atMs: 2_300 }],
+    clips: [{ atMs: LEAD_MS, ms: 500 }, { atMs: 700, ms: 600 }, { atMs: 1_400, ms: 700 }, { atMs: 2_300, ms: 1_800 }],
   };
   const captions = captionsFor(beat, beat.clips);
   for (const c of captions) {
@@ -415,7 +415,7 @@ test("phrases with room enough keep their own cards", () => {
     at: 0,
     ms: 8_000,
     say: "Every other app decided your week on Sunday. PocketAthlete asks first.",
-    clips: [{ atMs: LEAD_MS }, { atMs: 4_000 }],
+    clips: [{ atMs: LEAD_MS, ms: 3_600 }, { atMs: 4_000, ms: 3_000 }],
   };
   const captions = captionsFor(beat, beat.clips);
   assert.ok(captions.length >= 2, `${captions.length} caption(s) — the phrases were merged unnecessarily`);
