@@ -101,6 +101,14 @@ export interface PlanStep {
   action: string;
   /** Timed absolutely, so the driver never does arithmetic of its own. */
   captions: Caption[];
+  /**
+   * Where the spoken phrases landed, when there were any.
+   *
+   * Carried onto the step so lib/reel-retention.ts can tell a NARRATED reel
+   * from a silent one — they are read differently and are held to different
+   * floors. See the note there.
+   */
+  clips?: readonly Clip[];
 }
 
 export interface ReelPlan {
@@ -347,6 +355,7 @@ export function reelPlan(script: PlannableScript, hookMs = HOOK_MS): ReelPlan {
      */
     focus: beat.focus,
     moves: beat.moves,
+    clips: beat.clips,
     captions: captionsFor(beat, beat.clips),
   }));
   return {

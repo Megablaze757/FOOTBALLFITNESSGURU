@@ -59,7 +59,7 @@ export const HOOK_MAX_WORDS = 10;
  * lib/caption-lines.ts. Re-exported here because this is where the retention
  * rules are read, and a reader looking for the caption floor looks here first.
  */
-import { captionReadMs } from "./caption-lines";
+import { captionReadMs, MIN_CAPTION_MS } from "./caption-lines";
 export { CAPTION_ACQUIRE_MS, CAPTION_CPS, MIN_CAPTION_MS, captionReadMs } from "./caption-lines";
 
 
@@ -187,13 +187,50 @@ export function retentionProblems(plan: ReelPlan): RetentionProblem[] {
     say(`${Math.round(plan.totalMs / 1000)}s is not long enough to show anything`);
   }
 
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * TWO DIFFERENT FLOORS, BECAUSE A NARRATED REEL IS A DIFFERENT THING TO READ.
+   *
+   * captionReadMs is a COLD-READING rate — Netflix's 17 characters a second
+   * pulled back to 15 on the stated grounds that "most of the audience has the
+   * sound off, the caption is not an aid to the audio, it IS the content".
+   * That is exactly right for a silent reel.
+   *
+   * It is not right for a narrated one, and the measurement that showed it was
+   * the runner refusing a reel whose captions were finally in sync: this voice
+   * says "Every other training app hands you the session it planned on Sunday"
+   * in 3.92 seconds, and reading its captions cold takes 5.07. There is no
+   * timing that satisfies both — a caption cannot both start when the words
+   * are spoken and stay up longer than the speaking.
+   *
+   * So one of them has to give, and the honest choice is the cold-reading
+   * rate, for a reason rather than because it was in the way. These captions
+   * are drawn word by word with the spoken word lit (lib/caption-karaoke.ts).
+   * A muted viewer is not reading a static block and deciding when to look
+   * away; they are following a sweep, and the sweep's pace IS the speaking
+   * pace. The thing the Netflix figure measures is not what is happening.
+   *
+   * WHAT SURVIVES IS THE ACQUISITION FLOOR. MIN_CAPTION_MS is not a reading
+   * rate — it is the time an eye needs to find new text on screen at all, and
+   * that does not care whether anybody is talking. A caption under it is a
+   * flash, narrated or not.
+   *
+   * A SILENT REEL KEEPS THE FULL RATE. There is no voice to follow and the
+   * caption really is the whole content, which is the case captionReadMs was
+   * written for.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  const narrated = plan.steps.some((step) => (step.clips?.length ?? 0) > 0);
+
   const onRoute = new Map<string, number>();
   for (const step of plan.steps) {
     for (const caption of step.captions) {
-      const needs = captionReadMs(caption.text);
+      const needs = narrated ? MIN_CAPTION_MS : captionReadMs(caption.text);
       if (caption.ms < needs) {
         say(
-          `"${caption.text}" is on screen for ${caption.ms}ms — too brief to read, it needs ${needs}ms`,
+          narrated
+            ? `"${caption.text}" is on screen for ${caption.ms}ms — under ${needs}ms the eye does not land on it at all`
+            : `"${caption.text}" is on screen for ${caption.ms}ms — too brief to read, it needs ${needs}ms`,
           step.index,
         );
       }

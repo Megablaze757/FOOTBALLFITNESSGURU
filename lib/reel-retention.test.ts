@@ -248,3 +248,50 @@ test("naming the app only in the sign-off is refused", () => {
   const problems = retentionProblems(reelPlan(stripped)).map((p) => p.problem).join(" | ");
   assert.match(problems, /refers to nothing/, `the incoherent version passed: ${problems}`);
 });
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * A NARRATED REEL IS A DIFFERENT THING TO READ.
+ *
+ * captionReadMs is a COLD-READING rate, and it is right for a silent reel —
+ * there is no voice and the caption is the whole content. On a narrated one it
+ * is measuring something that is not happening: the words are drawn one at a
+ * time with the spoken word lit, so a muted viewer follows a sweep whose pace
+ * IS the speaking pace rather than reading a static block.
+ *
+ * The measurement that forced the distinction: this voice says "Every other
+ * training app hands you the session it planned on Sunday" in 3.92 seconds and
+ * reading its captions cold takes 5.07. No timing satisfies both — a caption
+ * cannot start when the words are spoken AND outlast the speaking.
+ *
+ * What survives is MIN_CAPTION_MS, which is not a reading rate at all: it is
+ * the time an eye needs to find new text on screen, and that does not care
+ * whether anybody is talking.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+const sayingPlan = (ms: number, clips?: { atMs: number; ms: number }[]): PlannableScript => ({
+  id: "t", hook: "Your app doesn't care.", totalMs: 6_000,
+  beats: [{ at: 0, ms: 6_000, route: "/", action: "a", say: "Every other training app hands you the session it planned on Sunday.", clips }],
+});
+
+test("a narrated caption is held to the eye, not to a cold-reading rate", () => {
+  /** One sentence, spoken in less time than reading it cold would take. */
+  const narrated = reelPlan(sayingPlan(6_000, [{ atMs: 140, ms: 3_920 }]));
+  const problems = retentionProblems(narrated).map((p) => p.problem).join(" | ");
+  assert.doesNotMatch(problems, /too brief to read/,
+    "the cold-reading rate is still being applied to a reel that has a voice");
+});
+
+test("a silent reel keeps the full reading rate", () => {
+  const silent = reelPlan(sayingPlan(2_000));
+  const short = { ...silent, steps: silent.steps.map((s) => ({ ...s, captions: s.captions.map((c) => ({ ...c, ms: 400 })) })) };
+  assert.match(retentionProblems(short).map((p) => p.problem).join(" | "), /too brief to read/,
+    "a silent reel with 400ms captions is not being checked against the reading rate");
+});
+
+test("a flash is a flash even with a voice over it", () => {
+  const narrated = reelPlan(sayingPlan(6_000, [{ atMs: 140, ms: 3_920 }]));
+  const flashed = { ...narrated, steps: narrated.steps.map((s) => ({ ...s, captions: s.captions.map((c) => ({ ...c, ms: 300 })) })) };
+  assert.match(retentionProblems(flashed).map((p) => p.problem).join(" | "), /the eye does not land on it/,
+    "a 300ms caption passes because something is being said over it");
+});
