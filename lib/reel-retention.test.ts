@@ -7,6 +7,7 @@ import {
 import { reelPlan, type PlannableScript } from "./reel-plan";
 import { SCRIPTS, reelScript, scriptProblems } from "./reel-script";
 import { readFileSync } from "node:fs";
+import { APP_NAME } from "./signup-link";
 
 const plan = (beats: PlannableScript["beats"], hook = "Is your bench press any good?") =>
   reelPlan({ id: "t", hook, beats, totalMs: beats.reduce((n, b) => n + b.ms, 0) });
@@ -208,4 +209,42 @@ test("the browser-side overlay is a plain file, never transpiled", () => {
   assert.match(overlay, /window\.__reelHook/, "nothing shows the hook");
   // Captions must clear the platforms' own UI, which covers the lower fifth.
   assert.match(overlay, /padding:0 28px 22%/, "the caption sits where TikTok and Instagram draw their own");
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * A PRONOUN NEEDS AN ANTECEDENT.
+ *
+ * "Script is incoherent." Read aloud as one block the fault was every
+ * demonstrative: "THIS ONE asks first" — this one WHAT? — then "THAT's today's
+ * body talking" over a number the voice never names. The product was named
+ * once, in the last two seconds, so nothing before it had anything to refer
+ * to.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("a reel says what it is about before the sign-off", () => {
+  for (const meta of SCRIPTS) {
+    const script = reelScript(meta.id, "");
+    const plan = reelPlan(script!);
+    const said = plan.steps.slice(0, -1).flatMap((s) => s.captions.map((c) => c.text)).join(" ");
+    assert.ok(said.includes(APP_NAME), `${meta.id} never says ${APP_NAME} until the last beat`);
+    assert.equal(retentionProblems(plan).length, 0, `${meta.id}: ${JSON.stringify(retentionProblems(plan))}`);
+  }
+});
+
+/**
+ * NOT IN THE SIGN-OFF. Every reel ends by naming the app, so a check that
+ * counted the last beat would pass on every script including the incoherent
+ * ones it exists for — which is a guard that cannot fail.
+ */
+test("naming the app only in the sign-off is refused", () => {
+  const script = reelScript("demo-readiness", "")!;
+  const stripped = {
+    ...script,
+    beats: script.beats.map((b, i) => (i === script.beats.length - 1
+      ? b
+      : { ...b, say: b.say.replaceAll(APP_NAME, "this one") })),
+  };
+  const problems = retentionProblems(reelPlan(stripped)).map((p) => p.problem).join(" | ");
+  assert.match(problems, /refers to nothing/, `the incoherent version passed: ${problems}`);
 });

@@ -56,6 +56,18 @@ export const SIGNUP_CTA_SHORT = "Sign up free";
  * ═══════════════════════════════════════════════════════════════════════════
  */
 /**
+ * The product's name, in the one place a rule can check for it.
+ *
+ * "Script is incoherent." Read the reels aloud as one block and the fault is
+ * every demonstrative in them — "THIS ONE asks first", "THAT's today's body
+ * talking" — pointing at a thing the voice had never named. The app appeared
+ * once, in the last two seconds, so nothing in the four lines before it had an
+ * antecedent. lib/reel-retention.ts refuses a script that does that now, and
+ * this is what it looks for.
+ */
+export const APP_NAME = "PocketAthlete";
+
+/**
  * ONE SENTENCE, WHICH IS WHY IT IS PUNCTUATED LIKE THIS.
  *
  * The first draft was "PocketAthlete. It's free. Link's in the bio." — three
@@ -68,7 +80,7 @@ export const SIGNUP_CTA_SHORT = "Sign up free";
  * comma even though the whole thing fits in a line — and that is fine. The
  * expensive thing was the full stops, not the commas.
  */
-export const SIGNUP_SPOKEN = "PocketAthlete, free, link in the bio.";
+export const SIGNUP_SPOKEN = `${APP_NAME}, free, link in the bio.`;
 
 /**
  * Whether the login page should open on the create-account form.

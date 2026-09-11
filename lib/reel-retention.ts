@@ -40,6 +40,7 @@
 // =============================================================================
 
 import type { ReelPlan } from "./reel-plan";
+import { APP_NAME } from "./signup-link";
 
 /** The hook must be readable before the decision is made. */
 export const HOOK_DEADLINE_MS = 3_000;
@@ -236,6 +237,33 @@ export function retentionProblems(plan: ReelPlan): RetentionProblem[] {
     if (plan.totalMs > 0 && ms / plan.totalMs > MAX_ONE_ROUTE_SHARE) {
       say(`${Math.round((ms / plan.totalMs) * 100)}% of the reel is on ${route} — there is nothing to watch`);
     }
+  }
+
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * A PRONOUN NEEDS AN ANTECEDENT.
+   *
+   * "Script is incoherent." Read aloud as one block, the fault in all four
+   * reels was every demonstrative in them: "THIS ONE asks first" — this one
+   * WHAT? — then "THAT's today's body talking", pointing at a number the voice
+   * never names, then "SO today's session got rebuilt", a consequence of a
+   * cause the listener was never given. The product was named once, in the
+   * last two seconds, so nothing before it had anything to refer to.
+   *
+   * The published guidance for short-form informational content is one idea
+   * per video, each beat making one point and moving on. A reel cannot be
+   * about one thing while declining to say what the thing is.
+   *   — teleprompter.com/blog/short-form-video-strategy
+   *   — captions.ai/blog/how-to-write-short-form-video-scripts
+   *
+   * NOT IN THE SIGN-OFF. Every reel ends by naming the app — that rule already
+   * exists in lib/reel-script.ts — so counting the last beat would make this
+   * check pass on every script including the incoherent ones it is for.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  const before = plan.steps.slice(0, -1).flatMap((step) => step.captions.map((c) => c.text));
+  if (before.length && !before.some((text) => text.includes(APP_NAME))) {
+    say(`the reel never says "${APP_NAME}" until the sign-off, so every "it" and "this one" before it refers to nothing`);
   }
 
   for (const gap of silentGaps(plan)) {

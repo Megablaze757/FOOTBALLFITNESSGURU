@@ -211,7 +211,25 @@ function readinessScript(): ReelScript {
        * four seconds, and then a third time in the beat below. The first line
        * has to ADD, so it names the thing the hook is accusing.
        */
-      say: "Every training app you own will still hand you the session it planned last Sunday.",
+      /**
+       * ═══════════════════════════════════════════════════════════════════
+       * THE SUBJECT IS NAMED HERE, AND THAT IS THE WHOLE FIX.
+       *
+       * "Script is incoherent." Read the old one aloud as one block and the
+       * fault is every demonstrative in it: "THIS ONE asks first" — this one
+       * WHAT? — then "THAT's today's body talking", pointing at a number the
+       * voice never names, then "SO today's session got rebuilt", a
+       * consequence of a cause the listener was never given. The app itself
+       * was named once, in the last two seconds.
+       *
+       * A pronoun needs an antecedent. Naming PocketAthlete in the first
+       * spoken line gives every "it" in the four lines after it something to
+       * refer to, and turns a list of disconnected claims into one sentence
+       * about one thing — which is what the short-form guidance means by one
+       * idea per video.
+       * ═══════════════════════════════════════════════════════════════════
+       */
+      say: "Every other training app hands you the session it planned on Sunday. PocketAthlete asks how you slept first.",
     },
     {
       route: "/journal",
@@ -270,7 +288,7 @@ function readinessScript(): ReelScript {
        * third time in twelve seconds. The taps happen on camera underneath
        * this line, so the line only has to name them as they land.
        */
-      say: "This one asks first — bad night, wrecked legs, ten seconds.",
+      say: "Two taps: bad night, wrecked legs.",
     },
     {
       route: "/home",
@@ -295,7 +313,7 @@ function readinessScript(): ReelScript {
        * the viewer can see is narration of a screenshot; letting the screen
        * deliver it is the reveal the suspense pause was put there for.
        */
-      say: "That's today's body talking, not last Sunday's plan.",
+      say: "It scores you out of a hundred, from what you just told it.",
     },
     /**
      * ═══════════════════════════════════════════════════════════════════════
@@ -321,7 +339,7 @@ function readinessScript(): ReelScript {
       route: "/coach",
       action: "Today's session, with the app's own reason for changing it.",
       focus: "not the session the block prescribed",
-      say: "So today's session got rebuilt. Not a warning you swipe away — the work itself changed.",
+      say: "Then it rebuilds today's session to match. Not a warning — different work.",
     },
     /**
      * THE ONLY BEAT THAT ASKS FOR ANYTHING, AND IT USED TO BE SILENT.
@@ -461,7 +479,7 @@ function costScript(): ReelScript {
        * 58% without a millisecond being added to it. Cutting this beat to a
        * fragment made the reel's worst number worse.
        */
-      say: "Every recipe you cook is priced before you buy it.",
+      say: "PocketAthlete prices every recipe before you buy it.",
     },
     {
       route: "/nutrition",
@@ -554,7 +572,16 @@ function drillScript(drillId: string): ReelScript | null {
       route: `/drills/${drill.sport}/`,
       action: `Find ${drill.name} and show its setup.`,
       focus: drill.name,
-      say: drill.setup,
+      /**
+       * A BRIDGE, because the beat before it promises "one detail" and this
+       * one used to open on raw setup text with nothing joining them. Read
+       * aloud it was a non-sequitur: a claim, then equipment.
+       *
+       * Still the drill's OWN words — the ring is around this drill's card, so
+       * inventing a description here would put the voice and the screen back
+       * out of step. Only the lead-in is added.
+       */
+      say: `The drill: ${drill.setup.charAt(0).toLowerCase()}${drill.setup.slice(1)}`,
     },
     {
       route: `/drills/${drill.sport}/`,
@@ -568,7 +595,7 @@ function drillScript(drillId: string): ReelScript | null {
     {
       route: "/journal?log=training",
       action: "The training row, open and ready for the session.",
-      say: "Log it, and next week builds on what you actually did.",
+      say: "Log it in PocketAthlete and next week builds on what you actually did.",
     },
     { route: "/home", action: "The home screen, held for the sign-off.", say: SIGNUP_SPOKEN, tail: END_CARD_MS },
   ]);
@@ -613,7 +640,7 @@ function standardsScript(): ReelScript | null {
    * work out which one they are.
    * ═══════════════════════════════════════════════════════════════════════
    */
-  return build(`standards-${page.slug}`, `Your ${LOAD}kg ${page.lift.label.toLowerCase()} means nothing`, [
+  return build(`standards-${page.slug}`, `Your ${LOAD}kg ${page.lift.label.toLowerCase()} means nothing.`, [
     {
       route: "/standards/",
       action: "Show the list of lifts.",
@@ -625,7 +652,9 @@ function standardsScript(): ReelScript | null {
        * one beat later. Same fault as the readiness reel's session beat: the
        * line and the picture were on different screens.
        */
-      say: "Every lift in here is ranked against your bodyweight, not against the bloke next to you.",
+      // "Every lift IN HERE" pointed at a page the voice had never named — the
+      // same dangling reference as "this one" in the readiness reel.
+      say: "PocketAthlete ranks every lift against your bodyweight, not against the bloke next to you.",
     },
     {
       route: `/standards/${page.slug}/`,
