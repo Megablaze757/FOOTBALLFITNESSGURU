@@ -44,9 +44,15 @@ export default function StudioCard({ params }: { params: { card: string; step: s
   const shown = stage === 1 ? card.faces.slice(0, 1) : card.faces;
 
   return (
-    <main className="flex min-h-screen flex-col justify-center gap-5 px-6 py-10">
+    /*
+      UPPER TWO THIRDS, NOT CENTRED. The recorder lays captions across the
+      lower-middle of the frame — which is also where a platform puts the
+      username, the description and the action buttons. A card centred in the
+      viewport puts its figure exactly where all of that lands.
+    */
+    <main className="flex min-h-screen flex-col justify-start gap-4 px-4 pb-40 pt-12">
       {shown.map((face, i) => (
-        <section key={i} className="card px-6 py-8 text-center">
+        <section key={i} className="card px-4 py-6 text-center">
           {face.kicker && (
             <p className="text-sm font-semibold uppercase tracking-widest text-slate-400">
               {face.kicker}
@@ -58,10 +64,16 @@ export default function StudioCard({ params }: { params: { card: string; step: s
             for, and lib/content-cards.ts refuses a "figure" long enough to be
             a sentence precisely so this stays legible.
           */}
-          <p className="mt-2 text-[76px] font-extrabold leading-none tracking-tight">
+          {/*
+            BIG ENOUGH TO BE THE PICTURE. 76px filled about a quarter of the
+            frame's width and read as a number inside a layout rather than as
+            the subject of the shot — which is the one thing this format is for.
+            Sized against the 540px-wide viewport the recorder films at.
+          */}
+          <p className="mt-1 text-[104px] font-extrabold leading-[0.95] tracking-tighter">
             {face.figure}
           </p>
-          <p className="mt-3 text-xl font-semibold text-slate-400">{face.caption}</p>
+          <p className="mt-2 text-lg font-semibold text-slate-400">{face.caption}</p>
         </section>
       ))}
       {stage === CARD_STAGES && (
