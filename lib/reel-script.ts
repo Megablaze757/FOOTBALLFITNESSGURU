@@ -774,10 +774,51 @@ function standardsScript(): ReelScript | null {
       // faster to scan. Mixing "100 kilos" with "60kg" got one of each.
       say: `${LOAD}kg at ${LIGHT}kg bodyweight is ${light}. At ${HEAVY}kg, ${heavy}. Same bar.`,
     },
+    /**
+     * ═══════════════════════════════════════════════════════════════════════
+     * "THE VIDEOS STILL AREN'T MAKING ME WANNA WATCH MORE."
+     *
+     * This beat used to say "log one lift and PocketAthlete tells you exactly
+     * where you sit" over a screenshot of /benchmarks with a lift already on
+     * it. Nothing was logged and nothing was told — the claim was made in the
+     * voice and the picture was a still of the aftermath.
+     *
+     * Audited, three of the four reels were doing that: navigate, scroll,
+     * talk. lib/reel-moves.ts was built for exactly this ("the videos should
+     * show them doing the stuff") and one reel used it.
+     *
+     * So the form gets filled on camera. The claim is no longer a claim: the
+     * viewer watches a number go in, and the next beat is where it comes out.
+     * ═══════════════════════════════════════════════════════════════════════
+     */
     {
       route: "/benchmarks",
-      action: "Show a logged lift with its tier beside it.",
-      say: "Log one lift and PocketAthlete tells you exactly where you sit.",
+      action: "Log the lift: open the form, type the load, save it.",
+      moves: [
+        { tap: "+ Log a benchmark test" },
+        { type: String(LOAD), into: `${page.lift.label} 1RM` },
+        { tap: "Save" },
+      ],
+      say: "So log it. Takes one tap.",
+    },
+    /**
+     * AND THE PAYOFF IS THE SCREEN, NOT THE SENTENCE.
+     *
+     * The rank is what the whole reel has been promising. It arrives here,
+     * computed by the app from the number typed a beat ago, with a pause on
+     * it — see `hold`, which is the one place a reel should wait.
+     *
+     * The tab tap is NOT optional dressing: the dashboard opens on Recovery
+     * (useState("recovery")), so without it this beat films a page that does
+     * not contain the thing it is about, and the focus below would fail.
+     */
+    {
+      route: "/dashboard",
+      action: "Open Performance and let the rank land.",
+      moves: [{ tap: "Performance" }],
+      focus: "Strength ranks",
+      hold: SUSPENSE_MS,
+      say: "And there's where PocketAthlete puts that lift.",
     },
     // Back to the list it opened on, so the reel loops. See demo-readiness.
     { route: "/standards/", action: "Back to the screen it opened on, for the sign-off.", say: SIGNUP_SPOKEN, tail: END_CARD_MS },
