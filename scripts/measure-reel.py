@@ -26,11 +26,18 @@ for script in job["plan"]:
             ms += len(samples) / rate * 1000 + ph["gap"]
         # retime() takes the longer of the speech and the time to READ the
         # captions, which is what lib/caption-lines.ts calls beatFloorMs.
-        # The floor is a CAPTION reading time, so the end card's room is added
-        # to it rather than competing with it — the same arithmetic as time()
-        # in lib/reel-script.ts. Taking max(ms, floor) alone would let a beat
-        # whose captions outlast its speech swallow the card's room whole.
-        beats.append((b["route"], max(ms, b["floor"] + b.get("after", 0))))
+        # THE SAME ARITHMETIC AS retime IN lib/narration.ts, and it changed.
+        #
+        # This took max(speech, caption reading time). retime stopped padding
+        # narrated beats to a reading time — a narrated caption is paced by the
+        # sweep, not read cold, and the pad became slack that left one caption
+        # sitting on screen for six seconds. So the estimate was over-counting
+        # every reel against a rule the recorder no longer applies, and three
+        # of four looked within a second of the ceiling when they were not.
+        #
+        # MIN_SCENE_MS is the floor that survives: a shot too short for the eye
+        # to land on is a shot whether or not anybody is talking over it.
+        beats.append((b["route"], max(job["minScene"], ms)))
 
     total = sum(ms for _, ms in beats)
     share = {}
@@ -54,14 +61,13 @@ for script in job["plan"]:
     # KOKORO'S TIMING, AND THE PIPELINE RECORDS WITH CHATTERBOX. Loading
     # Chatterbox to estimate four reels costs ten minutes, which is not what a
     # studio check is for — but an unlabelled number from the wrong engine is
-    # how a reel passes here and is refused on the runner. Observed on one
-    # recording: Chatterbox ran 2.2% longer than this said. One sample, so it
-    # is printed rather than applied.
+    # how a reel passes here and is refused on the runner.
     print(f"{script['id']:<16} {total/1000:5.1f}s   busiest {route} {pct:.0%}"
           f"   needs {aim:.0%} completion{flag}")
 
-print("\nTimed with Kokoro. Recording uses Chatterbox by default, which ran 2.2%"
-      "\nlonger on the one reel where both were measured — so treat anything"
-      "\nwithin a second of the ceiling as over it.")
+print("\nTimed with Kokoro; recording uses Chatterbox, which speaks more slowly."
+      "\nThe 2.2% gap measured earlier was against an estimator that has since"
+      "\nchanged, so it is not carried forward — treat anything within a second"
+      "\nof the ceiling as over it until the two are compared again.")
 
 sys.exit(1 if bad else 0)

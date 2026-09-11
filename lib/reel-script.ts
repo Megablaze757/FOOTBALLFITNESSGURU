@@ -249,11 +249,28 @@ function readinessScript(): ReelScript {
        * idea per video.
        * ═══════════════════════════════════════════════════════════════════
        */
-      // NOT "books you in for heavy squats" again — the hook card two seconds
-      // earlier already said it. The first spoken line has to ADD, and what it
-      // adds is the name, so every "it" in the four lines after has an
-      // antecedent.
-      say: "PocketAthlete is the only one that asks how you slept before it decides.",
+      /**
+       * ═══════════════════════════════════════════════════════════════════
+       * EVERY LINE WAS AN ISLAND. "Scripts don't flow nice."
+       *
+       * The last pass gave them a point of view and they still read as five
+       * separate statements, because nothing in one line reached into the
+       * next. Read the old set aloud and every line starts from a standing
+       * start: "PocketAthlete is the only one that asks..." / "Two taps..." /
+       * "Out of a hundred..." / "So today's session changed..."
+       *
+       * Two things were missing and both are ordinary spoken English. The
+       * CONNECTIVES — so, and, which is why — that hand one thought to the
+       * next; I had stripped them out for brevity, which is what made it
+       * staccato. And VARIED LENGTH: five lines of roughly equal weight is a
+       * metronome, and a metronome is the opposite of flow.
+       *
+       * The lines now chain — "decided your week on Sunday" answered by "asks
+       * first", then "So —", then "And", then "Which is why" — and run long,
+       * short, short, medium, short.
+       * ═══════════════════════════════════════════════════════════════════
+       */
+      say: "Every other app decided your week on Sunday. PocketAthlete asks first.",
     },
     {
       route: "/journal",
@@ -312,10 +329,8 @@ function readinessScript(): ReelScript {
        * third time in twelve seconds. The taps happen on camera underneath
        * this line, so the line only has to name them as they land.
        */
-      // One sentence, not three. Each full stop is its own caption with its own
-      // floor, so "Two taps. Slept badly. Legs like concrete." cost three of
-      // them for seven words — and the taps are on screen anyway.
-      say: "Two taps: slept badly, legs like concrete.",
+      // "So —" picks up the line before it instead of starting again.
+      say: "So — slept badly, legs like concrete. Two taps.",
     },
     {
       route: "/home",
@@ -343,7 +358,7 @@ function readinessScript(): ReelScript {
       // The number is on screen and the ring is around it, so the line does
       // not read it out — it reacts to it, which is the joke and is also the
       // only version that cannot be wrong when the scoring changes.
-      say: "Out of a hundred. It's not impressed either.",
+      say: "And there's your score. Brutal, but fair.",
     },
     /**
      * ═══════════════════════════════════════════════════════════════════════
@@ -369,7 +384,7 @@ function readinessScript(): ReelScript {
       route: "/coach",
       action: "Today's session, with the app's own reason for changing it.",
       focus: "not the session the block prescribed",
-      say: "So today's session changed. Not a warning — the sets are lighter.",
+      say: "Which is why today's session changed. Not a warning — lighter sets.",
     },
     /**
      * THE ONLY BEAT THAT ASKS FOR ANYTHING, AND IT USED TO BE SILENT.
@@ -521,7 +536,8 @@ function costScript(): ReelScript {
       focus: facts ? facts.dearest.name : "",
       // "10x the money" is the hook card's line, not this one's. What this beat
       // has that nothing else does is the joke.
-      say: `The dear one's ${dearName}. Hope they were nice.`,
+      // A question hands over to its own answer; a statement just stops.
+      say: `The dear one? ${dearName.charAt(0).toUpperCase()}${dearName.slice(1)}. Hope they were nice.`,
     },
     {
       route: "/recipes/",
@@ -548,7 +564,8 @@ function costScript(): ReelScript {
        * 58% without a millisecond being added to it. Cutting this beat to a
        * fragment made the reel's worst number worse.
        */
-      say: "PocketAthlete prices every recipe before you buy.",
+      // "like that" reaches back to the two rows just shown.
+      say: "Every recipe in PocketAthlete is costed like that, before you buy.",
     },
     {
       route: "/nutrition",
@@ -573,7 +590,7 @@ function costScript(): ReelScript {
        * of lib/protein-index.ts. A shelf price moves, "£3.19" becomes "£10.45",
        * and the reel is refused by a rule nobody was thinking about that day.
        */
-      say: "Build a week and it prices the shop.",
+      say: "Build a week and it prices your whole shop.",
     },
     /**
      * NOT looping to /cheapest-protein/. This reel already spends 55% of
@@ -622,7 +639,7 @@ function drillScript(drillId: string): ReelScript | null {
        * spoken line now says the same thing, so the promise arrives in the
        * window the retention data actually cares about.
        */
-      say: `Your ${drill.name.toLowerCase()} aren't working. One detail, not fitness.`,
+      say: `Your ${drill.name.toLowerCase()} aren't working. Not fitness — one detail.`,
     },
     /**
      * ═══════════════════════════════════════════════════════════════════════
@@ -661,7 +678,7 @@ function drillScript(drillId: string): ReelScript | null {
        * text the viewer can see is narration of a screenshot, and this reel was
        * 29.5s against a 30s ceiling with a 2.2% engine correction on top.
        */
-      say: `The drill: ${(() => { const [first] = drill.setup.split(/(?<=\.)\s+/); return first.charAt(0).toLowerCase() + first.slice(1); })()}`,
+      say: `Here's the drill. ${(() => { const [first] = drill.setup.split(/(?<=\.)\s+/); return first; })()}`,
     },
     {
       route: `/drills/${drill.sport}/`,
@@ -675,7 +692,8 @@ function drillScript(drillId: string): ReelScript | null {
     {
       route: "/journal?log=training",
       action: "The training row, open and ready for the session.",
-      say: "Log it in PocketAthlete. Next week builds on what you did, not what you meant to.",
+      // "That's it" lands on the cue the beat before, which is the whole point.
+      say: "That's it. Log it in PocketAthlete and next week builds on what you did, not what you meant to.",
     },
     // Back to the index it opened on, so the reel loops. See demo-readiness.
     { route: "/drills/", action: "Back to the screen it opened on, for the sign-off.", say: SIGNUP_SPOKEN, tail: END_CARD_MS },
@@ -733,9 +751,12 @@ function standardsScript(): ReelScript | null {
        * one beat later. Same fault as the readiness reel's session beat: the
        * line and the picture were on different screens.
        */
-      // "Every lift IN HERE" pointed at a page the voice had never named — the
-      // same dangling reference as "this one" in the readiness reel.
-      say: "PocketAthlete ranks every lift against your bodyweight, not against the bloke next to you.",
+      // Picks the hook card's own words straight up rather than restating them
+      // as a sentence about the product.
+      // "Nothing." on its own is a sentence, so it is a caption, so it is a
+      // one-word flash — the rule that caught "The drill:" caught this too.
+      // Two words each keeps the shape and clears the floor.
+      say: "On its own? Means nothing. Against your bodyweight? Means everything.",
     },
     {
       route: `/standards/${page.slug}/`,
@@ -756,7 +777,7 @@ function standardsScript(): ReelScript | null {
     {
       route: "/benchmarks",
       action: "Show a logged lift with its tier beside it.",
-      say: "Log one lift and it tells you exactly which tier you're in.",
+      say: "Log one lift and PocketAthlete tells you exactly where you sit.",
     },
     // Back to the list it opened on, so the reel loops. See demo-readiness.
     { route: "/standards/", action: "Back to the screen it opened on, for the sign-off.", say: SIGNUP_SPOKEN, tail: END_CARD_MS },

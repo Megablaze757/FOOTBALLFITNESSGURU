@@ -26,6 +26,7 @@ import { spokenForm } from "../lib/spoken-numbers";
 import { BASE_SPEED, VOICE, shapeRates } from "../lib/speech-prosody";
 import { beatFloorMs } from "../lib/caption-lines";
 import { LEAD_MS, TAIL_MS, SILENT_BEAT_MS } from "../lib/narration";
+import { MIN_SCENE_MS } from "../lib/reel";
 import { MAX_ONE_ROUTE_SHARE, MAX_REEL_MS, RETENTION_BANDS } from "../lib/reel-retention";
 
 const model = process.env.KOKORO_MODEL ?? ".voice/kokoro-v1.0.onnx";
@@ -59,7 +60,7 @@ const dir = mkdtempSync(join(tmpdir(), "reel-measure-"));
 const file = join(dir, "plan.json");
 writeFileSync(file, JSON.stringify({
   model, voices, voice: VOICE, plan,
-  lead: LEAD_MS, tail: TAIL_MS, silent: SILENT_BEAT_MS,
+  lead: LEAD_MS, tail: TAIL_MS, silent: SILENT_BEAT_MS, minScene: MIN_SCENE_MS,
   maxMs: MAX_REEL_MS, maxShare: MAX_ONE_ROUTE_SHARE,
   /** Infinity does not survive JSON, so the open-ended band travels as null. */
   bands: RETENTION_BANDS.map((b) => ({ ...b, underMs: Number.isFinite(b.underMs) ? b.underMs : null })),
