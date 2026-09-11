@@ -278,8 +278,31 @@ jobs:
           # longer matched its video for anybody downloading the pair to post.
           id="$(basename "$(ls reels/*.srt | head -1)" .srt)"
           lead=$(cat reels/*.lead 2>/dev/null || echo 0)
+          # ═══════════════════════════════════════════════════════════════
+          # LOUDNESS, NOT PEAK. "I can't hear the voice."
+          #
+          # Measured on four shipped reels: mean volume -23 to -24.6 dB with
+          # the peak sitting exactly on -1.0 dB, and integrated loudness of
+          # -21.7 and -20.4 LUFS. Platforms normalise a feed to roughly -14
+          # LUFS, so these played about seven decibels under everything around
+          # them — audibly half as loud, on a phone, usually in public.
+          #
+          # The cause is in lib/wav.ts: normalised() scales the track so its
+          # loudest sample lands on -1 dBFS. That is PEAK normalisation, and it
+          # says nothing about how loud a thing sounds. One transient consonant
+          # can set the peak while the speech sits far below it — which is
+          # exactly what happened, because the role gains deliberately spread
+          # the levels and Chatterbox is dynamic on top of that.
+          #
+          # loudnorm is EBU R128 and measures what an ear does. LRA 9 because
+          # the input measured 14.6 LU: broadcast speech sits around 5-8, and
+          # a range that wide means the setup lines disappear under traffic
+          # while the payoffs are fine. TP -1.5 leaves headroom for the AAC
+          # encoder, which can overshoot a sample-peak ceiling.
+          # ═══════════════════════════════════════════════════════════════
           ffmpeg -hide_banner -loglevel error -y -ss "$lead" -i reels/*.webm -i reels/*.wav \
             -vf "scale=1080:1920:flags=lanczos,unsharp=5:5:0.9:5:5:0.0" \
+            -af "loudnorm=I=-14:TP=-1.5:LRA=9" \
             -c:v libx264 -preset slow -crf 20 -pix_fmt yuv420p -c:a aac -b:a 128k \
             -shortest "reels/$id.mp4"
 
@@ -298,6 +321,13 @@ jobs:
       - name: Check the captions are in step with the voice
         if: env.VOICE == 'true'
         run: node --import tsx scripts/check-sync.mts reels/*.sync.json
+
+      # The filter above is easy to lose in an edit and silent when it goes.
+      # Four reels shipped at -21 LUFS before anybody measured; this is so the
+      # fifth cannot.
+      - name: Check it is as loud as the rest of the feed
+        if: env.VOICE == 'true'
+        run: bash scripts/check-loudness.sh reels/*.mp4
 
       # ═══════════════════════════════════════════════════════════════════
       # BACK INTO THE APP, WHICH IS THE WHOLE POINT.

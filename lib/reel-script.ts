@@ -199,7 +199,27 @@ function readinessScript(): ReelScript {
    * "last Sunday" in the first line, paid off in the reveal.
    * ═══════════════════════════════════════════════════════════════════════
    */
-  return build("demo-readiness", "You slept three hours. Your app doesn't care.", [
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * CORRECT, CLEAR, AND NOBODY IS TALKING.
+   *
+   * "Scripts still don't feel human or hooking or humorous." Fourth pass, and
+   * the previous three were all the same kind of edit — tightening wording,
+   * fixing references, removing repetition. Every one of those made the lines
+   * BETTER COPY. None of them put a person behind the microphone.
+   *
+   * Read the old version aloud: "Every other training app hands you the
+   * session it planned on Sunday." That is a true, well-formed sentence with
+   * no attitude in it at all — a brochure. There is nothing to laugh at
+   * because there is nobody there.
+   *
+   * What this changes is the register, not the facts. A joke in short form is
+   * a setup and a turn, and the turn is usually understatement: "Out of a
+   * hundred. It's not impressed." The app gets an opinion, which is both
+   * funnier and more accurate than narrating its output.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  return build("demo-readiness", "Slept three hours? Your app's booked you in for squats.", [
     {
       route: "/journal",
       action: "Open the check-in. Do not fill it in yet — let the empty form show.",
@@ -229,7 +249,11 @@ function readinessScript(): ReelScript {
        * idea per video.
        * ═══════════════════════════════════════════════════════════════════
        */
-      say: "Every other training app hands you the session it planned on Sunday. PocketAthlete asks how you slept first.",
+      // NOT "books you in for heavy squats" again — the hook card two seconds
+      // earlier already said it. The first spoken line has to ADD, and what it
+      // adds is the name, so every "it" in the four lines after has an
+      // antecedent.
+      say: "PocketAthlete is the only one that asks how you slept before it decides.",
     },
     {
       route: "/journal",
@@ -288,7 +312,10 @@ function readinessScript(): ReelScript {
        * third time in twelve seconds. The taps happen on camera underneath
        * this line, so the line only has to name them as they land.
        */
-      say: "Two taps: bad night, wrecked legs.",
+      // One sentence, not three. Each full stop is its own caption with its own
+      // floor, so "Two taps. Slept badly. Legs like concrete." cost three of
+      // them for seven words — and the taps are on screen anyway.
+      say: "Two taps: slept badly, legs like concrete.",
     },
     {
       route: "/home",
@@ -313,7 +340,10 @@ function readinessScript(): ReelScript {
        * the viewer can see is narration of a screenshot; letting the screen
        * deliver it is the reveal the suspense pause was put there for.
        */
-      say: "It scores you out of a hundred, from what you just told it.",
+      // The number is on screen and the ring is around it, so the line does
+      // not read it out — it reacts to it, which is the joke and is also the
+      // only version that cannot be wrong when the scoring changes.
+      say: "Out of a hundred. It's not impressed either.",
     },
     /**
      * ═══════════════════════════════════════════════════════════════════════
@@ -339,7 +369,7 @@ function readinessScript(): ReelScript {
       route: "/coach",
       action: "Today's session, with the app's own reason for changing it.",
       focus: "not the session the block prescribed",
-      say: "Then it rebuilds today's session to match. Not a warning — different work.",
+      say: "So today's session changed. Not a warning — the sets are lighter.",
     },
     /**
      * THE ONLY BEAT THAT ASKS FOR ANYTHING, AND IT USED TO BE SILENT.
@@ -464,7 +494,17 @@ function costScript(): ReelScript {
        * the contrarian-claim shape, and the beats after it are then evidence
        * for something already promised rather than a slow walk toward it.
        */
-      say: `${cheapPrice}, or ${dear}. Same ${REFERENCE_PROTEIN} grams of protein.`,
+      /**
+       * TWO SENTENCES MADE "£0.31." A CAPTION ON ITS OWN — a one-word flash,
+       * caught by the rule written two commits ago for "The drill:". One
+       * sentence, so it is one thought and at worst two captions.
+       *
+       * And the QUANTITY stays in the spoken line. Cutting it to two bare
+       * prices leaned on the hook card, which is up for 1.6 seconds: anybody
+       * who arrives a moment late gets two numbers and no idea what they buy.
+       * A test caught that too, and it was right to.
+       */
+      say: `${cheapPrice} or ${dear}, same ${REFERENCE_PROTEIN} grams.`,
     },
     {
       route: "/cheapest-protein/",
@@ -479,7 +519,9 @@ function costScript(): ReelScript {
       route: "/cheapest-protein/",
       action: "Hold on the most expensive row.",
       focus: facts ? facts.dearest.name : "",
-      say: `The dear one's ${dearName}. ${gap} the money.`,
+      // "10x the money" is the hook card's line, not this one's. What this beat
+      // has that nothing else does is the joke.
+      say: `The dear one's ${dearName}. Hope they were nice.`,
     },
     {
       route: "/recipes/",
@@ -506,7 +548,7 @@ function costScript(): ReelScript {
        * 58% without a millisecond being added to it. Cutting this beat to a
        * fragment made the reel's worst number worse.
        */
-      say: "PocketAthlete prices every recipe before you buy it.",
+      say: "PocketAthlete prices every recipe before you buy.",
     },
     {
       route: "/nutrition",
@@ -531,7 +573,7 @@ function costScript(): ReelScript {
        * of lib/protein-index.ts. A shelf price moves, "£3.19" becomes "£10.45",
        * and the reel is refused by a rule nobody was thinking about that day.
        */
-      say: "Build a week and it prices the whole shop.",
+      say: "Build a week and it prices the shop.",
     },
     /**
      * NOT looping to /cheapest-protein/. This reel already spends 55% of
@@ -580,7 +622,7 @@ function drillScript(drillId: string): ReelScript | null {
        * spoken line now says the same thing, so the promise arrives in the
        * window the retention data actually cares about.
        */
-      say: `Your ${drill.name.toLowerCase()} aren't working, and it's one detail, not fitness.`,
+      say: `Your ${drill.name.toLowerCase()} aren't working. One detail, not fitness.`,
     },
     /**
      * ═══════════════════════════════════════════════════════════════════════
@@ -613,7 +655,13 @@ function drillScript(drillId: string): ReelScript | null {
        * inventing a description here would put the voice and the screen back
        * out of step. Only the lead-in is added.
        */
-      say: `The drill: ${drill.setup.charAt(0).toLowerCase()}${drill.setup.slice(1)}`,
+      /**
+       * THE FIRST SENTENCE OF THE SETUP, not all of it. The ring is around this
+       * drill's card and the card shows the whole thing — a voice reading out
+       * text the viewer can see is narration of a screenshot, and this reel was
+       * 29.5s against a 30s ceiling with a 2.2% engine correction on top.
+       */
+      say: `The drill: ${(() => { const [first] = drill.setup.split(/(?<=\.)\s+/); return first.charAt(0).toLowerCase() + first.slice(1); })()}`,
     },
     {
       route: `/drills/${drill.sport}/`,
@@ -627,7 +675,7 @@ function drillScript(drillId: string): ReelScript | null {
     {
       route: "/journal?log=training",
       action: "The training row, open and ready for the session.",
-      say: "Log it in PocketAthlete and next week builds on what you actually did.",
+      say: "Log it in PocketAthlete. Next week builds on what you did, not what you meant to.",
     },
     // Back to the index it opened on, so the reel loops. See demo-readiness.
     { route: "/drills/", action: "Back to the screen it opened on, for the sign-off.", say: SIGNUP_SPOKEN, tail: END_CARD_MS },
@@ -700,7 +748,10 @@ function standardsScript(): ReelScript | null {
        * table and it is what the sentence names.
        */
       focus: "Bodyweight",
-      say: `So a ${LOAD}kg bench at ${LIGHT}kg bodyweight is ${light}. At ${HEAVY}kg, ${heavy}.`,
+      // All three written as numerals: lib/spoken-numbers.ts turns "60kg" into
+      // "sixty kilos" for the voice and the caption keeps the numeral, which is
+      // faster to scan. Mixing "100 kilos" with "60kg" got one of each.
+      say: `${LOAD}kg at ${LIGHT}kg bodyweight is ${light}. At ${HEAVY}kg, ${heavy}. Same bar.`,
     },
     {
       route: "/benchmarks",
