@@ -1,5 +1,6 @@
 import { captionLines, captionReadMs } from "./caption-lines";
 import { phrases } from "./speech-timing";
+import { LEAD_MS } from "./narration";
 import type { Move } from "./reel-moves";
 
 // =============================================================================
@@ -164,27 +165,6 @@ export function captionsFor(
   beat: { at: number; ms: number; say: string; tail?: number },
   clips?: readonly Clip[],
 ): Caption[] {
-  if (clips && clips.length) {
-    const spoken = phrases(beat.say);
-    /**
-     * COUNTS MUST AGREE OR THE ANCHORING IS GUESSWORK. The recorder speaks
-     * `spokenForm(say)` and this splits the original, so a change that made
-     * the two disagree about sentence boundaries would silently pair caption
-     * three with phrase two. Verified across all four reels that spokenForm
-     * never changes the count; if it ever does, fall back rather than lie.
-     */
-    if (spoken.length === clips.length) {
-      const out: Caption[] = [];
-      spoken.forEach((phrase, i) => {
-        out.push(...spread(captionLines(phrase.text), beat.at + clips[i].atMs, clips[i].ms));
-      });
-      if (out.length) return out;
-    }
-  }
-
-  const chunks = captionLines(beat.say);
-  if (!chunks.length) return [];
-
   /**
    * ═══════════════════════════════════════════════════════════════════════
    * THE TAIL IS NOT THE CAPTIONS' TO SPEND.
@@ -202,6 +182,52 @@ export function captionsFor(
    * ═══════════════════════════════════════════════════════════════════════
    */
   const budget = Math.max(0, beat.ms - (beat.tail ?? 0));
+
+  if (clips && clips.length) {
+    const spoken = phrases(beat.say);
+    /**
+     * COUNTS MUST AGREE OR THE ANCHORING IS GUESSWORK. The recorder speaks
+     * `spokenForm(say)` and this splits the original, so a change that made
+     * the two disagree about sentence boundaries would silently pair caption
+     * three with phrase two. Verified across all four reels that spokenForm
+     * never changes the count; if it ever does, fall back rather than lie.
+     */
+    if (spoken.length === clips.length) {
+      const out: Caption[] = [];
+      spoken.forEach((phrase, i) => {
+        /**
+         * ═══════════════════════════════════════════════════════════════════
+         * A CAPTION STARTS WITH ITS PHRASE AND MAY OUTLAST IT.
+         *
+         * The first version of this gave each phrase's captions exactly that
+         * phrase's SPEAKING time, and the runner refused the reel: ten
+         * captions too brief to read, "Not a warning —" on screen for 920ms
+         * needing 1300. Correct, and the right thing to refuse — a voice is
+         * faster than an eye, and Chatterbox is faster than Kokoro.
+         *
+         * Sync is about when a caption APPEARS. When it LEAVES is free, so
+         * each phrase's captions run until the NEXT phrase starts rather than
+         * stopping dead with the audio — which reclaims every gap between
+         * phrases and whatever slack the beat has at its end.
+         *
+         * THE LEAD, BUT NEVER THE HOLD. clips[0] sits at LEAD_MS + hold, and
+         * the hold is a deliberate silence before a reveal — starting the
+         * caption inside it would put the words on screen before the shot
+         * that earns them. Reclaiming exactly LEAD_MS takes the dead air and
+         * leaves the suspense alone.
+         * ═══════════════════════════════════════════════════════════════════
+         */
+        const from = beat.at + (i === 0 ? Math.max(0, clips[0].atMs - LEAD_MS) : clips[i].atMs);
+        const until = beat.at + (i + 1 < clips.length ? clips[i + 1].atMs : budget);
+        out.push(...spread(captionLines(phrase.text), from, Math.max(1, until - from)));
+      });
+      if (out.length) return out;
+    }
+  }
+
+  const chunks = captionLines(beat.say);
+  if (!chunks.length) return [];
+
 
   /**
    * TIME PROPORTIONAL TO LENGTH, not an equal share.

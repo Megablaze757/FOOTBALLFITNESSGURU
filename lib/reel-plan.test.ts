@@ -1,6 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { captionReadMs } from "./caption-lines";
+import { LEAD_MS } from "./narration";
 import {
   HOOK_MS, REEL_H, REEL_RATIO, REEL_SCALE, REEL_W,
   captionsFor, reelPlan, srt, srtTime, type PlannableScript, endCardAt, END_CARD_MS, } from "./reel-plan";
@@ -222,18 +224,44 @@ test("a caption starts when its phrase does, not where the arithmetic lands", ()
   const arithmetic = captionsFor(beat);
 
   assert.ok(anchored.length > clips.length, "the captions are cut finer than the speech — that is the whole problem");
-  assert.equal(anchored[0].at, 10_300, "the first caption does not start where the voice starts");
 
-  /** Every caption sits inside the span of the phrase it belongs to. */
-  const lastOfFirst = anchored[anchored.length - 1];
-  assert.equal(lastOfFirst.at + lastOfFirst.ms, 10_000 + 5_200 + 1_600,
-    "the final caption does not end where its phrase ends");
+  /**
+   * The first phrase's caption reclaims LEAD_MS — dead air at the top of every
+   * beat — and NOT the rest, which is the script's suspense hold. Starting
+   * inside a hold would put the words up before the shot that earns them.
+   *
+   * Derived from LEAD_MS rather than typed: a hardcoded 10_000 here passed
+   * only because I had guessed the fixture's lead, and would have gone on
+   * "passing" by being wrong in the same direction as the code.
+   */
+  assert.equal(anchored[0].at, 10_000 + (300 - LEAD_MS),
+    "the first caption does not reclaim exactly the lead-in");
 
-  /** And the second phrase's caption waits for the gap rather than running on. */
+  /** The second phrase's captions start when the SECOND PHRASE does. */
   const second = anchored.find((c) => c.at >= 10_000 + 5_200);
   assert.ok(second, "nothing is timed to the second phrase at all");
+  assert.equal(second!.at, 10_000 + 5_200, "the second phrase's caption does not start with the voice");
   assert.notEqual(second!.at, arithmetic.find((c) => c.text === second!.text)?.at,
     "anchoring changed nothing, so the clips are being ignored");
+
+  /**
+   * AND THEY MAY OUTLAST THE VOICE. The first version gave each caption its
+   * phrase's SPEAKING time and the runner refused the reel — ten captions too
+   * brief to read, "Not a warning —" on for 920ms needing 1300. A voice is
+   * faster than an eye. Sync is about when a caption appears; when it leaves
+   * is free, so the gap before the next phrase is reading time.
+   */
+  const firstPhrase = anchored.filter((c) => c.at < 10_000 + 5_200);
+  const lastOfFirst = firstPhrase[firstPhrase.length - 1];
+  assert.equal(lastOfFirst.at + lastOfFirst.ms, 10_000 + 5_200,
+    "the first phrase's captions stop dead with its audio instead of running to the next one");
+  const last = anchored[anchored.length - 1];
+  assert.equal(last.at + last.ms, 10_000 + 8_000, "the captions do not fill the beat");
+
+  /** Every one of them gets its reading time, which is the point of the above. */
+  for (const c of anchored) {
+    assert.ok(c.ms >= captionReadMs(c.text), `"${c.text}" is on for ${c.ms}ms and needs ${captionReadMs(c.text)}ms`);
+  }
 });
 
 /** A silent reel and the studio preview have no audio to anchor to. */
