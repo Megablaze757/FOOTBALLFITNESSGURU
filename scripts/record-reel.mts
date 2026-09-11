@@ -35,7 +35,7 @@ import { phrases } from "../lib/speech-timing";
 import { spokenForm } from "../lib/spoken-numbers";
 import {
   BASE_SPEED, VOICE, shapeGains, shapeRates,
-  shapeExpression, EXAGGERATION_BASE, CFG_BASE,
+  shapeExpression, EXAGGERATION_BASE, CFG_BASE, REFERENCE_VOICE, REFERENCE_LINE,
 } from "../lib/speech-prosody";
 import { beatAudio, retime, trackClips, type BeatAudio } from "../lib/narration";
 import { layTrack, normalised, readWav, writeWav, type Wav } from "../lib/wav";
@@ -134,10 +134,11 @@ const ENGINE = (process.env.REEL_VOICE || "kokoro").toLowerCase();
 async function narrate(beats: readonly { say: string; hold?: number }[]): Promise<BeatAudio[]> {
   const model = process.env.KOKORO_MODEL;
   const voices = process.env.KOKORO_VOICES;
-  if (ENGINE === "kokoro" && (!model || !voices)) {
+  if (!model || !voices) {
     throw new Error(
       "Set KOKORO_MODEL and KOKORO_VOICES to the kokoro-v1.0.onnx and voices-v1.0.bin paths. "
-      + "Both are free downloads — see docs/REELS.md.",
+      + "Both are free downloads — see docs/REELS.md. Chatterbox needs them too: it builds "
+      + "its reference voice with Kokoro, which is where the British accent comes from.",
     );
   }
 
@@ -184,6 +185,14 @@ async function narrate(beats: readonly { say: string; hold?: number }[]): Promis
 
   const chatterboxJob = {
     out: tmp,
+    /**
+     * Kokoro's files, because Chatterbox builds its REFERENCE with them —
+     * a British male voice for a British football audience, performed by a
+     * model that has the expression control. See lib/speech-prosody.ts.
+     */
+    model, voices,
+    reference_voice: process.env.REEL_REFERENCE_VOICE || REFERENCE_VOICE,
+    reference_line: REFERENCE_LINE,
     phrases: flat.map((p) => p.text),
     exaggerations: expression.map((e) => e.exaggeration),
     cfgs: expression.map((e) => e.cfg),

@@ -255,3 +255,58 @@ export function shapeExpression(
 ): { exaggeration: number; cfg: number }[] {
   return phrases.map((text, i) => expressionFor(roleOf(i, phrases.length, text), base, cfgBase));
 }
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * A YOUNG BRITISH MALE VOICE, BUILT RATHER THAN BORROWED.
+ *
+ * "The voice doesn't reach our target audience." It did not, and the reason
+ * was that the voice had been chosen by one measurement — pitch variability —
+ * with nothing in it about who was listening.
+ *
+ * WHO IS LISTENING. The app is British throughout: pounds, UK supermarket
+ * shelf prices, "programme", football positions. The content is football
+ * drills and barbell standards. The published profile for that audience is a
+ * young adult male read, energetic, "motivating without shouting", with tight
+ * rhythmic pacing and dynamic inflection — and a recognisable accent is named
+ * as a success factor for UK creators specifically.
+ *   — voiceovers.co.uk/character/sports
+ *   — modash.io/find-influencers/tiktok/united-kingdom/football
+ *
+ * What shipped was bf_alice: British, expressive, and female.
+ *
+ * WHY A HYBRID. Kokoro has four British male voices and no expression
+ * control. Chatterbox has the expression control and one speaker, who is
+ * neither British nor young. Neither is the answer alone — so Kokoro speaks a
+ * reference passage and Chatterbox performs it. Kokoro supplies the accent,
+ * the gender and the timbre; Chatterbox supplies the pitch range and the
+ * emphasis. Both are permissively licensed for commercial use, and no human's
+ * voice is involved, so there is no consent to obtain and nobody to
+ * impersonate.
+ *
+ * MEASURED ON A WHOLE NARRATION, and that matters more than it sounds. On a
+ * single line bm_george led at 6.22 semitones and bm_lewis trailed at 6.05.
+ * Across all six lines of the readiness reel the order REVERSES:
+ *
+ *   bf_alice, as it ships    F0 SD 3.94 st   range 13.61 st   median 222 Hz
+ *   hybrid bm_george         F0 SD 4.04 st   range 14.91 st   median 138 Hz
+ *   hybrid bm_lewis          F0 SD 5.17 st   range 16.76 st   median 126 Hz
+ *
+ * One line was thin evidence and it pointed at the wrong voice. The gains are
+ * also smaller over a reel than over a line — +31% on pitch variation rather
+ * than the +50% a single sentence suggested — which is the honest number.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export const REFERENCE_VOICE = "bm_lewis";
+
+/**
+ * What the reference says.
+ *
+ * The app's OWN words, at length: a cloner has more to work with from three
+ * varied sentences than from one, and using the script's own register means
+ * the reference is the thing being performed rather than a sample of
+ * something else.
+ */
+export const REFERENCE_LINE = "Every other training app hands you the session it planned on Sunday. "
+  + "PocketAthlete asks how you slept first. Two taps: bad night, wrecked legs. "
+  + "It scores you out of a hundred, and then it rebuilds today to match.";

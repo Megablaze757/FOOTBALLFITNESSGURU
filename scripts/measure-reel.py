@@ -47,6 +47,11 @@ for script in job["plan"]:
     if notes:
         bad = True
     flag = ("  <-- WOULD BE REFUSED: " + ", ".join(notes)) if notes else ""
-    print(f"{script['id']:<16} {total/1000:5.1f}s   busiest {route} {pct:.0%}{flag}")
+    # The band this length is graded against, so the number that matters is on
+    # screen next to the length rather than in a document. See RETENTION_BANDS
+    # in lib/reel-retention.ts for the figures and where they come from.
+    aim = next(b["aim"] for b in job["bands"] if total < (b["underMs"] or float("inf")))
+    print(f"{script['id']:<16} {total/1000:5.1f}s   busiest {route} {pct:.0%}"
+          f"   needs {aim:.0%} completion{flag}")
 
 sys.exit(1 if bad else 0)

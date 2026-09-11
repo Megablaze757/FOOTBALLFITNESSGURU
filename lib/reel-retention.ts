@@ -96,6 +96,74 @@ export const MAX_ONE_ROUTE_SHARE = 0.6;
 export const MAX_REEL_MS = 30_000;
 
 /**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * WHAT A REEL OF THIS LENGTH HAS TO CLEAR, AND WHY LENGTH IS A CHOICE.
+ *
+ * "I'm not a social media expert, I'm asking you to research and become one."
+ * Fair. This is the part of that which belongs in code rather than in a
+ * message, because a figure in a message is read once.
+ *
+ * Retention is graded against LENGTH, not in absolute terms — a 45-second
+ * video holding 45% is doing better than a 12-second one holding 55%. The
+ * published bands, measured across TikTok:
+ *
+ *              aim above   strong
+ *   under 15s      60%       75%
+ *   15-30s         50%       65%
+ *   30-60s         40%       55%
+ *   1-3min         30%       45%
+ *
+ * And by niche: educational content 50%+ under thirty seconds; fitness
+ * instruction 55%+; motivational 65-75%.
+ *   — retensis.com/blog/tiktok-retention-rate-benchmarks-2026
+ *
+ * SHORTER IS NOT AUTOMATICALLY BETTER, which is why this is a table and not a
+ * smaller MAX_REEL_MS. A reel that drops a beat to get under fifteen seconds
+ * buys a higher bar for itself and loses the footage that earns it.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export const RETENTION_BANDS = [
+  { underMs: 15_000, aim: 0.6, strong: 0.75 },
+  { underMs: 30_000, aim: 0.5, strong: 0.65 },
+  { underMs: 60_000, aim: 0.4, strong: 0.55 },
+  { underMs: Infinity, aim: 0.3, strong: 0.45 },
+];
+
+/** The completion a reel of this length has to clear to be worth posting. */
+export function retentionBand(totalMs: number): { aim: number; strong: number } {
+  const band = RETENTION_BANDS.find((b) => totalMs < b.underMs) ?? RETENTION_BANDS[RETENTION_BANDS.length - 1];
+  return { aim: band.aim, strong: band.strong };
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE SIGNAL NOTHING HERE WAS DESIGNED FOR: BEING WATCHED TWICE.
+ *
+ * Replay rate is total plays over unique viewers. Above 1.2, distribution is
+ * reported as substantially stronger — and a reel that loops cleanly plays
+ * again before the viewer has consciously decided to replay it, which is how
+ * a watch-time percentage goes over 100%.
+ *   — retensis.com/blog/tiktok-retention-rate-benchmarks-2026
+ *   — ondigitals.com/how-to-make-looping-content-for-tiktok
+ *
+ * Two things carry a loop, and this project currently has neither. The PICTURE
+ * loops when the last shot matches the framing of the first. The WORDS loop
+ * when the closing line is the setup for the opening line.
+ *
+ * These reels do the opposite: they end on a static card, held for END_CARD_MS
+ * in silence, on a screen that looks nothing like the opening shot. That is
+ * the least loopable ending available, and it is also the frame a viewer is
+ * looking at when they decide whether to do anything.
+ *
+ * NOT ENFORCED, DELIBERATELY. A rule that failed every reel for not looping
+ * would be a rule that gets switched off. It is written down here because the
+ * fix is a script decision — a closing line that hands back to the hook — and
+ * the person making that decision should find the reason next to the numbers.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export const REPLAY_RATE_TARGET = 1.2;
+
+/**
  * Below this there is nothing to watch.
  *
  * Not a retention rule — a reel this short is a mistake in the script rather

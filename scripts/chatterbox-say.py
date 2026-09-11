@@ -63,13 +63,39 @@ import soundfile as sf  # noqa: E402
 from chatterbox.tts import ChatterboxTTS  # noqa: E402
 
 job = json.load(sys.stdin)
+
+# ─────────────────────────────────────────────────────────────────────────
+# THE REFERENCE IS BUILT HERE, NOT SUPPLIED.
+#
+# Chatterbox has one speaker and he is neither British nor young, and the
+# audience for this app is UK football and barbells. Kokoro has four British
+# male voices and no expression control. So Kokoro speaks a reference passage
+# and Chatterbox performs it: the accent, gender and timbre come from one, the
+# pitch range and emphasis from the other.
+#
+# Both are permissively licensed for commercial use and no human's voice is
+# involved, so there is nobody to get consent from and nobody to impersonate.
+# See the note in lib/speech-prosody.ts for the measurements that chose it.
+#
+# An explicit `prompt` still wins. If somebody records themselves and points
+# this at the file, that is a better reference than anything synthesised, and
+# the consent question answers itself.
+# ─────────────────────────────────────────────────────────────────────────
+prompt = job.get("prompt") or None
+if not prompt and job.get("reference_voice") and job.get("reference_line"):
+    from kokoro_onnx import Kokoro
+    kokoro = Kokoro(job["model"], job["voices"])
+    samples, rate = kokoro.create(
+        job["reference_line"], voice=job["reference_voice"], speed=0.94, lang="en-gb",
+    )
+    prompt = f"{job['out']}/_reference.wav"
+    sf.write(prompt, samples, rate)
+
 model = ChatterboxTTS.from_pretrained(device=job.get("device", "cpu"))
 
 phrases = job["phrases"]
 exaggerations = job.get("exaggerations") or []
 cfgs = job.get("cfgs") or []
-prompt = job.get("prompt") or None
-
 for index, text in enumerate(phrases):
     # Per phrase, or the job's single value, or Chatterbox's own defaults. A
     # caller that shapes nothing still gets a working reel.

@@ -18,8 +18,11 @@ import {
   EXAGGERATION_MAX,
   CFG_MIN,
   CFG_MAX,
+  REFERENCE_VOICE,
+  REFERENCE_LINE,
   type Role,
 } from "./speech-prosody";
+import { APP_NAME } from "./signup-link";
 
 /**
  * The measurement that chose this voice is checked in as
@@ -358,4 +361,43 @@ test("chatterbox keeps its libraries off the answer channel", () => {
   assert.ok(silence < firstHeavyImport,
     "chatterbox is imported before stdout is protected, so anything it prints at import time still lands on the answer channel");
   assert.ok(answer > 0, "the per-phrase answers no longer go to the captured stdout");
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * A BRITISH MALE VOICE FOR A BRITISH FOOTBALL AUDIENCE.
+ *
+ * "The voice doesn't reach our target audience." It did not: it had been
+ * chosen by one measurement — pitch variability — with nothing in it about who
+ * was listening. The app is British throughout and the content is football
+ * drills and barbell standards; the published profile is a young adult male
+ * read, energetic, with a recognisable accent.
+ *
+ * Kokoro has the British male voices and no expression control; Chatterbox has
+ * the expression control and one speaker who is neither. So one speaks the
+ * reference and the other performs it — and nobody's actual voice is cloned,
+ * which is the only version of this that needs no consent from anybody.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("the reference voice is British, male, and not a person", () => {
+  assert.match(REFERENCE_VOICE, /^bm_/,
+    `${REFERENCE_VOICE} is not one of Kokoro's British male voices, which is what the audience research chose`);
+  assert.ok(REFERENCE_LINE.split(/[.!?]/).filter((p) => p.trim()).length >= 3,
+    "the reference is one sentence — a cloner has little to work with, and the voice wobbles between phrases");
+  assert.ok(REFERENCE_LINE.includes(APP_NAME), "the reference is not in the register it will be performing");
+});
+
+/**
+ * ORDERING AGAIN, AND INVISIBLE AGAIN. A recorded human reference is better
+ * than any synthesised one and answers the consent question by existing — so
+ * an explicit prompt has to win. Built first and then overwritten would still
+ * produce a reel, using the wrong voice, silently.
+ */
+test("a supplied reference wins over the built one", () => {
+  const src = readFileSync("scripts/chatterbox-say.py", "utf8");
+  const supplied = src.indexOf('prompt = job.get("prompt") or None');
+  const built = src.indexOf('if not prompt and job.get("reference_voice")');
+  assert.ok(supplied > 0 && built > supplied,
+    "the synthesised reference is not guarded by whether one was supplied");
+  assert.match(src, /reference_line/, "the reference has no words to say");
 });
