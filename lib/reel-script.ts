@@ -41,6 +41,7 @@ import { SKILL_DRILLS } from "./skills";
 import { indexFacts, money, REFERENCE_PROTEIN } from "./protein-index";
 import { standardPages } from "./standards-page";
 import { rankLift } from "./strength-standards";
+import { cardById, cardProblems, CARD_STAGES, type ContentCard } from "./content-cards";
 import { sportLabel } from "./seo";
 import type { SportId } from "./exercises";
 
@@ -885,13 +886,78 @@ function standardsScript(): ReelScript | null {
   ]);
 }
 
-export type ScriptId = "demo-readiness" | "demo-cost" | "drill" | "standards";
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * A CARD REEL IS THE SAME PIPELINE POINTED AT A DIFFERENT PAGE.
+ *
+ * "A full content engine, not just a poor content engine that produces
+ * monotonic vids." Everything here filmed the APP, which lib/content-formats.ts
+ * records is the worst-performing shape in a cold feed — it reads as an advert
+ * on sight and has no human in it.
+ *
+ * The recorder films a ROUTE, though, and nothing requires that route to be
+ * the app. app/studio renders one figure set large enough to be the picture,
+ * built from figures this app computes and roughly nobody else has. So a
+ * knowledge post costs no new recorder, no new voice, no new caption sync — it
+ * is a script with different routes in it.
+ *
+ * SHORT, AND IT LOOPS. The comparison band is 8-20s against the tour's 30:
+ * completion is the signal a feed ranks on, a gap the viewer has to resolve is
+ * what holds them to the end of it, and a loop is counted again.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+function cardScript(card: ContentCard): ReelScript | null {
+  if (cardProblems(card).length) return null;
+  const stageRoute = (n: number) => `/studio/${card.id}/${n}/`;
+  const faceAt = (i: number) => card.faces[Math.min(i, card.faces.length - 1)];
+
+  const beats: Omit<Beat, "at" | "ms">[] = card.lines.map((line, i) => ({
+    route: stageRoute(i + 1),
+    action: `Stage ${i + 1}: ${i + 1 === CARD_STAGES ? "the proof" : faceAt(i).figure}.`,
+    /** The ring goes on the figure the line is about, not the whole card. */
+    focus: i + 1 === CARD_STAGES ? undefined : faceAt(i).figure,
+    /** The pause before the number the whole thing is built to deliver. */
+    hold: i === 1 ? SUSPENSE_MS : undefined,
+    say: line,
+  }));
+
+  /**
+   * THE SIGN-OFF IS ITS OWN BEAT, and it goes back to the first stage.
+   *
+   * Its own beat because a reel's last `say` has to BE the call to action —
+   * lib/reel-plan.ts draws the written end card over that beat's tail and
+   * refuses to draw it over a caption, so a sign-off with a sentence in front
+   * of it loses the only frame that asks for anything.
+   *
+   * Back to the first stage because that is where the reel opened, so it
+   * LOOPS: the cheapest format there is to watch twice, and a replay counts.
+   */
+  beats.push({
+    route: stageRoute(1),
+    action: "Back to the opening shot, for the sign-off.",
+    say: SIGNUP_SPOKEN,
+    tail: END_CARD_MS,
+  });
+  return build(`card-${card.id}`, card.hook, beats);
+}
+
+export type ScriptId =
+  | "demo-readiness" | "demo-cost" | "drill" | "standards"
+  | "card-protein-gap" | "card-bodyweight-gap" | "card-cheapest-protein";
 
 export const SCRIPTS: { id: ScriptId; label: string; note: string }[] = [
   { id: "demo-readiness", label: "Readiness changes the session", note: "The one screen where a number moves because of you" },
   { id: "demo-cost", label: "What protein actually costs", note: "The table, then a recipe, then a priced plan" },
   { id: "drill", label: "One drill, done properly", note: "Setup, volume, and the cue that separates them" },
   { id: "standards", label: "Is your lift any good?", note: "The table, then your own lift ranked against it" },
+  /**
+   * The card formats. Short, faceless, and built on figures this app computes
+   * and nobody else publishes — see lib/content-formats.ts for why these exist
+   * alongside the tours rather than instead of them.
+   */
+  { id: "card-protein-gap", label: "£0.31 against £3.19", note: "The same 30g of protein, ten times the price" },
+  { id: "card-bodyweight-gap", label: "Same bar, different rank", note: "100kg at two bodyweights" },
+  { id: "card-cheapest-protein", label: "The cheapest 30g in the shop", note: "One figure, and what it buys" },
 ];
 
 export function reelScript(id: ScriptId, subject?: string): ReelScript | null {
@@ -899,6 +965,10 @@ export function reelScript(id: ScriptId, subject?: string): ReelScript | null {
   if (id === "demo-cost") return costScript();
   if (id === "drill") return drillScript(subject ?? "");
   if (id === "standards") return standardsScript();
+  if (id.startsWith("card-")) {
+    const card = cardById(id.slice("card-".length));
+    return card ? cardScript(card) : null;
+  }
   return null;
 }
 

@@ -52,7 +52,14 @@ export interface ReelRequest {
  * The value ends up in a workflow that runs shell, and "it came from our own
  * admin page" is not a reason to hand an arbitrary string to it.
  */
-export const REEL_SCRIPTS = ["demo-readiness", "demo-cost", "drill", "standards"] as const;
+export const REEL_SCRIPTS = [
+  "demo-readiness", "demo-cost", "drill", "standards",
+  /**
+   * The card formats. Same recorder, same voice, a different kind of video —
+   * see lib/content-formats.ts for why one shape was the defect.
+   */
+  "card-protein-gap", "card-bodyweight-gap", "card-cheapest-protein",
+] as const;
 
 /** Why this request cannot be sent, or null. */
 export function reelRequestProblem(request: Partial<ReelRequest> | null | undefined): string | null {
