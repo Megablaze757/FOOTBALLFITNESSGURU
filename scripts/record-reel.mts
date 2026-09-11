@@ -36,6 +36,7 @@ import { spokenForm } from "../lib/spoken-numbers";
 import {
   BASE_SPEED, VOICE, shapeGains, shapeRates,
   shapeExpression, EXAGGERATION_BASE, CFG_BASE, REFERENCE_WAV,
+  PITCH_RATIO, SHELF_HZ, SHELF_DB,
 } from "../lib/speech-prosody";
 import { beatAudio, retime, trackClips, type BeatAudio } from "../lib/narration";
 import { layTrack, normalised, readWav, writeWav, type Wav } from "../lib/wav";
@@ -246,6 +247,14 @@ async function narrate(beats: readonly { say: string; hold?: number }[]): Promis
      * thing in the reel. See lib/speech-prosody.ts.
      */
     speeds: shapeRates(flat.map((p) => p.text), Number(process.env.KOKORO_SPEED || BASE_SPEED)),
+    /**
+     * Lower, and not thinner. The shift is formant-preserved and measured at
+     * 0.0ms of drift, so captions stay in sync; the shelf puts back the
+     * phone-band energy the shift moves out of reach. See lib/speech-prosody.ts.
+     */
+    pitch: PITCH_RATIO,
+    shelf_hz: SHELF_HZ,
+    shelf_db: SHELF_DB,
     phrases: flat.map((p) => p.text),
   };
 

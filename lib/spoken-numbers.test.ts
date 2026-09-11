@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { spokenForm, words } from "./spoken-numbers";
-import { BASE_SPEED, RATE, VOICE } from "./speech-prosody";
+import { BASE_SPEED, RATE, VOICE, PITCH_RATIO, SHELF_DB } from "./speech-prosody";
 
 test("numbers become words", () => {
   const cases: [number, string][] = [
@@ -132,4 +132,26 @@ test("the recorder never asks the voice to hurry", () => {
   assert.ok(voiceMatch, "kokoro-say.py no longer has a default voice");
   assert.equal(voiceMatch![1], VOICE,
     "the recorder and its fallback disagree about who is speaking");
+
+  /**
+   * AND THE PITCH, which is a third setting in the same shape and would drift
+   * the same way. It is the one a listener notices first: the complaint that
+   * put it here was "too high pitched", and a fallback stuck at the old value
+   * would put that back on any run that did not send the field.
+   */
+  const pitchMatch = py.match(/job\.get\("pitch", ([0-9.]+)\)/);
+  assert.ok(pitchMatch, "kokoro-say.py no longer has a default pitch");
+  assert.equal(Number(pitchMatch![1]), PITCH_RATIO,
+    "the recorder and its fallback disagree about how low the voice is");
+
+  /**
+   * The shelf is not a tone preference, it is the other half of the shift:
+   * dropping four semitones moves energy out of the band a phone speaker
+   * reproduces, and this puts it back. Shipping one without the other gives a
+   * voice that is lower AND thinner.
+   */
+  const shelfMatch = py.match(/job\.get\("shelf_db", ([0-9.]+)\)/);
+  assert.ok(shelfMatch, "kokoro-say.py no longer has a default shelf");
+  assert.equal(Number(shelfMatch![1]), SHELF_DB,
+    "the pitch shift ships without the correction that makes it survive a phone");
 });

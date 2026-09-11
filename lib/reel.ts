@@ -72,13 +72,14 @@ export const MIN_SCENE_MS = 1100;
  * says the same words in a quarter less time, so every number here was stale
  * by about that much.
  *
- * Refitted across all twenty beats of all four reels, counting SPOKEN words:
- * total predicted within 0.7% of total measured, mean error 513ms, worst
- * 1.76s. Twenty beats is a thinner fit per parameter than eight phrases was,
- * and it is honest about a wider range of material.
+ * Refitted across all twenty beats of all four reels, counting SPOKEN words.
+ * Refitted again when the voice came down to 1.30 and dropped four semitones:
+ * total predicted within 0.6% of total measured, mean error 587ms, worst 2.2s.
+ * Twenty beats is a thinner fit per parameter than eight phrases was, and it
+ * is honest about a wider range of material.
  * ═══════════════════════════════════════════════════════════════════════════
  */
-export const MS_PER_WORD = 137;
+export const MS_PER_WORD = 152;
 
 /**
  * What a phrase costs before its first word. Measured; see above.
@@ -88,7 +89,7 @@ export const MS_PER_WORD = 137;
  * it, and a beat's words are now counted as they are spoken rather than as
  * they are typed, so there are more of them to spread the same seconds over.
  */
-export const MS_PER_PHRASE = 1_196;
+export const MS_PER_PHRASE = 1_261;
 
 /** How long the last line of a card sits complete before the cut. */
 export const SETTLE_MS = 320;

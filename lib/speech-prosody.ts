@@ -102,7 +102,52 @@ export const VOICE = "bm_fable";
  * playing back faster, which is the difference between a person hurrying and
  * a tape running fast.
  */
-export const BASE_SPEED = 1.42;
+export const BASE_SPEED = 1.30;
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * "FEELS A BIT ROBOTIC AND TOO HIGH PITCHED. I WANT VOICE TO FEEL RELATABLE."
+ *
+ * The pitch complaint is a regression this file caused. Choosing bm_fable on
+ * pace and dead air moved the median from bm_lewis's 96Hz to 125Hz, and
+ * nothing in that decision was looking at pitch HEIGHT — only at pitch
+ * VARIABILITY, which is a different number that happened to be the one with an
+ * instrument attached. 125Hz is at the top of the male range.
+ *
+ * WHY NOT JUST GO BACK TO bm_lewis. Because it is the least expressive voice
+ * here, and "robotic" is the other half of the same sentence:
+ *
+ *                                   dead%   artic   F0 SD    Hz   phone band
+ *   bm_lewis 1.26, natively low        26     205    4.01    97       48.3%
+ *   bm_fable 1.42, as shipped          17     189    4.95   123       41.1%
+ *   bm_fable 1.30, -4st, +5dB shelf    19     179    5.01   104       41.4%
+ *
+ * Shifting bm_fable down gets the pitch bm_lewis has while KEEPING the
+ * expression and the low dead air that made it worth choosing. rubberband
+ * shifts with formants preserved, so it is a lower voice rather than a slowed
+ * tape, and it changes the duration by a measured 0.0ms — captions stay in
+ * sync to the millisecond.
+ *
+ * THE SHELF IS NOT A TONE PREFERENCE, IT IS PUTTING BACK WHAT THE SHIFT TOOK.
+ * Moving everything down 4 semitones moves energy out of the 400Hz-6kHz band a
+ * phone speaker can actually reproduce — measured, 41.1% falls to 34.9%, and a
+ * reel is watched on a phone. A high shelf restores it to 41.4%, which is where
+ * it started. Without this the voice is lower AND thinner, and thin is most of
+ * what "robotic" sounds like.
+ *
+ * Speed comes down with it, 1.42 to 1.30: articulation 189 to 179 words a
+ * minute, still inside the energetic band and no longer the top of it. The
+ * previous pass had drill running at 237.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export const PITCH_SEMITONES = -4;
+
+/** The ratio rubberband wants, which is what the shift actually is. */
+export const PITCH_RATIO = Math.round(2 ** (PITCH_SEMITONES / 12) * 1e5) / 1e5;
+
+/** Where the shelf starts, and how much of the band the shift cost. */
+export const SHELF_HZ = 1_000;
+export const SHELF_DB = 5;
 
 /** What a phrase is doing, which is what decides how fast it is said. */
 export type Role = "hook" | "setup" | "figure" | "payoff";
