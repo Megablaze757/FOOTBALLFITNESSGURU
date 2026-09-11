@@ -57,17 +57,52 @@ FRAME_MS = 25
 #: measure does not move when the level does.
 SILENCE_FLOOR_DB = 35
 
+#: How far under the 95th-percentile frame a frame may be and still be asked
+#: for a pitch. Deeper is not more thorough: at 25dB the quiet frames admitted
+#: are ones autocorrelation cannot read, and they come back as octave errors
+#: that inflate a reel's measured range to 25 semitones — over two octaves,
+#: which no speaker does. Relative to the audio, so it does not move with level.
+VOICED_FLOOR_DB = 15
+
+#: How periodic a frame must be to count as voiced, as a fraction of its own
+#: zero-lag energy. 0.35 is the usual textbook bar; 0.45 costs a few genuine
+#: frames and refuses considerably more nonsense.
+VOICED_AC = 0.45
+
 
 def f0_track(x, sr, fmin=60, fmax=350):
-    """Autocorrelation pitch tracker. Voiced frames only. Same as measure-voice.py."""
+    """
+    Autocorrelation pitch tracker. Voiced frames only.
+
+    ─────────────────────────────────────────────────────────────────────
+    THE VOICING THRESHOLD IS RELATIVE, AND IN measure-voice.py IT IS NOT.
+    IT ALSO HAS TO BE HIGH ENOUGH, WHICH TOOK A SECOND GO TO GET RIGHT.
+
+    That one is 0.015 of full scale, which is a threshold only if every file
+    is at the same level. Run it either side of the mastering chain — which
+    raises a reel about 8dB and cannot touch pitch — and it reports F0 SD
+    going from 5.03 to 9.49 semitones and the median from 126Hz to 157Hz.
+    None of that happened. The louder file simply pushed low-energy frames
+    and breath noise over a fixed bar, and noise autocorrelates to nonsense.
+
+    So the bar is set from the audio: 32dB under the loud frames, the same
+    way the dead-air floor is. The self-test has a control for it now — the
+    same clip at half amplitude must measure the same pitch.
+    ─────────────────────────────────────────────────────────────────────
+    """
     win = int(0.040 * sr)
     hop = int(0.010 * sr)
     lo, hi = int(sr / fmax), int(sr / fmin)
+    starts = range(0, len(x) - win, hop)
+    rms = np.array([np.sqrt((x[i:i + win].astype(np.float64) ** 2).mean()) for i in starts])
+    if not len(rms):
+        return np.array([])
+    floor = np.percentile(rms, 95) * (10 ** (-VOICED_FLOOR_DB / 20))
     out = []
-    for i in range(0, len(x) - win, hop):
-        f = x[i:i + win].astype(np.float64)
-        if np.sqrt((f ** 2).mean()) < 0.015:
+    for n, i in enumerate(starts):
+        if rms[n] < floor:
             continue
+        f = x[i:i + win].astype(np.float64)
         f = f - f.mean()
         ac = np.correlate(f, f, "full")[win - 1:]
         if ac[0] <= 0:
@@ -76,7 +111,7 @@ def f0_track(x, sr, fmin=60, fmax=350):
         if len(seg) == 0:
             continue
         lag = int(np.argmax(seg)) + lo
-        if ac[lag] / ac[0] < 0.35:
+        if ac[lag] / ac[0] < VOICED_AC:
             continue
         out.append(sr / lag)
     return np.array(out)
@@ -164,7 +199,15 @@ def self_test():
         print(row(label, s))
     print()
 
+    quiet_copy = write("quiet-copy.wav", x * 0.12)
+    d = score(quiet_copy, text)
     checks = [
+        # Mastering raises a reel about 8dB and cannot change its pitch. A
+        # fixed voicing threshold reported 5.03 -> 9.49 semitones across it.
+        # At 0.12 of full scale a fixed 0.015 bar rejects most of the speech
+        # and reports 2.92 semitones against the true 4.97.
+        ("pitch stats do not move when the level does", abs(d["f0sd"] - base["f0sd"]) < 0.25),
+        ("median pitch does not move when the level does", abs(d["med"] - base["med"]) < 3),
         ("dead air rises when silence is added", a["silence"] > base["silence"] + 0.05),
         ("pace falls when silence is added", a["wpm"] < base["wpm"]),
         ("pace rises ~25% when sped up", 1.20 < b["wpm"] / base["wpm"] < 1.30),

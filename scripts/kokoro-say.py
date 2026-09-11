@@ -25,7 +25,7 @@ kokoro = Kokoro(job["model"], job["voices"])
 # A British voice, because the app is British throughout — pounds, "programme",
 # stone and pounds for bodyweight. A US voice reading £0.31 is a small wrongness
 # on every single reel.
-voice = job.get("voice", "bf_alice")
+voice = job.get("voice", "bm_fable")
 lang = "en-gb" if voice.startswith(("b",)) else "en-us"
 
 for index, text in enumerate(job["phrases"]):
@@ -39,7 +39,7 @@ for index, text in enumerate(job["phrases"]):
     # `speed` is still read as a fallback so an older caller keeps working.
     # ─────────────────────────────────────────────────────────────────────
     speeds = job.get("speeds") or []
-    speed = speeds[index] if index < len(speeds) else job.get("speed", 0.94)
+    speed = speeds[index] if index < len(speeds) else job.get("speed", 1.42)
     samples, rate = kokoro.create(text, voice=voice, speed=speed, lang=lang)
     path = f"{job['out']}/{index}.wav"
     sf.write(path, samples, rate)

@@ -134,9 +134,15 @@ test("nothing in, nothing out", () => {
   assert.deepEqual(shapeRates([]), []);
 });
 
-test("the base rate is under natural pace, not over it", () => {
-  assert.ok(BASE_SPEED <= 1.0, `${BASE_SPEED}x is faster than natural`);
-  assert.ok(BASE_SPEED >= 0.85, `${BASE_SPEED}x is slow enough to sound wrong`);
+/**
+ * Was "under natural pace, not over it", at 0.94. That produced 122 words a
+ * minute with 35% of the reel silent — see the note above VOICE. The band is
+ * now set by measured articulation across all four reels rather than by a
+ * rule of thumb about explainer voiceover.
+ */
+test("the base rate is brisk, and still a person talking", () => {
+  assert.ok(BASE_SPEED <= 1.6, `${BASE_SPEED}x stops sounding like speech`);
+  assert.ok(BASE_SPEED >= 1.2, `${BASE_SPEED}x is back in the range that read as sleepy`);
 });
 
 // ═══════════════════════════════════════════════════════════════════════════

@@ -63,12 +63,32 @@ export const MIN_SCENE_MS = 1100;
  * The recorder does not depend on this — it validates the RETIMED plan, built
  * from real audio, so the 30s ceiling was always checked against reality. This
  * is so the preview tells the truth before three minutes are spent.
+ *
+ * ─────────────────────────────────────────────────────────────────────────
+ * REFITTED FOR A VOICE THAT SPEAKS HALF AS FAST AGAIN.
+ *
+ * The figures above are Chatterbox cloning a reference read at 0.94. The reels
+ * now run Kokoro bm_fable at 1.42 — see lib/speech-prosody.ts for why — which
+ * says the same words in a quarter less time, so every number here was stale
+ * by about that much.
+ *
+ * Refitted across all twenty beats of all four reels, counting SPOKEN words:
+ * total predicted within 0.7% of total measured, mean error 513ms, worst
+ * 1.76s. Twenty beats is a thinner fit per parameter than eight phrases was,
+ * and it is honest about a wider range of material.
  * ═══════════════════════════════════════════════════════════════════════════
  */
-export const MS_PER_WORD = 199;
+export const MS_PER_WORD = 137;
 
-/** What a phrase costs before its first word. Measured; see above. */
-export const MS_PER_PHRASE = 1_040;
+/**
+ * What a phrase costs before its first word. Measured; see above.
+ *
+ * Up, while the per-word rate came down, and the two moved together for a
+ * reason: this absorbs the gap AFTER the phrase as well as the onset before
+ * it, and a beat's words are now counted as they are spoken rather than as
+ * they are typed, so there are more of them to spread the same seconds over.
+ */
+export const MS_PER_PHRASE = 1_196;
 
 /** How long the last line of a card sits complete before the cut. */
 export const SETTLE_MS = 320;

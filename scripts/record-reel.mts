@@ -123,20 +123,38 @@ async function signIn(page: import("playwright").Page, at: string): Promise<bool
  * Chatterbox has one, clears that ceiling on every setting, and is free and
  * offline too; it is bigger, slower, and needs weights cached.
  *
- * Chatterbox is the DEFAULT now, and it was not until it had been listened to
+ * Chatterbox was the DEFAULT, and it was not until it had been listened to
  * and measured on a finished recording rather than on a sample:
  *
  *   bf_alice, Kokoro, as it shipped   F0 SD 3.94 st   median 222 Hz
  *   bm_lewis through Chatterbox       F0 SD 5.27 st   median 124 Hz
  *
- * A British male voice for a British football audience, +34% on pitch
- * variation, and the recorded reel's captions land on the voice to the
- * millisecond. Kokoro remains behind REEL_VOICE=kokoro: it needs no 3GB of
- * weights and runs several times faster, which is what a silent smoke test or
- * a machine without the cache wants.
+ * ─────────────────────────────────────────────────────────────────────────
+ * AND KOKORO IS THE DEFAULT AGAIN, BECAUSE PITCH WAS NOT THE PROBLEM.
+ *
+ * "The voice is putting me to sleep it needs to be exciting." Every line of
+ * the comparison above is about pitch, because pitch was the only thing
+ * measured. Chatterbox has no SPEED control at all — the note below about
+ * cfg_weight being "the equivalent lever" is the assumption that broke — and
+ * it turns out to regress to about 155 words a minute of articulation
+ * whatever reference it is given and whatever cfg it is handed. Measured
+ * across all four finished reels:
+ *
+ *                          dead%   wpm   artic   F0 SD   dyn    length
+ *   Chatterbox bm_lewis      35    122    187     4.92   9.8    23.4s
+ *   Kokoro bm_fable 1.42     19    164    201     4.87   9.8    17.4s
+ *
+ * Same pitch variability, same dynamic contrast, nearly half the dead air,
+ * a third more pace, and six seconds given back inside a thirty-second
+ * format. Kokoro's speed drives its duration predictor rather than resampling,
+ * so this is a person talking faster and not a tape running fast.
+ *
+ * Chatterbox stays behind REEL_VOICE=chatterbox, with its reference clip and
+ * its expression shaping intact. It is the better engine on the axis it was
+ * chosen for, and that axis was already fine.
  * ═══════════════════════════════════════════════════════════════════════════
  */
-const ENGINE = (process.env.REEL_VOICE || "chatterbox").toLowerCase();
+const ENGINE = (process.env.REEL_VOICE || "kokoro").toLowerCase();
 
 async function narrate(beats: readonly { say: string; hold?: number }[]): Promise<BeatAudio[]> {
   const model = process.env.KOKORO_MODEL;
@@ -210,6 +228,11 @@ async function narrate(beats: readonly { say: string; hold?: number }[]): Promis
      * the range speech research calls monotone. bf_alice reaches 3.96 on the
      * same line and carries the most energy in the band a phone speaker can
      * reproduce. scripts/measure-voice.py is the measurement, checked in.
+     *
+     * It is bm_fable now, and picking on that one line is how it got missed:
+     * across all four whole narrations it leaves less than half the dead air
+     * of any other voice here at the same pitch variability. See VOICE in
+     * lib/speech-prosody.ts and scripts/measure-excitement.py.
      */
     voice: process.env.KOKORO_VOICE || VOICE,
     /**

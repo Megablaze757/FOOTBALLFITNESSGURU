@@ -31,18 +31,78 @@
  *
  * 2.1x the pitch variation, from under the monotone threshold to inside the
  * animated range — and tempo that changes four times instead of never.
+ *
+ * HISTORY, NOT CURRENT SETTINGS. bf_alice is no longer the voice and 0.94 is
+ * no longer the rate — see the note above VOICE below, which records what
+ * measuring the three axes this one never looked at turned up. The reasoning
+ * here still holds; it was just incomplete.
  * ═══════════════════════════════════════════════════════════════════════════
  */
 
-/** Measured most expressive of the British voices that also survives a phone speaker. */
-export const VOICE = "bf_alice";
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * "THE VOICE IS PUTTING ME TO SLEEP IT NEEDS TO BE EXCITING."
+ *
+ * It measurably was, and the reason is that every voice decision in this file
+ * had been made on ONE axis — pitch variability — because that was the only
+ * axis anyone had built an instrument for. Measuring the shipped narration of
+ * all four reels on the axes nobody had:
+ *
+ *   pace          122 wpm    energetic short-form is 180-220
+ *   dead air       35%       over a third of the reel is silence
+ *   articulation  187 wpm    the speaking itself, pauses removed
+ *   pitch SD      4.92 st    healthy, and the one that was optimised
+ *
+ * The one axis that was measured is the one axis that was fine. A reel that
+ * says 122 words a minute and is silent 35% of the time is not a matter of
+ * taste; it is half the rate of the register it is aiming at.
+ *
+ * WHAT CHANGED. Four British male voices, three speeds, measured across all
+ * four reels rather than one line — the mistake this file already records
+ * making twice. bm_fable at 1.42 against Chatterbox as it shipped:
+ *
+ *                        dead%   wpm   artic   F0 SD   dyn    length
+ *   Chatterbox bm_lewis    35    122    187     4.92   9.8    23.4s
+ *   Kokoro bm_fable 1.42   19    164    201     4.87   9.8    17.4s
+ *
+ * Dead air nearly halved, pace up a third, articulation inside the band — and
+ * pitch variability and dynamic contrast UNCHANGED, which is the part that
+ * makes this a straight win rather than a trade. It also gives six seconds
+ * back in a thirty-second format.
+ *
+ * bm_fable was available the whole time and was passed over because the choice
+ * was made on a single line, where it came second. Across four narrations it
+ * leaves less than half the dead air of any other voice here. That is the same
+ * error as the bm_george/bm_lewis reversal recorded further down this file,
+ * made a third time, and the lesson is now a rule: a voice is chosen on whole
+ * narrations or it is not chosen.
+ *
+ * WHAT IT COSTS, honestly: Chatterbox keeps a wider measured pitch RANGE
+ * (16.3 against 14.5 semitones) and about twice the rate of upward pitch
+ * movement. Both of those are the two measures most sensitive to tracker
+ * jitter, and Chatterbox's track is the noisier of the two, so some of that
+ * gap is instrument rather than voice. It is not none of it.
+ *
+ * See scripts/measure-excitement.py, which is checked in and self-tests.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export const VOICE = "bm_fable";
 
 /**
- * The baseline. Explainer voiceover is read slightly under natural pace: the
- * listener is also reading captions and looking at a screen they have never
- * seen, and both cost time the speaker has to give back.
+ * The baseline.
+ *
+ * Was 0.94 — "explainer voiceover is read slightly under natural pace" — which
+ * is true of an explainer somebody chose to sit down and watch and false of
+ * something competing with a thumb. At 1.42 the four reels average 201 words a
+ * minute of articulation, which is the middle of the energetic short-form
+ * band; 1.5 reaches 209 and 1.35 reaches 190, and all three are defensible.
+ *
+ * NOT A RESAMPLE. Kokoro's speed drives its duration predictor, so the median
+ * pitch is 125Hz at 1.42 and 128Hz at 0.94 — it speaks faster rather than
+ * playing back faster, which is the difference between a person hurrying and
+ * a tape running fast.
  */
-export const BASE_SPEED = 0.94;
+export const BASE_SPEED = 1.42;
 
 /** What a phrase is doing, which is what decides how fast it is said. */
 export type Role = "hook" | "setup" | "figure" | "payoff";
@@ -51,8 +111,8 @@ export type Role = "hook" | "setup" | "figure" | "payoff";
  * Rate per role, as a multiplier on BASE_SPEED.
  *
  * The spread matters more than the exact values: a listener hears CHANGE, and
- * a reel whose every phrase is 0.94 has none to hear. Kept inside ±12% because
- * past that the voice stops sounding like one person.
+ * a reel whose every phrase is spoken at BASE_SPEED has none to hear. Kept
+ * inside ±12% because past that the voice stops sounding like one person.
  */
 export const RATE: Record<Role, number> = {
   /** It has to land, and it is competing with a thumb. */

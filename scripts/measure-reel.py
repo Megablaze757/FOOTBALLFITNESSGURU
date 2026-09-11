@@ -58,16 +58,16 @@ for script in job["plan"]:
     # screen next to the length rather than in a document. See RETENTION_BANDS
     # in lib/reel-retention.ts for the figures and where they come from.
     aim = next(b["aim"] for b in job["bands"] if total < (b["underMs"] or float("inf")))
-    # KOKORO'S TIMING, AND THE PIPELINE RECORDS WITH CHATTERBOX. Loading
-    # Chatterbox to estimate four reels costs ten minutes, which is not what a
-    # studio check is for — but an unlabelled number from the wrong engine is
-    # how a reel passes here and is refused on the runner.
+    # KOKORO'S TIMING, AND THE PIPELINE RECORDS WITH KOKORO TOO. These were
+    # different engines for a while, and an unlabelled number from the wrong
+    # one is how a reel passes here and is refused on the runner.
     print(f"{script['id']:<16} {total/1000:5.1f}s   busiest {route} {pct:.0%}"
           f"   needs {aim:.0%} completion{flag}")
 
-print("\nTimed with Kokoro; recording uses Chatterbox, which speaks more slowly."
-      "\nThe 2.2% gap measured earlier was against an estimator that has since"
-      "\nchanged, so it is not carried forward — treat anything within a second"
-      "\nof the ceiling as over it until the two are compared again.")
+print("\nTimed with Kokoro, which is what records these now — so this is no"
+      "\nlonger an estimate across two engines. The estimator was refitted for"
+      "\nit over all twenty beats of all four reels and lands within 0.7% in"
+      "\ntotal, but up to 1.8s out on a single beat: treat anything within a"
+      "\nsecond of the ceiling as over it.")
 
 sys.exit(1 if bad else 0)

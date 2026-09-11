@@ -37,10 +37,10 @@ on:
         type: boolean
         default: true
       engine:
-        description: "Which voice. Chatterbox has expression control; Kokoro is faster."
+        description: "Which voice. Kokoro is faster and paces better; Chatterbox has expression control."
         type: choice
-        options: [chatterbox, kokoro]
-        default: chatterbox
+        options: [kokoro, chatterbox]
+        default: kokoro
 
 jobs:
   record:
@@ -66,13 +66,23 @@ jobs:
       # on the same two lines with the same tracker, on every setting, and is
       # free and offline too — it is just bigger and slower.
       #
-      # Chatterbox is the default, measured on a finished recording rather
+      # Chatterbox was the default, measured on a finished recording rather
       # than a sample: F0 SD 5.27 against Kokoro's 3.94, median 124 Hz against
-      # 222, and a British male voice for a British football audience. Kokoro
-      # stays one word away — it needs no weights cache and runs several times
-      # faster, which is what a smoke test wants.
+      # 222, and a British male voice for a British football audience.
+      #
+      # KOKORO IS THE DEFAULT AGAIN — "the voice is putting me to sleep". Every
+      # figure above is pitch, because pitch was the only thing measured.
+      # Chatterbox has no speed control and settles around 155 words a minute
+      # of articulation whatever it is given. Over all four finished reels,
+      # Kokoro bm_fable at 1.42 leaves 19% dead air against 35% and speaks 164
+      # words a minute against 122, at the same pitch variability (4.87 against
+      # 4.92) and the same dynamic contrast. It is also the one that needs no
+      # weights cache and runs several times faster.
+      #
+      # Chatterbox stays one word away, reference clip and all: it is better on
+      # the axis it was picked for, and that axis was not the broken one.
       # ═══════════════════════════════════════════════════════════════════
-      REEL_VOICE: ${{ inputs.engine || github.event.client_payload.engine || 'chatterbox' }}
+      REEL_VOICE: ${{ inputs.engine || github.event.client_payload.engine || 'kokoro' }}
     steps:
       # ═══════════════════════════════════════════════════════════════════
       # WHAT IS CONFIGURED, BEFORE THREE MINUTES ARE SPENT FINDING OUT.
