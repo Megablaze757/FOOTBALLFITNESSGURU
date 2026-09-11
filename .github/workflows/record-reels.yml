@@ -42,7 +42,7 @@ on:
         options: [kokoro, chatterbox]
         default: kokoro
       music:
-        description: "Path to a music track you have the right to use. Blank records no bed."
+        description: "A track id from lib/stock-audio.ts (e.g. dnb-loop), or a path to your own. Blank records no bed."
         type: string
         default: ""
 
@@ -337,6 +337,18 @@ jobs:
           # larger lever this cannot pull: a trending sound chosen in the
           # platform's own editor at posting time.
           # ═══════════════════════════════════════════════════════════════
+          # A TRACK ID RESOLVES TO A FETCH. lib/stock-audio.ts holds CC0 tracks
+          # that have already passed the niche check, with their source and
+          # licence recorded; fetch-music.mts pulls one and re-runs the check on
+          # what actually arrived, because a URL is a promise somebody else
+          # keeps. A path is still accepted for a track of your own.
+          if [ -n "${REEL_MUSIC:-}" ] && [ ! -f "$REEL_MUSIC" ]; then
+            if node --import tsx scripts/fetch-music.mts "$REEL_MUSIC" reels/bed.wav; then
+              REEL_MUSIC=reels/bed.wav
+            else
+              echo "::error::\"$REEL_MUSIC\" is neither a file nor a known track id"; exit 1
+            fi
+          fi
           if [ -n "${REEL_MUSIC:-}" ] && [ -f "$REEL_MUSIC" ]; then
             # The wrong KIND of music is silent until it is posted. An acoustic
             # ballad under a reel about a 100kg bench is wrong in a way nobody
