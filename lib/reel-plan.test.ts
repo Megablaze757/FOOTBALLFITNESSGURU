@@ -362,3 +362,61 @@ test("a single-line phrase in a short span is left as one caption", () => {
   const caps = captionsFor({ at: 0, ms: 2_400, say: "Same bar." }, [{ atMs: 0, ms: 2_400 }]);
   assert.equal(caps.length, 1);
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// A FASTER VOICE MAKES SHORT LINES UNREADABLE, AND THE FIX IS NOT MORE TIME.
+//
+// The runner refused a reel with: beat 2: "Same bar." is on screen for 967ms —
+// under 1000ms the eye does not land on it at all. Correct, and not something
+// the plan can stretch: that caption ends when the next phrase starts speaking,
+// and when it is the LAST phrase of its beat it ends when the beat does.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** A beat whose final phrase is spoken too fast to read on its own. */
+const briefTail = {
+  at: 0,
+  ms: 4_000,
+  say: "One hundred kilos at sixty is exceptional. At one twenty, novice. Same bar.",
+  clips: [{ atMs: LEAD_MS }, { atMs: 1_900 }, { atMs: 3_100 }],
+};
+
+test("a short last phrase is merged backward rather than flashed", () => {
+  const captions = captionsFor(briefTail, briefTail.clips);
+  assert.ok(captions.length, "no captions at all");
+  for (const c of captions) {
+    assert.ok(c.ms >= MIN_CAPTION_MS,
+      `"${c.text}" is on screen for ${Math.round(c.ms)}ms — under ${MIN_CAPTION_MS}ms`);
+  }
+  // The words all survive the merge; nothing is dropped to make room.
+  assert.ok(captions.map((c) => c.text).join(" ").includes("Same bar"),
+    "the merged-away phrase lost its words");
+});
+
+test("a short middle phrase shares a card with the one after it", () => {
+  const beat = {
+    at: 0,
+    ms: 5_000,
+    say: "Means nothing. Against your bodyweight? Means everything. And that is the whole idea.",
+    clips: [{ atMs: LEAD_MS }, { atMs: 700 }, { atMs: 1_400 }, { atMs: 2_300 }],
+  };
+  const captions = captionsFor(beat, beat.clips);
+  for (const c of captions) {
+    assert.ok(c.ms >= MIN_CAPTION_MS,
+      `"${c.text}" is on screen for ${Math.round(c.ms)}ms — under ${MIN_CAPTION_MS}ms`);
+  }
+});
+
+/**
+ * Merging is for phrases that CANNOT have their own card. A beat with room
+ * must still caption phrase by phrase, or every reel becomes two long cards.
+ */
+test("phrases with room enough keep their own cards", () => {
+  const beat = {
+    at: 0,
+    ms: 8_000,
+    say: "Every other app decided your week on Sunday. PocketAthlete asks first.",
+    clips: [{ atMs: LEAD_MS }, { atMs: 4_000 }],
+  };
+  const captions = captionsFor(beat, beat.clips);
+  assert.ok(captions.length >= 2, `${captions.length} caption(s) — the phrases were merged unnecessarily`);
+});

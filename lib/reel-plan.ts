@@ -201,7 +201,32 @@ export function captionsFor(
      * never changes the count; if it ever does, fall back rather than lie.
      */
     if (spoken.length === clips.length) {
-      const out: Caption[] = [];
+      /**
+       * ═══════════════════════════════════════════════════════════════════
+       * TWO BRIEF PHRASES SHARE A CARD, BECAUSE ONE OF THEM CANNOT HAVE ONE.
+       *
+       * A caption runs from its phrase's onset to the NEXT phrase's onset, so
+       * its length is that phrase's speaking time plus the gap after it, and
+       * neither is under this function's control. Speed the voice up and short
+       * lines stop clearing the time an eye needs: the runner refused a reel
+       * over "Same bar." at 967ms against a 1000ms minimum. That is the right
+       * refusal, and not a span this could stretch — the next phrase is
+       * already speaking.
+       *
+       * What a subtitler does with two rapid short lines is put them on one
+       * card, and it works here for a reason particular to this renderer: the
+       * words are drawn one at a time with the spoken one lit, so a card
+       * holding two phrases still tracks the voice through both.
+       *
+       * FORWARD FIRST, THEN BACKWARD FOR THE TAIL. A phrase whose span is too
+       * short absorbs the one after it. The LAST phrase has nothing after it
+       * to absorb — which is exactly the "Same bar." case, a short line ending
+       * a beat — so a final group still under the minimum merges into the one
+       * before it instead. Merging backward leaves the reel's length alone,
+       * where padding the beat would put back the dead air this pass removed.
+       * ═══════════════════════════════════════════════════════════════════
+       */
+      const groups: { texts: string[]; from: number; until: number }[] = [];
       spoken.forEach((phrase, i) => {
         /**
          * ═══════════════════════════════════════════════════════════════════
@@ -227,9 +252,28 @@ export function captionsFor(
          */
         const from = beat.at + (i === 0 ? Math.max(0, clips[0].atMs - LEAD_MS) : clips[i].atMs);
         const until = beat.at + (i + 1 < clips.length ? clips[i + 1].atMs : budget);
-        const span = Math.max(1, until - from);
-        out.push(...spread(fitToSpan(phrase.text, span), from, span));
+        const open = groups[groups.length - 1];
+        if (open && open.until - open.from < MIN_CAPTION_MS) {
+          open.texts.push(phrase.text);
+          open.until = until;
+        } else {
+          groups.push({ texts: [phrase.text], from, until });
+        }
       });
+
+      const last = groups[groups.length - 1];
+      if (groups.length > 1 && last.until - last.from < MIN_CAPTION_MS) {
+        const before = groups[groups.length - 2];
+        before.texts.push(...last.texts);
+        before.until = last.until;
+        groups.pop();
+      }
+
+      const out: Caption[] = [];
+      for (const group of groups) {
+        const span = Math.max(1, group.until - group.from);
+        out.push(...spread(fitToSpan(group.texts.join(" "), span), group.from, span));
+      }
       if (out.length) return out;
     }
   }
