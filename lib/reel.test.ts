@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { SKILL_DRILLS } from "./skills";
 import {
-  holdFor, speechMs, reelScenes, reelDuration, sceneAt, reelFrameSvg, pickMimeType, fileExtension,
+  holdFor, speechMs, spokenWords, reelScenes, reelDuration, sceneAt, reelFrameSvg, pickMimeType, fileExtension,
   MIN_SCENE_MS, MIN_REEL_MS, MAX_REEL_MS, REEL_MIME_TYPES, closingFact,
   inspectRecording, isPostable, requestsH264, reelSteps, REEL_FPS, emphasise, type Scene,
 } from "./reel";
@@ -320,4 +320,39 @@ test("the estimate is close enough to trust", () => {
   // they replace was 29.1s. Anything near the old figure is the old bug back.
   assert.ok(total > 15_000, `${Math.round(total)}ms — back to the optimistic estimate`);
   assert.ok(total < 30_000, `${Math.round(total)}ms — now over-estimating instead`);
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE ESTIMATE WAS WORST ON THE BEATS THAT CARRY THE CONTENT.
+ *
+ * Every reel here is built on numbers — prices, weights, gram counts — and a
+ * written token like "100kg" is one word on the page and four in the mouth.
+ * The estimator's worst beat was three weights in a row, predicted 5.6s and
+ * actually 7.9s.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("a number counts as the words it is actually said in", () => {
+  assert.equal(spokenWords("one two three"), 3);
+  // "sixty kilograms", "one hundred kilograms".
+  assert.equal(spokenWords("60kg"), 2);
+  assert.equal(spokenWords("100kg"), 3);
+  // "three pounds nineteen" — the punctuation is not a word and the digits are.
+  assert.equal(spokenWords("£3.19"), 3);
+  assert.ok(spokenWords("100kg at 60kg bodyweight") > "100kg at 60kg bodyweight".split(" ").length,
+    "a line of weights is counted as if the digits were silent");
+});
+
+test("a word with no digits in it is still one word", () => {
+  assert.equal(spokenWords("PocketAthlete, free, link in the bio."), 6);
+  assert.equal(spokenWords("   spaced   out   "), 2);
+  assert.equal(spokenWords(""), 0);
+});
+
+/** The whole point: the beat that was worst is no longer wildly short. */
+test("a beat of weights is estimated longer than a beat of short words", () => {
+  const weights = speechMs("100kg at 60kg bodyweight is exceptional. At 120kg, novice.");
+  const words = speechMs("Right at the top of the list. Every one of them.");
+  assert.ok(weights > words,
+    `${Math.round(weights)}ms for three weights against ${Math.round(words)}ms for plain words`);
 });

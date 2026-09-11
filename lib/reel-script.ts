@@ -32,7 +32,7 @@
 
 import { beatFloorMs } from "./caption-lines";
 import { movesMs, type Move } from "./reel-moves";
-import { holdFor, speechMs, MIN_SCENE_MS, MAX_REEL_MS, MS_PER_WORD } from "./reel";
+import { holdFor, speechMs, spokenWords, MIN_SCENE_MS, MAX_REEL_MS, MS_PER_WORD } from "./reel";
 import { SUSPENSE_MS } from "./narration";
 import { hookText, HOOK_MAX_WORDS } from "./reel-kinds";
 import { END_CARD_MS } from "./reel-plan";
@@ -158,7 +158,7 @@ function build(id: string, hook: string, raw: Omit<Beat, "at" | "ms">[]): ReelSc
     hook: hookText(hook),
     beats,
     totalMs: beats.reduce((n, b) => n + b.ms, 0),
-    words: beats.reduce((n, b) => n + (b.say ? b.say.trim().split(/\s+/).length : 0), 0),
+    words: beats.reduce((n, b) => n + (b.say ? spokenWords(b.say) : 0), 0),
   };
 }
 
