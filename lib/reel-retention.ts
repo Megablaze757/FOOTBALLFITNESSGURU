@@ -328,11 +328,23 @@ export function retentionProblems(plan: ReelPlan): RetentionProblem[] {
      * A beat with no captions at all is the original case and still counts:
      * nothing changes for its entire length.
      */
-    const stillFor = step.captions.length
-      ? Math.max(...step.captions.map((c) => c.ms))
-      : step.ms;
+    /**
+     * NAMED, NOT JUST COUNTED. This said "6s on one screen doing one thing"
+     * and nothing else — true, and it cost a recording run and a round of
+     * guesswork to find out WHICH of a beat's captions was the six seconds.
+     * A diagnostic that makes you go and look is half a diagnostic.
+     */
+    const longest = step.captions.length
+      ? step.captions.reduce((worst, c) => (c.ms > worst.ms ? c : worst))
+      : null;
+    const stillFor = longest ? longest.ms : step.ms;
     if (stillFor > MAX_HOLD_MS) {
-      say(`${Math.round(stillFor / 1000)}s on one screen doing one thing`, step.index);
+      say(
+        longest
+          ? `"${longest.text}" holds the screen for ${(stillFor / 1000).toFixed(1)}s`
+          : `${(stillFor / 1000).toFixed(1)}s on one screen with nothing on it`,
+        step.index,
+      );
     }
     onRoute.set(step.route, (onRoute.get(step.route) ?? 0) + step.ms);
   }

@@ -103,8 +103,16 @@ test("a caption too brief to read is refused", () => {
 
 test("a single beat that just sits there is refused", () => {
   const problems = retentionProblems(plan(run([{ ms: 7_000 }, { ms: 3_000, route: "/b" }])));
-  assert.ok(problems.some((p) => /one screen doing one thing/.test(p.problem)),
+  /**
+   * Matched on the CAPTION being named rather than on the old wording.
+   * "6s on one screen doing one thing" was true and told you nothing else —
+   * it cost a recording run and a round of guesswork to find which of a
+   * beat's captions was the six seconds, so the message quotes it now.
+   */
+  assert.ok(problems.some((p) => /holds the screen for/.test(p.problem)),
     problems.map((p) => p.problem).join("; "));
+  assert.ok(problems.some((p) => /"One two three four five six"/.test(p.problem)),
+    "the message no longer says which caption is holding it");
 });
 
 /**

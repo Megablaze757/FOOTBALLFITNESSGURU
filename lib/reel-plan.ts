@@ -307,7 +307,18 @@ export function captionsFor(
  */
 function fitToSpan(text: string, span: number): string[] {
   const base = captionLines(text);
-  if (base.length < 2 && span >= MIN_CAPTION_MS) return base;
+  /**
+   * THE EARLY RETURN HAS TO CHECK BOTH ENDS. This asked only whether the span
+   * was long enough, so a phrase that fits on one line was handed back
+   * whatever the span — and "100kg at 60kg bodyweight is exceptional." held
+   * the screen for 6.2 seconds, because a caption stays up through the pause
+   * that follows its phrase rather than blinking off into silence.
+   *
+   * Forty characters is one line by width and two by TIME. Length decided
+   * here and duration decided elsewhere is the whole class of bug this
+   * function exists for, and the shortcut reintroduced it.
+   */
+  if (base.length < 2 && span >= MIN_CAPTION_MS && span <= MAX_CAPTION_MS) return base;
 
   /**
    * CANDIDATE CUTS, WIDEST FIRST, THEN MERGED DOWN.

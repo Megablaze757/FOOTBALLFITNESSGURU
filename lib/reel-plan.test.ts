@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { captionReadMs, MIN_CAPTION_MS } from "./caption-lines";
+import { captionLines, captionReadMs, MIN_CAPTION_MS } from "./caption-lines";
 import { LEAD_MS } from "./narration";
 import { MAX_HOLD_MS } from "./reel-retention";
 import {
@@ -325,4 +325,40 @@ test("a phrase too short to fill its span is left alone", () => {
  */
 test("the caption ceiling is the one the retention rule enforces", () => {
   assert.equal(MAX_CAPTION_MS, MAX_HOLD_MS);
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * ONE LINE BY WIDTH IS NOT ONE LINE BY TIME.
+ *
+ * fitToSpan took a shortcut for text that already fits on a single caption —
+ * and asked only whether the span was long ENOUGH, never whether it was too
+ * long. So "100kg at 60kg bodyweight is exceptional." (forty characters, one
+ * line by every width rule) held the screen for 6.2 seconds, because a caption
+ * stays up through the pause that follows its phrase rather than blinking off
+ * into silence.
+ *
+ * Length decided in one place and duration in another is the entire class of
+ * bug this function exists for, and the shortcut reintroduced it.
+ *
+ * Reproduced with the real measured durations off the synthesiser rather than
+ * invented ones, which is why the number in the name is exact.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("a single-line phrase is still re-cut when its span is long", () => {
+  const say = "100kg at 60kg bodyweight is exceptional.";
+  assert.equal(captionLines(say).length, 1, "the premise is gone — this no longer fits on one line");
+
+  const caps = captionsFor({ at: 0, ms: 6_170, say }, [{ atMs: 0, ms: 6_170 }]);
+  assert.ok(caps.length > 1, `one caption over 6.17s holds the screen for all of it`);
+  for (const c of caps) {
+    assert.ok(c.ms <= MAX_CAPTION_MS, `"${c.text}" holds for ${c.ms}ms`);
+    assert.ok(c.ms >= MIN_CAPTION_MS, `"${c.text}" flashes for ${c.ms}ms`);
+  }
+});
+
+/** And a short span still leaves a short phrase alone. */
+test("a single-line phrase in a short span is left as one caption", () => {
+  const caps = captionsFor({ at: 0, ms: 2_400, say: "Same bar." }, [{ atMs: 0, ms: 2_400 }]);
+  assert.equal(caps.length, 1);
 });
