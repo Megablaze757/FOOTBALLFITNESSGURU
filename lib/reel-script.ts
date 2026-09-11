@@ -119,6 +119,31 @@ export interface ReelScript {
  */
 export const HOOK_BY_MS = 2_000;
 
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * HOW LONG AN AUTHENTICATED PAGE IS BLACK AFTER THE RECORDER NAVIGATES TO IT.
+ *
+ * The recorder warms every route before recording, which caches the bundle and
+ * does nothing for the data: an authenticated screen re-fetches on mount and
+ * renders from nothing, and the recorder navigates with `waitUntil: "load"`,
+ * which on a Next.js SPA fires while the document is still empty.
+ *
+ * The beat's clock is the audio track, and the audio track cannot wait — so
+ * the only thing that can move is the LINE. A beat that lands on a heavy route
+ * holds this long before it speaks, and says nothing over a loading spinner.
+ *
+ * MEASURED BY STEPPING FRAMES, twice, because the first guess was half of it.
+ * /benchmarks navigated at 11.71s and did not paint until 13.8s. Light routes
+ * are much faster — /home was up well inside SUSPENSE_MS, so this is not a
+ * blanket tax on every navigation, only on the ones that fetch.
+ *
+ * Nothing enforces this: a beat that needs it and does not have it records a
+ * black screen and passes every check in the pipeline, which is exactly how it
+ * shipped. Downloading the file and looking at it is the check.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export const DATA_ROUTE_PAINT_MS = 2_300;
+
 /** A shot nobody can read. Shorter than this and the eye has not landed yet. */
 export const MIN_BEAT_MS = MIN_SCENE_MS;
 
@@ -806,14 +831,18 @@ function standardsScript(): ReelScript | null {
        * navigates with waitUntil "load", which on a Next.js SPA fires while
        * the document is still empty — lib/reel-moves.ts says so in its note
        * on MOVE_WAIT_MS — and the beat's clock is the audio, which does not
-       * care. Measured from the recording: /benchmarks paints about 1.3s in.
+       * care.
        *
        * A move that finds nothing is loud and fails the run. A move that
        * finds its target while the VIEWER is looking at a black screen is
        * silent, and that is what shipped.
+       *
+       * 1.1s was the first guess and it was still black. Measured properly off
+       * the second recording by stepping frames: this route navigates at
+       * 11.71s and does not paint until 13.8s. See DATA_ROUTE_PAINT_MS.
        * ═══════════════════════════════════════════════════════════════════
        */
-      hold: 1_100,
+      hold: DATA_ROUTE_PAINT_MS,
       moves: [
         { tap: "+ Log a benchmark test" },
         { type: String(LOAD), into: `${page.lift.label} 1RM` },
