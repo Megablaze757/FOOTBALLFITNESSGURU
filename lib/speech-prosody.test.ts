@@ -20,6 +20,7 @@ import {
   CFG_MAX,
   REFERENCE_VOICE,
   REFERENCE_LINE,
+  REFERENCE_WAV,
   type Role,
 } from "./speech-prosody";
 import { APP_NAME } from "./signup-link";
@@ -393,11 +394,42 @@ test("the reference voice is British, male, and not a person", () => {
  * an explicit prompt has to win. Built first and then overwritten would still
  * produce a reel, using the wrong voice, silently.
  */
-test("a supplied reference wins over the built one", () => {
-  const src = readFileSync("scripts/chatterbox-say.py", "utf8");
-  const supplied = src.indexOf('prompt = job.get("prompt") or None');
-  const built = src.indexOf('if not prompt and job.get("reference_voice")');
-  assert.ok(supplied > 0 && built > supplied,
-    "the synthesised reference is not guarded by whether one was supplied");
-  assert.match(src, /reference_line/, "the reference has no words to say");
+/**
+ * The committed clip and the reasoning written next to the measurements have
+ * to stay in step. They live in different files and different languages, and
+ * the failure mode is silent: the reels would clone a voice nobody chose while
+ * every comment described a different one.
+ */
+test("the reference file was made by the voice the measurements chose", () => {
+  const script = readFileSync("scripts/make-voice-reference.py", "utf8");
+  assert.match(script, new RegExp(`VOICE = "${REFERENCE_VOICE}"`),
+    `make-voice-reference.py does not use ${REFERENCE_VOICE}, so the committed clip is a different voice from the documented one`);
+  /** Same words, so the clip is in the register it will be performing. */
+  for (const sentence of REFERENCE_LINE.split(/(?<=[.!?])\s+/).filter(Boolean)) {
+    assert.ok(script.includes(sentence.trim()),
+      `the reference clip does not say "${sentence.trim()}"`);
+  }
+  assert.match(script, new RegExp(REFERENCE_WAV.replace(/[/.]/g, "\\$&")),
+    "the generator writes somewhere other than where the recorder reads");
+});
+
+/** And the clip has to actually be there, since nothing rebuilds it. */
+test("the reference clip is committed, not assumed", () => {
+  const wav = readFileSync(REFERENCE_WAV);
+  assert.ok(wav.length > 100_000, `${REFERENCE_WAV} is ${wav.length} bytes — too short to clone a voice from`);
+  assert.equal(wav.subarray(0, 4).toString("ascii"), "RIFF", "the reference is not a wav");
+});
+
+/**
+ * ORDERING, AND INVISIBLE. A recorded human reference is better than any
+ * synthesised one and answers the consent question by existing — so an
+ * explicit prompt has to win. Defaulted first and then overridden would still
+ * produce a reel, in the wrong voice, silently.
+ */
+test("a supplied reference wins over the committed one", () => {
+  const src = readFileSync("scripts/record-reel.mts", "utf8");
+  assert.match(src, /prompt: process\.env\.REEL_VOICE_PROMPT \|\| REFERENCE_WAV/,
+    "a recorded reference no longer takes precedence over the committed one");
+  assert.doesNotMatch(readFileSync("scripts/chatterbox-say.py", "utf8"), /from kokoro_onnx import/,
+    "chatterbox-say.py imports Kokoro again — the two will not install into one environment");
 });

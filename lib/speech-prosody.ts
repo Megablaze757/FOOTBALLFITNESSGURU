@@ -310,3 +310,29 @@ export const REFERENCE_VOICE = "bm_lewis";
 export const REFERENCE_LINE = "Every other training app hands you the session it planned on Sunday. "
   + "PocketAthlete asks how you slept first. Two taps: bad night, wrecked legs. "
   + "It scores you out of a hundred, and then it rebuilds today to match.";
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * AND IT IS A FILE IN THE REPOSITORY, NOT A BUILD STEP.
+ *
+ * The first version had the recorder synthesise this on every run, which is a
+ * dependency conflict rather than a convenience: kokoro-onnx 0.6.1 and
+ * chatterbox-tts will not install into one environment — pkuseg fails to build
+ * for want of numpy — and left unpinned they resolve to a Kokoro whose
+ * constructor reads the voices .bin as JSON and dies on byte 0xff. Two
+ * three-minute runs to find that out.
+ *
+ * The reference is deterministic and half a megabyte. Building it every time
+ * bought nothing and coupled two models that have no business sharing a
+ * process.
+ *
+ * Committing it also makes the voice REVIEWABLE. Anybody can play the file and
+ * hear exactly what the reels are cloning, which is not true of a decision
+ * that exists only as a model name in a config.
+ *
+ * Regenerate with scripts/make-voice-reference.py. A test keeps that script's
+ * voice and words in step with the constants above, so the file on disk and
+ * the reasoning written next to the measurements cannot drift apart.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export const REFERENCE_WAV = "assets/reel-voice-reference.wav";

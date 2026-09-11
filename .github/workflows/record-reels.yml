@@ -171,10 +171,8 @@ jobs:
 
       # 325MB, and it never changes. Downloading it on every run is most of the
       # job's time and all of it is avoidable.
-      # Needed by BOTH engines now: Chatterbox builds its reference voice with
-      # Kokoro, which is where the British accent comes from.
       - name: Cache the voice model
-        if: env.VOICE == 'true'
+        if: env.VOICE == 'true' && env.REEL_VOICE != 'chatterbox'
         id: voice-cache
         uses: actions/cache@v4
         with:
@@ -182,7 +180,7 @@ jobs:
           key: kokoro-v1.0
 
       - name: Fetch the voice model
-        if: env.VOICE == 'true' && steps.voice-cache.outputs.cache-hit != 'true'
+        if: env.VOICE == 'true' && env.REEL_VOICE != 'chatterbox' && steps.voice-cache.outputs.cache-hit != 'true'
         run: |
           mkdir -p .voice
           base=https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0
@@ -218,7 +216,10 @@ jobs:
 
       - name: Install Chatterbox
         if: env.VOICE == 'true' && env.REEL_VOICE == 'chatterbox'
-        run: pip install --quiet chatterbox-tts "kokoro-onnx==0.6.1" soundfile
+        # Chatterbox alone. Its reference voice is a committed wav — see
+        # assets/reel-voice-reference.wav — because these two will not install
+        # into one environment and do not need to.
+        run: pip install --quiet chatterbox-tts soundfile
 
       - name: Serve the export
         run: |
