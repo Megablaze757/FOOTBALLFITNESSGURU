@@ -756,7 +756,10 @@ function standardsScript(): ReelScript | null {
       // "Nothing." on its own is a sentence, so it is a caption, so it is a
       // one-word flash — the rule that caught "The drill:" caught this too.
       // Two words each keeps the shape and clears the floor.
-      say: "On its own? Means nothing. Against your bodyweight? Means everything.",
+      // Was four phrases making the point twice over; the table beat that
+      // follows says it with actual numbers. Trimmed to pay for the two holds
+      // above, which buy a picture that matches the line.
+      say: "On its own? Means nothing.",
     },
     {
       route: `/standards/${page.slug}/`,
@@ -794,6 +797,23 @@ function standardsScript(): ReelScript | null {
     {
       route: "/benchmarks",
       action: "Log the lift: open the form, type the load, save it.",
+      /**
+       * ═══════════════════════════════════════════════════════════════════
+       * THE LINE WAITED FOR THE PAGE, BECAUSE THE PAGE DOES NOT WAIT.
+       *
+       * First recording of this beat: at the exact moment the voice said "so
+       * log it", the frame was black with a loading spinner. The recorder
+       * navigates with waitUntil "load", which on a Next.js SPA fires while
+       * the document is still empty — lib/reel-moves.ts says so in its note
+       * on MOVE_WAIT_MS — and the beat's clock is the audio, which does not
+       * care. Measured from the recording: /benchmarks paints about 1.3s in.
+       *
+       * A move that finds nothing is loud and fails the run. A move that
+       * finds its target while the VIEWER is looking at a black screen is
+       * silent, and that is what shipped.
+       * ═══════════════════════════════════════════════════════════════════
+       */
+      hold: 1_100,
       moves: [
         { tap: "+ Log a benchmark test" },
         { type: String(LOAD), into: `${page.lift.label} 1RM` },
@@ -817,7 +837,18 @@ function standardsScript(): ReelScript | null {
       action: "Open Performance and let the rank land.",
       moves: [{ tap: "Performance" }],
       focus: "Strength ranks",
-      hold: SUSPENSE_MS,
+      /**
+       * NOT SUSPENSE_MS, AND THE DIFFERENCE IS MEASURED. At 900ms the payoff
+       * line began 1.3s before the rank was on screen: the first half of "and
+       * there's where PocketAthlete puts that lift" played over the Recovery
+       * tab — injury risk, average sleep — which is a different claim than the
+       * one being made. The tab switch plus the dashboard's own fetch land the
+       * rank about 2.4s into the beat, so the line waits that long.
+       *
+       * This is the cost of filming something real rather than a screenshot,
+       * and it is paid for out of the setup beat rather than the ceiling.
+       */
+      hold: 2_400,
       say: "And there's where PocketAthlete puts that lift.",
     },
     // Back to the list it opened on, so the reel loops. See demo-readiness.
