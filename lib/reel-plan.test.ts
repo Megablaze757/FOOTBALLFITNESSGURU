@@ -192,3 +192,65 @@ test("a beat with no tail still fills itself exactly", () => {
   const captions = captionsFor({ at: 0, ms: 4_000, say: "The cheap one's red lentils." });
   assert.equal(Math.max(...captions.map((c) => c.at + c.ms)), 4_000);
 });
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE CAPTIONS WERE TIMED BY CHARACTER ARITHMETIC AND THE VOICE WAS NOT.
+ *
+ * "Captions aren't in sync." Measured on a recorded reel by finding the voice
+ * onsets in the muxed audio and comparing them with the reel's own SRT: ten of
+ * twelve captions more than 0.25s out, worst 2.54s.
+ *
+ * Structural, not rounding. captionLines cuts at 42 characters, seven words
+ * and commas; `phrases` cuts at SENTENCES, because that is where a voice
+ * stops. demo-readiness is twelve captions over six spoken phrases — "This one
+ * asks first — bad night, wrecked legs, ten seconds." is one unbroken
+ * utterance and three captions, and they were spread across it by how many
+ * characters each had while the audio simply played.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("a caption starts when its phrase does, not where the arithmetic lands", () => {
+  const beat = {
+    at: 10_000,
+    ms: 8_000,
+    say: "This one asks first — bad night, wrecked legs, ten seconds. Then it rebuilds.",
+  };
+  /** One unbroken utterance, then a short one after a real gap. */
+  const clips = [{ atMs: 300, ms: 4_000 }, { atMs: 5_200, ms: 1_600 }];
+
+  const anchored = captionsFor(beat, clips);
+  const arithmetic = captionsFor(beat);
+
+  assert.ok(anchored.length > clips.length, "the captions are cut finer than the speech — that is the whole problem");
+  assert.equal(anchored[0].at, 10_300, "the first caption does not start where the voice starts");
+
+  /** Every caption sits inside the span of the phrase it belongs to. */
+  const lastOfFirst = anchored[anchored.length - 1];
+  assert.equal(lastOfFirst.at + lastOfFirst.ms, 10_000 + 5_200 + 1_600,
+    "the final caption does not end where its phrase ends");
+
+  /** And the second phrase's caption waits for the gap rather than running on. */
+  const second = anchored.find((c) => c.at >= 10_000 + 5_200);
+  assert.ok(second, "nothing is timed to the second phrase at all");
+  assert.notEqual(second!.at, arithmetic.find((c) => c.text === second!.text)?.at,
+    "anchoring changed nothing, so the clips are being ignored");
+});
+
+/** A silent reel and the studio preview have no audio to anchor to. */
+test("with no clips the captions fall back to filling the beat", () => {
+  const beat = { at: 0, ms: 6_000, say: "The cheap one's red lentils. The dear one is prawns." };
+  assert.deepEqual(captionsFor(beat, []), captionsFor(beat));
+  assert.equal(Math.max(...captionsFor(beat).map((c) => c.at + c.ms)), 6_000);
+});
+
+/**
+ * The recorder speaks spokenForm(say) and captionsFor splits the ORIGINAL, so
+ * a change that made the two disagree about sentence boundaries would pair
+ * caption three with phrase two and be invisible. Falling back is wrong-ish
+ * and honest; guessing is wrong and confident.
+ */
+test("a clip count that does not match the sentences is not guessed at", () => {
+  const beat = { at: 0, ms: 6_000, say: "One sentence only." };
+  const nonsense = [{ atMs: 0, ms: 1_000 }, { atMs: 2_000, ms: 1_000 }, { atMs: 4_000, ms: 1_000 }];
+  assert.deepEqual(captionsFor(beat, nonsense), captionsFor(beat));
+});

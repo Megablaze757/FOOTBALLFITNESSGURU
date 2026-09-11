@@ -1,4 +1,5 @@
 import { captionLines, captionReadMs } from "./caption-lines";
+import { phrases } from "./speech-timing";
 import type { Move } from "./reel-moves";
 
 // =============================================================================
@@ -124,7 +125,63 @@ export interface ReelPlan {
  * ═══════════════════════════════════════════════════════════════════════════
  */
 
-export function captionsFor(beat: { at: number; ms: number; say: string; tail?: number }): Caption[] {
+/** One spoken phrase's real place inside its beat, measured from the audio. */
+export interface Clip {
+  /** Milliseconds from the start of the BEAT. */
+  atMs: number;
+  ms: number;
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE CAPTIONS WERE TIMED BY CHARACTER ARITHMETIC AND THE VOICE WAS NOT.
+ *
+ * "Captions aren't in sync." Measured on a recorded reel by finding the voice
+ * onsets in the muxed audio and comparing them with the reel's own SRT: ten of
+ * twelve captions more than 0.25s out, worst 2.54s.
+ *
+ * The cause is in the two splits, and it is structural rather than a rounding
+ * error. captionLines cuts at 42 characters and seven words and at commas;
+ * `phrases` in lib/speech-timing.ts cuts at SENTENCES, because that is where a
+ * voice actually stops. On demo-readiness that is twelve captions over six
+ * spoken phrases — "This one asks first — bad night, wrecked legs, ten
+ * seconds." is one continuous utterance and three captions.
+ *
+ * So three captions were spread across one unbroken phrase by how many
+ * characters each had, while the audio simply played. Nothing could have kept
+ * them together, and no amount of adjusting the reading floors would have.
+ *
+ * THE FIX IS TO ANCHOR EACH CAPTION TO THE PHRASE IT BELONGS TO. Every caption
+ * of a phrase lives inside that phrase's real measured span — captionLines
+ * never merges across a sentence, so the grouping is exact — and the worst
+ * error left is a fraction of one phrase rather than seconds.
+ *
+ * WITHOUT CLIPS NOTHING CHANGES. A silent reel and the studio preview have no
+ * audio to anchor to, and the old arithmetic is the right answer there.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export function captionsFor(
+  beat: { at: number; ms: number; say: string; tail?: number },
+  clips?: readonly Clip[],
+): Caption[] {
+  if (clips && clips.length) {
+    const spoken = phrases(beat.say);
+    /**
+     * COUNTS MUST AGREE OR THE ANCHORING IS GUESSWORK. The recorder speaks
+     * `spokenForm(say)` and this splits the original, so a change that made
+     * the two disagree about sentence boundaries would silently pair caption
+     * three with phrase two. Verified across all four reels that spokenForm
+     * never changes the count; if it ever does, fall back rather than lie.
+     */
+    if (spoken.length === clips.length) {
+      const out: Caption[] = [];
+      spoken.forEach((phrase, i) => {
+        out.push(...spread(captionLines(phrase.text), beat.at + clips[i].atMs, clips[i].ms));
+      });
+      if (out.length) return out;
+    }
+  }
+
   const chunks = captionLines(beat.say);
   if (!chunks.length) return [];
 
@@ -166,11 +223,6 @@ export function captionsFor(beat: { at: number; ms: number; say: string; tail?: 
    * beatFloorMs guarantees the beat is at least the sum of these, so the
    * surplus is never negative for a beat this module timed.
    */
-  const floors = chunks.map((c) => captionReadMs(c));
-  const needed = floors.reduce((a, b) => a + b, 0);
-  const weights = chunks.map((c) => Math.max(1, c.length));
-  const total = weights.reduce((a, b) => a + b, 0);
-
   /**
    * FILLING THE BEAT EXACTLY IS THE INVARIANT, and the floor is what it can
    * afford within it.
@@ -190,17 +242,36 @@ export function captionsFor(beat: { at: number; ms: number; say: string; tail?: 
    * "cannot afford the floors" sent every well-timed beat down the fallback
    * and left captions tens of milliseconds short of their own reading time.
    */
-  const surplus = budget - needed;
-  const affordable = surplus >= 0;
-  const share = (i: number) => Math.floor(((affordable ? surplus : budget) * weights[i]) / total);
+  return spread(chunks, beat.at, budget);
+}
 
-  let at = beat.at;
+/**
+ * Lay a run of captions end to end across one span of time.
+ *
+ * FACTORED OUT so the anchored path above and the unanchored one below share
+ * it exactly. They differ only in what the span IS — one phrase's measured
+ * audio, or the whole beat — and having two copies of this arithmetic is how
+ * one of them quietly acquires an off-by-one.
+ *
+ * The floors, the surplus and the remainder rule are unchanged; the comments
+ * that earned each of them are above.
+ */
+function spread(chunks: readonly string[], from: number, span: number): Caption[] {
+  if (!chunks.length) return [];
+  const floors = chunks.map((c) => captionReadMs(c));
+  const needed = floors.reduce((a, b) => a + b, 0);
+  const weights = chunks.map((c) => Math.max(1, c.length));
+  const total = weights.reduce((a, b) => a + b, 0);
+
+  const surplus = span - needed;
+  const affordable = surplus >= 0;
+  const share = (i: number) => Math.floor(((affordable ? surplus : span) * weights[i]) / total);
+
+  let at = from;
   return chunks.map((text, i) => {
     // The last caption takes the remainder, so rounding can never leave a gap
-    // or an overhang at the end of a beat.
-    const ms = i === chunks.length - 1
-      ? beat.at + budget - at
-      : (affordable ? floors[i] + share(i) : share(i));
+    // or an overhang at the end of the span.
+    const ms = i === chunks.length - 1 ? from + span - at : (affordable ? floors[i] + share(i) : share(i));
     const caption = { at, ms, text };
     at += ms;
     return caption;
@@ -214,6 +285,12 @@ export interface PlannableScript {
     at: number; ms: number; route: string; action: string; say: string;
     /** Silence after the line, kept clear of the captions for the end card. */
     tail?: number;
+    /**
+     * Where this beat's spoken phrases actually landed, measured from the
+     * synthesised audio. Absent on a silent reel and in the studio preview,
+     * and the captions fall back to arithmetic — see captionsFor.
+     */
+    clips?: readonly Clip[];
     /** Words on screen this beat is about. Optional — most beats have none. */
     focus?: string;
   /** What to DO on this screen, performed on camera. See lib/reel-moves.ts. */
@@ -244,7 +321,7 @@ export function reelPlan(script: PlannableScript, hookMs = HOOK_MS): ReelPlan {
      */
     focus: beat.focus,
     moves: beat.moves,
-    captions: captionsFor(beat),
+    captions: captionsFor(beat, beat.clips),
   }));
   return {
     id: script.id,

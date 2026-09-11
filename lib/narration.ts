@@ -124,6 +124,15 @@ export interface RetimedBeat {
   hold?: number;
   /** Silence AFTER the line — the end card's room. See lib/reel-script.ts. */
   tail?: number;
+  /**
+   * Where each spoken phrase landed inside this beat, measured.
+   *
+   * The captions are anchored to these rather than spread across the beat by
+   * character count — see captionsFor in lib/reel-plan.ts, and the
+   * measurement that made it necessary: ten of twelve captions more than a
+   * quarter of a second out, worst 2.54s.
+   */
+  clips?: readonly { atMs: number; ms: number }[];
   focus?: string;
 }
 
@@ -187,7 +196,17 @@ export function retime<T extends { route: string; action: string; say: string; h
      * spread cannot forget the next one.
      * ═══════════════════════════════════════════════════════════════════════
      */
-    const placed = { ...beat, at, ms };
+    const placed = {
+      ...beat,
+      at,
+      ms,
+      /**
+       * ATTACHED HERE, where the audio and the beat are both in hand. The
+       * spread carries whatever a beat came with; this is the one thing that
+       * does not exist until the audio has been measured.
+       */
+      clips: (audio[i]?.clips ?? []).map((c) => ({ atMs: c.atMs, ms: c.phrase.audioMs })),
+    };
     at += ms;
     return placed;
   });
