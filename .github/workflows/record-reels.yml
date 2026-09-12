@@ -295,6 +295,25 @@ jobs:
           # longer matched its video for anybody downloading the pair to post.
           id="$(basename "$(ls reels/*.srt | head -1)" .srt)"
           lead=$(cat reels/*.lead 2>/dev/null || echo 0)
+
+          # ═══════════════════════════════════════════════════════════════
+          # RESOLVED ONCE, BY NAME. NOT RE-GLOBBED.
+          #
+          # This read the narration as `reels/*.wav` in three places. The bed
+          # was then fetched to reels/bed.wav — which that glob also matches,
+          # and which sorts FIRST. So ffmpeg's input 1 became the music: the
+          # loudness chain normalised the MUSIC to -14 LUFS, and the voice was
+          # mixed in 18dB down and ducked against itself. "Now we have no voice
+          # just bad music", exactly.
+          #
+          # The recorder writes <id>.wav next to <id>.srt, so the narration has
+          # a name and there is no reason to guess at it. Every later step uses
+          # these variables, and the bed is written outside reels/ as well, so
+          # neither half of the mistake can happen again.
+          # ═══════════════════════════════════════════════════════════════
+          voice="reels/$id.wav"
+          sync="reels/$id.sync.json"
+          [ -f "$voice" ] || { echo "::error::no narration at $voice"; exit 1; }
           # ═══════════════════════════════════════════════════════════════
           # LOUDNESS, NOT PEAK. "I can't hear the voice."
           #
@@ -320,7 +339,7 @@ jobs:
           # Measured first, then applied — see scripts/loudnorm-args.py for why a
           # single pass lands three decibels short and why a gain alone cannot
           # do it at all.
-          audio="$(python3 scripts/loudnorm-args.py reels/*.wav)"
+          audio="$(python3 scripts/loudnorm-args.py "$voice")"
 
           # ═══════════════════════════════════════════════════════════════
           # A BED, WHEN THERE IS ONE TO MIX.
@@ -343,8 +362,9 @@ jobs:
           # what actually arrived, because a URL is a promise somebody else
           # keeps. A path is still accepted for a track of your own.
           if [ -n "${REEL_MUSIC:-}" ] && [ ! -f "$REEL_MUSIC" ]; then
-            if node --import tsx scripts/fetch-music.mts "$REEL_MUSIC" reels/bed.wav; then
-              REEL_MUSIC=reels/bed.wav
+            # OUTSIDE reels/, so no glob over the recorder's own output can reach it.
+            if node --import tsx scripts/fetch-music.mts "$REEL_MUSIC" "$RUNNER_TEMP/bed.wav"; then
+              REEL_MUSIC="$RUNNER_TEMP/bed.wav"
             else
               echo "::error::\"$REEL_MUSIC\" is neither a file nor a known track id"; exit 1
             fi
@@ -355,8 +375,8 @@ jobs:
             # notices in a log. This refuses a track outside the tempo and bass
             # profile this audience listens to — see lib/reel-music.ts.
             python3 scripts/check-music.py "$REEL_MUSIC"
-            ms=$(python3 -c "import json,sys;print(int(json.load(open(sys.argv[1]))['totalMs']))" reels/*.sync.json)
-            ffmpeg -hide_banner -loglevel error -y -ss "$lead" -i reels/*.webm -i reels/*.wav \
+            ms=$(python3 -c "import json,sys;print(int(json.load(open(sys.argv[1]))['totalMs']))" "$sync")
+            ffmpeg -hide_banner -loglevel error -y -ss "$lead" -i reels/*.webm -i "$voice" \
               -i "$REEL_MUSIC" \
               -vf "scale=1080:1920:flags=lanczos,unsharp=5:5:0.9:5:5:0.0" \
               -filter_complex "[1:a]${audio}[voiced];$(node --import tsx scripts/bed-args.mts voiced 2:a mix "$ms")" \
@@ -365,7 +385,7 @@ jobs:
               -shortest "reels/$id.mp4"
             echo "mixed a bed from $REEL_MUSIC"
           else
-            ffmpeg -hide_banner -loglevel error -y -ss "$lead" -i reels/*.webm -i reels/*.wav \
+            ffmpeg -hide_banner -loglevel error -y -ss "$lead" -i reels/*.webm -i "$voice" \
               -vf "scale=1080:1920:flags=lanczos,unsharp=5:5:0.9:5:5:0.0" \
               -af "$audio" \
               -c:v libx264 -preset slow -crf 20 -pix_fmt yuv420p -c:a aac -b:a 128k \
@@ -394,6 +414,21 @@ jobs:
       - name: Check it is as loud as the rest of the feed
         if: env.VOICE == 'true'
         run: bash scripts/check-loudness.sh reels/*.mp4
+
+      # ═══════════════════════════════════════════════════════════════════
+      # AND THAT THE LOUD THING IS THE VOICE.
+      #
+      # A reel shipped with the narration 18dB UNDER the music, and every check
+      # above passed it: check-loudness measured -14.3 LUFS and was satisfied
+      # because the MUSIC was at -14.3, and check-sync measured 0.000s because
+      # the captions did line up with where the voice was scheduled to be —
+      # nobody had asked whether it could be heard there.
+      #
+      # This is the question neither of them can answer.
+      # ═══════════════════════════════════════════════════════════════════
+      - name: Check the voice is the loudest thing in it
+        if: env.VOICE == 'true'
+        run: python3 scripts/check-voice.py reels/*.mp4 reels/*.sync.json
 
       # ═══════════════════════════════════════════════════════════════════
       # BACK INTO THE APP, WHICH IS THE WHOLE POINT.
