@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { GAP, PAYOFF_MAX_WORDS, phrases, totalGapMs } from "./speech-timing";
+import { GAP, PAYOFF_MAX_WORDS, phrases, totalGapMs, jitter, GAP_JITTER} from "./speech-timing";
 import { SCRIPTS, reelScript } from "./reel-script";
 
 /**
@@ -36,7 +36,9 @@ test("sentences are split and the punctuation stays attached", () => {
 /** The gap a person leaves and a text-to-speech engine never does. */
 test("the longest gap in a line is the one before the punchline", () => {
   const parts = phrases("The same thirty grams from a chicken breast. Three times that.");
-  assert.equal(parts[0].gapMs, GAP.payoff, "no beat before the payoff");
+  // The jittered value of the right constant: which RULE fired is the point,
+  // and the exact number moves with the words now. See "no reel repeats a pause".
+  assert.equal(parts[0].gapMs, jitter(GAP.payoff, parts[0].text), "no beat before the payoff");
   assert.ok(GAP.payoff > GAP.sentence && GAP.payoff > GAP.question, "the payoff gap is not the longest");
 });
 
@@ -47,7 +49,8 @@ test("a long closing sentence gets an ordinary gap", () => {
   // this green — the mutation moved the goalposts and the test followed.
   const long = Array.from({ length: 20 }, (_, i) => `word${i}`).join(" ");
   const parts = phrases(`Something short first. ${long}.`);
-  assert.equal(parts[0].gapMs, GAP.sentence, `${PAYOFF_MAX_WORDS}-word ceiling not applied`);
+  assert.equal(parts[0].gapMs, jitter(GAP.sentence, parts[0].text),
+    `${PAYOFF_MAX_WORDS}-word ceiling not applied`);
   assert.ok(PAYOFF_MAX_WORDS < 20, `a ${PAYOFF_MAX_WORDS}-word "punchline" is a sentence, not a beat`);
 });
 
@@ -70,7 +73,7 @@ test("a sentence that ends on a digit still ends", () => {
 
 test("a question asks for a moment", () => {
   const parts = phrases("Is your bench any good? Here is what the numbers say about it. And then some more.");
-  assert.equal(parts[0].gapMs, GAP.question);
+  assert.equal(parts[0].gapMs, jitter(GAP.question, parts[0].text));
 });
 
 test("the last phrase never has a gap after it — the picture ends it", () => {
@@ -145,7 +148,7 @@ test("a short line after a long one gets a real pause, wherever it falls", () =>
     "Every food here gives you the same thirty grams of protein. Thirty-one pence. And it goes on.",
   );
   assert.equal(list.length, 3);
-  assert.equal(list[0].gapMs, GAP.reveal,
+  assert.equal(list[0].gapMs, jitter(GAP.reveal, list[0].text),
     `the reveal got ${list[0].gapMs}ms — the same as any other sentence break`);
   assert.ok(GAP.reveal > GAP.sentence, "the reveal pause is no longer than an ordinary one");
 });
@@ -197,4 +200,70 @@ test("the dramatic pauses stand well clear of the routine ones", () => {
 test("an ordinary sentence break does not cost half a second", () => {
   assert.ok(GAP.sentence <= 350, `${GAP.sentence}ms between two ordinary sentences reads as a stall`);
   assert.ok(GAP.clause <= 200, `${GAP.clause}ms inside one sentence is a stutter the ear hears as hesitation`);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// "VOICE SOUNDS VERY ROBOTIC", with every measured axis in range.
+//
+// Measured on a finished reel, the gaps between its nine phrases were
+// 900, 360, 1150, 900, 2660, 900, 2760, 360 — 900 three times and 360 twice,
+// identical to the millisecond, because they come from a table of five
+// constants. Exact repetition is the most mechanical thing a rhythm can do,
+// and this file's own opening asks for the opposite.
+// ═══════════════════════════════════════════════════════════════════════════
+
+test("the same words always get the same pause", () => {
+  assert.equal(jitter(GAP.sentence, "Same bar."), jitter(GAP.sentence, "Same bar."));
+  /**
+   * DERIVED, NOT RANDOM. A random jitter would make two recordings of one
+   * script differ, which breaks the caption-sync check and every comparison
+   * between takes.
+   */
+  const twice = [jitter(GAP.payoff, "Means nothing."), jitter(GAP.payoff, "Means nothing.")];
+  assert.equal(twice[0], twice[1]);
+});
+
+test("two phrases do not get the same pause", () => {
+  /** Consecutive lines in these scripts are often nearly identical. */
+  assert.notEqual(jitter(GAP.sentence, "Means nothing."), jitter(GAP.sentence, "Means everything."));
+  assert.notEqual(jitter(GAP.sentence, "a"), jitter(GAP.sentence, "b"));
+});
+
+test("no reel repeats a pause exactly", () => {
+  for (const { id } of SCRIPTS) {
+    const script = reelScript(id, "");
+    if (!script) continue;
+    const gaps: number[] = [];
+    for (const b of script.beats) {
+      if (!b.say.trim()) continue;
+      for (const p of phrases(b.say)) if (p.gapMs > 0) gaps.push(p.gapMs);
+    }
+    assert.equal(new Set(gaps).size, gaps.length,
+      `${id} pauses for the same length twice: ${gaps.join(", ")}`);
+  }
+});
+
+test("the jitter moves a gap without changing what it is", () => {
+  for (const base of [GAP.clause, GAP.sentence, GAP.question, GAP.payoff, GAP.reveal]) {
+    for (const text of ["one", "two", "three", "Means nothing.", "£0.31 from red lentils."]) {
+      const got = jitter(base, text);
+      assert.ok(Math.abs(got - base) <= Math.ceil(base * GAP_JITTER),
+        `${got}ms is more than ${GAP_JITTER * 100}% off ${base}ms`);
+      assert.ok(got > 0, "a jittered gap became nothing");
+    }
+  }
+});
+
+/** A payoff must still outrank an ordinary break at every jittered extreme. */
+test("jitter never lets a routine pause overtake a dramatic one", () => {
+  const widest = (n: number) => n * (1 + GAP_JITTER);
+  const narrowest = (n: number) => n * (1 - GAP_JITTER);
+  assert.ok(narrowest(GAP.payoff) > widest(GAP.sentence) * 1.5,
+    "a jittered sentence break can reach a jittered payoff pause");
+  assert.ok(narrowest(GAP.reveal) > widest(GAP.question),
+    "a jittered question can reach a jittered reveal");
+});
+
+test("a phrase with no pause after it still has none", () => {
+  assert.equal(jitter(0, "the last phrase of a beat"), 0);
 });

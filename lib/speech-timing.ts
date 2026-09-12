@@ -97,6 +97,72 @@ export const PAYOFF_MAX_WORDS = 8;
  */
 export const REVEAL_MIN_SETUP_WORDS = 7;
 
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * NO SPEAKER HAS EVER PAUSED FOR EXACTLY THE SAME LENGTH TWICE.
+ *
+ * "Voice sounds very robotic", for the fourth time, with every axis anybody
+ * had built an instrument for sitting in range — 5.0 semitones of pitch
+ * variability, 179 words a minute, 19% dead air. So the instruments were
+ * measuring the wrong things.
+ *
+ * Measured on a finished reel, the gaps between its nine phrases were:
+ *
+ *   900, 360, 1150, 900, 2660, 900, 2760, 360
+ *
+ * 900 three times and 360 twice, identical to the millisecond, because they
+ * come from a table of five constants. That is not a subtle defect: exact
+ * repetition is the single most mechanical thing a rhythm can do, and this
+ * file's own opening argues the case — "the VARIATION is what the ear reads as
+ * human" — while producing none of it.
+ *
+ * ─────────────────────────────────────────────────────────────────────────
+ * DERIVED FROM THE WORDS, NOT RANDOM.
+ *
+ * A random jitter would make every recording of the same script different,
+ * which breaks the caption-sync check, the estimator and any comparison
+ * between two takes. This hashes the phrase instead: the same words always get
+ * the same pause, different words get different ones, and the table's values
+ * become a CENTRE rather than a value.
+ *
+ * ±12% keeps a payoff pause a payoff pause — 900ms moves between 792 and 1008,
+ * which is still well clear of an ordinary sentence break and nowhere near the
+ * reveal. The point is not that any single gap is better; it is that no two
+ * are the same.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export const GAP_JITTER = 0.12;
+
+/**
+ * A stable number in [0, 1) from a string.
+ *
+ * FNV-1a, because it is four lines and its avalanche is good enough that two
+ * phrases differing by one character land far apart — which is the whole
+ * requirement here, since consecutive phrases are often nearly identical
+ * ("Means nothing." / "Means everything.").
+ */
+export function hashUnit(text: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h / 0x100000000;
+}
+
+/**
+ * The table's value for this phrase, moved off the exact number.
+ *
+ * Rounded to a millisecond because everything downstream is integer
+ * milliseconds, and a fractional gap would put the caption-sync check into
+ * floating point for no gain.
+ */
+export function jitter(gapMs: number, text: string): number {
+  if (gapMs <= 0) return gapMs;
+  const swing = (hashUnit(text) * 2 - 1) * GAP_JITTER;
+  return Math.max(1, Math.round(gapMs * (1 + swing)));
+}
+
 export interface Phrase {
   text: string;
   /** Silence AFTER this phrase. Zero on the last one — the beat ends it. */
@@ -158,7 +224,7 @@ export function phrases(line: string): Phrase[] {
     const words = (t: string) => t.split(/\s+/).filter(Boolean).length;
     const nextIsLast = i === spoken.length - 2;
     const nextIsShort = words(next) <= PAYOFF_MAX_WORDS;
-    if (nextIsLast && nextIsShort) return { text: phrase, gapMs: GAP.payoff };
+    if (nextIsLast && nextIsShort) return { text: phrase, gapMs: jitter(GAP.payoff, phrase) };
 
     /**
      * A SHORT LINE AFTER A LONG ONE IS A REVEAL, wherever it falls.
@@ -170,12 +236,12 @@ export function phrases(line: string): Phrase[] {
      * rather than suspense.
      */
     if (nextIsShort && words(phrase) >= REVEAL_MIN_SETUP_WORDS) {
-      return { text: phrase, gapMs: GAP.reveal };
+      return { text: phrase, gapMs: jitter(GAP.reveal, phrase) };
     }
 
-    if (phrase.endsWith("?")) return { text: phrase, gapMs: GAP.question };
-    if (/[.!]$/.test(phrase)) return { text: phrase, gapMs: GAP.sentence };
-    return { text: phrase, gapMs: GAP.clause };
+    if (phrase.endsWith("?")) return { text: phrase, gapMs: jitter(GAP.question, phrase) };
+    if (/[.!]$/.test(phrase)) return { text: phrase, gapMs: jitter(GAP.sentence, phrase) };
+    return { text: phrase, gapMs: jitter(GAP.clause, phrase) };
   });
 }
 
