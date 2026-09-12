@@ -37,10 +37,10 @@ on:
         type: boolean
         default: true
       engine:
-        description: "Which voice. Kokoro is faster and paces better; Chatterbox has expression control."
+        description: "Which voice. Chatterbox sounds more human; Kokoro is much faster for a smoke test."
         type: choice
-        options: [kokoro, chatterbox]
-        default: kokoro
+        options: [chatterbox, kokoro]
+        default: chatterbox
       music:
         description: "A track id from lib/stock-audio.ts (e.g. dnb-loop), or a path to your own. Blank records no bed."
         type: string
@@ -86,7 +86,7 @@ jobs:
       # Chatterbox stays one word away, reference clip and all: it is better on
       # the axis it was picked for, and that axis was not the broken one.
       # ═══════════════════════════════════════════════════════════════════
-      REEL_VOICE: ${{ inputs.engine || github.event.client_payload.engine || 'kokoro' }}
+      REEL_VOICE: ${{ inputs.engine || github.event.client_payload.engine || 'chatterbox' }}
       # A path to a track, not a track. Nothing in this repository picks music,
       # and nothing in it ships music it does not have the right to.
       REEL_MUSIC: ${{ inputs.music || github.event.client_payload.music || '' }}

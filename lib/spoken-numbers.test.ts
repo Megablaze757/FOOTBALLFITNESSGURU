@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { spokenForm, words } from "./spoken-numbers";
-import { BASE_SPEED, RATE, VOICE, PITCH_RATIO, SHELF_DB } from "./speech-prosody";
+import { BASE_SPEED, RATE, VOICE, PITCH_RATIO, SHELF_DB, CHATTERBOX_TEMPO } from "./speech-prosody";
 
 test("numbers become words", () => {
   const cases: [number, string][] = [
@@ -154,4 +154,20 @@ test("the recorder never asks the voice to hurry", () => {
   assert.ok(shelfMatch, "kokoro-say.py no longer has a default shelf");
   assert.equal(Number(shelfMatch![1]), SHELF_DB,
     "the pitch shift ships without the correction that makes it survive a phone");
+
+  /**
+   * AND THE OTHER ENGINE, which has the same three settings plus a tempo it
+   * cannot do for itself. Chatterbox is the default now, so its fallbacks are
+   * the ones a run without the fields would actually use.
+   */
+  const cb = readFileSync("scripts/chatterbox-say.py", "utf8");
+  const cbNum = (name: string) => {
+    const m = cb.match(new RegExp(`job\\.get\\("${name}", ([0-9.]+)\\)`));
+    assert.ok(m, `chatterbox-say.py no longer has a default ${name}`);
+    return Number(m![1]);
+  };
+  assert.equal(cbNum("pitch"), PITCH_RATIO, "the two engines disagree about how low the voice is");
+  assert.equal(cbNum("shelf_db"), SHELF_DB, "the two engines disagree about the shelf");
+  assert.equal(cbNum("tempo"), CHATTERBOX_TEMPO,
+    "chatterbox would fall back to a pace nobody chose");
 });

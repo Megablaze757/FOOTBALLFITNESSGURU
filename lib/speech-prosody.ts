@@ -149,6 +149,27 @@ export const PITCH_RATIO = Math.round(2 ** (PITCH_SEMITONES / 12) * 1e5) / 1e5;
 export const SHELF_HZ = 1_000;
 export const SHELF_DB = 5;
 
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * HOW MUCH FASTER CHATTERBOX HAS TO BE PLAYED, AND WHY THAT IS ALLOWED NOW.
+ *
+ * Chatterbox has no speed parameter and settles around 155 words a minute of
+ * articulation whatever reference it clones. That is what got it dropped, and
+ * the note in scripts/chatterbox-say.py dismissed time-stretching as "a phase
+ * vocoder smearing a voice to imitate a control the model already has".
+ *
+ * It does not have that control, and rubberband is not a phase vocoder doing
+ * it badly — measured, a pitch shift through it drifts the duration by 0.0ms
+ * and a tempo change leaves the pitch where it was. The dismissal was written
+ * about a technique nobody had tried.
+ *
+ * 1.18 puts articulation at 177 words a minute against Kokoro's 138 on the same
+ * script, inside the energetic band without reaching the 237 the drill reel hit
+ * when this was pushed too far.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export const CHATTERBOX_TEMPO = 1.18;
+
 /** What a phrase is doing, which is what decides how fast it is said. */
 export type Role = "hook" | "setup" | "figure" | "payoff";
 

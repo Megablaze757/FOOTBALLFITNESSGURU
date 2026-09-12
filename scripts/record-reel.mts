@@ -36,7 +36,7 @@ import { spokenForm } from "../lib/spoken-numbers";
 import {
   BASE_SPEED, VOICE, shapeGains, shapeRates,
   shapeExpression, EXAGGERATION_BASE, CFG_BASE, REFERENCE_WAV,
-  PITCH_RATIO, SHELF_HZ, SHELF_DB,
+  PITCH_RATIO, SHELF_HZ, SHELF_DB, CHATTERBOX_TEMPO,
 } from "../lib/speech-prosody";
 import { beatAudio, retime, trackClips, type BeatAudio } from "../lib/narration";
 import { layTrack, normalised, readWav, writeWav, type Wav } from "../lib/wav";
@@ -155,7 +155,28 @@ async function signIn(page: import("playwright").Page, at: string): Promise<bool
  * chosen for, and that axis was already fine.
  * ═══════════════════════════════════════════════════════════════════════════
  */
-const ENGINE = (process.env.REEL_VOICE || "kokoro").toLowerCase();
+/**
+ * ─────────────────────────────────────────────────────────────────────────
+ * AND BACK TO CHATTERBOX, WITH THE THING THAT WAS MISSING.
+ *
+ * Kokoro was made the default because Chatterbox had no speed control and sat
+ * at 122 words a minute — correct at the time, and it fixed "putting me to
+ * sleep". Five rounds of "still robotic" later, every axis Kokoro exposes has
+ * been tuned and every one of them measures in range, which means the axes
+ * were not the problem.
+ *
+ * Chatterbox was never slow because it had to be. It is slow because nothing
+ * had tried stretching it, on the strength of a note in chatterbox-say.py that
+ * called the idea "a phase vocoder smearing a voice" without measuring it.
+ * Stretched 1.18x through rubberband it articulates at 177 words a minute
+ * against Kokoro's 138 on the same script, with 6.09 semitones of pitch
+ * variability against 4.82 and twice the rate of upward pitch movement.
+ *
+ * It costs about 22 seconds a phrase against Kokoro's one, so a recording goes
+ * from four minutes to eight. Kokoro stays one word away for a smoke test.
+ * ─────────────────────────────────────────────────────────────────────────
+ */
+const ENGINE = (process.env.REEL_VOICE || "chatterbox").toLowerCase();
 
 async function narrate(beats: readonly { say: string; hold?: number }[]): Promise<BeatAudio[]> {
   const model = process.env.KOKORO_MODEL;
@@ -219,6 +240,15 @@ async function narrate(beats: readonly { say: string; hold?: number }[]): Promis
     phrases: flat.map((p) => p.text),
     exaggerations: expression.map((e) => e.exaggeration),
     cfgs: expression.map((e) => e.cfg),
+    /**
+     * The three things Chatterbox will not do for itself: come down in pitch,
+     * keep the phone-band energy that costs, and get to a pace a feed will sit
+     * through. See lib/speech-prosody.ts.
+     */
+    pitch: PITCH_RATIO,
+    shelf_hz: SHELF_HZ,
+    shelf_db: SHELF_DB,
+    tempo: CHATTERBOX_TEMPO,
   };
 
   const job = {
