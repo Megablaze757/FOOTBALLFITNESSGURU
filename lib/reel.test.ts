@@ -1,8 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { SKILL_DRILLS } from "./skills";
 import {
-  holdFor, speechMs, spokenWords, reelScenes, reelDuration, sceneAt, reelFrameSvg, pickMimeType, fileExtension,
+  holdFor, speechMs, spokenWords, implausibleAudio, MIN_MS_PER_SPOKEN_WORD, reelScenes, reelDuration, sceneAt, reelFrameSvg, pickMimeType, fileExtension,
   MIN_SCENE_MS, MIN_REEL_MS, MAX_REEL_MS, REEL_MIME_TYPES, closingFact,
   inspectRecording, isPostable, requestsH264, reelSteps, REEL_FPS, emphasise, type Scene,
 } from "./reel";
@@ -363,4 +364,57 @@ test("a beat of weights is estimated longer than a beat of short words", () => {
   const words = speechMs("Right at the top of the list. Every one of them.");
   assert.ok(weights > words,
     `${Math.round(weights)}ms for three weights against ${Math.round(words)}ms for plain words`);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// "SCRIPT CUTS OUT AT SOME POINT."
+//
+// "So log it." came back from the synthesiser as 236ms — three words at 12.7
+// a second — and the pipeline laid those 236ms into the track and carried on.
+// The line is simply absent from the finished reel, and NOTHING failed: the
+// captions were in sync with a phrase that was not there, and a reel missing
+// one line is exactly as loud as a reel.
+// ═══════════════════════════════════════════════════════════════════════════
+
+test("audio far too short for its words is refused", () => {
+  const wrong = implausibleAudio("So log it.", 236);
+  assert.ok(wrong, "the generation that cut the reel would still be accepted");
+  assert.ok(wrong!.includes("236"), "the reason does not say what came back");
+  assert.ok(wrong!.includes("So log it."), "the reason does not name the phrase");
+});
+
+test("audio a real voice produced is accepted", () => {
+  // Measured from real generations, which run 330-370ms per spoken word.
+  assert.equal(implausibleAudio("So log it.", 1_000), null);
+  assert.equal(implausibleAudio("Same bar.", 721), null);
+  assert.equal(implausibleAudio("100kg at 60kg bodyweight is exceptional.", 3_291), null);
+  assert.equal(implausibleAudio("PocketAthlete, free, link in the bio.", 2_649), null);
+});
+
+/** The floor counts SPOKEN words, so a line of weights is not judged as six. */
+test("the floor counts numbers as the words they are said in", () => {
+  const weights = "100kg at 60kg bodyweight is exceptional.";
+  assert.ok(implausibleAudio(weights, 800), "nine spoken words in 800ms was accepted");
+  assert.equal(implausibleAudio("one two three four five six", 800), null,
+    "six short words in 800ms is brisk but possible");
+});
+
+test("nothing to say cannot be too short to say it", () => {
+  assert.equal(implausibleAudio("", 0), null);
+  assert.equal(implausibleAudio("   ", 5), null);
+});
+
+test("the floor sits under real speech and over the failure", () => {
+  // The failure was 79ms/word; real generations run 330-370.
+  assert.ok(MIN_MS_PER_SPOKEN_WORD > 79, "the failure that cut the reel would pass");
+  assert.ok(MIN_MS_PER_SPOKEN_WORD < 300, "a brisk real phrase would be rejected");
+});
+
+/** The Python side redraws on this floor, so the two must agree. */
+test("the synthesiser uses the floor this file defines", () => {
+  const py = readFileSync("scripts/chatterbox-say.py", "utf8");
+  const m = py.match(/^MIN_MS_PER_SPOKEN_WORD = (\d+)/m);
+  assert.ok(m, "chatterbox-say.py no longer has a floor to redraw against");
+  assert.equal(Number(m![1]), MIN_MS_PER_SPOKEN_WORD,
+    "the retry threshold and the recorder's guard disagree");
 });

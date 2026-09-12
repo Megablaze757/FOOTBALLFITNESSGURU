@@ -28,6 +28,7 @@ import { reelScript, type ScriptId } from "../lib/reel-script";
 import { reelPlan, srt, endCardAt, REEL_W, REEL_H, REEL_SCALE } from "../lib/reel-plan";
 import { retentionProblems } from "../lib/reel-retention";
 import { driftTarget } from "../lib/reel-scroll";
+import { implausibleAudio } from "../lib/reel";
 import { MOVE_GAP_MS, MOVE_POLL_MS, MOVE_WAIT_MS } from "../lib/reel-moves";
 import { SIGNUP_CTA } from "../lib/signup-link";
 import { karaokeWords } from "../lib/caption-karaoke";
@@ -320,6 +321,34 @@ async function narrate(beats: readonly { say: string; hold?: number }[]): Promis
           return reject(new Error(
             `${say} printed something that is not JSON on the answer channel: ${JSON.stringify(line.slice(0, 200))}\n`
             + "Everything but the per-phrase answers belongs on stderr — see the note in scripts/chatterbox-say.py.",
+          ));
+        }
+      }
+      /**
+       * ═══════════════════════════════════════════════════════════════════
+       * AND WHETHER THE ANSWER IS POSSIBLE.
+       *
+       * "Script cuts out at some point." It did: "So log it." came back as
+       * 236ms — three words at 12.7 a second — and this resolved it, laid it
+       * into the track and carried on. Every downstream check passed, because
+       * the captions were in sync with a phrase that was not there and a reel
+       * missing one line is exactly as loud as a reel.
+       *
+       * chatterbox-say.py redraws a bad sample itself, which is the right
+       * place for it since only that script can try again. This is the guard
+       * that does not care which engine produced the answer: a duration that
+       * is not physically speech never reaches the timeline.
+       * ═══════════════════════════════════════════════════════════════════
+       */
+      for (const [i, item] of parsed.entries()) {
+        const text = flat[i]?.text;
+        if (!text) continue;
+        const wrong = implausibleAudio(text, Number(item.ms));
+        if (wrong) {
+          return reject(new Error(
+            `${say} produced audio that cannot be those words.\n  ${wrong}\n`
+            + "A phrase this short is a failed generation, and laying it into the track "
+            + "deletes the line from the reel without failing anything downstream.",
           ));
         }
       }

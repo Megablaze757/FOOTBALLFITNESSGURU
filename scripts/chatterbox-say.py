@@ -109,13 +109,9 @@ model = ChatterboxTTS.from_pretrained(device=job.get("device", "cpu"))
 phrases = job["phrases"]
 exaggerations = job.get("exaggerations") or []
 cfgs = job.get("cfgs") or []
-for index, text in enumerate(phrases):
-    # Per phrase, or the job's single value, or Chatterbox's own defaults. A
-    # caller that shapes nothing still gets a working reel.
-    ex = exaggerations[index] if index < len(exaggerations) else job.get("exaggeration", 0.5)
-    cfg = cfgs[index] if index < len(cfgs) else job.get("cfg", 0.5)
+def synthesise(index, text, ex, cfg, path):
+    """One draw, shaped and measured. Returns its length in milliseconds."""
     wav = model.generate(text, exaggeration=ex, cfg_weight=cfg, audio_prompt_path=prompt)
-    path = f"{job['out']}/{index}.wav"
     sf.write(path, wav.squeeze(0).numpy(), model.sr)
 
     # ─────────────────────────────────────────────────────────────────────
@@ -155,4 +151,51 @@ for index, text in enumerate(phrases):
 
     with wave.open(path) as handle:
         ms = handle.getnframes() / handle.getframerate() * 1000
+    return ms
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# A DRAW THAT CAME BACK IMPOSSIBLE IS DRAWN AGAIN.
+#
+# "Script cuts out at some point." It did: "So log it." came back as 236ms —
+# three words at 12.7 a second — and the pipeline laid those 236ms into the
+# track and carried on. Every check passed: the captions were in sync with a
+# phrase that was not there, and a reel missing one line is exactly as loud as
+# a reel.
+#
+# Chatterbox samples, so this fails occasionally rather than always; the same
+# line generated seven times locally came back between 1.00s and 1.36s. The
+# only way to catch a single bad draw is to ask whether the answer is possible,
+# and the floor is in lib/reel.ts where a test keeps the two in step.
+# ─────────────────────────────────────────────────────────────────────────
+MIN_MS_PER_SPOKEN_WORD = 120
+
+
+def spoken_words(text):
+    """The same count lib/reel.ts uses: a digit is about a word."""
+    import re as _re
+    n = 0
+    for tok in text.split():
+        digits = len(_re.findall(r"\d", tok))
+        n += max(2, digits) if digits else 1
+    return n
+
+
+for index, text in enumerate(phrases):
+    ex = exaggerations[index] if index < len(exaggerations) else job.get("exaggeration", 0.5)
+    cfg = cfgs[index] if index < len(cfgs) else job.get("cfg", 0.5)
+    path = f"{job['out']}/{index}.wav"
+    floor = spoken_words(text) * MIN_MS_PER_SPOKEN_WORD
+    ms = 0.0
+    for attempt in range(1, 4):
+        ms = synthesise(index, text, ex, cfg, path)
+        if ms >= floor:
+            break
+        print(f'  "{text}" came back {ms:.0f}ms against a {floor}ms floor — '
+              f"redrawing ({attempt}/3)", file=sys.stderr)
+    else:
+        # Three impossible draws is not a bad sample, it is a broken setup.
+        raise SystemExit(
+            f'"{text}" could not be synthesised: {ms:.0f}ms for {spoken_words(text)} spoken '
+            f"word(s), under the {floor}ms floor, three times running.")
     print(json.dumps({"index": index, "path": path, "ms": ms}), file=ANSWER, flush=True)

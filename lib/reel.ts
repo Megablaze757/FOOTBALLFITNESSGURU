@@ -79,6 +79,44 @@ export const MIN_SCENE_MS = 1100;
  * is honest about a wider range of material.
  * ═══════════════════════════════════════════════════════════════════════════
  */
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE SHORTEST A PHRASE CAN PHYSICALLY BE, PER SPOKEN WORD.
+ *
+ * "Script cuts out at some point." It did: "So log it." came back from the
+ * synthesiser as 236 milliseconds — three words at 12.7 a second, which no
+ * mouth does — and the pipeline laid those 236ms into the track and carried on.
+ * The phrase is simply absent from the finished reel, and every check passed,
+ * because the captions were in sync with a phrase that was not there and the
+ * loudness of a reel missing one line is the loudness of a reel.
+ *
+ * Chatterbox SAMPLES, so it fails occasionally rather than systematically —
+ * generated seven times locally the same line came back between 1.00s and
+ * 1.36s. Nothing about a single bad draw is detectable except by asking
+ * whether the answer is possible.
+ *
+ * Measured against real generations, which run 330-370ms per spoken word, this
+ * sits far below the slowest of them and far above the failure: it catches
+ * 79ms/word without being able to reject anything a voice actually said.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export const MIN_MS_PER_SPOKEN_WORD = 120;
+
+/**
+ * Why this audio cannot be the words it claims to be, or null.
+ *
+ * A reason rather than a boolean, because the caller's job is to put it in a
+ * log that somebody reads after a three-minute run.
+ */
+export function implausibleAudio(text: string, ms: number): string | null {
+  const words = spokenWords(text);
+  if (!words) return null;
+  const floor = words * MIN_MS_PER_SPOKEN_WORD;
+  if (ms >= floor) return null;
+  return `"${text}" came back as ${Math.round(ms)}ms for ${words} spoken word(s) — `
+    + `under ${floor}ms, which is faster than speech`;
+}
+
 export const MS_PER_WORD = 152;
 
 /**
