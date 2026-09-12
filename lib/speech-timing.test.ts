@@ -267,3 +267,43 @@ test("jitter never lets a routine pause overtake a dramatic one", () => {
 test("a phrase with no pause after it still has none", () => {
   assert.equal(jitter(0, "the last phrase of a beat"), 0);
 });
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * A LINE OF NUMBERS IS LONGER THAN IT LOOKS, AND THE PAUSES DEPEND ON IT.
+ *
+ * "100kg at 60kg bodyweight is exceptional." is six written tokens and nine
+ * spoken words. Counted as six it was a short punchline, so the line before it
+ * got a payoff pause it had not earned, and it was too short to be a setup, so
+ * the reveal after it lost one.
+ *
+ * The fourth place this fault appeared. It is guarded here so there is not a
+ * fifth.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("a line of numbers is measured by what it takes to say", () => {
+  const written = "100kg at 60kg bodyweight is exceptional.";
+  assert.ok(written.split(/\s+/).length <= PAYOFF_MAX_WORDS,
+    "this line is no longer short enough written to make the point");
+
+  /**
+   * Followed by a short line, so if this one counted as a punchline the gap
+   * BEFORE it would be a payoff pause. It should be an ordinary break.
+   */
+  const list = phrases(`Nothing at all happens here first. ${written} Same bar.`);
+  const before = list[0];
+  assert.notEqual(before.gapMs, jitter(GAP.payoff, before.text),
+    `a nine-word line was treated as a punchline, so "${before.text}" got a payoff pause`);
+});
+
+test("a numeric line is long enough to set up a reveal", () => {
+  /**
+   * THREE PHRASES, because the payoff branch is checked first and fires when
+   * the short line is also the LAST one. A two-phrase version of this tested
+   * the payoff rule and reported the reveal rule broken — the script it is
+   * taken from has three.
+   */
+  const list = phrases("100kg at 60kg bodyweight is exceptional. At 120kg, novice. Same bar.");
+  assert.equal(list[0].gapMs, jitter(GAP.reveal, list[0].text),
+    `the setup before a reveal got ${list[0].gapMs}ms — counted as six words, not nine`);
+});
