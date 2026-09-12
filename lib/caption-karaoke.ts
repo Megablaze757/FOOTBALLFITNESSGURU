@@ -206,11 +206,18 @@ export function karaokeWords(text: string, ms: number): KaraokeWord[] {
     if (at < 0) return { ...span, key: false };
     cursor = at + span.text.length;
     /**
-     * Any character of the word being inside the coloured run is enough: the
-     * unit is pulled into the run with its number ("30 grams"), so a word can
-     * begin outside it and still belong to the figure.
+     * THE FIRST CHARACTER IS THE WHOLE TEST, and that is a fact about how
+     * emphasise builds its runs rather than a shortcut. It splits on
+     * whitespace and pushes the separators INTO the keyed run alongside the
+     * number, so "30 grams." is one run beginning at "30" — every word inside
+     * it also begins inside it.
+     *
+     * This was `.slice(at, at + length).some(Boolean)`, justified by a comment
+     * saying a word could begin outside the run and still belong to the
+     * figure. No word can. A mutation to the first character survived every
+     * test, which is what a line doing nothing looks like.
      */
-    const key = keyAt.slice(at, at + span.text.length).some(Boolean);
+    const key = keyAt[at] ?? false;
     return { ...span, key };
   });
 }
