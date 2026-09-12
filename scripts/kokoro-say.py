@@ -66,7 +66,7 @@ for index, text in enumerate(job["phrases"]):
     # after the measurement is a step the rest of the pipeline does not know
     # about. See lib/speech-prosody.ts; a test keeps these in step with it.
     # ─────────────────────────────────────────────────────────────────────
-    pitch = job.get("pitch", 0.7937)
+    pitch = job.get("pitch", 0.83316)
     shelf_hz = job.get("shelf_hz", 1000)
     shelf_db = job.get("shelf_db", 5)
     if pitch and pitch != 1:

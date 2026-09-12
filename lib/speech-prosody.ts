@@ -140,34 +140,84 @@ export const BASE_SPEED = 1.30;
  * previous pass had drill running at 237.
  * ═══════════════════════════════════════════════════════════════════════════
  */
-export const PITCH_SEMITONES = -4;
-
-/** The ratio rubberband wants, which is what the shift actually is. */
-export const PITCH_RATIO = Math.round(2 ** (PITCH_SEMITONES / 12) * 1e5) / 1e5;
-
-/** Where the shelf starts, and how much of the band the shift cost. */
-export const SHELF_HZ = 1_000;
-export const SHELF_DB = 5;
-
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- * HOW MUCH FASTER CHATTERBOX HAS TO BE PLAYED, AND WHY THAT IS ALLOWED NOW.
+ * A TARGET TO REACH, NOT A SHIFT TO APPLY. "IT SOUNDS LIKE THE TERMINATOR."
  *
- * Chatterbox has no speed parameter and settles around 155 words a minute of
- * articulation whatever reference it clones. That is what got it dropped, and
- * the note in scripts/chatterbox-say.py dismissed time-stretching as "a phase
- * vocoder smearing a voice to imitate a control the model already has".
+ * This was PITCH_SEMITONES = -4, a constant measured against Kokoro's bm_fable
+ * at 125Hz and then applied to every engine. Chatterbox clones bm_lewis and
+ * arrives at 94Hz already — so the same shift took it to 75Hz, which is below
+ * the adult male range entirely, and stacking a formant-preserving shift under
+ * a time-stretch cost 1.5dB of harmonic-to-noise ratio on top:
  *
- * It does not have that control, and rubberband is not a phase vocoder doing
- * it badly — measured, a pitch shift through it drifts the duration by 0.0ms
- * and a tempo change leaves the pitch where it was. The dismissal was written
- * about a technique nobody had tried.
+ *                          HNR        median
+ *   Chatterbox raw       -1.40 dB      94 Hz
+ *   + the -4st shift     -2.09 dB      75 Hz   <- under the male range
+ *   + the shelf          -2.59 dB      75 Hz
+ *   + the tempo          -2.90 dB      76 Hz
+ *   tempo alone          -1.75 dB      95 Hz
  *
- * 1.18 puts articulation at 177 words a minute against Kokoro's 138 on the same
- * script, inside the energetic band without reaching the 237 the drill reel hit
- * when this was pushed too far.
+ * Deep and metallic at once, which is what that description is.
+ *
+ * The fault is expressing the INTENT as a shift. What was ever wanted is a
+ * voice around 105Hz — mid-range for an adult man, low enough to answer "too
+ * high pitched", high enough to keep the energy a phone speaker reproduces.
+ * So that is what is written down, and each engine's correction is derived
+ * from where it actually starts. An engine already in range gets nothing done
+ * to it, which is the only way to be sure the processing cannot make it worse.
  * ═══════════════════════════════════════════════════════════════════════════
  */
+export const VOICE_TARGET_HZ = 105;
+
+/**
+ * Where each engine's voice sits before anything is done to it, measured.
+ * Kokoro is bm_fable at BASE_SPEED; Chatterbox is the committed reference clip.
+ */
+export const NATIVE_HZ: Record<string, number> = { kokoro: 126, chatterbox: 94 };
+
+/**
+ * Close enough to leave alone.
+ *
+ * A shift of under a semitone is inaudible and still costs harmonic detail, so
+ * inside this band the honest correction is none. Chatterbox at 94Hz is 1.9
+ * semitones under the target and gets nothing, because a voice that is already
+ * too LOW must never be pushed lower.
+ */
+export const PITCH_DEADBAND_ST = 1.5;
+
+/** How far this engine must move to reach the target, in semitones. */
+export function pitchShiftFor(engine: string): number {
+  const from = NATIVE_HZ[engine];
+  if (!from) return 0;
+  const semitones = 12 * Math.log2(VOICE_TARGET_HZ / from);
+  /**
+   * ONLY DOWNWARD, and only when it is worth doing. Raising a synthesised
+   * voice thins it, and the complaint that started this was that it was too
+   * high — there is no case here for shifting up.
+   */
+  if (semitones >= -PITCH_DEADBAND_ST) return 0;
+  return Math.round(semitones * 100) / 100;
+}
+
+/** The ratio rubberband wants. 1 means leave the voice alone. */
+export function pitchRatioFor(engine: string): number {
+  const semitones = pitchShiftFor(engine);
+  return semitones ? Math.round(2 ** (semitones / 12) * 1e5) / 1e5 : 1;
+}
+
+/**
+ * The shelf exists ONLY to put back what a shift takes away.
+ *
+ * Dropping a voice moves energy out of the 400Hz-6kHz band a phone reproduces.
+ * An engine that is not shifted has lost nothing, and a shelf on top of it is
+ * a tone preference nobody asked for — measured, it cost another 0.5dB of HNR.
+ */
+export const SHELF_HZ = 1_000;
+export const SHELF_DB = 5;
+export function shelfDbFor(engine: string): number {
+  return pitchShiftFor(engine) ? SHELF_DB : 0;
+}
+
 export const CHATTERBOX_TEMPO = 1.18;
 
 /** What a phrase is doing, which is what decides how fast it is said. */

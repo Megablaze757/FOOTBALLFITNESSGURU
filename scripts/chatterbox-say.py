@@ -137,9 +137,9 @@ for index, text in enumerate(phrases):
     # so a duration read before this would be wrong by 18% and every caption
     # would drift further behind than the last.
     # ─────────────────────────────────────────────────────────────────────
-    pitch = job.get("pitch", 0.7937)
+    pitch = job.get("pitch", 1)          # chatterbox arrives at 94Hz; see lib/speech-prosody.ts
     shelf_hz = job.get("shelf_hz", 1000)
-    shelf_db = job.get("shelf_db", 5)
+    shelf_db = job.get("shelf_db", 0)    # nothing was shifted, so nothing was lost
     tempo = job.get("tempo", 1.18)
     chain = []
     if pitch and pitch != 1:

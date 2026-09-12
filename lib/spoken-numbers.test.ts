@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { spokenForm, words } from "./spoken-numbers";
-import { BASE_SPEED, RATE, VOICE, PITCH_RATIO, SHELF_DB, CHATTERBOX_TEMPO } from "./speech-prosody";
+import { BASE_SPEED, RATE, VOICE, SHELF_DB, CHATTERBOX_TEMPO, pitchRatioFor, shelfDbFor } from "./speech-prosody";
 
 test("numbers become words", () => {
   const cases: [number, string][] = [
@@ -141,7 +141,7 @@ test("the recorder never asks the voice to hurry", () => {
    */
   const pitchMatch = py.match(/job\.get\("pitch", ([0-9.]+)\)/);
   assert.ok(pitchMatch, "kokoro-say.py no longer has a default pitch");
-  assert.equal(Number(pitchMatch![1]), PITCH_RATIO,
+  assert.equal(Number(pitchMatch![1]), pitchRatioFor("kokoro"),
     "the recorder and its fallback disagree about how low the voice is");
 
   /**
@@ -166,8 +166,14 @@ test("the recorder never asks the voice to hurry", () => {
     assert.ok(m, `chatterbox-say.py no longer has a default ${name}`);
     return Number(m![1]);
   };
-  assert.equal(cbNum("pitch"), PITCH_RATIO, "the two engines disagree about how low the voice is");
-  assert.equal(cbNum("shelf_db"), SHELF_DB, "the two engines disagree about the shelf");
+  /**
+   * PER ENGINE, and that is the point. Chatterbox arrives at 94Hz and must be
+   * left alone; one shared constant took it to 75Hz, under the male range.
+   */
+  assert.equal(cbNum("pitch"), pitchRatioFor("chatterbox"),
+    "chatterbox would fall back to a shift measured for a different engine");
+  assert.equal(cbNum("shelf_db"), shelfDbFor("chatterbox"),
+    "an unshifted voice would get a shelf correcting for a loss it never had");
   assert.equal(cbNum("tempo"), CHATTERBOX_TEMPO,
     "chatterbox would fall back to a pace nobody chose");
 });

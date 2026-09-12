@@ -22,6 +22,12 @@ import {
   REFERENCE_LINE,
   REFERENCE_WAV,
   type Role,
+  pitchShiftFor,
+  pitchRatioFor,
+  shelfDbFor,
+  VOICE_TARGET_HZ,
+  NATIVE_HZ,
+  PITCH_DEADBAND_ST
 } from "./speech-prosody";
 import { APP_NAME } from "./signup-link";
 
@@ -438,4 +444,57 @@ test("a supplied reference wins over the committed one", () => {
     "a recorded reference no longer takes precedence over the committed one");
   assert.doesNotMatch(readFileSync("scripts/chatterbox-say.py", "utf8"), /from kokoro_onnx import/,
     "chatterbox-say.py imports Kokoro again — the two will not install into one environment");
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// "IT SOUNDS LIKE THE TERMINATOR."
+//
+// A -4 semitone shift measured against Kokoro's bm_fable at 125Hz was applied
+// to every engine. Chatterbox arrives at 94Hz, so the same shift took it to
+// 75Hz — below the adult male range — and stacking it under a time-stretch
+// cost 1.5dB of harmonic-to-noise ratio. Deep and metallic at once.
+// ═══════════════════════════════════════════════════════════════════════════
+
+test("every engine is corrected towards the same target, not by the same amount", () => {
+  for (const engine of Object.keys(NATIVE_HZ)) {
+    const landed = NATIVE_HZ[engine] * pitchRatioFor(engine);
+    assert.ok(landed >= 88 && landed <= VOICE_TARGET_HZ + 2,
+      `${engine} lands at ${Math.round(landed)}Hz, outside a believable adult male range`);
+  }
+});
+
+/** The specific defect: a voice already low enough must not be pushed lower. */
+test("a voice already under the target is left alone", () => {
+  assert.equal(pitchShiftFor("chatterbox"), 0,
+    `chatterbox starts at ${NATIVE_HZ.chatterbox}Hz and is still being shifted`);
+  assert.equal(pitchRatioFor("chatterbox"), 1, "an unshifted voice is not being left untouched");
+  assert.equal(shelfDbFor("chatterbox"), 0,
+    "an unshifted voice gets a shelf correcting a loss it never had");
+});
+
+test("a voice above the target is brought down to it", () => {
+  assert.ok(pitchShiftFor("kokoro") < 0, "kokoro starts above the target and is not corrected");
+  assert.ok(shelfDbFor("kokoro") > 0, "kokoro is shifted but not given the shelf back");
+  const landed = NATIVE_HZ.kokoro * pitchRatioFor("kokoro");
+  assert.ok(Math.abs(landed - VOICE_TARGET_HZ) < 2,
+    `kokoro lands at ${Math.round(landed)}Hz, not ${VOICE_TARGET_HZ}`);
+});
+
+test("nothing is ever shifted upward", () => {
+  for (const engine of Object.keys(NATIVE_HZ)) {
+    assert.ok(pitchRatioFor(engine) <= 1, `${engine} is being raised, which thins a voice`);
+  }
+  /** An engine well under the target must still not be raised to meet it. */
+  assert.equal(pitchRatioFor("nonexistent"), 1, "an unknown engine is processed on a guess");
+});
+
+test("a shift too small to hear is not worth its artefacts", () => {
+  assert.ok(PITCH_DEADBAND_ST >= 1,
+    `${PITCH_DEADBAND_ST} semitones would process a voice for an inaudible gain`);
+});
+
+test("the target is a believable adult male pitch", () => {
+  // Adult male speech runs about 85-155Hz; the complaint was 125Hz being high.
+  assert.ok(VOICE_TARGET_HZ >= 95 && VOICE_TARGET_HZ <= 120,
+    `${VOICE_TARGET_HZ}Hz is not a mid-range adult male voice`);
 });

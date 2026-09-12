@@ -36,7 +36,7 @@ import { spokenForm } from "../lib/spoken-numbers";
 import {
   BASE_SPEED, VOICE, shapeGains, shapeRates,
   shapeExpression, EXAGGERATION_BASE, CFG_BASE, REFERENCE_WAV,
-  PITCH_RATIO, SHELF_HZ, SHELF_DB, CHATTERBOX_TEMPO,
+  pitchRatioFor, shelfDbFor, SHELF_HZ, CHATTERBOX_TEMPO,
 } from "../lib/speech-prosody";
 import { beatAudio, retime, trackClips, type BeatAudio } from "../lib/narration";
 import { layTrack, normalised, readWav, writeWav, type Wav } from "../lib/wav";
@@ -245,9 +245,9 @@ async function narrate(beats: readonly { say: string; hold?: number }[]): Promis
      * keep the phone-band energy that costs, and get to a pace a feed will sit
      * through. See lib/speech-prosody.ts.
      */
-    pitch: PITCH_RATIO,
+    pitch: pitchRatioFor(ENGINE),
     shelf_hz: SHELF_HZ,
-    shelf_db: SHELF_DB,
+    shelf_db: shelfDbFor(ENGINE),
     tempo: CHATTERBOX_TEMPO,
   };
 
@@ -282,9 +282,9 @@ async function narrate(beats: readonly { say: string; hold?: number }[]): Promis
      * 0.0ms of drift, so captions stay in sync; the shelf puts back the
      * phone-band energy the shift moves out of reach. See lib/speech-prosody.ts.
      */
-    pitch: PITCH_RATIO,
+    pitch: pitchRatioFor(ENGINE),
     shelf_hz: SHELF_HZ,
-    shelf_db: SHELF_DB,
+    shelf_db: shelfDbFor(ENGINE),
     phrases: flat.map((p) => p.text),
   };
 
