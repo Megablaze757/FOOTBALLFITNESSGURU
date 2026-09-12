@@ -30,6 +30,8 @@
 // ═══════════════════════════════════════════════════════════════════════════
 // =============================================================================
 
+import { MAX_REEL_MS } from "./reel-retention";
+
 export interface StockTrack {
   id: string;
   /** What the uploader called it. */
@@ -51,21 +53,43 @@ export interface StockTrack {
 /**
  * Tracks that have passed the niche check.
  *
- * Short, because they are LOOPS — lib/reel-music.ts loops the bed to the length
- * of the reel, so twelve seconds of drum and bass is twelve seconds that can
- * sit under a thirty-second video without ending in silence.
+ * ═══════════════════════════════════════════════════════════════════════════
+ * LONG ENOUGH NOT TO LOOP. "BAD MUSIC."
+ *
+ * The first entry here was twelve seconds of drum loop, on the reasoning that
+ * the bed is looped to the reel's length anyway so length did not matter. It
+ * does: twelve seconds under a twenty-seven second reel repeats two and a
+ * quarter times, and a loop point heard three times is the only thing anybody
+ * will notice. It was also drums and percussion with no music in it.
+ *
+ * The check measures tempo and bass weight, and says so — it does not judge
+ * whether something is good. Length is the part it CAN see, so a track shorter
+ * than the longest reel is now refused: at 86 seconds a bed never reaches its
+ * loop point at all.
+ * ═══════════════════════════════════════════════════════════════════════════
  */
 export const STOCK_TRACKS: StockTrack[] = [
   {
-    id: "dnb-loop",
-    title: "Drum n Bass loop (Drum + Perc)",
-    url: "https://cdn.freesound.org/previews/156/156863_236950-hq.mp3",
+    id: "trap-beats-02",
+    title: "Trap Beats 02",
+    url: "https://cdn.freesound.org/previews/534/534826_11861866-hq.mp3",
     licence: "CC0",
-    creator: "freesound.org contributor 236950",
+    creator: "freesound.org contributor 11861866",
     via: "openverse.org, filtered to licence=cc0",
-    bpm: 128,
-    bassShare: 0.85,
-    seconds: 12.0,
+    bpm: 141,
+    bassShare: 0.90,
+    seconds: 85.7,
+  },
+  {
+    id: "dark-beat",
+    title: "Dark Beat Synth Electro Atmo Ambience",
+    url: "https://cdn.freesound.org/previews/611/611374_2282212-hq.mp3",
+    licence: "CC0",
+    creator: "freesound.org contributor 2282212",
+    via: "openverse.org, filtered to licence=cc0",
+    bpm: 122,
+    bassShare: 0.92,
+    seconds: 48.0,
   },
 ];
 
@@ -88,11 +112,13 @@ export function trackProblems(tracks: readonly StockTrack[] = STOCK_TRACKS): str
     if (!t.creator.trim()) problems.push(`${t.id}: nobody is recorded as having made it`);
     if (!t.via.trim()) problems.push(`${t.id}: no record of where the licence claim came from`);
     /**
-     * A LOOP MAY BE SHORT, BUT NOT THIS SHORT. Under five seconds the loop
-     * point arrives often enough to be heard as a loop, which is worse than
-     * silence because it is the only thing anybody will notice.
+     * LONGER THAN THE LONGEST REEL, so the bed never reaches its loop point.
+     * The entry this replaced was 12s under a 27s reel — two and a quarter
+     * repeats, and a loop heard three times is all anybody hears.
      */
-    if (t.seconds < 5) problems.push(`${t.id}: ${t.seconds}s loops audibly`);
+    if (t.seconds * 1000 < MAX_REEL_MS) {
+      problems.push(`${t.id}: ${t.seconds}s loops audibly under a ${MAX_REEL_MS / 1000}s reel`);
+    }
   }
   if (!tracks.length) problems.push("no track has passed the niche check yet");
   return problems;

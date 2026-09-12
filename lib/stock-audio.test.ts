@@ -38,13 +38,14 @@ test("every track records where it came from and what may be done with it", () =
 test("a track with no provenance is refused", () => {
   const bad: StockTrack[] = [{
     id: "x", title: "x", url: "http://example.com/a.mp3", licence: "CC0",
-    creator: "", via: "", bpm: 130, bassShare: 0.5, seconds: 2,
+    creator: "", via: "", bpm: 130, bassShare: 0.5, seconds: 12,
   }];
   const found = trackProblems(bad);
   assert.ok(found.some((p) => p.includes("not fetched over https")));
   assert.ok(found.some((p) => p.includes("nobody is recorded")));
   assert.ok(found.some((p) => p.includes("where the licence claim came from")));
-  assert.ok(found.some((p) => p.includes("loops audibly")));
+  assert.ok(found.some((p) => p.includes("loops audibly")),
+    "a 12s track under a 30s reel repeats twice and was not caught");
 });
 
 test("an empty manifest says so rather than looking fine", () => {
