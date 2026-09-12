@@ -26,6 +26,8 @@
 // ═══════════════════════════════════════════════════════════════════════════
 // =============================================================================
 
+import { spokenWords } from "./spoken-numbers";
+
 /**
  * Silences, in milliseconds.
  *
@@ -221,7 +223,30 @@ export function phrases(line: string): Phrase[] {
     if (last) return { text: phrase, gapMs: 0 };
 
     const next = spoken[i + 1];
-    const words = (t: string) => t.split(/\s+/).filter(Boolean).length;
+    /**
+     * ═══════════════════════════════════════════════════════════════════
+     * COUNTED AS SPOKEN, BECAUSE THESE TWO DECISIONS ARE ABOUT SPEECH.
+     *
+     * Both thresholds below ask how long a line TAKES TO SAY — is the next
+     * one short enough to be a punchline, is this one long enough to be a
+     * setup — and both were counting written tokens. These reels are built
+     * on numbers, so the two answers differ on exactly the lines that carry
+     * the content:
+     *
+     *   "£0.31 or £3.19, same 30 grams."            written 6, spoken 11
+     *   "100kg at 60kg bodyweight is exceptional."  written 6, spoken  9
+     *
+     * Both were being read as short punchlines, so the line BEFORE each got
+     * a 900ms payoff pause it had not earned; and both were being rejected
+     * as setups, so a genuine reveal after them lost its pause. The dramatic
+     * silences were landing on the wrong lines.
+     *
+     * Fourth place this fault has turned up — see spokenWords in lib/reel.ts
+     * and weightOf in lib/caption-karaoke.ts. Every one of them was the
+     * written form standing in for the spoken one.
+     * ═══════════════════════════════════════════════════════════════════
+     */
+    const words = spokenWords;
     const nextIsLast = i === spoken.length - 2;
     const nextIsShort = words(next) <= PAYOFF_MAX_WORDS;
     if (nextIsLast && nextIsShort) return { text: phrase, gapMs: jitter(GAP.payoff, phrase) };
