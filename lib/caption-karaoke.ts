@@ -168,10 +168,49 @@ export interface KaraokeWord extends WordSpan {
 export function karaokeWords(text: string, ms: number): KaraokeWord[] {
   const spans = wordSpans(text, ms);
   /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * A RUN IS NOT A WORD, AND THE INDEXES ONLY LINED UP BY ACCIDENT.
+   *
    * The key flag comes from emphasise, so there is ONE rule about which figure
-   * is coloured and it is the tested one. Matching by text would colour every
-   * copy of a repeated word; matching by position cannot.
+   * is coloured — that part was right. The mapping was not: emphasise returns
+   * RUNS, which are stretches of the caption that share a colour, and this
+   * matched run 0 to word 0, run 1 to word 1 and so on.
+   *
+   * A caption with the figure in the middle produces three runs for six words:
+   *
+   *   "100kg at 60kg bodyweight is exceptional."
+   *     run 0  "100kg at "                     not key
+   *     run 1  "60kg"                          KEY
+   *     run 2  " bodyweight is exceptional."   not key
+   *
+   * so the colour landed on word 1 — "at" — and "60kg" stayed white. The line
+   * that measures a bodyweight against a bar coloured the preposition. The
+   * same caption that prompted "the stress of words is at the wrong place",
+   * with the highlight in a second wrong place for a second reason.
+   *
+   * It looked correct in testing because a caption whose figure happens to sit
+   * at a word boundary with no leading text — "At 120kg, novice." — produces
+   * exactly one run per word and lines up by luck.
+   *
+   * Keyed by CHARACTER POSITION now, which is the thing the two actually share.
+   * ═══════════════════════════════════════════════════════════════════════
    */
-  const keyed = emphasise(text).filter((r) => r.text.trim()).map((r) => r.key);
-  return spans.map((s, i) => ({ ...s, key: keyed[i] ?? false }));
+  const keyAt: boolean[] = [];
+  for (const run of emphasise(text)) {
+    for (let i = 0; i < run.text.length; i += 1) keyAt.push(run.key);
+  }
+
+  let cursor = 0;
+  return spans.map((span) => {
+    const at = text.indexOf(span.text, cursor);
+    if (at < 0) return { ...span, key: false };
+    cursor = at + span.text.length;
+    /**
+     * Any character of the word being inside the coloured run is enough: the
+     * unit is pulled into the run with its number ("30 grams"), so a word can
+     * begin outside it and still belong to the figure.
+     */
+    const key = keyAt.slice(at, at + span.text.length).some(Boolean);
+    return { ...span, key };
+  });
 }

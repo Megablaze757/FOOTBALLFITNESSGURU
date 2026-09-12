@@ -143,3 +143,48 @@ test("the spans still tile the caption exactly", () => {
     assert.equal(last.at + last.ms, 2_500, "the highlight outlives or undershoots the caption");
   }
 });
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE COLOUR LANDED ON "AT".
+ *
+ * emphasise returns RUNS — stretches of a caption sharing a colour — and this
+ * matched run 0 to word 0, run 1 to word 1. A figure in the middle of a line
+ * makes three runs for six words, so the key fell on word 1 and the figure
+ * stayed white. The line measuring a bodyweight against a bar coloured the
+ * preposition.
+ *
+ * It passed before because a caption whose figure sits at a word boundary with
+ * no leading text produces one run per word and lines up by luck.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("the colour lands on the figure, not on whatever shares its index", () => {
+  const ws = karaokeWords("100kg at 60kg bodyweight is exceptional.", 2_000);
+  const keyed = ws.filter((w) => w.key).map((w) => w.text);
+  assert.deepEqual(keyed, ["60kg"],
+    `coloured ${JSON.stringify(keyed)} — the run index was being read as a word index`);
+});
+
+test("a figure at a word boundary still works", () => {
+  // The shape that lined up by accident and hid the bug.
+  const ws = karaokeWords("At 120kg, novice.", 2_000);
+  assert.deepEqual(ws.filter((w) => w.key).map((w) => w.text), ["120kg,"]);
+});
+
+test("a unit is coloured with its number", () => {
+  const ws = karaokeWords("£0.31 or £3.19, same 30 grams.", 2_000);
+  assert.deepEqual(ws.filter((w) => w.key).map((w) => w.text), ["30", "grams."],
+    "the fact was split across two colours");
+});
+
+/** Position, not text: a repeated figure must colour only the one that counts. */
+test("only one copy of a repeated figure is coloured", () => {
+  const ws = karaokeWords("Same 30 grams. Same 30 grams.", 2_000);
+  const keyed = ws.map((w, i) => (w.key ? i : -1)).filter((i) => i >= 0);
+  assert.equal(keyed.length, 2, "the unit should come with the number, and once");
+  assert.ok(Math.min(...keyed) > 2, "the FIRST copy was coloured, so this is matching by text");
+});
+
+test("a caption with no figure has nothing coloured", () => {
+  assert.deepEqual(karaokeWords("Means nothing.", 2_000).filter((w) => w.key), []);
+});
