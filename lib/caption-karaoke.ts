@@ -32,6 +32,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 // =============================================================================
 
+import { spokenForm } from "./spoken-numbers";
 import { emphasise } from "./caption-emphasis";
 
 /**
@@ -56,7 +57,35 @@ export interface WordSpan {
  * tracks it closely enough for a highlight and cannot be wrong about a word it
  * has never seen. The +1 stops a one-character word getting a share of zero.
  */
-const weightOf = (word: string) => word.replace(/[^\p{L}\p{N}]/gu, "").length + 1;
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * HOW LONG A WORD TAKES TO SAY, NOT HOW LONG IT IS TO WRITE.
+ *
+ * "Sometimes the stress of words is at the wrong place." The voice was not
+ * stressing the wrong word — the HIGHLIGHT was on the wrong one, which reads
+ * as the same thing.
+ *
+ * This counted written characters, and the reels are built on numbers. "100kg"
+ * is five characters and "one hundred kilos" is seventeen, so on a real line:
+ *
+ *   word          gets   needs
+ *   100kg          15%     29%
+ *   at              8%      5%
+ *   60kg           13%     20%
+ *   bodyweight     28%     20%
+ *   exceptional    30%     21%
+ *
+ * The first word is given half the time it needs, so the highlight is a whole
+ * word ahead before the voice has finished saying "hundred", and stays ahead
+ * for the rest of the line.
+ *
+ * Same fault as the pace estimator had — see spokenWords in lib/reel.ts — in
+ * the one other place that measures a word without saying it. The spoken form
+ * is what the synthesiser is handed, so its length is the honest weight.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+const weightOf = (word: string) =>
+  spokenForm(word).replace(/[^\p{L}\p{N}]/gu, "").length + 1;
 
 /**
  * When each word of a caption should light up.

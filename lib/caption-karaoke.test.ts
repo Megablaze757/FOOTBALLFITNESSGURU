@@ -99,3 +99,47 @@ test("timings survive the merge untouched", () => {
   const merged = karaokeWords("one two three four", 2_000);
   assert.deepEqual(merged.map(({ text, at, ms }) => ({ text, at, ms })), plain);
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// "SOMETIMES THE STRESS OF WORDS IS AT THE WRONG PLACE."
+//
+// The voice was not stressing the wrong word — the HIGHLIGHT was on the wrong
+// one, which reads as the same thing. Weights were written characters, and
+// these reels are built on numbers: "100kg" is five characters and takes as
+// long to say as "one hundred kilos".
+// ═══════════════════════════════════════════════════════════════════════════
+
+test("a number is lit for as long as it takes to say", () => {
+  const spans = wordSpans("100kg at 60kg bodyweight is exceptional.", 3_000);
+  assert.equal(spans.length, 6);
+  const share = (i: number) => spans[i].ms / 3_000;
+  /**
+   * "one hundred kilos" against "bodyweight": the number is the longer of the
+   * two to say, and by written length it looks half the size.
+   */
+  assert.ok(share(0) > share(3),
+    `"100kg" is lit for ${(share(0) * 100).toFixed(0)}% and "bodyweight" for `
+    + `${(share(3) * 100).toFixed(0)}% — the highlight runs ahead of the voice`);
+  assert.ok(share(0) > share(1) * 3, "a long number is not given more room than 'at'");
+});
+
+test("a line with no numbers in it is unchanged", () => {
+  const spans = wordSpans("Means nothing at all here", 2_000);
+  assert.equal(spans.length, 5);
+  // Still longest-word-gets-most, just measured on what is said.
+  const byWidth = [...spans].sort((a, b) => b.ms - a.ms)[0];
+  assert.equal(byWidth.text, "nothing");
+});
+
+test("the spans still tile the caption exactly", () => {
+  for (const line of ["100kg at 60kg bodyweight is exceptional.", "£0.31 or £3.19, same 30 grams."]) {
+    const spans = wordSpans(line, 2_500);
+    assert.equal(spans[0].at, 0, "the first word does not start at zero");
+    for (let i = 1; i < spans.length; i++) {
+      assert.equal(spans[i].at, spans[i - 1].at + spans[i - 1].ms,
+        `a gap opened before "${spans[i].text}"`);
+    }
+    const last = spans[spans.length - 1];
+    assert.equal(last.at + last.ms, 2_500, "the highlight outlives or undershoots the caption");
+  }
+});
