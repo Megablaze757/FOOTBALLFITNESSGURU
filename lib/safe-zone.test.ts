@@ -264,7 +264,7 @@ test("the focus calibration points at the check that verifies it", () => {
  *
  * captionLines cuts at MAX_LINE_CHARS = 42, and one character of the caption
  * font averages 26.4 CSS px, so 42 characters is about three rendered lines in
- * the 412px band and never the one the name implies. Measured across all eight
+ * the 412px band and never the one the name implies. Measured across all seven
  * scripts, 29 captions render three lines and one rendered four — 45% of the
  * frame in text, over the app the reel is about.
  *
@@ -284,6 +284,14 @@ test("the recorder refuses a caption taller than the ceiling", () => {
    */
   assert.match(rec, /checkCaptionLines[\s\S]{0,900}getComputedStyle\(el\)\.lineHeight/,
     "the line height is assumed rather than read from the element");
+  /**
+   * AND IT HAS TO BE THE RETURNED VALUE. Merely mentioning the line height
+   * nearby is not enough: replacing the whole computation with `return 1` left
+   * every assertion above passing, because the ingredients were still in the
+   * function that no longer used them.
+   */
+  assert.match(rec, /return Math\.round\(box\.height \/ lh\);/,
+    "the rendered line count is not computed from the measured height");
 });
 
 test("the line ceiling leaves the spotlight room", () => {
@@ -299,4 +307,35 @@ test("the line ceiling leaves the spotlight room", () => {
   assert.ok(tallestCaptionTop - ringBottom > 26 * 2,
     "the clearance is no better than the 26px that prompted the ceiling");
   assert.equal(MAX_CAPTION_LINES, 3);
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE CEILING NEEDS A GUARD THAT RUNS WITHOUT A RECORDING.
+ *
+ * Mutation testing found the hole: reverting the one over-long script line was
+ * caught by NOTHING. The recorder measures it on the real page, and a recording
+ * needs three minutes, a running app and a voice model — so in the unit suite,
+ * which has no browser, a script could go back to a four-line caption silently.
+ *
+ * scripts/check-captions.mts is the same measurement with none of that: the
+ * overlay on a blank page at the record viewport, every caption of every
+ * script, a few seconds. This asserts it exists and still does that, because a
+ * check nobody runs is the other way this goes quiet.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("captions can be checked without recording a reel", () => {
+  const src = readFileSync("scripts/check-captions.mts", "utf8");
+  assert.match(src, /MAX_CAPTION_LINES/, "the standalone check does not use the ceiling");
+  assert.match(src, /outsideSafeZone/, "it checks lines but not whether they fit the frame");
+  assert.match(src, /reel-overlay\.js/, "it measures something other than the real overlay");
+  assert.match(src, /SCRIPTS/, "it does not cover every script");
+  assert.match(src, /process\.exit\(1\)/, "a problem does not fail the check");
+  /**
+   * A self-test, for the same reason three audio metrics in this project got
+   * one: an instrument that is confidently wrong is worse than no instrument.
+   */
+  assert.match(src, /--self-test/, "the instrument has no control");
+  assert.match(src, /the instrument is wrong, so its readings mean nothing/,
+    "the self-test does not refuse to report when the control fails");
 });

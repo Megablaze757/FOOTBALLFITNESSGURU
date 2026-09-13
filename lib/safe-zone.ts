@@ -69,7 +69,7 @@ export const SAFE = {
  *
  * Not a style rule — a measurement. One character of the caption font averages
  * 26.4 CSS px, so the 412px safe band fits about fifteen, and a caption the
- * code counts as ONE line is routinely three on screen. Across all eight
+ * code counts as ONE line is routinely three on screen. Across all seven
  * scripts: 23 captions render one line, 22 render two, 28 render three, and
  * one rendered four before it was reworded.
  *
