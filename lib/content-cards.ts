@@ -128,11 +128,14 @@ export function proteinGapCard(): ContentCard | null {
      * whose first second is the same sentence — the one second that decides,
      * spent telling a returning viewer they have seen this.
      *
-     * The card is a two-sided reveal, so its hook is the two sides as a
-     * question the viewer has to answer before the card does.
+     * The card is a two-sided reveal, so its hook is the question those two
+     * sides settle — and it must not answer itself. The first attempt did:
+     * "£0.31 or £3.19 for the same 30 grams?" puts both figures in the first
+     * second, and beats one and two then deliver the same two figures again.
+     * A hook that gives away its own reveal leaves the rest of the reel with
+     * nothing to close.
      */
-    hook: `${money(facts.cheapest.cost)} or ${money(facts.dearest.cost)} `
-      + `for the same ${REFERENCE_PROTEIN} grams?`,
+    hook: `Same protein. ${times}x the price?`,
     lines: [
       `${REFERENCE_PROTEIN} grams of protein from ${facts.cheapest.name.toLowerCase()} costs `
         + `${money(facts.cheapest.cost)}.`,
@@ -185,7 +188,7 @@ export function bodyweightGapCard(): ContentCard | null {
      * The card's whole device is one bar with two answers, so the hook asks
      * which one it is and the two faces settle it.
      */
-    hook: `${LOAD}kg on the ${page.lift.label.toLowerCase()} — exceptional, or novice?`,
+    hook: `Same bar. ${light} or ${heavy}?`,
     lines: [
       `A ${LOAD}kg ${page.lift.label.toLowerCase()} at ${LIGHT}kg bodyweight is ${light.toLowerCase()}.`,
       `The same bar at ${HEAVY}kg is ${heavy.toLowerCase()} — nothing about the lift changed, `
@@ -241,7 +244,7 @@ export function cheapestProteinCard(): ContentCard | null {
      * asserted — red lentils at 31p against chicken breast at £1.06 — and a
      * test fails if that ever stops being true.
      */
-    hook: "The cheapest protein in the shop? Not chicken.",
+    hook: "Cheapest protein? Not chicken.",
     lines: [
       `The cheapest ${REFERENCE_PROTEIN} grams of protein you can buy is `
         + `${facts.cheapest.name.toLowerCase()}.`,

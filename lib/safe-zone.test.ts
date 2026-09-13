@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
   CHROME, SAFE, FRAME_W, FRAME_H, CAPTION_BOTTOM_FRACTION, outsideSafeZone, cssPx,
-  MAX_CAPTION_LINES,
+  MAX_CAPTION_LINES, MAX_HOOK_LINES,
 } from "./safe-zone";
 import { REEL_W, REEL_SCALE } from "./reel-plan";
 
@@ -361,4 +361,30 @@ test("the spotlight dims the page without erasing it", () => {
     `a ${alpha} dim measured 2.26:1 on the figure the reel is about — under the 3:1 floor`);
   /** And it still has to dim: no dim is no spotlight. */
   assert.ok(alpha >= 0.35, `a ${alpha} dim stops the ring pointing at anything`);
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE HOOK IS THE LINE THAT DECIDES, SO IT IS THE ONE TO MEASURE.
+ *
+ * The checker measured captions and not hooks, which is the wrong way round if
+ * you only get one: a caption is read by somebody who already stayed, and the
+ * hook is what makes them stay. It is also the largest type in the reel — 64px
+ * against the caption's 46 — so it overflows first.
+ *
+ * HOOK_MAX_WORDS is ten, justified as what fits in the one second a feed
+ * gives. That is a rule about reading TIME and it was the only one there was.
+ * Measured, ten words is four or five rendered lines: "Slept three hours? Your
+ * app's booked you in for squats." was five, over a third of the frame, drawn
+ * over the app in the second that decides.
+ */
+test("the checker measures the hook, not just the captions", () => {
+  const src = readFileSync("scripts/check-captions.mts", "utf8");
+  assert.match(src, /MAX_HOOK_LINES/, "the hook ceiling is not imported");
+  assert.match(src, /__reelHook/, "nothing draws the hook");
+  assert.match(src, /HOOK:/, "a hook problem would not say it was the hook");
+  /** Its box against the frame as well as its height. */
+  assert.match(src, /drawHook[\s\S]{0,1200}outsideSafeZone\(hook\.box\)/,
+    "the hook's height is checked and where it sits is not");
+  assert.equal(MAX_HOOK_LINES, 3);
 });

@@ -26,7 +26,7 @@ import { chromium, type Browser, type Page } from "playwright";
 import { SCRIPTS, reelScript, type ScriptId } from "../lib/reel-script";
 import { reelPlan, REEL_W, REEL_H, REEL_SCALE } from "../lib/reel-plan";
 import { karaokeWords } from "../lib/caption-karaoke";
-import { MAX_CAPTION_LINES, outsideSafeZone } from "../lib/safe-zone";
+import { MAX_CAPTION_LINES, MAX_HOOK_LINES, outsideSafeZone } from "../lib/safe-zone";
 
 /**
  * PW_CHROMIUM, the same name record-reel.mts, record-carousel.mts,
@@ -147,6 +147,38 @@ if (process.argv.includes("--self-test")) {
   process.exit(0);
 }
 
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE HOOK TOO, BECAUSE IT IS THE LINE THAT DECIDES.
+ *
+ * This measured captions and not hooks, which is the wrong way round if you
+ * only get one: a caption is read by somebody who has already stayed, and the
+ * hook is what makes them. It is also the largest type in the reel — 64px
+ * against the caption's 46 — so it is the first thing to overflow when a hook
+ * is rewritten, and five of the seven were just rewritten.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+async function drawHook(text: string): Promise<{ lines: number; box: Drawn["box"] }> {
+  await page.evaluate(
+    (t) => (window as never as { __reelHook: (s: string) => void }).__reelHook(t),
+    text,
+  );
+  return page.evaluate(() => {
+    const el = document.getElementById("__reel_hook")!;
+    const r = el.getBoundingClientRect();
+    const lh = parseFloat(getComputedStyle(el).lineHeight);
+    const bleed = Number(el.dataset.bleed ?? 0);
+    const s = Number(document.documentElement.dataset.reelScale ?? 2);
+    return {
+      lines: lh > 0 ? Math.round(r.height / lh) : 0,
+      box: {
+        left: (r.left - bleed) * s, right: (r.right + bleed) * s,
+        top: (r.top - bleed) * s, bottom: (r.bottom + bleed) * s,
+      },
+    };
+  });
+}
+
 const problems: string[] = [];
 const histogram = new Map<number, number>();
 let highest = { top: REEL_H * REEL_SCALE, text: "" };
@@ -155,6 +187,22 @@ let total = 0;
 for (const meta of SCRIPTS) {
   const script = reelScript(meta.id as ScriptId, "");
   if (!script) continue;
+
+  const hook = await drawHook(script.hook);
+  for (const reason of outsideSafeZone(hook.box)) {
+    problems.push(`${meta.id} HOOK: ${reason} — ${JSON.stringify(script.hook)}`);
+  }
+  /**
+   * Four lines of 64px type is over half the frame, and the hook is drawn over
+   * the app rather than under it — at that size it stops being a hook and
+   * becomes a wall the viewer has to read past.
+   */
+  if (hook.lines > MAX_HOOK_LINES) {
+    problems.push(`${meta.id} HOOK: ${hook.lines} lines, over the ${MAX_HOOK_LINES}-line ceiling `
+      + `— ${JSON.stringify(script.hook)}`);
+  }
+  await page.evaluate(() => (window as never as { __reelHook: (s: string) => void }).__reelHook(""));
+
   for (const step of reelPlan(script).steps) {
     for (const caption of step.captions) {
       total += 1;

@@ -97,6 +97,30 @@ export const MAX_CAPTION_LINES = 3;
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
+ * AND THE SAME CEILING FOR THE HOOK, WHICH IS SET MUCH LARGER.
+ *
+ * HOOK_MAX_WORDS is ten, justified as "a feed gives about a second, and ten
+ * words is what fits in one". That is a rule about READING TIME, and it is the
+ * only one there was. Nothing asked whether ten words fit the FRAME.
+ *
+ * They do not. The hook is 64px against the caption's 46, so a line holds
+ * about fifteen characters, and measured across the seven scripts:
+ *
+ *   "Slept three hours? Your app's booked you in for squats."   5 lines
+ *   "Which of these costs 10x more for the same protein?"       4 lines
+ *
+ * Five lines of 64px type is over a third of the frame, drawn OVER the app, in
+ * the second that decides whether anybody stays. At that size it stops being a
+ * hook and becomes a wall to read past.
+ *
+ * Three lines is 414px of a 1920px frame. It also forces hooks under about 45
+ * characters, which is the length short-form hooks work at anyway.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export const MAX_HOOK_LINES = 3;
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
  * THE CAPTION'S OWN GEOMETRY, so the page underneath can keep out of its way.
  *
  * These are the values scripts/reel-overlay.js draws with, in the CSS pixels it

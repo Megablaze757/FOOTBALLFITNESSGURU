@@ -245,7 +245,7 @@ function readinessScript(): ReelScript {
    * funnier and more accurate than narrating its output.
    * ═══════════════════════════════════════════════════════════════════════
    */
-  return build("demo-readiness", "Slept three hours? Your app's booked you in for squats.", [
+  return build("demo-readiness", "Slept 3 hours? Your app says squats.", [
     {
       route: "/journal",
       action: "Open the check-in. Do not fill it in yet — let the empty form show.",
