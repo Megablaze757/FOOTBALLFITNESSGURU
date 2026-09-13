@@ -29,14 +29,15 @@ import { karaokeWords } from "../lib/caption-karaoke";
 import { MAX_CAPTION_LINES, outsideSafeZone } from "../lib/safe-zone";
 
 /**
- * Playwright's own download when there is one, and the container's build when
- * the pinned revision is not there — the alternative is this guard quietly not
- * running in the one environment that has a browser installed.
+ * PW_CHROMIUM, the same name record-reel.mts, record-carousel.mts,
+ * build-og-images.mts, screenshot-themes.mts and playwright.config.ts already
+ * read. Playwright's own download when it is unset; a path when the pinned
+ * revision is not the one installed.
  */
-const executablePath = process.env.CHROMIUM_PATH;
+const executablePath = process.env.PW_CHROMIUM || undefined;
 
 async function open(): Promise<{ browser: Browser; page: Page }> {
-  const browser = await chromium.launch(executablePath ? { executablePath } : {});
+  const browser = await chromium.launch({ executablePath });
   const context = await browser.newContext({
     viewport: { width: REEL_W, height: REEL_H },
     deviceScaleFactor: REEL_SCALE,
