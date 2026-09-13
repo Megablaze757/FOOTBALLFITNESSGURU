@@ -27,7 +27,7 @@ import { join } from "node:path";
 import { reelScript, type ScriptId } from "../lib/reel-script";
 import { reelPlan, srt, endCardAt, REEL_W, REEL_H, REEL_SCALE } from "../lib/reel-plan";
 import { retentionProblems } from "../lib/reel-retention";
-import { closingDrift, driftTarget } from "../lib/reel-scroll";
+import { closingDrift, driftTarget, openingScroll } from "../lib/reel-scroll";
 import { implausibleAudio } from "../lib/reel";
 import { outsideSafeZone, MAX_CAPTION_LINES } from "../lib/safe-zone";
 import { MOVE_GAP_MS, MOVE_POLL_MS, MOVE_WAIT_MS } from "../lib/reel-moves";
@@ -863,8 +863,10 @@ for (const step of plan.steps) {
      * now, so the first second of the reel is the app doing something.
      */
     await checkSafeZone("hook", "__reel_hook", plan.hook);
-    await page.evaluate((y) => window.scrollTo({ top: y, behavior: "smooth" }), Math.round(page_.viewport * 0.28)).catch(() => {});
-    driftFrom = Math.round(page_.viewport * 0.28);
+    // openingScroll, not 0.28 written twice: the closing beat glides back to
+    // this exact position, so the two have to be the same number.
+    await page.evaluate((y) => window.scrollTo({ top: y, behavior: "smooth" }), openingScroll(page_)).catch(() => {});
+    driftFrom = openingScroll(page_);
     // Held from the first frame, because the decision is made in three seconds
     // and the hook has to be readable inside them.
     await sleep(Math.max(0, plan.hookMs - elapsed()));
@@ -1151,7 +1153,7 @@ async function runCaptions(step: (typeof plan.steps)[number], willAim: boolean):
      */
     const closing = step === plan.steps[plan.steps.length - 1];
     const to = closing
-      ? closingDrift({ from: driftAt, step: i + 1, steps: step.captions.length })
+      ? closingDrift({ ...page_, from: driftAt, step: i + 1, steps: step.captions.length })
       : driftTarget({ ...page_, from: driftAt, step: i + 1, steps: step.captions.length });
     if (to !== driftAt || i === 0) {
       await page.evaluate((y) => window.scrollTo({ top: y, behavior: "smooth" }), to).catch(() => {});

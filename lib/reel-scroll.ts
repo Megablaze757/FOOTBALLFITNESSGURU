@@ -91,7 +91,34 @@ export function driftEnd(d: Omit<Drift, "step" | "steps">): number {
  * last caption, so the end card holds the opening framing while it asks.
  * ═══════════════════════════════════════════════════════════════════════════
  */
-export function closingDrift({ from, step, steps }: Pick<Drift, "from" | "step" | "steps">): number {
+export function closingDrift(
+  { from, scrollable, viewport, step, steps }: Drift,
+): number {
   const share = Math.min(1, Math.max(0, step / Math.max(1, steps)));
-  return Math.round(Math.max(0, from * (1 - share)));
+  const home = openingScroll({ scrollable, viewport });
+  return Math.round(from + (home - from) * share);
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * WHERE THE REEL OPENS, WHICH IS NOT THE TOP OF THE DOCUMENT.
+ *
+ * The hook beat scrolls the page down by this much as it starts — "a frame
+ * that does not move is a frame a scroller has already finished reading" — and
+ * the mux trims the audio lead off the front, so the first frame ANYBODY SEES
+ * is already scrolled.
+ *
+ * The first version of closingDrift glided the last beat back to 0 and called
+ * that the loop. Filmed and compared: the opening frame of the standards reel
+ * starts partway down its list of lifts, and the closing frame showed the page
+ * header above it. The right page, the right scroll for the document, and the
+ * wrong frame — off by exactly this.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export const OPENING_DRIFT = 0.28;
+
+export function openingScroll(
+  { scrollable, viewport }: Pick<Drift, "scrollable" | "viewport">,
+): number {
+  return Math.round(Math.max(0, Math.min(scrollable, viewport * OPENING_DRIFT)));
 }
