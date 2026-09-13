@@ -885,7 +885,35 @@ function standardsScript(): ReelScript | null {
        * ═══════════════════════════════════════════════════════════════════
        */
       moves: [{ tap: "Performance" }, { tap: "Not now", optional: true }],
-      focus: "Strength ranks",
+      /**
+       * ═══════════════════════════════════════════════════════════════════
+       * THE RANKED LIFT, NOT THE HEADING ABOVE IT.
+       *
+       * This was "Strength ranks", and filmed it rings a title bar. The
+       * smallest element containing those words is the <h3>; the ring grows
+       * while the parent is still about the same thing, and the section it
+       * sits in holds a body diagram and a lift table, so it blows both
+       * bounds (8x the h3, 30% of the frame) and growth stops at the header
+       * row. Photographed twice: a gold rectangle around the words "Strength
+       * ranks — 1 lift ranked", with the sentence that actually names the
+       * tier immediately below it, half-covered by the ring's own edge.
+       *
+       * The line is "the rank PocketAthlete gives that lift", so the shot is
+       * the lift's row in the table — the lift, its tier, and the kilos to the
+       * next one, which is the answer the whole reel is built to deliver.
+       *
+       * page.lift.label rather than "Bench press" typed here: the script
+       * already resolved which lift it is logging, and a focus that does not
+       * match the lift being logged should move when that does.
+       *
+       * (The table shows `via` rather than the label — a rank earned on
+       * dumbbells reads as a dumbbell press. This logs a barbell 1RM straight
+       * into /benchmarks, so they are the same string. If that ever stops
+       * being true the recorder refuses the run and says so, which is the
+       * right way round: a missing focus is loud, a wrong one is silent.)
+       * ═══════════════════════════════════════════════════════════════════
+       */
+      focus: page.lift.label,
       /**
        * NOT SUSPENSE_MS, AND THE DIFFERENCE IS MEASURED. At 900ms the payoff
        * line began 1.3s before the rank was on screen: the first half of "and
