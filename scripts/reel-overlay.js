@@ -179,6 +179,24 @@
       // asking for a weight it does not have is how the fake bold got here.
       + "max-width:100%;text-align:center;font-size:46px;line-height:1.2;font-weight:800;"
       + "letter-spacing:-0.01em;"
+      /**
+       * THE ACTIVE WORD IS SCALED, SO THE SPACES HAVE TO SURVIVE IT.
+       *
+       * The sweep grows the word being spoken to scale(1.1). An inline-block
+       * scales about its own centre, so a seven-letter word at 46px reaches
+       * about 6px into the space on each side — and the space was 1.18px.
+       * Measured on a finished frame: "which is cheaper than" read as
+       * "which ischeaperthan".
+       *
+       * Measured on the real caption, gap either side of the scaled word:
+       *
+       *   normal   1.18px     0.04em   3.03px
+       *   0.06em   3.93px     0.08em   4.85px, and the line wrapped
+       *
+       * 0.06em is the widest that does not cost a line, which is the other
+       * thing a caption cannot afford.
+       */
+      + "word-spacing:0.06em;"
       + "color:#fff;"
       + "text-shadow:4px 0px 0 #000,3.5px 2px 0 #000,2px 3.5px 0 #000,0px 4px 0 #000,-2px 3.5px 0 #000,-3.5px 2px 0 #000,-4px 0px 0 #000,-3.5px -2px 0 #000,-2px -3.5px 0 #000,-0px -4px 0 #000,2px -3.5px 0 #000,3.5px -2px 0 #000,0 2px 14px rgba(0,0,0,0.9),0 10px 30px rgba(0,0,0,0.55);"
       + "opacity:0;transition:opacity 120ms linear;";
