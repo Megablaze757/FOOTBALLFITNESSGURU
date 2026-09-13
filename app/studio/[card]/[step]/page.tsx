@@ -32,6 +32,22 @@ export function generateStaticParams() {
 
 export const metadata: Metadata = { robots: { index: false, follow: false } };
 
+/** The biggest the figure is ever set, which suits a price. */
+const FIGURE_MAX_PX = 104;
+
+/**
+ * How many characters fit at that size, measured rather than guessed: the
+ * card's content box is 478px and this face runs about 0.478em a character,
+ * so nine is the honest answer and "Exceptional" is eleven.
+ */
+const FIGURE_FITS_CHARS = 9;
+
+function figurePx(figure: string): number {
+  const length = figure.trim().length;
+  if (length <= FIGURE_FITS_CHARS) return FIGURE_MAX_PX;
+  return Math.floor((FIGURE_MAX_PX * FIGURE_FITS_CHARS) / length);
+}
+
 export default function StudioCard({ params }: { params: { card: string; step: string } }) {
   const card = cardById(params.card);
   const stage = Number(params.step);
@@ -90,7 +106,24 @@ export default function StudioCard({ params }: { params: { card: string; step: s
             the subject of the shot — which is the one thing this format is for.
             Sized against the 540px-wide viewport the recorder films at.
           */}
-          <p className="mt-1 text-[104px] font-extrabold leading-[0.95] tracking-tighter">
+          {/*
+            ═══════════════════════════════════════════════════════════════
+            SIZED TO THE FIGURE, BECAUSE "Exceptional" IS NOT "£0.31".
+
+            104px was chosen against a price and never checked against a
+            word. Measured on the real page: "Exceptional" needs 547px of a
+            478px card — 69px clipped — so the bodyweight-gap card reel
+            showed "Exceptiona" as its entire subject, on both stages.
+
+            cardProblems() already refuses a figure longer than three words,
+            which catches prose and says nothing about width. One long word
+            is still one word.
+            ═══════════════════════════════════════════════════════════════
+          */}
+          <p
+            className="mt-1 font-extrabold leading-[0.95] tracking-tighter"
+            style={{ fontSize: `${figurePx(face.figure)}px` }}
+          >
             {face.figure}
           </p>
           <p className="mt-2 text-lg font-semibold text-slate-400">{face.caption}</p>

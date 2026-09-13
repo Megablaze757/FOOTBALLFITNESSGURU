@@ -188,6 +188,29 @@ for (const meta of SCRIPTS) {
   const script = reelScript(meta.id as ScriptId, "");
   if (!script) continue;
 
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * AND THE CARD'S OWN FIGURE, WHICH IS THE SUBJECT OF A CARD REEL.
+   *
+   * cardProblems() refuses a figure of more than three words, which catches
+   * prose and says nothing about width. One long word is still one word:
+   * "Exceptional" needed 547px of a 478px card at 104px, so the
+   * bodyweight-gap reel showed "Exceptiona" as its entire subject.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  if (meta.id.startsWith("card-")) {
+    await page.goto(`${ORIGIN}/studio/${meta.id.slice("card-".length)}/2/`, { waitUntil: "load" })
+      .catch(() => null);
+    await page.evaluate(() => (window as never as { __reelCaption: (s: string) => void }).__reelCaption("x"));
+    const clipped = await page.evaluate(() => Array.from(document.querySelectorAll("section p"))
+      .filter((p) => parseFloat(getComputedStyle(p).fontSize) > 60)
+      .filter((p) => (p as HTMLElement).scrollWidth > (p as HTMLElement).clientWidth + 1)
+      .map((p) => ({ text: (p.textContent ?? "").trim(), over: (p as HTMLElement).scrollWidth - (p as HTMLElement).clientWidth })));
+    for (const c of clipped) {
+      problems.push(`${meta.id} FIGURE: "${c.text}" is cut off by ${c.over}px`);
+    }
+  }
+
   const hook = await drawHook(script.hook);
   for (const reason of outsideSafeZone(hook.box)) {
     problems.push(`${meta.id} HOOK: ${reason} — ${JSON.stringify(script.hook)}`);
