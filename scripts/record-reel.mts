@@ -29,6 +29,7 @@ import { reelPlan, srt, endCardAt, REEL_W, REEL_H, REEL_SCALE } from "../lib/ree
 import { retentionProblems } from "../lib/reel-retention";
 import { driftTarget } from "../lib/reel-scroll";
 import { implausibleAudio } from "../lib/reel";
+import { outsideSafeZone } from "../lib/safe-zone";
 import { MOVE_GAP_MS, MOVE_POLL_MS, MOVE_WAIT_MS } from "../lib/reel-moves";
 import { SIGNUP_CTA } from "../lib/signup-link";
 import { karaokeWords } from "../lib/caption-karaoke";
@@ -547,6 +548,64 @@ await context.addInitScript(() => {
 
 
 const page = await context.newPage();
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * MEASURE THE CAPTION THAT WAS ACTUALLY DRAWN.
+ *
+ * lib/safe-zone.test.ts reads the overlay's padding out of the source and
+ * checks the numbers, which is worth having and is not the same claim. Padding
+ * is where a line STARTS; how wide it ends up is down to how long the words
+ * are, whether they wrapped, and what font fell back. Both edges of the
+ * caption were already wrong once while the intent in the source read fine.
+ *
+ * So this asks the browser for the box, in CSS pixels, and scales it to the
+ * frame. Violations are collected rather than thrown: stopping the recording
+ * half way leaves no artefact to look at, and the run is three minutes. They
+ * are reported together at the end, and they fail the run — a caption under
+ * the platform's chrome cannot be fixed once the file is rendered.
+ *
+ * Declared HERE, above the recording loop, and not beside its caller further
+ * down: `unsafe` is a const and the loop runs at module top level, so a
+ * declaration after it leaves the first real violation throwing a
+ * ReferenceError out of the temporal dead zone instead of being reported.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+const unsafe: string[] = [];
+
+async function checkSafeZone(what: string, id: string, text: string): Promise<void> {
+  const box = await page.evaluate((elId) => {
+    const el = document.getElementById(elId);
+    if (!el || !el.textContent) return null;
+    const r = el.getBoundingClientRect();
+    if (r.width < 1 || r.height < 1) return null;
+    /**
+     * The ring the glyphs are outlined with paints OUTSIDE this rect —
+     * text-shadow is not layout — so the element carries how far, and the box
+     * grows by it before anything is judged. Without this the check was blind
+     * to exactly the 6px the first measured frame was over by.
+     */
+    const bleed = Number(el.dataset.bleed ?? 0);
+    return {
+      left: r.left - bleed, right: r.right + bleed,
+      top: r.top - bleed, bottom: r.bottom + bleed,
+    };
+  }, id).catch(() => null);
+  if (!box) return;
+
+  const framed = {
+    left: box.left * REEL_SCALE, right: box.right * REEL_SCALE,
+    top: box.top * REEL_SCALE, bottom: box.bottom * REEL_SCALE,
+  };
+  const problems = outsideSafeZone(framed);
+  if (!problems.length) return;
+  const where = `x ${Math.round(framed.left)}..${Math.round(framed.right)} `
+    + `y ${Math.round(framed.top)}..${Math.round(framed.bottom)}`;
+  const line = `${what} ${where}: ${problems.join(", ")} — ${JSON.stringify(text.slice(0, 48))}`;
+  // One per distinct fault. A caption drawn 40 times reports once.
+  if (!unsafe.includes(line)) unsafe.push(line);
+}
+
 // Loud, because an overlay that fails to install produces a video that
 // looks fine and has no captions on it at all.
 page.on("pageerror", (e) => console.error(`  page error: ${e.message}`));
@@ -719,6 +778,7 @@ for (const step of plan.steps) {
      * only thing left to do with it is swipe. The drift starts under the hook
      * now, so the first second of the reel is the app doing something.
      */
+    await checkSafeZone("hook", "__reel_hook", plan.hook);
     await page.evaluate((y) => window.scrollTo({ top: y, behavior: "smooth" }), Math.round(page_.viewport * 0.28)).catch(() => {});
     driftFrom = Math.round(page_.viewport * 0.28);
     // Held from the first frame, because the decision is made in three seconds
@@ -932,6 +992,7 @@ for (const step of plan.steps) {
       (t) => (window as never as { __reelHook: (s: string) => void }).__reelHook(t),
       SIGNUP_CTA,
     ).catch(() => {});
+    await checkSafeZone("sign-off", "__reel_hook", SIGNUP_CTA);
     await sleep(Math.max(0, step.at + step.ms - elapsed()));
   }
   await page.evaluate(() => (window as never as { __reelCaption: (s: string) => void }).__reelCaption("")).catch(() => {});
@@ -963,6 +1024,7 @@ async function runCaptions(step: (typeof plan.steps)[number], willAim: boolean):
       (words) => (window as never as { __reelCaption: (r: unknown) => void }).__reelCaption(words),
       karaokeWords(caption.text, caption.ms),
     );
+    await checkSafeZone("caption", "__reel_caption", caption.text);
     /**
      * ═══════════════════════════════════════════════════════════════════════
      * A COMPOSED SHOT HOLDS STILL.
@@ -1114,3 +1176,26 @@ if (withVoice) {
 
 console.log(`  ${outDir}/${script.id}.webm`);
 console.log(`  ${outDir}/${script.id}.srt`);
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * REPORTED AFTER THE FILES ARE WRITTEN, AND IT STILL FAILS THE RUN.
+ *
+ * Both halves of that are deliberate. Failing means the reel does not get
+ * posted with its lowest line of text under Instagram's caption — the defect
+ * this whole check exists for was invisible in the recorder's output and
+ * obvious the moment somebody measured a frame. Writing the files first means
+ * there is a .webm to open and see the problem in, instead of a failed run
+ * and nothing to look at.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+if (unsafe.length) {
+  console.error(`\n  ${unsafe.length} thing(s) drawn where the platform covers them:`);
+  for (const line of unsafe) console.error(`    ${line}`);
+  console.error(
+    "\n  The frame is 1080x1920 and the safe box is 60/180/140/400 in from the"
+    + "\n  edges — see lib/safe-zone.ts. Shorten the line or move the element;"
+    + "\n  it cannot be fixed after the video is rendered.",
+  );
+  process.exitCode = 1;
+}

@@ -18,10 +18,18 @@
 // being a percentage in a style string that nobody can evaluate by reading.
 // ═══════════════════════════════════════════════════════════════════════════
 // =============================================================================
+import { REEL_W, REEL_H, REEL_SCALE } from "./reel-plan";
 
-/** What every reel is rendered at. */
-export const FRAME_W = 1080;
-export const FRAME_H = 1920;
+/**
+ * What every reel is rendered at.
+ *
+ * DERIVED, not typed again. lib/reel-plan.ts already owns the record viewport
+ * and the scale factor, and a second copy of 1080 here would be a third place
+ * for the same number to disagree with itself — which is the entire reason
+ * this file exists.
+ */
+export const FRAME_W = REEL_W * REEL_SCALE;
+export const FRAME_H = REEL_H * REEL_SCALE;
 
 /**
  * Reported chrome, in pixels of a 1080x1920 frame.
@@ -56,22 +64,17 @@ export const SAFE = {
 } as const;
 
 /**
- * The record viewport, in CSS pixels. Playwright drives the app at 540x960
- * with deviceScaleFactor 2, so every CSS pixel of layout is two pixels of
- * frame — and the overlay's style strings are written in the CSS ones while
- * every number above is in frame ones.
+ * Frame pixels to the CSS pixels the overlay is written in.
  *
- * This exists because that factor of two is where the clearances get lost.
+ * Playwright drives the app at REEL_W x REEL_H with deviceScaleFactor
+ * REEL_SCALE, so every CSS pixel of layout is two pixels of frame — and the
+ * overlay's style strings are in the CSS ones while every number above is in
+ * frame ones. That factor of two is where the clearances got lost:
  * `padding: 0 28px` reads like a generous margin and is 56px of a 1080-wide
  * frame, under a 180px-wide action rail.
  */
-export const RECORD_W = 540;
-export const RECORD_H = 960;
-export const RECORD_SCALE = FRAME_W / RECORD_W;
-
-/** Frame pixels to the CSS pixels the overlay is written in. */
 export function cssPx(framePx: number): number {
-  return framePx / RECORD_SCALE;
+  return framePx / REEL_SCALE;
 }
 
 export interface Box { left: number; right: number; top: number; bottom: number }

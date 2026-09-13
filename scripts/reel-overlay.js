@@ -30,7 +30,7 @@
       "position:fixed;inset:0;z-index:2147483647;pointer-events:none;"
       + "display:flex;flex-direction:column;justify-content:flex-end;align-items:center;"
       // 90px right / 30px left: the action rail. See the note on the caption.
-      + "padding:0 90px 22vh 30px;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;";
+      + "padding:0 94px 22vh 34px;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;";
 
     var caption = document.createElement("div");
     caption.id = "__reel_caption";
@@ -70,8 +70,12 @@
      * — HALF. `28px` reads generous and is 56px of frame against a 180px
      * rail. In frame pixels the chrome is 60 left and 180 right, so:
      *
-     *   left   30px CSS  =  60px frame
-     *   right  90px CSS  = 180px frame
+     *   left   30px CSS  =  60px frame   + 4px ring = 34px
+     *   right  90px CSS  = 180px frame   + 4px ring = 94px
+     *
+     * The ring is the +4: text-shadow paints outside the layout box, so a
+     * padding equal to the chrome puts the OUTLINE of the last letter under
+     * the buttons. See caption.dataset.bleed below.
      *
      * That leaves 420 CSS px of usable width instead of 484, and centres the
      * text 30px left of the frame's middle. Symmetric 90px would have cost
@@ -143,6 +147,20 @@
       + "color:#fff;"
       + "text-shadow:4px 0px 0 #000,3.5px 2px 0 #000,2px 3.5px 0 #000,0px 4px 0 #000,-2px 3.5px 0 #000,-3.5px 2px 0 #000,-4px 0px 0 #000,-3.5px -2px 0 #000,-2px -3.5px 0 #000,-0px -4px 0 #000,2px -3.5px 0 #000,3.5px -2px 0 #000,0 2px 14px rgba(0,0,0,0.9),0 10px 30px rgba(0,0,0,0.55);"
       + "opacity:0;transition:opacity 120ms linear;";
+    /**
+     * HOW FAR THE PAINT GOES PAST THE LAYOUT BOX, in CSS pixels.
+     *
+     * getBoundingClientRect() measures layout, and text-shadow is not layout —
+     * so the ring above paints 4px outside the box on every side where the
+     * recorder's safe-zone check cannot see it. That is the whole of the 6px
+     * the first measured frame was over on the right: the element ended at 895
+     * and the ink reached 906.
+     *
+     * The RING only. The two soft shadows after it reach 40px further down,
+     * and a translucent halo clipped by the platform's chrome is not something
+     * anybody can see; a hard black outline on a letter is.
+     */
+    caption.dataset.bleed = "4";
     layer.appendChild(caption);
 
     /**
@@ -177,7 +195,7 @@
       // the same stated reason rather than one of them by accident.
       "position:fixed;z-index:1;left:0;right:0;top:42%;display:flex;justify-content:center;"
       // Asymmetric for the action rail, same as the caption layer's padding.
-      + "padding:0 90px 0 30px;pointer-events:none;";
+      + "padding:0 95px 0 35px;pointer-events:none;";
 
     var hook = document.createElement("div");
     hook.id = "__reel_hook";
@@ -200,6 +218,9 @@
       + "color:#fff;"
       + "text-shadow:5px 0px 0 #000,4.3px 2.5px 0 #000,2.5px 4.3px 0 #000,0px 5px 0 #000,-2.5px 4.3px 0 #000,-4.3px 2.5px 0 #000,-5px 0px 0 #000,-4.3px -2.5px 0 #000,-2.5px -4.3px 0 #000,-0px -5px 0 #000,2.5px -4.3px 0 #000,4.3px -2.5px 0 #000,0 3px 18px rgba(0,0,0,0.9),0 12px 40px rgba(0,0,0,0.6);"
       + "opacity:0;transition:opacity 120ms linear;";
+    // A 5px ring, not the caption's 4 — see caption.dataset.bleed above for
+    // why the number has to travel with the element.
+    hook.dataset.bleed = "5";
     hookWrap.appendChild(hook);
     layer.appendChild(hookWrap);
 

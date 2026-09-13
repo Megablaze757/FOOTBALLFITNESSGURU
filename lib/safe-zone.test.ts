@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
   CHROME, SAFE, FRAME_W, FRAME_H, CAPTION_BOTTOM_FRACTION, outsideSafeZone, cssPx,
-  RECORD_W, RECORD_SCALE,
 } from "./safe-zone";
+import { REEL_W, REEL_SCALE } from "./reel-plan";
 
 const OVERLAY = readFileSync("scripts/reel-overlay.js", "utf8");
 
@@ -13,6 +13,16 @@ function captionPadding() {
   const m = OVERLAY.match(/padding:0 (\d+)px ([\d.]+)(vh|%) (\d+)px/);
   assert.ok(m, "the caption layer's padding is no longer where this can read it");
   return { right: Number(m![1]), bottom: Number(m![2]), unit: m![3], left: Number(m![4]) };
+}
+
+/**
+ * How far the glyph outline paints OUTSIDE the layout box, in CSS pixels, as
+ * the element itself declares it.
+ */
+function bleedOf(el: "caption" | "hook"): number {
+  const m = OVERLAY.match(new RegExp(`${el}\\.dataset\\.bleed = "([\\d.]+)"`));
+  assert.ok(m, `${el} no longer declares how far its outline paints`);
+  return Number(m![1]);
 }
 
 test("a box inside the safe area has nothing wrong with it", () => {
@@ -55,7 +65,8 @@ test("the overlay lifts its caption by a fraction of the HEIGHT", () => {
     "percentage padding resolves against WIDTH — this is the bug that shipped a caption "
     + "243px off the bottom when it meant 422");
   assert.equal(unit, "vh");
-  const px = (bottom / 100) * FRAME_H;
+  /** Less the ring, which paints below the box just as it paints beside it. */
+  const px = (bottom / 100) * FRAME_H - bleedOf("caption") * REEL_SCALE;
   assert.ok(px >= CHROME.bottom,
     `${bottom}vh is ${Math.round(px)}px, under the ${CHROME.bottom}px the platform draws over`);
 });
@@ -72,10 +83,41 @@ test("the overlay lifts its caption by a fraction of the HEIGHT", () => {
  */
 test("the caption clears the action rail on the right", () => {
   const { left, right } = captionPadding();
-  assert.ok(right >= cssPx(CHROME.right),
-    `${right}px CSS is ${right * 2}px of frame, inside the ${CHROME.right}px action rail`);
-  assert.ok(left >= cssPx(CHROME.left),
-    `${left}px CSS is ${left * 2}px of frame, inside the ${CHROME.left}px left margin`);
+  const bleed = bleedOf("caption");
+  assert.ok(right >= cssPx(CHROME.right) + bleed,
+    `${right}px CSS leaves ${right * REEL_SCALE}px of frame; the rail is ${CHROME.right}px `
+    + `and the outline paints ${bleed * REEL_SCALE}px past the box`);
+  assert.ok(left >= cssPx(CHROME.left) + bleed,
+    `${left}px CSS is inside the ${CHROME.left}px left margin once the outline is counted`);
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE OUTLINE IS NOT LAYOUT, AND THAT IS WHERE THE 6px WENT.
+ *
+ * The captions are legible on any background because the glyphs carry a heavy
+ * black ring — twelve text-shadows on a circle. text-shadow paints outside the
+ * layout box and getBoundingClientRect() does not report it, so the box said
+ * the caption ended at 895 while the pixels in the frame ended at 906.
+ *
+ * A padding merely EQUAL to the chrome therefore puts the outline of the last
+ * letter under the buttons. The declared bleed has to match the ring actually
+ * in the CSS, or it is a number that drifts silently.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("each element's declared bleed matches the ring it actually paints", () => {
+  for (const el of ["caption", "hook"] as const) {
+    const at = OVERLAY.indexOf(`var ${el} = document.createElement`);
+    assert.ok(at > 0, `${el} is not created where this can find its styles`);
+    const shadow = OVERLAY.slice(at).match(/text-shadow:([^"]+)/);
+    assert.ok(shadow, `${el} has no text-shadow`);
+    /** The hard ring only: `<x>px <y>px 0 #000`. Blur radii are not ink. */
+    const hard = [...shadow![1].matchAll(/(-?[\d.]+)px (-?[\d.]+)px 0 #000/g)]
+      .flatMap((m) => [Math.abs(Number(m[1])), Math.abs(Number(m[2]))]);
+    assert.ok(hard.length >= 12, `${el}'s ring has ${hard.length / 2} shadows, not 12`);
+    assert.equal(bleedOf(el), Math.max(...hard),
+      `${el} declares a bleed of ${bleedOf(el)}px and paints a ${Math.max(...hard)}px ring`);
+  }
 });
 
 /**
@@ -84,12 +126,13 @@ test("the caption clears the action rail on the right", () => {
  * the same defect in a second place.
  */
 test("the hook clears the action rail too", () => {
-  const m = OVERLAY.match(/top:42%;[^"]*"\s*\n?[^"]*"padding:0 (\d+)px 0 (\d+)px/)
-    ?? OVERLAY.match(/padding:0 (\d+)px 0 (\d+)px/);
+  const m = OVERLAY.match(/padding:0 (\d+)px 0 (\d+)px/);
   assert.ok(m, "the hook's padding is no longer where this can read it");
-  assert.ok(Number(m![1]) >= cssPx(CHROME.right),
-    `the hook pads ${m![1]}px CSS on the right, inside the ${CHROME.right}px rail`);
-  assert.ok(Number(m![2]) >= cssPx(CHROME.left), "the hook runs into the left edge");
+  const bleed = bleedOf("hook");
+  assert.ok(Number(m![1]) >= cssPx(CHROME.right) + bleed,
+    `the hook pads ${m![1]}px CSS on the right; the rail is ${CHROME.right}px of frame and its `
+    + `ring paints ${bleed * REEL_SCALE}px past the box`);
+  assert.ok(Number(m![2]) >= cssPx(CHROME.left) + bleed, "the hook's outline runs off the left");
 });
 
 /**
@@ -106,7 +149,9 @@ test("the caption is not padded symmetrically", () => {
    * between the two paddings, taken back up to frame pixels, is the 840px
    * between the chrome on each side.
    */
-  assert.equal((RECORD_W - left - right) * RECORD_SCALE, FRAME_W - CHROME.left - CHROME.right);
+  const band = FRAME_W - CHROME.left - CHROME.right - 2 * bleedOf("caption") * REEL_SCALE;
+  assert.equal((REEL_W - left - right) * REEL_SCALE, band,
+    "the usable width is not the safe band less the outline on each side");
 });
 
 test("the derived safe box sits inside the quoted one", () => {
@@ -120,4 +165,45 @@ test("the derived safe box sits inside the quoted one", () => {
 
 test("the caption fraction is derived, not typed twice", () => {
   assert.equal(CAPTION_BOTTOM_FRACTION, CHROME.bottom / FRAME_H);
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE CHECK HAS TO RUN ON THE REAL FRAME, NOT JUST EXIST.
+ *
+ * outsideSafeZone() sat here for an hour with nothing calling it. A guard
+ * nobody invokes is worse than no guard: the tests are green, the module reads
+ * like the rule is enforced, and the reels ship with text under the chrome
+ * exactly as before. The padding tests above read the overlay's SOURCE, which
+ * is where a line starts — how wide it ends up depends on the words, the wrap
+ * and the fallback font, so the box has to be measured while it is on screen.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("the recorder measures what it drew against the safe zone", () => {
+  const rec = readFileSync("scripts/record-reel.mts", "utf8");
+  assert.match(rec, /outsideSafeZone/, "the recorder does not use the safe-zone check at all");
+  assert.match(rec, /getBoundingClientRect/,
+    "nothing asks the browser for the box — the check is reading source, not frames");
+  for (const what of ["caption", "hook", "sign-off"]) {
+    assert.ok(rec.includes(`checkSafeZone("${what}"`), `the ${what} is never measured`);
+  }
+  /** CSS pixels out of the browser, frame pixels into the check. */
+  assert.match(rec, /left: box\.left \* REEL_SCALE/, "the box is not scaled to frame pixels");
+  /** And the ring has to be added back, or the check is blind to the ink. */
+  assert.match(rec, /dataset\.bleed/, "the recorder measures layout and ignores the outline");
+  /** And a violation has to stop the reel being posted, not just print. */
+  assert.match(rec, /unsafe\.length[\s\S]{0,900}process\.exitCode = 1/,
+    "violations are reported and the run still succeeds");
+});
+
+/**
+ * The declaration order is load-bearing and was wrong once: `unsafe` is a
+ * const, and the recording loop that appends to it runs at module top level.
+ * Declared after the loop it is in the temporal dead zone, so the first real
+ * violation throws a ReferenceError instead of being reported.
+ */
+test("the violation list is declared before the loop that fills it", () => {
+  const rec = readFileSync("scripts/record-reel.mts", "utf8");
+  assert.ok(rec.indexOf("const unsafe: string[]") < rec.indexOf("for (const step of plan.steps)"),
+    "`unsafe` is declared after the recording loop and will be in the TDZ");
 });
