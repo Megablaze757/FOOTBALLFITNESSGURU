@@ -251,6 +251,25 @@ function readinessScript(): ReelScript {
       route: "/journal",
       action: "Open the check-in. Do not fill it in yet — let the empty form show.",
       /**
+       * ═══════════════════════════════════════════════════════════════════
+       * DISMISS THE WEARABLE NUDGE, WHICH IS FILMING OVER THE HOOK.
+       *
+       * Downloaded the recording and looked at the first second: the hook
+       * card sits over a tooltip reading "Stop typing last night's sleep —
+       * connect an Oura ring, or add the Apple Health shortcut", with its own
+       * "Not now" and "Show me" buttons across the bottom of the frame.
+       *
+       * It is the right nudge for a real athlete and the wrong thing to open
+       * a reel with: the first second is the one that decides, and a quarter
+       * of it is an upsell for hardware the viewer does not own yet.
+       *
+       * Same shape as the share prompt on the standards payoff beat, and
+       * optional for the same reason — it only appears for an account that
+       * has not answered it, so a run where it is absent is not a failure.
+       * ═══════════════════════════════════════════════════════════════════
+       */
+      moves: [{ tap: "Not now", optional: true }],
+      /**
        * THE HOOK'S OWN WORDS ARE NOT AVAILABLE TO THE FIRST LINE.
        *
        * This said "Three hours' sleep, and your app still hands you..." over a

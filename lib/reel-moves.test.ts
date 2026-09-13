@@ -115,7 +115,7 @@ test("the readiness reel taps the quick check-in, not the detailed one", async (
   const script = reelScript("demo-readiness", "");
   assert.ok(script, "there is no demo-readiness script");
   const taps = script!.beats.flatMap((b) => (b.moves ?? []).filter(isTap).map((m) => m.tap));
-  assert.deepEqual(taps, ["Change my answers", "Barely", "Wrecked", "Save today's log"],
+  assert.deepEqual(taps, ["Not now", "Change my answers", "Barely", "Wrecked", "Save today's log"],
     "the taps changed — check them against the view /journal actually opens on");
   /**
    * "Log it" was here and it was the wrong control: a button of that name
@@ -340,10 +340,28 @@ test("the readiness reel normalises the screen before it demonstrates", async ()
   const { reelScript } = await import("./reel-script");
   const beats = reelScript("demo-readiness", "")!.beats.filter((b) => b.moves?.length);
   const moves = beats.flatMap((b) => b.moves!);
-  assert.equal(moves[0] && "tap" in moves[0] && moves[0].tap, "Change my answers",
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * HOUSEKEEPING FIRST, THEN THE DEMONSTRATION — AND ONLY THE FIRST MAY BE
+   * OPTIONAL.
+   *
+   * This asserted that moves[0] is exactly "Change my answers" and that every
+   * move after it is mandatory. The intent is right and the shape was too
+   * narrow: putting the screen into a known state can take more than one tap.
+   * It takes two now, because the account also gets offered a wearable nudge
+   * that films over the hook.
+   *
+   * So the rule is stated as what it means. Everything optional comes first
+   * and is housekeeping; the moment a mandatory move appears the reel is
+   * demonstrating, and nothing after that may be optional — otherwise a reel
+   * could film nothing at all and still pass.
+   */
+  const firstRequired = moves.findIndex((m) => !("optional" in m && m.optional));
+  assert.ok(firstRequired > 0, "the reel demonstrates before it normalises the screen");
+  const housekeeping = moves.slice(0, firstRequired)
+    .map((m) => ("tap" in m ? m.tap : ""));
+  assert.ok(housekeeping.includes("Change my answers"),
     "the reel does not clear a check-in it may have written on a previous run");
-  assert.ok(moves[0] && "optional" in moves[0] && moves[0].optional,
-    "clearing is mandatory, so a clean account would fail the run");
-  assert.ok(moves.slice(1).every((m) => !("optional" in m && m.optional)),
+  assert.ok(moves.slice(firstRequired).every((m) => !("optional" in m && m.optional)),
     "a move that demonstrates something is optional, so the reel could film nothing and pass");
 });
