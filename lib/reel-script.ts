@@ -665,7 +665,17 @@ function drillScript(drillId: string): ReelScript | null {
        * spoken line now says the same thing, so the promise arrives in the
        * window the retention data actually cares about.
        */
-      say: `Your ${drill.name.toLowerCase()} aren't working. Not fitness — one detail.`,
+      /**
+       * THE HOOK ALREADY SAID THIS. It read "Your <drill> aren't working"
+       * under a hook reading "You're doing <drill> wrong" — the same sentence
+       * twice, built from the same words, spending the two seconds that decide
+       * on a claim the viewer has already read.
+       *
+       * A second line's job is to make the first one owe an answer. Naming
+       * what it is NOT, and promising the detail without giving it away, is
+       * the gap the third beat then closes with the actual correction.
+       */
+      say: "Not fitness. Not effort. One detail, and it happens before you pass.",
     },
     /**
      * ═══════════════════════════════════════════════════════════════════════
@@ -815,7 +825,15 @@ function standardsScript(): ReelScript | null {
       // Was four phrases making the point twice over; the table beat that
       // follows says it with actual numbers. Trimmed to pay for the two holds
       // above, which buy a picture that matches the line.
-      say: "On its own? Means nothing.",
+      /**
+       * "On its own? Means nothing." under a hook reading "Your 100kg bench
+       * press means nothing" — the same two words, four seconds apart, with
+       * the reel standing still between them.
+       *
+       * This names the MISSING VARIABLE instead. It is what the whole reel is
+       * about, and it is the setup the next line pays off with two numbers.
+       */
+      say: "Not until you say what you weigh.",
     },
     {
       route: `/standards/${page.slug}/`,

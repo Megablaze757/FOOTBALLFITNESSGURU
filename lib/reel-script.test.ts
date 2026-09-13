@@ -3,11 +3,12 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import {
   reelScript, scriptProblems, readTimeMs, SCRIPTS, HOOK_BY_MS, MIN_BEAT_MS,
-  type ReelScript,
+  type ReelScript, type ScriptId,
 } from "./reel-script";
 import { holdFor, MAX_REEL_MS } from "./reel";
 import { END_CARD_MS } from "./reel-plan";
 import { SIGNUP_SPOKEN } from "./signup-link";
+import { proteinIndex } from "./protein-index";
 import { HOOK_MAX_WORDS } from "./reel-kinds";
 
 const all = () => SCRIPTS.map((s) => reelScript(s.id)).filter((s): s is ReelScript => s !== null);
@@ -286,4 +287,48 @@ test("a sign-off with no room after it is refused", () => {
     scriptProblems(crowded).map((p) => p.problem).join(" | "),
     /the end card needs/,
   );
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * NO TWO REELS MAY OPEN WITH THE SAME SENTENCE.
+ *
+ * Two pairs did. demo-cost and card-protein-gap both opened "You're paying
+ * 10x for the same protein."; standards and card-bodyweight-gap both opened
+ * "Your 100kg bench press means nothing." Posting both of a pair spends the
+ * one second that decides on telling a returning viewer they have seen this.
+ *
+ * They were not copy-pasted — each pair is built from the same facts by two
+ * different functions, which is exactly why nothing noticed.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("every reel opens with a different sentence", () => {
+  const seen = new Map<string, string>();
+  for (const meta of SCRIPTS) {
+    const script = reelScript(meta.id as ScriptId, "");
+    if (!script) continue;
+    const key = script.hook.trim().toLowerCase();
+    const first = seen.get(key);
+    assert.equal(first, undefined,
+      `${meta.id} and ${first} open with the same hook: "${script.hook}"`);
+    seen.set(key, meta.id);
+  }
+  assert.ok(seen.size >= 7, `only ${seen.size} hooks — a script stopped building`);
+});
+
+/**
+ * And the one hook that names a food has to stay true.
+ *
+ * "The cheapest protein in the shop? Not chicken." is editorial wording about
+ * a fact the index owns, and this project's own history is prices written as
+ * words in a script, correct on the day and quietly wrong the first time a
+ * shelf price moved. The wording is a judgement; the claim is checkable.
+ */
+test("the cheapest protein really is not chicken", () => {
+  const index = proteinIndex();
+  assert.ok(index.length > 0, "no protein index to check the claim against");
+  const hook = reelScript("card-cheapest-protein", "")?.hook ?? "";
+  if (!/not chicken/i.test(hook)) return;
+  assert.doesNotMatch(index[0].name, /chicken/i,
+    `the cheapest protein is now ${index[0].name}, so the hook "${hook}" is false`);
 });

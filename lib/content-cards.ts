@@ -122,7 +122,17 @@ export function proteinGapCard(): ContentCard | null {
   return {
     id: "protein-gap",
     format: "comparison",
-    hook: `You're paying ${times}x for the same protein.`,
+    /**
+     * NOT THE SAME HOOK AS THE demo-cost REEL, which opens with exactly
+     * "You're paying Nx for the same protein." Posting both meant two videos
+     * whose first second is the same sentence — the one second that decides,
+     * spent telling a returning viewer they have seen this.
+     *
+     * The card is a two-sided reveal, so its hook is the two sides as a
+     * question the viewer has to answer before the card does.
+     */
+    hook: `${money(facts.cheapest.cost)} or ${money(facts.dearest.cost)} `
+      + `for the same ${REFERENCE_PROTEIN} grams?`,
     lines: [
       `${REFERENCE_PROTEIN} grams of protein from ${facts.cheapest.name.toLowerCase()} costs `
         + `${money(facts.cheapest.cost)}.`,
@@ -166,7 +176,16 @@ export function bodyweightGapCard(): ContentCard | null {
   return {
     id: "bodyweight-gap",
     format: "comparison",
-    hook: `Your ${LOAD}kg ${page.lift.label.toLowerCase()} means nothing.`,
+    /**
+     * TWO FAULTS IN ONE LINE. It was "Your 100kg bench press means nothing",
+     * word for word the standards reel's hook — and its own first line then
+     * says the same lift IS exceptional, so the reel opened by contradicting
+     * itself before it had explained anything.
+     *
+     * The card's whole device is one bar with two answers, so the hook asks
+     * which one it is and the two faces settle it.
+     */
+    hook: `${LOAD}kg on the ${page.lift.label.toLowerCase()} — exceptional, or novice?`,
     lines: [
       `A ${LOAD}kg ${page.lift.label.toLowerCase()} at ${LIGHT}kg bodyweight is ${light.toLowerCase()}.`,
       `The same bar at ${HEAVY}kg is ${heavy.toLowerCase()} — nothing about the lift changed, `
@@ -210,7 +229,19 @@ export function cheapestProteinCard(): ContentCard | null {
   return {
     id: "cheapest-protein",
     format: "knowledge",
-    hook: `The cheapest ${REFERENCE_PROTEIN}g of protein in the shop.`,
+    /**
+     * A LABEL, WHICH IS THE ONE THING A HOOK MUST NOT BE. It was "The cheapest
+     * 30g of protein in the shop." — a caption for the video, naming the
+     * subject and asking nothing. hookProblems() passed it because it contains
+     * a digit, which is a proxy for specific and not the same thing.
+     *
+     * What it is really about is an assumption people hold, so it contradicts
+     * that instead: the cheapest protein in a British supermarket is not the
+     * chicken everybody buys for it. Checked against the index rather than
+     * asserted — red lentils at 31p against chicken breast at £1.06 — and a
+     * test fails if that ever stops being true.
+     */
+    hook: "The cheapest protein in the shop? Not chicken.",
     lines: [
       `The cheapest ${REFERENCE_PROTEIN} grams of protein you can buy is `
         + `${facts.cheapest.name.toLowerCase()}.`,
