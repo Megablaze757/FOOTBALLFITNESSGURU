@@ -39,7 +39,7 @@ import { END_CARD_MS } from "./reel-plan";
 import { SIGNUP_SPOKEN } from "./signup-link";
 import { SKILL_DRILLS } from "./skills";
 import { indexFacts, money, REFERENCE_PROTEIN } from "./protein-index";
-import { standardPages } from "./standards-page";
+import { standardPages, standardTable } from "./standards-page";
 import { rankLift } from "./strength-standards";
 import { cardById, cardProblems, CARD_STAGES, type ContentCard } from "./content-cards";
 import { sportLabel } from "./seo";
@@ -755,6 +755,36 @@ function standardsScript(): ReelScript | null {
 
   /**
    * ═══════════════════════════════════════════════════════════════════════
+   * A NEEDLE THAT NAMES A ROW, BECAUSE A BODYWEIGHT ON ITS OWN DOES NOT.
+   *
+   * The focus here was "Bodyweight" — which is the COLUMN HEADING. Filmed,
+   * the ring is a gold rectangle around "BODYWEIGHT NOVICE INTERMEDIATE
+   * ADVANCED EXCEPTIONAL MASTER" while the line says "100kg at 60kg
+   * bodyweight is exceptional", and the row that proves it is dimmed
+   * underneath.
+   *
+   * "60kg" alone does not fix it: measured on the page, 26 elements contain
+   * it, because 60kg is also what an intermediate lifts at 70kg bodyweight.
+   * The overlay picks the smallest match, and two table cells are the same
+   * size, so which one gets ringed is a coin toss.
+   *
+   * A row's textContent runs its cells together — "60kg30kg50kg75kg..." — so
+   * the bodyweight followed by its first target names exactly one element.
+   * Measured on the real page: 8 candidates, and the smallest is the <tr>
+   * itself at 580x37.
+   *
+   * Built from standardTable(), the same function the page renders from, so
+   * it cannot drift from what is on screen the way a typed "60kg30kg" would
+   * the first time a multiple moves.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  const rowNeedle = (bodyweight: number): string => {
+    const row = standardTable(page.lift, "male").find((r) => r.bodyweight === bodyweight);
+    return row ? `${row.bodyweight}kg${row.targets[0]}kg` : `${bodyweight}kg`;
+  };
+
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
    * A CONTRARIAN CLAIM WITH TWO NUMBERS IN IT.
    *
    * The hook asked "Is your bench press any good?" and the first line then
@@ -797,7 +827,7 @@ function standardsScript(): ReelScript | null {
        * of them mattered. The bodyweight column is the whole point of the
        * table and it is what the sentence names.
        */
-      focus: "Bodyweight",
+      focus: rowNeedle(LIGHT),
       // All three written as numerals: lib/spoken-numbers.ts turns "60kg" into
       // "sixty kilos" for the voice and the caption keeps the numeral, which is
       // faster to scan. Mixing "100 kilos" with "60kg" got one of each.
