@@ -37,6 +37,7 @@ import { SUSPENSE_MS } from "./narration";
 import { hookText, HOOK_MAX_WORDS } from "./reel-kinds";
 import { END_CARD_MS } from "./reel-plan";
 import { SIGNUP_SPOKEN } from "./signup-link";
+import { WHY_READINESS_OPENER } from "./session-why";
 import { SKILL_DRILLS } from "./skills";
 import { indexFacts, money, REFERENCE_PROTEIN } from "./protein-index";
 import { standardPages, standardTable } from "./standards-page";
@@ -409,7 +410,19 @@ function readinessScript(): ReelScript {
     {
       route: "/coach",
       action: "Today's session, with the app's own reason for changing it.",
-      focus: "not the session the block prescribed",
+      /**
+       * THE PART OF THE LINE THAT SURVIVES EITHER DAY.
+       *
+       * This aimed at "not the session the block prescribed", which is the RED
+       * wording — while the line it plays over says "lighter sets", which is
+       * the YELLOW one. The readiness is computed from a check-in performed on
+       * camera and lands where it lands, so on a yellow day the focus found
+       * nothing and the recording died rather than filming a good reel.
+       *
+       * WHY_READINESS_OPENER is the half both days share, exported from the
+       * module that writes them so the two cannot drift apart again.
+       */
+      focus: WHY_READINESS_OPENER,
       say: "Which is why today's session changed. Not a warning — lighter sets.",
     },
     /**

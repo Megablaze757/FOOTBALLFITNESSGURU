@@ -92,6 +92,27 @@ const FOCUS_REASON: Partial<Record<GoalType, string>> = {
   skill: "Ball work while you are fresh — technique falls apart under fatigue and practising it badly sticks.",
 };
 
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE HALF OF THE READINESS LINE THAT IS THE SAME ON BOTH DAYS.
+ *
+ * A red day and a yellow day say different things, and a reel that wants to
+ * point at "the app's own reason for changing the session" cannot know which
+ * it will get: the demo account's readiness is computed from a check-in
+ * performed on camera, and it lands where it lands.
+ *
+ * lib/reel-script.ts used to aim at the RED wording — "not the session the
+ * block prescribed" — while the line it played over said "lighter sets",
+ * which is the YELLOW one. So the beat's words and its own focus described
+ * two different days, and the whole recording died on the day they disagreed:
+ * "Nothing on /coach matches the focus".
+ *
+ * Exported so the reel can aim at the part that is always there, rather than
+ * at one branch of a ternary it cannot predict.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export const WHY_READINESS_OPENER = "Today's log said";
+
 export function sessionWhy(input: SessionWhyInput): SessionWhy {
   const { week, totalWeeks, session } = input;
   const headline = `Week ${week.week} of ${totalWeeks} · ${week.theme}`;
@@ -135,8 +156,8 @@ export function sessionWhy(input: SessionWhyInput): SessionWhy {
     lines.push({
       icon: "note",
       text: input.readiness === "Red"
-        ? "Today's log said recover, so this is not the session the block prescribed."
-        : "Today's log said ease off, so this is a set lighter than prescribed.",
+        ? `${WHY_READINESS_OPENER} recover, so this is not the session the block prescribed.`
+        : `${WHY_READINESS_OPENER} ease off, so this is a set lighter than prescribed.`,
     });
   }
   if (input.isInSeason) {
