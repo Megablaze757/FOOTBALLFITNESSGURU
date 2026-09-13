@@ -169,6 +169,21 @@ jobs:
       # engines would treble the run for no extra signal.
       - run: npx playwright install --with-deps chromium
 
+      # BEFORE the build, because it needs neither the app nor a server — the
+      # overlay on a blank page is the whole fixture, and it fails in seconds.
+      #
+      # A caption is cut by character count and drawn by width, and only the
+      # second is what anybody sees: lib/caption-lines.ts cuts at 42 characters
+      # and 42 characters of this font is three rendered lines. The unit suite
+      # has no browser and so cannot see that at all.
+      #
+      # The self-test first. An instrument that is confidently wrong is worse
+      # than no instrument, and three audio metrics in this project were.
+      - name: Check every caption fits the frame
+        run: |
+          node --import tsx scripts/check-captions.mts --self-test
+          node --import tsx scripts/check-captions.mts
+
       # Placeholder Supabase config: these tests never talk to a backend, but
       # the client throws at construction without a URL, and a page that dies
       # on load would fail every assertion for the wrong reason. Publishable
