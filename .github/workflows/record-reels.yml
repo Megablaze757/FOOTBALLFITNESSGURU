@@ -266,24 +266,36 @@ jobs:
       # do it; Playwright's cannot.
       #
       # ═══════════════════════════════════════════════════════════════════
-      # NO UPSCALE ANY MORE — the recorder captures 1080x1920 natively.
+      # YES, THIS IS AN UPSCALE. 540x960 -> 1080x1920, and it is not optional.
       #
-      # UNSHARP AFTER THE SCALE, because the capture cannot be bigger.
+      # The headline here used to read "NO UPSCALE ANY MORE — the recorder
+      # captures 1080x1920 natively", describing an approach that was tried and
+      # REVERTED. The paragraph below it already said the opposite. Anybody
+      # reading this to find out why the reels look soft was told the one thing
+      # that would stop them looking.
       #
-      # Recording at 1080x1920 with the page zoomed is measurably sharper —
-      # 1.64x more fine detail — and renders the DESKTOP layout, because CSS
-      # media queries answer against the viewport and not a zoomed box. That
-      # shipped once and came back as a dense multi-column table.
+      # What is actually true:
+      #
+      #   Playwright's screencast records CSS PIXELS. Asking it for a bigger
+      #   canvas pads rather than resamples — the page lands in the top-left
+      #   quadrant and three quarters of the frame is blank. Measured on a
+      #   red page: mismatched sizes cover 25% of the frame, matched 99%.
+      #
+      #   deviceScaleFactor does not change that. Measured again, viewport
+      #   540x960 at dsf 2 with a 1080x1920 video: still the top-left quadrant.
+      #   The screencast is not device-pixel aware.
+      #
+      #   Recording at a 1080x1920 VIEWPORT is genuinely sharper — 1.64x more
+      #   fine detail — and renders the DESKTOP layout, because CSS media
+      #   queries answer the viewport and not a zoomed or transformed box. That
+      #   shipped once and came back as a dense multi-column table.
       #
       # So the capture stays at phone size and the detail is recovered here:
-      # lanczos then an unsharp mask, measured at 1.45x of the 1.64x.
-      #
-      # This used to scale 540x960 up to 1080x1920 with lanczos, because
-      # Playwright's screencast records CSS pixels and asking it for a bigger
-      # canvas just pads it. The recorder now uses a 1080x1920 viewport with
-      # the page zoomed 2x instead, so the layout is still the phone one and
-      # every pixel is rendered rather than interpolated. Measured 1.64x more
-      # fine detail, and text is what an upscale smears most.
+      # lanczos, then an unsharp mask after the scale because the capture
+      # cannot be bigger. Measured at 1.45x of the 1.64x a native capture would
+      # have given. Text is what an upscale smears most, which is why the
+      # captions are set in a real loaded weight rather than a synthesised one
+      # — see scripts/reel-overlay.js.
       # ═══════════════════════════════════════════════════════════════════
       - name: Mux to MP4
         if: env.VOICE == 'true'
