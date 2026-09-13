@@ -144,8 +144,16 @@ test("every reel written to loop ends on the frame it opened on", () => {
 
 test("the recorder glides the closing beat back rather than onward", () => {
   const rec = readFileSync("scripts/record-reel.mts", "utf8");
-  assert.match(rec, /closingDrift/, "the recorder never uses the closing drift");
-  assert.match(rec, /plan\.steps\[plan\.steps\.length - 1\]/,
+  /**
+   * THE SELECTION, not the ingredients. Asserting that `closingDrift` and
+   * `plan.steps[plan.steps.length - 1]` merely APPEAR left a mutant alive: the
+   * import stayed, the closing beat was still identified, and the ternary was
+   * replaced with a plain driftTarget call. Everything the test looked for was
+   * present in a file that had lost the behaviour.
+   */
+  assert.match(rec, /closing\s*\?\s*closingDrift\(/,
+    "the closing beat does not select the closing drift");
+  assert.match(rec, /const closing = step === plan\.steps\[plan\.steps\.length - 1\];/,
     "nothing identifies the closing beat, so every beat drifts the same way");
   /** Ordinary beats must still drift onward — this replaces one beat, not all. */
   assert.match(rec, /driftTarget\(\{ \.\.\.page_/, "the ordinary drift is gone");
