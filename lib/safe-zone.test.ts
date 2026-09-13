@@ -207,3 +207,52 @@ test("the violation list is declared before the loop that fills it", () => {
   assert.ok(rec.indexOf("const unsafe: string[]") < rec.indexOf("for (const step of plan.steps)"),
     "`unsafe` is declared after the recording loop and will be in the TDZ");
 });
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * A RING AROUND SOMETHING THE CAPTION IS COVERING.
+ *
+ * scripts/reel-overlay.js records this defect photographed twice — "the ring
+ * was around the dial and the number was under the caption" — and FOCUS_AT
+ * fixed it by placing the focused thing at 36% of the frame, calibrated
+ * against a caption band starting around 68%.
+ *
+ * Lifting the caption off Instagram's chrome moved that to 55%, so the fix's
+ * premise is gone and its margin went from 174px to 26px. The arithmetic still
+ * clears; 26px of 960 is not something to leave to arithmetic.
+ */
+test("the recorder checks the ring against the caption on the real page", () => {
+  const rec = readFileSync("scripts/record-reel.mts", "utf8");
+  assert.match(rec, /checkRingClear/, "nothing compares the ring with the caption");
+  assert.match(rec, /__reel_ring/, "the ring is never measured");
+  /** Both boxes from one call, or the comparison is across coordinate spaces. */
+  assert.match(rec, /getComputedStyle\(spot\)\.opacity/,
+    "an invisible spotlight would be compared as though it were aimed");
+  /** Counted with the outline, same as every other edge. */
+  assert.match(rec, /checkRingClear[\s\S]{0,1800}dataset\.bleed/,
+    "the overlap ignores the outline the caption paints");
+  assert.ok(rec.indexOf("checkRingClear(caption.text)") > 0, "the check is never called");
+});
+
+/**
+ * The overlay's note carries the numbers this was calibrated against. It said
+ * 68% while the caption had moved to 55%, which is how a stale premise passes
+ * for a rule — so the note has to name the element the recorder now measures.
+ */
+test("the focus calibration points at the check that verifies it", () => {
+  const overlay = readFileSync("scripts/reel-overlay.js", "utf8");
+  const at = overlay.indexOf("var FOCUS_AT");
+  assert.ok(at > 0, "FOCUS_AT is gone");
+  const note = overlay.slice(Math.max(0, at - 2200), at);
+  assert.match(note, /checkRingClear/,
+    "the calibration comment does not say what verifies it, so it can go stale again");
+  /**
+   * A POSITIVE CLAIM, because the negative one cannot be written. Asserting the
+   * absence of "68%" failed against the corrected comment: the note now quotes
+   * the old figure as the thing that went stale, and a string search cannot
+   * tell a live claim from a quotation of a dead one. What it can check is
+   * that the measured replacement is stated.
+   */
+  assert.match(note, /55%/, "the note does not carry the caption top it was re-measured against");
+  assert.match(note, /26px/, "the note does not say how much clearance is left");
+});

@@ -573,6 +573,59 @@ const page = await context.newPage();
  */
 const unsafe: string[] = [];
 
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE RING MUST NOT POINT AT SOMETHING THE CAPTION IS COVERING.
+ *
+ * This exact defect is already recorded twice in scripts/reel-overlay.js: "the
+ * ring was around the dial and the number was under the caption". FOCUS_AT was
+ * the fix — put the focused thing at 36% of the frame — and it was calibrated
+ * against a caption band starting at about 68%.
+ *
+ * That premise has since changed. Lifting the caption clear of Instagram's
+ * chrome moved its top from 70% of the frame to 55%, and narrowing it to clear
+ * the action rail made the longest captions four rendered lines instead of
+ * three. Measured, the budget is now:
+ *
+ *   ring bottom, worst case   502px   (36% of 960, + GROW_SHARE/2, + 12 pad)
+ *   caption top, worst case   528px   (four rendered lines)
+ *   clearance                  26px   — it was 174
+ *
+ * 26px of 960 is not a margin anybody should trust to stay true, and the
+ * arithmetic above is only as good as its assumptions about wrapping. So the
+ * overlap is measured on the real page instead, every beat, in the one place
+ * both things are on screen together.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+async function checkRingClear(text: string): Promise<void> {
+  const hit = await page.evaluate(() => {
+    const spot = document.getElementById("__reel_spot");
+    const ring = document.getElementById("__reel_ring");
+    const cap = document.getElementById("__reel_caption");
+    // Nothing aimed, or no caption up: there is no pair to compare.
+    if (!spot || !ring || !cap || !cap.textContent) return null;
+    if (getComputedStyle(spot).opacity !== "1") return null;
+    const r = ring.getBoundingClientRect();
+    const c = cap.getBoundingClientRect();
+    if (r.width < 1 || c.width < 1) return null;
+    /**
+     * Both rects come from the same call in the same coordinate space, so the
+     * overlap is valid whatever the zoom does to either of them.
+     */
+    const bleed = Number(cap.dataset.bleed ?? 0);
+    const over = Math.min(r.bottom, c.bottom + bleed) - Math.max(r.top, c.top - bleed);
+    const across = Math.min(r.right, c.right + bleed) - Math.max(r.left, c.left - bleed);
+    if (over <= 0 || across <= 0) return null;
+    return { over, ringBottom: r.bottom, capTop: c.top - bleed };
+  }).catch(() => null);
+  if (!hit) return;
+
+  const line = `spotlight ring overlaps the caption by ${Math.round(hit.over * REEL_SCALE)}px `
+    + `(ring reaches ${Math.round(hit.ringBottom * REEL_SCALE)}, caption starts `
+    + `${Math.round(hit.capTop * REEL_SCALE)}) — ${JSON.stringify(text.slice(0, 48))}`;
+  if (!unsafe.includes(line)) unsafe.push(line);
+}
+
 async function checkSafeZone(what: string, id: string, text: string): Promise<void> {
   const box = await page.evaluate((elId) => {
     const el = document.getElementById(elId);
@@ -1025,6 +1078,7 @@ async function runCaptions(step: (typeof plan.steps)[number], willAim: boolean):
       karaokeWords(caption.text, caption.ms),
     );
     await checkSafeZone("caption", "__reel_caption", caption.text);
+    await checkRingClear(caption.text);
     /**
      * ═══════════════════════════════════════════════════════════════════════
      * A COMPOSED SHOT HOLDS STILL.

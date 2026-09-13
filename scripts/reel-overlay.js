@@ -421,9 +421,25 @@
        * at both times: the ring was around the dial and the number was under
        * the caption.
        *
-       * FOCUS_AT is where a focused thing should sit. Everything below about
-       * 68% of the frame is caption, so the target is placed in the upper
-       * middle and its lower half still lands clear.
+       * FOCUS_AT is where a focused thing should sit: the target is placed in
+       * the upper middle so its lower half still lands clear of the caption.
+       *
+       * THE NUMBER THIS WAS CALIBRATED AGAINST HAS MOVED. It read "everything
+       * below about 68% of the frame is caption", which was true of a caption
+       * sitting 119px off the bottom in a 484px-wide band. Lifting it clear of
+       * Instagram's chrome and narrowing it off the action rail changed both:
+       * the longest captions now render four lines rather than three, and the
+       * top of the block measures at 55% of the frame, not 68%.
+       *
+       * What is left, measured rather than assumed:
+       *
+       *   ring bottom, worst case   502px of 960   (36% + GROW_SHARE/2 + pad)
+       *   caption top,  worst case  528px
+       *   clearance                  26px          — it used to be 174
+       *
+       * Still clear, and no longer by enough to leave unwatched. The recorder
+       * measures the real overlap on every beat now — checkRingClear() in
+       * scripts/record-reel.mts — so this cannot quietly go wrong again.
        * ═══════════════════════════════════════════════════════════════════
        */
       var FOCUS_AT = 0.36;
