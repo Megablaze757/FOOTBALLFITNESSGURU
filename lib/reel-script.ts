@@ -865,7 +865,26 @@ function standardsScript(): ReelScript | null {
     {
       route: "/dashboard",
       action: "Open Performance and let the rank land.",
-      moves: [{ tap: "Performance" }],
+      /**
+       * ═══════════════════════════════════════════════════════════════════
+       * AND DISMISS THE SHARE PROMPT, BECAUSE IT IS A DIFFERENT SUBJECT.
+       *
+       * Downloaded the finished reel and looked at the payoff frame. The rank
+       * lands and the app immediately offers to share it, so the beat whose
+       * line is "and there it is, the rank PocketAthlete gives that lift" was
+       * filmed with a share dialog over half the frame: "Share my progress",
+       * "Save image", "Turn on your own page", "Not now". The rank itself was
+       * a dimmed line underneath it.
+       *
+       * The prompt is correct product behaviour and the wrong thing to film.
+       * Tapping it away puts the ranks section where the line is pointing.
+       *
+       * OPTIONAL, because it only appears when a rank has just landed — and a
+       * move that is not needed is not a failure, which is the difference
+       * between this and the moves that stop the run.
+       * ═══════════════════════════════════════════════════════════════════
+       */
+      moves: [{ tap: "Performance" }, { tap: "Not now", optional: true }],
       focus: "Strength ranks",
       /**
        * NOT SUSPENSE_MS, AND THE DIFFERENCE IS MEASURED. At 900ms the payoff
@@ -878,7 +897,19 @@ function standardsScript(): ReelScript | null {
        * This is the cost of filming something real rather than a screenshot,
        * and it is paid for out of the setup beat rather than the ceiling.
        */
-      hold: 2_400,
+      /**
+       * 1,980 = the measured 2,400 less the 420ms the extra move costs.
+       *
+       * movesMs() budgets MOVE_GAP_MS per move, so dismissing the share prompt
+       * made the beat 420ms longer and pushed its caption to 5.2s — over the
+       * ceiling, and the retention check said so.
+       *
+       * Taking it off the hold rather than the ceiling is not arithmetic
+       * convenience: the prompt only APPEARS once the rank has landed, so the
+       * thing being dismissed is itself proof that the shot is ready. The line
+       * can start as the dismissal happens.
+       */
+      hold: 1_980,
       /**
        * ═══════════════════════════════════════════════════════════════════
        * REWORDED TO SPLIT AT THE COMMA, AND THE REASON IS MEASURED TWICE.
