@@ -155,3 +155,45 @@ export function captionProblems(text: string): string[] {
   }
   return problems;
 }
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE CAPTION FOR A REEL, WHICH HAD NONE.
+ *
+ * record-carousel.mts has written a caption.txt next to its slides since the
+ * day it was built. The reel recorder writes an .mp4, an .srt and a
+ * .sync.json, and the person posting it is left to write the box underneath
+ * from scratch — on a pipeline whose whole argument is that nothing worth
+ * checking should be done by hand at the end.
+ *
+ * BUILT FROM THE SCRIPT, not written again. The beats are already prose a
+ * person wrote, already checked for claims they cannot make, already true of
+ * what the video shows. Rewriting them for the caption would be a second
+ * version of the same sentences, free to drift from the footage.
+ *
+ * The sign-off beat is dropped: "PocketAthlete, free, link in the bio" is a
+ * line for a voice with a profile underneath it, and the caption has its own
+ * call to action with an actual address in it.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export function reelCaption(
+  script: { hook: string; beats: readonly { say: string }[] },
+  opts: { link?: string; tags?: string[] } = {},
+): CaptionParts {
+  const link = opts.link ?? "pocketathlete.com";
+  /**
+   * The hook leads, because it is the one line guaranteed to be above the
+   * fold and it has already been written to earn a second of attention.
+   */
+  const body = script.beats
+    .slice(0, -1)
+    .map((b) => b.say.trim())
+    .filter(Boolean)
+    .join("\n");
+  return {
+    hook: script.hook.trim(),
+    body,
+    cta: `Free, and no account needed to look — ${link}`,
+    tags: opts.tags ?? ["#pocketathlete", "#traindeliberately"],
+  };
+}

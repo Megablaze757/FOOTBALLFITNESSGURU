@@ -4,8 +4,11 @@ import { SKILL_DRILLS } from "./skills";
 import { DEMO_SCREENS } from "./demo-card";
 import {
   drillCaption, demoCaption, renderCaption, captionProblems, hashtags, supportingFact,
+  reelCaption, CAPTION_FOLD,
   CAPTION_FOLD, CAPTION_MAX,
 } from "./caption";
+import { SCRIPTS, reelScript, type ScriptId } from "./reel-script";
+import { readFileSync } from "node:fs";
 
 const drill = SKILL_DRILLS[0];
 
@@ -106,4 +109,57 @@ test("the call to action is a verified fact", () => {
 
 test("an unknown demo screen throws rather than captioning the wrong picture", () => {
   assert.throws(() => demoCaption("leaderboard" as never), /unknown demo screen/);
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * EVERY REEL SHIPS WITH THE WORDS THAT GO UNDER IT.
+ *
+ * The carousel has written a caption.txt next to its slides since it was
+ * built. The reel recorder wrote an .mp4, an .srt and a .sync.json, and left
+ * the caption to be typed by hand at the end — on a pipeline whose whole
+ * argument is that the hand-typed step at the end is where things go wrong.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("every reel's caption is postable", () => {
+  for (const meta of SCRIPTS) {
+    const script = reelScript(meta.id as ScriptId, "");
+    if (!script) continue;
+    const text = renderCaption(reelCaption(script));
+    assert.deepEqual(captionProblems(text), [], `${meta.id}: ${captionProblems(text).join("; ")}`);
+    /** The hook is the one line certain to be read, so it has to fit above it. */
+    const first = text.split("\n")[0] ?? "";
+    assert.equal(first, script.hook.trim(), `${meta.id} does not lead with its hook`);
+    assert.ok(first.length <= CAPTION_FOLD,
+      `${meta.id}'s first line is ${first.length} characters, past the ${CAPTION_FOLD} fold`);
+  }
+});
+
+/**
+ * The sign-off is a line for a voice with a profile under it. In a caption it
+ * is a second call to action arguing with the real one, which has an address.
+ */
+test("a reel caption does not repeat the spoken sign-off", () => {
+  const script = reelScript("standards", "")!;
+  const text = renderCaption(reelCaption(script));
+  assert.ok(!text.includes("link in the bio"),
+    "the caption repeats the spoken sign-off instead of giving an address");
+  assert.ok(text.includes("pocketathlete.com"), "the caption has no address to go to");
+});
+
+/** Built from the beats, so it cannot describe a video that was never made. */
+test("a reel caption is the script's own words", () => {
+  const script = reelScript("demo-cost", "")!;
+  const text = renderCaption(reelCaption(script));
+  for (const beat of script.beats.slice(0, -1)) {
+    assert.ok(text.includes(beat.say.trim()), `the caption drops "${beat.say}"`);
+  }
+});
+
+test("the recorder writes the caption beside the video", () => {
+  const src = readFileSync("scripts/record-reel.mts", "utf8");
+  assert.match(src, /caption\.txt/, "no caption is written next to the reel");
+  assert.match(src, /captionProblems\(caption\)/, "the caption is written without being checked");
+  assert.match(src, /captionFaults\.length[\s\S]{0,200}throw new Error/,
+    "a caption that cannot be posted is written out anyway");
 });

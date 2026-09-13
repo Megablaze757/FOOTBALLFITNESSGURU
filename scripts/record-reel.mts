@@ -32,6 +32,7 @@ import { implausibleAudio } from "../lib/reel";
 import { outsideSafeZone, MAX_CAPTION_LINES } from "../lib/safe-zone";
 import { MOVE_GAP_MS, MOVE_POLL_MS, MOVE_WAIT_MS } from "../lib/reel-moves";
 import { SIGNUP_CTA } from "../lib/signup-link";
+import { reelCaption, renderCaption, captionProblems } from "../lib/caption";
 import { karaokeWords } from "../lib/caption-karaoke";
 import { phrases } from "../lib/speech-timing";
 import { spokenForm } from "../lib/spoken-numbers";
@@ -1183,6 +1184,30 @@ writeFileSync(join(outDir, `${script.id}.srt`), srt(plan));
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
+ * AND THE WORDS THAT GO IN THE BOX UNDERNEATH.
+ *
+ * record-carousel.mts has written a caption.txt next to its slides since it
+ * was built. This wrote an .mp4, an .srt and a .sync.json, and left the
+ * person posting to write the caption from scratch — on a pipeline whose
+ * whole argument is that nothing worth checking gets done by hand at the end.
+ *
+ * Built from the script's own beats rather than written again, so the caption
+ * cannot drift from what the video says, and checked before it is written:
+ * captionProblems() is the same guard the other captions get, and a claim it
+ * refuses would be refused in the box under a post too.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+const caption = renderCaption(reelCaption(script));
+const captionFaults = captionProblems(caption);
+if (captionFaults.length) {
+  throw new Error(
+    `The caption for ${script.id} would not be postable:\n  ${captionFaults.join("\n  ")}`,
+  );
+}
+writeFileSync(join(outDir, `${script.id}.caption.txt`), `${caption}\n`);
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
  * THE NUMBERS THE RECORDER ACTUALLY USED, SO SYNC STOPS BEING INFERRED.
  *
  * Caption sync was checked three times by finding voice onsets in the muxed
@@ -1280,6 +1305,7 @@ if (withVoice) {
 
 console.log(`  ${outDir}/${script.id}.webm`);
 console.log(`  ${outDir}/${script.id}.srt`);
+console.log(`  ${outDir}/${script.id}.caption.txt`);
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
