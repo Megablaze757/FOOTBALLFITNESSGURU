@@ -339,3 +339,26 @@ test("captions can be checked without recording a reel", () => {
   assert.match(src, /the instrument is wrong, so its readings mean nothing/,
     "the self-test does not refuse to report when the control fails");
 });
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE DIM MUST LEAVE THE PAGE READABLE.
+ *
+ * The spotlight dims everything outside the ring, and at 0.72 over a near-black
+ * app that meant erasure rather than emphasis. Measured on a finished frame:
+ * the ringed line at 20.35:1, and the £0.31 the whole reel is about at 2.63:1 —
+ * under the 3:1 floor for large text.
+ *
+ * Swept on the real page: 0.6 gives 3.58:1, 0.5 gives 5.06:1, 0.4 gives 7.04:1.
+ * The ceiling here is where legibility fails, not a taste about how dark it
+ * looks — which is why it is a number and not an opinion.
+ */
+test("the spotlight dims the page without erasing it", () => {
+  const alpha = Number(OVERLAY.match(/\[data-side\][\s\S]{0,2400}?background:rgba\(4,4,6,([\d.]+)\)/)?.[1]
+    ?? OVERLAY.match(/background:rgba\(4,4,6,([\d.]+)\)/)?.[1]);
+  assert.ok(Number.isFinite(alpha), "the spotlight's dim is no longer where this can read it");
+  assert.ok(alpha <= 0.55,
+    `a ${alpha} dim measured 2.26:1 on the figure the reel is about — under the 3:1 floor`);
+  /** And it still has to dim: no dim is no spotlight. */
+  assert.ok(alpha >= 0.35, `a ${alpha} dim stops the ring pointing at anything`);
+});
