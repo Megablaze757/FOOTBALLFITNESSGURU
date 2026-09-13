@@ -67,16 +67,25 @@ export const SAFE = {
  * ═══════════════════════════════════════════════════════════════════════════
  * HOW MANY RENDERED LINES A CAPTION MAY COVER THE APP WITH.
  *
- * Not a style rule — a measurement. One character of the caption font averages
- * 26.4 CSS px, so the 412px safe band fits about fifteen, and a caption the
- * code counts as ONE line is routinely three on screen. Across all seven
- * scripts: 23 captions render one line, 22 render two, 28 render three, and
- * one rendered four before it was reworded.
+ * Not a style rule — a measurement, and the first version of it was taken in
+ * the wrong font. The overlay asked for `system-ui`, which on a Linux runner
+ * is DejaVu Sans: 26.4 CSS px a character, about fifteen to a line, and 28 of
+ * the 74 captions rendering three lines with one at four. That is what shipped,
+ * and it is not what the page can do.
  *
- * Four lines was 45% of the frame in text, on a reel whose entire subject is
- * the app underneath it, and it left 26px between the caption and the
- * spotlight ring. Measured again with the ceiling held: the tallest caption
- * now covers 39% and the ring clears it by 81px.
+ * In the app's own display face, which the overlay uses now, a character is
+ * 18.8px and the band holds 22. Measured across all seven scripts:
+ *
+ *                        fallback        Barlow Semi Condensed 800
+ *   one line                   23                               38
+ *   two lines                  22                               32
+ *   three lines                28                                4
+ *   four lines                  1                                0
+ *
+ * The ceiling stays, because the ceiling is about what the frame can carry
+ * rather than what the font happens to be: four lines was 45% of the frame in
+ * text, over the app the reel exists to show, and it left 26px between the
+ * caption and the spotlight ring.
  *
  * Dropping the font to 40px CSS would also have cleared it, and was refused:
  * 46px is 92px of frame, deliberately raised from 80 into the 80-120px band
@@ -85,6 +94,36 @@ export const SAFE = {
  * ═══════════════════════════════════════════════════════════════════════════
  */
 export const MAX_CAPTION_LINES = 3;
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE CAPTION'S OWN GEOMETRY, so the page underneath can keep out of its way.
+ *
+ * These are the values scripts/reel-overlay.js draws with, in the CSS pixels it
+ * is written in. They live here rather than only there because the APP needs
+ * them too: a page filmed for a reel has to leave the caption band empty, and
+ * until it did, the studio cards sat in the top quarter of the frame with 326px
+ * of black between them and the caption.
+ *
+ * A test parses the overlay and fails if these drift from what it actually
+ * draws — the overlay stays the thing that decides.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export const CAPTION = { fontPx: 46, lineHeight: 1.2, liftVh: 22 } as const;
+
+/**
+ * How much of the frame's HEIGHT the caption block can reach up into, worst
+ * case: its lift off the bottom plus a full-height caption.
+ *
+ * Measured against the real thing: 22vh of 960 is 211px, three lines at 46px
+ * and 1.2 is 166px, so the block tops out 377px from the bottom — 583px down a
+ * 960px viewport, which is exactly where the tallest real caption starts.
+ */
+export const CAPTION_BAND_FRACTION =
+  (REEL_H * (CAPTION.liftVh / 100) + MAX_CAPTION_LINES * CAPTION.fontPx * CAPTION.lineHeight) / REEL_H;
+
+/** What is left for the app being filmed, as a fraction of the frame height. */
+export const FILMABLE_FRACTION = 1 - CAPTION_BAND_FRACTION;
 
 /**
  * Frame pixels to the CSS pixels the overlay is written in.

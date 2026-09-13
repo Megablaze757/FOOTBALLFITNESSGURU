@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { cardById, contentCards, CARD_STAGES } from "@/lib/content-cards";
+import { FILMABLE_FRACTION } from "@/lib/safe-zone";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -45,14 +46,33 @@ export default function StudioCard({ params }: { params: { card: string; step: s
 
   return (
     /*
-      UPPER TWO THIRDS, NOT CENTRED. The recorder lays captions across the
-      lower-middle of the frame — which is also where a platform puts the
-      username, the description and the action buttons. A card centred in the
-      viewport puts its figure exactly where all of that lands.
+      ═══════════════════════════════════════════════════════════════════════
+      FILLS THE PART OF THE FRAME THE CAPTION DOES NOT USE.
+
+      The rule was right and the execution left a hole. Captions are drawn
+      across the lower part of the frame — which is also where a platform puts
+      the username, the description and the action buttons — so a card centred
+      in the viewport puts its figure exactly where all of that lands. This
+      answered that with `justify-start` and `pb-40`, which pinned the card to
+      the TOP and left everything below it black.
+
+      Filmed and measured: the card ran 48..257 of a 960px viewport and the
+      caption began at 583, so 326px — a third of the frame — was empty. On a
+      reel whose whole subject is one number, a third of the picture was
+      nothing at all, and it read exactly like a page that had run out.
+
+      FILMABLE_FRACTION is what the caption leaves, derived in lib/safe-zone.ts
+      from the caption's own lift and line ceiling rather than guessed at here.
+      The faces share it, so one face fills the band and three divide it, and
+      the bottom of the last one still clears the words.
+      ═══════════════════════════════════════════════════════════════════════
     */
-    <main className="flex min-h-screen flex-col justify-start gap-4 px-4 pb-40 pt-12">
+    <main
+      className="flex flex-col justify-center gap-4 px-4 pt-8"
+      style={{ height: `${(FILMABLE_FRACTION * 100).toFixed(2)}vh` }}
+    >
       {shown.map((face, i) => (
-        <section key={i} className="card px-4 py-6 text-center">
+        <section key={i} className="card flex flex-1 flex-col justify-center px-4 py-6 text-center">
           {face.kicker && (
             <p className="text-sm font-semibold uppercase tracking-widest text-slate-400">
               {face.kicker}
@@ -76,8 +96,20 @@ export default function StudioCard({ params }: { params: { card: string; step: s
           <p className="mt-2 text-lg font-semibold text-slate-400">{face.caption}</p>
         </section>
       ))}
+      {/*
+        THE MIDDLE STAGE HAS TO SHOW SOMETHING NEW. A comparison reveals its
+        second figure here; a knowledge card has only one, so without this its
+        stage two was pixel-identical to stage one and the reel sat on an
+        unchanging number for twenty-two seconds. Set large enough to be the
+        reveal rather than a caption under it.
+      */}
+      {stage >= 2 && card.context && (
+        <p className="shrink-0 px-2 text-center text-2xl font-bold leading-tight text-slate-200">
+          {card.context}
+        </p>
+      )}
       {stage === CARD_STAGES && (
-        <p className="px-2 text-center text-base text-slate-400">{card.footer}</p>
+        <p className="shrink-0 px-2 text-center text-base text-slate-400">{card.footer}</p>
       )}
     </main>
   );

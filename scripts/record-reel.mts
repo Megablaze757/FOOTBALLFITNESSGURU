@@ -601,11 +601,12 @@ const unsafe: string[] = [];
  * ═══════════════════════════════════════════════════════════════════════════
  * A CAPTION THE CODE CALLS ONE LINE AND THE BROWSER DRAWS AS FOUR.
  *
- * captionLines cuts at 42 characters, and one character of this caption font
- * averages 26.4 CSS px — so 42 characters is about three rendered lines in the
- * 412px safe band, never one. Nothing downstream knew that: the block grows
- * upward from a fixed bottom, so the taller it renders the more of the app it
- * covers, and the app is the subject.
+ * captionLines cuts at 42 characters and calls that a line. How many lines it
+ * actually becomes depends on the words, the wrap and the face: in the
+ * fallback the overlay used to ask for, 42 characters was three rendered lines
+ * and never one; in the app's own display face it is two. Nothing downstream
+ * knows either number — the block grows upward from a fixed bottom, so the
+ * taller it renders the more of the app it covers, and the app is the subject.
  *
  * Counted from the line-height the element reports rather than a number
  * written here, because that is the thing that decides.

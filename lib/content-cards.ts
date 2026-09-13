@@ -91,6 +91,16 @@ export interface ContentCard {
    * thumb, and resolving it is what keeps them to the end.
    */
   faces: CardFace[];
+  /**
+   * What the middle stage adds, for a card whose format allows only one face.
+   *
+   * A comparison reveals its second figure at stage two. A knowledge card has
+   * no second figure to reveal, so without this its middle stage was identical
+   * to its first — a reel that does not move for twenty-two seconds. This is
+   * the thing it can reveal instead: the context that makes the one figure
+   * mean something.
+   */
+  context?: string;
   /** The sentence under the whole thing — why it is true, in the app's words. */
   footer: string;
 }
@@ -171,10 +181,32 @@ export function bodyweightGapCard(): ContentCard | null {
   };
 }
 
-/** What the cheapest protein actually is, which surprises people. */
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * WHAT THE CHEAPEST PROTEIN ACTUALLY IS, WHICH SURPRISES PEOPLE — AND THE
+ * SURPRISE NEEDS SOMETHING TO BE SURPRISING AGAINST.
+ *
+ * This had ONE face. app/studio/[card]/[step]/page.tsx shows the first figure
+ * at stage one and all of them at stage two, so with one face stage two was
+ * pixel-identical to stage one and stage three added a footer line. Filmed, it
+ * is twenty-two seconds of a single number that never changes, under a script
+ * whose middle line says "it is not close" — a claim with nothing on screen to
+ * be close to.
+ *
+ * The comparison that carries the claim is the cheapest ANIMAL source, which is
+ * also where the surprise lives: the cheapest protein in the shop is not meat,
+ * and the nearest animal source is more than double. That is a different
+ * argument from proteinGapCard's cheapest-against-dearest, which is why this
+ * card gets it rather than repeating that one.
+ *
+ * The multiple is computed rather than written down: "more than double" is true
+ * today at 2.4x and is a sentence about shelf prices that change weekly.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
 export function cheapestProteinCard(): ContentCard | null {
   const facts = indexFacts();
-  if (!facts?.cheapestPlant) return null;
+  if (!facts?.cheapestPlant || !facts.cheapestAnimal) return null;
+  const animal = facts.cheapestAnimal;
   return {
     id: "cheapest-protein",
     format: "knowledge",
@@ -193,6 +225,23 @@ export function cheapestProteinCard(): ContentCard | null {
         caption: `for ${REFERENCE_PROTEIN}g of protein`,
       },
     ],
+    /**
+     * WHAT THE MIDDLE STAGE SHOWS, and why it is not a second figure.
+     *
+     * A knowledge card has exactly one subject — cardProblems() enforces it,
+     * and turning this into a third comparison card would have cost the format
+     * variety the mix exists for. But with nothing to reveal, stage two was
+     * pixel-identical to stage one: filmed, this reel was twenty-two seconds of
+     * one number that never changed, under a line claiming "it is not close"
+     * with nothing on screen to be close to.
+     *
+     * So the reveal is the CONTEXT rather than another number, which is what a
+     * knowledge card has to give. It names the nearest animal source, because
+     * that is where the surprise actually is — the cheapest protein in the shop
+     * is not meat, and the closest thing to it costs more than double.
+     */
+    context: `Nothing else comes close. The cheapest animal source, `
+      + `${animal.name}, is ${money(animal.cost)}.`,
     footer: `Cheaper than every one of the other ${facts.count - 1} foods priced.`,
   };
 }

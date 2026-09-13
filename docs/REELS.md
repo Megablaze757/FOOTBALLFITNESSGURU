@@ -110,8 +110,23 @@ been rendered. Two things make that easy to get wrong:
 ## The captions
 
 `lib/caption-lines.ts` cuts text at 42 characters. That is a *caption* width and
-not a *line* width: one character of the caption font averages 26.4 CSS px, so
-the 412px band fits about fifteen, and 42 characters is three rendered lines.
+not a *line* width — how many lines it becomes depends on the words, the wrap
+and the face.
+
+The face matters more than anything else here. The overlay asked for
+`system-ui` for a long time, which on a Linux runner resolves to DejaVu Sans —
+a family with no weight above Bold, so `font-weight: 900` was **synthesised**,
+and every caption in every reel was drawn in a smeared fake bold. It uses the
+app's own `--font-display` (Barlow Semi Condensed, loaded by `app/layout.tsx`)
+now, at a weight that face actually has:
+
+| | px per character | chars per line | captions at 3 lines |
+| --- | --- | --- | --- |
+| `system-ui` fallback | 26.4 | 15 | 28 of 74 |
+| app's display face | 18.8 | 22 | 4 of 74 |
+
+`npm run check:captions` refuses to report if it is measuring a fallback, and
+needs the export built and served for that reason.
 
 So the ceiling is on what is drawn, not on what is counted — `MAX_CAPTION_LINES`
 in `lib/safe-zone.ts`, measured on the page. Four lines is 45% of the frame in

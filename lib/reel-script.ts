@@ -937,8 +937,20 @@ function cardScript(card: ContentCard): ReelScript | null {
   const beats: Omit<Beat, "at" | "ms">[] = card.lines.map((line, i) => ({
     route: stageRoute(i + 1),
     action: `Stage ${i + 1}: ${i + 1 === CARD_STAGES ? "the proof" : faceAt(i).figure}.`,
-    /** The ring goes on the figure the line is about, not the whole card. */
-    focus: i + 1 === CARD_STAGES ? undefined : faceAt(i).figure,
+    /**
+     * THE RING GOES ON WHAT THIS STAGE REVEALS, not on the whole card — and
+     * "what this stage reveals" is not always a figure.
+     *
+     * A comparison puts its second number up at stage two, so the ring follows
+     * it. A knowledge card has only one figure, so faceAt() clamped back to the
+     * first one and the ring sat on a number that had not changed since the
+     * opening shot — while the thing that HAD changed, the context line, was
+     * outside the ring and therefore dimmed. Filmed, the reveal was the one
+     * part of the frame the spotlight was hiding.
+     */
+    focus: i + 1 === CARD_STAGES
+      ? undefined
+      : (i === 1 && card.faces.length === 1 && card.context ? card.context : faceAt(i).figure),
     /** The pause before the number the whole thing is built to deliver. */
     hold: i === 1 ? SUSPENSE_MS : undefined,
     say: line,

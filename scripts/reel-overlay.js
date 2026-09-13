@@ -30,7 +30,40 @@
       "position:fixed;inset:0;z-index:2147483647;pointer-events:none;"
       + "display:flex;flex-direction:column;justify-content:flex-end;align-items:center;"
       // 90px right / 30px left: the action rail. See the note on the caption.
-      + "padding:0 94px 22vh 34px;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;";
+      /**
+       * ═══════════════════════════════════════════════════════════════════
+       * THE APP'S OWN FACE, NOT THE RUNNER'S IDEA OF system-ui.
+       *
+       * This was `system-ui,-apple-system,'Segoe UI',sans-serif`, which on a
+       * Linux runner resolves to DejaVu Sans — a face with no weight above
+       * Bold, so `font-weight:900` was SYNTHESISED. Every caption in every
+       * reel was drawn in a smeared fake-bold fallback, which is most of why
+       * the captions never looked like the ones the research describes.
+       *
+       * Seen in a recorded frame: the sign-off read as a typewriter face while
+       * the app's own card text, two inches above it, was set properly.
+       *
+       * The page already has the right fonts. app/layout.tsx loads Inter and
+       * Barlow Semi Condensed through next/font, self-hosted under
+       * _next/static/media, and exposes them as --font-display and
+       * --font-sans on <html>. The overlay is injected into that page, so they
+       * cost nothing to use and they are what the product is set in.
+       *
+       * Measured on a real page, at 46px, per character of caption text:
+       *
+       *   system-ui -> DejaVu Sans, fake 900     26.39px   15 per line
+       *   var(--font-display) at 800             18.76px   22 per line
+       *
+       * A condensed display face is also simply the right shape for this: 29%
+       * more of a phrase on a line, in the band the caption research asks for.
+       *
+       * The fallbacks stay, and check-captions.mts refuses to report when it
+       * is measuring one — a caption checked in the wrong font is a number
+       * about nothing.
+       * ═══════════════════════════════════════════════════════════════════
+       */
+      + "padding:0 94px 22vh 34px;"
+      + "font-family:var(--font-display),var(--font-sans),system-ui,-apple-system,sans-serif;";
 
     var caption = document.createElement("div");
     caption.id = "__reel_caption";
@@ -142,7 +175,9 @@
        * Taking half of a preset is how you get the worst of it.
        * ═══════════════════════════════════════════════════════════════════
        */
-      + "max-width:100%;text-align:center;font-size:46px;line-height:1.2;font-weight:900;"
+      // 800 and not 900: Barlow Semi Condensed is loaded at 600/700/800, and
+      // asking for a weight it does not have is how the fake bold got here.
+      + "max-width:100%;text-align:center;font-size:46px;line-height:1.2;font-weight:800;"
       + "letter-spacing:-0.01em;"
       + "color:#fff;"
       + "text-shadow:4px 0px 0 #000,3.5px 2px 0 #000,2px 3.5px 0 #000,0px 4px 0 #000,-2px 3.5px 0 #000,-3.5px 2px 0 #000,-4px 0px 0 #000,-3.5px -2px 0 #000,-2px -3.5px 0 #000,-0px -4px 0 #000,2px -3.5px 0 #000,3.5px -2px 0 #000,0 2px 14px rgba(0,0,0,0.9),0 10px 30px rgba(0,0,0,0.55);"
@@ -200,7 +235,8 @@
     var hook = document.createElement("div");
     hook.id = "__reel_hook";
     hook.style.cssText =
-      "max-width:100%;font-size:64px;line-height:1.08;font-weight:900;text-align:center;"
+      // 800, for the reason on the caption above: the loaded face stops there.
+      "max-width:100%;font-size:64px;line-height:1.08;font-weight:800;text-align:center;"
       /**
        * SAME OUTLINE, SAME REASON AS THE CAPTION ABOVE — and one more that
        * belongs to the hook alone.

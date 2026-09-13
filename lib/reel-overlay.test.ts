@@ -87,7 +87,30 @@ test("the caption is outlined, not boxed", () => {
   const ring = caption.match(RING) ?? [];
   assert.ok(ring.length >= 8,
     `${ring.length} solid outline offsets — under eight the ring has gaps and the caption dissolves into a busy screen`);
-  assert.match(caption, /font-weight:900/, "the caption is no longer heavy enough to read on video");
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * HEAVY, AND A WEIGHT THE LOADED FACE ACTUALLY HAS.
+   *
+   * This asserted `font-weight:900` literally, and that value was the bug. The
+   * overlay asked for a weight nothing on the page provides, so the browser
+   * SYNTHESISED one — every caption in every reel was drawn in a smeared fake
+   * bold, which is most of why they never looked like the captions the
+   * research describes.
+   *
+   * app/layout.tsx is what decides: it loads Barlow Semi Condensed at specific
+   * weights through next/font. Asking for anything outside that list is asking
+   * for the fake again, so the list is read rather than assumed.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  const weight = Number(caption.match(/font-weight:(\d+)/)?.[1]);
+  assert.ok(weight >= 800, `font-weight:${weight} is not heavy enough to read on video`);
+  const layout = readFileSync("app/layout.tsx", "utf8");
+  const loaded = [...(layout.match(/weight:\s*\[([^\]]+)\]/)?.[1] ?? "")
+    .matchAll(/"(\d+)"/g)].map((m) => Number(m[1]));
+  assert.ok(loaded.length, "app/layout.tsx no longer says which weights it loads");
+  assert.ok(loaded.includes(weight),
+    `the overlay asks for ${weight} and the page loads ${loaded.join(", ")} — `
+    + "the browser fakes the difference, which is what shipped");
 
   /**
    * ABOVE THE FLOOR OF THE BAND, NOT INSIDE IT — and the difference is a

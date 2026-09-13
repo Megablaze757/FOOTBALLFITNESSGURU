@@ -36,6 +36,24 @@ import { MAX_CAPTION_LINES, outsideSafeZone } from "../lib/safe-zone";
  */
 const executablePath = process.env.PW_CHROMIUM || undefined;
 
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * ON A REAL PAGE, BECAUSE THE FONT IS ON THE REAL PAGE.
+ *
+ * This used to measure captions on a blank document, which was fine while the
+ * overlay asked for `system-ui`. It no longer does: it uses --font-display,
+ * the Barlow Semi Condensed that app/layout.tsx loads through next/font, and
+ * those variables exist only on the app's own pages. On a blank one the stack
+ * falls through to whatever the machine calls sans-serif — 29% wider — so
+ * every line count would be measured in a font no reel is drawn in.
+ *
+ * So it films the same page the recorder does, and refuses to report at all if
+ * the font it measured is not the one that will be used. A caption checked in
+ * the wrong face is a number about nothing.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+const ORIGIN = process.env.REEL_ORIGIN ?? "http://localhost:8899";
+
 async function open(): Promise<{ browser: Browser; page: Page }> {
   const browser = await chromium.launch({ executablePath });
   const context = await browser.newContext({
@@ -44,9 +62,35 @@ async function open(): Promise<{ browser: Browser; page: Page }> {
   });
   await context.addInitScript({ path: new URL("./reel-overlay.js", import.meta.url).pathname });
   const page = await context.newPage();
-  await page.setContent("<body style='margin:0;height:3000px;background:#111'></body>");
+  const target = `${ORIGIN}/studio/cheapest-protein/1/`;
+  const landed = await page.goto(target, { waitUntil: "load" }).catch(() => null);
+  if (!landed || !landed.ok()) {
+    console.error(`Could not reach ${target}.`);
+    console.error("This measures captions in the font they are drawn in, which lives on the");
+    console.error("app's own pages — so it needs the export built and served:");
+    console.error("  npm run build && python3 -m http.server 8899 --directory out &");
+    console.error("Set REEL_ORIGIN to point somewhere else.");
+    await browser.close();
+    process.exit(1);
+  }
   // install() is lazy — the overlay builds itself on the first caption.
   await page.evaluate(() => (window as never as { __reelCaption: (s: string) => void }).__reelCaption("x"));
+
+  /** The face actually resolved, not the one the stack asked for. */
+  const font = await page.evaluate(() => {
+    const el = document.getElementById("__reel_caption")!;
+    const want = getComputedStyle(document.documentElement).getPropertyValue("--font-display").trim();
+    return { want, used: getComputedStyle(el).fontFamily };
+  });
+  if (!font.want || !font.used.includes(font.want.split(",")[0].replace(/["']/g, ""))) {
+    console.error("The caption is not rendering in the app's display face.");
+    console.error(`  --font-display: ${font.want || "(missing)"}`);
+    console.error(`  resolved to:    ${font.used}`);
+    console.error("Measuring line counts in a fallback would report numbers about a font no");
+    console.error("reel is drawn in, so this refuses rather than guessing.");
+    await browser.close();
+    process.exit(1);
+  }
   return { browser, page };
 }
 
