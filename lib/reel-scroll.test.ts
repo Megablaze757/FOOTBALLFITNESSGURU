@@ -1,6 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { DRIFT_PER_BEAT, driftEnd, driftTarget } from "./reel-scroll";
+import { readFileSync } from "node:fs";
+import { DRIFT_PER_BEAT, closingDrift, driftEnd, driftTarget } from "./reel-scroll";
+import { SCRIPTS, reelScript, type ScriptId } from "./reel-script";
+import { reelPlan } from "./reel-plan";
 
 /**
  * /cheapest-protein/ as it actually is: a screen of 960, a document long
@@ -54,4 +57,96 @@ test("a page with nothing to scroll is left alone", () => {
   // Negative scrollable (a viewport taller than the document) is not a scroll up.
   assert.equal(driftTarget({ scrollable: -50, viewport: 960, from: 0, step: 1, steps: 1 }), 0);
   assert.equal(driftTarget({ scrollable: 500, viewport: 0, from: 40, step: 1, steps: 1 }), 40);
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE LOOP THE SCRIPTS PAY FOR.
+ *
+ * Five of the seven scripts end on the screen they opened on, and
+ * lib/reel-script.ts records what that costs: two other reels go without it
+ * because coming back would push them past MAX_ONE_ROUTE_SHARE. Simulated
+ * against the recorder's own drift, every one of those five ended 720px down a
+ * 960px viewport while the first frame sits at 0 — the right page at the wrong
+ * place, which loops no better than the wrong page.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("the closing beat arrives back at the framing it opened on", () => {
+  assert.equal(closingDrift({ from: 720, step: 4, steps: 4 }), 0,
+    "the last caption of the reel does not land on the opening frame");
+});
+
+test("the closing beat is still moving on the way there", () => {
+  const from = 720;
+  const seen = [1, 2, 3, 4].map((step) => closingDrift({ from, step, steps: 4 }));
+  assert.deepEqual(seen, [540, 360, 180, 0]);
+  /** Downward all the way — a scroll that jitters back and forth reads as broken. */
+  for (let i = 1; i < seen.length; i += 1) {
+    assert.ok(seen[i] < seen[i - 1], `the closing drift went backwards at caption ${i + 1}`);
+  }
+});
+
+test("a closing beat that starts at the top stays there", () => {
+  for (const step of [1, 2, 3]) assert.equal(closingDrift({ from: 0, step, steps: 3 }), 0);
+});
+
+test("a single-caption closing beat still lands at 0", () => {
+  assert.equal(closingDrift({ from: 900, step: 1, steps: 1 }), 0);
+});
+
+/** steps is a count off a plan, and 0 captions must not divide by zero. */
+test("a closing beat with no captions is not a division by zero", () => {
+  assert.equal(closingDrift({ from: 500, step: 0, steps: 0 }), 500);
+  assert.ok(Number.isFinite(closingDrift({ from: 500, step: 1, steps: 0 })));
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * WALKED OVER THE REAL SCRIPTS, BECAUSE THE ARITHMETIC WAS NEVER THE PROBLEM.
+ *
+ * driftTarget was correct in itself the whole time. What nobody had done was
+ * follow it across a whole reel and ask where the last frame lands — and the
+ * answer, on all five reels written to loop, was 720px from the frame they
+ * opened on. This walks the beats the way the recorder drives them: a route
+ * change reloads the document at 0, captions drift within a beat, and the
+ * closing beat glides back.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("every reel written to loop ends on the frame it opened on", () => {
+  const viewport = 960;
+  const scrollable = 5_000;
+  let looping = 0;
+  for (const meta of SCRIPTS) {
+    const script = reelScript(meta.id as ScriptId, "");
+    if (!script) continue;
+    const plan = reelPlan(script);
+    const last = plan.steps[plan.steps.length - 1];
+    let at = 0;
+    let route = "";
+    for (const step of plan.steps) {
+      if (step.route !== route) { at = 0; route = step.route; }
+      let from = at;
+      for (let i = 0; i < step.captions.length; i += 1) {
+        from = step === last
+          ? closingDrift({ from, step: i + 1, steps: step.captions.length })
+          : driftTarget({ from, scrollable, viewport, step: i + 1, steps: step.captions.length });
+      }
+      at = from;
+    }
+    if (plan.steps[0].route !== last.route) continue;
+    looping += 1;
+    assert.equal(at, 0,
+      `${meta.id} opens and closes on ${last.route} but ends ${at}px down it, so the picture jumps`);
+  }
+  /** The count itself, or a script losing its loop would quietly empty this. */
+  assert.ok(looping >= 5, `only ${looping} scripts still loop; five did when this was written`);
+});
+
+test("the recorder glides the closing beat back rather than onward", () => {
+  const rec = readFileSync("scripts/record-reel.mts", "utf8");
+  assert.match(rec, /closingDrift/, "the recorder never uses the closing drift");
+  assert.match(rec, /plan\.steps\[plan\.steps\.length - 1\]/,
+    "nothing identifies the closing beat, so every beat drifts the same way");
+  /** Ordinary beats must still drift onward — this replaces one beat, not all. */
+  assert.match(rec, /driftTarget\(\{ \.\.\.page_/, "the ordinary drift is gone");
 });

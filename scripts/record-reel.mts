@@ -27,7 +27,7 @@ import { join } from "node:path";
 import { reelScript, type ScriptId } from "../lib/reel-script";
 import { reelPlan, srt, endCardAt, REEL_W, REEL_H, REEL_SCALE } from "../lib/reel-plan";
 import { retentionProblems } from "../lib/reel-retention";
-import { driftTarget } from "../lib/reel-scroll";
+import { closingDrift, driftTarget } from "../lib/reel-scroll";
 import { implausibleAudio } from "../lib/reel";
 import { outsideSafeZone, MAX_CAPTION_LINES } from "../lib/safe-zone";
 import { MOVE_GAP_MS, MOVE_POLL_MS, MOVE_WAIT_MS } from "../lib/reel-moves";
@@ -1133,9 +1133,25 @@ async function runCaptions(step: (typeof plan.steps)[number], willAim: boolean):
      */
     if (willAim) continue;
 
-    const to = driftTarget({
-      ...page_, from: driftAt, step: i + 1, steps: step.captions.length,
-    });
+    /**
+     * THE LAST BEAT GOES BACK THE WAY IT CAME.
+     *
+     * Five of the seven scripts end on the screen they opened on, and
+     * lib/reel-script.ts records what that costs — two other reels go without
+     * the loop because returning would push them past MAX_ONE_ROUTE_SHARE.
+     * The point of paying it is the picture: "the last shot matches the
+     * framing of the first".
+     *
+     * It did not. driftTarget only ever moves down, so every one of those five
+     * ended 720px into a 960px viewport while the first frame is at 0 — the
+     * right page at the wrong place, which loops no better than the wrong
+     * page. The closing beat glides back to the top instead, arriving on its
+     * last caption so the end card asks from the opening framing.
+     */
+    const closing = step === plan.steps[plan.steps.length - 1];
+    const to = closing
+      ? closingDrift({ from: driftAt, step: i + 1, steps: step.captions.length })
+      : driftTarget({ ...page_, from: driftAt, step: i + 1, steps: step.captions.length });
     if (to !== driftAt || i === 0) {
       await page.evaluate((y) => window.scrollTo({ top: y, behavior: "smooth" }), to).catch(() => {});
     }

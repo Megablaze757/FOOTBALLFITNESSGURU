@@ -62,3 +62,36 @@ export function driftTarget({ from, scrollable, viewport, step, steps }: Drift):
 export function driftEnd(d: Omit<Drift, "step" | "steps">): number {
   return driftTarget({ ...d, step: 1, steps: 1 });
 }
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE CLOSING BEAT SCROLLS BACK, BECAUSE THE LOOP IS A PICTURE AND NOT A URL.
+ *
+ * lib/reel-script.ts ends five of the seven scripts on the screen they opened
+ * on, deliberately and at a cost it documents: "the PICTURE, when the last
+ * shot matches the framing of the first". Replay rate is the signal — above
+ * 1.2 distribution is reported as substantially stronger — and a reel that
+ * loops cleanly plays again before the viewer decides to replay it.
+ *
+ * The route matched and the framing never did. driftTarget only ever moves
+ * DOWN, so simulating every script's scroll the way the recorder drives it:
+ *
+ *   drill                  opens /drills/    ends /drills/    final scrollY 720
+ *   standards              opens /standards/ ends /standards/ final scrollY 720
+ *   card-protein-gap       …/protein-gap/1/  …/protein-gap/1/ final scrollY 720
+ *   card-bodyweight-gap    …                 …                final scrollY 720
+ *   card-cheapest-protein  …                 …                final scrollY 720
+ *
+ * 720px of a 960px viewport — three quarters of a screen from the frame the
+ * reel opened on, on every reel written to loop. The last shot was the right
+ * page at the wrong place, which loops no better than the wrong page.
+ *
+ * So the closing beat glides back instead of onward. Still moving — a still
+ * frame is one the scroller has finished reading — and it arrives at 0 on its
+ * last caption, so the end card holds the opening framing while it asks.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export function closingDrift({ from, step, steps }: Pick<Drift, "from" | "step" | "steps">): number {
+  const share = Math.min(1, Math.max(0, step / Math.max(1, steps)));
+  return Math.round(Math.max(0, from * (1 - share)));
+}
