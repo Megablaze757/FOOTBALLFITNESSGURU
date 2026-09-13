@@ -55,6 +55,25 @@ export const SAFE = {
   bottom: FRAME_H - CHROME.bottom,
 } as const;
 
+/**
+ * The record viewport, in CSS pixels. Playwright drives the app at 540x960
+ * with deviceScaleFactor 2, so every CSS pixel of layout is two pixels of
+ * frame — and the overlay's style strings are written in the CSS ones while
+ * every number above is in frame ones.
+ *
+ * This exists because that factor of two is where the clearances get lost.
+ * `padding: 0 28px` reads like a generous margin and is 56px of a 1080-wide
+ * frame, under a 180px-wide action rail.
+ */
+export const RECORD_W = 540;
+export const RECORD_H = 960;
+export const RECORD_SCALE = FRAME_W / RECORD_W;
+
+/** Frame pixels to the CSS pixels the overlay is written in. */
+export function cssPx(framePx: number): number {
+  return framePx / RECORD_SCALE;
+}
+
 export interface Box { left: number; right: number; top: number; bottom: number }
 
 /**

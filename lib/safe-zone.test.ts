@@ -2,8 +2,18 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
-  CHROME, SAFE, FRAME_W, FRAME_H, CAPTION_BOTTOM_FRACTION, outsideSafeZone,
+  CHROME, SAFE, FRAME_W, FRAME_H, CAPTION_BOTTOM_FRACTION, outsideSafeZone, cssPx,
+  RECORD_W, RECORD_SCALE,
 } from "./safe-zone";
+
+const OVERLAY = readFileSync("scripts/reel-overlay.js", "utf8");
+
+/** `padding:0 <right>px <bottom><unit> <left>px` off the caption layer. */
+function captionPadding() {
+  const m = OVERLAY.match(/padding:0 (\d+)px ([\d.]+)(vh|%) (\d+)px/);
+  assert.ok(m, "the caption layer's padding is no longer where this can read it");
+  return { right: Number(m![1]), bottom: Number(m![2]), unit: m![3], left: Number(m![4]) };
+}
 
 test("a box inside the safe area has nothing wrong with it", () => {
   assert.deepEqual(outsideSafeZone({ left: 200, right: 800, top: 300, bottom: 1200 }), []);
@@ -40,16 +50,63 @@ test("the caption that shipped would be refused", () => {
  * ═══════════════════════════════════════════════════════════════════════════
  */
 test("the overlay lifts its caption by a fraction of the HEIGHT", () => {
-  const css = readFileSync("scripts/reel-overlay.js", "utf8");
-  const m = css.match(/padding:0 \d+px ([\d.]+)(vh|%)\b/);
-  assert.ok(m, "the caption's bottom padding is no longer where this can check it");
-  assert.notEqual(m![2], "%",
+  const { bottom, unit } = captionPadding();
+  assert.notEqual(unit, "%",
     "percentage padding resolves against WIDTH — this is the bug that shipped a caption "
     + "243px off the bottom when it meant 422");
-  assert.equal(m![2], "vh");
-  const px = (Number(m![1]) / 100) * FRAME_H;
+  assert.equal(unit, "vh");
+  const px = (bottom / 100) * FRAME_H;
   assert.ok(px >= CHROME.bottom,
-    `${m![1]}vh is ${Math.round(px)}px, under the ${CHROME.bottom}px the platform draws over`);
+    `${bottom}vh is ${Math.round(px)}px, under the ${CHROME.bottom}px the platform draws over`);
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE SIDES ARE IN CSS PIXELS AND THE RAIL IS IN FRAME PIXELS.
+ *
+ * Measured on the same frame: the caption's right edge at x=906 against a safe
+ * edge of 900, from a container that allowed 1024. `padding:0 28px` looks like
+ * clearance and is 56 frame pixels against a 180px action rail, because the
+ * recorder runs at 540x960 and scales by two.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("the caption clears the action rail on the right", () => {
+  const { left, right } = captionPadding();
+  assert.ok(right >= cssPx(CHROME.right),
+    `${right}px CSS is ${right * 2}px of frame, inside the ${CHROME.right}px action rail`);
+  assert.ok(left >= cssPx(CHROME.left),
+    `${left}px CSS is ${left * 2}px of frame, inside the ${CHROME.left}px left margin`);
+});
+
+/**
+ * The hook is the first 1.6 seconds and the largest type in the reel, so it is
+ * the worst thing to lose an edge of. It had its own 30px padding, which was
+ * the same defect in a second place.
+ */
+test("the hook clears the action rail too", () => {
+  const m = OVERLAY.match(/top:42%;[^"]*"\s*\n?[^"]*"padding:0 (\d+)px 0 (\d+)px/)
+    ?? OVERLAY.match(/padding:0 (\d+)px 0 (\d+)px/);
+  assert.ok(m, "the hook's padding is no longer where this can read it");
+  assert.ok(Number(m![1]) >= cssPx(CHROME.right),
+    `the hook pads ${m![1]}px CSS on the right, inside the ${CHROME.right}px rail`);
+  assert.ok(Number(m![2]) >= cssPx(CHROME.left), "the hook runs into the left edge");
+});
+
+/**
+ * Not symmetric, and that is the point: there are no buttons on the left, so
+ * matching 90px there would throw away 124 frame pixels of the widest type in
+ * the reel to no purpose. If somebody "tidies" it to one value, this says why.
+ */
+test("the caption is not padded symmetrically", () => {
+  const { left, right } = captionPadding();
+  assert.ok(right > left,
+    "the rail is only on the right — symmetric padding costs usable width for nothing");
+  /**
+   * And it lands exactly on the safe band rather than near it: the width left
+   * between the two paddings, taken back up to frame pixels, is the 840px
+   * between the chrome on each side.
+   */
+  assert.equal((RECORD_W - left - right) * RECORD_SCALE, FRAME_W - CHROME.left - CHROME.right);
 });
 
 test("the derived safe box sits inside the quoted one", () => {

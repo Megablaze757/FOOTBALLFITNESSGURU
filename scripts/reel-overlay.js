@@ -29,7 +29,8 @@
     layer.style.cssText =
       "position:fixed;inset:0;z-index:2147483647;pointer-events:none;"
       + "display:flex;flex-direction:column;justify-content:flex-end;align-items:center;"
-      + "padding:0 28px 22vh;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;";
+      // 90px right / 30px left: the action rail. See the note on the caption.
+      + "padding:0 90px 22vh 30px;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;";
 
     var caption = document.createElement("div");
     caption.id = "__reel_caption";
@@ -54,6 +55,29 @@
      *
      * The intent was right and the unit quietly defeated it. vh is the unit
      * that means what the comment says.
+     *
+     * ───────────────────────────────────────────────────────────────────
+     * AND THE SIDES ARE NOT SYMMETRIC, BECAUSE THE CHROME IS NOT EITHER.
+     *
+     * The same measured frame caught the other edge: the caption's right edge
+     * landed at x=906 of 1080, and the action rail — profile, like, comment,
+     * share — runs UP the right edge over the last 180px, so the safe edge is
+     * 900. Six pixels over on a line that did not even fill the box; the
+     * container allowed 1024, which is 124px under the buttons.
+     *
+     * Playwright records 540x960 at deviceScaleFactor 2, so these style
+     * strings are in CSS pixels and every clearance above is in frame pixels
+     * — HALF. `28px` reads generous and is 56px of frame against a 180px
+     * rail. In frame pixels the chrome is 60 left and 180 right, so:
+     *
+     *   left   30px CSS  =  60px frame
+     *   right  90px CSS  = 180px frame
+     *
+     * That leaves 420 CSS px of usable width instead of 484, and centres the
+     * text 30px left of the frame's middle. Symmetric 90px would have cost
+     * 124 of them for nothing — there are no buttons on the left. Captions
+     * sitting slightly left of centre with the rail on the right is what a
+     * deliberately made reel looks like.
      * ═══════════════════════════════════════════════════════════════════
      */
     caption.style.cssText =
@@ -152,7 +176,8 @@
       // z-index alongside the caption's, so both sit above the dim panels for
       // the same stated reason rather than one of them by accident.
       "position:fixed;z-index:1;left:0;right:0;top:42%;display:flex;justify-content:center;"
-      + "padding:0 30px;pointer-events:none;";
+      // Asymmetric for the action rail, same as the caption layer's padding.
+      + "padding:0 90px 0 30px;pointer-events:none;";
 
     var hook = document.createElement("div");
     hook.id = "__reel_hook";
