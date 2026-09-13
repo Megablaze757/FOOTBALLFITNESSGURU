@@ -29,16 +29,32 @@
     layer.style.cssText =
       "position:fixed;inset:0;z-index:2147483647;pointer-events:none;"
       + "display:flex;flex-direction:column;justify-content:flex-end;align-items:center;"
-      + "padding:0 28px 22%;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;";
+      + "padding:0 28px 22vh;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;";
 
     var caption = document.createElement("div");
     caption.id = "__reel_caption";
     /**
-     * 22% up from the bottom, not against it.
+     * ═══════════════════════════════════════════════════════════════════
+     * 22vh, NOT 22% — AND THE DIFFERENCE WAS THE WHOLE POINT OF THE RULE.
      *
-     * TikTok and Instagram draw their own caption, handle and buttons over the
-     * lower fifth of the frame. A caption under that is a caption nobody reads
-     * — and it cannot be fixed after the video is made.
+     * TikTok and Instagram draw their own caption, handle and buttons over
+     * the lower fifth of the frame. A caption under that is a caption nobody
+     * reads, and it cannot be fixed after the video is made. That is why this
+     * pushes the line up off the bottom edge.
+     *
+     * It was `22%`, and PERCENTAGE PADDING RESOLVES AGAINST THE CONTAINING
+     * BLOCK'S WIDTH — including padding-bottom. So 22% of a 540px-wide
+     * viewport is 119px, not 22% of 960px of height. Measured on a finished
+     * reel, the caption sat 243px off the bottom of a 1080x1920 frame where
+     * the rule intends 422:
+     *
+     *   Instagram Reels overlays the bottom  400px
+     *   TikTok's own chrome                  320px
+     *   what this actually cleared           243px
+     *
+     * The intent was right and the unit quietly defeated it. vh is the unit
+     * that means what the comment says.
+     * ═══════════════════════════════════════════════════════════════════
      */
     caption.style.cssText =
       /**

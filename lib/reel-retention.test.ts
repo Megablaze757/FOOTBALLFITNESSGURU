@@ -215,8 +215,16 @@ test("the browser-side overlay is a plain file, never transpiled", () => {
   const overlay = readFileSync("scripts/reel-overlay.js", "utf8");
   assert.match(overlay, /window\.__reelCaption/, "nothing sets captions");
   assert.match(overlay, /window\.__reelHook/, "nothing shows the hook");
-  // Captions must clear the platforms' own UI, which covers the lower fifth.
-  assert.match(overlay, /padding:0 28px 22%/, "the caption sits where TikTok and Instagram draw their own");
+  /**
+   * WHERE the caption sits is deliberately not checked here. This line used to
+   * pin the literal string `padding:0 28px 22%` as if that proved the caption
+   * cleared the platforms' own UI. It proved nothing: percentage padding
+   * resolves against the containing block's WIDTH, so that exact value put the
+   * caption 243px off the bottom of a frame whose lower 400px Reels draws over
+   * — a guard spelling out the broken value passes only while the bug is
+   * there, and fails the moment somebody fixes it. The real check is in
+   * lib/safe-zone.test.ts, in named pixels against every edge.
+   */
 });
 
 /**
