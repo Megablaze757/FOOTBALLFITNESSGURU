@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
   CHROME, SAFE, FRAME_W, FRAME_H, CAPTION_BOTTOM_FRACTION, outsideSafeZone, cssPx,
+  MAX_CAPTION_LINES,
 } from "./safe-zone";
 import { REEL_W, REEL_SCALE } from "./reel-plan";
 
@@ -255,4 +256,47 @@ test("the focus calibration points at the check that verifies it", () => {
    */
   assert.match(note, /55%/, "the note does not carry the caption top it was re-measured against");
   assert.match(note, /26px/, "the note does not say how much clearance is left");
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE LINE COUNT THE CODE BELIEVES IS NOT THE ONE ON SCREEN.
+ *
+ * captionLines cuts at MAX_LINE_CHARS = 42, and one character of the caption
+ * font averages 26.4 CSS px, so 42 characters is about three rendered lines in
+ * the 412px band and never the one the name implies. Measured across all eight
+ * scripts, 29 captions render three lines and one rendered four — 45% of the
+ * frame in text, over the app the reel is about.
+ *
+ * Nothing could catch that from the source, because how many lines a string
+ * becomes depends on the words, the wrap and the font. It is measured on the
+ * page instead, and the ceiling is a named constant so the message can state
+ * what was exceeded.
+ */
+test("the recorder refuses a caption taller than the ceiling", () => {
+  const rec = readFileSync("scripts/record-reel.mts", "utf8");
+  assert.match(rec, /MAX_CAPTION_LINES/, "the line ceiling is not imported");
+  assert.match(rec, /checkCaptionLines/, "nothing counts the rendered lines");
+  assert.ok(rec.indexOf("checkCaptionLines(caption.text)") > 0, "the check is never called");
+  /**
+   * From the element's own line-height, not a number repeated here: the height
+   * a line takes is decided by the CSS and nowhere else.
+   */
+  assert.match(rec, /checkCaptionLines[\s\S]{0,900}getComputedStyle\(el\)\.lineHeight/,
+    "the line height is assumed rather than read from the element");
+});
+
+test("the line ceiling leaves the spotlight room", () => {
+  /**
+   * Measured, with the ceiling held across every script: the tallest caption
+   * starts 583px down a 960px viewport and the ring reaches 502px. Four lines
+   * put those at 528 and 26px apart.
+   */
+  const tallestCaptionTop = 583;
+  const ringBottom = 502;
+  assert.ok(tallestCaptionTop > ringBottom,
+    "the tallest caption overlaps where the spotlight ring can reach");
+  assert.ok(tallestCaptionTop - ringBottom > 26 * 2,
+    "the clearance is no better than the 26px that prompted the ceiling");
+  assert.equal(MAX_CAPTION_LINES, 3);
 });

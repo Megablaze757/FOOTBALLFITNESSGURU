@@ -64,6 +64,29 @@ export const SAFE = {
 } as const;
 
 /**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * HOW MANY RENDERED LINES A CAPTION MAY COVER THE APP WITH.
+ *
+ * Not a style rule — a measurement. One character of the caption font averages
+ * 26.4 CSS px, so the 412px safe band fits about fifteen, and a caption the
+ * code counts as ONE line is routinely three on screen. Across all eight
+ * scripts: 23 captions render one line, 22 render two, 28 render three, and
+ * one rendered four before it was reworded.
+ *
+ * Four lines was 45% of the frame in text, on a reel whose entire subject is
+ * the app underneath it, and it left 26px between the caption and the
+ * spotlight ring. Measured again with the ceiling held: the tallest caption
+ * now covers 39% and the ring clears it by 81px.
+ *
+ * Dropping the font to 40px CSS would also have cleared it, and was refused:
+ * 46px is 92px of frame, deliberately raised from 80 into the 80-120px band
+ * the caption research specifies, and losing that for every caption to fix one
+ * is the wrong trade. The one caption was reworded instead.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export const MAX_CAPTION_LINES = 3;
+
+/**
  * Frame pixels to the CSS pixels the overlay is written in.
  *
  * Playwright drives the app at REEL_W x REEL_H with deviceScaleFactor

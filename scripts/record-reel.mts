@@ -29,7 +29,7 @@ import { reelPlan, srt, endCardAt, REEL_W, REEL_H, REEL_SCALE } from "../lib/ree
 import { retentionProblems } from "../lib/reel-retention";
 import { driftTarget } from "../lib/reel-scroll";
 import { implausibleAudio } from "../lib/reel";
-import { outsideSafeZone } from "../lib/safe-zone";
+import { outsideSafeZone, MAX_CAPTION_LINES } from "../lib/safe-zone";
 import { MOVE_GAP_MS, MOVE_POLL_MS, MOVE_WAIT_MS } from "../lib/reel-moves";
 import { SIGNUP_CTA } from "../lib/signup-link";
 import { karaokeWords } from "../lib/caption-karaoke";
@@ -597,6 +597,36 @@ const unsafe: string[] = [];
  * both things are on screen together.
  * ═══════════════════════════════════════════════════════════════════════════
  */
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * A CAPTION THE CODE CALLS ONE LINE AND THE BROWSER DRAWS AS FOUR.
+ *
+ * captionLines cuts at 42 characters, and one character of this caption font
+ * averages 26.4 CSS px — so 42 characters is about three rendered lines in the
+ * 412px safe band, never one. Nothing downstream knew that: the block grows
+ * upward from a fixed bottom, so the taller it renders the more of the app it
+ * covers, and the app is the subject.
+ *
+ * Counted from the line-height the element reports rather than a number
+ * written here, because that is the thing that decides.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+async function checkCaptionLines(text: string): Promise<void> {
+  const drawn = await page.evaluate(() => {
+    const el = document.getElementById("__reel_caption");
+    if (!el || !el.textContent) return 0;
+    const box = el.getBoundingClientRect();
+    const lh = parseFloat(getComputedStyle(el).lineHeight);
+    if (!(box.height > 0) || !(lh > 0)) return 0;
+    return Math.round(box.height / lh);
+  }).catch(() => 0);
+  if (drawn <= MAX_CAPTION_LINES) return;
+
+  const line = `caption renders ${drawn} lines, over the ${MAX_CAPTION_LINES}-line ceiling `
+    + `— ${JSON.stringify(text)}`;
+  if (!unsafe.includes(line)) unsafe.push(line);
+}
+
 async function checkRingClear(text: string): Promise<void> {
   const hit = await page.evaluate(() => {
     const spot = document.getElementById("__reel_spot");
@@ -1079,6 +1109,7 @@ async function runCaptions(step: (typeof plan.steps)[number], willAim: boolean):
     );
     await checkSafeZone("caption", "__reel_caption", caption.text);
     await checkRingClear(caption.text);
+    await checkCaptionLines(caption.text);
     /**
      * ═══════════════════════════════════════════════════════════════════════
      * A COMPOSED SHOT HOLDS STILL.

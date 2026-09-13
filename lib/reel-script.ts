@@ -879,7 +879,30 @@ function standardsScript(): ReelScript | null {
        * and it is paid for out of the setup beat rather than the ceiling.
        */
       hold: 2_400,
-      say: "And there's where PocketAthlete puts that lift.",
+      /**
+       * ═══════════════════════════════════════════════════════════════════
+       * REWORDED TO SPLIT AT THE COMMA, AND THE REASON IS MEASURED TWICE.
+       *
+       * This was "And there's where PocketAthlete puts that lift." — the
+       * wording the hold above was timed against, which is why the note
+       * quotes it. Rendered at 46px in the 412px band that clears Instagram's
+       * action rail, it cut into "And there's where PocketAthlete puts" at
+       * FOUR lines — 45% of the frame in text, on the one beat whose job is to
+       * show the rank — followed by "that lift." alone, the orphan flash
+       * lib/caption-lines.ts exists to prevent.
+       *
+       * Shortening it is not enough on its own. "That's where PocketAthlete
+       * puts that lift." renders three lines and fits on ONE caption, which
+       * then holds the screen for 5.9s and fails the retention check for
+       * exactly the reason fitToSpan was written. Length and duration have to
+       * come out right together.
+       *
+       * The comma is what does it: captionLines cuts there, so this is "And
+       * there it is," at one line and "the rank PocketAthlete gives that
+       * lift." at three, and the reveal keeps its beat.
+       * ═══════════════════════════════════════════════════════════════════
+       */
+      say: "And there it is, the rank PocketAthlete gives that lift.",
     },
     // Back to the list it opened on, so the reel loops. See demo-readiness.
     { route: "/standards/", action: "Back to the screen it opened on, for the sign-off.", say: SIGNUP_SPOKEN, tail: END_CARD_MS },
