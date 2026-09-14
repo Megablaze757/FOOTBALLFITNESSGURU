@@ -99,6 +99,13 @@ export const MIN_SCENE_MS = 1100;
  * Measured against real generations, which run 330-370ms per spoken word, this
  * sits far below the slowest of them and far above the failure: it catches
  * 79ms/word without being able to reject anything a voice actually said.
+ *
+ * THOSE 330-370ms INCLUDED SILENCE. lib/wav.ts now takes the model's own lead
+ * and tail off a clip before anything measures it, which is a median of about
+ * 300ms gone from every line and a bigger share of a short one. Re-measured on
+ * the trimmed clips of two finished reels, the FASTEST line in either comes to
+ * 250ms per spoken word — still a little over twice this floor, so the guard
+ * keeps its headroom and the trim cannot make it reject real speech.
  * ═══════════════════════════════════════════════════════════════════════════
  */
 export const MIN_MS_PER_SPOKEN_WORD = 120;

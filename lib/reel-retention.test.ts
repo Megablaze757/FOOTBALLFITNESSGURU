@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   HOOK_MAX_WORDS, MAX_ONE_ROUTE_SHARE, MAX_REEL_MS, MAX_SILENT_MS, MIN_CAPTION_MS,
-  hookProblems, retentionProblems, silentGaps,
+  hookProblems, retentionProblems, silentGaps, MAX_OPENING_SILENCE_MS,
 } from "./reel-retention";
 import { reelPlan, type PlannableScript } from "./reel-plan";
 import { SCRIPTS, reelScript, scriptProblems } from "./reel-script";
@@ -310,4 +310,37 @@ test("a flash is a flash even with a voice over it", () => {
   const flashed = { ...narrated, steps: narrated.steps.map((s) => ({ ...s, captions: s.captions.map((c) => ({ ...c, ms: 300 })) })) };
   assert.match(retentionProblems(flashed).map((p) => p.problem).join(" | "), /the eye does not land on it/,
     "a 300ms caption passes because something is being said over it");
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// THE SILENCE AT THE FRONT, WHICH NOTHING USED TO MEASURE.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const openingFault = (clips?: { atMs: number; ms: number }[]) =>
+  retentionProblems(reelPlan(sayingPlan(6_000, clips))).map((p) => p.problem).join(" | ");
+
+/** 140ms is LEAD_MS: the room the design puts in front of the voice on purpose. */
+test("the room a line is designed to start on is not a fault", () => {
+  assert.doesNotMatch(openingFault([{ atMs: 140, ms: 3_920 }]), /first word is not heard/);
+});
+
+/**
+ * 300ms is what three finished reels actually opened on, before lib/wav.ts
+ * started trimming the model's own silence off the front of a clip. The rule
+ * exists so that coming back is a failed check rather than a quiet regression.
+ */
+test("a reel that opens on a third of a second of nothing is refused", () => {
+  const problems = openingFault([{ atMs: 460, ms: 3_920 }]);
+  assert.match(problems, /first word is not heard until 460ms/);
+  assert.match(problems, /half the audience is gone by 1000ms/);
+});
+
+/** Exactly at the ceiling passes: a limit that refuses its own value is a typo. */
+test("the ceiling itself is allowed", () => {
+  assert.doesNotMatch(openingFault([{ atMs: MAX_OPENING_SILENCE_MS, ms: 3_920 }]), /first word is not heard/);
+});
+
+/** No voice, no clip, nothing to be late — and no complaint about it either. */
+test("a silent reel is not accused of opening on silence", () => {
+  assert.doesNotMatch(openingFault(), /first word is not heard/);
 });

@@ -42,7 +42,7 @@ import {
   pitchRatioFor, shelfDbFor, SHELF_HZ, CHATTERBOX_TEMPO,
 } from "../lib/speech-prosody";
 import { beatAudio, retime, trackClips, type BeatAudio } from "../lib/narration";
-import { layTrack, normalised, readWav, writeWav, type Wav } from "../lib/wav";
+import { durationMs, layTrack, normalised, readWav, trimmedToSpeech, writeWav, type Wav } from "../lib/wav";
 import { secretValue } from "../lib/env-value";
 
 const audioFiles: string[] = [];
@@ -342,6 +342,36 @@ async function narrate(beats: readonly { say: string; hold?: number }[]): Promis
        * is not physically speech never reaches the timeline.
        * ═══════════════════════════════════════════════════════════════════
        */
+      /**
+       * ═══════════════════════════════════════════════════════════════════
+       * AND HOW MUCH OF IT IS ACTUALLY THE WORDS.
+       *
+       * Every clip comes back with the model's own silence on both ends — a
+       * median of 150ms in front and 145ms behind, measured on three finished
+       * reels — and the timeline was treating it as speech. So LEAD_MS, which
+       * exists to put a beat of room before the voice, was putting two; and
+       * the reel opened on about 300ms of nothing, inside the second where
+       * the curve in lib/reel-retention.ts loses half the audience.
+       *
+       * Trimmed HERE, before anything is measured, so there is one duration
+       * for a clip rather than a file length and a speech length that drift
+       * apart. The file on disk is rewritten, which is also what makes the
+       * guard below honest: a generation that is mostly silence now reports
+       * the length of the part that is not.
+       *
+       * lib/wav.ts returns the clip untouched whenever it cannot find the
+       * edges, so the worst case is the timing this had before.
+       * ═══════════════════════════════════════════════════════════════════
+       */
+      for (const item of parsed) {
+        const wav = readWav(new Uint8Array(readFileSync(item.path)));
+        if (!wav) continue;
+        const speech = trimmedToSpeech(wav.format, wav.data);
+        if (speech.length >= wav.data.length) continue;
+        writeFileSync(item.path, writeWav(wav.format, speech));
+        item.ms = durationMs(wav.format, speech.length);
+      }
+
       for (const [i, item] of parsed.entries()) {
         const text = flat[i]?.text;
         if (!text) continue;

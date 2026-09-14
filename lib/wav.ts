@@ -250,6 +250,138 @@ export function normalised(
   return gained(format, data, targetDbFs - 20 * Math.log10(peak));
 }
 
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE SILENCE THE VOICE MODEL SHIPS INSIDE EVERY LINE.
+ *
+ * lib/narration.ts puts LEAD_MS of room in front of a line and TAIL_MS behind
+ * it, and says in as many words that a cut is "about a third of a second".
+ * Measured on three finished reels, every cut was about two thirds. Each
+ * synthesised clip arrives with its own silence at both ends and the pipeline
+ * was laying that as though it were speech:
+ *
+ *   demo-readiness          lead 160ms  trail 112ms   2.38s of 25.3s
+ *   standards-bench-press   lead 150ms  trail 145ms   3.11s of 29.1s
+ *   card-cheapest-protein   lead 200ms  trail 232ms   1.55s of 19.9s
+ *
+ * (medians per clip, and the total across the reel)
+ *
+ * The one that costs something is the first. A reel opens on LEAD_MS plus
+ * whatever the model put in front of the first word — about 300ms of nothing
+ * — inside the second where the measured curve in lib/reel-retention.ts loses
+ * half the audience.
+ *
+ * NOTHING DOWNSTREAM COULD SEE THIS. scripts/check-sync.mts subtracts the
+ * caption times from the clip times, and both come from the same schedule, so
+ * a track where every word arrives 150ms after the schedule says it does
+ * reports zero error. It took decoding the finished audio to find.
+ *
+ * WHAT THE EDGES LOOK LIKE, at 5ms resolution and relative to the clip's own
+ * peak: 15-30ms of hard zero, then a FLAT floor at -53 to -64dB with no
+ * structure in it — room tone, not a breath — and then speech, which crosses
+ * -45dB and reaches -20 within about 15ms. The two are far enough apart that
+ * the threshold between them is not a judgement call.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export const SPEECH_FLOOR_DB = -45;
+
+/**
+ * Room tone kept either side of the speech.
+ *
+ * Trimming to the first loud sample would start the line on its own attack,
+ * which sounds like a tape splice. This leaves the model's own floor either
+ * side, so LEAD_MS lands on quiet rather than on a word.
+ */
+export const EDGE_KEEP_MS = 40;
+
+const EDGE_WINDOW_MS = 10;
+
+/** Windows that have to clear the floor together, so one click is not a word. */
+const EDGE_RUN = 2;
+
+/** Per-window loudness, in dB relative to full scale. Empty for anything but 16-bit. */
+function windowsDb(format: WavFormat, data: Uint8Array): number[] {
+  if (format.bitsPerSample !== 16) return [];
+  const align = blockAlign(format);
+  const per = Math.max(align, Math.round((EDGE_WINDOW_MS / 1000) * format.sampleRate) * align);
+  const usable = data.byteLength - (data.byteLength % 2);
+  const view = new DataView(data.buffer, data.byteOffset, usable);
+  const out: number[] = [];
+  for (let at = 0; at + per <= usable; at += per) {
+    let sum = 0;
+    let count = 0;
+    for (let i = at; i + 1 < at + per; i += 2) {
+      const sample = view.getInt16(i, true) / FULL_SCALE;
+      sum += sample * sample;
+      count += 1;
+    }
+    // 10log10 of the mean square is 20log10 of the RMS, without the square root.
+    out.push(count ? 10 * Math.log10(sum / count + 1e-24) : -Infinity);
+  }
+  return out;
+}
+
+export interface SpeechEdges {
+  /** Offset of the first word, in ms from the start of the clip. */
+  startMs: number;
+  /** End of the last word, in ms from the start of the clip. */
+  endMs: number;
+}
+
+/**
+ * Where the speech in a clip begins and ends.
+ *
+ * Null rather than a throw for a clip this cannot read — a depth it does not
+ * understand, or one with nothing above the floor anywhere in it. The caller
+ * then leaves the clip exactly as the model produced it, which is the safe
+ * direction: a clip that is all silence is a failed generation, and catching
+ * that is implausibleAudio's job, not this one's.
+ */
+export function speechEdges(format: WavFormat, data: Uint8Array): SpeechEdges | null {
+  const dbs = windowsDb(format, data);
+  if (dbs.length < EDGE_RUN) return null;
+
+  const floor = Math.max(...dbs) + SPEECH_FLOOR_DB;
+  const clears = (from: number, step: number) => {
+    for (let k = 0; k < EDGE_RUN; k++) {
+      const at = from + k * step;
+      if (at < 0 || at >= dbs.length || dbs[at] <= floor) return false;
+    }
+    return true;
+  };
+
+  let first = -1;
+  for (let i = 0; i < dbs.length; i++) {
+    if (clears(i, 1)) { first = i; break; }
+  }
+  if (first < 0) return null;
+
+  let last = first;
+  for (let i = dbs.length - 1; i > first; i--) {
+    if (clears(i, -1)) { last = i; break; }
+  }
+
+  return { startMs: first * EDGE_WINDOW_MS, endMs: (last + 1) * EDGE_WINDOW_MS };
+}
+
+/**
+ * The same clip with the model's own silence taken off both ends.
+ *
+ * A VIEW, not a copy: subarray shares the buffer, and layTrack only reads it.
+ *
+ * The clip is returned untouched whenever the edges cannot be found, so the
+ * failure mode of this whole idea is the timing the pipeline had before it.
+ */
+export function trimmedToSpeech(format: WavFormat, data: Uint8Array): Uint8Array {
+  const edges = speechEdges(format, data);
+  if (!edges) return data;
+  const align = blockAlign(format);
+  const usable = data.length - (data.length % align);
+  const start = Math.min(offsetOf(format, Math.max(0, edges.startMs - EDGE_KEEP_MS)), usable);
+  const end = Math.max(start, Math.min(offsetOf(format, edges.endMs + EDGE_KEEP_MS), usable));
+  return data.subarray(start, end);
+}
+
 export function layTrack(format: WavFormat, clips: readonly Clip[], totalMs: number): Uint8Array {
   const align = blockAlign(format);
   const length = offsetOf(format, Math.max(0, totalMs));

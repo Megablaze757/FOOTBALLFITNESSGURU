@@ -198,6 +198,28 @@ export const REPLAY_RATE_TARGET = 1.2;
  */
 export const MIN_REEL_MS = 6_000;
 
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE MOST EXPENSIVE SILENCE IN THE REEL IS THE ONE AT THE FRONT.
+ *
+ * DEAD_OPENERS below checks what the first WORDS are. Nothing checked when
+ * they arrive, and for every reel this pipeline has made, the answer was
+ * about 300ms: LEAD_MS of deliberate room, plus another 150ms of silence the
+ * voice model ships inside the clip and lib/wav.ts now trims off.
+ *
+ * Against the curve measured on a published reel — 85% at 0.5s, 50% at 1.0s,
+ * 21% at 2.0s — a third of the deciding second was going on nothing at all.
+ * Nobody skips because of 300ms on its own; it is that this is the one part
+ * of the reel where a third of a second is a third of the budget.
+ *
+ * The ceiling is double LEAD_MS rather than LEAD_MS itself: the lead is there
+ * on purpose, a word that starts on the same frame as the picture sounds
+ * clipped, and a rule that forbids what the design intends is a rule somebody
+ * turns off.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export const MAX_OPENING_SILENCE_MS = 300;
+
 /** Openings that spend the deciding second saying nothing. */
 const DEAD_OPENERS = [
   /^(hi|hey|hello|yo)\b/i,
@@ -273,6 +295,23 @@ export function retentionProblems(plan: ReelPlan): RetentionProblem[] {
 
   if (plan.hookMs > HOOK_DEADLINE_MS) {
     say(`the hook is still going at ${plan.hookMs}ms — the decision is made by ${HOOK_DEADLINE_MS}ms`);
+  }
+
+  /**
+   * SILENT REELS ARE EXEMPT BY CONSTRUCTION, not by a check: there is no clip
+   * to be late, so there is no opening silence to measure. A reel with
+   * captions and no voice starts on its first caption, which is timed at zero.
+   */
+  const opening = plan.steps[0];
+  const firstWord = opening?.clips?.[0];
+  if (opening && firstWord) {
+    const silence = opening.at + firstWord.atMs;
+    if (silence > MAX_OPENING_SILENCE_MS) {
+      say(
+        `the first word is not heard until ${Math.round(silence)}ms — half the audience is gone by 1000ms, `
+        + `and ${MAX_OPENING_SILENCE_MS}ms is the most of that worth spending on room`,
+      );
+    }
   }
 
   if (plan.totalMs > MAX_REEL_MS) {

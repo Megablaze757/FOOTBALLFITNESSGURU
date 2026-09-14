@@ -9,7 +9,10 @@ import {
   offsetOf,
   peakOf,
   readWav,
+  speechEdges,
+  trimmedToSpeech,
   writeWav,
+  EDGE_KEEP_MS,
   type WavFormat,
 } from "./wav";
 
@@ -267,4 +270,145 @@ test("two reels cut by different amounts come out at the same level", () => {
   for (const track of [mostlyQuiet, mostlyLoud]) {
     assert.ok(Math.abs(peakOf(PIPER, normalised(PIPER, track)) - target) < 0.001);
   }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// THE SILENCE THE VOICE MODEL SHIPS INSIDE EVERY LINE.
+//
+// Built to the shape the real clips have, measured at 5ms resolution on three
+// finished reels: a little hard zero, then a FLAT floor about 60dB under the
+// speech — room tone, not a breath — and then the words. See lib/wav.ts.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const SPEECH = 20_000;
+/** 60dB under SPEECH, which is where the model's floor actually sits. */
+const FLOOR = Math.round(SPEECH * 10 ** (-60 / 20));
+
+/**
+ * Edges land on a window boundary, and the window is 10ms. Asserting to the
+ * millisecond would be asserting the window size, which is an implementation
+ * detail this file has no opinion about.
+ */
+const EDGE_WINDOW_TOLERANCE = 15;
+
+function clip(
+  format: WavFormat,
+  parts: readonly { ms: number; amplitude: number }[],
+): Uint8Array {
+  const out = new Uint8Array(parts.reduce((n, p) => n + offsetOf(format, p.ms), 0));
+  const view = new DataView(out.buffer);
+  let at = 0;
+  for (const part of parts) {
+    const end = at + offsetOf(format, part.ms);
+    for (let i = at; i + 1 < end; i += 2) {
+      view.setInt16(i, i % 4 === 0 ? part.amplitude : -part.amplitude, true);
+    }
+    at = end;
+  }
+  return out;
+}
+
+const voiced = (format: WavFormat, leadMs: number, sayMs: number, trailMs: number) => clip(format, [
+  { ms: 20, amplitude: 0 },
+  { ms: leadMs - 20, amplitude: FLOOR },
+  { ms: sayMs, amplitude: SPEECH },
+  { ms: trailMs - 20, amplitude: FLOOR },
+  { ms: 20, amplitude: 0 },
+]);
+
+test("the edges of the speech are found through the model's own room tone", () => {
+  const edges = speechEdges(PIPER, voiced(PIPER, 160, 1_200, 150));
+  assert.ok(edges, "no speech found in a clip that is mostly speech");
+  assert.ok(Math.abs(edges.startMs - 160) <= EDGE_WINDOW_TOLERANCE, `starts at ${edges.startMs}ms`);
+  assert.ok(Math.abs(edges.endMs - 1_360) <= EDGE_WINDOW_TOLERANCE, `ends at ${edges.endMs}ms`);
+});
+
+/**
+ * THE PROPERTY THAT MATTERS: a trim that eats a word is worse than the silence
+ * it was removing. Asserted as "every loud sample survived", not as a length.
+ */
+test("trimming never takes a sample of the speech with it", () => {
+  for (const [lead, say, trail] of [[160, 1_200, 150], [20, 400, 20], [500, 90, 500]]) {
+    const original = voiced(PIPER, lead, say, trail);
+    const kept = trimmedToSpeech(PIPER, original);
+    const loud = (bytes: Uint8Array) => samplesOf(bytes).filter((s) => Math.abs(s) > FLOOR).length;
+    assert.equal(loud(kept), loud(original), `${lead}/${say}/${trail} lost speech`);
+  }
+});
+
+test("the clip comes back shorter by the silence, less the room kept either side", () => {
+  const kept = trimmedToSpeech(PIPER, voiced(PIPER, 160, 1_200, 150));
+  const was = durationMs(PIPER, offsetOf(PIPER, 160 + 1_200 + 150));
+  const now = durationMs(PIPER, kept.length);
+  const expected = was - (160 - EDGE_KEEP_MS) - (150 - EDGE_KEEP_MS);
+  assert.ok(Math.abs(now - expected) <= 2 * EDGE_WINDOW_TOLERANCE, `${now}ms, wanted about ${expected}ms`);
+});
+
+/** The room is kept ON PURPOSE — a line starting on its own attack is a splice. */
+test("room tone is left in front of the first word", () => {
+  const kept = trimmedToSpeech(PIPER, voiced(PIPER, 300, 800, 300));
+  const before = samplesOf(kept).findIndex((s) => Math.abs(s) > FLOOR);
+  const ms = durationMs(PIPER, before * 2);
+  assert.ok(ms >= EDGE_KEEP_MS - 10, `only ${ms}ms of room left in front of the voice`);
+});
+
+/**
+ * A failed generation is implausibleAudio's to catch, and it measures the
+ * clip. So a clip with no words in it has to come back the length it went in
+ * rather than being trimmed down to nothing and reported as plausible.
+ *
+ * The threshold is relative to the clip's OWN loudest moment, so a clip that
+ * is nothing but room tone is uniformly "above the floor" and no edge is
+ * found to cut at. That arrives at the same place from the other direction.
+ */
+test("a clip with no speech in it comes back the length it went in", () => {
+  for (const amplitude of [0, FLOOR]) {
+    const nothing = clip(PIPER, [{ ms: 500, amplitude }]);
+    assert.equal(trimmedToSpeech(PIPER, nothing).length, nothing.length, `amplitude ${amplitude}`);
+  }
+});
+
+/** Shorter than the measurement itself: there is no answer, and it says so. */
+test("a clip too short to measure reports no edges rather than a guess", () => {
+  assert.equal(speechEdges(PIPER, new Uint8Array(0)), null);
+  assert.equal(speechEdges(PIPER, clip(PIPER, [{ ms: 5, amplitude: SPEECH }])), null);
+});
+
+/** Reading 24-bit bytes as 16-bit pairs would trim a real line to nonsense. */
+test("a depth this cannot read a sample out of is left alone", () => {
+  const deep: WavFormat = { sampleRate: 22_050, channels: 1, bitsPerSample: 24 };
+  const data = voiced(PIPER, 200, 600, 200);
+  assert.equal(speechEdges(deep, data), null);
+  assert.equal(trimmedToSpeech(deep, data).length, data.length);
+});
+
+/**
+ * ONE WINDOW OVER THE FLOOR IS NOT A WORD, and the limit of that claim is
+ * worth writing down: the floor sits 60dB under the speech and the threshold
+ * 45dB under it, so ANY full-amplitude artefact clears the threshold in every
+ * window it touches. A spike of one sample touches one window and is ignored;
+ * anything longer straddles two and will anchor the line early.
+ *
+ * That is a cost of a few milliseconds of trim, never a cut into speech — the
+ * edge can only move OUTWARD from a stray sample, which is the direction that
+ * leaves the clip as it was.
+ */
+test("a single-sample spike does not start the line early", () => {
+  const withSpike = clip(PIPER, [
+    { ms: 20, amplitude: 0 },
+    { ms: 300, amplitude: FLOOR },
+    { ms: 600, amplitude: SPEECH },
+    { ms: 100, amplitude: FLOOR },
+  ]);
+  new DataView(withSpike.buffer).setInt16(offsetOf(PIPER, 120), SPEECH, true);
+  const edges = speechEdges(PIPER, withSpike);
+  assert.ok(edges, "no speech found");
+  assert.ok(edges.startMs >= 300, `the spike at 120ms started the line, at ${edges.startMs}ms`);
+});
+
+/** Stereo, because a trim off a half-sample boundary is noise rather than a trim. */
+test("a trim lands on a whole sample across every channel", () => {
+  const kept = trimmedToSpeech(STEREO, voiced(STEREO, 170, 900, 170));
+  assert.equal(kept.length % blockAlign(STEREO), 0);
+  assert.equal(kept.byteOffset % blockAlign(STEREO), 0);
 });
