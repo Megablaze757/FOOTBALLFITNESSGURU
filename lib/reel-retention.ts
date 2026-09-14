@@ -120,6 +120,33 @@ export const MAX_REEL_MS = 30_000;
  * SHORTER IS NOT AUTOMATICALLY BETTER, which is why this is a table and not a
  * smaller MAX_REEL_MS. A reel that drops a beat to get under fifteen seconds
  * buys a higher bar for itself and loses the footage that earns it.
+ *
+ * ───────────────────────────────────────────────────────────────────────────
+ * WHAT ONE OF THESE REELS ACTUALLY MEASURED, WHICH IS NOWHERE NEAR THE TABLE.
+ *
+ * demo-readiness was posted and Instagram returned a retention curve.
+ * Digitised off it, for a 27-second reel whose band says "aim above 50%":
+ *
+ *   0.5s  85% still watching
+ *   1.0s  50%          <- half the audience is gone in one second
+ *   1.5s  32%
+ *   2.0s  21%
+ *   3.0s  11%
+ *   end    2.4%
+ *
+ *   average watch, the area under that curve:  9.7%
+ *
+ * Five times under the aim, and the shape is a cliff rather than a slope:
+ * everyone who survives the third second stays to the end.
+ *
+ * READ THE TABLE WITH THAT IN MIND rather than deleting it. The published
+ * bands are TikTok figures for accounts with an audience; this was 133 views,
+ * 90% of them cold traffic from the Reels tab, on an account with almost no
+ * history. The numbers are not comparable and the table is still the right
+ * shape — retention graded against length. What is NOT true is that a reel
+ * clearing these bands is normal for this account today, and scripts/
+ * measure-reel.mts prints them as though it were.
+ * ───────────────────────────────────────────────────────────────────────────
  * ═══════════════════════════════════════════════════════════════════════════
  */
 export const RETENTION_BANDS = [

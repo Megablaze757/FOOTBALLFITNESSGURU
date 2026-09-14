@@ -51,6 +51,22 @@ export const REEL_RATIO = 9 / 16;
  * Short. It is the thing between somebody and the app, and the app is the
  * reason to keep watching — a hook that outstays this is the reel telling you
  * what it is about instead of showing you.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ * AND THE AUDIENCE HALVES BEFORE IT COMES OFF.
+ *
+ * Measured from Instagram's retention curve for a posted reel, digitised:
+ * 85% are still watching at 0.5s, 50% at 1.0s, 32% at 1.5s. The hook holds
+ * for 1,600ms, so its last 600ms plays to a third of the people who saw its
+ * first 600ms, and whatever it has not said by one second it will not say.
+ *
+ * NOT SHORTENED ON THAT EVIDENCE, deliberately. It is one reel and 133 views,
+ * and the trade is real in both directions: a shorter hold reaches the app
+ * sooner for whoever stayed, and gives whoever is still reading less time to
+ * finish. Three of the seven hooks render three lines, so reading time is not
+ * free. The number to change first is how much there is to read — see
+ * MAX_HOOK_LINES in lib/safe-zone.ts — rather than how long it is up.
+ * ═══════════════════════════════════════════════════════════════════════════
  */
 export const HOOK_MS = 1_600;
 
