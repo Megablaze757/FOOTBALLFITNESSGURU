@@ -10,7 +10,10 @@
  *   node --import tsx scripts/check-sync.mts reels/demo-readiness.sync.json
  */
 import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { LEAD_MS } from "../lib/narration";
+import { EDGE_KEEP_MS, SPEECH_FLOOR_DB } from "../lib/wav";
+import { MAX_OPENING_SILENCE_MS } from "../lib/reel-retention";
 
 interface Report {
   id: string;
@@ -23,7 +26,8 @@ interface Report {
 }
 
 const path = process.argv[2];
-if (!path) throw new Error("usage: check-sync.mts <reel.sync.json>");
+if (!path) throw new Error("usage: check-sync.mts <reel.sync.json> [reel.mp4]");
+const film = process.argv[3];
 const report = JSON.parse(readFileSync(path, "utf8")) as Report;
 
 let worst = 0;
@@ -62,4 +66,78 @@ console.log(`\n${checked} phrases   worst |error| ${(worst / 1000).toFixed(3)}s`
 if (worst > 60) {
   console.error(`::error::captions are ${(worst / 1000).toFixed(2)}s out of step with the voice`);
   process.exit(1);
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * AND ONE NUMBER THAT IS NOT ARITHMETIC ON THE REPORT.
+ *
+ * Everything above subtracts the recorder's own numbers from each other, and
+ * the note at the top explains why: three attempts to find voice onsets in
+ * the muxed audio were each wrong in a different way, and all three failures
+ * were about PAIRING — which onset belongs to which caption. That reasoning
+ * is still right, and it left a hole the size of the whole file: a track
+ * where every word arrives 150ms after the schedule says it does reports zero
+ * error here, because both sides of the subtraction came from the schedule.
+ * It did, on three finished reels, and nothing in this pipeline noticed.
+ *
+ * THE FIRST ONSET HAS NO PAIRING PROBLEM. There is exactly one candidate —
+ * the first moment the file is louder than its own floor — and exactly one
+ * thing it should be, which is the first clip's place on the timeline. So
+ * this measures that one number and nothing else, and it is the number the
+ * opening rule is about: what a viewer hears in the second where the measured
+ * curve loses half of them.
+ *
+ * Skipped rather than failed when there is no film to read or no ffmpeg to
+ * read it with — this runs after a mux that may not have happened, and a
+ * check that cannot run must not look like a check that passed.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+const firstClip = report.steps[0]?.clips?.[0];
+if (film && firstClip) {
+  const RATE = 16_000;
+  const WINDOW_MS = 10;
+  let pcm: Buffer | null = null;
+  try {
+    pcm = execFileSync("ffmpeg", [
+      "-v", "quiet", "-i", film, "-map", "0:a:0",
+      "-f", "s16le", "-ac", "1", "-ar", String(RATE), "-",
+    ], { maxBuffer: 1 << 28 });
+  } catch (e) {
+    console.log(`\nno audio read out of ${film} (${e instanceof Error ? e.message : e}) — opening not measured`);
+  }
+
+  if (pcm && pcm.length > RATE) {
+    const per = (WINDOW_MS / 1000) * RATE;
+    const windows: number[] = [];
+    for (let at = 0; at + per * 2 <= pcm.length; at += per * 2) {
+      let sum = 0;
+      for (let i = at; i < at + per * 2; i += 2) {
+        const sample = pcm.readInt16LE(i) / 32768;
+        sum += sample * sample;
+      }
+      windows.push(10 * Math.log10(sum / per + 1e-24));
+    }
+    const floor = Math.max(...windows) + SPEECH_FLOOR_DB;
+    const firstAbove = windows.findIndex((db) => db > floor);
+    /**
+     * The clip keeps EDGE_KEEP_MS of room tone in front of its first word (see
+     * lib/wav.ts), so the sound starts that much after the clip is laid. Taken
+     * off rather than absorbed into a tolerance, because a tolerance wide
+     * enough to hide it is wide enough to hide a fault.
+     */
+    const heard = firstAbove < 0 ? Infinity : firstAbove * WINDOW_MS + EDGE_KEEP_MS;
+    const scheduled = (report.steps[0].at ?? 0) + firstClip.atMs;
+    console.log(
+      `\nfirst word scheduled ${Math.round(scheduled)}ms, heard ${
+        Number.isFinite(heard) ? `${Math.round(heard)}ms` : "not at all"}`,
+    );
+    if (heard > MAX_OPENING_SILENCE_MS) {
+      console.error(
+        `::error::the reel opens on ${Number.isFinite(heard) ? `${Math.round(heard)}ms` : "nothing but"} `
+        + `silence, over the ${MAX_OPENING_SILENCE_MS}ms allowance — half the audience is gone by 1000ms`,
+      );
+      process.exit(1);
+    }
+  }
 }

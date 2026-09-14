@@ -433,9 +433,16 @@ jobs:
       # every caption and where every phrase's audio starts; this checks they
       # agree. Three earlier attempts inferred it from voice onsets and were
       # wrong three different ways — see scripts/record-reel.mts.
+      # THE MP4 AS WELL AS THE REPORT. Everything the report can answer is
+      # arithmetic on the recorder's own numbers, which cannot see a track
+      # where every word arrives late — three finished reels did, and this
+      # step passed all three. The film is where the first onset is measured.
       - name: Check the captions are in step with the voice
         if: env.VOICE == 'true'
-        run: node --import tsx scripts/check-sync.mts reels/*.sync.json
+        run: |
+          for report in reels/*.sync.json; do
+            node --import tsx scripts/check-sync.mts "$report" "${report%.sync.json}.mp4"
+          done
 
       # The filter above is easy to lose in an edit and silent when it goes.
       # Four reels shipped at -21 LUFS before anybody measured; this is so the

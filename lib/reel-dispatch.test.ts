@@ -442,3 +442,29 @@ test("the reels bucket accepts slides, not only video", () => {
   assert.match(list, /'video\/mp4'/, "the update drops video, so reels stop uploading");
   assert.match(sql, /where id = 'reels'/, "the migration does not name the bucket");
 });
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE SYNC CHECK HAS TO BE GIVEN THE FILM, NOT ONLY THE REPORT.
+ *
+ * Everything scripts/check-sync.mts can answer from the report is arithmetic
+ * on the recorder's own numbers, and the recorder is not a witness: three
+ * finished reels had every word arriving about 150ms after the schedule said
+ * it did, and this step reported "worst |error| 0.000s" on all three, because
+ * both sides of the subtraction came from the same place.
+ *
+ * The one thing that cannot be arithmetic is the first onset in the finished
+ * audio, and reading it needs the MP4. A workflow that stops passing it would
+ * lose that silently — the step would still run and still pass.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("the sync step reads the finished film as well as the report", () => {
+  const workflow = readFileSync(".github/workflows/record-reels.yml", "utf8");
+  const step = workflow.slice(workflow.indexOf("Check the captions are in step"));
+  const run = step.slice(0, step.indexOf("- name:", 1));
+  assert.match(run, /check-sync\.mts/, "the sync check is not run here any more");
+  assert.match(run, /\.mp4/, "check-sync is given the report and never the audio it describes");
+
+  const sync = code("scripts/check-sync.mts");
+  assert.match(sync, /ffmpeg/, "nothing decodes the film, so the report is still checking itself");
+});
