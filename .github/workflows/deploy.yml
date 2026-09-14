@@ -43,7 +43,7 @@ jobs:
       # Kept in step with the test workflow and package.json engines. Next 14
       # supports 22; a version split between building and testing is how you
       # get a green test run and a broken build.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
