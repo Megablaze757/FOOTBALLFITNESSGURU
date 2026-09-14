@@ -534,8 +534,10 @@
        *   clearance                  26px          — it used to be 174
        *
        * Still clear, and no longer by enough to leave unwatched. The recorder
-       * measures the real overlap on every beat now — checkRingClear() in
-       * scripts/record-reel.mts — so this cannot quietly go wrong again.
+       * measures the real overlap on every beat now — checkOverlaysClear() in
+       * scripts/record-reel.mts, which since the hook stopped holding the
+       * screen alone compares all three overlays rather than this one pair —
+       * so this cannot quietly go wrong again.
        * ═══════════════════════════════════════════════════════════════════
        */
       var FOCUS_AT = 0.36;

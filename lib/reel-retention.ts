@@ -186,6 +186,25 @@ export function retentionBand(totalMs: number): { aim: number; strong: number } 
  * would be a rule that gets switched off. It is written down here because the
  * fix is a script decision — a closing line that hands back to the hook — and
  * the person making that decision should find the reason next to the numbers.
+ *
+ * ───────────────────────────────────────────────────────────────────────────
+ * AND WHAT IT IS WORTH, ON THE ONE REEL THIS PROJECT HAS MEASURED.
+ *
+ * 1.2 plays per viewer needs viewers who reach the end. On the published
+ * reel, 2.4% did. A loop cannot be taken by somebody who left, so the ceiling
+ * on everything below — the closing drift back to the opening scroll, a
+ * closing line that hands back to the hook, the whole idea — is 1.024 plays
+ * per viewer, not 1.2. It is out of reach by a factor of eight, and not
+ * because the looping is bad.
+ *
+ * That is not an argument for dropping it — a perfect loop would still add
+ * about a quarter to the average watch, which is not nothing. It is an
+ * argument for where the CEILING is. The loop's gain is capped at 2.4% of
+ * viewers by definition and cannot be raised by making the loop better; the
+ * opening's is not capped, because everybody it keeps then flows through the
+ * whole rest of the curve. Fixing the ending is bounded work. See
+ * RETENTION_BANDS for what the opening is currently doing.
+ * ───────────────────────────────────────────────────────────────────────────
  * ═══════════════════════════════════════════════════════════════════════════
  */
 export const REPLAY_RATE_TARGET = 1.2;
@@ -219,6 +238,39 @@ export const MIN_REEL_MS = 6_000;
  * ═══════════════════════════════════════════════════════════════════════════
  */
 export const MAX_OPENING_SILENCE_MS = 300;
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * HOW LATE A CAPTION MAY BE DRAWN BEFORE THE SCHEDULE IS A FICTION.
+ *
+ * Every rule in this file that measures a caption measures the PLAN. The
+ * recorder then has to honour it, and twice now it has not: the moves used to
+ * run before the captions were scheduled, which put a line a second and a half
+ * behind the voice that said it; and the hook held the screen for its whole
+ * 1.6 seconds before the first caption was drawn at all, which cost
+ *
+ *   drill       "Not fitness."      planned 1214ms, on screen for 0
+ *   demo-cost   "£0.31 or £3.19,"   planned 1672ms, on screen for 72
+ *
+ * — both of them checked against MIN_CAPTION_MS and both passing, because the
+ * number checked was the planned one.
+ *
+ * So the recorder measures what it actually did and fails on this. It is the
+ * one rule here the plan cannot satisfy on its own.
+ *
+ * DELIBERATELY LOOSE. Getting a caption on screen is half a dozen
+ * page.evaluate round trips on a machine that is also encoding video, and the
+ * first caption of a reel pays for the hook, the safe-zone measurement and the
+ * opening glide before it. Tightening this to something that sounds precise
+ * would fail runs for jitter.
+ *
+ * It does not need to be tight. Both failures it exists for were structural —
+ * a whole hook, a whole run of moves — and came in at 1600ms and about
+ * 1500ms. Anything under half a second is the browser; anything over it is
+ * the recorder doing something else while the clock runs.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export const MAX_CAPTION_LATE_MS = 400;
 
 /** Openings that spend the deciding second saying nothing. */
 const DEAD_OPENERS = [

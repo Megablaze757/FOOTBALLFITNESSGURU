@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   HOOK_MAX_WORDS, MAX_ONE_ROUTE_SHARE, MAX_REEL_MS, MAX_SILENT_MS, MIN_CAPTION_MS,
-  hookProblems, retentionProblems, silentGaps, MAX_OPENING_SILENCE_MS,
+  hookProblems, retentionProblems, silentGaps, MAX_OPENING_SILENCE_MS, MAX_CAPTION_LATE_MS,
 } from "./reel-retention";
 import { reelPlan, type PlannableScript } from "./reel-plan";
 import { SCRIPTS, reelScript, scriptProblems } from "./reel-script";
@@ -343,4 +343,28 @@ test("the ceiling itself is allowed", () => {
 /** No voice, no clip, nothing to be late — and no complaint about it either. */
 test("a silent reel is not accused of opening on silence", () => {
   assert.doesNotMatch(openingFault(), /first word is not heard/);
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE ALLOWANCE HAS TO SIT BETWEEN THE TWO NUMBERS IT WAS PICKED FROM.
+ *
+ * MAX_CAPTION_LATE_MS is enforced by the recorder against a stopwatch, so no
+ * test here can exercise it. What a test CAN hold is the reasoning it was
+ * chosen by, which is the part that rots: it has to be short enough that a
+ * caption arriving "on time" still gets most of its MIN_CAPTION_MS on screen,
+ * and long enough that the browser overhead it is not meant to catch stays
+ * under it. The two real failures it exists for were 1600ms and about 1500ms.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("a caption allowed to be late still gets most of its time on screen", () => {
+  assert.ok(MAX_CAPTION_LATE_MS < MIN_CAPTION_MS / 2,
+    `${MAX_CAPTION_LATE_MS}ms of a ${MIN_CAPTION_MS}ms floor is most of the caption`);
+});
+
+test("the two failures it was written for are both well over it", () => {
+  for (const failure of [1_600, 1_500]) {
+    assert.ok(failure > MAX_CAPTION_LATE_MS * 2,
+      `${failure}ms would not be caught with room to spare by a ${MAX_CAPTION_LATE_MS}ms allowance`);
+  }
 });

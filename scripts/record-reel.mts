@@ -26,7 +26,7 @@ import { spawn } from "node:child_process";
 import { join } from "node:path";
 import { reelScript, type ScriptId } from "../lib/reel-script";
 import { reelPlan, srt, endCardAt, REEL_W, REEL_H, REEL_SCALE } from "../lib/reel-plan";
-import { retentionProblems } from "../lib/reel-retention";
+import { MAX_CAPTION_LATE_MS, retentionProblems } from "../lib/reel-retention";
 import { closingDrift, driftTarget, openingScroll } from "../lib/reel-scroll";
 import { implausibleAudio } from "../lib/reel";
 import { outsideSafeZone, MAX_CAPTION_LINES } from "../lib/safe-zone";
@@ -659,33 +659,95 @@ async function checkCaptionLines(text: string): Promise<void> {
   if (!unsafe.includes(line)) unsafe.push(line);
 }
 
-async function checkRingClear(text: string): Promise<void> {
-  const hit = await page.evaluate(() => {
-    const spot = document.getElementById("__reel_spot");
-    const ring = document.getElementById("__reel_ring");
-    const cap = document.getElementById("__reel_caption");
-    // Nothing aimed, or no caption up: there is no pair to compare.
-    if (!spot || !ring || !cap || !cap.textContent) return null;
-    if (getComputedStyle(spot).opacity !== "1") return null;
-    const r = ring.getBoundingClientRect();
-    const c = cap.getBoundingClientRect();
-    if (r.width < 1 || c.width < 1) return null;
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE OVERLAYS MUST NOT SIT ON EACH OTHER.
+ *
+ * This checked one pair — the spotlight ring against the caption — because
+ * for a long time that was the only pair that could happen: the hook held the
+ * screen alone for its 1.6 seconds, and nothing else was drawn until it came
+ * off. It does not any more, so all three pairs can be on one frame and all
+ * three are measured.
+ *
+ * The pair that made it necessary is the hook against the caption. Measured
+ * in a browser at the recording viewport, in frame pixels of 1080x1920: the
+ * hook hangs from 42% at a line pitch of 138, so three lines end at 1231; the
+ * caption is bottom-anchored at a pitch of 110, so it starts at 1379 for one
+ * line, 1269 for two, 1159 for three.
+ *
+ *   every script as it stands   3-line hook, 1-2 line caption   clear by 38-176px
+ *   both ceilings               3-line hook, 3-line caption     OVERLAP by 72px
+ *
+ * Three lines each is what lib/safe-zone.ts already permits — MAX_HOOK_LINES
+ * and MAX_CAPTION_LINES are both 3 — so the collision is a script away rather
+ * than impossible, and 38px is not a margin to leave unwatched.
+ *
+ * The third pair, the ring against the hook, arrived with the same change:
+ * the card reels aim their spotlight on the first beat, which used to be a
+ * beat and a half after the hook was gone.
+ *
+ * EVERY BOX GROWS BY ITS OWN BLEED FIRST. The rings the glyphs are outlined
+ * with paint outside the layout box — text-shadow is not layout — and they
+ * are different sizes, 5px on the hook and 4 on the caption. The element
+ * carries its own, which is why the number travels with it.
+ *
+ * GATED ON "ASKED TO BE VISIBLE", NOT ON "FINISHED FADING IN". The pair this
+ * was written for is measured the instant the caption is drawn, and every one
+ * of these elements fades — 120ms on the hook and the caption, 220ms on the
+ * spotlight. A gate of `opacity === "1"` would therefore find the caption
+ * mid-fade every single time and skip the pair, which is a check that runs on
+ * every caption in every reel and can never report anything. An element on
+ * its way in or out is still an element on the frame, and an overlap during a
+ * fade is still an overlap.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+async function checkOverlaysClear(text: string): Promise<void> {
+  const hits = await page.evaluate(() => {
+    const parts = [
+      { id: "__reel_ring", name: "spotlight ring", gate: "__reel_spot", needsText: false },
+      { id: "__reel_hook", name: "hook", gate: "__reel_hook", needsText: true },
+      { id: "__reel_caption", name: "caption", gate: "__reel_caption", needsText: true },
+    ];
+    const boxes: { name: string; left: number; right: number; top: number; bottom: number }[] = [];
+    for (const part of parts) {
+      const el = document.getElementById(part.id);
+      const gate = document.getElementById(part.gate);
+      if (!el || !gate) continue;
+      if (getComputedStyle(gate).opacity === "0") continue;
+      if (part.needsText && !el.textContent) continue;
+      const r = el.getBoundingClientRect();
+      if (r.width < 1 || r.height < 1) continue;
+      const bleed = Number(el.dataset.bleed ?? 0);
+      boxes.push({
+        name: part.name,
+        left: r.left - bleed, right: r.right + bleed,
+        top: r.top - bleed, bottom: r.bottom + bleed,
+      });
+    }
     /**
-     * Both rects come from the same call in the same coordinate space, so the
-     * overlap is valid whatever the zoom does to either of them.
+     * Every rect comes from the same call in the same coordinate space, so
+     * the overlaps are valid whatever the zoom does to any of them.
      */
-    const bleed = Number(cap.dataset.bleed ?? 0);
-    const over = Math.min(r.bottom, c.bottom + bleed) - Math.max(r.top, c.top - bleed);
-    const across = Math.min(r.right, c.right + bleed) - Math.max(r.left, c.left - bleed);
-    if (over <= 0 || across <= 0) return null;
-    return { over, ringBottom: r.bottom, capTop: c.top - bleed };
-  }).catch(() => null);
-  if (!hit) return;
+    const out: { a: string; b: string; over: number; aBottom: number; bTop: number }[] = [];
+    for (let i = 0; i < boxes.length; i++) {
+      for (let j = i + 1; j < boxes.length; j++) {
+        const a = boxes[i];
+        const b = boxes[j];
+        const over = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+        const across = Math.min(a.right, b.right) - Math.max(a.left, b.left);
+        if (over > 0 && across > 0) out.push({ a: a.name, b: b.name, over, aBottom: a.bottom, bTop: b.top });
+      }
+    }
+    return out;
+  }).catch(() => []);
 
-  const line = `spotlight ring overlaps the caption by ${Math.round(hit.over * REEL_SCALE)}px `
-    + `(ring reaches ${Math.round(hit.ringBottom * REEL_SCALE)}, caption starts `
-    + `${Math.round(hit.capTop * REEL_SCALE)}) — ${JSON.stringify(text.slice(0, 48))}`;
-  if (!unsafe.includes(line)) unsafe.push(line);
+  for (const hit of hits) {
+    const line = `${hit.a} overlaps the ${hit.b} by ${Math.round(hit.over * REEL_SCALE)}px `
+      + `(${hit.a} reaches ${Math.round(hit.aBottom * REEL_SCALE)}, ${hit.b} starts `
+      + `${Math.round(hit.bTop * REEL_SCALE)}) — ${JSON.stringify(text.slice(0, 48))}`;
+    // One per distinct fault. A caption drawn 40 times reports once.
+    if (!unsafe.includes(line)) unsafe.push(line);
+  }
 }
 
 async function checkSafeZone(what: string, id: string, text: string): Promise<void> {
@@ -887,6 +949,9 @@ let driftFrom = 0;
 console.log(`Recording "${script.hook}" — ${Math.round(plan.totalMs / 1000)}s, ${plan.steps.length} beats`);
 
 let hookShown = false;
+/** The hook coming off on its own clock. Resolved already on every later beat. */
+let hookHold: Promise<void> = Promise.resolve();
+let hookFault: unknown = null;
 for (const step of plan.steps) {
   /**
    * ONLY WHEN THE ROUTE CHANGES.
@@ -945,10 +1010,38 @@ for (const step of plan.steps) {
       { to: openingScroll(page_), ms: plan.hookMs },
     ).catch(() => {});
     driftFrom = openingScroll(page_);
-    // Held from the first frame, because the decision is made in three seconds
-    // and the hook has to be readable inside them.
-    await sleep(Math.max(0, plan.hookMs - elapsed()));
-    await page.evaluate(() => (window as never as { __reelHook: (s: string) => void }).__reelHook(""));
+    /**
+     * ═══════════════════════════════════════════════════════════════════════
+     * HELD ALONGSIDE THE CAPTIONS, NOT INSTEAD OF THEM.
+     *
+     * This awaited the whole 1.6 seconds before the beat's captions were
+     * scheduled, and the schedule does not wait — a caption whose moment
+     * passed is drawn the instant the loop reaches it and replaced by the
+     * next one on time. Every reel lost its first line to that, and two lost
+     * it completely: "Not fitness." had 1214ms planned and was on screen for
+     * none of them, "£0.31 or £3.19," had 1672 and got 72.
+     *
+     * This is the SAME BUG as the moves below, one level up, and it survived
+     * that fix because the fix was made where the moves are. The hook is now
+     * a promise that comes off on its own clock, and the captions run under
+     * it — which the layout already expects: the pill sits at 42% and the
+     * note on it says in as many words that it clears the caption band.
+     *
+     * checkOverlaysClear measures that rather than trusting it: a hook that
+     * runs to three lines and a caption that runs to three would meet, and
+     * until now they could never be on one frame for anything to notice.
+     * ═══════════════════════════════════════════════════════════════════════
+     */
+    hookHold = (async () => {
+      // Held from the first frame, because the decision is made in three
+      // seconds and the hook has to be readable inside them.
+      await sleep(Math.max(0, plan.hookMs - elapsed()));
+      await page.evaluate(() => (window as never as { __reelHook: (s: string) => void }).__reelHook(""));
+      // Caught into a variable and rethrown where it is awaited, the same way
+      // the captions below are. A detached promise that rejects is an
+      // unhandled rejection; a swallowed one is a hook that never comes off
+      // and a reel with a headline across the middle of every shot.
+    })().catch((e: unknown) => { hookFault = e; });
   }
 
   /**
@@ -1129,6 +1222,10 @@ for (const step of plan.steps) {
 
   await captioning;
   if (captionFault) throw captionFault;
+  // The hook comes off mid-beat, and a beat that finished first would move on
+  // with it still up. Resolved already on every beat but the first.
+  await hookHold;
+  if (hookFault) throw hookFault;
 
   /**
    * ═══════════════════════════════════════════════════════════════════════
@@ -1188,8 +1285,26 @@ async function runCaptions(step: (typeof plan.steps)[number], willAim: boolean):
       (words) => (window as never as { __reelCaption: (r: unknown) => void }).__reelCaption(words),
       karaokeWords(caption.text, caption.ms),
     );
+    /**
+     * DRAWN WHEN THE PLAN SAID, measured rather than assumed.
+     *
+     * Read AFTER the draw, because a caption exists when the browser has been
+     * told about it and not when the timer fired. See MAX_CAPTION_LATE_MS —
+     * every other caption rule in lib/reel-retention.ts measures the plan, and
+     * twice the recorder has quietly not honoured it.
+     */
+    const lateBy = elapsed() - caption.at;
+    if (lateBy > MAX_CAPTION_LATE_MS) {
+      const line = `caption drawn ${Math.round(lateBy)}ms after its moment, over the `
+        + `${MAX_CAPTION_LATE_MS}ms allowance — planned ${Math.round(caption.ms)}ms at `
+        + `${Math.round(caption.at)}ms on ${step.route}, so `
+        + `${Math.round(Math.max(0, caption.ms - lateBy))}ms of it is on screen. `
+        + `Something ran on the clock before the schedule did: a navigation, a hold, `
+        + `a check — ${JSON.stringify(caption.text.slice(0, 48))}`;
+      if (!unsafe.includes(line)) unsafe.push(line);
+    }
     await checkSafeZone("caption", "__reel_caption", caption.text);
-    await checkRingClear(caption.text);
+    await checkOverlaysClear(caption.text);
     await checkCaptionLines(caption.text);
     /**
      * ═══════════════════════════════════════════════════════════════════════

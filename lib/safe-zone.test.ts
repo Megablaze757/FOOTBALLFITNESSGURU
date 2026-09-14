@@ -222,17 +222,45 @@ test("the violation list is declared before the loop that fills it", () => {
  * premise is gone and its margin went from 174px to 26px. The arithmetic still
  * clears; 26px of 960 is not something to leave to arithmetic.
  */
-test("the recorder checks the ring against the caption on the real page", () => {
+test("the recorder checks the overlays against each other on the real page", () => {
   const rec = readFileSync("scripts/record-reel.mts", "utf8");
-  assert.match(rec, /checkRingClear/, "nothing compares the ring with the caption");
-  assert.match(rec, /__reel_ring/, "the ring is never measured");
-  /** Both boxes from one call, or the comparison is across coordinate spaces. */
-  assert.match(rec, /getComputedStyle\(spot\)\.opacity/,
-    "an invisible spotlight would be compared as though it were aimed");
+  assert.match(rec, /checkOverlaysClear/, "nothing compares the overlays with each other");
+  /**
+   * All three, not just the pair this started as. The hook used to hold the
+   * screen alone for its 1.6 seconds, so the ring and the caption were the
+   * only two that could ever share a frame; they are not any more.
+   */
+  for (const id of ["__reel_ring", "__reel_hook", "__reel_caption"]) {
+    assert.match(rec, new RegExp(id), `${id} is never measured`);
+  }
   /** Counted with the outline, same as every other edge. */
-  assert.match(rec, /checkRingClear[\s\S]{0,1800}dataset\.bleed/,
-    "the overlap ignores the outline the caption paints");
-  assert.ok(rec.indexOf("checkRingClear(caption.text)") > 0, "the check is never called");
+  assert.match(rec, /checkOverlaysClear[\s\S]{0,2500}dataset\.bleed/,
+    "the overlap ignores the outline the words paint");
+  assert.ok(rec.indexOf("checkOverlaysClear(caption.text)") > 0, "the check is never called");
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * AND A GATE THAT CAN ACTUALLY OPEN.
+ *
+ * An element that is not showing must not be compared — a spotlight that was
+ * never aimed has a stale box. The obvious way to write that is
+ * `opacity === "1"`, and it is wrong here: every one of these elements fades
+ * in (120ms on the hook and the caption, 220ms on the spotlight) and the
+ * check runs the instant the caption is drawn. It would find the caption
+ * mid-fade every time and skip the pair, on every caption of every reel, and
+ * report nothing for ever.
+ *
+ * So the gate is "has it been asked to show", not "has it finished showing".
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("an overlay still fading in is measured rather than skipped", () => {
+  const rec = readFileSync("scripts/record-reel.mts", "utf8");
+  const check = rec.slice(rec.indexOf("async function checkOverlaysClear"));
+  const gate = check.slice(0, check.indexOf("\n}"));
+  assert.match(gate, /opacity/, "nothing consults whether an overlay is showing");
+  assert.doesNotMatch(gate, /opacity !== "1"/,
+    "gated on the fade being finished, so the caption is skipped every time");
 });
 
 /**
@@ -245,7 +273,7 @@ test("the focus calibration points at the check that verifies it", () => {
   const at = overlay.indexOf("var FOCUS_AT");
   assert.ok(at > 0, "FOCUS_AT is gone");
   const note = overlay.slice(Math.max(0, at - 2200), at);
-  assert.match(note, /checkRingClear/,
+  assert.match(note, /checkOverlaysClear/,
     "the calibration comment does not say what verifies it, so it can go stale again");
   /**
    * A POSITIVE CLAIM, because the negative one cannot be written. Asserting the
