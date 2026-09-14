@@ -109,3 +109,161 @@ test("the hook sits above the dimming too", async ({ page }) => {
     .not.toBe("static");
   expect(Number(positioned.captionZ) >= 1, "the caption has no z-index above the spotlight").toBeTruthy();
 });
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE SWEEP LEFT EVERY WORD IT TOUCHED YELLOW.
+ *
+ * scripts/reel-overlay.js lights each word as the voice reaches it and only
+ * ever undid the SCALE, never the colour. So a seven-word caption ended as
+ * seven yellow words, and the one word marked `key` — the figure the whole
+ * beat is about, coloured because a unique colour is found without scanning —
+ * was by then the same colour as "the".
+ *
+ * WHY A BROWSER TEST, AGAIN. The bug is in what the element ENDS UP as after
+ * a sequence of timers, and the only thing that can answer that is a renderer
+ * running the timers. Grepping the source for `previous.style.color` would
+ * pass on code that set it to the wrong value.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("the sweep marks where the voice is, not how far it has got", async ({ page }) => {
+  await page.goto("/cheapest-protein/");
+  await page.addScriptTag({ content: OVERLAY });
+
+  const colours = await page.evaluate(async () => {
+    const w = window as unknown as Record<string, (r: unknown) => unknown>;
+    w.__reelCaption([
+      { text: "The", key: false, at: 0 },
+      { text: "31p", key: true, at: 40 },
+      { text: "row", key: false, at: 80 },
+    ]);
+    await new Promise((r) => setTimeout(r, 400));
+    const spans = [...document.getElementById("__reel_caption")!.querySelectorAll("span")];
+    return spans.map((el) => getComputedStyle(el).color);
+  });
+
+  const YELLOW = "rgb(255, 232, 26)";
+  const WHITE = "rgb(255, 255, 255)";
+
+  expect(colours[0], `"The" is still lit after the sweep passed it — [${colours.join(" | ")}]`).toBe(WHITE);
+  expect(colours[1], "the figure lost its permanent highlight, which is the one it is there for").toBe(YELLOW);
+  expect(colours[2], "the last word the sweep reached is not lit").toBe(YELLOW);
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE RING WAS A RECTANGLE DRAWN ONCE, AND THE PAGE MOVED UNDER IT.
+ *
+ * Extracted two frames of the same beat of the same recording, three seconds
+ * apart. At 12s the ring enclosed the readiness gauge and "44 RED" exactly.
+ * At 15s the number sat BELOW the ring, dimmed — the one figure the reveal
+ * exists to show, greyed out by the thing pointing at it.
+ *
+ * Nothing scrolled. The strip above the gauge finished loading, got taller,
+ * and pushed everything under it down 94 pixels. The ring is position:fixed
+ * and had been computed once.
+ *
+ * The drift had this exact symptom before and was fixed by not drifting on an
+ * aimed beat — which could never have fixed this one. Async data, a lazy
+ * image, a transition: all identical to a viewer, none of them scrolling.
+ *
+ * WHY A BROWSER TEST. The question is whether a rectangle still matches an
+ * element AFTER a reflow, and only a layout engine can answer it.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("the ring follows its target when the page reflows under it", async ({ page }) => {
+  await page.goto("/cheapest-protein/");
+  await page.addScriptTag({ content: OVERLAY });
+
+  const ringBox = () => page.evaluate(() => {
+    const ring = document.getElementById("__reel_ring")!;
+    const target = document.getElementById("__probe_target")!;
+    const zoom = parseFloat(getComputedStyle(document.documentElement).zoom as string) || 1;
+    const t = target.getBoundingClientRect();
+    return {
+      ringTop: parseFloat(ring.style.top) * zoom,
+      ringHeight: parseFloat(ring.style.height) * zoom,
+      targetTop: t.top,
+      targetBottom: t.bottom,
+    };
+  });
+
+  await page.evaluate(() => {
+    const spacer = document.createElement("div");
+    spacer.id = "__probe_spacer";
+    spacer.style.height = "0px";
+    const target = document.createElement("div");
+    target.id = "__probe_target";
+    target.textContent = "Ringmeasurement";
+    target.style.cssText = "height:120px;width:300px;font-size:20px;";
+    document.body.prepend(target);
+    document.body.prepend(spacer);
+    (window as unknown as Record<string, (s: string) => boolean>).__reelFocus("Ringmeasurement");
+  });
+
+  const before = await ringBox();
+  expect(before.ringHeight, "the ring was never drawn, so this proves nothing").toBeGreaterThan(0);
+  expect(before.ringTop).toBeLessThanOrEqual(before.targetTop);
+  expect(before.ringTop + before.ringHeight).toBeGreaterThanOrEqual(before.targetBottom);
+
+  /** Exactly the fault: content ABOVE the target appears and pushes it down. */
+  await page.evaluate(() => { document.getElementById("__probe_spacer")!.style.height = "260px"; });
+  await page.waitForTimeout(300);
+
+  const after = await ringBox();
+  expect(after.targetTop - before.targetTop, "the reflow did not move the target — the test is inert")
+    .toBeGreaterThan(100);
+  expect(after.ringTop, `the ring stayed at ${after.ringTop} while the target moved to ${after.targetTop}`)
+    .toBeLessThanOrEqual(after.targetTop);
+  expect(after.ringTop + after.ringHeight,
+    "the bottom of the target is outside the ring, which is how the score came to be dimmed")
+    .toBeGreaterThanOrEqual(after.targetBottom);
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE REVEAL OF A PRICE, WITH THE PRICE OUTSIDE THE RING.
+ *
+ * Photographed at 10s of a recorded demo-cost: the caption reads "The cheap
+ * one's red lentils", the ring is drawn neatly around the words "Red lentils",
+ * and £0.31 — directly above them, in the same card, the entire point of the
+ * reel — is outside it and dimmed.
+ *
+ * findByText takes the SMALLEST element containing the words, because every
+ * ancestor contains them too. That is right for FINDING and wrong for RINGING,
+ * and this is the second photograph of the same mistake: the readiness gauge
+ * left its own score outside the ring for the same reason.
+ *
+ * THE REAL PAGE, not a fixture. The rule is "grow while the parent is still
+ * about the same thing", and whether a summary card is within three times the
+ * height of its own label is a fact about this app's markup. A fixture would
+ * be me deciding the answer and then checking my own arithmetic.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("the ring around a name includes the figure beside it", async ({ page }) => {
+  await page.goto("/cheapest-protein/");
+  await page.addScriptTag({ content: OVERLAY });
+
+  const result = await page.evaluate(() => {
+    const w = window as unknown as Record<string, (s: string) => boolean>;
+    const aimed = w.__reelFocus("Red lentils");
+    const ring = document.getElementById("__reel_ring")!;
+    const zoom = parseFloat(getComputedStyle(document.documentElement).zoom as string) || 1;
+    const top = parseFloat(ring.style.top) * zoom;
+    const bottom = top + parseFloat(ring.style.height) * zoom;
+
+    /** The summary card's own price, found the way a reader finds it. */
+    const price = [...document.querySelectorAll("body *")]
+      .filter((el) => (el.textContent ?? "").trim() === "£0.31" && el.children.length === 0)
+      .map((el) => el.getBoundingClientRect())
+      .find((b) => b.height > 0);
+
+    return { aimed, top, bottom, price: price ? { top: price.top, bottom: price.bottom } : null };
+  });
+
+  expect(result.aimed, "the spotlight found nothing to aim at").toBe(true);
+  expect(result.price, "£0.31 is not on this page any more — the test is checking nothing").not.toBeNull();
+  expect(result.top, `the ring starts at ${result.top}, below the price at ${result.price!.top}`)
+    .toBeLessThanOrEqual(result.price!.top);
+  expect(result.bottom).toBeGreaterThanOrEqual(result.price!.bottom);
+});

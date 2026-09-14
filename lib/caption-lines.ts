@@ -29,6 +29,26 @@ export const MAX_LINE_CHARS = 42;
 export const MAX_LINE_WORDS = 7;
 
 /**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * A BREAK THAT LEAVES TWO WORDS IS A FLASH, NOT A CAPTION.
+ *
+ * Photographed in a recorded drill reel: "The drill:" alone on screen for 1.3
+ * seconds, then the rest of the sentence. The punctuation rule below prefers
+ * the latest natural break that fits, and in "The drill: a wall and a ball."
+ * the only break is the colon two words in — so it took it.
+ *
+ * The orphan rule at the end of fitSentence catches the same shape at the
+ * other end and always has: a one-word LAST line is merged back, "even if that
+ * overruns the width slightly, because a single word alone on screen is not
+ * invisible". A short FIRST line is the same fault and was not covered.
+ *
+ * Three words, because two is where it looks broken and four would refuse the
+ * break in "Two taps: bad night, wrecked legs." — which reads correctly today.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export const MIN_BREAK_WORDS = 3;
+
+/**
  * Words that may not END a caption.
  *
  * All of them open something they do not finish: an article wants its noun, a
@@ -96,7 +116,8 @@ function fitSentence(sentence: string, maxChars: number, maxWords: number): stri
      */
     let cut = end;
     for (let j = end - 1; j > i; j -= 1) {
-      if (breakAfter(ws[j])) { cut = j + 1; break; }
+      // MIN_BREAK_WORDS: a break this early leaves a flash rather than a line.
+      if (breakAfter(ws[j]) && j + 1 - i >= MIN_BREAK_WORDS) { cut = j + 1; break; }
     }
 
     /**

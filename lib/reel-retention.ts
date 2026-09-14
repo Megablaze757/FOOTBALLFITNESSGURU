@@ -40,6 +40,7 @@
 // =============================================================================
 
 import type { ReelPlan } from "./reel-plan";
+import { APP_NAME } from "./signup-link";
 
 /** The hook must be readable before the decision is made. */
 export const HOOK_DEADLINE_MS = 3_000;
@@ -58,7 +59,7 @@ export const HOOK_MAX_WORDS = 10;
  * lib/caption-lines.ts. Re-exported here because this is where the retention
  * rules are read, and a reader looking for the caption floor looks here first.
  */
-import { captionReadMs } from "./caption-lines";
+import { captionReadMs, MIN_CAPTION_MS } from "./caption-lines";
 export { CAPTION_ACQUIRE_MS, CAPTION_CPS, MIN_CAPTION_MS, captionReadMs } from "./caption-lines";
 
 
@@ -95,12 +96,181 @@ export const MAX_ONE_ROUTE_SHARE = 0.6;
 export const MAX_REEL_MS = 30_000;
 
 /**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * WHAT A REEL OF THIS LENGTH HAS TO CLEAR, AND WHY LENGTH IS A CHOICE.
+ *
+ * "I'm not a social media expert, I'm asking you to research and become one."
+ * Fair. This is the part of that which belongs in code rather than in a
+ * message, because a figure in a message is read once.
+ *
+ * Retention is graded against LENGTH, not in absolute terms — a 45-second
+ * video holding 45% is doing better than a 12-second one holding 55%. The
+ * published bands, measured across TikTok:
+ *
+ *              aim above   strong
+ *   under 15s      60%       75%
+ *   15-30s         50%       65%
+ *   30-60s         40%       55%
+ *   1-3min         30%       45%
+ *
+ * And by niche: educational content 50%+ under thirty seconds; fitness
+ * instruction 55%+; motivational 65-75%.
+ *   — retensis.com/blog/tiktok-retention-rate-benchmarks-2026
+ *
+ * SHORTER IS NOT AUTOMATICALLY BETTER, which is why this is a table and not a
+ * smaller MAX_REEL_MS. A reel that drops a beat to get under fifteen seconds
+ * buys a higher bar for itself and loses the footage that earns it.
+ *
+ * ───────────────────────────────────────────────────────────────────────────
+ * WHAT ONE OF THESE REELS ACTUALLY MEASURED, WHICH IS NOWHERE NEAR THE TABLE.
+ *
+ * demo-readiness was posted and Instagram returned a retention curve.
+ * Digitised off it, for a 27-second reel whose band says "aim above 50%":
+ *
+ *   0.5s  85% still watching
+ *   1.0s  50%          <- half the audience is gone in one second
+ *   1.5s  32%
+ *   2.0s  21%
+ *   3.0s  11%
+ *   end    2.4%
+ *
+ *   average watch, the area under that curve:  9.7%
+ *
+ * Five times under the aim, and the shape is a cliff rather than a slope:
+ * everyone who survives the third second stays to the end.
+ *
+ * READ THE TABLE WITH THAT IN MIND rather than deleting it. The published
+ * bands are TikTok figures for accounts with an audience; this was 133 views,
+ * 90% of them cold traffic from the Reels tab, on an account with almost no
+ * history. The numbers are not comparable and the table is still the right
+ * shape — retention graded against length. What is NOT true is that a reel
+ * clearing these bands is normal for this account today, and scripts/
+ * measure-reel.mts prints them as though it were.
+ * ───────────────────────────────────────────────────────────────────────────
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export const RETENTION_BANDS = [
+  { underMs: 15_000, aim: 0.6, strong: 0.75 },
+  { underMs: 30_000, aim: 0.5, strong: 0.65 },
+  { underMs: 60_000, aim: 0.4, strong: 0.55 },
+  { underMs: Infinity, aim: 0.3, strong: 0.45 },
+];
+
+/** The completion a reel of this length has to clear to be worth posting. */
+export function retentionBand(totalMs: number): { aim: number; strong: number } {
+  const band = RETENTION_BANDS.find((b) => totalMs < b.underMs) ?? RETENTION_BANDS[RETENTION_BANDS.length - 1];
+  return { aim: band.aim, strong: band.strong };
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE SIGNAL NOTHING HERE WAS DESIGNED FOR: BEING WATCHED TWICE.
+ *
+ * Replay rate is total plays over unique viewers. Above 1.2, distribution is
+ * reported as substantially stronger — and a reel that loops cleanly plays
+ * again before the viewer has consciously decided to replay it, which is how
+ * a watch-time percentage goes over 100%.
+ *   — retensis.com/blog/tiktok-retention-rate-benchmarks-2026
+ *   — ondigitals.com/how-to-make-looping-content-for-tiktok
+ *
+ * Two things carry a loop, and this project currently has neither. The PICTURE
+ * loops when the last shot matches the framing of the first. The WORDS loop
+ * when the closing line is the setup for the opening line.
+ *
+ * These reels do the opposite: they end on a static card, held for END_CARD_MS
+ * in silence, on a screen that looks nothing like the opening shot. That is
+ * the least loopable ending available, and it is also the frame a viewer is
+ * looking at when they decide whether to do anything.
+ *
+ * NOT ENFORCED, DELIBERATELY. A rule that failed every reel for not looping
+ * would be a rule that gets switched off. It is written down here because the
+ * fix is a script decision — a closing line that hands back to the hook — and
+ * the person making that decision should find the reason next to the numbers.
+ *
+ * ───────────────────────────────────────────────────────────────────────────
+ * AND WHAT IT IS WORTH, ON THE ONE REEL THIS PROJECT HAS MEASURED.
+ *
+ * 1.2 plays per viewer needs viewers who reach the end. On the published
+ * reel, 2.4% did. A loop cannot be taken by somebody who left, so the ceiling
+ * on everything below — the closing drift back to the opening scroll, a
+ * closing line that hands back to the hook, the whole idea — is 1.024 plays
+ * per viewer, not 1.2. It is out of reach by a factor of eight, and not
+ * because the looping is bad.
+ *
+ * That is not an argument for dropping it — a perfect loop would still add
+ * about a quarter to the average watch, which is not nothing. It is an
+ * argument for where the CEILING is. The loop's gain is capped at 2.4% of
+ * viewers by definition and cannot be raised by making the loop better; the
+ * opening's is not capped, because everybody it keeps then flows through the
+ * whole rest of the curve. Fixing the ending is bounded work. See
+ * RETENTION_BANDS for what the opening is currently doing.
+ * ───────────────────────────────────────────────────────────────────────────
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export const REPLAY_RATE_TARGET = 1.2;
+
+/**
  * Below this there is nothing to watch.
  *
  * Not a retention rule — a reel this short is a mistake in the script rather
  * than a stylistic choice, and it is worth saying so before it is filmed.
  */
 export const MIN_REEL_MS = 6_000;
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE MOST EXPENSIVE SILENCE IN THE REEL IS THE ONE AT THE FRONT.
+ *
+ * DEAD_OPENERS below checks what the first WORDS are. Nothing checked when
+ * they arrive, and for every reel this pipeline has made, the answer was
+ * about 300ms: LEAD_MS of deliberate room, plus another 150ms of silence the
+ * voice model ships inside the clip and lib/wav.ts now trims off.
+ *
+ * Against the curve measured on a published reel — 85% at 0.5s, 50% at 1.0s,
+ * 21% at 2.0s — a third of the deciding second was going on nothing at all.
+ * Nobody skips because of 300ms on its own; it is that this is the one part
+ * of the reel where a third of a second is a third of the budget.
+ *
+ * The ceiling is double LEAD_MS rather than LEAD_MS itself: the lead is there
+ * on purpose, a word that starts on the same frame as the picture sounds
+ * clipped, and a rule that forbids what the design intends is a rule somebody
+ * turns off.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export const MAX_OPENING_SILENCE_MS = 300;
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * HOW LATE A CAPTION MAY BE DRAWN BEFORE THE SCHEDULE IS A FICTION.
+ *
+ * Every rule in this file that measures a caption measures the PLAN. The
+ * recorder then has to honour it, and twice now it has not: the moves used to
+ * run before the captions were scheduled, which put a line a second and a half
+ * behind the voice that said it; and the hook held the screen for its whole
+ * 1.6 seconds before the first caption was drawn at all, which cost
+ *
+ *   drill       "Not fitness."      planned 1214ms, on screen for 0
+ *   demo-cost   "£0.31 or £3.19,"   planned 1672ms, on screen for 72
+ *
+ * — both of them checked against MIN_CAPTION_MS and both passing, because the
+ * number checked was the planned one.
+ *
+ * So the recorder measures what it actually did and fails on this. It is the
+ * one rule here the plan cannot satisfy on its own.
+ *
+ * DELIBERATELY LOOSE. Getting a caption on screen is half a dozen
+ * page.evaluate round trips on a machine that is also encoding video, and the
+ * first caption of a reel pays for the hook, the safe-zone measurement and the
+ * opening glide before it. Tightening this to something that sounds precise
+ * would fail runs for jitter.
+ *
+ * It does not need to be tight. Both failures it exists for were structural —
+ * a whole hook, a whole run of moves — and came in at 1600ms and about
+ * 1500ms. Anything under half a second is the browser; anything over it is
+ * the recorder doing something else while the clock runs.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export const MAX_CAPTION_LATE_MS = 400;
 
 /** Openings that spend the deciding second saying nothing. */
 const DEAD_OPENERS = [
@@ -179,6 +349,23 @@ export function retentionProblems(plan: ReelPlan): RetentionProblem[] {
     say(`the hook is still going at ${plan.hookMs}ms — the decision is made by ${HOOK_DEADLINE_MS}ms`);
   }
 
+  /**
+   * SILENT REELS ARE EXEMPT BY CONSTRUCTION, not by a check: there is no clip
+   * to be late, so there is no opening silence to measure. A reel with
+   * captions and no voice starts on its first caption, which is timed at zero.
+   */
+  const opening = plan.steps[0];
+  const firstWord = opening?.clips?.[0];
+  if (opening && firstWord) {
+    const silence = opening.at + firstWord.atMs;
+    if (silence > MAX_OPENING_SILENCE_MS) {
+      say(
+        `the first word is not heard until ${Math.round(silence)}ms — half the audience is gone by 1000ms, `
+        + `and ${MAX_OPENING_SILENCE_MS}ms is the most of that worth spending on room`,
+      );
+    }
+  }
+
   if (plan.totalMs > MAX_REEL_MS) {
     say(`${Math.round(plan.totalMs / 1000)}s — completion falls away past ${MAX_REEL_MS / 1000}s and the algorithm stops promoting it`);
   }
@@ -186,13 +373,50 @@ export function retentionProblems(plan: ReelPlan): RetentionProblem[] {
     say(`${Math.round(plan.totalMs / 1000)}s is not long enough to show anything`);
   }
 
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * TWO DIFFERENT FLOORS, BECAUSE A NARRATED REEL IS A DIFFERENT THING TO READ.
+   *
+   * captionReadMs is a COLD-READING rate — Netflix's 17 characters a second
+   * pulled back to 15 on the stated grounds that "most of the audience has the
+   * sound off, the caption is not an aid to the audio, it IS the content".
+   * That is exactly right for a silent reel.
+   *
+   * It is not right for a narrated one, and the measurement that showed it was
+   * the runner refusing a reel whose captions were finally in sync: this voice
+   * says "Every other training app hands you the session it planned on Sunday"
+   * in 3.92 seconds, and reading its captions cold takes 5.07. There is no
+   * timing that satisfies both — a caption cannot both start when the words
+   * are spoken and stay up longer than the speaking.
+   *
+   * So one of them has to give, and the honest choice is the cold-reading
+   * rate, for a reason rather than because it was in the way. These captions
+   * are drawn word by word with the spoken word lit (lib/caption-karaoke.ts).
+   * A muted viewer is not reading a static block and deciding when to look
+   * away; they are following a sweep, and the sweep's pace IS the speaking
+   * pace. The thing the Netflix figure measures is not what is happening.
+   *
+   * WHAT SURVIVES IS THE ACQUISITION FLOOR. MIN_CAPTION_MS is not a reading
+   * rate — it is the time an eye needs to find new text on screen at all, and
+   * that does not care whether anybody is talking. A caption under it is a
+   * flash, narrated or not.
+   *
+   * A SILENT REEL KEEPS THE FULL RATE. There is no voice to follow and the
+   * caption really is the whole content, which is the case captionReadMs was
+   * written for.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  const narrated = plan.steps.some((step) => (step.clips?.length ?? 0) > 0);
+
   const onRoute = new Map<string, number>();
   for (const step of plan.steps) {
     for (const caption of step.captions) {
-      const needs = captionReadMs(caption.text);
+      const needs = narrated ? MIN_CAPTION_MS : captionReadMs(caption.text);
       if (caption.ms < needs) {
         say(
-          `"${caption.text}" is on screen for ${caption.ms}ms — too brief to read, it needs ${needs}ms`,
+          narrated
+            ? `"${caption.text}" is on screen for ${caption.ms}ms — under ${needs}ms the eye does not land on it at all`
+            : `"${caption.text}" is on screen for ${caption.ms}ms — too brief to read, it needs ${needs}ms`,
           step.index,
         );
       }
@@ -222,11 +446,23 @@ export function retentionProblems(plan: ReelPlan): RetentionProblem[] {
      * A beat with no captions at all is the original case and still counts:
      * nothing changes for its entire length.
      */
-    const stillFor = step.captions.length
-      ? Math.max(...step.captions.map((c) => c.ms))
-      : step.ms;
+    /**
+     * NAMED, NOT JUST COUNTED. This said "6s on one screen doing one thing"
+     * and nothing else — true, and it cost a recording run and a round of
+     * guesswork to find out WHICH of a beat's captions was the six seconds.
+     * A diagnostic that makes you go and look is half a diagnostic.
+     */
+    const longest = step.captions.length
+      ? step.captions.reduce((worst, c) => (c.ms > worst.ms ? c : worst))
+      : null;
+    const stillFor = longest ? longest.ms : step.ms;
     if (stillFor > MAX_HOLD_MS) {
-      say(`${Math.round(stillFor / 1000)}s on one screen doing one thing`, step.index);
+      say(
+        longest
+          ? `"${longest.text}" holds the screen for ${(stillFor / 1000).toFixed(1)}s`
+          : `${(stillFor / 1000).toFixed(1)}s on one screen with nothing on it`,
+        step.index,
+      );
     }
     onRoute.set(step.route, (onRoute.get(step.route) ?? 0) + step.ms);
   }
@@ -236,6 +472,33 @@ export function retentionProblems(plan: ReelPlan): RetentionProblem[] {
     if (plan.totalMs > 0 && ms / plan.totalMs > MAX_ONE_ROUTE_SHARE) {
       say(`${Math.round((ms / plan.totalMs) * 100)}% of the reel is on ${route} — there is nothing to watch`);
     }
+  }
+
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * A PRONOUN NEEDS AN ANTECEDENT.
+   *
+   * "Script is incoherent." Read aloud as one block, the fault in all four
+   * reels was every demonstrative in them: "THIS ONE asks first" — this one
+   * WHAT? — then "THAT's today's body talking", pointing at a number the voice
+   * never names, then "SO today's session got rebuilt", a consequence of a
+   * cause the listener was never given. The product was named once, in the
+   * last two seconds, so nothing before it had anything to refer to.
+   *
+   * The published guidance for short-form informational content is one idea
+   * per video, each beat making one point and moving on. A reel cannot be
+   * about one thing while declining to say what the thing is.
+   *   — teleprompter.com/blog/short-form-video-strategy
+   *   — captions.ai/blog/how-to-write-short-form-video-scripts
+   *
+   * NOT IN THE SIGN-OFF. Every reel ends by naming the app — that rule already
+   * exists in lib/reel-script.ts — so counting the last beat would make this
+   * check pass on every script including the incoherent ones it is for.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  const before = plan.steps.slice(0, -1).flatMap((step) => step.captions.map((c) => c.text));
+  if (before.length && !before.some((text) => text.includes(APP_NAME))) {
+    say(`the reel never says "${APP_NAME}" until the sign-off, so every "it" and "this one" before it refers to nothing`);
   }
 
   for (const gap of silentGaps(plan)) {

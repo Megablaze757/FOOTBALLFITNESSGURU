@@ -29,19 +29,93 @@
     layer.style.cssText =
       "position:fixed;inset:0;z-index:2147483647;pointer-events:none;"
       + "display:flex;flex-direction:column;justify-content:flex-end;align-items:center;"
-      + "padding:0 28px 22%;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;";
+      // 90px right / 30px left: the action rail. See the note on the caption.
+      /**
+       * ═══════════════════════════════════════════════════════════════════
+       * THE APP'S OWN FACE, NOT THE RUNNER'S IDEA OF system-ui.
+       *
+       * This was `system-ui,-apple-system,'Segoe UI',sans-serif`, which on a
+       * Linux runner resolves to DejaVu Sans — a face with no weight above
+       * Bold, so `font-weight:900` was SYNTHESISED. Every caption in every
+       * reel was drawn in a smeared fake-bold fallback, which is most of why
+       * the captions never looked like the ones the research describes.
+       *
+       * Seen in a recorded frame: the sign-off read as a typewriter face while
+       * the app's own card text, two inches above it, was set properly.
+       *
+       * The page already has the right fonts. app/layout.tsx loads Inter and
+       * Barlow Semi Condensed through next/font, self-hosted under
+       * _next/static/media, and exposes them as --font-display and
+       * --font-sans on <html>. The overlay is injected into that page, so they
+       * cost nothing to use and they are what the product is set in.
+       *
+       * Measured on a real page, at 46px, per character of caption text:
+       *
+       *   system-ui -> DejaVu Sans, fake 900     26.39px   15 per line
+       *   var(--font-display) at 800             18.76px   22 per line
+       *
+       * A condensed display face is also simply the right shape for this: 29%
+       * more of a phrase on a line, in the band the caption research asks for.
+       *
+       * The fallbacks stay, and check-captions.mts refuses to report when it
+       * is measuring one — a caption checked in the wrong font is a number
+       * about nothing.
+       * ═══════════════════════════════════════════════════════════════════
+       */
+      + "padding:0 94px 22vh 34px;"
+      + "font-family:var(--font-display),var(--font-sans),system-ui,-apple-system,sans-serif;";
 
     var caption = document.createElement("div");
     caption.id = "__reel_caption";
     /**
-     * 22% up from the bottom, not against it.
+     * ═══════════════════════════════════════════════════════════════════
+     * 22vh, NOT 22% — AND THE DIFFERENCE WAS THE WHOLE POINT OF THE RULE.
      *
-     * TikTok and Instagram draw their own caption, handle and buttons over the
-     * lower fifth of the frame. A caption under that is a caption nobody reads
-     * — and it cannot be fixed after the video is made.
+     * TikTok and Instagram draw their own caption, handle and buttons over
+     * the lower fifth of the frame. A caption under that is a caption nobody
+     * reads, and it cannot be fixed after the video is made. That is why this
+     * pushes the line up off the bottom edge.
      *
-     * Heavy weight on a near-black pill, because three quarters of the
-     * audience is READING this rather than hearing it.
+     * It was `22%`, and PERCENTAGE PADDING RESOLVES AGAINST THE CONTAINING
+     * BLOCK'S WIDTH — including padding-bottom. So 22% of a 540px-wide
+     * viewport is 119px, not 22% of 960px of height. Measured on a finished
+     * reel, the caption sat 243px off the bottom of a 1080x1920 frame where
+     * the rule intends 422:
+     *
+     *   Instagram Reels overlays the bottom  400px
+     *   TikTok's own chrome                  320px
+     *   what this actually cleared           243px
+     *
+     * The intent was right and the unit quietly defeated it. vh is the unit
+     * that means what the comment says.
+     *
+     * ───────────────────────────────────────────────────────────────────
+     * AND THE SIDES ARE NOT SYMMETRIC, BECAUSE THE CHROME IS NOT EITHER.
+     *
+     * The same measured frame caught the other edge: the caption's right edge
+     * landed at x=906 of 1080, and the action rail — profile, like, comment,
+     * share — runs UP the right edge over the last 180px, so the safe edge is
+     * 900. Six pixels over on a line that did not even fill the box; the
+     * container allowed 1024, which is 124px under the buttons.
+     *
+     * Playwright records 540x960 at deviceScaleFactor 2, so these style
+     * strings are in CSS pixels and every clearance above is in frame pixels
+     * — HALF. `28px` reads generous and is 56px of frame against a 180px
+     * rail. In frame pixels the chrome is 60 left and 180 right, so:
+     *
+     *   left   30px CSS  =  60px frame   + 4px ring = 34px
+     *   right  90px CSS  = 180px frame   + 4px ring = 94px
+     *
+     * The ring is the +4: text-shadow paints outside the layout box, so a
+     * padding equal to the chrome puts the OUTLINE of the last letter under
+     * the buttons. See caption.dataset.bleed below.
+     *
+     * That leaves 420 CSS px of usable width instead of 484, and centres the
+     * text 30px left of the frame's middle. Symmetric 90px would have cost
+     * 124 of them for nothing — there are no buttons on the left. Captions
+     * sitting slightly left of centre with the rail on the right is what a
+     * deliberately made reel looks like.
+     * ═══════════════════════════════════════════════════════════════════
      */
     caption.style.cssText =
       /**
@@ -66,23 +140,80 @@
        * ═══════════════════════════════════════════════════════════════════
        */
       "position:relative;z-index:1;"
-      + "max-width:100%;text-align:center;font-size:40px;line-height:1.25;font-weight:800;"
       /**
-       * OPAQUE, AND WITH A RIM.
+       * ═══════════════════════════════════════════════════════════════════
+       * OUTLINE, NOT A BOX. "CAPTIONS SHOULD BE BRIGHT."
        *
-       * The fill was rgba(8,8,10,0.82), which separated the words from a light
-       * page perfectly and vanished entirely on a dark one — the app's own
-       * ground is rgb(9,9,10), so once the recorder started filming in dark
-       * the pill became invisible and the page's text read straight through
-       * the caption. A caption has to work on ANY background, which means it
-       * cannot rely on being darker than what is behind it.
+       * The caption was white on an OPAQUE near-black pill, and the pill was
+       * the right answer to the wrong question. It got there by fixing a
+       * translucent fill that vanished on the app's own dark ground — but the
+       * property that actually makes a caption work on any background is a
+       * heavy outline on the GLYPHS, which is why every short-form caption
+       * preset uses one and none of them use a box.
        *
-       * Opaque fill for the text, and a light rim so the pill still has an
-       * edge when the thing behind it is as dark as the fill.
+       * A box is a black rectangle over a fifth of the frame. The reel is an
+       * app demo; the rectangle is sitting on the app.
+       *
+       * WHY text-shadow AND NOT -webkit-text-stroke: a text-stroke is centred
+       * on the glyph outline, so half of a 4px stroke eats into the letter and
+       * thin strokes close up. paint-order:stroke fill fixes that and is a
+       * thing to be right about in a browser nobody will re-check. Twelve
+       * shadows on a circle is the technique that has always worked, and it
+       * paints behind the fill by definition.
+       *
+       * 46px CSS at deviceScaleFactor 2 is 92px on the 1080x1920 file — inside
+       * the 80-120px band the caption presets specify, where it was at 80.
+       *   — ascynd.io/en/blog/why-hormozi-captions-get-more-views
+       *   — opus.pro/blog/best-caption-presets-styles-boost-retention
+       *
+       * NOT ALL-CAPS, and that is a departure worth stating rather than
+       * hiding: the same guidance says caps, and it says caps alongside ONE
+       * TO THREE WORDS a caption. These captions are phrases, because a
+       * phrase is what lib/caption-lines.ts times and what a mute viewer of an
+       * APP demo needs — and a 42-character phrase set in 92px caps is three
+       * tall lines climbing into the screen the reel is meant to be showing.
+       * Taking half of a preset is how you get the worst of it.
+       * ═══════════════════════════════════════════════════════════════════
        */
-      + "color:#fff;background:rgb(10,10,11);padding:14px 22px;border-radius:18px;"
-      + "border:2px solid rgba(255,255,255,0.22);"
-      + "box-shadow:0 10px 44px rgba(0,0,0,0.6);opacity:0;transition:opacity 120ms linear;";
+      // 800 and not 900: Barlow Semi Condensed is loaded at 600/700/800, and
+      // asking for a weight it does not have is how the fake bold got here.
+      + "max-width:100%;text-align:center;font-size:46px;line-height:1.2;font-weight:800;"
+      + "letter-spacing:-0.01em;"
+      /**
+       * THE ACTIVE WORD IS SCALED, SO THE SPACES HAVE TO SURVIVE IT.
+       *
+       * The sweep grows the word being spoken to scale(1.1). An inline-block
+       * scales about its own centre, so a seven-letter word at 46px reaches
+       * about 6px into the space on each side — and the space was 1.18px.
+       * Measured on a finished frame: "which is cheaper than" read as
+       * "which ischeaperthan".
+       *
+       * Measured on the real caption, gap either side of the scaled word:
+       *
+       *   normal   1.18px     0.04em   3.03px
+       *   0.06em   3.93px     0.08em   4.85px, and the line wrapped
+       *
+       * 0.06em is the widest that does not cost a line, which is the other
+       * thing a caption cannot afford.
+       */
+      + "word-spacing:0.06em;"
+      + "color:#fff;"
+      + "text-shadow:4px 0px 0 #000,3.5px 2px 0 #000,2px 3.5px 0 #000,0px 4px 0 #000,-2px 3.5px 0 #000,-3.5px 2px 0 #000,-4px 0px 0 #000,-3.5px -2px 0 #000,-2px -3.5px 0 #000,-0px -4px 0 #000,2px -3.5px 0 #000,3.5px -2px 0 #000,0 2px 14px rgba(0,0,0,0.9),0 10px 30px rgba(0,0,0,0.55);"
+      + "opacity:0;transition:opacity 120ms linear;";
+    /**
+     * HOW FAR THE PAINT GOES PAST THE LAYOUT BOX, in CSS pixels.
+     *
+     * getBoundingClientRect() measures layout, and text-shadow is not layout —
+     * so the ring above paints 4px outside the box on every side where the
+     * recorder's safe-zone check cannot see it. That is the whole of the 6px
+     * the first measured frame was over on the right: the element ended at 895
+     * and the ink reached 906.
+     *
+     * The RING only. The two soft shadows after it reach 40px further down,
+     * and a translucent halo clipped by the platform's chrome is not something
+     * anybody can see; a hard black outline on a letter is.
+     */
+    caption.dataset.bleed = "4";
     layer.appendChild(caption);
 
     /**
@@ -95,6 +226,18 @@
      * look at but a sentence, in the one second where a scroller decides.
      * Instagram reported a 91.7% skip rate on it, higher than typical, and
      * listed skip rate first as the thing that most affects reach.
+     *
+     * HOW MUCH THAT NUMBER IS WORTH, since it is quoted as though it settles
+     * something. No sample size was recorded with it. A later reel measured
+     * 93.2%, also "higher than typical", on about 133 views — which is roughly
+     * nine people who did not skip, and engagement counts of 4 likes, 2
+     * reposts, 1 save and 0 comments. At that size a single extra tap moves
+     * any of those rates by 0.8 points, so the RATES are noise and only the
+     * direction of the skip figure carries anything at all.
+     *
+     * The reasoning below stands on what the frame does — a title slide shows
+     * no product in the second that decides — which is an argument about the
+     * picture rather than about the percentage.
      *
      * A pill instead of a blackout: the words stay legible on this app's light
      * pages, and the ranked table the hook is ABOUT is visible behind them from
@@ -116,16 +259,34 @@
       // z-index alongside the caption's, so both sit above the dim panels for
       // the same stated reason rather than one of them by accident.
       "position:fixed;z-index:1;left:0;right:0;top:42%;display:flex;justify-content:center;"
-      + "padding:0 30px;pointer-events:none;";
+      // Asymmetric for the action rail, same as the caption layer's padding.
+      + "padding:0 95px 0 35px;pointer-events:none;";
 
     var hook = document.createElement("div");
     hook.id = "__reel_hook";
     hook.style.cssText =
-      "max-width:100%;font-size:64px;line-height:1.08;font-weight:900;text-align:center;"
-      // Same rim, same reason as the caption above.
-      + "color:#fff;background:rgb(10,10,11);padding:18px 26px;border-radius:22px;"
-      + "border:2px solid rgba(255,255,255,0.24);"
-      + "box-shadow:0 12px 56px rgba(0,0,0,0.65);opacity:0;transition:opacity 120ms linear;";
+      // 800, for the reason on the caption above: the loaded face stops there.
+      "max-width:100%;font-size:64px;line-height:1.08;font-weight:800;text-align:center;"
+      /**
+       * SAME OUTLINE, SAME REASON AS THE CAPTION ABOVE — and one more that
+       * belongs to the hook alone.
+       *
+       * The note above this element records the whole history: a 93% opaque
+       * blackout across the frame, a 91.7% skip rate, then a pill so the
+       * ranked table would show behind it. The pill was the second step of
+       * that argument and this is the third. The hook is the first 1.6
+       * seconds; every pixel of it that is a black slab is a pixel not
+       * showing the thing being claimed.
+       *
+       * A wider ring than the caption because the type is larger: both are
+       * about 8% of the font size, which is where the presets put it.
+       */
+      + "color:#fff;"
+      + "text-shadow:5px 0px 0 #000,4.3px 2.5px 0 #000,2.5px 4.3px 0 #000,0px 5px 0 #000,-2.5px 4.3px 0 #000,-4.3px 2.5px 0 #000,-5px 0px 0 #000,-4.3px -2.5px 0 #000,-2.5px -4.3px 0 #000,-0px -5px 0 #000,2.5px -4.3px 0 #000,4.3px -2.5px 0 #000,0 3px 18px rgba(0,0,0,0.9),0 12px 40px rgba(0,0,0,0.6);"
+      + "opacity:0;transition:opacity 120ms linear;";
+    // A 5px ring, not the caption's 4 — see caption.dataset.bleed above for
+    // why the number has to travel with the element.
+    hook.dataset.bleed = "5";
     hookWrap.appendChild(hook);
     layer.appendChild(hookWrap);
 
@@ -153,7 +314,37 @@
     ["t", "b", "l", "r"].forEach(function (side) {
       var panel = document.createElement("div");
       panel.setAttribute("data-side", side);
-      panel.style.cssText = "position:fixed;background:rgba(4,4,6,0.72);";
+      /**
+       * ═══════════════════════════════════════════════════════════════════
+       * 0.5, AND THE OLD 0.72 WAS ERASING THE SUBJECT OF THE REEL.
+       *
+       * A dim this heavy works over a light UI. This app is near-black, so the
+       * content it covers is already low-luminance and 72% of near-black on top
+       * of it leaves nothing. Measured on a finished 1080x1920 frame, on the
+       * beat where the spotlight is on the reveal line:
+       *
+       *   the ringed line          20.35:1   peak RGB 255
+       *   the £0.31 it is about     2.63:1   peak RGB 104
+       *
+       * 2.63:1 is under the 3:1 floor for large text. The number the entire
+       * reel is built around was, measurably, not readable — while a sentence
+       * explaining it sat at full brightness.
+       *
+       * Swept on the real page and measured the same way:
+       *
+       *   0.72   2.26:1    0.6   3.58:1    0.5   5.06:1
+       *   0.45   6.01:1    0.4   7.04:1    0.3   9.27:1
+       *
+       * 0.5 clears the 4.5:1 bar with margin and still leaves the ringed thing
+       * four times brighter than its surroundings, which is the whole job. Less
+       * than that and the spotlight stops pointing at anything.
+       *
+       * (The history here is a 93% opaque blackout and a 91.7% skip rate. The
+       * lesson taken then was "less than a blackout"; the number was never
+       * measured against this app's own darkness.)
+       * ═══════════════════════════════════════════════════════════════════
+       */
+      panel.style.cssText = "position:fixed;background:rgba(4,4,6,0.5);";
       spot.appendChild(panel);
     });
     var ring = document.createElement("div");
@@ -197,7 +388,21 @@
     var best = null;
     for (var i = 0; i < all.length; i++) {
       var el = all[i];
-      var text = (el.textContent || "").trim().toLowerCase();
+      /**
+       * THE ACCESSIBLE NAME COUNTS AS TEXT.
+       *
+       * This read textContent only, and the readiness gauge is an <svg> whose
+       * name lives in aria-label — "Readiness ready, 54 of 100". So the one
+       * beat whose whole job is to point at that number could never find it,
+       * and said so in the run log while the reel went out with no spotlight
+       * on the reveal.
+       *
+       * An aria-label is a deliberate, human-written name for something on
+       * screen, which is exactly what this is looking for. A drawing that
+       * names itself is not a special case; it is the case.
+       */
+      var text = ((el.textContent || "") + " " + (el.getAttribute("aria-label") || ""))
+        .trim().toLowerCase();
       if (text.indexOf(want) === -1) continue;
       var box = el.getBoundingClientRect();
       if (box.width < 40 || box.height < 16) continue;
@@ -214,42 +419,18 @@
   };
 
   /**
-   * Point at something, or at nothing.
+   * Put the panels and the ring around one element, as it is RIGHT NOW.
    *
-   * An empty string clears it. Text that is not on screen ALSO clears it
-   * rather than dimming the whole frame — a spotlight on nothing is worse than
-   * no spotlight, and it would be invisible until somebody watched the reel.
+   * Split out of __reelFocus so the frame loop below can call it again — the
+   * measurement is the part that goes stale, and the search is the part that
+   * must not be repeated (findByText picks the smallest element containing the
+   * words, and a re-search mid-beat could pick a different one).
    */
-  window.__reelFocus = function (needle) {
-    install();
+  var place = function (el) {
     var spot = document.getElementById("__reel_spot");
-    if (!spot) return false;
-    if (!needle) { spot.style.opacity = "0"; return false; }
-
-    /**
-     * ═══════════════════════════════════════════════════════════════════════
-     * SCROLL TO IT FIRST. A spotlight only helps if the thing is on screen.
-     *
-     * findByText deliberately ignores anything outside the viewport, and the
-     * shot drifts down the page as a beat plays — so by the time the reveal
-     * arrived, the row it was meant to ring had scrolled past and the
-     * spotlight correctly did nothing. The reel showed the page FOOTER under
-     * the words "Cheapest: £0.31."
-     *
-     * Naming a focus is the script saying "this is the shot". So it moves the
-     * shot: instant rather than smooth, because the beat's timing is already
-     * fixed against the audio and a 400ms glide would eat the reveal.
-     * ═══════════════════════════════════════════════════════════════════════
-     */
-    var anywhere = findByText(needle, true);
-    if (anywhere) {
-      var box = anywhere.el.getBoundingClientRect();
-      var centred = window.scrollY + box.top - (window.innerHeight / 2) + (box.height / 2);
-      window.scrollTo({ top: Math.max(0, centred), behavior: "instant" });
-    }
-
-    var found = findByText(needle);
-    if (!found) { spot.style.opacity = "0"; return false; }
+    if (!spot || !el) return false;
+    var b = el.getBoundingClientRect();
+    if (!(b.width > 0 && b.height > 0)) { spot.style.opacity = "0"; return false; }
 
     /**
      * ═══════════════════════════════════════════════════════════════════════
@@ -272,14 +453,13 @@
      */
     var zoom = parseFloat(window.getComputedStyle(document.documentElement).zoom) || 1;
     var pad = 12;
-    var b = found.box;
     var top = Math.max(0, b.top - pad) / zoom;
     var left = Math.max(0, b.left - pad) / zoom;
     var right = Math.min(window.innerWidth, b.right + pad) / zoom;
     var bottom = Math.min(window.innerHeight, b.bottom + pad) / zoom;
 
     var panels = spot.querySelectorAll("[data-side]");
-    var put = function (el, css) { el.style.cssText += ";" + css; };
+    var put = function (node, css) { node.style.cssText += ";" + css; };
     for (var i = 0; i < panels.length; i++) {
       var side = panels[i].getAttribute("data-side");
       if (side === "t") put(panels[i], "left:0;top:0;width:100%;height:" + top + "px;");
@@ -294,6 +474,171 @@
       + (right - left) + "px;height:" + (bottom - top) + "px;";
     spot.style.opacity = "1";
     return true;
+  };
+
+  /**
+   * Point at something, or at nothing.
+   *
+   * An empty string clears it. Text that is not on screen ALSO clears it
+   * rather than dimming the whole frame — a spotlight on nothing is worse than
+   * no spotlight, and it would be invisible until somebody watched the reel.
+   */
+  window.__reelFocus = function (needle) {
+    install();
+    var spot = document.getElementById("__reel_spot");
+    if (!spot) return false;
+    if (!needle) { tracking = null; spot.style.opacity = "0"; return false; }
+
+    /**
+     * ═══════════════════════════════════════════════════════════════════════
+     * SCROLL TO IT FIRST. A spotlight only helps if the thing is on screen.
+     *
+     * findByText deliberately ignores anything outside the viewport, and the
+     * shot drifts down the page as a beat plays — so by the time the reveal
+     * arrived, the row it was meant to ring had scrolled past and the
+     * spotlight correctly did nothing. The reel showed the page FOOTER under
+     * the words "Cheapest: £0.31."
+     *
+     * Naming a focus is the script saying "this is the shot". So it moves the
+     * shot: instant rather than smooth, because the beat's timing is already
+     * fixed against the audio and a 400ms glide would eat the reveal.
+     * ═══════════════════════════════════════════════════════════════════════
+     */
+    var anywhere = findByText(needle, true);
+    if (anywhere) {
+      var box = anywhere.el.getBoundingClientRect();
+      /**
+       * ═══════════════════════════════════════════════════════════════════
+       * ABOVE THE CAPTION, NOT IN THE MIDDLE OF THE FRAME.
+       *
+       * Centring put the readiness gauge dead centre, and the caption owns
+       * the bottom third — so the score, the one thing the reveal exists to
+       * show, sat behind the words describing it. Recorded twice and looked
+       * at both times: the ring was around the dial and the number was under
+       * the caption.
+       *
+       * FOCUS_AT is where a focused thing should sit: the target is placed in
+       * the upper middle so its lower half still lands clear of the caption.
+       *
+       * THE NUMBER THIS WAS CALIBRATED AGAINST HAS MOVED. It read "everything
+       * below about 68% of the frame is caption", which was true of a caption
+       * sitting 119px off the bottom in a 484px-wide band. Lifting it clear of
+       * Instagram's chrome and narrowing it off the action rail changed both:
+       * the longest captions now render four lines rather than three, and the
+       * top of the block measures at 55% of the frame, not 68%.
+       *
+       * What is left, measured rather than assumed:
+       *
+       *   ring bottom, worst case   502px of 960   (36% + GROW_SHARE/2 + pad)
+       *   caption top,  worst case  528px
+       *   clearance                  26px          — it used to be 174
+       *
+       * Still clear, and no longer by enough to leave unwatched. The recorder
+       * measures the real overlap on every beat now — checkOverlaysClear() in
+       * scripts/record-reel.mts, which since the hook stopped holding the
+       * screen alone compares all three overlays rather than this one pair —
+       * so this cannot quietly go wrong again.
+       * ═══════════════════════════════════════════════════════════════════
+       */
+      var FOCUS_AT = 0.36;
+      var centred = window.scrollY + box.top - (window.innerHeight * FOCUS_AT) + (box.height / 2);
+      window.scrollTo({ top: Math.max(0, centred), behavior: "instant" });
+    }
+
+    var found = findByText(needle);
+    if (!found) { tracking = null; spot.style.opacity = "0"; return false; }
+
+    /**
+     * ═══════════════════════════════════════════════════════════════════════
+     * A NAME NAMES A THING, AND THE THING IS BIGGER THAN THE WORDS.
+     *
+     * findByText deliberately takes the SMALLEST element containing the words,
+     * because every ancestor contains them too and <body> is not a spotlight.
+     * That is right for finding it and wrong for ringing it, and the wrongness
+     * has now been photographed twice:
+     *
+     *   The readiness gauge is an <svg> with aria-label "Readiness red, 44 of
+     *   100". The score is a SIBLING div underneath. The ring went round the
+     *   drawing and left the number outside it, dimmed.
+     *
+     *   "Red lentils" on /cheapest-protein/ is one line of a card whose other
+     *   line is £0.31. The ring went round the name and left the PRICE outside
+     *   it, dimmed — on the reveal beat of the reel about prices.
+     *
+     * Both were fixed for one shape and would have come back on the next. The
+     * first version of this widened only an <svg> to its parent, which is the
+     * gauge and nothing else.
+     *
+     * The rule that covers both: grow while the parent is still ABOUT THE SAME
+     * THING as the words. Two bounds, because either alone is a container
+     * waiting to be ringed — the ratio stops a wrapper that is merely tall,
+     * the share stops a page whose every element is short.
+     *
+     * MEASURED ON THE PAGE, not chosen and hoped for. The ancestry above "Red
+     * lentils" at a 540x960 viewport:
+     *
+     *   0  the words           16px    1.0x    2% of the frame
+     *   1  the CHEAPEST card  110px    6.9x   13%     <- the ring
+     *   2  the panel of three 354px   22.1x   42%     <- stop
+     *   3  <main>            3321px  207.6x  396%
+     *
+     * The first draft of this used 3x, which stops at level 0 — the fix would
+     * have shipped doing nothing, and the only reason it did not is that the
+     * test measured a real page instead of a fixture I had built to agree with
+     * me. Both bounds reject level 2 independently.
+     * ═══════════════════════════════════════════════════════════════════════
+     */
+    var GROW_TIMES = 8;
+    var GROW_SHARE = 0.3;
+    for (var up = 0; up < 4; up++) {
+      var parent = found.el.parentElement;
+      if (!parent || parent === document.body) break;
+      var grown = parent.getBoundingClientRect();
+      if (!(grown.width > 0 && grown.height > 0)) break;
+      if (grown.height > found.box.height * GROW_TIMES) break;
+      if (grown.height > window.innerHeight * GROW_SHARE) break;
+      found = { el: parent, box: grown };
+    }
+
+    place(found.el);
+    /**
+     * ═══════════════════════════════════════════════════════════════════════
+     * THE RING FOLLOWS ITS TARGET. IT IS NOT A RECTANGLE DRAWN ONCE.
+     *
+     * Recorded, extracted at two seconds apart, and looked at: at 12s the ring
+     * enclosed the gauge and "44 RED" exactly. At 15s, same beat, same shot,
+     * the number was BELOW the ring and dimmed — the one figure the reveal
+     * exists to show, greyed out by the thing pointing at it.
+     *
+     * Nothing scrolled. The week strip above the gauge finished loading and
+     * got taller, and everything under it moved down 94 pixels. The ring is
+     * position:fixed and was computed once, so the page slid out from under
+     * it while the shot itself held perfectly still.
+     *
+     * The drift already had this exact failure — a ring around the wrong row —
+     * and was fixed by not drifting on an aimed beat. That fixed the scroll
+     * and could never have fixed this one: async data, a lazy image, a
+     * transition, anything that changes layout after the aim. All of them look
+     * identical to the viewer and none of them are scrolling.
+     *
+     * A frame loop is the version that cannot be wrong about any of them.
+     * "A composed shot holds still" is about the CAMERA, and the camera does:
+     * this moves the annotation, not the shot.
+     * ═══════════════════════════════════════════════════════════════════════
+     */
+    tracking = found.el;
+    if (!ticking) { ticking = true; requestAnimationFrame(follow); }
+    return true;
+  };
+
+  /** The element the spotlight is on, followed until it is cleared. */
+  var tracking = null;
+  var ticking = false;
+
+  var follow = function () {
+    if (!tracking) { ticking = false; return; }
+    place(tracking);
+    requestAnimationFrame(follow);
   };
 
   /**
@@ -339,6 +684,51 @@
     captionTimers = [];
   };
 
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * A SCROLL THAT LASTS AS LONG AS THE HOOK DOES.
+   *
+   * The opening beat used to call scrollTo with behavior:"smooth", which is
+   * the browser's animation and finishes when the browser decides — measured
+   * on a finished reel, in about 360ms. The hook holds for 1.6 seconds, so
+   * the picture was frozen from 0.64s to 1.44s: 63 of the first 73 frames
+   * changed by less than 1.0 out of 255.
+   *
+   * That is the exact window Instagram's retention curve falls off a cliff
+   * in — 100% to about 10% inside two seconds — and this file already argues
+   * the point it was failing to deliver: "a frame that does not move is a
+   * frame a scroller has already finished reading". The intent was right and
+   * the browser's idea of smooth was three times too short.
+   *
+   * So the tween is ours and it runs for exactly as long as it is given.
+   * Eased so it does not stop dead: fast at the start, still moving at the
+   * end, which is what a thumb flicking a page looks like.
+   *
+   * IN THIS FILE, not in a page.evaluate, for the reason the whole file
+   * exists — a named function inside an evaluate is wrapped by esbuild in a
+   * __name helper that does not exist in the page.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  var glide = null;
+  window.__reelGlide = function (to, ms) {
+    install();
+    if (glide) cancelAnimationFrame(glide);
+    var from = window.scrollY;
+    var travel = to - from;
+    var started = 0;
+    if (!(ms > 0) || travel === 0) { window.scrollTo(0, to); return; }
+    var tick = function (now) {
+      if (!started) started = now;
+      var share = Math.min(1, (now - started) / ms);
+      // Ease out cubic: most of the distance early, never a hard stop.
+      var eased = 1 - Math.pow(1 - share, 3);
+      window.scrollTo(0, from + travel * eased);
+      if (share < 1) glide = requestAnimationFrame(tick);
+      else glide = null;
+    };
+    glide = requestAnimationFrame(tick);
+  };
+
   window.__reelCaption = function (value) {
     install();
     var el = document.getElementById("__reel_caption");
@@ -364,16 +754,129 @@
 
     // One timer per word rather than a per-frame poll: the browser is also
     // running a screen recording, and this is the cheaper of the two.
+    /**
+     * ═══════════════════════════════════════════════════════════════════════
+     * THE SWEEP PUT THE WHOLE LINE YELLOW AND LEFT IT THERE.
+     *
+     * Only the transform was ever undone. Every word the sweep touched kept
+     * HIGHLIGHT, so a seven-word caption finished as seven yellow words — and
+     * the comment above, which says the FIGURE is coloured the whole time
+     * "because colour is found without scanning", described a uniqueness the
+     * code destroyed one word at a time. By the end of the line the £0.31 the
+     * whole reel is about was the same colour as "the".
+     *
+     * The colour goes back to the word's own base now. A key word's base IS
+     * the highlight, so it is yellow throughout and everything else is yellow
+     * only while it is being said — which is what makes the yellow mean
+     * "here" rather than "read so far".
+     * ═══════════════════════════════════════════════════════════════════════
+     */
     for (var j = 0; j < words.length; j++) {
-      (function (span, previous) {
+      (function (span, previous, previousBase) {
         captionTimers.push(setTimeout(function () {
-          if (previous) { previous.style.transform = "none"; }
+          if (previous) {
+            previous.style.transform = "none";
+            previous.style.color = previousBase;
+          }
           span.style.color = HIGHLIGHT;
-          span.style.transform = "scale(1.06)";
+          span.style.transform = "scale(1.1)";
         }, words[j].at));
-      })(spans[j], j ? spans[j - 1] : null);
+      })(spans[j], j ? spans[j - 1] : null, j && words[j - 1].key ? HIGHLIGHT : "#fff");
     }
   };
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * DOING SOMETHING, SO THE REEL SHOWS IT HAPPENING.
+   *
+   * "The videos should actually show them doing the stuff." Every beat used
+   * to navigate and scroll, and the app's own numbers only ever appeared
+   * already-computed. Filling the check-in on camera and letting the
+   * readiness score move is the difference between saying a thing reacts to
+   * you and showing it.
+   *
+   * FOUND BY LABEL, not by selector — the same reason Beat.focus is text.
+   * The label, placeholder, aria-label and neighbouring text are all tried,
+   * because a form in this app labels its fields in all four ways.
+   *
+   * Returns false rather than throwing when nothing matches: the recorder
+   * turns that into a loud warning, and a silent miss films an empty form.
+   */
+  var fieldFor = function (label) {
+    var want = String(label || "").trim().toLowerCase();
+    if (!want) return null;
+    var fields = document.querySelectorAll("input, textarea, select");
+    for (var i = 0; i < fields.length; i++) {
+      var f = fields[i];
+      var hay = [
+        f.getAttribute("aria-label"), f.getAttribute("placeholder"), f.getAttribute("name"), f.id,
+      ];
+      // The <label> pointing at it, and the text of whatever wraps it.
+      if (f.id) {
+        var lab = document.querySelector('label[for="' + f.id + '"]');
+        if (lab) hay.push(lab.textContent);
+      }
+      if (f.closest("label")) hay.push(f.closest("label").textContent);
+      for (var h = 0; h < hay.length; h++) {
+        if (hay[h] && String(hay[h]).trim().toLowerCase().indexOf(want) !== -1) return f;
+      }
+    }
+    return null;
+  };
+
+  var tappable = function (label) {
+    var want = String(label || "").trim().toLowerCase();
+    if (!want) return null;
+    var all = document.querySelectorAll("button, a, [role='button'], summary, input[type='submit']");
+    for (var i = 0; i < all.length; i++) {
+      var el = all[i];
+      var text = ((el.textContent || "") + " " + (el.getAttribute("aria-label") || ""))
+        .trim().toLowerCase();
+      if (text.indexOf(want) === -1) continue;
+      if (el.disabled) continue;
+      var box = el.getBoundingClientRect();
+      if (box.width < 4 || box.height < 4) continue;
+      return el;
+    }
+    return null;
+  };
+
+  window.__reelDo = function (move) {
+    install();
+    try {
+      if (move && move.tap) {
+        var control = tappable(move.tap);
+        if (!control) return false;
+        control.scrollIntoView({ block: "center", behavior: "instant" });
+        control.click();
+        return true;
+      }
+      if (move && move.into) {
+        var field = fieldFor(move.into);
+        if (!field) return false;
+        field.scrollIntoView({ block: "center", behavior: "instant" });
+        field.focus();
+        /**
+         * THE NATIVE SETTER, NOT `field.value = x`.
+         *
+         * React tracks the value on the DOM node and skips its own handler
+         * when the value it sees already matches — so a plain assignment
+         * changes what is on screen and the app never hears about it. The
+         * readiness score would not move, which is the one thing the shot
+         * exists to show.
+         */
+        var proto = field instanceof HTMLTextAreaElement
+          ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+        var setter = Object.getOwnPropertyDescriptor(proto, "value");
+        if (setter && setter.set) setter.set.call(field, String(move.type));
+        else field.value = String(move.type);
+        field.dispatchEvent(new Event("input", { bubbles: true }));
+        field.dispatchEvent(new Event("change", { bubbles: true }));
+        return true;
+      }
+    } catch (e) { return false; }
+    return false;
+  };
+
   window.__reelHook = function (text) { set("__reel_hook", text); };
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", install);

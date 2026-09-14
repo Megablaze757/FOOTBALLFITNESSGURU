@@ -99,3 +99,92 @@ test("timings survive the merge untouched", () => {
   const merged = karaokeWords("one two three four", 2_000);
   assert.deepEqual(merged.map(({ text, at, ms }) => ({ text, at, ms })), plain);
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// "SOMETIMES THE STRESS OF WORDS IS AT THE WRONG PLACE."
+//
+// The voice was not stressing the wrong word — the HIGHLIGHT was on the wrong
+// one, which reads as the same thing. Weights were written characters, and
+// these reels are built on numbers: "100kg" is five characters and takes as
+// long to say as "one hundred kilos".
+// ═══════════════════════════════════════════════════════════════════════════
+
+test("a number is lit for as long as it takes to say", () => {
+  const spans = wordSpans("100kg at 60kg bodyweight is exceptional.", 3_000);
+  assert.equal(spans.length, 6);
+  const share = (i: number) => spans[i].ms / 3_000;
+  /**
+   * "one hundred kilos" against "bodyweight": the number is the longer of the
+   * two to say, and by written length it looks half the size.
+   */
+  assert.ok(share(0) > share(3),
+    `"100kg" is lit for ${(share(0) * 100).toFixed(0)}% and "bodyweight" for `
+    + `${(share(3) * 100).toFixed(0)}% — the highlight runs ahead of the voice`);
+  assert.ok(share(0) > share(1) * 3, "a long number is not given more room than 'at'");
+});
+
+test("a line with no numbers in it is unchanged", () => {
+  const spans = wordSpans("Means nothing at all here", 2_000);
+  assert.equal(spans.length, 5);
+  // Still longest-word-gets-most, just measured on what is said.
+  const byWidth = [...spans].sort((a, b) => b.ms - a.ms)[0];
+  assert.equal(byWidth.text, "nothing");
+});
+
+test("the spans still tile the caption exactly", () => {
+  for (const line of ["100kg at 60kg bodyweight is exceptional.", "£0.31 or £3.19, same 30 grams."]) {
+    const spans = wordSpans(line, 2_500);
+    assert.equal(spans[0].at, 0, "the first word does not start at zero");
+    for (let i = 1; i < spans.length; i++) {
+      assert.equal(spans[i].at, spans[i - 1].at + spans[i - 1].ms,
+        `a gap opened before "${spans[i].text}"`);
+    }
+    const last = spans[spans.length - 1];
+    assert.equal(last.at + last.ms, 2_500, "the highlight outlives or undershoots the caption");
+  }
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE COLOUR LANDED ON "AT".
+ *
+ * emphasise returns RUNS — stretches of a caption sharing a colour — and this
+ * matched run 0 to word 0, run 1 to word 1. A figure in the middle of a line
+ * makes three runs for six words, so the key fell on word 1 and the figure
+ * stayed white. The line measuring a bodyweight against a bar coloured the
+ * preposition.
+ *
+ * It passed before because a caption whose figure sits at a word boundary with
+ * no leading text produces one run per word and lines up by luck.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("the colour lands on the figure, not on whatever shares its index", () => {
+  const ws = karaokeWords("100kg at 60kg bodyweight is exceptional.", 2_000);
+  const keyed = ws.filter((w) => w.key).map((w) => w.text);
+  assert.deepEqual(keyed, ["60kg"],
+    `coloured ${JSON.stringify(keyed)} — the run index was being read as a word index`);
+});
+
+test("a figure at a word boundary still works", () => {
+  // The shape that lined up by accident and hid the bug.
+  const ws = karaokeWords("At 120kg, novice.", 2_000);
+  assert.deepEqual(ws.filter((w) => w.key).map((w) => w.text), ["120kg,"]);
+});
+
+test("a unit is coloured with its number", () => {
+  const ws = karaokeWords("£0.31 or £3.19, same 30 grams.", 2_000);
+  assert.deepEqual(ws.filter((w) => w.key).map((w) => w.text), ["30", "grams."],
+    "the fact was split across two colours");
+});
+
+/** Position, not text: a repeated figure must colour only the one that counts. */
+test("only one copy of a repeated figure is coloured", () => {
+  const ws = karaokeWords("Same 30 grams. Same 30 grams.", 2_000);
+  const keyed = ws.map((w, i) => (w.key ? i : -1)).filter((i) => i >= 0);
+  assert.equal(keyed.length, 2, "the unit should come with the number, and once");
+  assert.ok(Math.min(...keyed) > 2, "the FIRST copy was coloured, so this is matching by text");
+});
+
+test("a caption with no figure has nothing coloured", () => {
+  assert.deepEqual(karaokeWords("Means nothing.", 2_000).filter((w) => w.key), []);
+});

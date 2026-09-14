@@ -157,3 +157,68 @@ test("the button only exists when the library has something in it", () => {
   assert.match(panel, /\{!!reels\?\.length && \([\s\S]{0,400}Clear all/,
     "Clear all is offered on an empty library");
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// A REEL'S CAPTION, WHICH USED TO REACH NOBODY.
+//
+// The recorder has written one beside every MP4 since the caption builder
+// landed. The workflow uploaded the film and the subtitles and left it on the
+// runner; this file only knew the carousel spelling; and the library filtered
+// the listing to mp4 and png, so even a carousel's caption never arrived. The
+// panel renders `post.caption` as a link, and the branch could not be taken.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const stored = (name: string): StoredFile => ({ name, url: `https://x/${name}` });
+
+test("a reel and the caption written for it are one post", () => {
+  const [post, ...rest] = groupPosts([
+    stored("card-cheapest-protein-2026-09-14T18-11.mp4"),
+    stored("card-cheapest-protein-2026-09-14T18-11-caption.txt"),
+  ]);
+  assert.equal(rest.length, 0, "the caption came back as a post of its own");
+  assert.equal(post.kind, "reel");
+  assert.equal(post.files.length, 1, "the caption is in the files list as well");
+  assert.equal(post.caption?.name, "card-cheapest-protein-2026-09-14T18-11-caption.txt");
+});
+
+/** The bucket lists by name, and "-caption.txt" sorts before ".mp4". */
+test("the caption is paired whichever order the bucket lists them in", () => {
+  for (const order of [0, 1]) {
+    const files = [
+      stored("standards-2026-09-14T18-11.mp4"),
+      stored("standards-2026-09-14T18-11-caption.txt"),
+    ];
+    const posts = groupPosts(order ? files.reverse() : files);
+    assert.equal(posts.length, 1, `order ${order}: ${posts.length} posts`);
+    assert.ok(posts[0].caption, `order ${order}: no caption attached`);
+  }
+});
+
+/**
+ * Nothing to post without the film, and a row that is a text file pretending
+ * to be a reel is a worse answer than the missing row already gives.
+ */
+test("a caption whose film is not there is not a post on its own", () => {
+  assert.deepEqual(groupPosts([stored("drill-2026-09-14T18-11-caption.txt")]), []);
+});
+
+/** The carousel spelling is a case of the general rule, not a casualty of it. */
+test("a carousel still collects its slides and its caption", () => {
+  const posts = groupPosts([
+    stored("carousel-2026-09-06T12-11-01.png"),
+    stored("carousel-2026-09-06T12-11-02.png"),
+    stored("carousel-2026-09-06T12-11-caption.txt"),
+  ]);
+  assert.equal(posts.length, 1);
+  assert.equal(posts[0].kind, "carousel");
+  assert.equal(posts[0].files.length, 2);
+  assert.equal(posts[0].caption?.name, "carousel-2026-09-06T12-11-caption.txt");
+});
+
+/** The link in the panel is only reachable if the listing lets a caption past. */
+test("the library asks the bucket for captions as well as films", () => {
+  const panel = readFileSync("components/admin/ReelLibrary.tsx", "utf8");
+  const filter = panel.slice(panel.indexOf("const files = (data"), panel.indexOf("const files = (data") + 200);
+  assert.match(filter, /caption/, "captions are filtered out before grouping ever sees them");
+  assert.doesNotMatch(filter, /\|\s*\\\.txt\$/, "every .txt is let through, including the working files");
+});

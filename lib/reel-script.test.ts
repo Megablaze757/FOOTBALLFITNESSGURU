@@ -1,11 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import {
   reelScript, scriptProblems, readTimeMs, SCRIPTS, HOOK_BY_MS, MIN_BEAT_MS,
-  type ReelScript,
+  type ReelScript, type ScriptId,
 } from "./reel-script";
 import { holdFor, MAX_REEL_MS } from "./reel";
+import { END_CARD_MS } from "./reel-plan";
+import { SIGNUP_SPOKEN } from "./signup-link";
+import { proteinIndex } from "./protein-index";
 import { HOOK_MAX_WORDS } from "./reel-kinds";
 
 const all = () => SCRIPTS.map((s) => reelScript(s.id)).filter((s): s is ReelScript => s !== null);
@@ -90,8 +93,37 @@ test("a script quotes the app's own numbers", () => {
 });
 
 /** Every route has to be somewhere the recorder can actually go. */
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE ROUTES COME FROM THE ROUTER, NOT FROM A LIST IN A TEST.
+ *
+ * This was a hand-written alternation of fourteen segment names — a second
+ * copy of the routing table, kept up to date by whoever remembered it existed.
+ * A beat moved to /coach, which is a real page with a real directory, and the
+ * test called it a page that does not exist.
+ *
+ * A copy of a fact is a fact that can disagree with itself. Reading app/ is
+ * the same work and cannot.
+ */
+function appSegments(): Set<string> {
+  const out = new Set<string>([""]);
+  const walk = (dir: string) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      // (app), (marketing): route GROUPS are not in the URL, so their children
+      // are top-level segments. [slug] and [...rest] are dynamic and match
+      // anything, which is not something this guard can check.
+      if (entry.name.startsWith("(")) walk(`${dir}/${entry.name}`);
+      else if (!entry.name.startsWith("[") && !entry.name.startsWith("_")) out.add(entry.name);
+    }
+  };
+  walk("app");
+  return out;
+}
+
 test("no beat points at a page that does not exist", () => {
-  const known = /^\/(|home|journal|nutrition|benchmarks|drills|standards|recipes|cheapest-protein|exercises|a|articles|collections|plans)(\/|$)/;
+  const known = appSegments();
+  assert.ok(known.size > 10, `only ${known.size} routes found — the scan is not working`);
   for (const script of all()) {
     for (const beat of script.beats) {
       /**
@@ -104,7 +136,8 @@ test("no beat points at a page that does not exist", () => {
        * real route with a real parameter read as a page that does not exist.
        */
       const [path] = beat.route.split("?");
-      assert.match(path, known, `${script.id}: ${beat.route}`);
+      assert.ok(known.has(path.split("/")[1] ?? ""),
+        `${script.id}: ${beat.route} — no directory under app/ serves that`);
       // And the query, if there is one, has to BE a query rather than a typo
       // that would be sent to the browser verbatim.
       const query = beat.route.slice(path.length);
@@ -204,4 +237,98 @@ test("the recorder films the screen and can carry a voice", () => {
   assert.match(src, /canRecord === false \?/, "the button is offered on a browser that cannot record");
   assert.match(src, /Control Centre/,
     "it says it cannot record and does not say what to do instead — iOS records the screen fine");
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * A REEL THAT NEVER SAYS WHAT THE APP IS CALLED.
+ *
+ * All four of these ran to the end and asked for nothing. The last beat was
+ * silence over the front page, and "free, on your phone" was tacked onto the
+ * middle of an earlier line where it read as a shrug. That is the beat the
+ * short-form guidance says creators skip and the one that decides whether a
+ * view becomes anything at all.
+ *
+ * ONE CONSTANT rather than four sign-offs, because a sign-off only builds
+ * recognition if it is the same one — and four hand-written endings is four
+ * chances for one of them to quietly stop naming the product.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("every reel says what the app is called and where to get it", () => {
+  for (const meta of SCRIPTS) {
+    const script = reelScript(meta.id, "");
+    assert.ok(script, `${meta.id} does not build`);
+    const last = script!.beats[script!.beats.length - 1];
+    assert.equal(last.say, SIGNUP_SPOKEN, `${meta.id} ends without a call to action`);
+    /**
+     * The room for the WRITTEN card, which lib/reel-plan.ts draws over the
+     * tail of this beat and refuses to draw over a caption. See the test in
+     * lib/reel-plan.test.ts for why speaking here deletes it without one.
+     */
+    assert.ok((last.tail ?? 0) >= END_CARD_MS,
+      `${meta.id} speaks to the last millisecond, so the end card gets none`);
+    assert.equal(scriptProblems(script!).length, 0, `${meta.id}: ${JSON.stringify(scriptProblems(script!))}`);
+  }
+});
+
+test("a reel that ends in silence is refused", () => {
+  const script = reelScript("demo-cost", "")!;
+  const mute = { ...script, beats: script.beats.map((b, i) => (i === script.beats.length - 1 ? { ...b, say: "" } : b)) };
+  assert.match(
+    scriptProblems(mute).map((p) => p.problem).join(" | "),
+    /never says what the app is called/,
+  );
+});
+
+test("a sign-off with no room after it is refused", () => {
+  const script = reelScript("drill", "")!;
+  const crowded = { ...script, beats: script.beats.map((b, i) => (i === script.beats.length - 1 ? { ...b, tail: 0 } : b)) };
+  assert.match(
+    scriptProblems(crowded).map((p) => p.problem).join(" | "),
+    /the end card needs/,
+  );
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * NO TWO REELS MAY OPEN WITH THE SAME SENTENCE.
+ *
+ * Two pairs did. demo-cost and card-protein-gap both opened "You're paying
+ * 10x for the same protein."; standards and card-bodyweight-gap both opened
+ * "Your 100kg bench press means nothing." Posting both of a pair spends the
+ * one second that decides on telling a returning viewer they have seen this.
+ *
+ * They were not copy-pasted — each pair is built from the same facts by two
+ * different functions, which is exactly why nothing noticed.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("every reel opens with a different sentence", () => {
+  const seen = new Map<string, string>();
+  for (const meta of SCRIPTS) {
+    const script = reelScript(meta.id as ScriptId, "");
+    if (!script) continue;
+    const key = script.hook.trim().toLowerCase();
+    const first = seen.get(key);
+    assert.equal(first, undefined,
+      `${meta.id} and ${first} open with the same hook: "${script.hook}"`);
+    seen.set(key, meta.id);
+  }
+  assert.ok(seen.size >= 7, `only ${seen.size} hooks — a script stopped building`);
+});
+
+/**
+ * And the one hook that names a food has to stay true.
+ *
+ * "The cheapest protein in the shop? Not chicken." is editorial wording about
+ * a fact the index owns, and this project's own history is prices written as
+ * words in a script, correct on the day and quietly wrong the first time a
+ * shelf price moved. The wording is a judgement; the claim is checkable.
+ */
+test("the cheapest protein really is not chicken", () => {
+  const index = proteinIndex();
+  assert.ok(index.length > 0, "no protein index to check the claim against");
+  const hook = reelScript("card-cheapest-protein", "")?.hook ?? "";
+  if (!/not chicken/i.test(hook)) return;
+  assert.doesNotMatch(index[0].name, /chicken/i,
+    `the cheapest protein is now ${index[0].name}, so the hook "${hook}" is false`);
 });

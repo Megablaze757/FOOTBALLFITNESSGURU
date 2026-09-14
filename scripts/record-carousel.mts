@@ -133,6 +133,9 @@ page.on("pageerror", (e) => console.error(`  page error: ${e.message}`));
 mkdirSync(outDir, { recursive: true });
 await page.setContent(`<style>${CSS}</style><div id="root"></div>`);
 
+/** Anything the screenshot would cut off, reported together at the end. */
+const clipped: string[] = [];
+
 for (const [i, slide] of slides.entries()) {
   await page.evaluate(
     ({ s, n, total }) => {
@@ -144,9 +147,46 @@ for (const [i, slide] of slides.entries()) {
   );
   // Two frames, so webfonts and layout have settled before the shutter.
   await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * MEASURED BEFORE THE SHUTTER, BECAUSE THE SHUTTER IS WHAT HIDES IT.
+   *
+   * page.screenshot() with no clip captures the VIEWPORT, so anything past
+   * 1350px is not a broken-looking slide — it is silently absent, and the run
+   * says nothing. The names here wrap rather than truncate, deliberately: a
+   * post meant to be useful in a shop cannot show "Greek style yoghurt (…".
+   * The cost of that decision is that a long enough name is two lines and
+   * pushes everything below it down.
+   *
+   * And the data is not fixed. scripts/snapshot-protein.mts refreshes these
+   * prices and product names from real supermarket pack sizes, so the layout
+   * question is asked again every time it runs, by a name nobody has seen.
+   *
+   * Measured today, every slide: content fills 86..1230 of the 1144px box
+   * exactly, the lowest ink is the page dots at 1294, nothing overflows.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  const spill = await page.evaluate(({ h, w }) => {
+    const root = document.querySelector(".slide") as HTMLElement | null;
+    if (!root) return ["the slide did not render at all"];
+    const out: string[] = [];
+    for (const node of Array.from(root.querySelectorAll("*"))) {
+      const r = node.getBoundingClientRect();
+      if (r.width < 1 || r.height < 1) continue;
+      const el = node as HTMLElement;
+      const name = el.tagName.toLowerCase() + (el.className ? `.${el.className}` : "");
+      const text = (el.textContent ?? "").trim().slice(0, 40);
+      if (r.bottom > h + 0.5) out.push(`${name} runs ${Math.round(r.bottom - h)}px off the bottom — "${text}"`);
+      if (r.right > w + 0.5) out.push(`${name} runs ${Math.round(r.right - w)}px off the right — "${text}"`);
+    }
+    return out;
+  }, { h: SLIDE_H, w: SLIDE_W });
+  for (const reason of spill) clipped.push(`slide ${i + 1} (${slide.kind}): ${reason}`);
+
   const name = `${String(i + 1).padStart(2, "0")}.png`;
   await page.screenshot({ path: join(outDir, name) });
-  console.log(`  ${name}  ${slide.kind}`);
+  console.log(`  ${name}  ${slide.kind}${spill.length ? "  CLIPPED" : ""}`);
 }
 
 /** The caption, so the post is ready to publish rather than ready to write. */
@@ -163,3 +203,18 @@ writeFileSync(
 await context.close();
 await browser.close();
 console.log(`${slides.length} slides in ${outDir}/`);
+
+/**
+ * After the PNGs are written, and it still fails: there is something to look
+ * at, and a carousel with a row cut in half does not get posted.
+ */
+if (clipped.length) {
+  console.error(`\n${clipped.length} thing(s) the screenshot cut off:`);
+  for (const line of clipped) console.error(`  ${line}`);
+  console.error(
+    `\n  The slide is ${SLIDE_W}x${SLIDE_H} and the shutter captures exactly that, so this`
+    + "\n  is invisible in the PNG rather than ugly in it. A name wrapping to two lines"
+    + "\n  is the usual cause — see ROWS_PER_SLIDE in lib/carousel.ts.",
+  );
+  process.exitCode = 1;
+}

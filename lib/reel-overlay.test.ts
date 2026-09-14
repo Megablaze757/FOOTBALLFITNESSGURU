@@ -54,8 +54,24 @@ test("the hook clears the caption band and the platform's own chrome", () => {
   assert.ok(pct <= 55, `${pct}% collides with the caption band`);
 });
 
-/** Captions are read by most of the audience, so they keep their backing. */
-test("the caption keeps a solid backing", () => {
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE CAPTION IS READ ON MUTE, SO SOMETHING HAS TO SEPARATE IT FROM THE APP.
+ *
+ * This asserted a `background:` — the pill — because that was the mechanism.
+ * It is an outline on the glyphs now, which is what every published caption
+ * preset uses and what lets the app show through. The PROPERTY is the same
+ * one it always was: legible over anything. The mechanism changed, so the
+ * assertion has to, or it guards a thing nobody is doing any more.
+ *
+ * Counting the offsets rather than matching "text-shadow": one shadow is a
+ * drop shadow, and a drop shadow disappears against a dark page exactly like
+ * the translucent fill did. A ring needs to be a ring.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+const RING = /(-?[0-9.]+px\s+-?[0-9.]+px\s+0\s+#000)/g;
+
+test("the caption is outlined, not boxed", () => {
   const src = overlay();
   /**
    * Bounded by the line that USES it, not by the next declaration. The wider
@@ -65,21 +81,91 @@ test("the caption keeps a solid backing", () => {
    * occurrence, in a test written to catch exactly that class of thing.
    */
   const caption = src.slice(src.indexOf("caption.style.cssText"), src.indexOf("layer.appendChild(caption)"));
-  // rgba OR rgb: the fill became opaque so it survives a dark background, and
-  // this check is about the pill existing at all.
-  assert.match(caption, /background:rgba?\(/, "the caption lost the pill it is read against");
-  assert.match(caption, /font-weight:800|font-weight:900/, "the caption is no longer heavy enough to read on video");
+
+  assert.doesNotMatch(caption, /background:/,
+    "the caption has a box behind it again — that is a black rectangle over the app it is demonstrating");
+  const ring = caption.match(RING) ?? [];
+  assert.ok(ring.length >= 8,
+    `${ring.length} solid outline offsets — under eight the ring has gaps and the caption dissolves into a busy screen`);
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * HEAVY, AND A WEIGHT THE LOADED FACE ACTUALLY HAS.
+   *
+   * This asserted `font-weight:900` literally, and that value was the bug. The
+   * overlay asked for a weight nothing on the page provides, so the browser
+   * SYNTHESISED one — every caption in every reel was drawn in a smeared fake
+   * bold, which is most of why they never looked like the captions the
+   * research describes.
+   *
+   * app/layout.tsx is what decides: it loads Barlow Semi Condensed at specific
+   * weights through next/font. Asking for anything outside that list is asking
+   * for the fake again, so the list is read rather than assumed.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  const weight = Number(caption.match(/font-weight:(\d+)/)?.[1]);
+  assert.ok(weight >= 800, `font-weight:${weight} is not heavy enough to read on video`);
+  const layout = readFileSync("app/layout.tsx", "utf8");
+  const loaded = [...(layout.match(/weight:\s*\[([^\]]+)\]/)?.[1] ?? "")
+    .matchAll(/"(\d+)"/g)].map((m) => Number(m[1]));
+  assert.ok(loaded.length, "app/layout.tsx no longer says which weights it loads");
+  assert.ok(loaded.includes(weight),
+    `the overlay asks for ${weight} and the page loads ${loaded.join(", ")} — `
+    + "the browser fakes the difference, which is what shipped");
+
+  /**
+   * ABOVE THE FLOOR OF THE BAND, NOT INSIDE IT — and the difference is a
+   * mutation that should have gone red and did not.
+   *
+   * 80-120px on the 1080x1920 file is what the presets specify, and the
+   * recorder films at deviceScaleFactor 2, so the CSS number is half. The
+   * caption was at 40px. Putting it back to 40 is the exact regression this
+   * assertion exists to catch, and `>= 80` passed it happily: 80 IS in the
+   * band. A guard that permits the value that caused the complaint is not a
+   * guard, it is a restatement of the spec.
+   *
+   * So: strictly above the floor. 80px is inside the published range and it is
+   * also the size somebody looked at and said the captions were not bright
+   * enough to be worth reading, which is the fact this file is for.
+   */
+  const size = caption.match(/font-size:([0-9]+)px/);
+  assert.ok(size, "the caption has no size of its own");
+  const onFile = Number(size![1]) * 2;
+  assert.ok(onFile > 80 && onFile <= 120,
+    `${onFile}px on the recorded file — the band is 80-120 and 80 itself is the size that was too small`);
 });
 
 /**
  * A frame that does not move is a frame a scroller has finished reading, and
  * the only thing left to do with it is swipe.
  */
-test("the recorder starts moving under the hook", () => {
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * MOVING FOR AS LONG AS THE HOOK IS UP, NOT JUST STARTING TO MOVE.
+ *
+ * This asserted the hook block contains "scrollTo", which it did, and the
+ * frame was still frozen. behavior:"smooth" hands the animation to the
+ * browser and the browser finishes when it likes — measured on a finished
+ * reel, about 360ms of a 1,600ms hook. Frames 0.64s to 1.44s changed by less
+ * than 1.0 out of 255: 63 of the first 73 were effectively identical.
+ *
+ * Instagram's retention curve for that reel drops from 100% to roughly 10%
+ * inside two seconds, which is precisely the window the still frame occupies.
+ *
+ * So the check is the duration, not the call: the opening motion has to be
+ * handed the hook's length, which only __reelGlide takes.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("the recorder keeps moving for as long as the hook is up", () => {
   const src = readFileSync("scripts/record-reel.mts", "utf8");
   const hookBlock = src.slice(src.indexOf("if (!hookShown)"), src.indexOf("__reelHook(\"\")"));
-  assert.match(hookBlock, /scrollTo/,
-    "the hook holds a still frame for its whole duration again");
+  assert.match(hookBlock, /__reelGlide/,
+    "the opening scroll is handed to the browser again, which finishes it in a third of the hook");
+  assert.match(hookBlock, /ms: plan\.hookMs/,
+    "the glide is not given the hook's duration, so how long it moves is a guess");
+  const overlay = readFileSync("scripts/reel-overlay.js", "utf8");
+  assert.match(overlay, /__reelGlide = function/, "nothing in the page can glide");
+  assert.match(overlay, /requestAnimationFrame/,
+    "the glide is not animated frame by frame, so it cannot last a set time");
 });
 
 /**
@@ -125,6 +211,14 @@ test("the recorder films the app in the theme it actually ships", () => {
  * as the fill.
  * ═══════════════════════════════════════════════════════════════════════════
  */
+/**
+ * The app's own ground is rgb(9,9,10). Anything that relies on being darker
+ * than what is behind it — a translucent scrim, a soft drop shadow — is
+ * nothing at all on a dark page, which is how the caption came to be read
+ * straight through once the recorder started filming in dark.
+ *
+ * A black ring on white glyphs is the one treatment that does not care.
+ */
 test("the caption and hook stay legible on a dark page", () => {
   const src = overlay();
   const caption = src.slice(src.indexOf("caption.style.cssText"), src.indexOf("layer.appendChild(caption)"));
@@ -135,8 +229,10 @@ test("the caption and hook stay legible on a dark page", () => {
     const translucent = block.match(/background:rgba\([^)]*?([0-9.]+)\)/);
     assert.equal(translucent, null,
       `the ${name} fill is translucent again, so it disappears on the app's own dark ground`);
-    assert.match(block, /border:2px solid rgba\(255,255,255/,
-      `the ${name} has no rim, so it has no edge against a dark page`);
+    const ring = block.match(RING) ?? [];
+    assert.ok(ring.length >= 8,
+      `the ${name} has no outline ring, so it has no edge against a dark page`);
+    assert.match(block, /color:#fff/, `the ${name} is not white, so the black ring is not an outline`);
   }
 });
 
@@ -158,18 +254,64 @@ test("the overlay can point at one thing", () => {
    * A spotlight on nothing is worse than no spotlight, and it would be
    * invisible until somebody watched the finished reel.
    */
-  assert.match(src, /if \(!found\) \{ spot\.style\.opacity = "0"; return false; \}/,
+  assert.match(src, /if \(!found\) \{ tracking = null; spot\.style\.opacity = "0"; return false; \}/,
     "text that is not on screen dims the whole frame instead of doing nothing");
+  /**
+   * Clearing a focus has to stop the follow loop as well as hide the panels.
+   * A loop still measuring a stale element after the shot moved on is a
+   * spotlight that comes back by itself.
+   */
+  assert.match(src, /if \(!needle\) \{ tracking = null;/,
+    "clearing the focus leaves the frame loop running on the old element");
 
   // The smallest element containing the words, or every ancestor matches and
   // the spotlight is <body>.
   assert.match(src, /box\.width \* box\.height < best\.box\.width \* best\.box\.height/,
     "the spotlight does not prefer the smallest match, so it will pick a container");
 
-  // Text, not a selector: a selector is a promise about markup this file does
-  // not own, and it breaks silently when a class is renamed.
-  assert.doesNotMatch(src, /querySelector\((?!"body \*")/,
-    "the spotlight targets a CSS selector, which breaks silently on a rename");
+  /**
+   * Text, not a selector — but the rule is about WHICH selector.
+   *
+   * This forbade every querySelector outside the spotlight's own "body *".
+   * The moves added in lib/reel-moves.ts have to enumerate the form controls
+   * on a page, and there is no way to ask for "every input" by text.
+   *
+   * The thing that breaks silently on a rename is a CLASS or an ID, because
+   * those are promises about markup this file does not own. An element name
+   * is HTML semantics and does not get renamed; `label[for=...]` is the
+   * relationship the HTML spec defines between a label and its field. So the
+   * rule is now the one that was always meant, and it is stricter about the
+   * dangerous half rather than blanket about all of it.
+   */
+  const selectors = [...src.matchAll(/querySelector(?:All)?\(([^)]*)\)/g)].map((m) => m[1]);
+  /**
+   * Only the STRING LITERALS are the selector. A first version tested the
+   * whole expression and failed on `'label[for="' + f.id + '"]'` — matching
+   * the dot in a JavaScript property access and calling it a CSS class. The
+   * test was wrong, not the code, which is the sort of thing that gets a
+   * correct rule loosened by somebody in a hurry.
+   */
+  const literals = selectors.flatMap((sel) => [...sel.matchAll(/'([^']*)'|"([^"]*)"/g)]
+    .map((m) => m[1] ?? m[2]));
+  for (const literal of literals) {
+    assert.doesNotMatch(literal, /[.#][A-Za-z_-]/,
+      `the overlay targets a class or id ("${literal}"), which breaks silently on a rename`);
+  }
+  assert.ok(literals.length > 0, "the scrape found no selectors at all — the check is not running");
+
+  /**
+   * The spotlight's SEARCH still finds its target by TEXT, not by markup — so
+   * the slice ends where the search does. It used to run on to __reelFocus,
+   * which was the same thing until place() was split out between them: that
+   * function asks for the overlay's own panels by [data-side], which is not a
+   * promise about the app's markup and is not what this rule is about.
+   */
+  const focusFn = src.slice(src.indexOf("var findByText"), src.indexOf("var place = function (el)"));
+  assert.ok(focusFn.length > 0, "findByText is gone — the search this checks does not exist");
+  assert.match(focusFn, /querySelectorAll\("body \*"\)/,
+    "the spotlight no longer walks the document looking for words");
+  assert.doesNotMatch(focusFn, /querySelector(?:All)?\((?!"body \*")/,
+    "the spotlight targets something other than the words on screen");
 });
 
 test("the spotlight never dims the caption", () => {
@@ -217,7 +359,16 @@ test("focus survives the trip from script to plan", async () => {
  */
 test("the spotlight converts out of visual pixels", () => {
   const src = overlay();
-  const focus = src.slice(src.indexOf("window.__reelFocus = function"));
+  /**
+   * BOUNDED BY place(), which is where the geometry lives.
+   *
+   * This sliced from __reelFocus to the END OF THE FILE, so it would have gone
+   * on passing on any zoom division anywhere below — and it stopped passing
+   * the moment the measurement moved OUT of __reelFocus into place(), which is
+   * the honest half of an unbounded slice: it can be wrong in both directions.
+   */
+  const focus = src.slice(src.indexOf("var place = function (el)"), src.indexOf("window.__reelFocus = function"));
+  assert.ok(focus.length > 0, "place() is gone — the spotlight has no geometry to check");
   assert.match(focus, /getComputedStyle\(document\.documentElement\)\.zoom/,
     "the spotlight never reads the zoom, so it is drawn at the wrong scale");
 
@@ -308,10 +459,122 @@ test("a beat that aimed the shot does not then scroll off it", () => {
   const body = loop.slice(0, loop.indexOf("\n  }"));
 
   const caption = body.indexOf("__reelCaption");
-  const skip = body.indexOf("if (aimed) continue;");
+  /**
+   * `willAim`, not `aimed`.
+   *
+   * The caption schedule runs alongside the moves now — it has to, or the
+   * captions arrive after the taps and a second behind the voice — so it
+   * cannot wait for the aim to report back. Whether the beat NAMES a focus is
+   * the question the drift was always asking, and it is known before either
+   * of them starts.
+   */
+  const skip = body.indexOf("if (willAim) continue;");
   const drift = body.indexOf("driftTarget({");
 
   assert.ok(skip > 0, "a focused beat still drifts, so the spotlight ends up on the wrong row");
   assert.ok(caption < skip, "the caption is skipped along with the drift");
   assert.ok(skip < drift, "the skip comes after the scroll it is meant to prevent");
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * A NAME NAMES A THING, AND THE THING IS BIGGER THAN THE WORDS.
+ *
+ * These two tests used to say "only a GRAPHIC is widened, not a text match",
+ * which was a belief with a reason behind it — widening every match would ring
+ * a container instead of the row asked for — and it has since been
+ * photographed being wrong:
+ *
+ *   The readiness gauge is an <svg> with aria-label "Readiness red, 44 of
+ *   100" and the score is a sibling div. The ring went round the drawing and
+ *   left the number outside it, dimmed.
+ *
+ *   "Red lentils" on /cheapest-protein/ is one line of a card whose other line
+ *   is £0.31. The ring went round the name and left the PRICE outside it,
+ *   dimmed — on the reveal beat of the reel about prices.
+ *
+ * The svg rule fixed the first shape and could not have fixed the second. The
+ * rule that covers both is "grow while the parent is still about the same
+ * thing", and what it must not do is grow to a container — so the bounds are
+ * what these check. The BEHAVIOUR is checked against real markup in
+ * e2e/reel-overlay.spec.ts, because whether a card is three times the height
+ * of its own label is a question about a page, not about this source.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("the ring grows past the words, and stops before the container", () => {
+  const src = overlay();
+  const fn = src.slice(src.indexOf("window.__reelFocus"), src.indexOf("window.__reelDo"));
+
+  const times = Number(fn.match(/var GROW_TIMES = ([0-9.]+);/)?.[1]);
+  const share = Number(fn.match(/var GROW_SHARE = ([0-9.]+);/)?.[1]);
+  /**
+   * The ancestry above "Red lentils" measured 1.0x, 6.9x, 22.1x, so anything
+   * at or under 6.9 shipped doing nothing and anything over 22 rings the
+   * panel. This is deliberately wider than that one page — the numbers are one
+   * measurement, and the e2e test is what holds the actual behaviour.
+   */
+  assert.ok(Number.isFinite(times) && times >= 2 && times <= 12,
+    `${times}x is not a bound: too small and nothing ever grows, too large and a row becomes its table`);
+  assert.ok(Number.isFinite(share) && share > 0.05 && share <= 0.4,
+    `${share} of the frame is not a spotlight, it is a dimmer switch`);
+
+  assert.match(fn, /grown\.width > 0 && grown\.height > 0/,
+    "a parent with no box would replace a good match with an invisible one");
+  assert.match(fn, /parent === document\.body/,
+    "nothing stops the walk at the body, so a short page could ring the whole document");
+  assert.match(fn, /for \(var up = 0; up < \d+; up\+\+\)/,
+    "the walk has no step limit of its own");
+});
+
+/**
+ * The caption owns the bottom third of the frame. Centring a focused element
+ * put the readiness score — the one thing the reveal exists to show — behind
+ * the words describing it. Recorded twice and looked at both times.
+ */
+test("a focused thing is placed above the caption, not in the middle", () => {
+  const src = overlay();
+  const fn = src.slice(src.indexOf("window.__reelFocus"), src.indexOf("window.__reelDo"));
+  const at = Number(fn.match(/var FOCUS_AT = ([0-9.]+);/)?.[1]);
+  assert.ok(Number.isFinite(at), "nothing decides where a focused element sits");
+  assert.ok(at < 0.5, `${at} centres or lowers the target, putting it under the caption`);
+  assert.ok(at > 0.2, `${at} puts the target so high the shot has nothing under it`);
+  assert.match(fn, /window\.innerHeight \* FOCUS_AT/, "the placement is not used by the scroll");
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE CAPTIONS ARE ON THE CLOCK. THE MOVES ARE NOT.
+ *
+ * The caption schedule used to be written after the moves loop, so it did not
+ * begin until every tap had been polled for, clicked and waited out.
+ * Extracted from the recording at 6.8s and 7.3s: the check-in is being filled
+ * in on camera, "Barely" and "Wrecked" already lit, and there is no caption on
+ * the frame at all. The line arrives about a second and a half after the voice
+ * said it, because the VOICE is laid at the plan's absolute times and knows
+ * nothing about moves.
+ *
+ * On the one beat in the reel that shows somebody using the app, the three
+ * quarters of the audience with the sound off got a silent screen.
+ *
+ * Ordering, checked in the source, because the alternative is a three-minute
+ * recording and a frame extraction — which is how it was found, and is not a
+ * regression test.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("the caption schedule starts before the moves, not after them", () => {
+  const src = readFileSync("scripts/record-reel.mts", "utf8");
+  const step = src.slice(src.indexOf("for (const step of plan.steps)"));
+  const body = step.slice(0, step.indexOf("\nasync function runCaptions"));
+
+  const start = body.indexOf("runCaptions(step, willAim)");
+  const moves = body.indexOf("for (const move of step.moves");
+  const awaited = body.indexOf("await captioning;");
+
+  assert.ok(start > 0, "the captions are no longer scheduled as their own job");
+  assert.ok(moves > 0, "the moves loop is gone — this test is checking nothing");
+  assert.ok(start < moves,
+    "the captions are scheduled after the moves again, so they arrive late and behind the voice");
+  assert.ok(awaited > moves, "the beat does not wait for its own captions to finish");
+  assert.match(body, /if \(captionFault\) throw captionFault;/,
+    "a caption that failed while the moves ran would be swallowed");
 });

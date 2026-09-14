@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { SCRIPTS, reelScript } from "./reel-script";
 import {
   CAPTION_ACQUIRE_MS, CAPTION_CPS, MAX_LINE_CHARS, MAX_LINE_WORDS, MIN_CAPTION_MS,
   beatFloorMs, captionLines, captionReadMs,
@@ -148,4 +149,50 @@ test("a last line is never one stranded word", () => {
     lines[lines.length - 1].split(/\s+/).length >= 2,
     `stranded: ${JSON.stringify(lines)}`,
   );
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * A BREAK THAT LEAVES TWO WORDS IS A FLASH, NOT A CAPTION.
+ *
+ * Photographed in a recorded drill reel: "The drill:" alone on screen for 1.3
+ * seconds, then the rest of the sentence. The punctuation rule prefers the
+ * latest natural break that fits, and in "The drill: a wall and a ball." the
+ * only break is the colon two words in.
+ *
+ * The orphan rule at the other end of fitSentence has always caught the same
+ * shape — a one-word LAST line is merged back. A short FIRST line is the same
+ * fault and was not covered.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("a punctuation break never orphans the words before it", () => {
+  assert.deepEqual(
+    captionLines("The drill: a wall and a ball. 5–8m back."),
+    ["The drill: a wall and a ball.", "5–8m back."],
+    "the colon two words in is still taken, so a caption reads \"The drill:\" and nothing else",
+  );
+});
+
+/**
+ * Four words would refuse this one, which reads correctly today — the reason
+ * the floor is three rather than higher.
+ */
+test("a break with enough before it is still taken", () => {
+  assert.deepEqual(
+    captionLines("Two taps: bad night, wrecked legs."),
+    ["Two taps: bad night,", "wrecked legs."],
+  );
+});
+
+/** Every caption of every reel, held to the same rule. */
+test("no reel produces a caption of fewer than two words", () => {
+  for (const meta of SCRIPTS) {
+    const script = reelScript(meta.id, "");
+    for (const beat of script!.beats) {
+      for (const line of captionLines(beat.say)) {
+        assert.ok(line.trim().split(/\s+/).length >= 2,
+          `${meta.id} shows "${line}" on its own, which reads as a glitch rather than a caption`);
+      }
+    }
+  }
 });

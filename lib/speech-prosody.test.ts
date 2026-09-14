@@ -12,7 +12,24 @@ import {
   shapeGains,
   shapeRates,
   speedFor,
+  expressionFor,
+  shapeExpression,
+  EXAGGERATION_MIN,
+  EXAGGERATION_MAX,
+  CFG_MIN,
+  CFG_MAX,
+  REFERENCE_VOICE,
+  REFERENCE_LINE,
+  REFERENCE_WAV,
+  type Role,
+  pitchShiftFor,
+  pitchRatioFor,
+  shelfDbFor,
+  VOICE_TARGET_HZ,
+  NATIVE_HZ,
+  PITCH_DEADBAND_ST
 } from "./speech-prosody";
+import { APP_NAME } from "./signup-link";
 
 /**
  * The measurement that chose this voice is checked in as
@@ -123,9 +140,15 @@ test("nothing in, nothing out", () => {
   assert.deepEqual(shapeRates([]), []);
 });
 
-test("the base rate is under natural pace, not over it", () => {
-  assert.ok(BASE_SPEED <= 1.0, `${BASE_SPEED}x is faster than natural`);
-  assert.ok(BASE_SPEED >= 0.85, `${BASE_SPEED}x is slow enough to sound wrong`);
+/**
+ * Was "under natural pace, not over it", at 0.94. That produced 122 words a
+ * minute with 35% of the reel silent — see the note above VOICE. The band is
+ * now set by measured articulation across all four reels rather than by a
+ * rule of thumb about explainer voiceover.
+ */
+test("the base rate is brisk, and still a person talking", () => {
+  assert.ok(BASE_SPEED <= 1.6, `${BASE_SPEED}x stops sounding like speech`);
+  assert.ok(BASE_SPEED >= 1.2, `${BASE_SPEED}x is back in the range that read as sleepy`);
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -196,4 +219,282 @@ test("the recorder shapes the loudness of the spoken phrases too", () => {
     "the shaped loudness never reaches the track");
   assert.match(src, /normalised\(first\.format, track\)/,
     "the track is only ever cut, so the reel ships quieter than the last one");
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE KNOB KOKORO DOES NOT HAVE.
+ *
+ * "It needs to feel excited, grab the audience's attention, not just talking
+ * at you like it's reading off a script."
+ *
+ * Rate and loudness are everything Kokoro exposes and its pitch variability
+ * tops out around 4.35 semitones however it is tuned. Chatterbox measured
+ * 5.4-6.2 on the same two lines with the same tracker, on every setting.
+ *
+ * What these guard is the SPREAD, because that is the part with a reason
+ * behind it: a listener hears CHANGE, and the exact heat of the read is a
+ * judgement for whoever publishes the reels. Same argument as RATE and GAIN.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("a reel is not delivered at one setting from end to end", () => {
+  const roles: Role[] = ["hook", "setup", "figure", "payoff"];
+  const ex = roles.map((r) => expressionFor(r).exaggeration);
+  const cfg = roles.map((r) => expressionFor(r).cfg);
+
+  assert.ok(new Set(ex).size > 1, "every phrase is equally emphatic, which is the flatness being complained about");
+  assert.ok(new Set(cfg).size > 1, "every phrase is paced identically");
+
+  const at = (r: Role) => expressionFor(r);
+  assert.ok(at("hook").exaggeration > at("setup").exaggeration,
+    "the hook is no more emphatic than the connective material it is competing with");
+  assert.ok(at("payoff").exaggeration > at("setup").exaggeration,
+    "the line people remember is delivered like a subordinate clause");
+
+  /** Lower cfg_weight is LOOSER AND QUICKER, so the hook and payoff sit under it. */
+  assert.ok(at("hook").cfg < at("setup").cfg, "the hook is read as tightly as the setup");
+  assert.ok(at("payoff").cfg < at("setup").cfg, "the payoff is read as tightly as the setup");
+});
+
+/**
+ * Chatterbox accepts 0.25-2.0 for exaggeration, and past about 1.2 it stops
+ * sounding like a read at all. A base the caller sets from an environment
+ * variable can be anything, so the offsets must not carry it out of range.
+ */
+test("an extreme base is clamped rather than passed through", () => {
+  for (const base of [0, -5, 5, 100]) {
+    for (const role of ["hook", "setup", "figure", "payoff"] as Role[]) {
+      const { exaggeration, cfg } = expressionFor(role, base, base);
+      assert.ok(exaggeration >= EXAGGERATION_MIN && exaggeration <= EXAGGERATION_MAX,
+        `base ${base} gave ${role} an exaggeration of ${exaggeration}`);
+      assert.ok(cfg >= CFG_MIN && cfg <= CFG_MAX, `base ${base} gave ${role} a cfg of ${cfg}`);
+    }
+  }
+});
+
+/**
+ * OFFSETS, NOT ABSOLUTES, so that picking a hotter read moves all four
+ * together. A table of absolute values would have to be retyped four times
+ * every time somebody listened and wanted more, and three of the four would
+ * eventually be forgotten.
+ */
+test("raising the base moves every role and keeps the contrast", () => {
+  const roles: Role[] = ["hook", "setup", "figure", "payoff"];
+  const cool = roles.map((r) => expressionFor(r, 0.4).exaggeration);
+  const hot = roles.map((r) => expressionFor(r, 0.7).exaggeration);
+
+  for (const [i, role] of roles.entries()) {
+    assert.ok(hot[i] > cool[i], `${role} did not move with the base`);
+  }
+  const spread = (xs: number[]) => Math.max(...xs) - Math.min(...xs);
+  assert.ok(Math.abs(spread(hot) - spread(cool)) < 1e-9,
+    "the contrast between roles changed with the level, so a hotter read is also a flatter one");
+});
+
+/** The flat list across the whole reel, for the same reason shapeRates takes one. */
+test("expression is shaped across the reel, not per beat", () => {
+  const phrases = ["You slept three hours.", "Every training app you own.", "It costs £0.31.", "PocketAthlete, free."];
+  const shaped = shapeExpression(phrases);
+  assert.equal(shaped.length, phrases.length);
+  assert.deepEqual(shaped[0], expressionFor("hook"), "the first phrase of the reel is not the hook");
+  assert.deepEqual(shaped[3], expressionFor("payoff"), "the last phrase of the reel is not the payoff");
+  assert.deepEqual(shaped[2], expressionFor("figure"), "a phrase carrying a price is not read as a figure");
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * TWO ENGINES, ONE CONTRACT.
+ *
+ * scripts/chatterbox-say.py says it uses "the same contract as kokoro-say.py,
+ * deliberately: a JSON job on stdin, one JSON line per phrase on stdout,
+ * <out>/<n>.wav on disk" — so that the recorder does not have to know which it
+ * is talking to beyond building the job.
+ *
+ * That is a claim in a comment about a file it is not in, which is the kind
+ * that rots quietly and is then discovered by a three-minute recording run
+ * failing on a runner. The recorder parses both the same way; if one of them
+ * stops printing `ms`, the reel is timed off undefined.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("both say-scripts read the same job and print the same answer", () => {
+  const kokoro = readFileSync("scripts/kokoro-say.py", "utf8");
+  const chatterbox = readFileSync("scripts/chatterbox-say.py", "utf8");
+
+  for (const [name, src] of [["kokoro", kokoro], ["chatterbox", chatterbox]] as const) {
+    assert.match(src, /job = json\.load\(sys\.stdin\)/, `${name}-say.py no longer reads a job on stdin`);
+    assert.match(src, /job\["phrases"\]/, `${name}-say.py no longer reads the phrases`);
+    assert.match(src, /f"\{job\['out'\]\}\/\{index\}\.wav"/, `${name}-say.py no longer writes <out>/<n>.wav`);
+    /** All three keys: the recorder reads every one of them off each line. */
+    for (const key of ["index", "path", "ms"]) {
+      assert.match(src, new RegExp(`"${key}":`), `${name}-say.py stopped printing ${key}`);
+    }
+    assert.match(src, /flush=True/, `${name}-say.py buffers its output, so a long reel looks hung`);
+  }
+});
+
+/**
+ * A reference clip clones a speaker, and the only person whose voice may be
+ * cloned to advertise this app is somebody who agreed to it. Kept as a note in
+ * the file that does the cloning rather than only in a conversation.
+ */
+test("the reference clip carries the consent note with it", () => {
+  const src = readFileSync("scripts/chatterbox-say.py", "utf8");
+  assert.match(src, /consent/i, "nothing in the cloning path says whose voice may be used");
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * STDOUT IS THE ANSWER CHANNEL AND THE LIBRARIES DO NOT KNOW THAT.
+ *
+ * The first Chatterbox run on a runner died with:
+ *
+ *     SyntaxError: Unexpected token 'l', "loaded Per"... is not valid JSON
+ *
+ * Loading the model prints its progress to stdout; the recorder parses every
+ * stdout line as JSON, because that is what the channel is for. One line of
+ * library chatter and a three-minute recording run is gone.
+ *
+ * The fix is to take the real stdout BEFORE importing anything and point
+ * sys.stdout at stderr, so a library that prints ends up in the run log where
+ * it belongs. Ordering is the whole trick and it is invisible: move the
+ * capture below the imports and it still runs, still passes a smoke test, and
+ * still loses a run the first time a dependency is chattier than today's.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("chatterbox keeps its libraries off the answer channel", () => {
+  const src = readFileSync("scripts/chatterbox-say.py", "utf8");
+
+  const capture = src.indexOf("ANSWER = sys.stdout");
+  const silence = src.indexOf("sys.stdout = sys.stderr");
+  const firstHeavyImport = src.indexOf("from chatterbox.tts import");
+  const answer = src.indexOf("file=ANSWER");
+
+  assert.ok(capture > 0, "the real stdout is never taken, so redirecting it loses the answers too");
+  assert.ok(silence > capture, "stdout is pointed at stderr before the answer channel is saved");
+  assert.ok(silence < firstHeavyImport,
+    "chatterbox is imported before stdout is protected, so anything it prints at import time still lands on the answer channel");
+  assert.ok(answer > 0, "the per-phrase answers no longer go to the captured stdout");
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * A BRITISH MALE VOICE FOR A BRITISH FOOTBALL AUDIENCE.
+ *
+ * "The voice doesn't reach our target audience." It did not: it had been
+ * chosen by one measurement — pitch variability — with nothing in it about who
+ * was listening. The app is British throughout and the content is football
+ * drills and barbell standards; the published profile is a young adult male
+ * read, energetic, with a recognisable accent.
+ *
+ * Kokoro has the British male voices and no expression control; Chatterbox has
+ * the expression control and one speaker who is neither. So one speaks the
+ * reference and the other performs it — and nobody's actual voice is cloned,
+ * which is the only version of this that needs no consent from anybody.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("the reference voice is British, male, and not a person", () => {
+  assert.match(REFERENCE_VOICE, /^bm_/,
+    `${REFERENCE_VOICE} is not one of Kokoro's British male voices, which is what the audience research chose`);
+  assert.ok(REFERENCE_LINE.split(/[.!?]/).filter((p) => p.trim()).length >= 3,
+    "the reference is one sentence — a cloner has little to work with, and the voice wobbles between phrases");
+  assert.ok(REFERENCE_LINE.includes(APP_NAME), "the reference is not in the register it will be performing");
+});
+
+/**
+ * ORDERING AGAIN, AND INVISIBLE AGAIN. A recorded human reference is better
+ * than any synthesised one and answers the consent question by existing — so
+ * an explicit prompt has to win. Built first and then overwritten would still
+ * produce a reel, using the wrong voice, silently.
+ */
+/**
+ * The committed clip and the reasoning written next to the measurements have
+ * to stay in step. They live in different files and different languages, and
+ * the failure mode is silent: the reels would clone a voice nobody chose while
+ * every comment described a different one.
+ */
+test("the reference file was made by the voice the measurements chose", () => {
+  const script = readFileSync("scripts/make-voice-reference.py", "utf8");
+  assert.match(script, new RegExp(`VOICE = "${REFERENCE_VOICE}"`),
+    `make-voice-reference.py does not use ${REFERENCE_VOICE}, so the committed clip is a different voice from the documented one`);
+  /** Same words, so the clip is in the register it will be performing. */
+  for (const sentence of REFERENCE_LINE.split(/(?<=[.!?])\s+/).filter(Boolean)) {
+    assert.ok(script.includes(sentence.trim()),
+      `the reference clip does not say "${sentence.trim()}"`);
+  }
+  assert.match(script, new RegExp(REFERENCE_WAV.replace(/[/.]/g, "\\$&")),
+    "the generator writes somewhere other than where the recorder reads");
+});
+
+/** And the clip has to actually be there, since nothing rebuilds it. */
+test("the reference clip is committed, not assumed", () => {
+  const wav = readFileSync(REFERENCE_WAV);
+  assert.ok(wav.length > 100_000, `${REFERENCE_WAV} is ${wav.length} bytes — too short to clone a voice from`);
+  assert.equal(wav.subarray(0, 4).toString("ascii"), "RIFF", "the reference is not a wav");
+});
+
+/**
+ * ORDERING, AND INVISIBLE. A recorded human reference is better than any
+ * synthesised one and answers the consent question by existing — so an
+ * explicit prompt has to win. Defaulted first and then overridden would still
+ * produce a reel, in the wrong voice, silently.
+ */
+test("a supplied reference wins over the committed one", () => {
+  const src = readFileSync("scripts/record-reel.mts", "utf8");
+  assert.match(src, /prompt: process\.env\.REEL_VOICE_PROMPT \|\| REFERENCE_WAV/,
+    "a recorded reference no longer takes precedence over the committed one");
+  assert.doesNotMatch(readFileSync("scripts/chatterbox-say.py", "utf8"), /from kokoro_onnx import/,
+    "chatterbox-say.py imports Kokoro again — the two will not install into one environment");
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// "IT SOUNDS LIKE THE TERMINATOR."
+//
+// A -4 semitone shift measured against Kokoro's bm_fable at 125Hz was applied
+// to every engine. Chatterbox arrives at 94Hz, so the same shift took it to
+// 75Hz — below the adult male range — and stacking it under a time-stretch
+// cost 1.5dB of harmonic-to-noise ratio. Deep and metallic at once.
+// ═══════════════════════════════════════════════════════════════════════════
+
+test("every engine is corrected towards the same target, not by the same amount", () => {
+  for (const engine of Object.keys(NATIVE_HZ)) {
+    const landed = NATIVE_HZ[engine] * pitchRatioFor(engine);
+    assert.ok(landed >= 88 && landed <= VOICE_TARGET_HZ + 2,
+      `${engine} lands at ${Math.round(landed)}Hz, outside a believable adult male range`);
+  }
+});
+
+/** The specific defect: a voice already low enough must not be pushed lower. */
+test("a voice already under the target is left alone", () => {
+  assert.equal(pitchShiftFor("chatterbox"), 0,
+    `chatterbox starts at ${NATIVE_HZ.chatterbox}Hz and is still being shifted`);
+  assert.equal(pitchRatioFor("chatterbox"), 1, "an unshifted voice is not being left untouched");
+  assert.equal(shelfDbFor("chatterbox"), 0,
+    "an unshifted voice gets a shelf correcting a loss it never had");
+});
+
+test("a voice above the target is brought down to it", () => {
+  assert.ok(pitchShiftFor("kokoro") < 0, "kokoro starts above the target and is not corrected");
+  assert.ok(shelfDbFor("kokoro") > 0, "kokoro is shifted but not given the shelf back");
+  const landed = NATIVE_HZ.kokoro * pitchRatioFor("kokoro");
+  assert.ok(Math.abs(landed - VOICE_TARGET_HZ) < 2,
+    `kokoro lands at ${Math.round(landed)}Hz, not ${VOICE_TARGET_HZ}`);
+});
+
+test("nothing is ever shifted upward", () => {
+  for (const engine of Object.keys(NATIVE_HZ)) {
+    assert.ok(pitchRatioFor(engine) <= 1, `${engine} is being raised, which thins a voice`);
+  }
+  /** An engine well under the target must still not be raised to meet it. */
+  assert.equal(pitchRatioFor("nonexistent"), 1, "an unknown engine is processed on a guess");
+});
+
+test("a shift too small to hear is not worth its artefacts", () => {
+  assert.ok(PITCH_DEADBAND_ST >= 1,
+    `${PITCH_DEADBAND_ST} semitones would process a voice for an inaudible gain`);
+});
+
+test("the target is a believable adult male pitch", () => {
+  // Adult male speech runs about 85-155Hz; the complaint was 125Hz being high.
+  assert.ok(VOICE_TARGET_HZ >= 95 && VOICE_TARGET_HZ <= 120,
+    `${VOICE_TARGET_HZ}Hz is not a mid-range adult male voice`);
 });

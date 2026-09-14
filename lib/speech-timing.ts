@@ -26,6 +26,8 @@
 // ═══════════════════════════════════════════════════════════════════════════
 // =============================================================================
 
+import { spokenWords } from "./spoken-numbers";
+
 /**
  * Silences, in milliseconds.
  *
@@ -34,18 +36,34 @@
  * sounds rushed or slow — everything else here is about WHICH one applies.
  */
 /**
- * Widened after "too fast paced". Every one of these was the shortest pause
- * that still registered as a pause; a reel needs the pause a listener would
- * take to LOOK at what is being described, which is longer than the one they
- * need to hear the end of a clause.
+ * ═══════════════════════════════════════════════════════════════════════════
+ * WIDENED AFTER "TOO FAST PACED", THEN SPLIT AFTER "PUTTING ME TO SLEEP".
+ *
+ * Both notes are real and they are not opposites, which is why the fix is not
+ * to put the first one back. Every gap here was widened at once, and widening
+ * the ROUTINE ones is what made the reel drag: an ordinary sentence break at
+ * 540ms and a deliberate pause before a punchline at 900ms are nearly the same
+ * length, so the punchline pause stopped reading as a pause at all.
+ *
+ * The note at the top of this file already says what matters — "the VARIATION
+ * is what the ear reads as human" — and a table whose five values sit inside
+ * one factor of two has very little of it. So the two DEVICES below keep their
+ * lengths and the three routine gaps come down under them. Nothing that was
+ * doing dramatic work got shorter; the ratio of a payoff pause to an ordinary
+ * sentence break goes from 1.7x to 3x.
+ *
+ * Measured on the standards narration, whose nine phrases carried 3.58s of
+ * gaps in a 20s reel: 2.86s, with the whole reduction taken out of dead air
+ * between ordinary clauses.
+ * ═══════════════════════════════════════════════════════════════════════════
  */
 export const GAP = {
   /** Inside a sentence. Barely a pause; enough to stop two clauses running on. */
-  clause: 260,
+  clause: 150,
   /** Between sentences. */
-  sentence: 540,
+  sentence: 300,
   /** After a question. Longer, because a question asks for a moment. */
-  question: 700,
+  question: 420,
   /**
    * Before the last thing said.
    *
@@ -80,6 +98,72 @@ export const PAYOFF_MAX_WORDS = 8;
  * rather than as one more short line. Below this the pause is a stutter.
  */
 export const REVEAL_MIN_SETUP_WORDS = 7;
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * NO SPEAKER HAS EVER PAUSED FOR EXACTLY THE SAME LENGTH TWICE.
+ *
+ * "Voice sounds very robotic", for the fourth time, with every axis anybody
+ * had built an instrument for sitting in range — 5.0 semitones of pitch
+ * variability, 179 words a minute, 19% dead air. So the instruments were
+ * measuring the wrong things.
+ *
+ * Measured on a finished reel, the gaps between its nine phrases were:
+ *
+ *   900, 360, 1150, 900, 2660, 900, 2760, 360
+ *
+ * 900 three times and 360 twice, identical to the millisecond, because they
+ * come from a table of five constants. That is not a subtle defect: exact
+ * repetition is the single most mechanical thing a rhythm can do, and this
+ * file's own opening argues the case — "the VARIATION is what the ear reads as
+ * human" — while producing none of it.
+ *
+ * ─────────────────────────────────────────────────────────────────────────
+ * DERIVED FROM THE WORDS, NOT RANDOM.
+ *
+ * A random jitter would make every recording of the same script different,
+ * which breaks the caption-sync check, the estimator and any comparison
+ * between two takes. This hashes the phrase instead: the same words always get
+ * the same pause, different words get different ones, and the table's values
+ * become a CENTRE rather than a value.
+ *
+ * ±12% keeps a payoff pause a payoff pause — 900ms moves between 792 and 1008,
+ * which is still well clear of an ordinary sentence break and nowhere near the
+ * reveal. The point is not that any single gap is better; it is that no two
+ * are the same.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export const GAP_JITTER = 0.12;
+
+/**
+ * A stable number in [0, 1) from a string.
+ *
+ * FNV-1a, because it is four lines and its avalanche is good enough that two
+ * phrases differing by one character land far apart — which is the whole
+ * requirement here, since consecutive phrases are often nearly identical
+ * ("Means nothing." / "Means everything.").
+ */
+export function hashUnit(text: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h / 0x100000000;
+}
+
+/**
+ * The table's value for this phrase, moved off the exact number.
+ *
+ * Rounded to a millisecond because everything downstream is integer
+ * milliseconds, and a fractional gap would put the caption-sync check into
+ * floating point for no gain.
+ */
+export function jitter(gapMs: number, text: string): number {
+  if (gapMs <= 0) return gapMs;
+  const swing = (hashUnit(text) * 2 - 1) * GAP_JITTER;
+  return Math.max(1, Math.round(gapMs * (1 + swing)));
+}
 
 export interface Phrase {
   text: string;
@@ -139,10 +223,33 @@ export function phrases(line: string): Phrase[] {
     if (last) return { text: phrase, gapMs: 0 };
 
     const next = spoken[i + 1];
-    const words = (t: string) => t.split(/\s+/).filter(Boolean).length;
+    /**
+     * ═══════════════════════════════════════════════════════════════════
+     * COUNTED AS SPOKEN, BECAUSE THESE TWO DECISIONS ARE ABOUT SPEECH.
+     *
+     * Both thresholds below ask how long a line TAKES TO SAY — is the next
+     * one short enough to be a punchline, is this one long enough to be a
+     * setup — and both were counting written tokens. These reels are built
+     * on numbers, so the two answers differ on exactly the lines that carry
+     * the content:
+     *
+     *   "£0.31 or £3.19, same 30 grams."            written 6, spoken 11
+     *   "100kg at 60kg bodyweight is exceptional."  written 6, spoken  9
+     *
+     * Both were being read as short punchlines, so the line BEFORE each got
+     * a 900ms payoff pause it had not earned; and both were being rejected
+     * as setups, so a genuine reveal after them lost its pause. The dramatic
+     * silences were landing on the wrong lines.
+     *
+     * Fourth place this fault has turned up — see spokenWords in lib/reel.ts
+     * and weightOf in lib/caption-karaoke.ts. Every one of them was the
+     * written form standing in for the spoken one.
+     * ═══════════════════════════════════════════════════════════════════
+     */
+    const words = spokenWords;
     const nextIsLast = i === spoken.length - 2;
     const nextIsShort = words(next) <= PAYOFF_MAX_WORDS;
-    if (nextIsLast && nextIsShort) return { text: phrase, gapMs: GAP.payoff };
+    if (nextIsLast && nextIsShort) return { text: phrase, gapMs: jitter(GAP.payoff, phrase) };
 
     /**
      * A SHORT LINE AFTER A LONG ONE IS A REVEAL, wherever it falls.
@@ -154,12 +261,12 @@ export function phrases(line: string): Phrase[] {
      * rather than suspense.
      */
     if (nextIsShort && words(phrase) >= REVEAL_MIN_SETUP_WORDS) {
-      return { text: phrase, gapMs: GAP.reveal };
+      return { text: phrase, gapMs: jitter(GAP.reveal, phrase) };
     }
 
-    if (phrase.endsWith("?")) return { text: phrase, gapMs: GAP.question };
-    if (/[.!]$/.test(phrase)) return { text: phrase, gapMs: GAP.sentence };
-    return { text: phrase, gapMs: GAP.clause };
+    if (phrase.endsWith("?")) return { text: phrase, gapMs: jitter(GAP.question, phrase) };
+    if (/[.!]$/.test(phrase)) return { text: phrase, gapMs: jitter(GAP.sentence, phrase) };
+    return { text: phrase, gapMs: jitter(GAP.clause, phrase) };
   });
 }
 

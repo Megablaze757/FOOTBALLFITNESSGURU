@@ -57,7 +57,7 @@ export function Notifications({ userId }: { userId: string }) {
     let active = true;
     const supabase = createClient();
     void (async () => {
-      const [notices, sub] = await Promise.all([
+      const [notices, sub, lastLog] = await Promise.all([
         supabase.from("notifications")
           .select("id, kind, title, body, href, created_at")
           .eq("user_id", userId)
@@ -66,12 +66,36 @@ export function Notifications({ userId }: { userId: string }) {
           .order("created_at", { ascending: false })
           .limit(5),
         supabase.from("subscriptions").select("stripe_status").eq("user_id", userId).maybeSingle(),
+        /**
+         * ═══════════════════════════════════════════════════════════════════
+         * THE ONE DAY THAT DECIDES WHETHER A CHECK-IN NAG IS STILL TRUE.
+         *
+         * "Days since your last log: 20. Last logged: 2026-08-17", sitting on
+         * the home screen directly above "Today's log ✓ Recovery day" and a
+         * readiness score computed from that log. Caught on the last frame of
+         * a recorded reel — the frame that asks somebody to sign up.
+         *
+         * One row, ordered and limited, so this costs a keyed lookup rather
+         * than a scan. A failed read leaves lastCheckIn undefined, and
+         * staleReason then declines to apply the rule at all: an unanswered
+         * question keeps its nag, which is the safe direction.
+         * ═══════════════════════════════════════════════════════════════════
+         */
+        supabase.from("daily_check_ins")
+          .select("check_in_date")
+          .eq("user_id", userId)
+          .order("check_in_date", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
       ]);
       if (!active) return;
 
       // A failed subscription read is not "no subscription" — see
       // subscriptionState, which is where that distinction is tested.
-      const state = subscriptionState(sub);
+      const state = {
+        ...subscriptionState(sub),
+        lastCheckIn: lastLog.error ? undefined : lastLog.data?.check_in_date ?? null,
+      };
 
       const { show, stale } = sortNotices((notices.data ?? []) as Notification[], state);
       setItems(show);

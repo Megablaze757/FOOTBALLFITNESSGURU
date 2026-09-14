@@ -15,6 +15,7 @@
 
 import type { SkillDrill } from "./skills";
 import { sizeOf } from "./post-size";
+import { spokenWords } from "./spoken-numbers";
 import { FACT_GROUPS } from "./content";
 
 const GOLD = "#e3b53f";
@@ -63,12 +64,78 @@ export const MIN_SCENE_MS = 1100;
  * The recorder does not depend on this — it validates the RETIMED plan, built
  * from real audio, so the 30s ceiling was always checked against reality. This
  * is so the preview tells the truth before three minutes are spent.
+ *
+ * ─────────────────────────────────────────────────────────────────────────
+ * REFITTED FOR A VOICE THAT SPEAKS HALF AS FAST AGAIN.
+ *
+ * The figures above are Chatterbox cloning a reference read at 0.94. The reels
+ * now run Kokoro bm_fable at 1.42 — see lib/speech-prosody.ts for why — which
+ * says the same words in a quarter less time, so every number here was stale
+ * by about that much.
+ *
+ * Refitted across all twenty beats of all four reels, counting SPOKEN words.
+ * Refitted again when the voice came down to 1.30 and dropped four semitones:
+ * total predicted within 0.6% of total measured, mean error 587ms, worst 2.2s.
+ * Twenty beats is a thinner fit per parameter than eight phrases was, and it
+ * is honest about a wider range of material.
  * ═══════════════════════════════════════════════════════════════════════════
  */
-export const MS_PER_WORD = 199;
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE SHORTEST A PHRASE CAN PHYSICALLY BE, PER SPOKEN WORD.
+ *
+ * "Script cuts out at some point." It did: "So log it." came back from the
+ * synthesiser as 236 milliseconds — three words at 12.7 a second, which no
+ * mouth does — and the pipeline laid those 236ms into the track and carried on.
+ * The phrase is simply absent from the finished reel, and every check passed,
+ * because the captions were in sync with a phrase that was not there and the
+ * loudness of a reel missing one line is the loudness of a reel.
+ *
+ * Chatterbox SAMPLES, so it fails occasionally rather than systematically —
+ * generated seven times locally the same line came back between 1.00s and
+ * 1.36s. Nothing about a single bad draw is detectable except by asking
+ * whether the answer is possible.
+ *
+ * Measured against real generations, which run 330-370ms per spoken word, this
+ * sits far below the slowest of them and far above the failure: it catches
+ * 79ms/word without being able to reject anything a voice actually said.
+ *
+ * THOSE 330-370ms INCLUDED SILENCE. lib/wav.ts now takes the model's own lead
+ * and tail off a clip before anything measures it, which is a median of about
+ * 300ms gone from every line and a bigger share of a short one. Re-measured on
+ * the trimmed clips of two finished reels, the FASTEST line in either comes to
+ * 250ms per spoken word — still a little over twice this floor, so the guard
+ * keeps its headroom and the trim cannot make it reject real speech.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export const MIN_MS_PER_SPOKEN_WORD = 120;
 
-/** What a phrase costs before its first word. Measured; see above. */
-export const MS_PER_PHRASE = 1_040;
+/**
+ * Why this audio cannot be the words it claims to be, or null.
+ *
+ * A reason rather than a boolean, because the caller's job is to put it in a
+ * log that somebody reads after a three-minute run.
+ */
+export function implausibleAudio(text: string, ms: number): string | null {
+  const words = spokenWords(text);
+  if (!words) return null;
+  const floor = words * MIN_MS_PER_SPOKEN_WORD;
+  if (ms >= floor) return null;
+  return `"${text}" came back as ${Math.round(ms)}ms for ${words} spoken word(s) — `
+    + `under ${floor}ms, which is faster than speech`;
+}
+
+export const MS_PER_WORD = 152;
+
+/**
+ * What a phrase costs before its first word. Measured; see above.
+ *
+ * Up, while the per-word rate came down, and the two moved together for a
+ * reason: this absorbs the gap AFTER the phrase as well as the onset before
+ * it, and a beat's words are now counted as they are spoken rather than as
+ * they are typed, so there are more of them to spread the same seconds over.
+ */
+export const MS_PER_PHRASE = 1_261;
 
 /** How long the last line of a card sits complete before the cut. */
 export const SETTLE_MS = 320;
@@ -105,10 +172,12 @@ export function holdFor(text: string): number {
  * is so the studio preview tells the truth before three minutes are spent.
  * ═══════════════════════════════════════════════════════════════════════════
  */
+export { spokenWords };
+
 export function speechMs(text: string): number {
   const trimmed = text.trim();
   if (!trimmed) return 0;
-  const words = trimmed.split(/\s+/).filter(Boolean).length;
+  const words = spokenWords(trimmed);
   // Sentences, because the overhead is per phrase and a beat may hold two.
   const phrases = Math.max(1, (trimmed.match(/[.!?]+(?:\s|$)/g) ?? []).length);
   return Math.round(words * MS_PER_WORD) + phrases * MS_PER_PHRASE + SETTLE_MS;

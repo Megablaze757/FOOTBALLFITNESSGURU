@@ -2,11 +2,12 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   HOOK_MAX_WORDS, MAX_ONE_ROUTE_SHARE, MAX_REEL_MS, MAX_SILENT_MS, MIN_CAPTION_MS,
-  hookProblems, retentionProblems, silentGaps,
+  hookProblems, retentionProblems, silentGaps, MAX_OPENING_SILENCE_MS, MAX_CAPTION_LATE_MS,
 } from "./reel-retention";
 import { reelPlan, type PlannableScript } from "./reel-plan";
 import { SCRIPTS, reelScript, scriptProblems } from "./reel-script";
 import { readFileSync } from "node:fs";
+import { APP_NAME } from "./signup-link";
 
 const plan = (beats: PlannableScript["beats"], hook = "Is your bench press any good?") =>
   reelPlan({ id: "t", hook, beats, totalMs: beats.reduce((n, b) => n + b.ms, 0) });
@@ -102,8 +103,16 @@ test("a caption too brief to read is refused", () => {
 
 test("a single beat that just sits there is refused", () => {
   const problems = retentionProblems(plan(run([{ ms: 7_000 }, { ms: 3_000, route: "/b" }])));
-  assert.ok(problems.some((p) => /one screen doing one thing/.test(p.problem)),
+  /**
+   * Matched on the CAPTION being named rather than on the old wording.
+   * "6s on one screen doing one thing" was true and told you nothing else —
+   * it cost a recording run and a round of guesswork to find which of a
+   * beat's captions was the six seconds, so the message quotes it now.
+   */
+  assert.ok(problems.some((p) => /holds the screen for/.test(p.problem)),
     problems.map((p) => p.problem).join("; "));
+  assert.ok(problems.some((p) => /"One two three four five six"/.test(p.problem)),
+    "the message no longer says which caption is holding it");
 });
 
 /**
@@ -206,6 +215,156 @@ test("the browser-side overlay is a plain file, never transpiled", () => {
   const overlay = readFileSync("scripts/reel-overlay.js", "utf8");
   assert.match(overlay, /window\.__reelCaption/, "nothing sets captions");
   assert.match(overlay, /window\.__reelHook/, "nothing shows the hook");
-  // Captions must clear the platforms' own UI, which covers the lower fifth.
-  assert.match(overlay, /padding:0 28px 22%/, "the caption sits where TikTok and Instagram draw their own");
+  /**
+   * WHERE the caption sits is deliberately not checked here. This line used to
+   * pin the literal string `padding:0 28px 22%` as if that proved the caption
+   * cleared the platforms' own UI. It proved nothing: percentage padding
+   * resolves against the containing block's WIDTH, so that exact value put the
+   * caption 243px off the bottom of a frame whose lower 400px Reels draws over
+   * — a guard spelling out the broken value passes only while the bug is
+   * there, and fails the moment somebody fixes it. The real check is in
+   * lib/safe-zone.test.ts, in named pixels against every edge.
+   */
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * A PRONOUN NEEDS AN ANTECEDENT.
+ *
+ * "Script is incoherent." Read aloud as one block the fault was every
+ * demonstrative: "THIS ONE asks first" — this one WHAT? — then "THAT's today's
+ * body talking" over a number the voice never names. The product was named
+ * once, in the last two seconds, so nothing before it had anything to refer
+ * to.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("a reel says what it is about before the sign-off", () => {
+  for (const meta of SCRIPTS) {
+    const script = reelScript(meta.id, "");
+    const plan = reelPlan(script!);
+    const said = plan.steps.slice(0, -1).flatMap((s) => s.captions.map((c) => c.text)).join(" ");
+    assert.ok(said.includes(APP_NAME), `${meta.id} never says ${APP_NAME} until the last beat`);
+    assert.equal(retentionProblems(plan).length, 0, `${meta.id}: ${JSON.stringify(retentionProblems(plan))}`);
+  }
+});
+
+/**
+ * NOT IN THE SIGN-OFF. Every reel ends by naming the app, so a check that
+ * counted the last beat would pass on every script including the incoherent
+ * ones it exists for — which is a guard that cannot fail.
+ */
+test("naming the app only in the sign-off is refused", () => {
+  const script = reelScript("demo-readiness", "")!;
+  const stripped = {
+    ...script,
+    beats: script.beats.map((b, i) => (i === script.beats.length - 1
+      ? b
+      : { ...b, say: b.say.replaceAll(APP_NAME, "this one") })),
+  };
+  const problems = retentionProblems(reelPlan(stripped)).map((p) => p.problem).join(" | ");
+  assert.match(problems, /refers to nothing/, `the incoherent version passed: ${problems}`);
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * A NARRATED REEL IS A DIFFERENT THING TO READ.
+ *
+ * captionReadMs is a COLD-READING rate, and it is right for a silent reel —
+ * there is no voice and the caption is the whole content. On a narrated one it
+ * is measuring something that is not happening: the words are drawn one at a
+ * time with the spoken word lit, so a muted viewer follows a sweep whose pace
+ * IS the speaking pace rather than reading a static block.
+ *
+ * The measurement that forced the distinction: this voice says "Every other
+ * training app hands you the session it planned on Sunday" in 3.92 seconds and
+ * reading its captions cold takes 5.07. No timing satisfies both — a caption
+ * cannot start when the words are spoken AND outlast the speaking.
+ *
+ * What survives is MIN_CAPTION_MS, which is not a reading rate at all: it is
+ * the time an eye needs to find new text on screen, and that does not care
+ * whether anybody is talking.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+const sayingPlan = (ms: number, clips?: { atMs: number; ms: number }[]): PlannableScript => ({
+  id: "t", hook: "Your app doesn't care.", totalMs: 6_000,
+  beats: [{ at: 0, ms: 6_000, route: "/", action: "a", say: "Every other training app hands you the session it planned on Sunday.", clips }],
+});
+
+test("a narrated caption is held to the eye, not to a cold-reading rate", () => {
+  /** One sentence, spoken in less time than reading it cold would take. */
+  const narrated = reelPlan(sayingPlan(6_000, [{ atMs: 140, ms: 3_920 }]));
+  const problems = retentionProblems(narrated).map((p) => p.problem).join(" | ");
+  assert.doesNotMatch(problems, /too brief to read/,
+    "the cold-reading rate is still being applied to a reel that has a voice");
+});
+
+test("a silent reel keeps the full reading rate", () => {
+  const silent = reelPlan(sayingPlan(2_000));
+  const short = { ...silent, steps: silent.steps.map((s) => ({ ...s, captions: s.captions.map((c) => ({ ...c, ms: 400 })) })) };
+  assert.match(retentionProblems(short).map((p) => p.problem).join(" | "), /too brief to read/,
+    "a silent reel with 400ms captions is not being checked against the reading rate");
+});
+
+test("a flash is a flash even with a voice over it", () => {
+  const narrated = reelPlan(sayingPlan(6_000, [{ atMs: 140, ms: 3_920 }]));
+  const flashed = { ...narrated, steps: narrated.steps.map((s) => ({ ...s, captions: s.captions.map((c) => ({ ...c, ms: 300 })) })) };
+  assert.match(retentionProblems(flashed).map((p) => p.problem).join(" | "), /the eye does not land on it/,
+    "a 300ms caption passes because something is being said over it");
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// THE SILENCE AT THE FRONT, WHICH NOTHING USED TO MEASURE.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const openingFault = (clips?: { atMs: number; ms: number }[]) =>
+  retentionProblems(reelPlan(sayingPlan(6_000, clips))).map((p) => p.problem).join(" | ");
+
+/** 140ms is LEAD_MS: the room the design puts in front of the voice on purpose. */
+test("the room a line is designed to start on is not a fault", () => {
+  assert.doesNotMatch(openingFault([{ atMs: 140, ms: 3_920 }]), /first word is not heard/);
+});
+
+/**
+ * 300ms is what three finished reels actually opened on, before lib/wav.ts
+ * started trimming the model's own silence off the front of a clip. The rule
+ * exists so that coming back is a failed check rather than a quiet regression.
+ */
+test("a reel that opens on a third of a second of nothing is refused", () => {
+  const problems = openingFault([{ atMs: 460, ms: 3_920 }]);
+  assert.match(problems, /first word is not heard until 460ms/);
+  assert.match(problems, /half the audience is gone by 1000ms/);
+});
+
+/** Exactly at the ceiling passes: a limit that refuses its own value is a typo. */
+test("the ceiling itself is allowed", () => {
+  assert.doesNotMatch(openingFault([{ atMs: MAX_OPENING_SILENCE_MS, ms: 3_920 }]), /first word is not heard/);
+});
+
+/** No voice, no clip, nothing to be late — and no complaint about it either. */
+test("a silent reel is not accused of opening on silence", () => {
+  assert.doesNotMatch(openingFault(), /first word is not heard/);
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE ALLOWANCE HAS TO SIT BETWEEN THE TWO NUMBERS IT WAS PICKED FROM.
+ *
+ * MAX_CAPTION_LATE_MS is enforced by the recorder against a stopwatch, so no
+ * test here can exercise it. What a test CAN hold is the reasoning it was
+ * chosen by, which is the part that rots: it has to be short enough that a
+ * caption arriving "on time" still gets most of its MIN_CAPTION_MS on screen,
+ * and long enough that the browser overhead it is not meant to catch stays
+ * under it. The two real failures it exists for were 1600ms and about 1500ms.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("a caption allowed to be late still gets most of its time on screen", () => {
+  assert.ok(MAX_CAPTION_LATE_MS < MIN_CAPTION_MS / 2,
+    `${MAX_CAPTION_LATE_MS}ms of a ${MIN_CAPTION_MS}ms floor is most of the caption`);
+});
+
+test("the two failures it was written for are both well over it", () => {
+  for (const failure of [1_600, 1_500]) {
+    assert.ok(failure > MAX_CAPTION_LATE_MS * 2,
+      `${failure}ms would not be caught with room to spare by a ${MAX_CAPTION_LATE_MS}ms allowance`);
+  }
 });

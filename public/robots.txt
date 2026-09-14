@@ -66,6 +66,12 @@ Disallow: /nutrition
 # pages built from the same data the app uses, with no session required — see
 # app/recipes, app/exercises, app/collections and app/cheapest-protein.
 # /library is the signed-in browser for the same catalogue and stays out.
+# Render targets for the social videos: a figure set large enough to film, with
+# no reader. An exported route nobody disallows becomes an empty page competing
+# with the homepage for its own name, which is exactly what happened to /ask,
+# /injury and /partner below.
+Disallow: /studio
+
 Disallow: /library
 Disallow: /essentials
 Disallow: /squad

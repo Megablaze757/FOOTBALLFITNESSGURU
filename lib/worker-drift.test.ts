@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { readFileSync, writeFileSync, mkdtempSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdtempSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer } from "node:http";
@@ -51,23 +51,46 @@ async function withLiveWorker<T>(version: string | null, body: (url: string) => 
  * below silently tested the "could not reach the deployed Worker" path instead
  * of the comparison it was written for, and reported the gate as broken.
  */
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * A COPY OF THE REPO LAYOUT, NOT THE REPO.
+ *
+ * This used to rewrite the real cloudflare/worker.js in place and put it back
+ * in a `finally`, and both ways that can go wrong were seen on one afternoon.
+ *
+ * The test runner runs FILES IN PARALLEL, so lib/worker-paste.test.ts and
+ * lib/admin-cancel.test.ts read the bundle while this file had a version of
+ * its own invention in it, and failed — intermittently, in a way that passed
+ * on every re-run of those files alone. And a run killed between the write
+ * and the `finally` leaves the TRACKED FILE MODIFIED, which is how
+ * `WORKER_VERSION = "2026-09-04.2"` turned up in a working tree nobody had
+ * edited.
+ *
+ * worker-drift.mjs resolves the bundle relative to its own URL, so putting a
+ * copy of the script and a copy of the bundle in one temp directory exercises
+ * exactly the same resolution against files this test owns. No production
+ * code learned about a test, and nothing outside the temp directory is
+ * written at all.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
 async function run(url: string, repoVersion: string): Promise<{ code: number; out: string }> {
-  const original = readFileSync(BUNDLE, "utf8");
   const dir = mkdtempSync(join(tmpdir(), "drift-"));
-  writeFileSync(join(dir, "worker.js"), original);
+  mkdirSync(join(dir, "scripts"));
+  mkdirSync(join(dir, "cloudflare"));
+  writeFileSync(join(dir, "scripts", "worker-drift.mjs"), readFileSync(SCRIPT, "utf8"));
+  writeFileSync(join(dir, "cloudflare", "worker.js"), readFileSync(BUNDLE, "utf8").replace(
+    /(var|const|let)\s+WORKER_VERSION\s*=\s*"[^"]+"/,
+    `$1 WORKER_VERSION = "${repoVersion}"`,
+  ));
   try {
-    writeFileSync(BUNDLE, original.replace(
-      /(var|const|let)\s+WORKER_VERSION\s*=\s*"[^"]+"/,
-      `$1 WORKER_VERSION = "${repoVersion}"`,
-    ));
     return await new Promise((resolve) => {
-      execFile("node", [SCRIPT, url], { encoding: "utf8" }, (err, stdout, stderr) => {
+      execFile("node", [join(dir, "scripts", "worker-drift.mjs"), url], { encoding: "utf8" }, (err, stdout, stderr) => {
         const code = (err as { code?: number } | null)?.code ?? 0;
         resolve({ code, out: `${stdout}${stderr}` });
       });
     });
   } finally {
-    writeFileSync(BUNDLE, original);
+    rmSync(dir, { recursive: true, force: true });
   }
 }
 

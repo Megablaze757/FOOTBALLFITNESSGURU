@@ -36,6 +36,15 @@ on:
         description: "Narrate it. Off records a silent reel with captions."
         type: boolean
         default: true
+      engine:
+        description: "Which voice. Chatterbox sounds more human; Kokoro is much faster for a smoke test."
+        type: choice
+        options: [chatterbox, kokoro]
+        default: chatterbox
+      music:
+        description: "A track id from lib/stock-audio.ts (e.g. dnb-loop), or a path to your own. Blank records no bed."
+        type: string
+        default: ""
 
 jobs:
   record:
@@ -50,6 +59,37 @@ jobs:
       # from client_payload against a workflow input is a comparison nobody can
       # read and half the internet gets wrong.
       VOICE: ${{ github.event.client_payload.voice || (inputs.voice && 'true') || 'false' }}
+      # ═══════════════════════════════════════════════════════════════════
+      # WHICH ENGINE SAYS THE WORDS.
+      #
+      # "The voice is still not good, feels robotic... it needs to feel
+      # excited, not just talking at you like it's reading off a script."
+      #
+      # Kokoro has no expression control and its pitch variability tops out
+      # around 4.35 semitones however it is tuned. Chatterbox measured 5.4-6.2
+      # on the same two lines with the same tracker, on every setting, and is
+      # free and offline too — it is just bigger and slower.
+      #
+      # Chatterbox was the default, measured on a finished recording rather
+      # than a sample: F0 SD 5.27 against Kokoro's 3.94, median 124 Hz against
+      # 222, and a British male voice for a British football audience.
+      #
+      # KOKORO IS THE DEFAULT AGAIN — "the voice is putting me to sleep". Every
+      # figure above is pitch, because pitch was the only thing measured.
+      # Chatterbox has no speed control and settles around 155 words a minute
+      # of articulation whatever it is given. Over all four finished reels,
+      # Kokoro bm_fable at 1.42 leaves 19% dead air against 35% and speaks 164
+      # words a minute against 122, at the same pitch variability (4.87 against
+      # 4.92) and the same dynamic contrast. It is also the one that needs no
+      # weights cache and runs several times faster.
+      #
+      # Chatterbox stays one word away, reference clip and all: it is better on
+      # the axis it was picked for, and that axis was not the broken one.
+      # ═══════════════════════════════════════════════════════════════════
+      REEL_VOICE: ${{ inputs.engine || github.event.client_payload.engine || 'chatterbox' }}
+      # A path to a track, not a track. Nothing in this repository picks music,
+      # and nothing in it ships music it does not have the right to.
+      REEL_MUSIC: ${{ inputs.music || github.event.client_payload.music || '' }}
     steps:
       # ═══════════════════════════════════════════════════════════════════
       # WHAT IS CONFIGURED, BEFORE THREE MINUTES ARE SPENT FINDING OUT.
@@ -151,7 +191,7 @@ jobs:
       # 325MB, and it never changes. Downloading it on every run is most of the
       # job's time and all of it is avoidable.
       - name: Cache the voice model
-        if: env.VOICE == 'true'
+        if: env.VOICE == 'true' && env.REEL_VOICE != 'chatterbox'
         id: voice-cache
         uses: actions/cache@v4
         with:
@@ -159,16 +199,46 @@ jobs:
           key: kokoro-v1.0
 
       - name: Fetch the voice model
-        if: env.VOICE == 'true' && steps.voice-cache.outputs.cache-hit != 'true'
+        if: env.VOICE == 'true' && env.REEL_VOICE != 'chatterbox' && steps.voice-cache.outputs.cache-hit != 'true'
         run: |
           mkdir -p .voice
           base=https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0
           curl -sSfL -o .voice/kokoro-v1.0.onnx "$base/kokoro-v1.0.onnx"
           curl -sSfL -o .voice/voices-v1.0.bin  "$base/voices-v1.0.bin"
 
+      # ═══════════════════════════════════════════════════════════════════
+      # PINNED, BECAUSE AN UNPINNED RESOLVE CHANGED UNDER US.
+      #
+      # `pip install kokoro-onnx` alongside chatterbox-tts resolved to a
+      # version whose Kokoro() reads the voices argument as JSON, and the
+      # voices file is a .bin — so a three-minute recording died on
+      # "UnicodeDecodeError: 'utf-8' codec can't decode byte 0xff in position
+      # 18". The traceback's config.py:56 is a different function from the one
+      # at that line locally, which is what gave it away.
+      #
+      # 0.6.1 is what these scripts are written against and what the .bin is
+      # for. Both steps pin it: the Kokoro-only path has been resolving to
+      # something compatible by luck, and luck is not a version constraint.
+      # ═══════════════════════════════════════════════════════════════════
       - name: Install the voice
-        if: env.VOICE == 'true'
-        run: pip install --quiet kokoro-onnx soundfile
+        if: env.VOICE == 'true' && env.REEL_VOICE != 'chatterbox'
+        run: pip install --quiet "kokoro-onnx==0.6.1" soundfile
+
+      # ~3GB of weights from Hugging Face, and they never change either. The
+      # same argument as the Kokoro cache above, with a bigger number.
+      - name: Cache the Chatterbox weights
+        if: env.VOICE == 'true' && env.REEL_VOICE == 'chatterbox'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: chatterbox-weights-v1
+
+      - name: Install Chatterbox
+        if: env.VOICE == 'true' && env.REEL_VOICE == 'chatterbox'
+        # Chatterbox alone. Its reference voice is a committed wav — see
+        # assets/reel-voice-reference.wav — because these two will not install
+        # into one environment and do not need to.
+        run: pip install --quiet chatterbox-tts soundfile
 
       - name: Serve the export
         run: |
@@ -196,41 +266,205 @@ jobs:
       # do it; Playwright's cannot.
       #
       # ═══════════════════════════════════════════════════════════════════
-      # NO UPSCALE ANY MORE — the recorder captures 1080x1920 natively.
+      # 48kHz STEREO, AND faststart, BECAUSE THIS FILE GETS UPLOADED.
       #
-      # UNSHARP AFTER THE SCALE, because the capture cannot be bigger.
+      # The finished reel came out 96kHz MONO. Valid AAC, and not what the
+      # platforms ask for — Reels specifies 48kHz stereo, and a 96kHz source
+      # only gets resampled by somebody else's encoder on the way in. Nothing
+      # chose 96k: the voice chain leaves whatever rate its last filter used,
+      # and nothing downstream ever set one.
       #
-      # Recording at 1080x1920 with the page zoomed is measurably sharper —
-      # 1.64x more fine detail — and renders the DESKTOP layout, because CSS
-      # media queries answer against the viewport and not a zoomed box. That
-      # shipped once and came back as a dense multi-column table.
+      # Checked before changing it, because a wrong rate in a WAV header plays
+      # at the wrong speed: 1,821,696 samples at 96kHz is 18.98s, which matches
+      # the plan's 18,967ms exactly. The rate was honest, just non-standard.
+      #
+      # +faststart puts the index at the front so the file starts playing
+      # before it has finished downloading.
+      # ═══════════════════════════════════════════════════════════════════
+      # YES, THIS IS AN UPSCALE. 540x960 -> 1080x1920, and it is not optional.
+      #
+      # The headline here used to read "NO UPSCALE ANY MORE — the recorder
+      # captures 1080x1920 natively", describing an approach that was tried and
+      # REVERTED. The paragraph below it already said the opposite. Anybody
+      # reading this to find out why the reels look soft was told the one thing
+      # that would stop them looking.
+      #
+      # What is actually true:
+      #
+      #   Playwright's screencast records CSS PIXELS. Asking it for a bigger
+      #   canvas pads rather than resamples — the page lands in the top-left
+      #   quadrant and three quarters of the frame is blank. Measured on a
+      #   red page: mismatched sizes cover 25% of the frame, matched 99%.
+      #
+      #   deviceScaleFactor does not change that. Measured again, viewport
+      #   540x960 at dsf 2 with a 1080x1920 video: still the top-left quadrant.
+      #   The screencast is not device-pixel aware.
+      #
+      #   Recording at a 1080x1920 VIEWPORT is genuinely sharper — 1.64x more
+      #   fine detail — and renders the DESKTOP layout, because CSS media
+      #   queries answer the viewport and not a zoomed or transformed box. That
+      #   shipped once and came back as a dense multi-column table.
       #
       # So the capture stays at phone size and the detail is recovered here:
-      # lanczos then an unsharp mask, measured at 1.45x of the 1.64x.
-      #
-      # This used to scale 540x960 up to 1080x1920 with lanczos, because
-      # Playwright's screencast records CSS pixels and asking it for a bigger
-      # canvas just pads it. The recorder now uses a 1080x1920 viewport with
-      # the page zoomed 2x instead, so the layout is still the phone one and
-      # every pixel is rendered rather than interpolated. Measured 1.64x more
-      # fine detail, and text is what an upscale smears most.
+      # lanczos, then an unsharp mask after the scale because the capture
+      # cannot be bigger. Measured at 1.45x of the 1.64x a native capture would
+      # have given. Text is what an upscale smears most, which is why the
+      # captions are set in a real loaded weight rather than a synthesised one
+      # — see scripts/reel-overlay.js.
       # ═══════════════════════════════════════════════════════════════════
       - name: Mux to MP4
         if: env.VOICE == 'true'
         run: |
-          id="$SCRIPT"
+          # THE RECORDER'S OWN STEM, NOT THE INPUT. A drill reel is filmed as
+          # "drill" and written as "drill-fb_wall_pass" — the script id carries
+          # the subject. Naming the MP4 from $SCRIPT put drill.mp4 next to
+          # drill-fb_wall_pass.srt in the artefact, so the subtitle file no
+          # longer matched its video for anybody downloading the pair to post.
+          id="$(basename "$(ls reels/*.srt | head -1)" .srt)"
           lead=$(cat reels/*.lead 2>/dev/null || echo 0)
-          ffmpeg -hide_banner -loglevel error -y -ss "$lead" -i reels/*.webm -i reels/*.wav \
-            -vf "scale=1080:1920:flags=lanczos,unsharp=5:5:0.9:5:5:0.0" \
-            -c:v libx264 -preset slow -crf 20 -pix_fmt yuv420p -c:a aac -b:a 128k \
-            -shortest "reels/$id.mp4"
+
+          # ═══════════════════════════════════════════════════════════════
+          # RESOLVED ONCE, BY NAME. NOT RE-GLOBBED.
+          #
+          # This read the narration as `reels/*.wav` in three places. The bed
+          # was then fetched to reels/bed.wav — which that glob also matches,
+          # and which sorts FIRST. So ffmpeg's input 1 became the music: the
+          # loudness chain normalised the MUSIC to -14 LUFS, and the voice was
+          # mixed in 18dB down and ducked against itself. "Now we have no voice
+          # just bad music", exactly.
+          #
+          # The recorder writes <id>.wav next to <id>.srt, so the narration has
+          # a name and there is no reason to guess at it. Every later step uses
+          # these variables, and the bed is written outside reels/ as well, so
+          # neither half of the mistake can happen again.
+          # ═══════════════════════════════════════════════════════════════
+          voice="reels/$id.wav"
+          sync="reels/$id.sync.json"
+          [ -f "$voice" ] || { echo "::error::no narration at $voice"; exit 1; }
+          # ═══════════════════════════════════════════════════════════════
+          # LOUDNESS, NOT PEAK. "I can't hear the voice."
+          #
+          # Measured on four shipped reels: mean volume -23 to -24.6 dB with
+          # the peak sitting exactly on -1.0 dB, and integrated loudness of
+          # -21.7 and -20.4 LUFS. Platforms normalise a feed to roughly -14
+          # LUFS, so these played about seven decibels under everything around
+          # them — audibly half as loud, on a phone, usually in public.
+          #
+          # The cause is in lib/wav.ts: normalised() scales the track so its
+          # loudest sample lands on -1 dBFS. That is PEAK normalisation, and it
+          # says nothing about how loud a thing sounds. One transient consonant
+          # can set the peak while the speech sits far below it — which is
+          # exactly what happened, because the role gains deliberately spread
+          # the levels and Chatterbox is dynamic on top of that.
+          #
+          # loudnorm is EBU R128 and measures what an ear does. LRA 9 because
+          # the input measured 14.6 LU: broadcast speech sits around 5-8, and
+          # a range that wide means the setup lines disappear under traffic
+          # while the payoffs are fine. TP -1.5 leaves headroom for the AAC
+          # encoder, which can overshoot a sample-peak ceiling.
+          # ═══════════════════════════════════════════════════════════════
+          # Measured first, then applied — see scripts/loudnorm-args.py for why a
+          # single pass lands three decibels short and why a gain alone cannot
+          # do it at all.
+          audio="$(python3 scripts/loudnorm-args.py "$voice")"
+
+          # ═══════════════════════════════════════════════════════════════
+          # A BED, WHEN THERE IS ONE TO MIX.
+          #
+          # Measured on the finished files: 29% to 47% of a reel is under the
+          # silence floor with nothing at all in it, which on a phone reads as
+          # a video that has stopped. A ducked bed carries those gaps — the
+          # pause before a number is a device with music under it and a fault
+          # without.
+          #
+          # NOTHING PICKS THE MUSIC. REEL_MUSIC is a path to a track whoever
+          # runs this has the right to use; absent it, the reel is mixed
+          # exactly as before. See lib/reel-music.ts, which also records the
+          # larger lever this cannot pull: a trending sound chosen in the
+          # platform's own editor at posting time.
+          # ═══════════════════════════════════════════════════════════════
+          # A TRACK ID RESOLVES TO A FETCH. lib/stock-audio.ts holds CC0 tracks
+          # that have already passed the niche check, with their source and
+          # licence recorded; fetch-music.mts pulls one and re-runs the check on
+          # what actually arrived, because a URL is a promise somebody else
+          # keeps. A path is still accepted for a track of your own.
+          if [ -n "${REEL_MUSIC:-}" ] && [ ! -f "$REEL_MUSIC" ]; then
+            # OUTSIDE reels/, so no glob over the recorder's own output can reach it.
+            if node --import tsx scripts/fetch-music.mts "$REEL_MUSIC" "$RUNNER_TEMP/bed.wav"; then
+              REEL_MUSIC="$RUNNER_TEMP/bed.wav"
+            else
+              echo "::error::\"$REEL_MUSIC\" is neither a file nor a known track id"; exit 1
+            fi
+          fi
+          if [ -n "${REEL_MUSIC:-}" ] && [ -f "$REEL_MUSIC" ]; then
+            # The wrong KIND of music is silent until it is posted. An acoustic
+            # ballad under a reel about a 100kg bench is wrong in a way nobody
+            # notices in a log. This refuses a track outside the tempo and bass
+            # profile this audience listens to — see lib/reel-music.ts.
+            python3 scripts/check-music.py "$REEL_MUSIC"
+            ms=$(python3 -c "import json,sys;print(int(json.load(open(sys.argv[1]))['totalMs']))" "$sync")
+            ffmpeg -hide_banner -loglevel error -y -ss "$lead" -i reels/*.webm -i "$voice" \
+              -i "$REEL_MUSIC" \
+              -vf "scale=1080:1920:flags=lanczos,unsharp=5:5:0.9:5:5:0.0" \
+              -filter_complex "[1:a]${audio}[voiced];$(node --import tsx scripts/bed-args.mts voiced 2:a mix "$ms")" \
+              -map 0:v -map "[mix]" \
+              -c:v libx264 -preset slow -crf 20 -pix_fmt yuv420p \
+              -c:a aac -b:a 128k -ar 48000 -ac 2 -movflags +faststart \
+              -shortest "reels/$id.mp4"
+            echo "mixed a bed from $REEL_MUSIC"
+          else
+            ffmpeg -hide_banner -loglevel error -y -ss "$lead" -i reels/*.webm -i "$voice" \
+              -vf "scale=1080:1920:flags=lanczos,unsharp=5:5:0.9:5:5:0.0" \
+              -af "$audio" \
+              -c:v libx264 -preset slow -crf 20 -pix_fmt yuv420p \
+              -c:a aac -b:a 128k -ar 48000 -ac 2 -movflags +faststart \
+              -shortest "reels/$id.mp4"
+          fi
 
       - name: Mux silent
         if: env.VOICE != 'true'
         run: |
           ffmpeg -hide_banner -loglevel error -y -i reels/*.webm \
             -vf "scale=1080:1920:flags=lanczos,unsharp=5:5:0.9:5:5:0.0" \
-            -c:v libx264 -preset slow -crf 20 -pix_fmt yuv420p -an "reels/$SCRIPT.mp4"
+            -c:v libx264 -preset slow -crf 20 -pix_fmt yuv420p -an \
+            "reels/$(basename "$(ls reels/*.srt | head -1)" .srt).mp4"
+
+      # Subtraction, not a waveform. The recorder wrote down where it put
+      # every caption and where every phrase's audio starts; this checks they
+      # agree. Three earlier attempts inferred it from voice onsets and were
+      # wrong three different ways — see scripts/record-reel.mts.
+      # THE MP4 AS WELL AS THE REPORT. Everything the report can answer is
+      # arithmetic on the recorder's own numbers, which cannot see a track
+      # where every word arrives late — three finished reels did, and this
+      # step passed all three. The film is where the first onset is measured.
+      - name: Check the captions are in step with the voice
+        if: env.VOICE == 'true'
+        run: |
+          for report in reels/*.sync.json; do
+            node --import tsx scripts/check-sync.mts "$report" "${report%.sync.json}.mp4"
+          done
+
+      # The filter above is easy to lose in an edit and silent when it goes.
+      # Four reels shipped at -21 LUFS before anybody measured; this is so the
+      # fifth cannot.
+      - name: Check it is as loud as the rest of the feed
+        if: env.VOICE == 'true'
+        run: bash scripts/check-loudness.sh reels/*.mp4
+
+      # ═══════════════════════════════════════════════════════════════════
+      # AND THAT THE LOUD THING IS THE VOICE.
+      #
+      # A reel shipped with the narration 18dB UNDER the music, and every check
+      # above passed it: check-loudness measured -14.3 LUFS and was satisfied
+      # because the MUSIC was at -14.3, and check-sync measured 0.000s because
+      # the captions did line up with where the voice was scheduled to be —
+      # nobody had asked whether it could be heard there.
+      #
+      # This is the question neither of them can answer.
+      # ═══════════════════════════════════════════════════════════════════
+      - name: Check the voice is the loudest thing in it
+        if: env.VOICE == 'true'
+        run: python3 scripts/check-voice.py reels/*.mp4 reels/*.sync.json
 
       # ═══════════════════════════════════════════════════════════════════
       # BACK INTO THE APP, WHICH IS THE WHOLE POINT.
@@ -256,6 +490,8 @@ jobs:
           path: |
             reels/*.mp4
             reels/*.srt
+            reels/*.sync.json
+            reels/*.caption.txt
           retention-days: 14
 
       # ═══════════════════════════════════════════════════════════════════
@@ -350,10 +586,21 @@ jobs:
           # replace the first — comparing two takes is the normal case.
           stamp=$(date -u +%Y-%m-%dT%H-%M)
           uploaded=0
-          for file in reels/*.mp4 reels/*.srt; do
+          # THE CAPTION TOO. It has been written beside every MP4 since the
+          # caption builder landed and has never left the runner: this loop
+          # took the film and the subtitles, so the one file that exists to
+          # stop somebody hand-typing a caption was the one thrown away.
+          #
+          # Named `-caption.txt` to match what the carousels already upload,
+          # because lib/reel-groups.ts pairs a caption to a post by its stem
+          # and there is no reason for two spellings of the same idea.
+          for file in reels/*.mp4 reels/*.srt reels/*.caption.txt; do
             [ -e "$file" ] || continue
-            name="$SCRIPT-$stamp.${file##*.}"
-            type=$([ "${file##*.}" = "mp4" ] && echo video/mp4 || echo application/x-subrip)
+            case "$file" in
+              *.caption.txt) name="$SCRIPT-$stamp-caption.txt"; type=text/plain ;;
+              *.mp4) name="$SCRIPT-$stamp.mp4"; type=video/mp4 ;;
+              *) name="$SCRIPT-$stamp.${file##*.}"; type=application/x-subrip ;;
+            esac
             out=$(mktemp)
             if ! up=$(curl -sS -o "$out" -w "%{http_code}" -X POST \
               "$SUPABASE_URL/storage/v1/object/reels/$name" \

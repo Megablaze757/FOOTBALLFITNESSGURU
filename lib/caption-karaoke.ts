@@ -32,6 +32,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 // =============================================================================
 
+import { spokenForm } from "./spoken-numbers";
 import { emphasise } from "./caption-emphasis";
 
 /**
@@ -56,7 +57,35 @@ export interface WordSpan {
  * tracks it closely enough for a highlight and cannot be wrong about a word it
  * has never seen. The +1 stops a one-character word getting a share of zero.
  */
-const weightOf = (word: string) => word.replace(/[^\p{L}\p{N}]/gu, "").length + 1;
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * HOW LONG A WORD TAKES TO SAY, NOT HOW LONG IT IS TO WRITE.
+ *
+ * "Sometimes the stress of words is at the wrong place." The voice was not
+ * stressing the wrong word — the HIGHLIGHT was on the wrong one, which reads
+ * as the same thing.
+ *
+ * This counted written characters, and the reels are built on numbers. "100kg"
+ * is five characters and "one hundred kilos" is seventeen, so on a real line:
+ *
+ *   word          gets   needs
+ *   100kg          15%     29%
+ *   at              8%      5%
+ *   60kg           13%     20%
+ *   bodyweight     28%     20%
+ *   exceptional    30%     21%
+ *
+ * The first word is given half the time it needs, so the highlight is a whole
+ * word ahead before the voice has finished saying "hundred", and stays ahead
+ * for the rest of the line.
+ *
+ * Same fault as the pace estimator had — see spokenWords in lib/reel.ts — in
+ * the one other place that measures a word without saying it. The spoken form
+ * is what the synthesiser is handed, so its length is the honest weight.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+const weightOf = (word: string) =>
+  spokenForm(word).replace(/[^\p{L}\p{N}]/gu, "").length + 1;
 
 /**
  * When each word of a caption should light up.
@@ -139,10 +168,56 @@ export interface KaraokeWord extends WordSpan {
 export function karaokeWords(text: string, ms: number): KaraokeWord[] {
   const spans = wordSpans(text, ms);
   /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * A RUN IS NOT A WORD, AND THE INDEXES ONLY LINED UP BY ACCIDENT.
+   *
    * The key flag comes from emphasise, so there is ONE rule about which figure
-   * is coloured and it is the tested one. Matching by text would colour every
-   * copy of a repeated word; matching by position cannot.
+   * is coloured — that part was right. The mapping was not: emphasise returns
+   * RUNS, which are stretches of the caption that share a colour, and this
+   * matched run 0 to word 0, run 1 to word 1 and so on.
+   *
+   * A caption with the figure in the middle produces three runs for six words:
+   *
+   *   "100kg at 60kg bodyweight is exceptional."
+   *     run 0  "100kg at "                     not key
+   *     run 1  "60kg"                          KEY
+   *     run 2  " bodyweight is exceptional."   not key
+   *
+   * so the colour landed on word 1 — "at" — and "60kg" stayed white. The line
+   * that measures a bodyweight against a bar coloured the preposition. The
+   * same caption that prompted "the stress of words is at the wrong place",
+   * with the highlight in a second wrong place for a second reason.
+   *
+   * It looked correct in testing because a caption whose figure happens to sit
+   * at a word boundary with no leading text — "At 120kg, novice." — produces
+   * exactly one run per word and lines up by luck.
+   *
+   * Keyed by CHARACTER POSITION now, which is the thing the two actually share.
+   * ═══════════════════════════════════════════════════════════════════════
    */
-  const keyed = emphasise(text).filter((r) => r.text.trim()).map((r) => r.key);
-  return spans.map((s, i) => ({ ...s, key: keyed[i] ?? false }));
+  const keyAt: boolean[] = [];
+  for (const run of emphasise(text)) {
+    for (let i = 0; i < run.text.length; i += 1) keyAt.push(run.key);
+  }
+
+  let cursor = 0;
+  return spans.map((span) => {
+    const at = text.indexOf(span.text, cursor);
+    if (at < 0) return { ...span, key: false };
+    cursor = at + span.text.length;
+    /**
+     * THE FIRST CHARACTER IS THE WHOLE TEST, and that is a fact about how
+     * emphasise builds its runs rather than a shortcut. It splits on
+     * whitespace and pushes the separators INTO the keyed run alongside the
+     * number, so "30 grams." is one run beginning at "30" — every word inside
+     * it also begins inside it.
+     *
+     * This was `.slice(at, at + length).some(Boolean)`, justified by a comment
+     * saying a word could begin outside the run and still belong to the
+     * figure. No word can. A mutation to the first character survived every
+     * test, which is what a line doing nothing looks like.
+     */
+    const key = keyAt[at] ?? false;
+    return { ...span, key };
+  });
 }

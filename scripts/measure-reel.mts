@@ -26,7 +26,8 @@ import { spokenForm } from "../lib/spoken-numbers";
 import { BASE_SPEED, VOICE, shapeRates } from "../lib/speech-prosody";
 import { beatFloorMs } from "../lib/caption-lines";
 import { LEAD_MS, TAIL_MS, SILENT_BEAT_MS } from "../lib/narration";
-import { MAX_ONE_ROUTE_SHARE, MAX_REEL_MS } from "../lib/reel-retention";
+import { MIN_SCENE_MS } from "../lib/reel";
+import { MAX_ONE_ROUTE_SHARE, MAX_REEL_MS, RETENTION_BANDS } from "../lib/reel-retention";
 
 const model = process.env.KOKORO_MODEL ?? ".voice/kokoro-v1.0.onnx";
 const voices = process.env.KOKORO_VOICES ?? ".voice/voices-v1.0.bin";
@@ -42,6 +43,13 @@ const plan = SCRIPTS.flatMap((meta) => {
     beats: script.beats.map((beat, bi) => ({
       route: beat.route,
       hold: beat.hold ?? 0,
+      /**
+       * "after", not "tail": the job already has a `tail`, and that one is
+       * lib/narration.ts TAIL_MS — the silence baked onto the END OF EVERY
+       * SYNTHESISED CLIP. This is the end card's room. Two fields called tail
+       * in one JSON document is a bug waiting for whoever reads it next.
+       */
+      after: beat.tail ?? 0,
       floor: beatFloorMs(beat.say),
       phrases: perBeat[bi].map((p) => ({ text: p.text, rate: rates[i++], gap: p.gapMs })),
     })),
@@ -52,8 +60,10 @@ const dir = mkdtempSync(join(tmpdir(), "reel-measure-"));
 const file = join(dir, "plan.json");
 writeFileSync(file, JSON.stringify({
   model, voices, voice: VOICE, plan,
-  lead: LEAD_MS, tail: TAIL_MS, silent: SILENT_BEAT_MS,
+  lead: LEAD_MS, tail: TAIL_MS, silent: SILENT_BEAT_MS, minScene: MIN_SCENE_MS,
   maxMs: MAX_REEL_MS, maxShare: MAX_ONE_ROUTE_SHARE,
+  /** Infinity does not survive JSON, so the open-ended band travels as null. */
+  bands: RETENTION_BANDS.map((b) => ({ ...b, underMs: Number.isFinite(b.underMs) ? b.underMs : null })),
 }));
 
 const child = spawn("python3", ["scripts/measure-reel.py", file], { stdio: "inherit" });

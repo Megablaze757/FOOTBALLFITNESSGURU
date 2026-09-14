@@ -40,7 +40,21 @@ export interface PostGroup {
 
 /** `carousel-2026-09-06T12-11-03.png` → stamp `2026-09-06T12-11`, slide 3. */
 const SLIDE = /^carousel-(.+?)-(\d+)\.(?:png|jpe?g)$/i;
-const CAPTION = /^carousel-(.+?)-caption\.txt$/i;
+
+/**
+ * `<anything>-caption.txt`, not `carousel-<stamp>-caption.txt`.
+ *
+ * The reel recorder has written a caption beside every MP4 since the day the
+ * caption builder was added, and it reached nobody: the workflow uploaded the
+ * film and the subtitles and left the caption on the runner, and this file
+ * only knew the carousel spelling. A caption the pipeline writes and then
+ * discards is worse than none, because the reason for building it was that
+ * the hand-typed step at the end is where things go wrong.
+ *
+ * One rule for both now — a file is the caption for whatever shares its stem.
+ */
+const CAPTION = /^(.+)-caption\.txt$/i;
+const CAROUSEL = "carousel-";
 
 /**
  * Group stored files into things somebody can post.
@@ -50,12 +64,20 @@ const CAPTION = /^carousel-(.+?)-caption\.txt$/i;
  */
 export function groupPosts(files: readonly StoredFile[]): PostGroup[] {
   const carousels = new Map<string, PostGroup>();
+  /** Reel captions, by the stem they belong to. Attached in a second pass. */
+  const captions = new Map<string, StoredFile>();
   const out: PostGroup[] = [];
 
   for (const file of files) {
     const caption = CAPTION.exec(file.name);
     if (caption) {
-      const id = `carousel-${caption[1]}`;
+      if (!caption[1].toLowerCase().startsWith(CAROUSEL)) {
+        // A reel's caption. The film it belongs to may not have been listed
+        // yet, so this waits rather than guessing at an order.
+        captions.set(caption[1], file);
+        continue;
+      }
+      const id = caption[1];
       const group = carousels.get(id) ?? blank(id, file.createdAt);
       carousels.set(id, group);
       group.caption = file;
@@ -90,6 +112,21 @@ export function groupPosts(files: readonly StoredFile[]): PostGroup[] {
   for (const group of carousels.values()) {
     group.files.sort((a, b) => slideNumber(a.name) - slideNumber(b.name));
     group.title = `Carousel · ${group.files.length} slide${group.files.length === 1 ? "" : "s"}`;
+  }
+
+  /**
+   * The reel captions, onto the films that share their stem.
+   *
+   * A caption whose film is not in the listing is DROPPED rather than shown as
+   * a row of its own. There is nothing to post without the video, and a row
+   * that is a text file pretending to be a reel is a worse answer than a reel
+   * that is missing — which the absence of its row already says.
+   */
+  for (const group of out) {
+    if (group.kind !== "reel" || group.caption) continue;
+    const stem = group.files[0]?.name.replace(/\.[^.]+$/, "");
+    const caption = stem ? captions.get(stem) : undefined;
+    if (caption) group.caption = caption;
   }
 
   return out;
