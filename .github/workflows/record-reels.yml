@@ -491,6 +491,7 @@ jobs:
             reels/*.mp4
             reels/*.srt
             reels/*.sync.json
+            reels/*.caption.txt
           retention-days: 14
 
       # ═══════════════════════════════════════════════════════════════════
@@ -585,10 +586,21 @@ jobs:
           # replace the first — comparing two takes is the normal case.
           stamp=$(date -u +%Y-%m-%dT%H-%M)
           uploaded=0
-          for file in reels/*.mp4 reels/*.srt; do
+          # THE CAPTION TOO. It has been written beside every MP4 since the
+          # caption builder landed and has never left the runner: this loop
+          # took the film and the subtitles, so the one file that exists to
+          # stop somebody hand-typing a caption was the one thrown away.
+          #
+          # Named `-caption.txt` to match what the carousels already upload,
+          # because lib/reel-groups.ts pairs a caption to a post by its stem
+          # and there is no reason for two spellings of the same idea.
+          for file in reels/*.mp4 reels/*.srt reels/*.caption.txt; do
             [ -e "$file" ] || continue
-            name="$SCRIPT-$stamp.${file##*.}"
-            type=$([ "${file##*.}" = "mp4" ] && echo video/mp4 || echo application/x-subrip)
+            case "$file" in
+              *.caption.txt) name="$SCRIPT-$stamp-caption.txt"; type=text/plain ;;
+              *.mp4) name="$SCRIPT-$stamp.mp4"; type=video/mp4 ;;
+              *) name="$SCRIPT-$stamp.${file##*.}"; type=application/x-subrip ;;
+            esac
             out=$(mktemp)
             if ! up=$(curl -sS -o "$out" -w "%{http_code}" -X POST \
               "$SUPABASE_URL/storage/v1/object/reels/$name" \

@@ -228,14 +228,22 @@ export function ReelLibrary({ subject }: { subject?: string }) {
       if (listError) throw new Error(listError.message);
 
       /**
-       * VIDEO AND SLIDES. This was `.mp4` only, so a carousel could be made
-       * and would never appear — the whole reason the reel went into the
-       * dashboard in the first place was not having to go and find it.
+       * VIDEO, SLIDES AND THE CAPTION. This was `.mp4` only, so a carousel
+       * could be made and would never appear — the whole reason the reel went
+       * into the dashboard in the first place was not having to go and find it.
        *
-       * .srt, .lead and .wav stay hidden: they are the reel's working files,
+       * AND THE CAPTION HAD THE SAME PROBLEM, one level quieter. The panel
+       * below renders `post.caption` as an "Open caption.txt" link, and it
+       * could never appear for anything: the caption is a .txt, this filter
+       * kept only mp4 and png, so lib/reel-groups.ts was handed a listing with
+       * no caption in it and every group came back without one. A dead link in
+       * a branch that is never taken looks exactly like a working feature.
+       *
+       * `-caption.txt` and not `.txt`, because the rule below still holds:
+       * .srt, .lead and .wav stay hidden. They are the reel's working files,
        * not something anybody opens this page to look at.
        */
-      const files = (data ?? []).filter((f) => /\.(mp4|png)$/i.test(f.name));
+      const files = (data ?? []).filter((f) => /\.(mp4|png)$|-caption\.txt$/i.test(f.name));
 
       /**
        * NO FILES, NO REQUEST.

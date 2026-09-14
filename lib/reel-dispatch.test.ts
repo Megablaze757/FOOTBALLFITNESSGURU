@@ -468,3 +468,30 @@ test("the sync step reads the finished film as well as the report", () => {
   const sync = code("scripts/check-sync.mts");
   assert.match(sync, /ffmpeg/, "nothing decodes the film, so the report is still checking itself");
 });
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE CAPTION HAS TO LEAVE THE RUNNER.
+ *
+ * scripts/record-reel.mts writes one beside every MP4 so that the last
+ * hand-typed step in the pipeline stops being hand-typed. Neither upload took
+ * it — the artefact listed mp4, srt and sync.json, and the storage loop ran
+ * over mp4 and srt — so it was written and deleted with the runner, every run,
+ * and the commit that added it said it landed beside the video. It did, on a
+ * machine nobody can reach.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("both uploads take the caption, not just the film", () => {
+  const workflow = readFileSync(".github/workflows/record-reels.yml", "utf8");
+
+  const artefact = workflow.slice(workflow.indexOf("actions/upload-artifact"));
+  assert.match(artefact.slice(0, 400), /caption\.txt/,
+    "the run's artefact has the film and not the caption written for it");
+
+  /** Named to the spelling lib/reel-groups.ts pairs by, or it shows as its own row. */
+  const dashboard = workflow.slice(workflow.indexOf("for file in reels/"));
+  assert.match(dashboard.slice(0, 700), /caption\.txt/,
+    "the dashboard upload skips the caption");
+  assert.match(dashboard.slice(0, 700), /-caption\.txt";?\s*type=text\/plain/,
+    "the caption is uploaded under a name the library cannot pair to its reel");
+});
