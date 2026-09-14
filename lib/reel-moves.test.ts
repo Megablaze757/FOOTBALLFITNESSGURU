@@ -115,7 +115,7 @@ test("the readiness reel taps the quick check-in, not the detailed one", async (
   const script = reelScript("demo-readiness", "");
   assert.ok(script, "there is no demo-readiness script");
   const taps = script!.beats.flatMap((b) => (b.moves ?? []).filter(isTap).map((m) => m.tap));
-  assert.deepEqual(taps, ["Not now", "Change my answers", "Barely", "Wrecked", "Save today's log"],
+  assert.deepEqual(taps, ["Change my answers", "Barely", "Wrecked", "Save today's log"],
     "the taps changed — check them against the view /journal actually opens on");
   /**
    * "Log it" was here and it was the wrong control: a button of that name
@@ -364,4 +364,31 @@ test("the readiness reel normalises the screen before it demonstrates", async ()
     "the reel does not clear a check-in it may have written on a previous run");
   assert.ok(moves.slice(firstRequired).every((m) => !("optional" in m && m.optional)),
     "a move that demonstrates something is optional, so the reel could film nothing and pass");
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE SCREEN IS TIDIED BEFORE THE CLOCK STARTS, NOT DURING THE HOOK.
+ *
+ * A dedicated demo account still gets offered a wearable and an install
+ * prompt. Both are right for a real athlete and both are somebody else's
+ * advert across the opening of ours.
+ *
+ * Dismissing them as a move on the first beat did not work, and the recording
+ * showed why: moves run alongside the hook rather than before it, so the tap
+ * landed around 1.5s. Measured on that file, the tooltip was present at 0.3s
+ * and 1.2s and gone by 2.5s — and Instagram's retention curve for it falls
+ * from 100% to roughly 10% inside two seconds. The fix was arriving after the
+ * audience had left.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("nudges are dismissed before the first frame is recorded", () => {
+  const src = readFileSync("scripts/record-reel.mts", "utf8");
+  assert.match(src, /DISMISS_BEFORE_FILMING/, "nothing dismisses the app's own nudges");
+  const beforeClock = src.slice(0, src.indexOf("const started = Date.now()"));
+  assert.match(beforeClock, /tidyScreen\(\)/,
+    "the screen is tidied after the clock starts, so the nudge is filmed");
+  /** Every route, not just the one somebody remembered to annotate. */
+  const warm = src.slice(src.indexOf("for (const route of [...new Set("), src.indexOf("const started = Date.now()"));
+  assert.match(warm, /tidyScreen\(\)/, "only the opening route is tidied");
 });

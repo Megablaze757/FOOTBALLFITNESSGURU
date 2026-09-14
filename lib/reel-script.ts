@@ -251,33 +251,6 @@ function readinessScript(): ReelScript {
       route: "/journal",
       action: "Open the check-in. Do not fill it in yet — let the empty form show.",
       /**
-       * ═══════════════════════════════════════════════════════════════════
-       * DISMISS THE WEARABLE NUDGE, WHICH IS FILMING OVER THE HOOK.
-       *
-       * Downloaded the recording and looked at the first second: the hook
-       * card sits over a tooltip reading "Stop typing last night's sleep —
-       * connect an Oura ring, or add the Apple Health shortcut", with its own
-       * "Not now" and "Show me" buttons across the bottom of the frame.
-       *
-       * It is the right nudge for a real athlete and the wrong thing to open
-       * a reel with: the first second is the one that decides, and a quarter
-       * of it is an upsell for hardware the viewer does not own yet.
-       *
-       * Same shape as the share prompt on the standards payoff beat, and
-       * optional for the same reason — it only appears for an account that
-       * has not answered it, so a run where it is absent is not a failure.
-       *
-       * POSTED WITH THE NUDGE STILL IN IT, and the numbers came back: 93.2%
-       * skip, higher than typical, on about 133 views. That is not evidence
-       * the tooltip caused it — 133 views is nine people staying and four
-       * likes, where one extra tap moves any rate by 0.8 points — and it is
-       * the only known defect in the second the skip figure measures, which
-       * is reason enough to take it out before reading anything into the
-       * next one.
-       * ═══════════════════════════════════════════════════════════════════
-       */
-      moves: [{ tap: "Not now", optional: true }],
-      /**
        * THE HOOK'S OWN WORDS ARE NOT AVAILABLE TO THE FIRST LINE.
        *
        * This said "Three hours' sleep, and your app still hands you..." over a

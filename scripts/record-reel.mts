@@ -805,12 +805,47 @@ const videoStart = Date.now();
 const settle = async () => {
   await page.waitForLoadState("networkidle", { timeout: 6_000 }).catch(() => {});
 };
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * NUDGES THE APP IS RIGHT TO SHOW AND THE REEL IS WRONG TO FILM.
+ *
+ * A dedicated demo account still gets offered things: "Stop typing last
+ * night's sleep — connect an Oura ring", and the install-to-home-screen
+ * prompt. Both are correct product behaviour and both are somebody else's
+ * advert sitting across the opening of ours.
+ *
+ * THIS USED TO BE A MOVE ON THE FIRST BEAT, and the recording showed why that
+ * was the wrong place. Moves run alongside the hook rather than before it, so
+ * the tap landed somewhere around 1.5s — the tooltip was gone by 2.5s and
+ * present for the whole of the first second. Instagram's retention curve for
+ * that reel falls from 100% to about 10% inside two seconds, so the fix was
+ * arriving after the audience had left.
+ *
+ * Here it happens while the routes are being warmed, before the clock starts
+ * and before a single recorded frame. It also covers every route rather than
+ * the one beat somebody remembered to annotate.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+const DISMISS_BEFORE_FILMING = ["Not now"];
+
+async function tidyScreen(): Promise<void> {
+  for (const label of DISMISS_BEFORE_FILMING) {
+    await page.evaluate(
+      (m) => (window as never as { __reelDo: (m: unknown) => boolean }).__reelDo(m),
+      { tap: label, optional: true },
+    ).catch(() => false);
+  }
+}
+
 for (const route of [...new Set(plan.steps.map((b) => b.route))]) {
   await page.goto(`${base}${route}`, { waitUntil: "load" }).catch(() => {});
   await settle();
+  await tidyScreen();
 }
 
 await page.goto(`${base}${plan.steps[0]?.route ?? "/"}`, { waitUntil: "load" }).catch(() => {});
+await settle();
+await tidyScreen();
 await settle();
 const started = Date.now();
 const leadMs = started - videoStart;
