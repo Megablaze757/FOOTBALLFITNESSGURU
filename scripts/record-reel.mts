@@ -866,7 +866,19 @@ for (const step of plan.steps) {
     await checkSafeZone("hook", "__reel_hook", plan.hook);
     // openingScroll, not 0.28 written twice: the closing beat glides back to
     // this exact position, so the two have to be the same number.
-    await page.evaluate((y) => window.scrollTo({ top: y, behavior: "smooth" }), openingScroll(page_)).catch(() => {});
+    /**
+     * GLIDED ACROSS THE WHOLE HOOK, not handed to the browser.
+     *
+     * behavior:"smooth" finishes when the browser decides — measured on a
+     * finished reel, about 360ms of a 1.6s hook, after which the frame was
+     * frozen for most of a second. Instagram's retention curve for that reel
+     * drops from 100% to roughly 10% inside two seconds, which is the window
+     * this was supposed to be filling.
+     */
+    await page.evaluate(
+      ({ to, ms }) => (window as never as { __reelGlide: (t: number, m: number) => void }).__reelGlide(to, ms),
+      { to: openingScroll(page_), ms: plan.hookMs },
+    ).catch(() => {});
     driftFrom = openingScroll(page_);
     // Held from the first frame, because the decision is made in three seconds
     // and the hook has to be readable inside them.

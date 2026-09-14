@@ -138,11 +138,34 @@ test("the caption is outlined, not boxed", () => {
  * A frame that does not move is a frame a scroller has finished reading, and
  * the only thing left to do with it is swipe.
  */
-test("the recorder starts moving under the hook", () => {
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * MOVING FOR AS LONG AS THE HOOK IS UP, NOT JUST STARTING TO MOVE.
+ *
+ * This asserted the hook block contains "scrollTo", which it did, and the
+ * frame was still frozen. behavior:"smooth" hands the animation to the
+ * browser and the browser finishes when it likes — measured on a finished
+ * reel, about 360ms of a 1,600ms hook. Frames 0.64s to 1.44s changed by less
+ * than 1.0 out of 255: 63 of the first 73 were effectively identical.
+ *
+ * Instagram's retention curve for that reel drops from 100% to roughly 10%
+ * inside two seconds, which is precisely the window the still frame occupies.
+ *
+ * So the check is the duration, not the call: the opening motion has to be
+ * handed the hook's length, which only __reelGlide takes.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("the recorder keeps moving for as long as the hook is up", () => {
   const src = readFileSync("scripts/record-reel.mts", "utf8");
   const hookBlock = src.slice(src.indexOf("if (!hookShown)"), src.indexOf("__reelHook(\"\")"));
-  assert.match(hookBlock, /scrollTo/,
-    "the hook holds a still frame for its whole duration again");
+  assert.match(hookBlock, /__reelGlide/,
+    "the opening scroll is handed to the browser again, which finishes it in a third of the hook");
+  assert.match(hookBlock, /ms: plan\.hookMs/,
+    "the glide is not given the hook's duration, so how long it moves is a guess");
+  const overlay = readFileSync("scripts/reel-overlay.js", "utf8");
+  assert.match(overlay, /__reelGlide = function/, "nothing in the page can glide");
+  assert.match(overlay, /requestAnimationFrame/,
+    "the glide is not animated frame by frame, so it cannot last a set time");
 });
 
 /**

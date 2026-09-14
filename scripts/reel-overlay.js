@@ -682,6 +682,51 @@
     captionTimers = [];
   };
 
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * A SCROLL THAT LASTS AS LONG AS THE HOOK DOES.
+   *
+   * The opening beat used to call scrollTo with behavior:"smooth", which is
+   * the browser's animation and finishes when the browser decides — measured
+   * on a finished reel, in about 360ms. The hook holds for 1.6 seconds, so
+   * the picture was frozen from 0.64s to 1.44s: 63 of the first 73 frames
+   * changed by less than 1.0 out of 255.
+   *
+   * That is the exact window Instagram's retention curve falls off a cliff
+   * in — 100% to about 10% inside two seconds — and this file already argues
+   * the point it was failing to deliver: "a frame that does not move is a
+   * frame a scroller has already finished reading". The intent was right and
+   * the browser's idea of smooth was three times too short.
+   *
+   * So the tween is ours and it runs for exactly as long as it is given.
+   * Eased so it does not stop dead: fast at the start, still moving at the
+   * end, which is what a thumb flicking a page looks like.
+   *
+   * IN THIS FILE, not in a page.evaluate, for the reason the whole file
+   * exists — a named function inside an evaluate is wrapped by esbuild in a
+   * __name helper that does not exist in the page.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  var glide = null;
+  window.__reelGlide = function (to, ms) {
+    install();
+    if (glide) cancelAnimationFrame(glide);
+    var from = window.scrollY;
+    var travel = to - from;
+    var started = 0;
+    if (!(ms > 0) || travel === 0) { window.scrollTo(0, to); return; }
+    var tick = function (now) {
+      if (!started) started = now;
+      var share = Math.min(1, (now - started) / ms);
+      // Ease out cubic: most of the distance early, never a hard stop.
+      var eased = 1 - Math.pow(1 - share, 3);
+      window.scrollTo(0, from + travel * eased);
+      if (share < 1) glide = requestAnimationFrame(tick);
+      else glide = null;
+    };
+    glide = requestAnimationFrame(tick);
+  };
+
   window.__reelCaption = function (value) {
     install();
     var el = document.getElementById("__reel_caption");

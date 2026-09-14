@@ -4,8 +4,7 @@ import { SKILL_DRILLS } from "./skills";
 import { DEMO_SCREENS } from "./demo-card";
 import {
   drillCaption, demoCaption, renderCaption, captionProblems, hashtags, supportingFact,
-  reelCaption, CAPTION_FOLD,
-  CAPTION_FOLD, CAPTION_MAX,
+  reelCaption, CAPTION_FOLD, CAPTION_MAX,
 } from "./caption";
 import { SCRIPTS, reelScript, type ScriptId } from "./reel-script";
 import { readFileSync } from "node:fs";
