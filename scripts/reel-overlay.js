@@ -227,6 +227,18 @@
      * Instagram reported a 91.7% skip rate on it, higher than typical, and
      * listed skip rate first as the thing that most affects reach.
      *
+     * HOW MUCH THAT NUMBER IS WORTH, since it is quoted as though it settles
+     * something. No sample size was recorded with it. A later reel measured
+     * 93.2%, also "higher than typical", on about 133 views — which is roughly
+     * nine people who did not skip, and engagement counts of 4 likes, 2
+     * reposts, 1 save and 0 comments. At that size a single extra tap moves
+     * any of those rates by 0.8 points, so the RATES are noise and only the
+     * direction of the skip figure carries anything at all.
+     *
+     * The reasoning below stands on what the frame does — a title slide shows
+     * no product in the second that decides — which is an argument about the
+     * picture rather than about the percentage.
+     *
      * A pill instead of a blackout: the words stay legible on this app's light
      * pages, and the ranked table the hook is ABOUT is visible behind them from
      * the first frame — already showing £0.31 at the top and £3.19 at the
