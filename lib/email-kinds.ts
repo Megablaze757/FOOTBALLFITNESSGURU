@@ -61,6 +61,17 @@ export const EMAIL_KINDS: EmailKind[] = [
     when: "When a target they set is hit." },
   { id: "milestone", label: "Milestone", group: "automatic",
     when: "A progress milestone other than a streak." },
+  /**
+   * The only kind that goes to somebody who has already stopped.
+   *
+   * Every other automatic email above is a nudge to somebody still using the
+   * app. This one is sent ONCE, to an athlete silent for 35 days, and only
+   * when there is a specific statistic about them worth a sentence — see
+   * lib/win-back.ts. An athlete with nothing to say about them gets nothing,
+   * which is why a low count here is the rule working rather than a fault.
+   */
+  { id: "win_back", label: "Win-back", group: "automatic",
+    when: "Once, 35 days after they go quiet, and only if their own numbers give it something to say." },
   { id: "program_assigned", label: "Programme assigned", group: "account",
     when: "When a coach assigns them a block." },
   { id: "coach_request", label: "Coach request", group: "account",

@@ -41,6 +41,15 @@ import { parseOuraSleep, parseIngestPayload } from "../../lib/biometrics";
 import { checkinReminderSince, daysBetween } from "../../lib/checkin-reminder";
 import { reminderPlan, silent, type ReminderInput } from "../../lib/reminder-plan";
 import { growthDigest } from "../../lib/growth-digest";
+// Same reasoning as the commission maths above: which windows count, what the
+// denominator is, and when a reading is too thin to quote are decisions with
+// wrong answers, and they are tested in lib/retention.test.ts.
+import { retentionReport, type Account } from "../../lib/retention";
+// Whether an athlete has a story worth one sentence, and which of their own
+// numbers leads with it, are the whole substance of this email. Tested in
+// lib/win-back.test.ts; a second copy here would be the one that sends the
+// "we miss you" the rule exists to prevent.
+import { winBack, type Facts } from "../../lib/win-back";
 import {
   CUES_PATH, MAX_ENTRIES, cueEntryProblems, cuesCommitMessage, decodeFileContent,
   encodeFileContent, mergeCues, parseCuesFile, renderCuesFile, type CueEntry,
@@ -302,7 +311,7 @@ export default {
       () => sendDeadlineReminders(env),
       () => sendMilestoneNotifications(env),
       () => createTrialEndingReminders(env),
-      ...(isMonday ? [() => sendWeeklySummaries(env), () => sendGrowthDigest(env)] : []),
+      ...(isMonday ? [() => sendWeeklySummaries(env), () => sendWinBacks(env), () => sendGrowthDigest(env)] : []),
       () => purgeExpiredVideos(env),
       () => emailNotifications(env),
     ]) {
@@ -545,7 +554,7 @@ function overBudget(state: BudgetState): Response {
 // nobody is watching a spinner and the budget can be what the work actually
 // needs. Callers pass their own client-side timeout to match.
 // Bump on every paste into the Cloudflare dashboard. GET /health reports it.
-const WORKER_VERSION = "2026-09-06.1";
+const WORKER_VERSION = "2026-09-16.1";
 
 const CHAIN_BUDGET_MS = 55_000;
 /**
@@ -3918,7 +3927,7 @@ async function approveDueCommissions(env: Env): Promise<void> {
 // key prevents a retried cron, a second Worker instance or a manual trigger
 // from telling somebody twice.
 
-type EmailCategory = "none" | "checkin" | "workout" | "weekly" | "milestone" | "program" | "essential";
+type EmailCategory = "none" | "checkin" | "workout" | "weekly" | "milestone" | "program" | "essential" | "win_back";
 
 interface ReminderProfile {
   id: string;
@@ -4194,6 +4203,73 @@ async function sendDeadlineReminders(env: Env): Promise<void> {
  * ADMINS ONLY, and by role rather than by a list of addresses — an address
  * list is a second place to remember when somebody joins or leaves.
  */
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE RETENTION LINES FOR THE WEEKLY NOTE.
+ *
+ * The funnel answers "why don't more people arrive" and nothing answered "did
+ * the ones who arrived stay". 0113 made that computable from what is already
+ * stored; this is the once-a-week read of it, so the answer turns up without
+ * anybody remembering to open a panel — which was the whole argument for the
+ * digest existing (see lib/growth-digest.ts).
+ *
+ * THE ARITHMETIC IS IMPORTED, NOT REWRITTEN. Which windows count, what the
+ * denominator is, and when a reading is too thin to quote all have wrong
+ * answers, and lib/retention.ts is where they are tested. A second copy here
+ * would be the one that drifts.
+ *
+ * THE LIMITS ARE REAL AND NAMED. This pulls every check-in and training log
+ * to date and counts them in memory, which is fine for an app whose only
+ * recorded size is "22 users" and is not fine forever. retention_standing()
+ * in 0113 does the same counting in the database for when it stops being;
+ * the reason this does not call it is that the Worker holds the service role
+ * and that function is gated on is_admin(), which a service-role caller is
+ * not. Rather than widen an admin function to a machine, the honest version
+ * is here with its ceiling written down.
+ *
+ * An empty list rather than a throw on any failure: a digest that arrives
+ * without its retention lines is worth more than no digest at all.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+const RETENTION_ROW_LIMIT = 20_000;
+
+async function retentionLines(env: Env): Promise<string[]> {
+  try {
+    const [profilesRes, checkRes, trainRes] = await Promise.all([
+      supa(env, "profiles?select=id,created_at&limit=5000"),
+      supa(env, `daily_check_ins?select=user_id,check_in_date&limit=${RETENTION_ROW_LIMIT}`),
+      supa(env, `training_logs?select=user_id,log_date&limit=${RETENTION_ROW_LIMIT}`),
+    ]);
+    if (!profilesRes.ok || !checkRes.ok || !trainRes.ok) return [];
+
+    const profiles = (await profilesRes.json()) as { id: string; created_at: string }[];
+    const checks = (await checkRes.json()) as { user_id: string; check_in_date: string }[];
+    const logs = (await trainRes.json()) as { user_id: string; log_date: string }[];
+
+    const days = new Map<string, Set<string>>();
+    const note = (userId: string, day: string) => {
+      if (!userId || !day) return;
+      const held = days.get(userId) ?? new Set<string>();
+      held.add(day.slice(0, 10));
+      days.set(userId, held);
+    };
+    for (const row of checks ?? []) note(row.user_id, row.check_in_date);
+    for (const row of logs ?? []) note(row.user_id, row.log_date);
+
+    const accounts: Account[] = (profiles ?? []).map((p) => ({
+      id: p.id,
+      joined: (p.created_at ?? "").slice(0, 10),
+      activeDays: [...(days.get(p.id) ?? [])],
+    }));
+
+    const today = new Date().toISOString().slice(0, 10);
+    return retentionReport(accounts, today);
+  } catch (error) {
+    console.error(`growth digest: retention lines unavailable (${String(error)})`);
+    return [];
+  }
+}
+
 async function sendGrowthDigest(env: Env): Promise<void> {
   const response = await supa(env, "profiles?role=eq.admin&select=id");
   if (!response.ok) {
@@ -4215,6 +4291,10 @@ async function sendGrowthDigest(env: Env): Promise<void> {
     : [];
 
   const digest = growthDigest({
+    // FIRST, because it is the answer to the question the digest is for. The
+    // share-loop counts below are about reach; these are about whether anybody
+    // stayed, and growthDigest puts `extra` at the top.
+    extra: await retentionLines(env),
     loop: {
       affiliateCodes: affiliates.map((a) => a.code),
       usernames: profiles.map((p) => p.username ?? "").filter(Boolean),
@@ -4239,6 +4319,93 @@ async function sendGrowthDigest(env: Env): Promise<void> {
     show_in_app: true,
     email_category: "weekly" as const,
   })));
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE ONE MESSAGE AFTER EVERYTHING ELSE HAS STOPPED.
+ *
+ * Every sender above gives up at thirty days of silence, because a thirty-
+ * first "you have not checked in" is the email that already failed thirty
+ * times and continuing is how a domain earns a spam reputation. The
+ * consequence, never written down until 0114: past that line nothing in this
+ * app ever contacts anybody again.
+ *
+ * This is the replacement, and it is deliberately not a reminder. The rule in
+ * lib/win-back.ts is that an athlete with no specific statistic to their name
+ * gets no email at all — because the alternative is "we miss you", which is
+ * the message everybody deletes and the one that costs the sending domain.
+ *
+ * ONCE PER ATHLETE, and not because this remembers. 0091's unique index on
+ * (user_id, dedupe_key) makes a second row impossible, and queueNotifications
+ * already posts with resolution=ignore-duplicates — so a cron that runs twice,
+ * a retry, or a future second sender all land on the same constraint rather
+ * than on somebody's good intentions.
+ *
+ * WEEKLY, not daily. Nothing about a ninety-day absence is urgent, and a daily
+ * sweep over the same query to send nothing is a daily chance to get it wrong.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+async function sendWinBacks(env: Env): Promise<void> {
+  const response = await supa(env, "rpc/win_back_candidates", {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+  if (!response.ok) {
+    console.error(`win-back: candidates unavailable (${response.status})`);
+    return;
+  }
+
+  const candidates = (await response.json()) as {
+    user_id: string;
+    full_name: string | null;
+    last_active: string | null;
+    sessions: number | string | null;
+    longest_streak: number | null;
+    best_metric: string | null;
+    best_value: number | string | null;
+    best_on: string | null;
+    wants_email: boolean | null;
+  }[];
+
+  const today = new Date().toISOString().slice(0, 10);
+  const rows: NotificationInput[] = [];
+
+  for (const row of candidates ?? []) {
+    // Only _1rm metrics reach here — see the filter in 0114 — so the unit is
+    // kilograms and does not have to be guessed per metric.
+    const value = Number(row.best_value ?? 0);
+    const facts: Facts = {
+      name: row.full_name,
+      lastActive: row.last_active,
+      sessions: Number(row.sessions ?? 0),
+      longestStreak: Number(row.longest_streak ?? 0),
+      best: row.best_metric && value > 0
+        ? { label: metricLabel(row.best_metric), value, unit: "kg", on: row.best_on ?? "" }
+        : null,
+      wantsEmail: row.wants_email !== false,
+      // The query already excludes anybody who has one. This is the same fact
+      // stated where the rule is, so the rule reads completely in one place.
+      alreadySent: false,
+    };
+
+    const message = winBack(facts, today);
+    if (!message) continue;
+
+    rows.push({
+      user_id: row.user_id,
+      kind: "win_back",
+      title: message.subject,
+      body: message.body,
+      href: message.href,
+      dedupe_key: "win_back",
+      show_in_app: true,
+      email_category: "win_back",
+    });
+  }
+
+  if (!rows.length) return;
+  await queueNotifications(env, rows);
 }
 
 async function sendWeeklySummaries(env: Env): Promise<void> {
