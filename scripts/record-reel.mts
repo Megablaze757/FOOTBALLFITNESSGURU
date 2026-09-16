@@ -970,7 +970,7 @@ console.log(`Recording "${script.hook}" — ${Math.round(plan.totalMs / 1000)}s,
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- * A ROUTE CHANGE RELOADS THE DOCUMENT, AND THAT IS THE LEAST-BAD OPTION.
+ * A ROUTE CHANGE RELOADS THE DOCUMENT, AND THE ALTERNATIVE COST TWO SECONDS.
  *
  * This was changed to click the app's own link instead — the app does
  * client-side routing, a marker on `window` survives a click and is destroyed
@@ -981,21 +981,32 @@ console.log(`Recording "${script.hook}" — ${Math.round(plan.totalMs / 1000)}s,
  *   caption drawn 2025ms after its moment, planned 2155ms at 10570ms on
  *   /home, so 130ms of it is on screen
  *
- * WHY, and it is not that the app is slow. page.goto returns at the `load`
- * event: the prerendered HTML for /home arrives quickly, React hydrates
- * afterwards, and the recorder carries on — so the hydration gap becomes the
- * blank frame the viewer sees. A soft navigation does not change
- * location.pathname until Next has the route's payload and is ready to render,
- * so waiting for it blocks for the whole thing. The time to content is much
- * the same either way. The only question is whether the recorder spends it
- * waiting or filming, and the captions are on an absolute clock, so waiting
- * spends it out of the beat.
+ * WHY IS NOT SETTLED, and the first explanation written here was wrong.
  *
- * WHICH MEANS THE FIX IS NEITHER. The navigation has to happen BEFORE the beat
- * that needs it — during the tail of the one before, while its caption is
- * still up — so the new screen is ready when the beat starts. That is a real
- * change to what the previous shot shows for its last half second, and it
- * needs its own measurement rather than another guess on top of this one.
+ * It said soft navigation is inherently slower because it does not commit the
+ * URL until the route is ready to render, so waiting for it costs the whole
+ * time to content. Measured afterwards against the local static export, that
+ * is not what the mechanism costs:
+ *
+ *   soft navigation, route never visited     83ms
+ *   soft navigation, route already fetched   40ms
+ *   page.goto, which returns at `load`      147ms
+ *
+ * So clicking is FASTER than reloading, by a wide margin, and 83ms fits
+ * comfortably inside the silence between two beats. Whatever cost two seconds
+ * on the recorder is specific to the screens it was crossing — /journal to
+ * /home, signed in, with the athlete's data to fetch — and not to client-side
+ * routing. Those pages are not reachable from here without the demo account,
+ * so the cause is genuinely unknown rather than diagnosed.
+ *
+ * WHAT WOULD ANSWER IT is one recording that prints how long each route change
+ * took, rather than a third attempt at the fix. The measurement below is the
+ * part worth having either way: every beat's last caption runs to the exact
+ * moment the next beat starts, so there is no gap to navigate into except the
+ * LEAD_MS + TAIL_MS of silence between them — about 360ms, during which the
+ * previous caption is still on screen and the previous beat's spotlight is
+ * still aimed. Any early navigation has to clear that spotlight first, and has
+ * to be soft, because a page.goto would take the caption with it.
  *
  * Left as it was, with the finding written down, because a pipeline that
  * records with a blank frame is worth more than one that refuses to record.

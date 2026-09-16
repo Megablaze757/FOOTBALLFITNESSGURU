@@ -439,9 +439,12 @@ test("the checker measures the hook, not just the captions", () => {
  */
 test("the reason the recorder still reloads the document is written down", () => {
   const rec = readFileSync("scripts/record-reel.mts", "utf8");
-  assert.match(rec, /A ROUTE CHANGE RELOADS THE DOCUMENT, AND THAT IS THE LEAST-BAD OPTION/,
-    "the finding that soft navigation was tried and measured worse is gone");
+  assert.match(rec, /A ROUTE CHANGE RELOADS THE DOCUMENT, AND THE ALTERNATIVE COST TWO SECONDS/,
+    "the finding that soft navigation was tried and cost two seconds is gone");
   assert.match(rec, /2025ms/, "the measurement that settled it is not quoted");
+  // And the correction: the mechanism itself is fast, so the two seconds was
+  // something about those screens rather than about client-side routing.
+  assert.match(rec, /83ms/, "the local timing that refuted the first explanation is gone");
   assert.doesNotMatch(rec, /async function softGoto/,
     "softGoto is back without the measurement that removed it being revisited");
 });
