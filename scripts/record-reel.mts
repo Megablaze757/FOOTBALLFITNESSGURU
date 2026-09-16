@@ -970,82 +970,37 @@ console.log(`Recording "${script.hook}" — ${Math.round(plan.totalMs / 1000)}s,
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- * NAVIGATE THE WAY AN ATHLETE DOES, NOT THE WAY A TEST DOES.
+ * A ROUTE CHANGE RELOADS THE DOCUMENT, AND THAT IS THE LEAST-BAD OPTION.
  *
- * Every route change in the reel was a page.goto, which is a FULL DOCUMENT
- * LOAD: the document is destroyed, the bundle is parsed again, React hydrates
- * again, and the app starts from nothing. Measured on the finished files, that
- * is 0.1 to 0.7 seconds of blank screen at the start of every beat that moves
- * — 0.7s on demo-readiness at /home — with the beat's caption already up over
- * it, because the caption is on time and the page is not.
+ * This was changed to click the app's own link instead — the app does
+ * client-side routing, a marker on `window` survives a click and is destroyed
+ * by page.goto, and lib/use-async.ts holds a module cache whose comment says
+ * it exists to stop exactly the skeleton flash the reels show. All of that is
+ * true and the change still made the reel worse. Recorded, measured, reverted:
  *
- * The app does not work that way and never did. lib/use-async.ts holds a
- * module-level cache whose own comment says why it exists: "Without it, every
- * navigation reran each page's loader from scratch and flashed a skeleton —
- * even returning to a page you were just on." A page.goto destroys that cache
- * every single time. The recorder was defeating the app's own fix for exactly
- * the defect the recording showed.
+ *   caption drawn 2025ms after its moment, planned 2155ms at 10570ms on
+ *   /home, so 130ms of it is on screen
  *
- * MEASURED BEFORE CHANGING ANYTHING, against the local static export:
+ * WHY, and it is not that the app is slow. page.goto returns at the `load`
+ * event: the prerendered HTML for /home arrives quickly, React hydrates
+ * afterwards, and the recorder carries on — so the hydration gap becomes the
+ * blank frame the viewer sees. A soft navigation does not change
+ * location.pathname until Next has the route's payload and is ready to render,
+ * so waiting for it blocks for the whole thing. The time to content is much
+ * the same either way. The only question is whether the recorder spends it
+ * waiting or filming, and the captions are on an absolute clock, so waiting
+ * spends it out of the beat.
  *
- *   page.goto        a marker put on window is GONE afterwards, and there is
- *                    a 150ms window where the page cannot even be queried
- *   clicking a link  the marker survives, and there is no such window
+ * WHICH MEANS THE FIX IS NEITHER. The navigation has to happen BEFORE the beat
+ * that needs it — during the tail of the one before, while its caption is
+ * still up — so the new screen is ready when the beat starts. That is a real
+ * change to what the previous shot shows for its last half second, and it
+ * needs its own measurement rather than another guess on top of this one.
  *
- * So the app does client-side routing, and clicking is how you get it.
- *
- * A DOM CLICK, NOT page.click(). Playwright's click scrolls the element into
- * view first, and the element is usually a nav item at the bottom of the
- * screen — so the camera would jerk down a fraction of a second before the
- * cut, on every beat that moves. Dispatching the click on the node moves
- * nothing.
- *
- * FALLS BACK TO page.goto, because a soft navigation needs a link to the
- * target on the page you are currently looking at, and not every route is one
- * tap from every other. When there is no link this is exactly what it was
- * before, which makes the worst case of this change "no worse than today".
- *
- * The overlay survives either way: it is appended to document.body outside
- * React's root, and install() returns early when the layer already exists.
+ * Left as it was, with the finding written down, because a pipeline that
+ * records with a blank frame is worth more than one that refuses to record.
  * ═══════════════════════════════════════════════════════════════════════════
  */
-const navigations: ("soft" | "hard")[] = [];
-
-async function softGoto(route: string): Promise<"soft" | "hard"> {
-  const clicked = await page.evaluate((to) => {
-    const wanted = [to, to.replace(/\/$/, ""), `${to.replace(/\/$/, "")}/`];
-    for (const node of Array.from(document.querySelectorAll("a[href]"))) {
-      const href = node.getAttribute("href") ?? "";
-      if (!wanted.includes(href)) continue;
-      // Dispatched, not Playwright's — see the note above on the camera.
-      (node as HTMLElement).click();
-      return true;
-    }
-    return false;
-  }, route).catch(() => false);
-
-  if (!clicked) {
-    await page.goto(`${base}${route}`, { waitUntil: "load" }).catch((e) => {
-      console.warn(`  ${route}: ${e instanceof Error ? e.message : e}`);
-    });
-    return "hard";
-  }
-
-  /**
-   * A soft navigation is not instant, and not waiting for it would aim the
-   * spotlight at the page being left. Short, because the alternative to
-   * arriving is carrying on — a route that never changes is a shot of the
-   * wrong screen, which the focus check below will refuse anyway.
-   */
-  await page.waitForFunction(
-    (to) => location.pathname.replace(/\/$/, "") === to.replace(/\/$/, ""),
-    route,
-    { timeout: 3_000 },
-  ).catch(() => {
-    console.warn(`  ${route}: the link was clicked and the route did not change`);
-  });
-  return "soft";
-}
 
 let hookShown = false;
 /** The hook coming off on its own clock. Resolved already on every later beat. */
@@ -1064,7 +1019,9 @@ for (const step of plan.steps) {
     onRoute = step.route;
     // A new screen starts at the top of it, not wherever the last one ended.
     driftFrom = 0;
-    navigations.push(await softGoto(step.route));
+    await page.goto(`${base}${step.route}`, { waitUntil: "load" }).catch((e) => {
+      console.warn(`  ${step.route}: ${e instanceof Error ? e.message : e}`);
+    });
   }
 
   /**
@@ -1528,12 +1485,6 @@ writeFileSync(join(outDir, `${script.id}.sync.json`), JSON.stringify({
   id: script.id,
   totalMs: plan.totalMs,
   leadMs,
-  /**
-   * How each route change was made. A reel that is all "hard" is a reel where
-   * the app offered no link between its screens, and every one of those is a
-   * blank frame the viewer sees — see softGoto.
-   */
-  navigations,
   steps: plan.steps.map((step) => ({
     index: step.index,
     route: step.route,

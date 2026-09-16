@@ -419,47 +419,29 @@ test("the checker measures the hook, not just the captions", () => {
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- * THE RECORDER NAVIGATES THE WAY THE APP DOES.
+ * A ROUTE CHANGE RELOADS THE DOCUMENT, AND THE ALTERNATIVE WAS MEASURED WORSE.
  *
- * Every route change used to be a page.goto — a full document load that
- * destroys the module-level cache in lib/use-async.ts, whose own comment says
- * it exists because "every navigation reran each page's loader from scratch
- * and flashed a skeleton". The recorder was defeating the app's own fix for
- * the exact defect the finished reels showed: 0.1 to 0.7 seconds of blank
- * screen at the start of every beat that moves.
+ * Clicking the app's own link instead was tried and reverted. Everything that
+ * argued for it is true — the app does client-side routing, a marker on
+ * `window` survives a click and dies on page.goto, and lib/use-async.ts holds
+ * a module cache whose comment says it exists to stop the skeleton flash the
+ * reels show. It still made the reel worse, and the recording said so:
+ * "caption drawn 2025ms after its moment ... so 130ms of it is on screen".
  *
- * Measured against the local export before the change: a marker on `window`
- * is gone after page.goto and survives a link click.
+ * page.goto returns at `load` and the recorder carries on while React
+ * hydrates, so the gap is filmed. A soft navigation does not commit until the
+ * route is ready to render, so waiting for it is spent out of the beat. The
+ * time to content is much the same; only who spends it differs.
+ *
+ * This test exists so the next person to have that good idea finds the
+ * measurement before the CI run rather than after it.
  * ═══════════════════════════════════════════════════════════════════════════
  */
-test("a route change tries the app's own link before reloading the document", () => {
+test("the reason the recorder still reloads the document is written down", () => {
   const rec = readFileSync("scripts/record-reel.mts", "utf8");
-  const fn = rec.slice(rec.indexOf("async function softGoto"));
-  const body = fn.slice(0, fn.indexOf("\nlet hookShown"));
-
-  assert.match(body, /querySelectorAll\("a\[href\]"\)/, "nothing looks for a link to the target");
-  assert.match(body, /page\.goto/, "there is no fallback, so a route with no link would not be reached");
-
-  /**
-   * Playwright's click scrolls the element into view, and the element is
-   * usually a nav item at the bottom of the screen — so the camera would jerk
-   * down a fraction of a second before every cut.
-   */
-  assert.doesNotMatch(body, /await page\.click\(/,
-    "Playwright's click scrolls the target into view, which moves the camera mid-shot");
-});
-
-test("the beat loop no longer reloads the document itself", () => {
-  const rec = readFileSync("scripts/record-reel.mts", "utf8");
-  const loop = rec.slice(rec.indexOf("for (const step of plan.steps)"));
-  const routeChange = loop.slice(0, loop.indexOf("if (!hookShown)"));
-  assert.match(routeChange, /softGoto\(step\.route\)/, "the beat loop navigates without going through softGoto");
-  assert.doesNotMatch(routeChange, /page\.goto/,
-    "the beat loop still does a full document load, which is the blank frame");
-});
-
-/** A claim nobody can check is a claim that goes stale. */
-test("which kind of navigation each beat got is written down", () => {
-  const rec = readFileSync("scripts/record-reel.mts", "utf8");
-  assert.match(rec, /navigations,/, "the sync report does not record how the routes were changed");
+  assert.match(rec, /A ROUTE CHANGE RELOADS THE DOCUMENT, AND THAT IS THE LEAST-BAD OPTION/,
+    "the finding that soft navigation was tried and measured worse is gone");
+  assert.match(rec, /2025ms/, "the measurement that settled it is not quoted");
+  assert.doesNotMatch(rec, /async function softGoto/,
+    "softGoto is back without the measurement that removed it being revisited");
 });
