@@ -948,6 +948,85 @@ let driftFrom = 0;
 
 console.log(`Recording "${script.hook}" — ${Math.round(plan.totalMs / 1000)}s, ${plan.steps.length} beats`);
 
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * NAVIGATE THE WAY AN ATHLETE DOES, NOT THE WAY A TEST DOES.
+ *
+ * Every route change in the reel was a page.goto, which is a FULL DOCUMENT
+ * LOAD: the document is destroyed, the bundle is parsed again, React hydrates
+ * again, and the app starts from nothing. Measured on the finished files, that
+ * is 0.1 to 0.7 seconds of blank screen at the start of every beat that moves
+ * — 0.7s on demo-readiness at /home — with the beat's caption already up over
+ * it, because the caption is on time and the page is not.
+ *
+ * The app does not work that way and never did. lib/use-async.ts holds a
+ * module-level cache whose own comment says why it exists: "Without it, every
+ * navigation reran each page's loader from scratch and flashed a skeleton —
+ * even returning to a page you were just on." A page.goto destroys that cache
+ * every single time. The recorder was defeating the app's own fix for exactly
+ * the defect the recording showed.
+ *
+ * MEASURED BEFORE CHANGING ANYTHING, against the local static export:
+ *
+ *   page.goto        a marker put on window is GONE afterwards, and there is
+ *                    a 150ms window where the page cannot even be queried
+ *   clicking a link  the marker survives, and there is no such window
+ *
+ * So the app does client-side routing, and clicking is how you get it.
+ *
+ * A DOM CLICK, NOT page.click(). Playwright's click scrolls the element into
+ * view first, and the element is usually a nav item at the bottom of the
+ * screen — so the camera would jerk down a fraction of a second before the
+ * cut, on every beat that moves. Dispatching the click on the node moves
+ * nothing.
+ *
+ * FALLS BACK TO page.goto, because a soft navigation needs a link to the
+ * target on the page you are currently looking at, and not every route is one
+ * tap from every other. When there is no link this is exactly what it was
+ * before, which makes the worst case of this change "no worse than today".
+ *
+ * The overlay survives either way: it is appended to document.body outside
+ * React's root, and install() returns early when the layer already exists.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+const navigations: ("soft" | "hard")[] = [];
+
+async function softGoto(route: string): Promise<"soft" | "hard"> {
+  const clicked = await page.evaluate((to) => {
+    const wanted = [to, to.replace(/\/$/, ""), `${to.replace(/\/$/, "")}/`];
+    for (const node of Array.from(document.querySelectorAll("a[href]"))) {
+      const href = node.getAttribute("href") ?? "";
+      if (!wanted.includes(href)) continue;
+      // Dispatched, not Playwright's — see the note above on the camera.
+      (node as HTMLElement).click();
+      return true;
+    }
+    return false;
+  }, route).catch(() => false);
+
+  if (!clicked) {
+    await page.goto(`${base}${route}`, { waitUntil: "load" }).catch((e) => {
+      console.warn(`  ${route}: ${e instanceof Error ? e.message : e}`);
+    });
+    return "hard";
+  }
+
+  /**
+   * A soft navigation is not instant, and not waiting for it would aim the
+   * spotlight at the page being left. Short, because the alternative to
+   * arriving is carrying on — a route that never changes is a shot of the
+   * wrong screen, which the focus check below will refuse anyway.
+   */
+  await page.waitForFunction(
+    (to) => location.pathname.replace(/\/$/, "") === to.replace(/\/$/, ""),
+    route,
+    { timeout: 3_000 },
+  ).catch(() => {
+    console.warn(`  ${route}: the link was clicked and the route did not change`);
+  });
+  return "soft";
+}
+
 let hookShown = false;
 /** The hook coming off on its own clock. Resolved already on every later beat. */
 let hookHold: Promise<void> = Promise.resolve();
@@ -965,9 +1044,7 @@ for (const step of plan.steps) {
     onRoute = step.route;
     // A new screen starts at the top of it, not wherever the last one ended.
     driftFrom = 0;
-    await page.goto(`${base}${step.route}`, { waitUntil: "load" }).catch((e) => {
-      console.warn(`  ${step.route}: ${e instanceof Error ? e.message : e}`);
-    });
+    navigations.push(await softGoto(step.route));
   }
 
   /**
@@ -1431,6 +1508,12 @@ writeFileSync(join(outDir, `${script.id}.sync.json`), JSON.stringify({
   id: script.id,
   totalMs: plan.totalMs,
   leadMs,
+  /**
+   * How each route change was made. A reel that is all "hard" is a reel where
+   * the app offered no link between its screens, and every one of those is a
+   * blank frame the viewer sees — see softGoto.
+   */
+  navigations,
   steps: plan.steps.map((step) => ({
     index: step.index,
     route: step.route,
