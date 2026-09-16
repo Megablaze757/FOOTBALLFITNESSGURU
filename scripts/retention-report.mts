@@ -46,6 +46,7 @@ import {
   LAPSED_AFTER_DAYS, daysSinceActive, longestStreak, retentionReport, standing, type Account,
 } from "../lib/retention";
 import { describeRate, detectableLift, sampleNeeded } from "../lib/proportions";
+import { firstUse } from "../lib/funnel";
 import { winBack, WIN_BACK_AFTER_DAYS, WIN_BACK_UNTIL_DAYS, type Facts } from "../lib/win-back";
 import { metricLabel } from "../lib/milestones";
 
@@ -97,6 +98,18 @@ const { rows: bests } = await client.query(
     where m.key like '%\\_1rm'
       and jsonb_typeof(m.value) = 'number'
       and (m.value)::text::numeric > 0`,
+);
+/**
+ * The activation events, counted per DISTINCT athlete.
+ *
+ * Counting rows would count somebody who built three blocks as three people
+ * and turn a fraction of onboarded into something over 100%. The question is
+ * "how many people ever reached this", which is a count of distinct users.
+ */
+const { rows: events } = await client.query(
+  `select event, count(distinct user_id)::int as people
+     from public.funnel_events
+    group by event`,
 );
 const { rows: consent } = await client.query(
   `select count(*) filter (where health_data_consent_at is not null) as consented,
@@ -167,6 +180,31 @@ line(`PocketAthlete — retention, ${today}`);
 line("=".repeat(60));
 line();
 for (const l of retentionReport(accounts, today)) line(`  ${l}`);
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * WHERE THE ONES WHO NEVER LOGGED ANYTHING ACTUALLY STOPPED.
+ *
+ * "Never logged anything" is one number and three completely different
+ * problems: they never finished onboarding, they onboarded and never got a
+ * block, or they got a block and never trained from it. The fixes have nothing
+ * in common, and until program_built and first_session were given a place in
+ * the report the difference could not be seen.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+const counts: Record<string, number> = {};
+for (const row of events) counts[String(row.event)] = Number(row.people ?? 0);
+const started = firstUse(counts);
+
+line();
+line("Did the product ever start working for them?");
+line("-".repeat(60));
+if (!started.base) {
+  line("  Nobody has finished onboarding, so there is nothing to measure yet.");
+} else {
+  line(`  Of the ${started.base} who finished onboarding:`);
+  for (const step of started.steps) line(`    ${step.label}: ${step.reading}`);
+}
 
 const where = standing(accounts, today);
 line();

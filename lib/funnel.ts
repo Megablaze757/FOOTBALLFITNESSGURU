@@ -13,6 +13,7 @@
 // =============================================================================
 
 import { createClient } from "./supabase/client";
+import { describeRate } from "./proportions";
 
 /** The funnel, in order. Must match the CHECK constraint in migration 0045. */
 export const FUNNEL_EVENTS = [
@@ -67,13 +68,48 @@ export type FunnelStep = FunnelEvent | "confirmed_email";
  * `revenue` is its own chain, entered from anywhere in the app. Percentages are
  * only ever computed inside a group, never across the boundary.
  */
-export type StepGroup = "activation" | "revenue";
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * AND A THIRD GROUP, WHICH IS NOT A CHAIN AT ALL.
+ *
+ * `program_built` and `first_session` were added to FUNNEL_EVENTS because,
+ * as the note on them says, "how long until someone has a plan and has trained
+ * from it? — the number the D7 target rests on — was unanswerable". They have
+ * been recorded on every account ever since and appear in NO report: the step
+ * list stops at first_check_in, so the question is still unanswerable and the
+ * data to answer it has been sitting there the whole time.
+ *
+ * They are not appended to the activation chain, because they are not ordered
+ * with it or with each other. Somebody can log a session without ever doing a
+ * morning check-in; somebody can be handed a block without either. Putting
+ * them in a chain would divide one by the other and produce exactly the
+ * category error described above — "0% of previous" for two things that do not
+ * follow one another.
+ *
+ * So they are a SET measured against the same base: of the people who finished
+ * onboarding, how many ever did each of these. Three independent answers to
+ * "did the product actually start working for them", which is the only
+ * question that matters when most accounts never log anything.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export type StepGroup = "activation" | "revenue" | "first_use";
+
+/**
+ * The groups whose steps genuinely follow one another.
+ *
+ * worstStep walks adjacent pairs, and doing that inside `first_use` would
+ * compare two things that do not follow one another — the mistake this file
+ * already records having made once.
+ */
+export const ORDERED_GROUPS: readonly StepGroup[] = ["activation", "revenue"];
 
 export const FUNNEL_STEPS: { event: FunnelStep; label: string; note: string; group: StepGroup }[] = [
   { event: "signup", label: "Signed up", note: "Created an account", group: "activation" },
   { event: "confirmed_email", label: "Confirmed email", note: "Clicked the link — until they do, they cannot reach the app at all", group: "activation" },
   { event: "onboarded", label: "Onboarded", note: "Told us their sport and position", group: "activation" },
   { event: "first_check_in", label: "Activated", note: "Completed a first check-in — the habit starts here", group: "activation" },
+  { event: "program_built", label: "Got a block", note: "A training block was generated for them", group: "first_use" },
+  { event: "first_session", label: "Trained once", note: "Logged a session — the product has now done its job at least once", group: "first_use" },
   { event: "paywall_hit", label: "Hit a paywall", note: "Wanted something a free plan doesn't include", group: "revenue" },
   { event: "plan_view", label: "Viewed plans", note: "Opened the pricing page", group: "revenue" },
   { event: "checkout_start", label: "Started checkout", note: "Opened Stripe", group: "revenue" },
@@ -135,6 +171,57 @@ export function trackOnce(event: FunnelEvent, meta: Record<string, string | numb
   track(event, meta);
 }
 
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * DID THE PRODUCT EVER ACTUALLY START WORKING FOR THEM?
+ *
+ * Every step above this is about getting through a door. This is the first
+ * question about what happened afterwards, and when most accounts never log
+ * anything it is the only question worth asking: of the people who finished
+ * onboarding, how many ever checked in, ever got a block, ever trained once.
+ *
+ * MEASURED AGAINST ONBOARDING, not against each other, because they are not
+ * ordered — see the note on StepGroup. Three independent fractions of one
+ * base, which is a thing that can be read; a chain of them is not.
+ *
+ * EACH ONE CARRIES ITS COUNT, via lib/proportions.ts. "27% got a block" and
+ * "3 of 11 got a block" are the same fact read completely differently, and at
+ * the sizes this project has, the second is the only honest one.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export interface FirstUse {
+  event: FunnelStep;
+  label: string;
+  note: string;
+  /** How many of `base` reached it. */
+  count: number;
+  /** The count, the rate, and the range it could be. */
+  reading: string;
+}
+
+export function firstUse(counts: Record<string, number>): { base: number; steps: FirstUse[] } {
+  // Onboarding is the base: before it somebody has not seen the product at
+  // all, so counting them as having failed to train is measuring the signup
+  // form. Absent rather than zero — an unmeasured base is not an empty one.
+  const base = counts.onboarded ?? 0;
+  const of = FUNNEL_STEPS.filter(
+    (s) => s.group === "first_use" || s.event === "first_check_in",
+  );
+  return {
+    base,
+    steps: of.map((step) => {
+      const count = counts[step.event] ?? 0;
+      return {
+        event: step.event,
+        label: step.label,
+        note: step.note,
+        count,
+        reading: describeRate(count, base),
+      };
+    }),
+  };
+}
+
 /** Conversion between two steps, as a percentage. */
 export function conversion(from: number, to: number): number {
   if (from <= 0) return 0;
@@ -172,6 +259,10 @@ export function worstStep(
     // revenue one measured nothing — a paywall is reachable without a check-in,
     // so the "drop" between them was an artifact of the list order.
     if (a.group !== b.group) continue;
+    // And only inside a chain that IS one. `first_use` is a set of unordered
+    // outcomes; walking adjacent pairs of it would divide "trained once" by
+    // "got a block" and call the result a drop-off.
+    if (!ORDERED_GROUPS.includes(a.group)) continue;
     const from = counts[a.event] ?? 0;
     const to = counts[b.event] ?? 0;
     if (from <= 0) continue;

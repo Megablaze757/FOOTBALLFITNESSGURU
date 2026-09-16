@@ -1,6 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { conversion, worstStep, FUNNEL_STEPS, FUNNEL_EVENTS } from "./funnel";
+import {
+  FUNNEL_EVENTS, FUNNEL_STEPS, ORDERED_GROUPS, conversion, firstUse, worstStep,
+} from "./funnel";
 
 test("conversion is a percentage to one decimal", () => {
   assert.equal(conversion(100, 50), 50);
@@ -210,4 +212,66 @@ test("skipping onboarding is recorded, and marked as a skip", () => {
     "skipping marks the profile onboarded but records nothing, so it reads as a drop-out");
   assert.match(skip, /skipped:\s*true/,
     "a skip is indistinguishable from a completed onboarding");
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FIRST USE: DID THE PRODUCT EVER ACTUALLY START WORKING FOR THEM?
+//
+// program_built and first_session have been recorded on every account since
+// they were added, and appeared in no report — the step list stopped at
+// first_check_in. The question they were added to answer stayed unanswerable
+// while the data to answer it sat in the table.
+// ═══════════════════════════════════════════════════════════════════════════
+
+test("the events that were recorded and never shown now have a home", () => {
+  const shown = new Set(FUNNEL_STEPS.map((s) => s.event));
+  for (const event of ["program_built", "first_session"] as const) {
+    assert.ok(shown.has(event), `${event} is recorded on every account and reported nowhere`);
+  }
+});
+
+test("first use is measured against onboarding, not against itself", () => {
+  const { base, steps } = firstUse({
+    signup: 22, onboarded: 11, first_check_in: 6, program_built: 4, first_session: 2,
+  });
+  assert.equal(base, 11, "the base is not the people who finished onboarding");
+  assert.deepEqual(steps.map((s) => s.count), [6, 4, 2]);
+  // Every one of them is a fraction of 11, not of the step above it.
+  for (const step of steps) assert.match(step.reading, /of 11/, step.reading);
+});
+
+test("each reading leads with its count", () => {
+  const { steps } = firstUse({ onboarded: 11, first_check_in: 6, program_built: 4, first_session: 2 });
+  assert.match(steps.find((s) => s.event === "first_session")!.reading, /^2 of 11/);
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE CATEGORY ERROR THIS FILE ALREADY RECORDS MAKING ONCE.
+ *
+ * Somebody can log a session without ever doing a morning check-in, and can be
+ * handed a block without either. Walking adjacent pairs of those and calling
+ * the difference a drop-off is the "0% of previous" nonsense the note on
+ * StepGroup describes.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("the unordered group is never walked as a chain", () => {
+  assert.ok(!ORDERED_GROUPS.includes("first_use"),
+    "first_use is treated as ordered, so worstStep will divide one of its steps by another");
+
+  // A shape where the first-use steps look like a catastrophic drop if chained,
+  // and the real worst step is inside activation.
+  const worst = worstStep({
+    signup: 100, confirmed_email: 90, onboarded: 30,
+    first_check_in: 25, program_built: 3, first_session: 1,
+  });
+  assert.ok(worst, "nothing was reported at all");
+  assert.equal(worst.from, "Confirmed email");
+  assert.equal(worst.to, "Onboarded");
+});
+
+test("nobody onboarded is reported as no knowledge rather than as nobody trained", () => {
+  const { base, steps } = firstUse({ signup: 5 });
+  assert.equal(base, 0);
+  for (const step of steps) assert.equal(step.reading, "nobody yet", step.label);
 });
