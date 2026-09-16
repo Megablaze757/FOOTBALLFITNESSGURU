@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   ACTIVE_WITHIN_DAYS, LAPSED_AFTER_DAYS, WINDOWS,
-  daysBetween, daysSinceActive, everReturned, retentionCurve, retentionReport, standing,
+  daysBetween, daysSinceActive, everReturned, longestStreak, retentionCurve, retentionReport, standing,
   type Account,
 } from "./retention";
 
@@ -202,4 +202,42 @@ test("the report survives rows with nothing in them", () => {
   const broken = [{ id: "x", joined: "", activeDays: [] }] as Account[];
   assert.doesNotThrow(() => retentionReport(broken, TODAY));
   assert.deepEqual(retentionReport(broken, TODAY), ["No accounts yet."]);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// THE LONGEST RUN THEY EVER PUT TOGETHER.
+//
+// Not lib/milestones.ts's currentStreak, which answers "how many in a row
+// right now" — and that is zero for everybody this module is about.
+// ═══════════════════════════════════════════════════════════════════════════
+
+test("the longest run is found, not the last one", () => {
+  // A five, then a gap, then a two. The five is the answer.
+  assert.equal(longestStreak([
+    "2026-01-01", "2026-01-02", "2026-01-03", "2026-01-04", "2026-01-05",
+    "2026-02-01", "2026-02-02",
+  ]), 5);
+});
+
+test("order and duplicates do not matter", () => {
+  assert.equal(longestStreak(["2026-01-03", "2026-01-01", "2026-01-02", "2026-01-02"]), 3);
+});
+
+test("one day is a run of one, and no days is none", () => {
+  assert.equal(longestStreak(["2026-01-01"]), 1);
+  assert.equal(longestStreak([]), 0);
+});
+
+test("a gap of one day breaks the run", () => {
+  assert.equal(longestStreak(["2026-01-01", "2026-01-03"]), 1);
+});
+
+/** A month boundary is consecutive; treating it as a gap would halve real streaks. */
+test("a run across a month and a leap day is unbroken", () => {
+  assert.equal(longestStreak(["2026-01-30", "2026-01-31", "2026-02-01"]), 3);
+  assert.equal(longestStreak(["2024-02-28", "2024-02-29", "2024-03-01"]), 3);
+});
+
+test("an unparseable day is skipped rather than breaking the count", () => {
+  assert.equal(longestStreak(["2026-01-01", "not a day", "2026-01-02"]), 2);
 });

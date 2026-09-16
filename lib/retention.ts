@@ -155,6 +155,34 @@ export function daysSinceActive(account: Account, asOf: string): number | null {
   return best;
 }
 
+/**
+ * The longest run of consecutive days in a set.
+ *
+ * lib/milestones.ts already has currentStreak, and this is deliberately not
+ * it: that answers "how many in a row right now", which is zero for everybody
+ * this module is about. The longest run they ever put together is a fact that
+ * survives them stopping, which is the only kind of fact a message to somebody
+ * who has stopped can be built on.
+ *
+ * Duplicates and disorder are harmless — the days are sorted and de-duplicated
+ * here, because the callers gather them from two tables and a set union is not
+ * something worth asking each of them to remember.
+ */
+export function longestStreak(days: readonly string[]): number {
+  const sorted = [...new Set((days ?? []).filter(Boolean))].sort();
+  let best = 0;
+  let run = 0;
+  let previous: number | null = null;
+  for (const day of sorted) {
+    const at = Date.parse(`${day}T00:00:00Z`);
+    if (!Number.isFinite(at)) continue;
+    run = previous !== null && at - previous === 86_400_000 ? run + 1 : 1;
+    previous = at;
+    if (run > best) best = run;
+  }
+  return best;
+}
+
 export interface Standing {
   /** Put something in within `activeWithin` days. */
   active: Account[];
