@@ -26,7 +26,7 @@ import { spawn } from "node:child_process";
 import { join } from "node:path";
 import { reelScript, type ScriptId } from "../lib/reel-script";
 import { reelPlan, srt, endCardAt, REEL_W, REEL_H, REEL_SCALE } from "../lib/reel-plan";
-import { MAX_CAPTION_LATE_MS, retentionProblems } from "../lib/reel-retention";
+import { MAX_CAPTION_LATE_MS, retentionProblems, revealAudience } from "../lib/reel-retention";
 import { closingDrift, driftTarget, openingScroll } from "../lib/reel-scroll";
 import { implausibleAudio } from "../lib/reel";
 import { outsideSafeZone, MAX_CAPTION_LINES } from "../lib/safe-zone";
@@ -430,6 +430,26 @@ if (problems.length) {
   for (const p of problems) console.error(`  ${p.beat < 0 ? "reel" : `beat ${p.beat + 1}`}: ${p.problem}`);
   process.exit(1);
 }
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * AND THE ONE NUMBER THE RULES ABOVE CANNOT TURN INTO A RULE.
+ *
+ * Every check above is a threshold something either clears or does not. This
+ * is a measurement of how many people will be left when the reel gets to its
+ * point, on the curve this account actually recorded — and across every script
+ * the project owns the answer is between 8 and 11 per cent.
+ *
+ * Printed rather than enforced. A rule that failed all of them would be turned
+ * off within a day, and the honest reading is not "this script is broken" but
+ * "this format spends most of itself on an audience that has already gone".
+ * That is a decision about what to make, and it belongs to whoever is making
+ * it, with the number in front of them rather than in a file they have to go
+ * and find.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+const audience = revealAudience(plan);
+if (audience) console.log(`  ${audience.reading}`);
 
 mkdirSync(outDir, { recursive: true });
 const rawDir = mkdtempSync(join(tmpdir(), "reel-raw-"));

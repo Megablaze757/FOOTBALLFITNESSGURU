@@ -241,6 +241,87 @@ export const MAX_OPENING_SILENCE_MS = 300;
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
+ * THE CURVE THIS PROJECT ACTUALLY MEASURED, AS A FUNCTION.
+ *
+ * Digitised from the published reel's own Instagram insights: 100% at the
+ * start, 85% at half a second, 50% at one, 32.5% at one and a half, 21.3% at
+ * two, 10.8% at three, decaying to 2.4% by the end of a 27-second reel.
+ *
+ * It is here as numbers rather than as prose in a comment because the useful
+ * question is arithmetic: given that something happens at second N, how many
+ * people are still there to see it? Every band and deadline above was chosen
+ * against a published benchmark for accounts with an audience. This is the one
+ * measurement of THIS account, and it is far harsher than any of them.
+ *
+ * ONE REEL, ABOUT 133 VIEWS. It is not a law and the next reel will differ.
+ * It is still the only real evidence there is, and using it beats using a
+ * figure from somebody else's account.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export const MEASURED_CURVE: readonly (readonly [number, number])[] = [
+  [0, 1], [500, 0.85], [1_000, 0.5], [1_500, 0.325],
+  [2_000, 0.213], [3_000, 0.108], [27_000, 0.024],
+];
+
+/** What fraction of viewers are still watching at `ms`, on the measured curve. */
+export function stillWatching(ms: number): number {
+  const at = Math.max(0, ms);
+  for (let i = 1; i < MEASURED_CURVE.length; i++) {
+    const [t0, v0] = MEASURED_CURVE[i - 1];
+    const [t1, v1] = MEASURED_CURVE[i];
+    if (at <= t1) return v0 + (v1 - v0) * ((at - t0) / (t1 - t0));
+  }
+  return MEASURED_CURVE[MEASURED_CURVE.length - 1][1];
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * WHO IS LEFT WHEN THE REEL GETS TO ITS POINT.
+ *
+ * lib/narration.ts says what a `hold` means: "the script saying wait here.
+ * Used at the reveal and nowhere else". So every script names its own payoff,
+ * and the curve says how many people are still there for it. Measured across
+ * the scripts as they stand:
+ *
+ *   demo-readiness         reveal at 11.4s     7.9% still watching
+ *   standards              reveal at  9.2s     8.6%
+ *   card-cheapest-protein  reveal at  4.5s    10.3%
+ *   demo-cost              reveal at  3.3s    10.7%
+ *
+ * The spread is small and that is the finding: on this curve there is no good
+ * late moment. Anything after about three seconds is seen by a tenth of the
+ * audience whether it happens at four seconds or at twelve, so moving a reveal
+ * from 11s to 5s buys very little. What buys something is the reel being about
+ * its point from the first frame — which is what the card formats already do,
+ * with the figure on screen before a word is said.
+ *
+ * REPORTED, NOT REFUSED. A rule that failed every script the project owns
+ * would be switched off within a day, and the honest reading of these numbers
+ * is not "this script is broken" but "this format spends most of itself on an
+ * audience that has gone". That is a decision about what to make, and it
+ * belongs to a person, with the number in front of them.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export interface RevealAudience {
+  atMs: number;
+  fraction: number;
+  reading: string;
+}
+
+export function revealAudience(plan: ReelPlan): RevealAudience | null {
+  const held = plan.steps.find((step) => Number((step as { hold?: number }).hold ?? 0) > 0);
+  if (!held) return null;
+  const fraction = stillWatching(held.at);
+  return {
+    atMs: held.at,
+    fraction,
+    reading: `the reveal lands at ${(held.at / 1000).toFixed(1)}s, where the measured curve `
+      + `has ${(fraction * 100).toFixed(0)}% of the audience left`,
+  };
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
  * HOW LATE A CAPTION MAY BE DRAWN BEFORE THE SCHEDULE IS A FICTION.
  *
  * Every rule in this file that measures a caption measures the PLAN. The

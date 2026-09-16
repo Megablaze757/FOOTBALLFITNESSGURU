@@ -2,7 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   HOOK_MAX_WORDS, MAX_ONE_ROUTE_SHARE, MAX_REEL_MS, MAX_SILENT_MS, MIN_CAPTION_MS,
-  hookProblems, retentionProblems, silentGaps, MAX_OPENING_SILENCE_MS, MAX_CAPTION_LATE_MS,
+  hookProblems, retentionProblems, silentGaps, stillWatching,
+  MAX_OPENING_SILENCE_MS, MAX_CAPTION_LATE_MS,
 } from "./reel-retention";
 import { reelPlan, type PlannableScript } from "./reel-plan";
 import { SCRIPTS, reelScript, scriptProblems } from "./reel-script";
@@ -367,4 +368,55 @@ test("the two failures it was written for are both well over it", () => {
     assert.ok(failure > MAX_CAPTION_LATE_MS * 2,
       `${failure}ms would not be caught with room to spare by a ${MAX_CAPTION_LATE_MS}ms allowance`);
   }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// THE CURVE THIS ACCOUNT ACTUALLY MEASURED, AS ARITHMETIC.
+// ═══════════════════════════════════════════════════════════════════════════
+
+test("the curve returns what was digitised from the insights", () => {
+  assert.equal(stillWatching(0), 1);
+  for (const [ms, want] of [[500, 0.85], [1_000, 0.5], [2_000, 0.213], [3_000, 0.108]] as const) {
+    assert.ok(Math.abs(stillWatching(ms) - want) < 1e-9, `${ms}ms gave ${stillWatching(ms)}`);
+  }
+});
+
+test("it interpolates between the points rather than stepping", () => {
+  const half = stillWatching(750);
+  assert.ok(half < 0.85 && half > 0.5, `750ms gave ${half}, which is not between the neighbours`);
+});
+
+test("it never climbs, and never leaves the range a fraction lives in", () => {
+  let previous = 1.0001;
+  for (let ms = 0; ms <= 40_000; ms += 100) {
+    const at = stillWatching(ms);
+    assert.ok(at <= previous + 1e-9, `the audience grew at ${ms}ms`);
+    assert.ok(at >= 0 && at <= 1, `${ms}ms gave ${at}`);
+    previous = at;
+  }
+});
+
+test("past the end of the curve it holds rather than going negative", () => {
+  assert.equal(stillWatching(60_000), 0.024);
+  assert.equal(stillWatching(-5_000), 1);
+});
+
+/**
+ * The finding this exists to produce: on this curve there is no good late
+ * moment. A reveal at four seconds and a reveal at twelve are seen by almost
+ * the same tenth of the audience, so moving one earlier buys very little — and
+ * the thing that buys something is the reel being about its point from the
+ * first frame.
+ */
+test("a reveal at four seconds and one at twelve reach a similar tenth", () => {
+  const early = stillWatching(4_000);
+  const late = stillWatching(12_000);
+  assert.ok(early < 0.12, `4s still has ${early}, which is not the measured curve`);
+  assert.ok(late > 0.05, `12s has ${late}`);
+  assert.ok(early - late < 0.05, "the gap between four seconds and twelve is bigger than the measurement says");
+});
+
+test("the first two seconds are where the audience actually goes", () => {
+  assert.ok(stillWatching(0) - stillWatching(2_000) > 0.75,
+    "the curve no longer loses three quarters of the audience in two seconds");
 });
