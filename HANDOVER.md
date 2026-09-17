@@ -157,9 +157,44 @@ Both duplications are forced by a process boundary; neither is allowed to be
 silent. Two mutations of the Python (`<` to `<=`, and dropping the
 infinity restore) each fail a test.
 
-`DATA_ROUTE_PAINT_MS` remains the only constant that is declared, documented as
-a standard, and read by nothing — it is the blank-frame decision above, not an
-oversight to tidy.
+**The sweep was then run over the whole repository**, not just the social
+engine: every exported *value* in `lib/`, `components/`, `app/` and `scripts/`
+whose only appearance in tracked code is its own declaration. Ten, and they fall
+into three groups.
+
+*Built and never wired up — a product decision, not a tidy-up. Each one's own
+doc comment describes a job it is not doing:*
+
+| | |
+|---|---|
+| `components/FeatureLock.tsx` → `UpgradeNote` | "Inline nudge for a feature that degrades rather than disappears." Rendered nowhere, so no feature nudges. |
+| `components/StrengthRanks.tsx` → `StrengthLadder` | "The ladder itself, so the ranks above are not unexplained words." Rendered nowhere, so the ranks *are* unexplained words. |
+| `components/RankLadder.tsx` → `DivisionDots` | "The three divisions inside a tier, for the level card." The level card does not show them. |
+
+These are working components sitting in the same files as the things that would
+use them. Wiring them up is a change to what athletes see, so it is yours to
+call, not mine.
+
+*Dormant for a documented reason — now annotated so the next reader does not
+mistake them for live:*
+
+- `lib/native.ts` → `registerNativePush`. `ios/README.md` states the decision:
+  *"Local notifications, not push: no device-token table, no APNs credentials,
+  no scheduled job."* This is the client half of an architecture the project
+  chose against. Calling it today would collect a device token with nowhere to
+  put it. Left in place, with that written above it.
+- `lib/session-shape.ts` → `orderWorkingBlock`. **The ordering it does is not
+  missing from generated programmes** — `orderPlan` in `lib/program-validate.ts`
+  runs on every plan and is a superset of it. Two implementations of one rule is
+  a drift hazard whether or not both are called, and the dormant one is the copy
+  nobody would notice breaking, so `lib/program-validate.test.ts` now pins it to
+  the same answer the live one gives.
+
+*Unused utilities, no stated promise broken, left alone:* `FIGURE_ZONES`
+(`BodyStrengthFigure.tsx`), `regionOfDrill` (`lib/coach.ts`), `auditPlan`
+(`lib/muscle-volume.ts`), `passesAA` (`lib/contrast.ts`), and
+`REPLAY_RATE_TARGET` (`lib/reel-retention.ts`, which documents itself as
+deliberately unenforced).
 
 **A note on the sweep itself.** The first run reported `revealAudience` as
 declared-and-never-used, which would have been a second `DATA_ROUTE_PAINT_MS`
@@ -167,6 +202,17 @@ and worse, because this session wrote it. It was wrong: the file-extension
 filter did not include `.mts`, and `scripts/record-reel.mts` both imports and
 calls it. Every `scripts/*.mts` in the project was invisible to the tool. A
 sweep for unreferenced code is only as good as its idea of what a file is.
+
+The pin written for `orderWorkingBlock` had the same disease in a different
+form. It ran the function over a generated session and asserted the result was
+in fatigue order — and it kept passing after the sort was deleted from the
+function, because `buildProgram` already emits its working sets hardest-first.
+The function was a no-op on that input, so the test was about `buildProgram`.
+Found by mutating the function and watching nothing go red; the test now
+reverses the session first, so restoring the order is work only a correct sort
+can do. Both the Python pins and this one were mutation-tested before being
+committed. **An assertion that cannot fail is worse than no assertion, because
+it occupies the place where a real one would go.**
 
 ---
 

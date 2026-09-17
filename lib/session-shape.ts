@@ -251,6 +251,28 @@ export function mainSlotFor(kind: ExerciseKind): Slot {
  * comes first survives — this fixes the ordering it got wrong without
  * overriding the part it got right. Everything outside the working block keeps
  * its position relative to the sections around it.
+ *
+ * ───────────────────────────────────────────────────────────────────────────
+ * NOTHING CALLS THIS TODAY, AND THE ORDERING STILL HAPPENS.
+ *
+ * `orderPlan` in lib/program-validate.ts is what runs on every generated plan,
+ * and it is a superset: it sorts by section first, then by the same KIND_RANK,
+ * then by original position. So a session that has been through the validator
+ * is already in fatigue order, and this function would be a no-op on it.
+ *
+ * The difference is what happens to a working set sitting physically between
+ * two warm-ups. `orderPlan` moves it out — that is the section-purity rule.
+ * This one leaves it where it is and only reorders among the working sets it
+ * finds. That is a weaker guarantee, which is why the validator's version is
+ * the one wired up.
+ *
+ * KEPT RATHER THAN DELETED, because it is a different and reasonable
+ * operation and deleting it would be deciding, on nobody's behalf, that
+ * reordering-without-re-sectioning is never wanted. But two implementations of
+ * one rule is a drift hazard whether or not both are called, so
+ * lib/program-validate.test.ts pins this one to the same answer the live one
+ * gives. If they ever disagree about fatigue order, that test says so.
+ * ───────────────────────────────────────────────────────────────────────────
  */
 export function orderWorkingBlock<T extends { name: string; slot?: Slot | null }>(drills: T[]): T[] {
   const ranked = drills.map((d, i) => ({ d, i, k: kindOf(d.name, d.slot) }));
