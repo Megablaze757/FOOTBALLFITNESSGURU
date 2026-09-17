@@ -183,9 +183,27 @@ deploy it yet.
    no identities — designed so the output is safe to paste back. It is the only
    thing that turns "assume the worst" into a fact, and it decides whether any
    of the experiment machinery is worth touching.
-2. **Rotate the demo-account password** and update `REEL_PASSWORD`.
-   `TESTACCOUNT123` went into a test fixture earlier in this session and is in
-   pushed git history.
+2. **Rotate the demo-account password** and update the `REEL_PASSWORD` secret.
+   It is compromised twice over: once into a test fixture, and once into the
+   sentence in this file that told you to rotate it. Both are in pushed git
+   history, which keeps them whether or not the commit is reverted — so
+   rotating is the only thing that closes it.
+
+   The second one is a finding, not an apology. `lib/no-secrets.test.ts`
+   compares tracked files against the secrets **in the environment it runs
+   in**, and it skips only when it holds none of them. This machine had
+   `GH_TOKEN` and nothing else — so the test ran, compared every tracked file
+   against that one value, found nothing, and reported a green tick that reads
+   like "no secret is committed" while seven of the eight it watches went
+   unexamined. The file was pushed. CI has all eight and failed on the next
+   run, which is after the push, which is the only part that matters.
+
+   It now prints what it could not check: *compared against 1 of 8 watched
+   secrets… NOT checked: REEL_EMAIL, REEL_PASSWORD, …*. Still a pass, because
+   a developer machine legitimately has no production credentials and failing
+   there would train people to set fake ones — but no longer a pass that looks
+   like more than it is.
+
 3. **Add a branch ruleset on `main`** requiring the `test` and `e2e` checks.
    Nothing enforces them on merge today.
 4. **Decide the blank-frame trade** from the three options above.

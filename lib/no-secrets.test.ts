@@ -183,6 +183,37 @@ test("no tracked file contains a secret this environment knows", (t) => {
     return;
   }
 
+  /**
+   * ═══════════════════════════════════════════════════════════════════════════
+   * SAY WHAT WAS NOT CHECKED, BECAUSE A PARTIAL PASS READS AS A FULL ONE.
+   *
+   * The skip above only fires when the environment holds NONE of these. One
+   * present is enough to run the test, and it then reports green having
+   * compared tracked files against that one value while the other seven went
+   * unexamined — which is not what a tick next to "no tracked file contains a
+   * secret this environment knows" looks like it means.
+   *
+   * THIS IS NOT HYPOTHETICAL EITHER. HANDOVER.md was written with the value of
+   * REEL_PASSWORD in the sentence telling the reader to rotate it. Locally
+   * GH_TOKEN was set and nothing else was, so this test ran, checked one
+   * secret, passed, and the file was committed and pushed. CI has all of them
+   * and failed on the next run — after the push, which is the only part that
+   * matters, because history keeps what it is given.
+   *
+   * A diagnostic rather than a failure: a developer machine legitimately has
+   * no production credentials, and failing there would train people to set
+   * fake ones. Naming the gap costs a line and makes the green honest.
+   * ═══════════════════════════════════════════════════════════════════════════
+   */
+  const unchecked = WATCHED.filter((name) => !known.some(([held]) => held === name));
+  if (unchecked.length) {
+    t.diagnostic(
+      `compared against ${known.length} of ${WATCHED.length} watched secrets. `
+      + `NOT in this environment and therefore NOT checked: ${unchecked.join(", ")}. `
+      + `A pass here is only as complete as the environment it ran in.`,
+    );
+  }
+
   const found: string[] = [];
   for (const file of trackedFiles()) {
     if (SKIP_DIR.test(file) || SKIP_FILE.test(file)) continue;
