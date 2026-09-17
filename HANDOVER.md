@@ -131,12 +131,16 @@ change actually took — not a fourth guess.
 
 ## Audit findings not yet acted on
 
-**The music never plays.** `lib/reel-music.ts` builds a full sidechain-ducking
-chain, it is tested, and `lib/stock-audio.ts` holds two licensed tracks. The
-workflow's `music` input defaults to `""` and the comment says it plainly:
-*"NOTHING PICKS THE MUSIC."* Every reel ever made has shipped with voice only.
-Whether that is right is a taste-and-licensing call; that it is an accident is
-not in doubt.
+**The music never played, and now it does.** `lib/reel-music.ts` builds a full
+sidechain-ducking chain, it is tested, and `lib/stock-audio.ts` holds two CC0
+tracks. The workflow's `music` input defaulted to `""` and the comment said it
+plainly: *"NOTHING PICKS THE MUSIC."* Every reel ever made shipped with voice
+only — and the measurement above says that single fact is the whole gap between
+these reels and the ones this account admires. Defaulted on. Note the dispatch
+path needed its own fix: the admin panel starts recordings through
+`repository_dispatch`, which never reads a `workflow_dispatch` input default,
+so defaulting the input alone would have left every admin-triggered reel silent
+while the form on GitHub looked correct.
 
 **The carousel has one guard to the reel's dozen.** 220 lines against 1588. Its
 only check is "did the screenshot cut something off". Most reel guards do not
@@ -275,7 +279,21 @@ deploy it yet.
 3. **Add a branch ruleset on `main`** requiring the `test` and `e2e` checks.
    Nothing enforces them on merge today.
 4. **Decide the blank-frame trade** from the three options above.
-5. **Decide whether reels get a music bed.**
+5. ~~Decide whether reels get a music bed.~~ **Decided, by measuring.** A reel
+   this account wanted to sound like was measured against ours on
+   `scripts/measure-excitement.py`:
+
+   |  | dead% | F0SD | range | Hz | dyn |
+   |---|---|---|---|---|---|
+   | the reel they liked | 2 | 4.10 | 13.32 | 119 | 4.3 |
+   | ours, voice only | 34 | 5.11 | 17.71 | 125 | 9.5 |
+   | ours + the bed | 4 | 5.39 | 18.36 | 123 | 9.4 |
+
+   A third of our reel is **digital silence** — the floor measures -120dB
+   between phrases, against a continuous 26dB floor in theirs. The voice was
+   never the problem: ours carries more pitch variation and a wider range than
+   the one being admired, before and after the bed. `record-reels.yml` now
+   defaults to `dark-beat` on both entry points; `music: none` turns it off.
 
 Migrations 0113 and 0114 are written and **not applied**. Both are in
 `supabase/apply-0088-0114.sql`, which is safe to run twice — Actions -> "Apply

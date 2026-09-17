@@ -56,3 +56,49 @@ test("lookup finds a track and does not invent one", () => {
   assert.ok(trackById(STOCK_TRACKS[0].id));
   assert.equal(trackById("nope"), undefined);
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// THE WORKFLOW NOW NAMES A TRACK, AND A NAME IS A THING THAT CAN GO STALE.
+//
+// record-reels.yml defaults REEL_MUSIC to a track id rather than to "". That
+// id is a string in YAML, matched against this manifest at record time by
+// scripts/fetch-music.mts — so a track renamed or removed here turns every
+// recording into a run that fails at the fetch, after the browser, the voice
+// and the whole video are already made.
+// ═══════════════════════════════════════════════════════════════════════════
+
+test("the workflow's default bed is a track that exists", async () => {
+  const { readFileSync } = await import("node:fs");
+  const workflow = readFileSync(".github/workflows/record-reels.yml", "utf8");
+
+  const dispatched = /REEL_MUSIC: \$\{\{[^}]*\|\|\s*'([^']*)'\s*\}\}/.exec(workflow);
+  assert.ok(dispatched, "REEL_MUSIC is no longer resolved with a fallback");
+  const fallback = dispatched![1];
+  assert.notEqual(fallback, "",
+    "the fallback is empty again, so every admin-dispatched reel records in silence");
+  assert.ok(trackById(fallback), `the dispatch fallback "${fallback}" is not a track in this manifest`);
+
+  const input = /music:\s*\n\s*description:[^\n]*\n\s*type: string\n\s*default: "([^"]*)"/.exec(workflow);
+  assert.ok(input, "the music input no longer declares a default");
+  assert.ok(trackById(input![1]), `the input default "${input![1]}" is not a track in this manifest`);
+
+  /**
+   * BOTH PATHS, and they are genuinely different: the workflow_dispatch input
+   * default does nothing for a repository_dispatch, which is how the admin
+   * panel starts a recording. Defaulting only the input is what left every
+   * admin-triggered reel silent while the form in GitHub looked correct.
+   */
+  assert.equal(input![1], fallback,
+    "the manual default and the dispatch fallback are different tracks");
+});
+
+test("there is a way to ask for no bed at all", async () => {
+  const { readFileSync } = await import("node:fs");
+  const workflow = readFileSync(".github/workflows/record-reels.yml", "utf8");
+  // The `||` chain treats "" as unset and falls through to the default, so
+  // without this there is no way to turn the bed off.
+  assert.match(workflow, /REEL_MUSIC:-\}" = "none" \]; then REEL_MUSIC=""/,
+    "the bed cannot be switched off — an empty string now means the default");
+  assert.doesNotMatch(workflow, /trackById\("none"\)/);
+});
+
