@@ -27,6 +27,7 @@ import { join } from "node:path";
 import { reelScript, type ScriptId } from "../lib/reel-script";
 import { reelPlan, srt, endCardAt, REEL_W, REEL_H, REEL_SCALE } from "../lib/reel-plan";
 import { MAX_CAPTION_LATE_MS, retentionProblems, revealAudience } from "../lib/reel-retention";
+import { observerSource, paintReport, type Paint } from "../lib/reel-paint";
 import { closingDrift, driftTarget, openingScroll } from "../lib/reel-scroll";
 import { implausibleAudio } from "../lib/reel";
 import { outsideSafeZone, MAX_CAPTION_LINES } from "../lib/safe-zone";
@@ -596,6 +597,29 @@ await context.addInitScript(() => {
   try { localStorage.setItem("pa:install-dismissed", "1"); } catch { /* no storage, no prompt */ }
 });
 
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * TIME HOW LONG EACH SCREEN IS A LOADING SCREEN. See lib/reel-paint.ts.
+ *
+ * The blank frame at the start of every data-route beat has been guessed at
+ * three times in this file and twice the guess was wrong — including one
+ * explanation written into the code that the local timings then refuted. The
+ * missing thing every time was a number measured on the screens that matter,
+ * which need the demo account and so cannot be reached from a laptop.
+ *
+ * `{ content }` rather than a function, so nothing transpiles it on the way
+ * in — the same reason reel-overlay.js is a plain .js file, and for the same
+ * failure: an init script that arrives with a `__name` helper in it throws
+ * before its first line and surfaces somewhere else entirely.
+ *
+ * NOTHING WAITS ON THIS. The observer stamps a number on `window` and the
+ * recording reads it later; a measurement that made the recorder pause would
+ * change the thing it is measuring, which is exactly how the soft-navigation
+ * attempt went wrong.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+await context.addInitScript({ content: observerSource() });
+
 
 
 const page = await context.newPage();
@@ -1013,6 +1037,37 @@ console.log(`Recording "${script.hook}" — ${Math.round(plan.totalMs / 1000)}s,
  * ═══════════════════════════════════════════════════════════════════════════
  */
 
+/**
+ * Every screen's paint time, in the order they were filmed.
+ *
+ * A list rather than a map keyed by route, because a reel can return to a
+ * screen it has already been on and the second visit is warm — two genuinely
+ * different numbers for one path, and averaging them would hide both.
+ */
+const paints: Paint[] = [];
+
+/**
+ * Take the stamp the page observer left, without waiting for it.
+ *
+ * NO `const x = (` INSIDE THE CALLBACK. lib/reel-moves.test.ts refuses that
+ * shape because esbuild wraps an inner arrow in `__name()`, which does not
+ * exist in the browser and throws at runtime. The guard matches on the text
+ * rather than on the syntax, so a parenthesised type assertion —
+ * `const held = (window as unknown as {...})` — trips it too. That is a false
+ * positive and the guard's own comment says it prefers them, so this is
+ * written to suit the guard rather than the guard loosened to suit this.
+ */
+async function collectPaint(route: string): Promise<void> {
+  if (!route) return;
+  const stamp = await page.evaluate(() => {
+    const scope = window as unknown as { __reelPaint?: { ms: number | null; sawSkeleton: boolean } };
+    const held = scope.__reelPaint;
+    return held ? { ms: held.ms, sawSkeleton: held.sawSkeleton } : null;
+  }).catch(() => null);
+  if (!stamp) return;
+  paints.push({ route, ms: stamp.ms === null ? null : Math.round(stamp.ms), hadSkeleton: stamp.sawSkeleton });
+}
+
 let hookShown = false;
 /** The hook coming off on its own clock. Resolved already on every later beat. */
 let hookHold: Promise<void> = Promise.resolve();
@@ -1027,6 +1082,15 @@ for (const step of plan.steps) {
    * hold a screen for two or three beats, so this was most beats.
    */
   if (step.route !== onRoute) {
+    /**
+     * READ THE OUTGOING SCREEN'S STAMP BEFORE REPLACING IT.
+     *
+     * page.goto destroys the document and `window.__reelPaint` with it, so
+     * this is the last moment the measurement for the screen just filmed
+     * exists — and it is also the moment it is most complete, having had the
+     * whole of that screen's time on camera to finish.
+     */
+    await collectPaint(onRoute);
     onRoute = step.route;
     // A new screen starts at the top of it, not wherever the last one ended.
     driftFrom = 0;
@@ -1419,6 +1483,27 @@ async function runCaptions(step: (typeof plan.steps)[number], willAim: boolean):
     if (i === step.captions.length - 1) { driftAt = to; driftFrom = to; }
   }
 }
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE LAST SCREEN'S STAMP, AND THE ANSWER TO A QUESTION ASKED THREE TIMES.
+ *
+ * Every other route was read as the recorder navigated away from it. The one
+ * it finished on has nothing after it, so it is taken here — before the
+ * context closes and the page with it.
+ *
+ * PRINTED, NOT ENFORCED. The three ways out of the blank frame — hold before
+ * speaking, stop visiting data routes mid-reel, make the pages paint faster —
+ * cost different things and one of them breaks the thirty-second ceiling. A
+ * check that failed the run would be picking one, on a measurement from a
+ * single recording. This prints what it saw and leaves the choice where it
+ * belongs. See lib/reel-paint.ts.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+await collectPaint(onRoute);
+console.log("");
+for (const line of paintReport(plan, paints)) console.log(line);
+console.log("");
 
 // ORDER MATTERS AND IS NOT OBVIOUS. The video file is only finished when the
 // CONTEXT closes, and the handle to it dies with the BROWSER — so saveAs has
