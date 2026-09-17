@@ -615,7 +615,7 @@ jobs:
               echo "::error::$name did not upload (HTTP $up)."
               head -c 200 "$out" | tr -d '\n'; echo
               # The overwhelmingly likely cause, named rather than guessed at.
-              echo "::error::If this says the bucket is missing, run supabase/apply-0088-0111.sql."
+              echo "::error::If this says the bucket is missing, run supabase/apply-0088-0114.sql."
             fi
           done
           if [ "$uploaded" -eq 0 ]; then

@@ -3,6 +3,9 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { CAROUSEL_EVENT, REEL_EVENT, REEL_SCRIPTS, dispatchBody, reelRequestProblem } from "./reel-dispatch";
 import { SCRIPTS } from "./reel-script";
+// Derived, not spelled: the name carries the migration range and this
+// assertion is the only thing checking the workflow quotes a real path.
+import { OUT } from "../scripts/build-apply-sql.mjs";
 
 const code = (src: string) =>
   readFileSync(src, "utf8").replace(/\/\*[\s\S]*?\*\//g, " ").replace(/(^|[^:])\/\/.*$/gm, "$1");
@@ -151,8 +154,8 @@ test("a run that cannot upload says so rather than passing quietly", () => {
   assert.match(upload, /::error::Sign-in to Supabase failed \(HTTP/,
     "a failed sign-in does not say that it failed");
   // The likeliest cause of an upload failure, named rather than left to guess.
-  assert.match(upload, /apply-0088-0111\.sql/,
-    "a missing bucket does not point at the migration that creates it");
+  assert.ok(upload.includes(OUT),
+    `a missing bucket does not point at ${OUT}, the file that creates it`);
 
   // Credentials are built by a JSON encoder, not string-concatenated into a
   // shell-quoted literal where a quote in a password would break the request.

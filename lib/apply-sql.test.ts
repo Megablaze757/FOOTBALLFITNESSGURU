@@ -1,10 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 // The list lives with the generator. A second copy here is a list that can go
 // stale and then validate the combined file against migrations it no longer
 // contains — which is exactly what happened when 0104 was added.
-import { PARTS } from "../scripts/build-apply-sql.mjs";
+import { OUT, PARTS } from "../scripts/build-apply-sql.mjs";
 
 /**
  * The paste-ready copy must be the migrations it claims to be.
@@ -25,11 +25,14 @@ const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf
 /**
  * DERIVED, not spelled out. The name carries the migration range, so it
  * changes every time the range does — and a hardcoded copy here fails with an
- * ENOENT that reads like a missing file rather than a rename. The guard at the
- * bottom of this file already works this out from PARTS; there is no reason
- * for a second answer.
+ * ENOENT that reads like a missing file rather than a rename.
+ *
+ * IT COMES FROM THE GENERATOR rather than being worked out again from PARTS.
+ * This file computed the same expression the script did, which is two answers
+ * to one question that happened to agree — and the whole subject of this test
+ * is what happens when two copies of a fact stop agreeing.
  */
-const COMBINED = `supabase/apply-0088-${PARTS[PARTS.length - 1].slice(0, 4)}.sql`;
+const COMBINED = OUT;
 const combined = read(`../${COMBINED}`);
 
 /**
@@ -231,20 +234,38 @@ test("everything that names the combined file names the one that exists", () => 
   const expected = COMBINED;
 
   /**
-   * EVERY file that names it, found rather than listed.
+   * EVERY file that names it, found by looking rather than by remembering.
    *
-   * This was a hand-written list of two, and lib/share-code.test.ts named the
-   * file as well — so a rename left it opening a path that no longer existed,
-   * with an ENOENT that reads like a missing file rather than a stale name.
-   * A guard against drift that itself has to be kept in step is half a guard.
+   * THIS GUARD HAS NOW FAILED TWICE FOR THE SAME REASON. It began as a
+   * hand-written list of two; lib/share-code.test.ts named the file as well,
+   * so it grew a readdir over lib. Then .github/workflows/record-reels.yml
+   * started naming it — in the error message printed when the upload fails,
+   * which is the one moment somebody is reading it — and pointed at
+   * apply-0088-0111.sql for three migrations after that file stopped existing.
+   * Neither the list nor the readdir covered a workflow.
+   *
+   * A guard against drift that itself has to be kept in step is half a guard,
+   * so this walks the repository. The skip list is build output and
+   * dependencies, which name the file only because they contain a copy of
+   * source that does.
    */
-  const quoted = [
-    "../components/admin/AppleShortcutLink.tsx",
-    "../scripts/build-apply-sql.mjs",
-    ...readdirSync(new URL("./", import.meta.url))
-      .filter((f) => f.endsWith(".ts"))
-      .map((f) => `./${f}`),
-  ].filter((file) => /supabase\/apply-0088-\d{4}\.sql/.test(read(file)));
+  const SKIP = new Set([".git", ".next", "node_modules", "out", "coverage", "supabase"]);
+  const walk = (dir: URL): string[] => {
+    const found: string[] = [];
+    for (const name of readdirSync(dir)) {
+      if (SKIP.has(name)) continue;
+      const at = new URL(`${name}${statSync(new URL(name, dir)).isDirectory() ? "/" : ""}`, dir);
+      if (at.pathname.endsWith("/")) found.push(...walk(at));
+      else found.push(at.pathname);
+    }
+    return found;
+  };
+  const root = new URL("../", import.meta.url);
+  const quoted = walk(root)
+    .map((path) => path.slice(root.pathname.length))
+    .filter((file) => /\.(ts|tsx|js|mjs|cjs|yml|yaml|md|sql|json)$/.test(file))
+    .filter((file) => /supabase\/apply-0088-\d{4}\.sql/.test(read(`../${file}`)))
+    .map((file) => `../${file}`);
 
   assert.ok(quoted.length >= 2, "nothing names the combined file — has it stopped being quoted anywhere?");
   for (const file of quoted) {
