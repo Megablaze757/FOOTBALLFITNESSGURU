@@ -338,12 +338,12 @@ function netAfterFee(grossPennies, feePennies) {
   return Math.max(0, grossPennies - fee);
 }
 __name(netAfterFee, "netAfterFee");
-function pctOf(amountPennies, pct) {
-  if (!Number.isFinite(amountPennies) || !Number.isFinite(pct))
+function pctOf(amountPennies, pct2) {
+  if (!Number.isFinite(amountPennies) || !Number.isFinite(pct2))
     return 0;
-  if (amountPennies <= 0 || pct <= 0)
+  if (amountPennies <= 0 || pct2 <= 0)
     return 0;
-  return Math.floor(amountPennies * pct / 100);
+  return Math.floor(amountPennies * pct2 / 100);
 }
 __name(pctOf, "pctOf");
 function chainFor(startCode, byCode, byId) {
@@ -652,9 +652,9 @@ __name(loopStats, "loopStats");
 // ../lib/growth-digest.ts
 function lines(input) {
   const out = [];
-  for (const line of input.extra ?? []) {
-    if (line.trim())
-      out.push(line.trim());
+  for (const line2 of input.extra ?? []) {
+    if (line2.trim())
+      out.push(line2.trim());
   }
   if (input.loop) {
     const stats = loopStats(input.loop);
@@ -683,6 +683,288 @@ function growthDigest(input) {
   };
 }
 __name(growthDigest, "growthDigest");
+
+// ../lib/proportions.ts
+function normalCdf(z) {
+  if (!Number.isFinite(z))
+    return z > 0 ? 1 : 0;
+  const sign = z < 0 ? -1 : 1;
+  const x = Math.abs(z) / Math.SQRT2;
+  const t = 1 / (1 + 0.3275911 * x);
+  const y = 1 - ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x);
+  return 0.5 * (1 + sign * y);
+}
+__name(normalCdf, "normalCdf");
+function normalQuantile(p) {
+  if (!(p > 0) || !(p < 1))
+    return p <= 0 ? -Infinity : Infinity;
+  let low = -40;
+  let high = 40;
+  for (let i = 0; i < 200 && high - low > 1e-12; i++) {
+    const mid = (low + high) / 2;
+    if (normalCdf(mid) < p)
+      low = mid;
+    else
+      high = mid;
+  }
+  return (low + high) / 2;
+}
+__name(normalQuantile, "normalQuantile");
+var ALPHA = 0.05;
+function wilson(successes, trials, alpha = ALPHA) {
+  const n = Math.max(0, Math.floor(trials));
+  const x = Math.min(Math.max(0, Math.floor(successes)), n);
+  if (n === 0)
+    return { rate: 0, low: 0, high: 1 };
+  const z = normalQuantile(1 - alpha / 2);
+  const p = x / n;
+  const z2 = z * z;
+  const denominator = 1 + z2 / n;
+  const centre = (p + z2 / (2 * n)) / denominator;
+  const half = z / denominator * Math.sqrt(p * (1 - p) / n + z2 / (4 * n * n));
+  return {
+    rate: p,
+    low: Math.max(0, centre - half),
+    high: Math.min(1, centre + half)
+  };
+}
+__name(wilson, "wilson");
+var pct = /* @__PURE__ */ __name((v) => `${Math.round(v * 100)}%`, "pct");
+function describeRate(successes, trials, alpha = ALPHA) {
+  const n = Math.max(0, Math.floor(trials));
+  if (n === 0)
+    return "nobody yet";
+  const i = wilson(successes, n, alpha);
+  const width = i.high - i.low;
+  const verdict = width > 0.4 ? " \u2014 too few to read anything into" : width > 0.2 ? " \u2014 a wide reading" : "";
+  return `${Math.floor(successes)} of ${n} (${pct(i.rate)}, and anywhere from ${pct(i.low)} to ${pct(i.high)})${verdict}`;
+}
+__name(describeRate, "describeRate");
+
+// ../lib/retention.ts
+var WINDOWS = [
+  { label: "the day after", from: 1, to: 1 },
+  { label: "their first week", from: 2, to: 7 },
+  { label: "week two", from: 8, to: 14 },
+  { label: "weeks three and four", from: 15, to: 28 },
+  { label: "month two", from: 29, to: 56 },
+  { label: "month three", from: 57, to: 84 }
+];
+function daysBetween2(from, to) {
+  const a = Date.parse(`${from}T00:00:00Z`);
+  const b = Date.parse(`${to}T00:00:00Z`);
+  if (!Number.isFinite(a) || !Number.isFinite(b))
+    return 0;
+  return Math.round((b - a) / 864e5);
+}
+__name(daysBetween2, "daysBetween");
+function retentionCurve(accounts, asOf, windows = WINDOWS) {
+  const usable = (accounts ?? []).filter((a) => a?.joined && daysBetween2(a.joined, asOf) >= 0);
+  return windows.map((window) => {
+    let eligible = 0;
+    let returned = 0;
+    for (const account of usable) {
+      if (daysBetween2(account.joined, asOf) < window.to)
+        continue;
+      eligible += 1;
+      const came = (account.activeDays ?? []).some((day) => {
+        const age = daysBetween2(account.joined, day);
+        return age >= window.from && age <= window.to;
+      });
+      if (came)
+        returned += 1;
+    }
+    return {
+      window,
+      eligible,
+      returned,
+      interval: wilson(returned, eligible),
+      reading: describeRate(returned, eligible)
+    };
+  });
+}
+__name(retentionCurve, "retentionCurve");
+function daysSinceActive(account, asOf) {
+  let best = null;
+  for (const day of account.activeDays ?? []) {
+    const gap = daysBetween2(day, asOf);
+    if (gap < 0)
+      continue;
+    if (best === null || gap < best)
+      best = gap;
+  }
+  return best;
+}
+__name(daysSinceActive, "daysSinceActive");
+var LAPSED_AFTER_DAYS = 30;
+var ACTIVE_WITHIN_DAYS = 7;
+function standing(accounts, asOf, activeWithin = ACTIVE_WITHIN_DAYS, lapsedAfter = LAPSED_AFTER_DAYS) {
+  const out = { active: [], slipping: [], lapsed: [], neverStarted: [] };
+  for (const account of accounts ?? []) {
+    if (!account?.joined)
+      continue;
+    const gap = daysSinceActive(account, asOf);
+    if (gap === null)
+      out.neverStarted.push(account);
+    else if (gap <= activeWithin)
+      out.active.push(account);
+    else if (gap <= lapsedAfter)
+      out.slipping.push(account);
+    else
+      out.lapsed.push(account);
+  }
+  return out;
+}
+__name(standing, "standing");
+function everReturned(accounts) {
+  const usable = (accounts ?? []).filter((a) => a?.joined);
+  let did = 0;
+  for (const account of usable) {
+    const after = new Set((account.activeDays ?? []).filter((d) => daysBetween2(account.joined, d) >= 1));
+    if (after.size > 0)
+      did += 1;
+  }
+  return { of: usable.length, did, reading: describeRate(did, usable.length) };
+}
+__name(everReturned, "everReturned");
+function retentionReport(accounts, asOf) {
+  const usable = (accounts ?? []).filter((a) => a?.joined);
+  if (!usable.length)
+    return ["No accounts yet."];
+  const where = standing(usable, asOf);
+  const back = everReturned(usable);
+  const lines2 = [
+    `${usable.length} accounts. ${where.active.length} put something in this week, ${where.slipping.length} have gone quiet, ${where.lapsed.length} are past the ${LAPSED_AFTER_DAYS} days after which nothing reaches them, and ${where.neverStarted.length} never logged anything at all.`,
+    `Came back at least once after signing up: ${back.reading}.`
+  ];
+  for (const result of retentionCurve(usable, asOf)) {
+    if (!result.eligible) {
+      lines2.push(`${capitalise(result.window.label)}: no account is old enough to say.`);
+      continue;
+    }
+    lines2.push(`Still there ${result.window.label}: ${result.reading}.`);
+  }
+  return lines2;
+}
+__name(retentionReport, "retentionReport");
+var capitalise = /* @__PURE__ */ __name((s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : s, "capitalise");
+
+// ../lib/milestones.ts
+var STREAK_MILESTONES = [7, 14, 21, 30, 60, 100, 180, 365];
+var LOWER_IS_BETTER = /* @__PURE__ */ new Set([
+  "sprint_10m",
+  "sprint_20m",
+  "sprint_40m",
+  "bronco_s",
+  "lane_agility_s",
+  "run_1500m_min",
+  "run_5k_min",
+  "run_10k_min"
+]);
+var METRIC_LABELS = {
+  squat_1rm: "back squat 1RM",
+  bench_1rm: "bench press 1RM",
+  deadlift_1rm: "deadlift 1RM",
+  sprint_10m: "10 m sprint",
+  sprint_20m: "20 m sprint",
+  sprint_40m: "40 m sprint",
+  vertical_jump_cm: "vertical jump",
+  yo_yo_level: "Yo-Yo IR1 level",
+  bronco_s: "Bronco test",
+  lane_agility_s: "lane agility",
+  run_1500m_min: "1500 m time",
+  run_5k_min: "5K time",
+  run_10k_min: "10K time",
+  snatch_1rm: "snatch 1RM",
+  clean_jerk_1rm: "clean & jerk 1RM",
+  front_squat_1rm: "front squat 1RM",
+  ohp_1rm: "overhead press 1RM",
+  pullups_max: "max pull-ups"
+};
+function metricLabel(metric) {
+  return METRIC_LABELS[metric] ?? metric.replaceAll("_", " ");
+}
+__name(metricLabel, "metricLabel");
+function goalAchieved(metric, current, target) {
+  return LOWER_IS_BETTER.has(metric) ? current <= target : current >= target;
+}
+__name(goalAchieved, "goalAchieved");
+function currentStreak(dates, today) {
+  const start = Date.parse(`${today}T00:00:00Z`);
+  if (!Number.isFinite(start))
+    return 0;
+  let cursor = dates.has(today) ? start : start - 864e5;
+  let count = 0;
+  while (dates.has(new Date(cursor).toISOString().slice(0, 10))) {
+    count++;
+    cursor -= 864e5;
+  }
+  return count;
+}
+__name(currentStreak, "currentStreak");
+function isStreakMilestone(streak) {
+  return STREAK_MILESTONES.includes(streak);
+}
+__name(isStreakMilestone, "isStreakMilestone");
+
+// ../lib/win-back.ts
+var WIN_BACK_ONCE = true;
+var WIN_BACK_AFTER_DAYS = 35;
+var WIN_BACK_UNTIL_DAYS = 180;
+var SESSION_MILESTONES = [10, 25, 50, 100, 200, 365, 500];
+var NEARLY = 5;
+function nextMilestone(count, ladder = SESSION_MILESTONES) {
+  for (const step of ladder)
+    if (step > count)
+      return step;
+  return null;
+}
+__name(nextMilestone, "nextMilestone");
+function line(facts, today) {
+  const quiet = facts.lastActive ? daysBetween2(facts.lastActive, today) : null;
+  const weeks = quiet === null ? null : Math.floor(quiet / 7);
+  const next = nextMilestone(facts.sessions);
+  const short = next === null ? null : next - facts.sessions;
+  if (facts.sessions > 0 && short !== null && short <= NEARLY) {
+    return {
+      subject: `${facts.sessions} sessions. ${short} off ${next}.`,
+      body: `You logged ${facts.sessions} sessions and stopped ${short} short of ${next}. They are still there when you want them.`
+    };
+  }
+  if (facts.best && facts.best.value > 0) {
+    const ago = weeks && weeks > 1 ? ` \u2014 ${weeks} weeks ago` : "";
+    return {
+      subject: `Your ${facts.best.label} is still ${facts.best.value}${facts.best.unit}`,
+      body: `Your best ${facts.best.label} is ${facts.best.value}${facts.best.unit}, set on ${facts.best.on}${ago}. Nothing has beaten it because nothing has been logged since.`
+    };
+  }
+  if (facts.longestStreak >= STREAK_MILESTONES[0]) {
+    return {
+      subject: `You once checked in ${facts.longestStreak} days running`,
+      body: `Your longest run of check-ins was ${facts.longestStreak} days. It starts again at one.`
+    };
+  }
+  return null;
+}
+__name(line, "line");
+function winBack(facts, today, href = "/journal") {
+  if (!facts?.wantsEmail)
+    return null;
+  if (facts.alreadySent && WIN_BACK_ONCE)
+    return null;
+  if (!facts.lastActive)
+    return null;
+  const quiet = daysBetween2(facts.lastActive, today);
+  if (quiet < WIN_BACK_AFTER_DAYS)
+    return null;
+  if (quiet > WIN_BACK_UNTIL_DAYS)
+    return null;
+  const said = line(facts, today);
+  if (!said)
+    return null;
+  return { subject: said.subject, body: said.body, href };
+}
+__name(winBack, "winBack");
 
 // ../lib/cues-file.ts
 var CUES_REQUIRED = 3;
@@ -828,7 +1110,19 @@ __name(trialIsRunning, "trialIsRunning");
 // ../lib/reel-dispatch.ts
 var REEL_EVENT = "record-reel";
 var CAROUSEL_EVENT = "record-carousel";
-var REEL_SCRIPTS = ["demo-readiness", "demo-cost", "drill", "standards"];
+var REEL_SCRIPTS = [
+  "demo-readiness",
+  "demo-cost",
+  "drill",
+  "standards",
+  /**
+   * The card formats. Same recorder, same voice, a different kind of video —
+   * see lib/content-formats.ts for why one shape was the defect.
+   */
+  "card-protein-gap",
+  "card-bodyweight-gap",
+  "card-cheapest-protein"
+];
 function reelRequestProblem(request) {
   const kind = request?.kind ?? "reel";
   if (kind !== "reel" && kind !== "carousel")
@@ -915,14 +1209,14 @@ function escapeText(value) {
   return value.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n");
 }
 __name(escapeText, "escapeText");
-function fold(line) {
-  const bytes = new TextEncoder().encode(line);
+function fold(line2) {
+  const bytes = new TextEncoder().encode(line2);
   if (bytes.length <= 75)
-    return line;
+    return line2;
   const out = [];
   let current = "";
   let width = 0;
-  for (const char of line) {
+  for (const char of line2) {
     const size = new TextEncoder().encode(char).length;
     if (width + size > (out.length === 0 ? 75 : 74)) {
       out.push(current);
@@ -977,64 +1271,6 @@ function nextDay(iso) {
   return addDays(iso, 1).replace(/-/g, "");
 }
 __name(nextDay, "nextDay");
-
-// ../lib/milestones.ts
-var STREAK_MILESTONES = [7, 14, 21, 30, 60, 100, 180, 365];
-var LOWER_IS_BETTER = /* @__PURE__ */ new Set([
-  "sprint_10m",
-  "sprint_20m",
-  "sprint_40m",
-  "bronco_s",
-  "lane_agility_s",
-  "run_1500m_min",
-  "run_5k_min",
-  "run_10k_min"
-]);
-var METRIC_LABELS = {
-  squat_1rm: "back squat 1RM",
-  bench_1rm: "bench press 1RM",
-  deadlift_1rm: "deadlift 1RM",
-  sprint_10m: "10 m sprint",
-  sprint_20m: "20 m sprint",
-  sprint_40m: "40 m sprint",
-  vertical_jump_cm: "vertical jump",
-  yo_yo_level: "Yo-Yo IR1 level",
-  bronco_s: "Bronco test",
-  lane_agility_s: "lane agility",
-  run_1500m_min: "1500 m time",
-  run_5k_min: "5K time",
-  run_10k_min: "10K time",
-  snatch_1rm: "snatch 1RM",
-  clean_jerk_1rm: "clean & jerk 1RM",
-  front_squat_1rm: "front squat 1RM",
-  ohp_1rm: "overhead press 1RM",
-  pullups_max: "max pull-ups"
-};
-function metricLabel(metric) {
-  return METRIC_LABELS[metric] ?? metric.replaceAll("_", " ");
-}
-__name(metricLabel, "metricLabel");
-function goalAchieved(metric, current, target) {
-  return LOWER_IS_BETTER.has(metric) ? current <= target : current >= target;
-}
-__name(goalAchieved, "goalAchieved");
-function currentStreak(dates, today) {
-  const start = Date.parse(`${today}T00:00:00Z`);
-  if (!Number.isFinite(start))
-    return 0;
-  let cursor = dates.has(today) ? start : start - 864e5;
-  let count = 0;
-  while (dates.has(new Date(cursor).toISOString().slice(0, 10))) {
-    count++;
-    cursor -= 864e5;
-  }
-  return count;
-}
-__name(currentStreak, "currentStreak");
-function isStreakMilestone(streak) {
-  return STREAK_MILESTONES.includes(streak);
-}
-__name(isStreakMilestone, "isStreakMilestone");
 
 // src/index.ts
 var CORS = {
@@ -1190,7 +1426,7 @@ var src_default = {
       () => sendDeadlineReminders(env),
       () => sendMilestoneNotifications(env),
       () => createTrialEndingReminders(env),
-      ...isMonday ? [() => sendWeeklySummaries(env), () => sendGrowthDigest(env)] : [],
+      ...isMonday ? [() => sendWeeklySummaries(env), () => sendWinBacks(env), () => sendGrowthDigest(env)] : [],
       () => purgeExpiredVideos(env),
       () => emailNotifications(env)
     ]) {
@@ -1360,7 +1596,7 @@ function overBudget(state) {
   return json({ error: `${reason} The on-device coach still works, and your allowance resets \u2014 upgrade for more.` }, 429);
 }
 __name(overBudget, "overBudget");
-var WORKER_VERSION = "2026-09-06.1";
+var WORKER_VERSION = "2026-09-16.1";
 var ATTEMPT_TIMEOUT_MS = {
   groq: 1e4,
   openrouter: 2e4,
@@ -3521,6 +3757,44 @@ async function sendDeadlineReminders(env) {
   await queueNotifications(env, rows);
 }
 __name(sendDeadlineReminders, "sendDeadlineReminders");
+var RETENTION_ROW_LIMIT = 2e4;
+async function retentionLines(env) {
+  try {
+    const [profilesRes, checkRes, trainRes] = await Promise.all([
+      supa(env, "profiles?select=id,created_at&limit=5000"),
+      supa(env, `daily_check_ins?select=user_id,check_in_date&limit=${RETENTION_ROW_LIMIT}`),
+      supa(env, `training_logs?select=user_id,log_date&limit=${RETENTION_ROW_LIMIT}`)
+    ]);
+    if (!profilesRes.ok || !checkRes.ok || !trainRes.ok)
+      return [];
+    const profiles = await profilesRes.json();
+    const checks = await checkRes.json();
+    const logs = await trainRes.json();
+    const days = /* @__PURE__ */ new Map();
+    const note = /* @__PURE__ */ __name((userId, day) => {
+      if (!userId || !day)
+        return;
+      const held = days.get(userId) ?? /* @__PURE__ */ new Set();
+      held.add(day.slice(0, 10));
+      days.set(userId, held);
+    }, "note");
+    for (const row2 of checks ?? [])
+      note(row2.user_id, row2.check_in_date);
+    for (const row2 of logs ?? [])
+      note(row2.user_id, row2.log_date);
+    const accounts = (profiles ?? []).map((p) => ({
+      id: p.id,
+      joined: (p.created_at ?? "").slice(0, 10),
+      activeDays: [...days.get(p.id) ?? []]
+    }));
+    const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+    return retentionReport(accounts, today);
+  } catch (error) {
+    console.error(`growth digest: retention lines unavailable (${String(error)})`);
+    return [];
+  }
+}
+__name(retentionLines, "retentionLines");
 async function sendGrowthDigest(env) {
   const response = await supa(env, "profiles?role=eq.admin&select=id");
   if (!response.ok) {
@@ -3537,6 +3811,10 @@ async function sendGrowthDigest(env) {
   const affiliates = affiliatesRes.ok ? await affiliatesRes.json() : [];
   const profiles = profilesRes.ok ? await profilesRes.json() : [];
   const digest = growthDigest({
+    // FIRST, because it is the answer to the question the digest is for. The
+    // share-loop counts below are about reach; these are about whether anybody
+    // stayed, and growthDigest puts `extra` at the top.
+    extra: await retentionLines(env),
     loop: {
       affiliateCodes: affiliates.map((a) => a.code),
       usernames: profiles.map((p) => p.username ?? "").filter(Boolean),
@@ -3561,6 +3839,50 @@ async function sendGrowthDigest(env) {
   })));
 }
 __name(sendGrowthDigest, "sendGrowthDigest");
+async function sendWinBacks(env) {
+  const response = await supa(env, "rpc/win_back_candidates", {
+    method: "POST",
+    body: JSON.stringify({})
+  });
+  if (!response.ok) {
+    console.error(`win-back: candidates unavailable (${response.status})`);
+    return;
+  }
+  const candidates = await response.json();
+  const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+  const rows = [];
+  for (const row2 of candidates ?? []) {
+    const value = Number(row2.best_value ?? 0);
+    const facts = {
+      name: row2.full_name,
+      lastActive: row2.last_active,
+      sessions: Number(row2.sessions ?? 0),
+      longestStreak: Number(row2.longest_streak ?? 0),
+      best: row2.best_metric && value > 0 ? { label: metricLabel(row2.best_metric), value, unit: "kg", on: row2.best_on ?? "" } : null,
+      wantsEmail: row2.wants_email !== false,
+      // The query already excludes anybody who has one. This is the same fact
+      // stated where the rule is, so the rule reads completely in one place.
+      alreadySent: false
+    };
+    const message = winBack(facts, today);
+    if (!message)
+      continue;
+    rows.push({
+      user_id: row2.user_id,
+      kind: "win_back",
+      title: message.subject,
+      body: message.body,
+      href: message.href,
+      dedupe_key: "win_back",
+      show_in_app: true,
+      email_category: "win_back"
+    });
+  }
+  if (!rows.length)
+    return;
+  await queueNotifications(env, rows);
+}
+__name(sendWinBacks, "sendWinBacks");
 async function sendWeeklySummaries(env) {
   const through = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
   const weekAgo = new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 10);

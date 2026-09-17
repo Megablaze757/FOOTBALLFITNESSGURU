@@ -26,7 +26,7 @@ import { spawn } from "node:child_process";
 import { join } from "node:path";
 import { reelScript, type ScriptId } from "../lib/reel-script";
 import { reelPlan, srt, endCardAt, REEL_W, REEL_H, REEL_SCALE } from "../lib/reel-plan";
-import { MAX_CAPTION_LATE_MS, retentionProblems } from "../lib/reel-retention";
+import { MAX_CAPTION_LATE_MS, retentionProblems, revealAudience } from "../lib/reel-retention";
 import { closingDrift, driftTarget, openingScroll } from "../lib/reel-scroll";
 import { implausibleAudio } from "../lib/reel";
 import { outsideSafeZone, MAX_CAPTION_LINES } from "../lib/safe-zone";
@@ -430,6 +430,26 @@ if (problems.length) {
   for (const p of problems) console.error(`  ${p.beat < 0 ? "reel" : `beat ${p.beat + 1}`}: ${p.problem}`);
   process.exit(1);
 }
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * AND THE ONE NUMBER THE RULES ABOVE CANNOT TURN INTO A RULE.
+ *
+ * Every check above is a threshold something either clears or does not. This
+ * is a measurement of how many people will be left when the reel gets to its
+ * point, on the curve this account actually recorded — and across every script
+ * the project owns the answer is between 8 and 11 per cent.
+ *
+ * Printed rather than enforced. A rule that failed all of them would be turned
+ * off within a day, and the honest reading is not "this script is broken" but
+ * "this format spends most of itself on an audience that has already gone".
+ * That is a decision about what to make, and it belongs to whoever is making
+ * it, with the number in front of them rather than in a file they have to go
+ * and find.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+const audience = revealAudience(plan);
+if (audience) console.log(`  ${audience.reading}`);
 
 mkdirSync(outDir, { recursive: true });
 const rawDir = mkdtempSync(join(tmpdir(), "reel-raw-"));
@@ -947,6 +967,51 @@ let onRoute = plan.steps[0]?.route ?? "";
 let driftFrom = 0;
 
 console.log(`Recording "${script.hook}" — ${Math.round(plan.totalMs / 1000)}s, ${plan.steps.length} beats`);
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * A ROUTE CHANGE RELOADS THE DOCUMENT, AND THE ALTERNATIVE COST TWO SECONDS.
+ *
+ * This was changed to click the app's own link instead — the app does
+ * client-side routing, a marker on `window` survives a click and is destroyed
+ * by page.goto, and lib/use-async.ts holds a module cache whose comment says
+ * it exists to stop exactly the skeleton flash the reels show. All of that is
+ * true and the change still made the reel worse. Recorded, measured, reverted:
+ *
+ *   caption drawn 2025ms after its moment, planned 2155ms at 10570ms on
+ *   /home, so 130ms of it is on screen
+ *
+ * WHY IS NOT SETTLED, and the first explanation written here was wrong.
+ *
+ * It said soft navigation is inherently slower because it does not commit the
+ * URL until the route is ready to render, so waiting for it costs the whole
+ * time to content. Measured afterwards against the local static export, that
+ * is not what the mechanism costs:
+ *
+ *   soft navigation, route never visited     83ms
+ *   soft navigation, route already fetched   40ms
+ *   page.goto, which returns at `load`      147ms
+ *
+ * So clicking is FASTER than reloading, by a wide margin, and 83ms fits
+ * comfortably inside the silence between two beats. Whatever cost two seconds
+ * on the recorder is specific to the screens it was crossing — /journal to
+ * /home, signed in, with the athlete's data to fetch — and not to client-side
+ * routing. Those pages are not reachable from here without the demo account,
+ * so the cause is genuinely unknown rather than diagnosed.
+ *
+ * WHAT WOULD ANSWER IT is one recording that prints how long each route change
+ * took, rather than a third attempt at the fix. The measurement below is the
+ * part worth having either way: every beat's last caption runs to the exact
+ * moment the next beat starts, so there is no gap to navigate into except the
+ * LEAD_MS + TAIL_MS of silence between them — about 360ms, during which the
+ * previous caption is still on screen and the previous beat's spotlight is
+ * still aimed. Any early navigation has to clear that spotlight first, and has
+ * to be soft, because a page.goto would take the caption with it.
+ *
+ * Left as it was, with the finding written down, because a pipeline that
+ * records with a blank frame is worth more than one that refuses to record.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
 
 let hookShown = false;
 /** The hook coming off on its own clock. Resolved already on every later beat. */

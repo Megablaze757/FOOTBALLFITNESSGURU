@@ -416,3 +416,35 @@ test("the checker measures the hook, not just the captions", () => {
     "the hook's height is checked and where it sits is not");
   assert.equal(MAX_HOOK_LINES, 3);
 });
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * A ROUTE CHANGE RELOADS THE DOCUMENT, AND THE ALTERNATIVE WAS MEASURED WORSE.
+ *
+ * Clicking the app's own link instead was tried and reverted. Everything that
+ * argued for it is true — the app does client-side routing, a marker on
+ * `window` survives a click and dies on page.goto, and lib/use-async.ts holds
+ * a module cache whose comment says it exists to stop the skeleton flash the
+ * reels show. It still made the reel worse, and the recording said so:
+ * "caption drawn 2025ms after its moment ... so 130ms of it is on screen".
+ *
+ * page.goto returns at `load` and the recorder carries on while React
+ * hydrates, so the gap is filmed. A soft navigation does not commit until the
+ * route is ready to render, so waiting for it is spent out of the beat. The
+ * time to content is much the same; only who spends it differs.
+ *
+ * This test exists so the next person to have that good idea finds the
+ * measurement before the CI run rather than after it.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("the reason the recorder still reloads the document is written down", () => {
+  const rec = readFileSync("scripts/record-reel.mts", "utf8");
+  assert.match(rec, /A ROUTE CHANGE RELOADS THE DOCUMENT, AND THE ALTERNATIVE COST TWO SECONDS/,
+    "the finding that soft navigation was tried and cost two seconds is gone");
+  assert.match(rec, /2025ms/, "the measurement that settled it is not quoted");
+  // And the correction: the mechanism itself is fast, so the two seconds was
+  // something about those screens rather than about client-side routing.
+  assert.match(rec, /83ms/, "the local timing that refuted the first explanation is gone");
+  assert.doesNotMatch(rec, /async function softGoto/,
+    "softGoto is back without the measurement that removed it being revisited");
+});
