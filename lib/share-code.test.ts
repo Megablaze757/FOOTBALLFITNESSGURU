@@ -1,9 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+// The combined file's name carries the migration range, so it changes every
+// time a migration is added. Spelling it here bought an ENOENT on the old name
+// that reads like a missing file rather than a rename.
+import { OUT } from "../scripts/build-apply-sql.mjs";
 
 const sql = readFileSync(new URL("../supabase/migrations/0107_athlete_share_codes.sql", import.meta.url), "utf8");
-const combined = readFileSync(new URL("../supabase/apply-0088-0111.sql", import.meta.url), "utf8");
+const combined = readFileSync(new URL(`../${OUT}`, import.meta.url), "utf8");
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════

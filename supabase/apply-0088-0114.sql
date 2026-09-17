@@ -1,5 +1,5 @@
 -- =============================================================================
--- PocketAthlete — migrations 0088 to 0105, in one file.
+-- PocketAthlete — migrations 0088 to 0114, in one file.
 --
 -- HOW TO RUN IT. Either:
 --
@@ -7,7 +7,7 @@
 --      -> Run. It is one transaction-free script; run it top to bottom.
 --
 --   2. Or, from GitHub: Actions -> "Apply SQL to Supabase" -> Run workflow,
---      with file = supabase/apply-0088-0105.sql. That needs the repo secret
+--      with file = supabase/apply-0088-0114.sql. That needs the repo secret
 --      SUPABASE_ACCESS_TOKEN (supabase.com/dashboard/account/tokens).
 --      Prefer this one: it prints what the database returned and fails the run
 --      on a non-2xx, so "did it apply?" has an answer in the log rather than in
@@ -29,6 +29,11 @@
 -- migration anybody is sure about, and since every statement here is safe to
 -- run twice, including one you already have costs nothing at all.
 --
+-- THIS FILE IS GENERATED. `node scripts/build-apply-sql.mjs` writes it, header
+-- and all, from supabase/migrations — including the list below, so a migration
+-- cannot be added to the paste without appearing in what the paste says it is.
+-- Editing it here is editing the wrong file; lib/apply-sql.test.ts will say so.
+--
 -- WHAT IT ADDS, in order:
 --
 --   0088  Ordered programme goals and saved exercises on the profile, and
@@ -39,8 +44,10 @@
 --         preferences; custom nutrition targets; and the email controls the
 --         notification pipeline below reads.
 --
---   0090  The last turns of Ask Coach, so a follow-up is still a follow-up
---         after a refresh or on another device.
+--   0090  Recent Ask Coach turns, so a follow-up is a follow-up after
+--         navigation, refresh or another device. The model receives only the
+--         latest 12; the table is the athlete's private record and cascades
+--         with account deletion.
 --
 --   0091  ONE notification pipeline, trial-ending reminders, and health
 --         consent recorded rather than assumed. This is the one that was
@@ -54,28 +61,70 @@
 --         two places at once. Adds diet_budget and diet_cook_level.
 --
 --   0093  A weekly food budget in pounds, and the supermarket it is measured
---         in. The shop has to move off the device with it: store prices differ
---         by a flat index per shop, so once a budget can change the plan, an
---         athlete whose phone said Aldi and whose laptop said Tesco would be
---         handed two different weeks from one seed.
+--         in. The shop has to move off the device with it: store prices
+--         differ by a flat index per shop, so once a budget can change the
+--         plan, an athlete whose phone said Aldi and whose laptop said Tesco
+--         would be handed two different weeks from one seed.
 --
 --   0094  A run's own duration, separate from the session it sat inside. A
 --         footballer's Tuesday is a 90-minute session with a 20-minute run in
 --         it, and pace computed from the session reads 4:30/km as 20:00/km.
---         Also widens distance_km, which was silently rounding 5.666km to 5.67.
+--         Also widens distance_km, which was silently rounding 5.666km to
+--         5.67.
 --
 --   0095  Admin visibility and the email audit. The delivery log has recorded
---         every send since 0089 and the only policy on it was "read own", so an
---         admin querying it saw their own handful of rows and concluded nothing
---         was being sent — which is exactly what nothing being sent looks like.
---         Adds admin reads, a summary function, an audit that joins each send
---         to the notification that triggered it, and the two email categories
---         that were asked for and did not exist (recovery alerts, meal plan).
+--         every send since 0089 and the only policy on it was "read own", so
+--         an admin querying it saw their own handful of rows and concluded
+--         nothing was being sent — which is exactly what nothing being sent
+--         looks like. Adds admin reads, a summary function, an audit that
+--         joins each send to the notification that triggered it, and the two
+--         email categories that were asked for and did not exist (recovery
+--         alerts, meal plan).
+--
+--   0096  Admins stop being able to read anybody's bodyweight.
+--
+--   0097  Stop pg_cron sending the reminders the Cloudflare Worker already
+--         sends.
+--
+--   0098  "Last seen" was the last sign-in, which says almost nothing.
+--
+--   0099  An exercise somebody added can become part of the main library.
+--
+--   0100  Structural limits on exercises people add.
+--
+--   0101  The athlete's own arrangement of a generated session.
+--
+--   0102  Which feature tips this athlete has already been shown.
+--
+--   0103  Where the published Apple Health shortcut lives.
+--
+--   0104  Who cancelled it.
+--
+--   0105  The rank badge on the leaderboard said Iron for everybody.
+--
+--   0106  Why a drafted exercise was held.
+--
+--   0107  Every athlete can be credited for a share.
+--
+--   0108  An athlete can have a page.
+--
+--   0109  Leaderboards you can actually win, and a streak that agrees with
+--         the one on your own screen.
+--
+--   0110  Subscribe to your training plan from a calendar app.
+--
+--   0111  FINISHED REELS, WHERE THE PERSON WHO ASKED FOR THEM ACTUALLY IS.
+--
+--   0112  THE REELS BUCKET HOLDS SLIDES TOO.
+--
+--   0113  Retention — who came back, and when they stopped.
+--
+--   0114  The one message after the app has stopped talking.
 --
 -- AFTER RUNNING IT, one thing is still outstanding and is NOT in this file:
 -- paste cloudflare/worker.js into the Cloudflare dashboard. The admin email
 -- panel's configuration check, test send and retry are Worker routes, and the
--- Worker is deployed by hand. /health reports version 2026-08-21.1 once it is.
+-- Worker is deployed by hand. /health reports version 2026-09-16.1 once it is.
 -- =============================================================================
 
 
@@ -2167,4 +2216,403 @@ create policy "reels: read admin" on storage.objects for select to authenticated
 drop policy if exists "reels: delete admin" on storage.objects;
 create policy "reels: delete admin" on storage.objects for delete to authenticated
   using (bucket_id = 'reels' and public.is_admin());
+
+-- ============================================================================
+-- 0112_reels_images.sql
+-- ============================================================================
+
+-- =============================================================================
+-- THE REELS BUCKET HOLDS SLIDES TOO.
+--
+-- The carousel workflow uploaded five PNGs and the bucket refused every one:
+--
+--   {"statusCode":"415","error":"invalid_mime_type",
+--    "message":"mime type image/png is not supported"}
+--
+-- 0111 listed video/mp4, application/x-subrip and text/plain, which was the
+-- complete set of things a reel produces. A carousel produces images, so the
+-- caption uploaded and the post itself did not.
+--
+-- image/jpeg is included as well. Nothing writes one today, but a bucket that
+-- accepts a PNG and refuses a JPEG is a distinction with no reason behind it,
+-- and the next person to hit it would be debugging a 415 rather than reading
+-- this file.
+--
+-- The size cap is unchanged and still doing the work: a slide is ~250KB and
+-- the cap is 40MB, so this widens what may be stored and not how much.
+-- =============================================================================
+
+update storage.buckets
+set allowed_mime_types = array[
+  'video/mp4', 'application/x-subrip', 'text/plain', 'image/png', 'image/jpeg'
+]
+where id = 'reels';
+
+-- The last statement reports the verdict, which is what .github/workflows/
+-- apply-sql.yml prints back.
+select
+  id,
+  allowed_mime_types,
+  ('image/png' = any(allowed_mime_types)) as accepts_slides
+from storage.buckets
+where id = 'reels';
+
+-- ============================================================================
+-- 0113_retention.sql
+-- ============================================================================
+
+-- =============================================================================
+-- 0113: Retention — who came back, and when they stopped.
+--
+-- =============================================================================
+-- THE APP COULD MEASURE EVERY STEP UP TO THE FRONT DOOR AND NOTHING AFTER IT.
+--
+-- 0045 added funnel_events and its twelve names are every one about arriving:
+-- signup, onboarded, first_check_in, paywall_hit, checkout_complete. The last
+-- thing this database knows about an athlete is the moment they first checked
+-- in. Whether anybody was still there a fortnight later has never been a
+-- question it could answer.
+--
+-- That is the wrong half to have instrumented. A funnel answers "why don't
+-- more people arrive"; the answer to "why isn't this growing" is far more
+-- often that the people who already arrived left.
+--
+-- NO NEW TABLE, AND THAT IS THE POINT. Retention is not a thing to start
+-- recording from today — it is a question about what is already stored, and
+-- the answer for every account that ever existed is sitting in daily_check_ins
+-- and training_logs right now. A new events table would have answered it for
+-- accounts created after this migration and left the existing ones, which are
+-- the only ones there are, permanently unmeasurable.
+--
+-- WHAT COUNTS AS BEING HERE is settled and this does not get a second opinion.
+-- 0098 replaced "last sign-in" with the later of a check-in and a training
+-- log, because a session refresh counts as a sign-in and so does opening the
+-- app and closing it again. The same definition is used here; a second one
+-- would give two admin screens that disagree about who is active.
+--
+-- ADMIN ONLY, and not because the numbers are sensitive in aggregate — because
+-- the rows are not aggregate. One row per account with every day that account
+-- logged something is a training diary, and 0046 already had to close exactly
+-- this hole on funnel_summary after it shipped readable by anyone signed in.
+-- =============================================================================
+
+drop function if exists public.retention_accounts();
+
+create function public.retention_accounts()
+returns table (
+  user_id uuid,
+  joined date,
+  -- Sorted and de-duplicated: the app treats it as a set, and sending the same
+  -- day twice because somebody logged two sessions would be pure noise on the
+  -- wire. array_agg(distinct ... order by ...) does both in the database.
+  active_days date[]
+)
+language plpgsql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if not public.is_admin() then
+    raise exception 'forbidden' using errcode = '42501';
+  end if;
+
+  return query
+  select p.id,
+         u.created_at::date,
+         coalesce((
+           select array_agg(distinct d order by d)
+             from (
+               select c.check_in_date as d
+                 from public.daily_check_ins c
+                where c.user_id = p.id
+               union
+               select t.log_date
+                 from public.training_logs t
+                where t.user_id = p.id
+             ) days
+         ), '{}'::date[])
+    from public.profiles p
+    join auth.users u on u.id = p.id
+   order by u.created_at;
+end;
+$$;
+
+revoke all on function public.retention_accounts() from public, anon;
+grant execute on function public.retention_accounts() to authenticated;
+
+-- -----------------------------------------------------------------------------
+-- The same question in one row, for anything that cannot hold the whole set.
+--
+-- The Worker sends the weekly digest and has no room to pull every athlete's
+-- training days across the wire to count them. This does the counting in the
+-- database and hands back four numbers.
+--
+-- THE THIRTY-DAY LINE IS NOT ARBITRARY. lib/checkin-reminder.ts stops emailing
+-- at thirty days of silence, and its reasoning is sound: nobody is brought
+-- back by the thirtieth identical email, and continuing to send them is how a
+-- domain earns a spam reputation. The consequence, never written down until
+-- now, is that everybody past that line is out of contact permanently. This
+-- counts them, which is the first step to that being a decision rather than an
+-- accident.
+-- -----------------------------------------------------------------------------
+drop function if exists public.retention_standing();
+
+create function public.retention_standing()
+returns table (
+  accounts bigint,
+  active_7d bigint,
+  slipping bigint,
+  lapsed bigint,
+  never_started bigint
+)
+language plpgsql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if not public.is_admin() then
+    raise exception 'forbidden' using errcode = '42501';
+  end if;
+
+  return query
+  with last_seen as (
+    select p.id,
+           greatest(
+             (select max(c.check_in_date) from public.daily_check_ins c where c.user_id = p.id),
+             (select max(t.log_date) from public.training_logs t where t.user_id = p.id)
+           ) as on_day
+      from public.profiles p
+  )
+  select count(*)::bigint,
+         count(*) filter (where on_day is not null and current_date - on_day <= 7)::bigint,
+         count(*) filter (where on_day is not null
+                            and current_date - on_day > 7
+                            and current_date - on_day <= 30)::bigint,
+         count(*) filter (where on_day is not null and current_date - on_day > 30)::bigint,
+         count(*) filter (where on_day is null)::bigint
+    from last_seen;
+end;
+$$;
+
+revoke all on function public.retention_standing() from public, anon;
+grant execute on function public.retention_standing() to authenticated;
+
+-- ============================================================================
+-- 0114_win_back.sql
+-- ============================================================================
+
+-- =============================================================================
+-- 0114: The one message after the app has stopped talking.
+--
+-- =============================================================================
+-- PAST THIRTY DAYS NOTHING REACHES ANYBODY, AND THAT WAS NEVER A DECISION.
+--
+-- lib/checkin-reminder.ts stops at thirty days of silence and its reasoning is
+-- right: nobody is brought back by the thirtieth identical email, and
+-- continuing to send them is how a domain earns a spam reputation. Every
+-- sender in the app inherits that line.
+--
+-- What follows from it was never written down anywhere. Everybody past thirty
+-- days is out of contact permanently — not mailed less, never mailed again by
+-- anything. 0113 made them countable. This is the one message they get.
+--
+-- NOT A RESTARTED REMINDER. The reminder was right to stop because it had
+-- nothing to say; a thirty-first "you have not checked in" is the same email
+-- that already failed thirty times. The rule in lib/win-back.ts is that if
+-- there is no specific statistic about that athlete worth a sentence, nothing
+-- is sent at all.
+--
+-- ONCE, ENFORCED WHERE IT CANNOT BE BYPASSED. 0091 put a unique index on
+-- (user_id, dedupe_key), so a win-back row written with the key 'win_back'
+-- can only exist once per athlete. A sender with a bug, a job that runs twice,
+-- or a future second implementation all hit the same constraint. The rule
+-- lives in the database rather than in the caller's good intentions.
+--
+-- ITS OWN CONSENT SWITCH, not a reused one. This is a different thing from a
+-- check-in reminder: it goes to somebody who has already stopped, and the
+-- honest thing is to let them refuse it without also refusing the reminders
+-- they may want if they come back. Default true, like every other category —
+-- an athlete who never touched the settings gets the same treatment they get
+-- for the weekly summary.
+-- =============================================================================
+
+alter table public.profiles
+  add column if not exists email_win_back boolean not null default true;
+
+-- -----------------------------------------------------------------------------
+-- The kind, and the bucket it unsubscribes under.
+--
+-- BOTH, OR IT SILENTLY NEVER SENDS. pending_notification_emails() ends its
+-- consent case with `else false`, so a category added to the constraint and
+-- not to the function produces rows that are valid, queued, and never picked
+-- up — a feature that looks shipped and does nothing.
+-- -----------------------------------------------------------------------------
+alter table public.notifications drop constraint if exists notifications_kind_check;
+alter table public.notifications add constraint notifications_kind_check check (
+  kind in (
+    'program_assigned', 'coach_request', 'general',
+    'check_in_reminder', 'workout_reminder', 'weekly_summary',
+    'program_deadline', 'milestone', 'trial_ending', 'billing',
+    'win_back'
+  )
+);
+
+alter table public.notifications drop constraint if exists notifications_email_category_check;
+alter table public.notifications add constraint notifications_email_category_check check (
+  email_category in (
+    'none', 'checkin', 'workout', 'weekly', 'milestone', 'program',
+    'recovery', 'meal_plan', 'essential', 'win_back'
+  )
+);
+
+create or replace function public.pending_notification_emails()
+returns table (
+  id uuid, user_id uuid, title text, body text, href text, kind text, email_category text
+)
+language sql
+security definer
+set search_path = public, pg_temp
+as $$
+  select n.id, n.user_id, n.title, n.body, n.href, n.kind, n.email_category
+    from public.notifications n
+    join public.profiles p on p.id = n.user_id
+   where n.emailed_at is null
+     and n.email_category <> 'none'
+     and (n.email_category = 'essential' or n.read_at is null)
+     and (n.email_category = 'essential' or p.health_data_consent_at is not null)
+     and n.created_at > now() - case
+       when n.email_category = 'essential' then interval '30 days'
+       else interval '7 days'
+     end
+     and case n.email_category
+       when 'essential' then true
+       when 'checkin' then p.email_checkin_reminders
+       when 'workout' then p.email_workout_reminders
+       when 'weekly' then p.email_weekly_summary
+       when 'milestone' then p.email_milestones
+       when 'program' then p.email_program_reminders
+       when 'recovery' then p.email_recovery_alerts
+       when 'meal_plan' then p.email_meal_plan
+       when 'win_back' then p.email_win_back
+       else false
+     end
+   order by n.created_at
+   limit 200;
+$$;
+
+revoke execute on function public.pending_notification_emails() from public, anon, authenticated;
+grant execute on function public.pending_notification_emails() to service_role;
+
+-- -----------------------------------------------------------------------------
+-- Who is eligible, and the facts about them the message is made of.
+--
+-- THE NUMBERS COME OUT OF THE DATABASE, THE SENTENCE IS DECIDED IN CODE. Same
+-- split as lib/growth-digest.ts: which line to lead with, whether an athlete
+-- has a story at all, and how "nearly fifty" is phrased are decisions worth
+-- testing, and they are tested in lib/win-back.test.ts. This does the counting,
+-- which SQL is better at and which no test can get wrong.
+--
+-- THE BEST LIFT IS A MAXIMUM OVER JSONB, one key at a time. metrics is a bag
+-- of whatever was measured — `{"squat_1rm": 100, "sprint_10m": 1.75}` — and
+-- the two are not comparable: bigger is better for one and worse for the
+-- other. Only the keys ending in _1rm are considered, because those are the
+-- ones where "your best is still X" is a sentence that means something.
+--
+-- SERVICE ROLE ONLY. It returns one athlete's training history per row, which
+-- is the shape 0046 had to close on funnel_summary after it shipped readable
+-- by anybody signed in.
+-- -----------------------------------------------------------------------------
+drop function if exists public.win_back_candidates(int, int);
+
+create function public.win_back_candidates(p_after int default 35, p_until int default 180)
+returns table (
+  user_id uuid,
+  full_name text,
+  last_active date,
+  sessions bigint,
+  longest_streak int,
+  best_metric text,
+  best_value numeric,
+  best_on date,
+  wants_email boolean
+)
+language plpgsql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  return query
+  with seen as (
+    select p.id,
+           p.full_name,
+           p.email_win_back,
+           greatest(
+             (select max(c.check_in_date) from public.daily_check_ins c where c.user_id = p.id),
+             (select max(t.log_date) from public.training_logs t where t.user_id = p.id)
+           ) as on_day
+      from public.profiles p
+     where not exists (
+       -- The unique index makes a second insert impossible; this makes the
+       -- query not bother offering one.
+       select 1 from public.notifications n
+        where n.user_id = p.id and n.dedupe_key = 'win_back'
+     )
+  ),
+  bests as (
+    select b.user_id,
+           m.key as metric,
+           (m.value)::text::numeric as value,
+           b.test_date,
+           row_number() over (
+             partition by b.user_id
+             order by (m.value)::text::numeric desc, b.test_date desc
+           ) as rank
+      from public.strength_benchmarks b
+      cross join lateral jsonb_each(b.metrics) as m(key, value)
+     where m.key like '%\_1rm'
+       and jsonb_typeof(m.value) = 'number'
+       and (m.value)::text::numeric > 0
+  ),
+  streaks as (
+    -- The longest run of consecutive check-in days: number the days, subtract
+    -- the row number, and every unbroken run shares one value to group on.
+    select user_id, max(run) as longest
+      from (
+        select user_id, count(*) as run
+          from (
+            select c.user_id,
+                   c.check_in_date
+                     - (row_number() over (partition by c.user_id order by c.check_in_date))::int as grp
+              from (select distinct user_id, check_in_date from public.daily_check_ins) c
+          ) marked
+         group by user_id, grp
+      ) runs
+     group by user_id
+  )
+  select s.id,
+         s.full_name,
+         s.on_day,
+         (select count(*) from public.training_logs t where t.user_id = s.id),
+         coalesce(st.longest, 0)::int,
+         bt.metric,
+         bt.value,
+         bt.test_date,
+         s.email_win_back
+    from seen s
+    left join bests bt on bt.user_id = s.id and bt.rank = 1
+    left join streaks st on st.user_id = s.id
+   where s.on_day is not null
+     and current_date - s.on_day >= p_after
+     and current_date - s.on_day <= p_until
+   order by s.on_day desc;
+end;
+$$;
+
+revoke execute on function public.win_back_candidates(int, int) from public, anon, authenticated;
+grant execute on function public.win_back_candidates(int, int) to service_role;
+
+notify pgrst, 'reload schema';
 
