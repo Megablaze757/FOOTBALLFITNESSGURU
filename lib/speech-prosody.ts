@@ -473,6 +473,65 @@ export function shapeExpression(
  * than the +50% a single sentence suggested — which is the honest number.
  * ═══════════════════════════════════════════════════════════════════════════
  */
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * AND IT SURVIVED BEING CHALLENGED WITH THE INSTAGRAM REGISTER. A NEGATIVE
+ * RESULT, KEPT SO NOBODY PAYS FOR IT TWICE.
+ *
+ * Asked whether the reels could sound like the AI voice on a short-form reel.
+ * The register that dominates there in 2026 is American, energetic and fast —
+ * ElevenLabs' most-generated social voice by a wide margin is an American
+ * female "valley girl" read — so the question is really whether this project's
+ * deliberately British male reference is the thing standing in the way.
+ *
+ * Twelve Kokoro voices, all four reels end to end, at the 0.94 the committed
+ * clip is built at. The American voices win clearly:
+ *
+ *                  dead%   wpm  artic   F0SD  range    Hz
+ *   bm_lewis          20   146    182   4.00  11.86    94   <- incumbent
+ *   am_puck           10   167    186   4.61  15.08   108
+ *   am_fenrir         12   164    185   4.56  15.26   134
+ *
+ * am_puck: +15% pitch variability, +27% range, half the dead air, and 108Hz —
+ * inside PITCH_DEADBAND_ST of VOICE_TARGET_HZ, so it would need no pitch
+ * correction and pay none of the harmonic cost that correction carries.
+ *
+ * THAT TABLE IS THE WRONG TABLE AND ITS ANSWER IS WRONG. It measures the
+ * REFERENCE. What ships is Chatterbox performing that reference, and putting
+ * both through it reverses the order on every expression axis:
+ *
+ *                         dead%   wpm  artic   F0SD  range    Hz  rise/s  dyn
+ *   chatterbox <- lewis      34   143    216   5.11  17.71   125    20.8  9.5
+ *   chatterbox <- puck       22   161    208   4.07  13.18   115    15.2  8.6
+ *
+ * The incumbent gains 25% pitch variability and 34% range as a performance,
+ * and the candidate that led as a reference trails as a product. Chatterbox
+ * does the expressing, and what it does with a clip is not a function of how
+ * expressive the clip was.
+ *
+ * This file already records choosing a voice on one line and having the order
+ * reverse over a whole narration — three times, ending in the rule "a voice is
+ * chosen on whole narrations or it is not chosen". Whole narrations were not
+ * enough either. THE RULE IS NOW: A VOICE IS CHOSEN ON THE SHIPPING PATH. The
+ * reference layer costs seconds and the shipping path costs minutes, which is
+ * exactly why the cheap measurement keeps getting made and keeps being wrong.
+ *
+ * SO THE BRITISH REFERENCE STAYS, and not because of the accent argument below
+ * — it would have stayed on the numbers alone. An American reference makes the
+ * reels measurably flatter.
+ *
+ * WHAT DID SURVIVE. am_puck cuts dead air from 34% to 22%, and dead air is the
+ * complaint that started this whole thread. That is a real finding about
+ * PACING, and pacing is reachable without touching the voice: CHATTERBOX_TEMPO
+ * and the exaggeration/cfg tables are where it lives. Not done here, because
+ * changing two things at once is how the last three of these went wrong.
+ *
+ * Reproduce with scripts/try-reference-voices.py --shipping. It joins phrases
+ * with a fixed gap rather than lib/narration.ts's LEAD_MS and TAIL_MS, so the
+ * absolute dead-air figures above are inflated for both sides and only the
+ * comparison should be quoted.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
 export const REFERENCE_VOICE = "bm_lewis";
 
 /**
