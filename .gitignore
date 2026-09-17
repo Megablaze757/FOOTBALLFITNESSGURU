@@ -60,3 +60,6 @@ screenshots/
 # The Kokoro voice model: 350MB, downloaded by the workflow and by
 # scripts/measure-voice.py. Never committed.
 .voice/
+
+# scripts/try-reference-voices.py scratch: generated wavs, hundreds of MB.
+.voice-trial/
