@@ -42,9 +42,9 @@ on:
         options: [chatterbox, kokoro]
         default: chatterbox
       music:
-        description: "A track id from lib/stock-audio.ts (e.g. dnb-loop), or a path to your own. Blank records no bed."
+        description: "A track id from lib/stock-audio.ts, or a path to your own. \"none\" records no bed."
         type: string
-        default: ""
+        default: "dark-beat"
 
 jobs:
   record:
@@ -87,9 +87,29 @@ jobs:
       # the axis it was picked for, and that axis was not the broken one.
       # ═══════════════════════════════════════════════════════════════════
       REEL_VOICE: ${{ inputs.engine || github.event.client_payload.engine || 'chatterbox' }}
-      # A path to a track, not a track. Nothing in this repository picks music,
-      # and nothing in it ships music it does not have the right to.
-      REEL_MUSIC: ${{ inputs.music || github.event.client_payload.music || '' }}
+      # A track id, resolved by scripts/fetch-music.mts against the CC0
+      # manifest in lib/stock-audio.ts. Nothing in this repository ships music
+      # it does not have the right to; the bytes are fetched and checksummed
+      # at record time.
+      #
+      # DEFAULTED, AFTER SEVEN REELS SHIPPED WITHOUT IT. This was "" and the
+      # comment here said "NOTHING PICKS THE MUSIC", which was true and was
+      # read as a policy rather than as the accident it was. What settled it
+      # was measuring a reel this account wanted to sound like, against ours,
+      # on scripts/measure-excitement.py:
+      #
+      #                          dead%   F0SD  range    Hz    dyn
+      #   the reel they liked        2   4.10  13.32   119    4.3
+      #   ours, voice only          34   5.11  17.71   125    9.5
+      #   ours + this bed            4   5.39  18.36   123    9.4
+      #
+      # A third of our reel is DIGITAL SILENCE — the floor measures -120dB
+      # between phrases, against a continuous 26dB floor in theirs. The voice
+      # was never the problem: ours carries more pitch variation and a wider
+      # range than the one being admired, before and after. See
+      # lib/speech-prosody.ts, which records an American reference losing on
+      # the same instrument.
+      REEL_MUSIC: ${{ inputs.music || github.event.client_payload.music || 'dark-beat' }}
     steps:
       # ═══════════════════════════════════════════════════════════════════
       # WHAT IS CONFIGURED, BEFORE THREE MINUTES ARE SPENT FINDING OUT.
@@ -388,6 +408,11 @@ jobs:
           # licence recorded; fetch-music.mts pulls one and re-runs the check on
           # what actually arrived, because a URL is a promise somebody else
           # keeps. A path is still accepted for a track of your own.
+          # "none" is how a run asks for silence now that a bed is the default.
+          # Without it there is no way to turn the bed off at all: the `||`
+          # chain above treats an empty string as unset and falls through to
+          # the default, so passing "" asks for the bed rather than for none.
+          if [ "${REEL_MUSIC:-}" = "none" ]; then REEL_MUSIC=""; fi
           if [ -n "${REEL_MUSIC:-}" ] && [ ! -f "$REEL_MUSIC" ]; then
             # OUTSIDE reels/, so no glob over the recorder's own output can reach it.
             if node --import tsx scripts/fetch-music.mts "$REEL_MUSIC" "$RUNNER_TEMP/bed.wav"; then
