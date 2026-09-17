@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   HOOK_MAX_WORDS, MAX_ONE_ROUTE_SHARE, MAX_REEL_MS, MAX_SILENT_MS, MIN_CAPTION_MS,
   hookProblems, retentionProblems, silentGaps, stillWatching,
-  MAX_OPENING_SILENCE_MS, MAX_CAPTION_LATE_MS,
+  MAX_OPENING_SILENCE_MS, MAX_CAPTION_LATE_MS, RETENTION_BANDS,
 } from "./reel-retention";
 import { reelPlan, type PlannableScript } from "./reel-plan";
 import { SCRIPTS, reelScript, scriptProblems } from "./reel-script";
@@ -419,4 +419,77 @@ test("a reveal at four seconds and one at twelve reach a similar tenth", () => {
 test("the first two seconds are where the audience actually goes", () => {
   assert.ok(stillWatching(0) - stillWatching(2_000) > 0.75,
     "the curve no longer loses three quarters of the audience in two seconds");
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// THE BAND IS PICKED IN PYTHON, AND NOTHING ELSE MAKES THE TWO AGREE.
+//
+// RETENTION_BANDS is handed to scripts/measure-reel.py as JSON and the
+// selection is made there, because the reel's finished length is not known
+// until that script has estimated every beat. A retentionBand() here would be
+// a second implementation of the rule in a language that cannot reach the
+// input — so there is only one, on the far side of the boundary, and this is
+// what keeps it honest. Same arrangement as lib/win-back.ts and migration
+// 0114's SQL.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const measurePy = readFileSync("scripts/measure-reel.py", "utf8");
+const measureMts = readFileSync("scripts/measure-reel.mts", "utf8");
+
+test("the table reaches the script that selects from it", () => {
+  assert.match(measureMts, /RETENTION_BANDS\.map/,
+    "the bands are no longer sent, so the Python is selecting from nothing");
+  /**
+   * Infinity is not JSON. The open-ended band travels as null and the Python
+   * turns it back into infinity; drop either half and the longest band stops
+   * matching, which raises StopIteration rather than grading the reel.
+   */
+  assert.match(measureMts, /Number\.isFinite\(b\.underMs\)/,
+    "Infinity is being written into JSON, where it becomes null with nothing expecting it");
+  assert.match(measurePy, /float\("inf"\)/,
+    "the Python no longer restores the open-ended band, so a long reel matches nothing");
+});
+
+test("the Python selects on the same column, the same way round", () => {
+  assert.match(measurePy, /job\["bands"\]/, "the Python stopped reading the table it is sent");
+  /**
+   * STRICTLY LESS THAN, so a reel of exactly 15.0s is graded by the 30s band
+   * rather than the 15s one. Flipping this to <= moves every reel that lands
+   * on a boundary up a band and raises the bar it is judged against, silently.
+   */
+  assert.match(measurePy, /total < \(b\["underMs"\]/,
+    "the comparison changed — a reel on a band boundary is now graded against the wrong one");
+});
+
+test("every column this table defines survives the crossing", () => {
+  /**
+   * Either the map spreads each band — in which case a column added above
+   * crosses on its own — or it names the columns, in which case it has to name
+   * all of them. Written as the disjunction rather than as `includes("...b")`,
+   * because the first draft of this asserted `spread || named` with the spread
+   * present, which passes for every key including ones that do not exist.
+   */
+  const spreads = /RETENTION_BANDS\.map\(\(b\) => \(\{\s*\.\.\.b\b/.test(measureMts);
+  const keys = Object.keys(RETENTION_BANDS[0]);
+  if (!spreads) {
+    for (const key of keys) {
+      assert.ok(measureMts.includes(key), `${key} is not sent to the Python and is not spread either`);
+    }
+  }
+  assert.ok(spreads || keys.length > 0);
+  assert.match(measurePy, /b\["aim"\]|band\["aim"\]/, "the aim is sent and never read");
+});
+
+test("the bands descend and end open", () => {
+  for (let i = 1; i < RETENTION_BANDS.length; i++) {
+    assert.ok(RETENTION_BANDS[i].underMs > RETENTION_BANDS[i - 1].underMs,
+      "the bands are out of order, so the first match is not the right one");
+    assert.ok(RETENTION_BANDS[i].aim < RETENTION_BANDS[i - 1].aim,
+      "a longer reel is being asked for more completion than a shorter one");
+  }
+  assert.equal(RETENTION_BANDS[RETENTION_BANDS.length - 1].underMs, Infinity,
+    "the last band is not open-ended, so a long enough reel matches nothing at all");
+  for (const band of RETENTION_BANDS) {
+    assert.ok(band.strong > band.aim, "strong is not above aim, so the two say nothing apart");
+  }
 });

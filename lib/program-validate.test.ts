@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { validatePlan, planIssues, orderPlan } from "./program-validate";
-import { kindOf, KIND_RANK, isWorkingSet, inFatigueOrder, sectionFor } from "./session-shape";
+import { kindOf, KIND_RANK, isWorkingSet, inFatigueOrder, orderWorkingBlock, sectionFor } from "./session-shape";
 import { buildProgram } from "./coach";
 import { asGoalType, type ProgramDrill, type ProgramPlan, type Slot } from "./engine";
 
@@ -236,4 +236,86 @@ test("asGoalType maps the vocabulary the app actually stores", () => {
   // And anything unreadable becomes the least wrong thing to hand somebody.
   assert.equal(asGoalType("???"), "strength");
   assert.equal(asGoalType(null), "strength");
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * TWO IMPLEMENTATIONS OF FATIGUE ORDER, AND ONLY ONE OF THEM RUNS.
+ *
+ * `orderPlan` above is wired into every generated plan. `orderWorkingBlock` in
+ * lib/session-shape.ts does the same reordering with a weaker guarantee — it
+ * leaves a working set that is sitting among the warm-ups where it is, rather
+ * than moving it out — and nothing calls it.
+ *
+ * It was found by sweeping for exported values that nothing reads. Deleting it
+ * would decide, on nobody's behalf, that reordering-without-re-sectioning is
+ * never wanted; leaving it unpinned means two copies of one rule that can
+ * drift apart in silence, and the dormant copy is the one nobody would notice
+ * breaking. So it is pinned here instead, against the same real plans the live
+ * one is checked on.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("the ordering nothing calls agrees with the ordering that runs", () => {
+  const plan = buildProgram({ sport: "gym", goal: "strength", daysPerWeek: 4 } as any);
+  let checked = 0;
+  for (const week of plan.weeks) {
+    for (const session of week.sessions) {
+      const drills = session.drills ?? [];
+      if (drills.filter((d) => isWorkingSet(kindOf(d.name, d.slot))).length < 2) continue;
+      checked += 1;
+
+      /**
+       * REVERSED FIRST, AND THAT IS THE WHOLE TEST.
+       *
+       * The first draft of this ran orderWorkingBlock over the generated
+       * session as-is and asserted the result was in fatigue order. It passed
+       * — and it went on passing when the KIND_RANK comparison was deleted
+       * from the function, because buildProgram already emits its working sets
+       * hardest-first. The function was a no-op on that input, so the
+       * assertion was about buildProgram and not about the thing being pinned.
+       * Caught by mutating the function and watching nothing go red.
+       *
+       * Reversing puts the working block in exactly the wrong order, so
+       * restoring it is work only a correct sort can do.
+       */
+      const scrambled = [...drills].reverse();
+      assert.ok(!inFatigueOrder(scrambled),
+        `${session.title}: reversing the session left it in fatigue order, so this proves nothing`);
+
+      const ours = orderWorkingBlock(scrambled);
+      assert.ok(inFatigueOrder(ours),
+        `${session.title}: orderWorkingBlock did not restore fatigue order`);
+
+      // It reorders and never adds, drops or renames — the same property
+      // orderPlan is held to above.
+      assert.deepEqual(
+        ours.map((d) => d.name).sort(), drills.map((d) => d.name).sort(),
+        `${session.title}: orderWorkingBlock changed which drills are in the session`,
+      );
+
+      /**
+       * And it is idempotent. A reorder that moves something on the second
+       * pass is a comparison that is not a total order, which is the failure
+       * that would make the two implementations disagree in the first place.
+       */
+      assert.deepEqual(orderWorkingBlock(ours).map((d) => d.name), ours.map((d) => d.name),
+        `${session.title}: running it twice gave a different order`);
+
+      /**
+       * And the live one, given the same mess, reaches fatigue order too. That
+       * is the actual agreement being claimed: not that they produce identical
+       * arrays — they cannot, orderPlan also re-sections — but that neither
+       * leaves a working block out of order.
+       */
+      const live = orderPlan({
+        ...plan,
+        // Spread the real week so this keeps every field ProgramWeek requires;
+        // a literal here goes stale the moment the type gains one.
+        weeks: [{ ...week, sessions: [{ ...session, drills: scrambled }] }],
+      });
+      assert.ok(inFatigueOrder(live.weeks[0].sessions[0].drills),
+        `${session.title}: orderPlan did not restore fatigue order from the same input`);
+    }
+  }
+  assert.ok(checked > 0, "no generated session had a working block to check — the pin is vacuous");
 });

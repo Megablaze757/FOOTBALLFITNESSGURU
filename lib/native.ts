@@ -137,6 +137,22 @@ export async function readHealth(days = 7): Promise<HealthSample[]> {
  * Register for APNs and hand the token back for storage against the user.
  *
  * Null on the web (where `usePush` already handles VAPID) and on refusal.
+ *
+ * ───────────────────────────────────────────────────────────────────────────
+ * NOTHING CALLS THIS, AND THAT IS THE DESIGN RATHER THAN AN OVERSIGHT.
+ *
+ * ios/README.md states the decision plainly: "Local notifications, not push:
+ * no device-token table, no APNs credentials, no scheduled job." The reminder
+ * an athlete gets on iOS is scheduled on the device by
+ * ios/PocketAthlete/Reminders.swift, and the whole server half of push — the
+ * token table, the credentials, the job that decides who to wake — was
+ * deliberately not built.
+ *
+ * So this is the client half of an architecture the project chose against. It
+ * is left here because it is the correct client half and writing it again
+ * would be work, but nobody should read its presence as push being available:
+ * calling it today would collect a device token that there is nowhere to put.
+ * ───────────────────────────────────────────────────────────────────────────
  */
 export async function registerNativePush(): Promise<string | null> {
   if (!isNative()) return null;
