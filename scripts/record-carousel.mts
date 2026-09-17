@@ -19,6 +19,7 @@ import { chromium } from "playwright";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { carouselSlides, SLIDE_H, SLIDE_W, type Slide } from "../lib/carousel";
+import { captionProblems } from "../lib/caption";
 import { proteinIndex, indexFacts, REFERENCE_PROTEIN } from "../lib/protein-index";
 
 const outDir = process.argv.includes("--out")
@@ -189,16 +190,40 @@ for (const [i, slide] of slides.entries()) {
   console.log(`  ${name}  ${slide.kind}${spill.length ? "  CLIPPED" : ""}`);
 }
 
-/** The caption, so the post is ready to publish rather than ready to write. */
-writeFileSync(
-  join(outDir, "caption.txt"),
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE CAPTION, CHECKED BY THE SAME RULES THE REEL'S IS.
+ *
+ * This wrote whatever it built and the reel refuses to record a caption that
+ * would not be postable — no medical claim, no promised result, no
+ * superlative, nothing past Instagram's limit, nothing hidden behind "more".
+ * One set of rules, one format applying them, and the format that skipped
+ * them is the one whose caption is assembled from LIVE DATA: the cheapest
+ * food's name, its price and the spread all come from the database, so the
+ * sentence is different every time it runs and nobody reviews it before it
+ * goes out.
+ *
+ * Refused rather than warned about, the same way reel-recording refuses, on
+ * the same grounds: a caption this would not write is a caption that should
+ * not be posted, and the moment to find that out is before the slides exist.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+const caption =
   `What ${REFERENCE_PROTEIN}g of protein actually costs in a UK supermarket.\n\n`
   + `${facts.cheapest.name} is the cheapest at ${money(facts.cheapest.cost)}. `
   + `The dearest is ${money(facts.dearest.cost)} — ${Math.round(facts.spread)}x more for the same protein.\n\n`
   + `Save this for your next shop.\n\n`
   + `Every price comes from a real supermarket pack size, not a per-100g estimate. `
-  + `All ${facts.count} foods are free on the site.\n`,
-);
+  + `All ${facts.count} foods are free on the site.\n`;
+
+const captionFaults = captionProblems(caption);
+if (captionFaults.length) {
+  console.error("The caption for this carousel would not be postable:");
+  for (const fault of captionFaults) console.error(`  ${fault}`);
+  process.exit(1);
+}
+
+writeFileSync(join(outDir, "caption.txt"), caption);
 
 await context.close();
 await browser.close();

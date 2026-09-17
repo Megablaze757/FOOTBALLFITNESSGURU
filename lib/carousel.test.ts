@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   MAX_SLIDES, ROWS_PER_SLIDE, SLIDE_H, SLIDE_W, carouselSlides, type Row,
 } from "./carousel";
@@ -83,4 +84,28 @@ test("one food still produces a whole post", () => {
   const slides = carouselSlides(input(1));
   assert.equal(slides.length, 3);
   assert.deepEqual(slides.map((s) => s.kind), ["hook", "list", "cta"]);
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE CAROUSEL'S CAPTION IS HELD TO THE SAME RULES AS THE REEL'S.
+ *
+ * The reel refuses to record a caption that would not be postable — no
+ * medical claim, no promised result, no superlative, nothing past Instagram's
+ * limit, nothing hidden behind "more". The carousel wrote whatever it built.
+ *
+ * And it is the format where that matters more: its caption is assembled from
+ * LIVE DATA — the cheapest food's name, its price, the spread — so the
+ * sentence differs every run and nobody reviews it before it goes out.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("the carousel refuses a caption it could not post", () => {
+  const src = readFileSync("scripts/record-carousel.mts", "utf8");
+  assert.match(src, /captionProblems\(caption\)/,
+    "the carousel writes its caption without the check the reel applies to its own");
+  assert.ok(
+    src.indexOf("captionProblems(caption)") < src.indexOf('writeFileSync(join(outDir, "caption.txt")'),
+    "the caption is written before it is checked, so an unpostable one still lands on disk",
+  );
+  assert.match(src, /process\.exit\(1\)/, "an unpostable caption does not fail the run");
 });
