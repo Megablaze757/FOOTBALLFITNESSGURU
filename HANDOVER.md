@@ -142,9 +142,31 @@ not in doubt.
 only check is "did the screenshot cut something off". Most reel guards do not
 apply to static slides — but the caption one did, and now does.
 
-**49 exported names in the social engine are referenced by nothing outside
-their own file.** Most are types used internally and harmless. The list is worth
-a pass; it is how `DATA_ROUTE_PAINT_MS` was found.
+**The exported-name sweep has now been done.** 26 exported names in the social
+engine are referenced by nothing outside their own file; 15 are types used
+internally and harmless. Of the 11 values, ten are ordinary module constants
+used inside their own file and merely over-exported. One was real:
+
+`retentionBand(totalMs)` in `lib/reel-retention.ts` — exported, and called by
+nothing in any language. It could not have been: the band depends on the reel's
+finished length, and the length is not known until `scripts/measure-reel.py` has
+estimated every beat, so the selection is made there. It is deleted, and
+`lib/reel-retention.test.ts` now pins the Python's copy of the rule to the table
+— the same arrangement `lib/win-back.test.ts` has with migration 0114's SQL.
+Both duplications are forced by a process boundary; neither is allowed to be
+silent. Two mutations of the Python (`<` to `<=`, and dropping the
+infinity restore) each fail a test.
+
+`DATA_ROUTE_PAINT_MS` remains the only constant that is declared, documented as
+a standard, and read by nothing — it is the blank-frame decision above, not an
+oversight to tidy.
+
+**A note on the sweep itself.** The first run reported `revealAudience` as
+declared-and-never-used, which would have been a second `DATA_ROUTE_PAINT_MS`
+and worse, because this session wrote it. It was wrong: the file-extension
+filter did not include `.mts`, and `scripts/record-reel.mts` both imports and
+calls it. Every `scripts/*.mts` in the project was invisible to the tool. A
+sweep for unreferenced code is only as good as its idea of what a file is.
 
 ---
 

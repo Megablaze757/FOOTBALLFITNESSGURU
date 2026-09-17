@@ -156,11 +156,29 @@ export const RETENTION_BANDS = [
   { underMs: Infinity, aim: 0.3, strong: 0.45 },
 ];
 
-/** The completion a reel of this length has to clear to be worth posting. */
-export function retentionBand(totalMs: number): { aim: number; strong: number } {
-  const band = RETENTION_BANDS.find((b) => totalMs < b.underMs) ?? RETENTION_BANDS[RETENTION_BANDS.length - 1];
-  return { aim: band.aim, strong: band.strong };
-}
+/**
+ * ───────────────────────────────────────────────────────────────────────────
+ * PICKING A BAND HAPPENS IN PYTHON, AND THAT IS NOT AN OVERSIGHT.
+ *
+ * There was a retentionBand(totalMs) here. It was exported, it was never
+ * called by anything in any language, and it could not have been: the band
+ * depends on the reel's finished LENGTH, and the length is not known until
+ * scripts/measure-reel.py has estimated every beat. So the table is handed
+ * across the process boundary and the selection is made on the far side —
+ * scripts/measure-reel.py, at `next(b for b in job["bands"] ...)`.
+ *
+ * It was deleted rather than kept for later. An exported function that
+ * implements a rule reads, to whoever finds it, as the place that rule is
+ * applied — which is exactly how DATA_ROUTE_PAINT_MS in lib/reel-script.ts
+ * came to be a documented standard that nothing has ever enforced. A rule with
+ * one implementation in the language that can reach it beats a second
+ * implementation in the language that cannot.
+ *
+ * lib/reel-retention.test.ts pins the Python's copy to this table, the same
+ * way lib/win-back.test.ts pins migration 0114's SQL to lib/win-back.ts. Both
+ * duplications are forced by a boundary; neither is allowed to be silent.
+ * ───────────────────────────────────────────────────────────────────────────
+ */
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
