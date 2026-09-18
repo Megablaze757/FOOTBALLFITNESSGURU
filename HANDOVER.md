@@ -129,6 +129,41 @@ change actually took — not a fourth guess.
 
 ---
 
+## The picture never moves, and nothing had ever measured it
+
+The audio half has had an instrument since the "sleepy voice" thread, and every
+voice decision was made with it. The picture had none. `scripts/measure-motion.py`
+is that instrument; the first time it was pointed at a finished file:
+
+| | dur | cuts/s | motion | still | longest hold |
+|---|---|---|---|---|---|
+| a reel this account admires | 12.9s | **1.94** | 0.0643 | **15%** | 0.8s |
+| demo-cost | 27.1s | **0.00** | 0.0048 | 90% | 6.0s |
+| demo-readiness | 27.8s | **0.00** | 0.0046 | 94% | 4.3s |
+| drill | 28.4s | **0.00** | 0.0035 | 94% | 5.6s |
+| standards | 27.7s | **0.00** | 0.0041 | 93% | **10.4s** |
+
+**Zero cuts.** Not few — none, in any reel this project has ever made, against
+roughly two a second in the one being compared against. 90–94% of frames are
+near-identical to the one before, motion is 13–18x lower, and `standards` holds
+one unchanging picture for **10.4 seconds** inside a 27.7-second reel.
+
+Set against the measured retention curve at the top of this document — half the
+audience gone inside one second — that is the most likely explanation sitting in
+plain sight. What a viewer is given in that second is a still screenshot.
+
+It is **reported, not enforced**: every reel the project owns would fail such a
+check, and a rule that fails everything gets switched off within a day. The
+instrument self-tests in the run before it is believed, and the self-test's
+important case is that a continuous pan is *not* counted as cutting — a measure
+that cannot tell a moving camera from an edit would call the slow drift down a
+page "fast cutting" and congratulate the reel that is putting people to sleep.
+
+**This is a decision, not a patch.** The recorder films one continuous slow
+drift per screen by design. Cutting means either more camera positions per beat
+or snapping the scroll instead of gliding it, and both change what the reels
+look like. The numbers are here; the choice is yours.
+
 ## Audit findings not yet acted on
 
 **The music never played, and now it does.** `lib/reel-music.ts` builds a full
