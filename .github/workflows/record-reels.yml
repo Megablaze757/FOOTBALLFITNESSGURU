@@ -502,6 +502,41 @@ jobs:
         run: python3 scripts/check-voice.py reels/*.mp4 reels/*.sync.json
 
       # ═══════════════════════════════════════════════════════════════════
+      # HOW MUCH THE PICTURE MOVES. REPORTED, NOT ENFORCED.
+      #
+      # The audio half has had an instrument since the "sleepy voice" thread
+      # and every voice decision was made with it. The picture had none, and
+      # the first time one was pointed at a finished file it found this:
+      #
+      #                              dur   cuts/s   motion   still   longest
+      #   a reel this account admires 12.9s   1.94   0.0643    15%      0.8s
+      #   demo-cost                   27.1s   0.00   0.0048    90%      6.0s
+      #   demo-readiness              27.8s   0.00   0.0046    94%      4.3s
+      #   drill                       28.4s   0.00   0.0035    94%      5.6s
+      #   standards                   27.7s   0.00   0.0041    93%     10.4s
+      #
+      # ZERO CUTS. Not few — none, in any reel this project has ever made,
+      # against roughly two a second in the one being compared against. 90-94%
+      # of frames are near-identical to the one before, and `standards` holds
+      # one unchanging picture for 10.4 seconds inside a 27.7-second reel.
+      #
+      # That is the retention curve's most likely explanation sitting in plain
+      # sight: half the audience is gone inside one second, and what they are
+      # given in that second is a still screenshot.
+      #
+      # NOT A FAILING CHECK. Every reel the project owns would fail it, and a
+      # rule that fails everything is a rule somebody switches off within a
+      # day — the same reasoning lib/reel-retention.ts gives for reporting the
+      # reveal audience rather than refusing it. The fix is a change to what
+      # the recorder films, which is a decision rather than a patch.
+      # ═══════════════════════════════════════════════════════════════════
+      - name: Measure how much the picture moves
+        run: |
+          python3 scripts/measure-motion.py --self-test
+          echo
+          python3 scripts/measure-motion.py reels/*.mp4
+
+      # ═══════════════════════════════════════════════════════════════════
       # BACK INTO THE APP, WHICH IS THE WHOLE POINT.
       #
       # "I want it in admin dashboard not github." An artefact means opening
