@@ -206,9 +206,35 @@ path needed its own fix: the admin panel starts recordings through
 so defaulting the input alone would have left every admin-triggered reel silent
 while the form on GitHub looked correct.
 
-**The carousel has one guard to the reel's dozen.** 220 lines against 1588. Its
-only check is "did the screenshot cut something off". Most reel guards do not
-apply to static slides — but the caption one did, and now does.
+**The carousel has one guard to the reel's dozen — now three.** 245 lines
+against 1673. Its only check was "did the screenshot cut something off", plus
+the caption checker once that was shared with it.
+
+Checking *which* reel guards transfer mattered more than it sounds. The obvious
+candidate was `outsideSafeZone`, which refuses anything under the 400px of
+platform chrome — and it does **not** transfer. A reel is 1080×1920 played
+full-screen with the app's caption and buttons drawn *on top*; a carousel is
+1080×1350 in a feed with the caption *below* it. Nothing is drawn over a slide,
+so borrowing that rule would have refused perfectly good layouts.
+
+What does threaten a slide is different, and neither half was checked:
+
+- **Contrast.** `lib/contrast.ts` had a full WCAG implementation and a
+  `passesAA` that nothing called — it was on the unused-export list. Measured,
+  every colour passes with room: the dimmest secondary text is 5.95:1 against a
+  4.5:1 bar. Not a bug report — the thing that notices when a token is dimmed
+  one step and the portion column stops being readable.
+- **The size it is read at, which is not the size it is drawn at.** A slide is
+  authored at 1080 wide and displayed at device width; on a 375pt phone that is
+  a scale of 0.347, so 32px type is read at 11.1pt. Apple's HIG puts the body
+  minimum at 11pt. The smallest type on a slide today is exactly 32px — it
+  lands on the floor and fails the moment anything gets smaller. That matters
+  more here than anywhere else in the project: a reel slightly too small is
+  still a reel, but a reference table too small to read is nothing, and
+  "reference material people save" is the entire argument for the format.
+
+Three mutations each fail a test: dimming a colour, shrinking the body type,
+shrinking the headline.
 
 **The exported-name sweep has now been done.** 26 exported names in the social
 engine are referenced by nothing outside their own file; 15 are types used
@@ -258,11 +284,12 @@ mistake them for live:*
   nobody would notice breaking, so `lib/program-validate.test.ts` now pins it to
   the same answer the live one gives.
 
-*Unused utilities, no stated promise broken, left alone:* `FIGURE_ZONES`
+*Unused utilities, no stated promise broken:* `FIGURE_ZONES`
 (`BodyStrengthFigure.tsx`), `regionOfDrill` (`lib/coach.ts`), `auditPlan`
-(`lib/muscle-volume.ts`), `passesAA` (`lib/contrast.ts`), and
-`REPLAY_RATE_TARGET` (`lib/reel-retention.ts`, which documents itself as
-deliberately unenforced).
+(`lib/muscle-volume.ts`), and `REPLAY_RATE_TARGET` (`lib/reel-retention.ts`,
+which documents itself as deliberately unenforced). **`passesAA` came off this
+list** — it now guards the carousel's palette, which is the job it was written
+for.
 
 **A note on the sweep itself.** The first run reported `revealAudience` as
 declared-and-never-used, which would have been a second `DATA_ROUTE_PAINT_MS`
