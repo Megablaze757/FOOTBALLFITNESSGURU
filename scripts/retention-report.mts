@@ -42,6 +42,7 @@
 // =============================================================================
 
 import { Client } from "pg";
+import { canUseManagementApi, runQuery } from "../lib/supabase-query";
 import {
   LAPSED_AFTER_DAYS, daysSinceActive, longestStreak, retentionReport, standing, type Account,
 } from "../lib/retention";
@@ -52,6 +53,7 @@ import { metricLabel } from "../lib/milestones";
 
 const REF = process.env.SUPABASE_PROJECT_REF;
 const PASSWORD = process.env.SUPABASE_DB_PASSWORD;
+const TOKEN = process.env.SUPABASE_ACCESS_TOKEN;
 const REGION = process.env.SUPABASE_REGION ?? "eu-west-3";
 const connectionString =
   process.env.SUPABASE_DB_URL ??
@@ -59,18 +61,78 @@ const connectionString =
     ? `postgresql://postgres.${REF}:${PASSWORD}@aws-0-${REGION}.pooler.supabase.com:5432/postgres`
     : "");
 
-if (!connectionString) {
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * TWO WAYS IN, AND THE SECOND ONE IS WHY THIS EVER GETS RUN.
+ *
+ * This script has been the first item in HANDOVER.md for as long as that file
+ * has existed and has never been run once. Not because anybody disagreed —
+ * because running it meant finding a connection string, and the connection
+ * string is a DATABASE PASSWORD, which is the one credential this project has
+ * already leaked and had to rotate.
+ *
+ * .github/workflows/apply-sql.yml had already solved that: the Management API
+ * takes a personal access token, the repository already holds one, and it is
+ * neither the database password nor the service_role key. So the same report
+ * runs from the Actions tab with a secret that already exists.
+ *
+ * THE ANALYSIS DOES NOT MOVE. Only the rows come from somewhere else; every
+ * judgement about what they mean stays in lib/retention.ts and
+ * lib/proportions.ts, where there are tests for it. Rewriting the windows and
+ * the eligibility rule as SQL would be a second implementation of the thing
+ * this repository has spent several commits de-duplicating.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+const viaApi = canUseManagementApi(process.env);
+
+if (!connectionString && !viaApi) {
   console.error(
-    "No connection details.\n\n"
-    + "  SUPABASE_DB_URL=postgresql://... node --import tsx scripts/retention-report.mts\n\n"
-    + "or SUPABASE_PROJECT_REF plus SUPABASE_DB_PASSWORD, the same pair\n"
-    + "scripts/db-verify.mjs takes. Nothing is written and nothing is stored.",
+    "No way in.\n\n"
+    + "  SUPABASE_ACCESS_TOKEN=... SUPABASE_PROJECT_REF=... node --import tsx scripts/retention-report.mts\n"
+    + "    the Management API. The token is the one apply-sql.yml uses, and is\n"
+    + "    NOT the database password and NOT the service_role key. This is also\n"
+    + "    what the \"Retention report\" workflow runs, so the easiest way to get\n"
+    + "    this output is the Actions tab.\n\n"
+    + "  SUPABASE_DB_URL=postgresql://... node --import tsx scripts/retention-report.mts\n"
+    + "    or SUPABASE_PROJECT_REF plus SUPABASE_DB_PASSWORD, the pair\n"
+    + "    scripts/db-verify.mjs takes.\n\n"
+    + "Nothing is written and nothing is stored either way.",
   );
   process.exit(2);
 }
 
-const client = new Client({ connectionString, ssl: { rejectUnauthorized: false } });
-await client.connect();
+const client = viaApi ? null : new Client({ connectionString, ssl: { rejectUnauthorized: false } });
+if (client) await client.connect();
+
+/**
+ * One read, from whichever source this run has.
+ *
+ * A FAILURE IS A SENTENCE, NOT A STACK TRACE. This is read in a workflow log
+ * by somebody who wants a number, and a top-level rejection from a module of
+ * top-level awaits prints twenty lines of node internals above the one line
+ * that says what went wrong. The messages themselves are already good — an
+ * expired token gives "HTTP 401: the database refused it: JWT could not be
+ * decoded", naming the query it was on — so the only thing needed is to stop
+ * burying them.
+ */
+const ask = async (sql: string): Promise<Record<string, unknown>[]> => {
+  try {
+    if (client) return (await client.query(sql)).rows as Record<string, unknown>[];
+    return await runQuery(sql, { ref: String(REF), token: String(TOKEN) });
+  } catch (e) {
+    console.error(`\nCould not read the database.\n  ${e instanceof Error ? e.message : String(e)}`);
+    if (viaApi) {
+      console.error(
+        "\nIf that is an authentication failure, the token has expired or was\n"
+        + "never set. Generate one at supabase.com/dashboard/account/tokens and\n"
+        + "put it in Settings -> Secrets and variables -> Actions as\n"
+        + "SUPABASE_ACCESS_TOKEN. It is not the database password.",
+      );
+    }
+    if (client) await client.end().catch(() => {});
+    process.exit(1);
+  }
+};
 
 const today = new Date().toISOString().slice(0, 10);
 const asDay = (v: unknown) => (v instanceof Date ? v.toISOString().slice(0, 10) : String(v ?? "").slice(0, 10));
@@ -80,25 +142,17 @@ const asDay = (v: unknown) => (v instanceof Date ? v.toISOString().slice(0, 10) 
  * check-in and a training log. A session refresh counts as a sign-in and so
  * does opening the app and closing it, which is why "last sign-in" was dropped.
  */
-const { rows: profiles } = await client.query(
-  `select p.id, u.created_at
+const profiles = await ask(`select p.id, u.created_at
      from public.profiles p
-     join auth.users u on u.id = p.id`,
-);
-const { rows: checks } = await client.query(
-  `select user_id, check_in_date from public.daily_check_ins`,
-);
-const { rows: logs } = await client.query(
-  `select user_id, log_date from public.training_logs`,
-);
-const { rows: bests } = await client.query(
-  `select b.user_id, m.key as metric, (m.value)::text::numeric as value, b.test_date
+     join auth.users u on u.id = p.id`);
+const checks = await ask(`select user_id, check_in_date from public.daily_check_ins`);
+const logs = await ask(`select user_id, log_date from public.training_logs`);
+const bests = await ask(`select b.user_id, m.key as metric, (m.value)::text::numeric as value, b.test_date
      from public.strength_benchmarks b
      cross join lateral jsonb_each(b.metrics) as m(key, value)
     where m.key like '%\\_1rm'
       and jsonb_typeof(m.value) = 'number'
-      and (m.value)::text::numeric > 0`,
-);
+      and (m.value)::text::numeric > 0`);
 /**
  * The activation events, counted per DISTINCT athlete.
  *
@@ -106,18 +160,14 @@ const { rows: bests } = await client.query(
  * and turn a fraction of onboarded into something over 100%. The question is
  * "how many people ever reached this", which is a count of distinct users.
  */
-const { rows: events } = await client.query(
-  `select event, count(distinct user_id)::int as people
+const events = await ask(`select event, count(distinct user_id)::int as people
      from public.funnel_events
-    group by event`,
-);
-const { rows: consent } = await client.query(
-  `select count(*) filter (where health_data_consent_at is not null) as consented,
+    group by event`);
+const consent = await ask(`select count(*) filter (where health_data_consent_at is not null) as consented,
           count(*) as total
-     from public.profiles`,
-);
+     from public.profiles`);
 
-await client.end();
+if (client) await client.end();
 
 // ---------------------------------------------------------------------------
 // Fold the rows into the shape lib/retention.ts is tested against.
