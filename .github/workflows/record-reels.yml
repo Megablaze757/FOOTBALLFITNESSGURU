@@ -397,11 +397,21 @@ jobs:
           # pause before a number is a device with music under it and a fault
           # without.
           #
-          # NOTHING PICKS THE MUSIC. REEL_MUSIC is a path to a track whoever
-          # runs this has the right to use; absent it, the reel is mixed
-          # exactly as before. See lib/reel-music.ts, which also records the
-          # larger lever this cannot pull: a trending sound chosen in the
-          # platform's own editor at posting time.
+          # THAT 29-47% WAS MEASURED HERE AND THEN LEFT ALONE FOR SEVEN REELS,
+          # because REEL_MUSIC defaulted to "" and this comment used to say
+          # "NOTHING PICKS THE MUSIC" — a true statement about the code that
+          # got read as a policy. It was an accident, and an expensive one.
+          #
+          # Confirmed independently against a reel this account wanted to
+          # sound like: ours measures 34% dead with a floor at -120dB between
+          # phrases, theirs 2% with a continuous 26dB floor. Same instrument,
+          # scripts/measure-excitement.py. The voice was never the difference —
+          # ours carries MORE pitch variation than the one being admired.
+          # Mixing this bed under it takes 34% to 4% and moves nothing else.
+          #
+          # See lib/reel-music.ts, which also records the larger lever this
+          # cannot pull: a trending sound chosen in the platform's own editor
+          # at posting time.
           # ═══════════════════════════════════════════════════════════════
           # A TRACK ID RESOLVES TO A FETCH. lib/stock-audio.ts holds CC0 tracks
           # that have already passed the niche check, with their source and

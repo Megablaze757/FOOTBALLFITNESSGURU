@@ -86,10 +86,25 @@ export const FADE_OUT_S = 1.2;
  * of a chart nothing here can read, and putting a commercial record under a
  * brand's video is the documented way to get it claimed or muted — "a
  * copyrighted pump-up song will get your highlight reel claimed", and a brand
- * account needs a licence for commercial use. So nothing here picks music, and
- * nothing here ships music. The genuinely trending route is the platform's own
- * licensed library, chosen when you post, which is also the route that carries
- * the reach — see MUSIC_GUIDANCE.
+ * account needs a licence for commercial use. The genuinely trending route is
+ * the platform's own licensed library, chosen when you post, which is also the
+ * route that carries the reach — see MUSIC_GUIDANCE.
+ *
+ * WHAT CHANGED, because this paragraph used to end "nothing here picks music,
+ * and nothing here ships music" and only the second half is still true. The
+ * bytes are still not in this repository: lib/stock-audio.ts is a manifest and
+ * scripts/fetch-music.mts pulls and checksums a CC0 track at record time.
+ *
+ * But something does pick one now. The workflow defaulted REEL_MUSIC to "" for
+ * seven reels, and the reason was this sentence being read as a policy rather
+ * than as a description. Measured against a reel this account admires, on
+ * scripts/measure-excitement.py: theirs 2% dead air over a continuous 26dB
+ * floor, ours 34% with the floor at digital silence between phrases. The voice
+ * was never the difference — ours measures MORE pitch variation than the one
+ * being admired. Defaulting a CC0 bed takes 34% to 4% and moves nothing else.
+ *
+ * Picking a PUBLIC DOMAIN track is not the thing the paragraph above refuses.
+ * What it refuses is a commercial record, and that refusal is unchanged.
  *
  * THE HALF THAT CAN. What gym and UK football short-form sounds like is not a
  * mystery and it is measurable. Phonk dominates gym content — aggressive, dark,
@@ -201,8 +216,13 @@ export const MUSIC_GUIDANCE = [
   `Gym and UK football short-form runs on ${NICHE_GENRES.join(", ")} — `
     + `${NICHE_BPM_MIN}-${NICHE_BPM_MAX}bpm and bass-led. `
     + "scripts/check-music.py measures a track against that and refuses one that is not.",
-  "A bed is mixed in only when you supply a track you have the right to use. "
-    + "Nothing here picks music for you.",
+  "A CC0 bed is mixed in by default — the tracks in lib/stock-audio.ts carry "
+    + "their source and licence, and are fetched and checksummed at record time. "
+    + "Override it with a track of your own that you have the right to use, or "
+    + "ask for \"none\" to record dry.",
+  "It is defaulted because a reel without one measures around a third DEAD AIR, "
+    + "falling to digital silence between phrases, where the reels this is "
+    + "competing with never go quiet at all. That gap is the bed, not the voice.",
   "The bigger lever is the platform's own trending sound, chosen when you post: "
     + "it files the video with an audience already listening to that sound, and is "
     + "reported to carry a post to around 68% more views.",
