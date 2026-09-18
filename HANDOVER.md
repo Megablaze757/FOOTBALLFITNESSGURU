@@ -162,7 +162,36 @@ page "fast cutting" and congratulate the reel that is putting people to sleep.
 **This is a decision, not a patch.** The recorder films one continuous slow
 drift per screen by design. Cutting means either more camera positions per beat
 or snapping the scroll instead of gliding it, and both change what the reels
-look like. The numbers are here; the choice is yours.
+look like.
+
+### And the cheap version of that fix was measured and refuted
+
+The obvious answer is "cut on every phrase boundary" — the phrase onsets are
+already measured from the audio and already carried on each step, and the
+captions are already cut there. `lib/reel-cuts.ts` is that arithmetic. Over all
+seven real scripts it yields:
+
+| | length | cuts | rate |
+|---|---|---|---|
+| demo-readiness | 26.0s | 4 | 0.15/s |
+| demo-cost | 25.0s | 4 | 0.16/s |
+| drill | 28.1s | 4 | 0.14/s |
+| standards | 28.1s | 5 | 0.18/s |
+| the three card formats | ~22s | 4 | 0.18/s |
+
+Against 1.94/s. **An order of magnitude short**, and the reason is structural
+rather than a setting: nearly every beat in every script aims a spotlight, a
+spotlight is `position:fixed` and may not move under the shot, so nearly every
+beat is excluded. What survives is the navigations the reels already had.
+
+So closing this gap is not a parameter. It needs either scripts built from many
+more, much shorter beats, or a recorder that can take more than one framing per
+phrase — a different kind of video, not this one with cuts added.
+
+`lib/reel-cuts.ts` is deliberately **not read by the recorder**, and a test
+asserts that, because unverified arithmetic wired into the thing that makes the
+videos is exactly how the blank frame shipped three times. It exists to make
+the refutation reproducible.
 
 ## Audit findings not yet acted on
 
