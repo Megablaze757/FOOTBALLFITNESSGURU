@@ -341,11 +341,25 @@ deploy it yet.
 
 ## What needs a human
 
-1. **Run `scripts/retention-report.mts`.** It takes the same env pair
-   `db-verify.mjs` does, is read-only, needs neither 0113 nor 0114, and prints
-   no identities — designed so the output is safe to paste back. It is the only
-   thing that turns "assume the worst" into a fact, and it decides whether any
-   of the experiment machinery is worth touching.
+1. **Run the "Retention report" workflow.** Actions -> Retention report -> Run
+   workflow. That is the whole thing now — no terminal, no connection string,
+   and **no database password**: it goes through the Management API with the
+   `SUPABASE_ACCESS_TOKEN` secret `apply-sql.yml` already uses. The output
+   lands in the run's summary as well as the log.
+
+   It is read-only, needs neither 0113 nor 0114, and prints no identities — a
+   design constraint of the script, now pinned by a test, so the output is safe
+   to paste back. It is the only thing that turns "assume the worst" into a
+   fact, and it decides whether any of the experiment machinery is worth
+   touching.
+
+   *Why this had never been run is worth naming: nobody disagreed with running
+   it. It needed a connection string, and the connection string is a database
+   password — the one credential this project has already leaked and had to
+   rotate. The barrier was the credential, not the question.*
+
+   `scripts/retention-report.mts` still takes `SUPABASE_DB_URL` or the
+   `db-verify.mjs` pair if you would rather run it locally.
 2. **Rotate the demo-account password** and update the `REEL_PASSWORD` secret.
    It is compromised twice over: once into a test fixture, and once into the
    sentence in this file that told you to rotate it. Both are in pushed git

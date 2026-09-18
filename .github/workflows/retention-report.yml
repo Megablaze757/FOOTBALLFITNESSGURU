@@ -1,0 +1,92 @@
+name: Retention report
+
+# What the database actually says about who stayed.
+#
+# ═══════════════════════════════════════════════════════════════════════════
+# WHY THIS IS A WORKFLOW AND NOT JUST A SCRIPT.
+#
+# scripts/retention-report.mts has been the first item in HANDOVER.md for as
+# long as that file has existed, and has never been run. Not because anybody
+# disagreed with running it — because it needed a connection string, and the
+# connection string is a DATABASE PASSWORD, the one credential this project has
+# already leaked once and had to rotate.
+#
+# .github/workflows/apply-sql.yml had already solved that problem: the
+# Management API takes a personal access token, the repository already holds
+# one as SUPABASE_ACCESS_TOKEN, and it is NOT the database password and NOT the
+# service_role key. So this needs no new secret and no terminal.
+#
+# The only sample size this project has ever written down is migration 0045's
+# "22 users, 0 paying". Every decision about what to build next rests on
+# whether that is still true, and at that size an A/B test can only settle a
+# difference of more than forty points. This is the run that replaces an
+# assumption with a number.
+#
+# ═══════════════════════════════════════════════════════════════════════════
+# READ ONLY, AND IT PRINTS NO IDENTITIES.
+#
+# Every statement the script runs is a SELECT. Its output is counts, dates and
+# rates — no ids, no emails, no names, no per-person rows — which is a design
+# constraint of the script rather than a habit, so that the result is safe to
+# paste into a message or an issue.
+#
+# That matters more here than it does on a laptop: a workflow log is readable
+# by anybody with access to the repository. The rows themselves never leave the
+# runner; only the summary is printed.
+# ═══════════════════════════════════════════════════════════════════════════
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: retention-report
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    env:
+      # Not a secret: the project ref ships in the browser bundle already, and
+      # apply-sql.yml states the same thing for the same reason.
+      SUPABASE_PROJECT_REF: txqhstackgidjqkkrzyj
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Check the access token is set
+        run: |
+          if [ -z "$SUPABASE_ACCESS_TOKEN" ]; then
+            echo "::error::SUPABASE_ACCESS_TOKEN is not set."
+            echo "Add it under Settings → Secrets and variables → Actions."
+            echo "Generate one at https://supabase.com/dashboard/account/tokens"
+            echo "It is a personal access token for the Management API — not the"
+            echo "database password, and not the service_role key."
+            exit 1
+          fi
+
+      - run: npm ci
+
+      # The report goes to the job summary as well as the log. A number nobody
+      # finds is the same as a number nobody measured, and this project has
+      # several of those already.
+      - name: Read it
+        run: |
+          set -euo pipefail
+          node --import tsx scripts/retention-report.mts | tee /tmp/retention.txt
+          {
+            echo '## Retention'
+            echo
+            echo '```'
+            cat /tmp/retention.txt
+            echo '```'
+            echo
+            echo 'Read only. No identity appears above, so this is safe to share.'
+          } >> "$GITHUB_STEP_SUMMARY"
