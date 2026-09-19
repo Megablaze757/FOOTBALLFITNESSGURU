@@ -1,5 +1,6 @@
 "use client";
 
+import { signOutAndForget } from "@/lib/sign-out";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -38,9 +39,7 @@ export function SuspendedGate({ userId, children }: { userId: string; children: 
   }, [userId]);
 
   async function signOut() {
-    clearAllDrafts(userId);
-    recordChanged("everything");
-    await createClient().auth.signOut();
+    await signOutAndForget(createClient(), userId);
     router.replace("/login");
   }
 
