@@ -162,6 +162,29 @@ emailed, and it was leaning on `checkin-reminder`'s copy — byte-identical to
 exercised across leap years, month boundaries, negative gaps and unparseable
 input; the one under the emails was not. All of that now sits under everything.
 
+### The rest of the sweep, and what it did not find
+
+The same scan turned up five more duplicated function names. Four are genuinely
+different functions that happen to share a word — `emphasise`, `nextMilestone`,
+`regionOfMovement` and `browserStore` all differ in signature and return type,
+so nothing can confuse them.
+
+The fifth is `hasHowTo`, which exists in `exercise-match.ts` (answers from the
+catalogue's flag and cues) and `how-to.ts` (answers by looking for an entry).
+Both are `(name: string) => boolean`, so the type system cannot tell them apart.
+**They agree on all 413 exercises today** — so this is not a bug, it is an
+agreement nobody holds in place. If it breaks, the symptom is a "how to" link
+leading nowhere, or a how-to that exists and is never offered, and neither
+points back at the disagreement.
+
+`HOOK_MAX_WORDS` is the same shape: duplicated in `reel-kinds.ts` and
+`reel-retention.ts`, same value, nothing making it so. `MAX_REEL_MS` presumably
+agreed once too.
+
+Neither is worth a refactor. Both now have a test, which is the cheapest thing
+that turns a coincidence into a rule — `lib/agreeing-duplicates.test.ts`, both
+halves mutation-tested.
+
 ## The generator's ceiling was ninety seconds, not thirty
 
 `lib/reel.ts` exported `MAX_REEL_MS = 90_000` — *"Instagram wants a reel between
