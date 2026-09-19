@@ -17,7 +17,7 @@ import { InjuryPlanner } from "@/components/InjuryPlanner";
 import Link from "next/link";
 import { SectionNav } from "@/components/SectionNav";
 import { ProtocolCard } from "@/components/ProtocolCard";
-import { currentPain, painAgeNote, daysBetween, PAIN_FRESH_DAYS } from "@/lib/pain";
+import { currentPain, painAgeNote, daysAgo, PAIN_FRESH_DAYS } from "@/lib/pain";
 import { todayLocal } from "@/lib/day";
 
 /**
@@ -101,7 +101,7 @@ export default function InjuryPage() {
      * is a claim about right now, and a faded 4 is not one.
      */
     const today = todayLocal();
-    const fresh = ci?.check_in_date ? daysBetween(ci.check_in_date, today) <= PAIN_FRESH_DAYS : false;
+    const fresh = ci?.check_in_date ? daysAgo(ci.check_in_date, today) <= PAIN_FRESH_DAYS : false;
     return {
       sport: (pr?.sport ?? "football") as SportId,
       painMap: currentPain(ci?.pain_map, ci?.check_in_date, today),

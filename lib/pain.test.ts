@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
-  currentPain, painConfidence, painAgeNote, painIsFading, daysBetween,
+  currentPain, painConfidence, painAgeNote, painIsFading, daysAgo,
   PAIN_FRESH_DAYS, PAIN_STALE_DAYS,
 } from "./pain";
 
@@ -73,8 +73,8 @@ test("zeroes and rubbish never become an injury", () => {
 
 test("a future-dated check-in reads as today rather than as negative age", () => {
   // A device clock askew must not produce confidence above 1 or a negative age.
-  assert.equal(daysBetween("2026-08-20", "2026-08-15"), 0);
-  assert.equal(painConfidence(daysBetween("2026-08-20", "2026-08-15")), 1);
+  assert.equal(daysAgo("2026-08-20", "2026-08-15"), 0);
+  assert.equal(painConfidence(daysAgo("2026-08-20", "2026-08-15")), 1);
 });
 
 test("confidence is 1 while fresh and 0 once stale, never outside that", () => {

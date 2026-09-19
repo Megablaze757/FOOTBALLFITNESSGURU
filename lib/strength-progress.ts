@@ -26,6 +26,7 @@
 // what ExerciseProgress already is; this is the per-muscle summary beside it.
 // =============================================================================
 
+import { daysAgo } from "./days";
 import { estimate1RM } from "./exercise-stats";
 import { workingSetsOf } from "./training-sets";
 import { resolveLift, type LiftStandard } from "./strength-standards";
@@ -119,7 +120,7 @@ export function liftProgress(logs: TrainingLog[] | null | undefined, today: stri
     const lastDate = rows[rows.length - 1].date;
 
     // Enough history for the number to mean something.
-    if (daysBetween(first.date, today) < MIN_HISTORY_DAYS) continue;
+    if (daysAgo(first.date, today) < MIN_HISTORY_DAYS) continue;
 
     const baselineEnd = addDays(first.date, BASELINE_DAYS);
     const opening = rows.filter((r) => r.date < baselineEnd);
@@ -178,12 +179,7 @@ export function progressHeadline(rows: MuscleProgress[]): string | null {
   return `Your ${best.muscle} have gained the most — up ${best.gain.pct}% on your ${best.gain.label.toLowerCase()} since you started.`;
 }
 
-function daysBetween(from: string, to: string): number {
-  const a = Date.parse(`${from}T00:00:00Z`);
-  const b = Date.parse(`${to}T00:00:00Z`);
-  if (Number.isNaN(a) || Number.isNaN(b)) return 0;
-  return Math.max(0, Math.round((b - a) / 86_400_000));
-}
+
 
 function addDays(date: string, n: number): string {
   const t = Date.parse(`${date}T00:00:00Z`);

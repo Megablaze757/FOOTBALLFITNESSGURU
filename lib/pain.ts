@@ -30,6 +30,7 @@
 // permanent one.
 // =============================================================================
 
+import { daysAgo } from "./days";
 import type { PainMap } from "./types";
 
 /**
@@ -53,12 +54,18 @@ export const PAIN_FRESH_DAYS = 3;
 export const PAIN_STALE_DAYS = 14;
 
 /** Whole days between two local ISO days. Negative clamps to 0. */
-export function daysBetween(from: string, to: string): number {
-  const a = Date.parse(`${from}T00:00:00Z`);
-  const b = Date.parse(`${to}T00:00:00Z`);
-  if (Number.isNaN(a) || Number.isNaN(b)) return 0;
-  return Math.max(0, Math.round((b - a) / 86_400_000));
-}
+/**
+ * RENAMED, because this one clamps and the old name did not say so.
+ *
+ * It was `daysBetween`, the same name lib/checkin-reminder.ts and
+ * lib/retention.ts exported for the SIGNED version. Their own tests show
+ * the two disagreeing on identical input — daysBetween("2026-03-15",
+ * "2026-03-10") is -5 in one and 0 in the other — and both are right about
+ * their own domain. A pain report dated tomorrow is a device clock askew
+ * and must not produce a negative age; a check-in dated tomorrow is a
+ * negative gap and nothing is due on it.
+ */
+export { daysAgo };
 
 /**
  * The weight a report of this age still carries: 1 while fresh, fading to 0.
@@ -86,7 +93,7 @@ export function currentPain(
   today: string,
 ): PainMap {
   if (!painMap || !reportedOn) return {};
-  const weight = painConfidence(daysBetween(reportedOn, today));
+  const weight = painConfidence(daysAgo(reportedOn, today));
   if (weight <= 0) return {};
   const out: PainMap = {};
   for (const [area, raw] of Object.entries(painMap)) {
@@ -104,14 +111,14 @@ export function currentPain(
 /** True when a report is old enough that the app is discounting it. */
 export function painIsFading(reportedOn: string | null | undefined, today: string): boolean {
   if (!reportedOn) return false;
-  const age = daysBetween(reportedOn, today);
+  const age = daysAgo(reportedOn, today);
   return age > PAIN_FRESH_DAYS && age < PAIN_STALE_DAYS;
 }
 
 /** One sentence explaining the discount, or null while the report is fresh. */
 export function painAgeNote(reportedOn: string | null | undefined, today: string): string | null {
   if (!reportedOn) return null;
-  const age = daysBetween(reportedOn, today);
+  const age = daysAgo(reportedOn, today);
   if (age <= PAIN_FRESH_DAYS) return null;
   if (age >= PAIN_STALE_DAYS) {
     return `Your last check-in was ${age} days ago, so it is no longer shaping your training. Check in to update it.`;

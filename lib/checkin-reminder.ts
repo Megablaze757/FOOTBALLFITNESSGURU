@@ -1,3 +1,4 @@
+import { daysBetween } from "./days";
 // =============================================================================
 // When the check-in reminder EMAIL is due.
 //
@@ -38,12 +39,14 @@ export const CHECKIN_REMINDER_GAP_DAYS = 3;
 export const CHECKIN_REMINDER_STOP_DAYS = 30;
 
 /** Whole days from `from` to `to`, both `YYYY-MM-DD`. Negative if `to` is earlier. */
-export function daysBetween(from: string, to: string): number {
-  const a = Date.parse(`${from}T00:00:00Z`);
-  const b = Date.parse(`${to}T00:00:00Z`);
-  if (!Number.isFinite(a) || !Number.isFinite(b)) return 0;
-  return Math.round((b - a) / 86_400_000);
-}
+/**
+ * Re-exported so every caller keeps working, and defined once.
+ *
+ * This was a local copy. lib/days.ts explains what five copies of eight
+ * lines cost: three were signed, two silently clamped at zero, and one
+ * took its arguments the other way round.
+ */
+export { daysBetween };
 
 /**
  * Is a check-in reminder email due today?

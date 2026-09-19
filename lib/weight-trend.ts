@@ -25,6 +25,7 @@
  * ═══════════════════════════════════════════════════════════════════════════
  */
 
+import { daysBetween } from "./days";
 import type { Bodyweight } from "@/lib/bodyweight";
 
 /**
@@ -64,12 +65,17 @@ export interface WeightTrend {
 /** The windows offered, shortest first. */
 export const TREND_WINDOWS = [7, 30, 90] as const;
 
-function dayDiff(a: string, b: string): number {
-  const then = Date.parse(`${b}T00:00:00Z`);
-  const now = Date.parse(`${a}T00:00:00Z`);
-  if (Number.isNaN(then) || Number.isNaN(now)) return 0;
-  return Math.round((now - then) / 86_400_000);
-}
+/**
+ * Days from `b` to `a` — the arguments are the other way round from
+ * lib/days.ts, which is why this wrapper exists rather than the call sites
+ * being changed.
+ *
+ * This used to be its own copy of the arithmetic, one of five in lib/. Three
+ * of them were signed and two silently clamped at zero, and this one alone
+ * took its arguments in the opposite order, so `dayDiff(today, date)` and
+ * `daysBetween(date, today)` are the same number written two ways.
+ */
+const dayDiff = (a: string, b: string): number => daysBetween(b, a);
 
 export function direction(change: number): Direction {
   if (change <= -NOISE_KG) return "down";
