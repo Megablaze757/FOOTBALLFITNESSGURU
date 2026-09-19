@@ -243,8 +243,32 @@ export function reelDuration(scenes: Scene[]): number {
   return scenes.reduce((n, s) => n + s.ms, 0);
 }
 
-export const MIN_REEL_MS = 3_000;
-export const MAX_REEL_MS = 90_000;
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * WHAT INSTAGRAM ACCEPTS — NOT WHAT THIS PROJECT AIMS AT. TWO DIFFERENT
+ * NUMBERS THAT SPENT A LONG TIME SHARING A NAME.
+ *
+ * These were MIN_REEL_MS and MAX_REEL_MS. lib/reel-retention.ts exports
+ * constants with exactly those names and different values — 6s and 30s — for
+ * a different reason: 90 seconds is the platform's limit, and 30 is where
+ * "completion falls away and the algorithm stops promoting".
+ *
+ * Nothing warned about that, and a consumer got the wrong one.
+ * lib/reel-script.ts is the module that WRITES the scripts, and its
+ * scriptProblems refused anything "over the ceiling" while importing the
+ * ceiling from here — so the generator's real limit was ninety seconds while
+ * every measurement tool and every piece of reasoning in the project said
+ * thirty. A script three times too long to be promoted would have passed the
+ * generator's own check and been flagged only by scripts/measure-reel.mts,
+ * after it was filmed.
+ *
+ * Renamed rather than reconciled, because both numbers are correct about
+ * their own question. A name that does not say which question it answers is
+ * the defect.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export const PLATFORM_MIN_REEL_MS = 3_000;
+export const PLATFORM_MAX_REEL_MS = 90_000;
 
 /**
  * Which scene is on screen at `t`, and how far through it we are.

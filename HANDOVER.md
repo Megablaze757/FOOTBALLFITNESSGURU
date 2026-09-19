@@ -129,6 +129,46 @@ change actually took — not a fourth guess.
 
 ---
 
+## The generator's ceiling was ninety seconds, not thirty
+
+`lib/reel.ts` exported `MAX_REEL_MS = 90_000` — *"Instagram wants a reel between
+3 and 90 seconds"*. `lib/reel-retention.ts` exported `MAX_REEL_MS = 30_000` —
+*"past this, completion falls away and the algorithm stops promoting"*. Both are
+correct about their own question, and the name answered neither.
+
+**`lib/reel-script.ts` — the module that writes the scripts — imported the first
+one.** So `scriptProblems` refused anything "over the ceiling" at ninety seconds
+while every measurement tool and every piece of reasoning in the project said
+thirty. A script three times too long to be promoted would have passed the
+generator's own check and been caught only by `measure-reel.mts`, after filming.
+
+`MIN_REEL_MS` had the same collision between the same two modules, 3s against 6s.
+
+Renamed to `PLATFORM_MIN_REEL_MS` / `PLATFORM_MAX_REEL_MS`, and the script
+builder now measures itself against the retention ceiling. All seven scripts are
+already under 30s, so this passes today and bites on the next one that isn't.
+
+`lib/constant-collisions.test.ts` now refuses any two `lib/` modules exporting
+the same numeric constant with different values, with a named exception list —
+two remain, both across unrelated domains (`DESCRIPTION_MAX`, `NEARLY`), each
+with its reason written beside it.
+
+### And what length costs, now that the ceiling is the real one
+
+On the measured retention curve, completion by reel length:
+
+| script | length | reach the end | at 20s | at 15s |
+|---|---|---|---|---|
+| drill | 28.1s | **2.4%** | 4.9% | **6.6%** |
+| standards | 28.1s | **2.4%** | 4.9% | **6.6%** |
+| demo-readiness | 26.0s | 2.8% | 4.9% | 6.6% |
+| demo-cost | 25.0s | 3.1% | 4.9% | 6.6% |
+| the three cards | ~22s | 3.9–4.1% | 4.9% | 6.6% |
+
+The reel this account was compared against is **12.9s**, where the curve gives
+7.3%. Trimming a 28s reel to 15s is worth roughly **2.75× the completions** —
+and unlike the cut rate, length is a dial the pipeline already has.
+
 ## The picture never moves, and nothing had ever measured it
 
 The audio half has had an instrument since the "sleepy voice" thread, and every

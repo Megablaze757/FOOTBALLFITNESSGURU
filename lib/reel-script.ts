@@ -32,7 +32,16 @@
 
 import { beatFloorMs } from "./caption-lines";
 import { movesMs, type Move } from "./reel-moves";
-import { holdFor, speechMs, spokenWords, MIN_SCENE_MS, MAX_REEL_MS, MS_PER_WORD } from "./reel";
+import { holdFor, speechMs, spokenWords, MIN_SCENE_MS, MS_PER_WORD } from "./reel";
+/**
+ * THE RETENTION CEILING, NOT THE PLATFORM ONE. This used to import
+ * MAX_REEL_MS from "./reel" — a constant of the same name and a different
+ * value, 90 seconds, which is what Instagram ACCEPTS. The rule this check is
+ * for is the one in lib/reel-retention.ts: "past this, completion falls away
+ * and the algorithm stops promoting". A script three times too long to be
+ * promoted passed this check for as long as it has existed.
+ */
+import { MAX_REEL_MS } from "./reel-retention";
 import { SUSPENSE_MS } from "./narration";
 import { hookText, HOOK_MAX_WORDS } from "./reel-kinds";
 import { END_CARD_MS } from "./reel-plan";

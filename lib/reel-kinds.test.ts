@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { REEL_KINDS, reelSubjects, hookText, HOOK_MAX_WORDS, type ReelKind } from "./reel-kinds";
-import { reelDuration, MIN_REEL_MS, MAX_REEL_MS, reelFrameSvg } from "./reel";
+import { reelDuration, PLATFORM_MIN_REEL_MS, PLATFORM_MAX_REEL_MS, reelFrameSvg } from "./reel";
 import { captionProblems } from "./caption";
 
 const KINDS = REEL_KINDS.map((k) => k.id);
@@ -12,7 +12,7 @@ test("every kind produces reels Instagram will accept", () => {
     assert.ok(subjects.length > 0, `${kind} produced nothing`);
     for (const s of subjects) {
       const ms = reelDuration(s.scenes);
-      assert.ok(ms >= MIN_REEL_MS && ms <= MAX_REEL_MS, `${kind}/${s.id}: ${ms}ms`);
+      assert.ok(ms >= PLATFORM_MIN_REEL_MS && ms <= PLATFORM_MAX_REEL_MS, `${kind}/${s.id}: ${ms}ms`);
       assert.ok(s.scenes.length >= 3, `${kind}/${s.id}: ${s.scenes.length} cards is not a reel`);
     }
   }
