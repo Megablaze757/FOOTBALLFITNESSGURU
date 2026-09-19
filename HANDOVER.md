@@ -129,6 +129,48 @@ change actually took — not a fourth guess.
 
 ---
 
+## The RLS posture, audited and then made an invariant
+
+This project has got row-level security wrong twice and caught it late both
+times — 0046 exists because `funnel_summary` shipped readable by anybody signed
+in, 0096 because 0095 gave `is_admin()` a blanket select on `body_logs` for a
+screen that no longer exists.
+
+Replaying all 114 migrations in order: **35 live tables, 92 live policies.**
+
+- **Every live table has RLS enabled.** None missing.
+- **Zero `security definer` functions with an unpinned `search_path`** — the
+  classic privilege-escalation shape, and it is clean.
+- **One `using (true)` policy**: `app_settings`, a single row whose only
+  meaningful column is `launched`. The front page reads it *before* anybody
+  signs in, to choose between the waitlist and the signup form. Correct.
+- **Two deny-all tables** (RLS on, no policies — which is *closed*, not open):
+  `referral_claims`, reached only through `claim_referral()`, a definer
+  function revoked from public, so deny-all is the point; and `cron_config`,
+  which nothing in the app or the Worker references — vestigial since 0097
+  moved the reminders off pg_cron. Dead schema, not a hole.
+
+So the posture is sound. `lib/rls-posture.test.ts` now enforces it on every
+run, with both exception lists carrying their reasons and a test that fails
+when an exception stops being real.
+
+**My own scanner was wrong twice before it was right**, both times in the
+direction that makes a security scan quieter:
+
+1. Reading the migrations as one flat document, it reported `profiles: read
+   all (authenticated)` — every signed-in athlete reading every profile row.
+   That policy is real, from 0001, and **0037 drops it**. Migrations only mean
+   anything in order.
+2. Requiring *quoted* policy names, it reported `funnel_events` and
+   `push_subscriptions` as having no policies at all — they have four apiece,
+   named bare. The same blind spot would have missed a bare-named policy that
+   was genuinely wide open.
+
+Which is why the last test in that file checks the scan still finds ~30 tables,
+~80 policies, and policy names of *both* spellings. Four mutations each fail
+it: a table with RLS and no policy, a table with no RLS, a bare-named
+`using (true)` on `body_logs`, and a definer function with no `search_path`.
+
 ## Five modules each wrote the same eight lines of date arithmetic
 
 Found by widening the collision sweep from constants to functions.
