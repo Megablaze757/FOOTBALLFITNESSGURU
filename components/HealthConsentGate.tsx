@@ -1,5 +1,6 @@
 "use client";
 
+import { signOutAndForget } from "@/lib/sign-out";
 import Link from "next/link";
 import { recordChanged } from "@/lib/data-events";
 import { usePathname, useRouter } from "next/navigation";
@@ -54,7 +55,7 @@ export function HealthConsentGate({ userId, children }: { userId: string; childr
   }
 
   async function signOut() {
-    await createClient().auth.signOut();
+    await signOutAndForget(createClient());
     router.replace("/login");
   }
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { signOutAndForget } from "@/lib/sign-out";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -130,9 +131,7 @@ export function ProfileForm({ profile, email }: { profile: Profile; email: strin
     const supabase = createClient();
     // Leaving a half-written check-in on a shared phone for whoever signs in
     // next is exactly the kind of thing nobody thinks about until it happens.
-    clearAllDrafts(profile.id);
-    recordChanged("profile", "goals");
-    await supabase.auth.signOut();
+    await signOutAndForget(supabase, profile.id);
     router.replace("/login");
   }
 

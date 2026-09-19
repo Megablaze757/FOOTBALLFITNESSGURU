@@ -129,6 +129,41 @@ change actually took — not a fourth guess.
 
 ---
 
+## Signing out left the athlete's data on the device
+
+`lib/use-async.ts` caches what every screen loaded — in memory and in
+`sessionStorage`, for ten minutes — and states the rule itself: *"this is a copy
+of someone's training data, and it should not outlive the browsing session on a
+shared device."*
+
+**sessionStorage does not end at sign-out. It ends when the tab does.** So that
+rule only holds if signing out clears the cache, and four components signed
+somebody out doing four different amounts of it:
+
+| | cleared |
+|---|---|
+| `SuspendedGate` | drafts + everything — correct |
+| `ProfileForm` | drafts + two prefixes — partial |
+| `HealthConsentGate` | **nothing** |
+| `DeleteAccount` | **nothing** |
+
+**The two that cleared nothing are the two where it matters most.**
+`DeleteAccount` signs out because the account has just been *deleted* — the rows
+are gone from the database and a copy stayed on the device. `HealthConsentGate`
+signs out somebody who has just *declined* to have their health data held, which
+makes a cached copy of exactly that data the most direct contradiction
+available.
+
+This was **not** a leak between accounts: `use-async` keys athlete data by user
+id, so a different person signing into the same tab reads their own empty cache.
+It is the device it was left on that is the problem.
+
+All four now go through `signOutAndForget` in `lib/sign-out.ts`, which clears
+both stores — drafts in `localStorage`, the page cache in `sessionStorage` —
+*before* tearing down the session, so a sign-out that navigates or throws still
+leaves a cold device. `lib/sign-out.test.ts` fails the build if any component
+calls `auth.signOut()` directly again. Three mutations each fail it.
+
 ## The coach fetched the athlete's name and threw it away
 
 `lib/coach-context.ts` assembles everything the AI coach knows, in twelve

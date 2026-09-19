@@ -1,5 +1,6 @@
 "use client";
 
+import { signOutAndForget } from "@/lib/sign-out";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -42,7 +43,7 @@ export function DeleteAccount({ email }: { email: string }) {
       // The account is gone, so the session token now points at nothing. Clear
       // it locally before navigating, or the app spends the next load retrying
       // requests as a user who no longer exists.
-      await createClient().auth.signOut();
+      await signOutAndForget(createClient());
       router.replace("/?deleted=1");
     } catch (e) {
       // Every failure path on the server deletes nothing, so it's safe to say so.
