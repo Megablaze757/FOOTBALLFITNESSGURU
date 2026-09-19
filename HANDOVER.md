@@ -129,6 +129,34 @@ change actually took — not a fourth guess.
 
 ---
 
+## The coach fetched the athlete's name and threw it away
+
+`lib/coach-context.ts` assembles everything the AI coach knows, in twelve
+queries, and its result is sent to a model **on every question** — two backends
+read `body.briefing`, and `lib/coach-briefing.test.ts` caps it at 6000
+characters precisely because it goes out each turn.
+
+It selected `full_name` along with sport, position, sex, height and the rest.
+`full_name` was used **nowhere**: `BriefingInput` has no name field and
+`ChatContext` has none either. So a real identity was pulled into the browser
+every time anybody opened the chat, and dropped.
+
+**The good news is the important part:** the briefing genuinely carries no
+identity — no name, no email, no id — and that was already true end to end,
+through `CoachChat.tsx` and both backends. The defect was an over-fetch, not a
+leak.
+
+But the absence was a *fact about the code* rather than a *rule about it*,
+which is the shape of everything else in this file that quietly stopped being
+true. `lib/coach-privacy.test.ts` now holds it: the coach's queries may not ask
+for an identifying column, neither `BriefingInput` nor `ChatContext` may gain a
+name/email/id field, and a briefing built from clean input is checked for
+leakage — after first checking, with poisoned input, that the assertion can
+detect a leak at all.
+
+Two mutations fail it: re-adding `full_name` to the query, and adding a `name`
+field to `BriefingInput`.
+
 ## The RLS posture, audited and then made an invariant
 
 This project has got row-level security wrong twice and caught it late both

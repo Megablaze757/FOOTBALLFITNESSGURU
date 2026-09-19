@@ -67,7 +67,14 @@ export async function loadCoachContext(userId: string): Promise<CoachContext> {
         .gte("check_in_date", since14).order("check_in_date", { ascending: true }),
       supabase.from("training_logs").select("*").eq("user_id", userId).gte("log_date", since30)
         .order("log_date", { ascending: true }),
-      selectProfile(supabase, userId, "full_name, sport, position, positions, training_focus, sex, height_cm, birth_year, activity_level, diet_goal, experience_years", ["goals", "calorie_target", "protein_target", "carbs_target", "fats_target"]),
+      /**
+       * NO full_name. It was selected here and used nowhere — not by
+       * buildBriefing, which has no name field, and not by ChatContext,
+       * which has none either. The coach has never known the athlete's
+       * name and is not supposed to; fetching it pulled a real identity
+       * into the browser on every chat open for nothing.
+       */
+      selectProfile(supabase, userId, "sport, position, positions, training_focus, sex, height_cm, birth_year, activity_level, diet_goal, experience_years", ["goals", "calorie_target", "protein_target", "carbs_target", "fats_target"]),
       supabase.from("daily_check_ins").select("check_in_date, weight_kg").eq("user_id", userId)
         .not("weight_kg", "is", null).order("check_in_date", { ascending: false }).limit(1),
       supabase.from("body_logs").select("log_date, weight_kg").eq("user_id", userId)
@@ -91,7 +98,7 @@ export async function loadCoachContext(userId: string): Promise<CoachContext> {
     ]);
 
     const pr = profile as {
-      full_name?: string; sport?: string; position?: string; positions?: string[];
+      sport?: string; position?: string; positions?: string[];
       training_focus?: string; sex?: string; height_cm?: number; birth_year?: number;
       activity_level?: string; diet_goal?: string;
       experience_years?: number; goals?: { type?: string; priority?: number }[];
