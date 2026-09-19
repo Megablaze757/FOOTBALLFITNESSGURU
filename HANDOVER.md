@@ -129,6 +129,39 @@ change actually took — not a fourth guess.
 
 ---
 
+## Five modules each wrote the same eight lines of date arithmetic
+
+Found by widening the collision sweep from constants to functions.
+`daysBetween` was defined in `checkin-reminder.ts`, `pain.ts`, `retention.ts`
+and `strength-progress.ts`; `weight-trend.ts` had the same thing as `dayDiff`.
+
+They did not agree:
+
+| module | exported | behaviour |
+|---|---|---|
+| checkin-reminder | yes | signed |
+| retention | yes | signed |
+| pain | yes | **clamps at 0** |
+| strength-progress | no | **clamps at 0** |
+| weight-trend (`dayDiff`) | no | signed, **arguments reversed** |
+
+Their own tests show two of them disagreeing on identical input:
+`daysBetween("2026-03-15", "2026-03-10")` is **−5** in `checkin-reminder` and
+**0** in `pain`. Both are right about their own domain — a check-in dated
+tomorrow is a negative gap and nothing is due on it; a pain report dated
+tomorrow is a device clock askew and must not produce a negative age. The
+*name* said neither, exactly like `MAX_REEL_MS`.
+
+`lib/days.ts` owns it now: `daysBetween` (signed) and `daysAgo` (clamped, and
+the clamp is in the name). The exported copies re-export it, so no caller
+changed except `pain`'s two, which now say `daysAgo`.
+
+**The duplicate that mattered most:** `reminder-plan.ts` decides who gets
+emailed, and it was leaning on `checkin-reminder`'s copy — byte-identical to
+`retention`'s but with a fraction of the test coverage. `retention`'s copy was
+exercised across leap years, month boundaries, negative gaps and unparseable
+input; the one under the emails was not. All of that now sits under everything.
+
 ## The generator's ceiling was ninety seconds, not thirty
 
 `lib/reel.ts` exported `MAX_REEL_MS = 90_000` — *"Instagram wants a reel between

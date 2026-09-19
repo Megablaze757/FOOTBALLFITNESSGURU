@@ -27,6 +27,7 @@
 // about what the rows MEAN is here, where it can be tested.
 // =============================================================================
 
+import { daysBetween } from "./days";
 import { describeRate, wilson, type Interval } from "./proportions";
 
 export interface Account {
@@ -73,12 +74,14 @@ export const WINDOWS: readonly Window[] = [
 ];
 
 /** Whole days from `from` to `to`, both `YYYY-MM-DD`. Negative if `to` is earlier. */
-export function daysBetween(from: string, to: string): number {
-  const a = Date.parse(`${from}T00:00:00Z`);
-  const b = Date.parse(`${to}T00:00:00Z`);
-  if (!Number.isFinite(a) || !Number.isFinite(b)) return 0;
-  return Math.round((b - a) / 86_400_000);
-}
+/**
+ * Re-exported so every caller keeps working, and defined once.
+ *
+ * This was a local copy. lib/days.ts explains what five copies of eight
+ * lines cost: three were signed, two silently clamped at zero, and one
+ * took its arguments the other way round.
+ */
+export { daysBetween };
 
 export interface WindowResult {
   window: Window;
