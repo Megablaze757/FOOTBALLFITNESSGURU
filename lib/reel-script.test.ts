@@ -5,7 +5,8 @@ import {
   reelScript, scriptProblems, readTimeMs, SCRIPTS, HOOK_BY_MS, MIN_BEAT_MS,
   type ReelScript, type ScriptId,
 } from "./reel-script";
-import { holdFor, MAX_REEL_MS } from "./reel";
+import { holdFor } from "./reel";
+import { MAX_REEL_MS } from "./reel-retention";
 import { END_CARD_MS } from "./reel-plan";
 import { SIGNUP_SPOKEN } from "./signup-link";
 import { proteinIndex } from "./protein-index";

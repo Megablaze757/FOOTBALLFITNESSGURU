@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { SKILL_DRILLS } from "./skills";
 import {
   holdFor, speechMs, spokenWords, implausibleAudio, MIN_MS_PER_SPOKEN_WORD, reelScenes, reelDuration, sceneAt, reelFrameSvg, pickMimeType, fileExtension,
-  MIN_SCENE_MS, MIN_REEL_MS, MAX_REEL_MS, REEL_MIME_TYPES, closingFact,
+  MIN_SCENE_MS, PLATFORM_MIN_REEL_MS, PLATFORM_MAX_REEL_MS, REEL_MIME_TYPES, closingFact,
   inspectRecording, isPostable, requestsH264, reelSteps, REEL_FPS, emphasise, type Scene,
 } from "./reel";
 import { captionProblems } from "./caption";
@@ -25,7 +25,7 @@ test("a card holds long enough to read and never flashes past", () => {
 test("every drill makes a reel Instagram will accept", () => {
   for (const d of SKILL_DRILLS) {
     const ms = reelDuration(reelScenes(d));
-    assert.ok(ms >= MIN_REEL_MS && ms <= MAX_REEL_MS, `${d.id}: ${ms}ms`);
+    assert.ok(ms >= PLATFORM_MIN_REEL_MS && ms <= PLATFORM_MAX_REEL_MS, `${d.id}: ${ms}ms`);
   }
 });
 
