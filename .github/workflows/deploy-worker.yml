@@ -78,7 +78,7 @@ jobs:
           # Public — it is baked into the shipped browser bundle.
           WORKER_URL: https://apex-api.fitnessguru.workers.dev
 
-      - uses: cloudflare/wrangler-action@v3
+      - uses: cloudflare/wrangler-action@v4
         if: env.CF_TOKEN != ''
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
