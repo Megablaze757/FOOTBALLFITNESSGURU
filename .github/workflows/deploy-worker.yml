@@ -1,51 +1,39 @@
-name: Deploy API Worker
+name: Check API Worker
 
-# Deploys cloudflare/ to Cloudflare Workers from CI, so the Worker can ship
-# without Node or wrangler installed locally.
+# ============================================================================
+# THIS WORKFLOW NO LONGER DEPLOYS.
 #
-# Secrets already set with `wrangler secret put` (OPENROUTER_API_KEY,
-# SUPABASE_ANON_KEY, Stripe, email…) are stored on Cloudflare's side and SURVIVE
-# a redeploy — this workflow never sees them and cannot overwrite them. The
-# `[vars]` block in wrangler.toml is the part each deploy replaces.
+# apex-api is now ONE Worker serving PocketAthlete AND Clipper, so both apps
+# share the same AI keys and Groq -> OpenRouter -> NVIDIA fallbacks. It is
+# built and deployed from Megablaze757/clipfarm (apps/worker), which contains
+# a copy of cloudflare/src + lib from this repo.
 #
-# One-time setup: add a repo secret CLOUDFLARE_API_TOKEN (Cloudflare dashboard →
-# My Profile → API Tokens → Create Token → "Edit Cloudflare Workers" template).
+# Deploying cloudflare/ from here would replace that merged Worker with a
+# PocketAthlete-only one and take Clipper's routes, R2 binding and cron down
+# with it. So this job only typechecks.
 #
-# THE DRIFT GATE BELOW IS NOT OPTIONAL, and it used to make this workflow
-# impossible. It compared the deployed and repo versions for EQUALITY and
-# refused on any difference — so bumping the version to ship a fix was refused
-# because they now differed, and not bumping it left nothing to ship. Every push
-# to cloudflare/ failed this job, the red X became scenery, and the Worker got
-# pasted into the dashboard by hand instead: precisely the hand-editing the gate
-# exists to protect against.
-#
-# It now compares them in ORDER. Repo ahead deploys, which is the whole point of
-# this workflow; production ahead refuses, because those changes exist nowhere
-# else. See scripts/worker-drift.mjs and lib/worker-drift.test.ts.
-#
-# `npm run deploy` has a predeploy hook that checks the same thing, but
-# wrangler-action does not go through npm, so the check has to be repeated here.
+# To ship a PocketAthlete Worker change:
+#   1. merge it here as usual;
+#   2. in clipfarm:  node scripts/sync-pocketathlete.mjs ../FOOTBALLFITNESSGURU
+#   3. commit, push, and deploy from clipfarm (apps/worker: npx wrangler deploy,
+#      or its "Deploy apex-api Worker" Action).
+# ============================================================================
 
 on:
   push:
     branches: [main]
     paths:
       - "cloudflare/**"
+      - "lib/**"
       - ".github/workflows/deploy-worker.yml"
-  workflow_dispatch:
-    inputs:
-      force:
-        description: "Deploy even if the live Worker differs from this repo (overwrites it)"
-        type: boolean
-        default: false
+  pull_request:
+    paths:
+      - "cloudflare/**"
+      - "lib/**"
 
 jobs:
-  deploy:
+  check:
     runs-on: ubuntu-latest
-    # Job-level so the steps below can branch on whether the token exists — the
-    # `secrets` context isn't available in a step's own `if`.
-    env:
-      CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
     defaults:
       run:
         working-directory: cloudflare
@@ -60,36 +48,10 @@ jobs:
 
       - run: npm ci
 
-      # Catch type errors here rather than discovering them as a 500 in the
-      # athlete's browser — a broken Worker degrades silently to the on-device
-      # engine, which is exactly the failure you don't notice.
+      # Catch type errors here rather than discovering them after the sync.
       - name: Typecheck
         run: npx tsc --noEmit
 
-      # Refuses when the deployed Worker is not the one in this repo — and also
-      # when it cannot tell, because deploying without knowing what you are
-      # about to overwrite is the whole risk. Override deliberately by running
-      # the workflow with `force` set.
-      - name: Refuse to overwrite a NEWER Worker
-        if: env.CF_TOKEN != '' && inputs.force != true
-        working-directory: .
-        run: node scripts/worker-drift.mjs "$WORKER_URL"
-        env:
-          # Public — it is baked into the shipped browser bundle.
-          WORKER_URL: https://apex-api.fitnessguru.workers.dev
-
-      - uses: cloudflare/wrangler-action@v3
-        if: env.CF_TOKEN != ''
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          workingDirectory: cloudflare
-
-      # Without the token there's nothing to deploy to, and failing the run
-      # would put a permanent red X on main — which teaches you to ignore red,
-      # the one habit that makes CI worthless. Typecheck still ran above.
-      - name: No deploy token — skipped
-        if: env.CF_TOKEN == ''
+      - name: Reminder — deploy from clipfarm
         run: |
-          echo "CLOUDFLARE_API_TOKEN is not set, so the Worker was not deployed."
-          echo "The code was typechecked. Add the secret to deploy automatically,"
-          echo "or keep pasting cloudflare/src/index.ts into the dashboard by hand."
+          echo "::notice title=Not deployed::apex-api is deployed from Megablaze757/clipfarm. Sync this change there with scripts/sync-pocketathlete.mjs, then deploy from clipfarm."

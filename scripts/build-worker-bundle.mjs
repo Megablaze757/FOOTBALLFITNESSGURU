@@ -29,6 +29,9 @@ try {
     cwd: join(ROOT, "cloudflare"), stdio: "pipe",
   });
   const HEADER = `// =============================================================================
+// !! DO NOT PASTE THIS INTO apex-api ANY MORE. apex-api is the merged PocketAthlete +
+// !! Clipper Worker, deployed from Megablaze757/clipfarm — pasting this removes Clipper.
+// !! Paste clipfarm's apex-api-merged.worker.js instead (see its README).
 // PASTE THIS FILE INTO THE CLOUDFLARE DASHBOARD. Not cloudflare/src/index.ts.
 //
 // Generated — do not edit. Rebuild with:  node scripts/build-worker-bundle.mjs

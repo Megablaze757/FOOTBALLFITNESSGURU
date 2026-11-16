@@ -3,8 +3,7 @@
   "private": true,
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
-    "predeploy": "node ../scripts/worker-drift.mjs",
+    "deploy": "node -e \"console.error('apex-api is now deployed from Megablaze757/clipfarm (merged PocketAthlete + Clipper Worker). Deploying from here would remove Clipper. Sync with clipfarm/scripts/sync-pocketathlete.mjs and deploy there.'); process.exit(1)\"",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

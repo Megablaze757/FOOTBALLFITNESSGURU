@@ -1,3 +1,9 @@
+# ============================================================================
+# DO NOT `wrangler deploy` FROM HERE. apex-api is now one Worker for
+# PocketAthlete + Clipper, deployed from Megablaze757/clipfarm (apps/worker).
+# Deploying this config would replace it and remove Clipper. See
+# .github/workflows/deploy-worker.yml for how to ship a change.
+# ============================================================================
 name = "apex-api"
 main = "src/index.ts"
 compatibility_date = "2024-11-01"
