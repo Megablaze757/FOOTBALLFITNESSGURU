@@ -1269,7 +1269,7 @@ function SleepHoursScale({ value, onChange }: {
             >
               <span className="text-base font-bold leading-none text-slate-200">{h === 9 ? "9+" : h}</span>
               <span className={`text-[10px] font-medium leading-tight ${active ? "text-accent-400" : "text-slate-400"}`}>
-                {h === 9 ? "hrs" : "hrs"}
+                hrs
               </span>
             </button>
           );
