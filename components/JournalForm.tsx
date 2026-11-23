@@ -528,7 +528,7 @@ export function JournalForm({ initial, initialTraining, sport, sex = null, dista
      *
      * An unanswered question is null, never 0 and never a middling guess.
      */
-    const fresh = {
+    const fresh: Record<string, unknown> = {
       sleep_hours: sleepHours === "" ? null : Number(sleepHours),
       stress_score: stress,
       soreness_score: soreness,
