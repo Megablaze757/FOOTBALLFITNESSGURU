@@ -1253,7 +1253,7 @@ function SleepHoursScale({ value, onChange }: {
           }`}
         >
           <span className="text-base font-bold leading-none text-slate-200">&lt;5</span>
-          <span className={`text-[10px] font-medium leading-tight ${exact ? "text-accent-400" : "text-slate-400"}`}>exact</span>
+          <span className={`text-[10px] font-medium leading-tight ${exact ? "text-accent-400" : "text-slate-400"}`}>type it</span>
         </button>
         {buckets.map((h) => {
           const active = !exact && stored === h;
