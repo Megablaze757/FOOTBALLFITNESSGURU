@@ -32,6 +32,15 @@ const SLEEP_HARD_LIMIT = 3; // sleep QUALITY at/below this forces Red
 const SLEEP_HOURS_HARD_LIMIT = 4;
 
 /**
+ * Soreness at which the advice talks about soreness rather than fatigue.
+ *
+ * Seven, matching the fatigue threshold just below it, because they are the
+ * same scale and there is no evidence to justify a different number — saying
+ * so is better than picking one that looks considered.
+ */
+const SORENESS_SPEAK_UP = 7;
+
+/**
  * ═══════════════════════════════════════════════════════════════════════════
  * THE WEIGHTS, AND WHY THEY RENORMALISE RATHER THAN BEING FIXED.
  *
@@ -257,7 +266,7 @@ export function assessReadiness(input: CheckInInput, load?: LoadContext): Readin
   if (spiking && status === "Green") status = "Yellow";
 
   const advice = buildAdvice(status, {
-    sleep, fatigue, pain, focus, acwr,
+    sleep, fatigue, pain, focus, acwr, sleepHours, soreness,
     trainedToday: load?.trainedToday === true,
     // Only when it COST them something. "HRV is 14% above your norm" as the
     // opening line of a Red day reads as the app not having read the room.
@@ -330,6 +339,18 @@ function adviceBody(
     focus: string | null;
     acwr?: number | null;
     /**
+     * 0115's two answers that have something to SAY, not just something to
+     * subtract. Null when they were not asked, which is most check-ins.
+     *
+     * A verdict the athlete cannot trace back to something they typed is a
+     * verdict they stop believing — the same argument that keeps the cycle
+     * phase out of the score. Adding a hard limit without adding the sentence
+     * that explains it would have been exactly that: Red, with "Load is
+     * high" underneath, on a day their load was fine and their night was not.
+     */
+    sleepHours?: number | null;
+    soreness?: number | null;
+    /**
      * The watch has already said something bad, and it is printed FIRST.
      *
      * Without this the advice contradicted its own opening line: a drop that
@@ -340,7 +361,7 @@ function adviceBody(
     watchFlagged?: boolean;
   }
 ): string {
-  const { sleep, fatigue, pain, focus, acwr, trainedToday, watchFlagged } = ctx;
+  const { sleep, fatigue, pain, focus, acwr, trainedToday, watchFlagged, sleepHours, soreness } = ctx;
 
   // Said first, because when it applies it's the reason for the verdict and the
   // athlete has no other way to know it. Percentages beat a bare ratio: "58%
@@ -353,9 +374,49 @@ function adviceBody(
       : `You feel fine, but this week is ${over}% up on your average. Train — keep the intensity, not the volume.`;
   }
 
+  /**
+   * SORE AND TIRED WANT OPPOSITE DAYS, and this is where that finally pays for
+   * the separate column migration 0115 added.
+   *
+   * Muscle soreness is a reason to MOVE — blood through the tissue, range of
+   * motion, easy work. Systemic tiredness is a reason to rest. Merged into one
+   * number, which is what fatigue_score alone was doing, the advice could only
+   * ever give one of those answers to both.
+   *
+   * WHY IT SITS OUT HERE RATHER THAN IN THE YELLOW BLOCK, where it was first
+   * written: 9/10 sore with everything else good scores 71, which is GREEN,
+   * and the Green line is "Good day for a higher-intensity session." That is
+   * the wrong instruction for legs that sore, and the right response is to say
+   * so rather than to re-tune the weights until the band comes out how the
+   * advice wanted it.
+   *
+   * It yields to three things, each more specific than it is: a Red verdict,
+   * which has graver lines of its own; a named painful joint, because a knee
+   * at 5/10 is a different conversation from sore legs; and systemic fatigue
+   * at 7+, which wants the opposite instruction and must not be told to move.
+   */
+  if (
+    soreness != null && soreness >= SORENESS_SPEAK_UP &&
+    status !== "Red" && fatigue < 7 && !(focus && pain.value > 0)
+  ) {
+    return trainedToday
+      ? `Session done on sore legs (${soreness}/10). Keep moving tonight — walk, stretch, loosen off.`
+      : `Sore (${soreness}/10) but not wrecked. Train light and move — mobility and easy work beat sitting still.`;
+  }
+
   if (status === "Red") {
     if (pain.value >= PAIN_HARD_LIMIT && focus) {
       return `${capitalize(focus)} pain is high (${pain.value}/10). No sprints today — gentle mobility and stretching around it.`;
+    }
+    /**
+     * BEFORE the sleep-QUALITY line, because it is the more concrete fact and
+     * it is usually the one that caused the verdict. Somebody can rate four
+     * broken hours 8/10 quite honestly, which is why this limit exists at
+     * all — so when both trip, the hours are what they need to hear.
+     */
+    if (sleepHours != null && sleepHours < SLEEP_HOURS_HARD_LIMIT) {
+      const hrs = Number.isInteger(sleepHours) ? `${sleepHours}` : sleepHours.toFixed(1);
+      return `${hrs} hours' sleep. Rest and light work only — training hard on that is where injuries come from.`;
     }
     if (sleep <= SLEEP_HARD_LIMIT) {
       return `Sleep is very low (${sleep}/10). Rest and light work only — heavy training now raises injury risk.`;

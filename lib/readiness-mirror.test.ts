@@ -145,3 +145,72 @@ test("the phase reaches the advice and nothing else, in both", () => {
       `${file} lets the cycle phase into the score`);
   }
 });
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE WORDS, NOT JUST THE NUMBERS — THE HALF THAT HAD ALREADY DRIFTED.
+ *
+ * The tests above compare weights, limits and curves, and those agreed. The
+ * SENTENCES did not, and had not for some time: the edge function said
+ * "Skip sprints today — focus on gentle mobility and static stretching around
+ * the area" where the browser says "No sprints today — gentle mobility and
+ * stretching around it", with three more differing the same way. Nobody wrote
+ * two versions deliberately. One was edited; the other was under a header
+ * asking whoever did it to remember.
+ *
+ * So the advice an athlete is given would depend on which copy answered —
+ * quietly, because both readings are perfectly sensible English.
+ *
+ * WHAT IS DELIBERATELY NOT COMPARED. The browser's advice also knows the
+ * acute:chronic load ratio, whether they have trained today, and what the
+ * watch said. A request to the edge function carries a check-in and nothing
+ * else, so those lines have no input there and are absent rather than
+ * approximated. Only the branches that exist in both are pinned here, and
+ * that is a real limit of this test rather than a gap to be papered over.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+
+/** Advice lines in lib/readiness.ts that depend only on the check-in. */
+const SHARED_ADVICE = [
+  "No sprints today — gentle mobility and stretching around it.",
+  "Rest and light work only — training hard on that is where injuries come from.",
+  "Rest and light work only — heavy training now raises injury risk.",
+  "Load is high. Active recovery today — stretching, mobility, hydration.",
+  "moderate intensity, warm up properly.",
+  "Fatigue is up. A moderate session is fine — no maximal efforts.",
+  "Moderately ready. Train as planned, ease off if anything flares up.",
+  "You're well recovered and ready to go. Good day for a higher-intensity session.",
+  "Train light and move — mobility and easy work beat sitting still.",
+];
+
+test("the sentences in this list are really in the browser copy", () => {
+  // Checked first. A list that had drifted from lib/readiness.ts would compare
+  // two files against a third thing neither of them says, and pass only by
+  // failing to be about anything.
+  for (const line of SHARED_ADVICE) {
+    assert.ok(browser.includes(line),
+      `lib/readiness.ts no longer says "${line}" — update this list with its new wording`);
+  }
+});
+
+test("both copies give the same advice, word for word", () => {
+  for (const line of SHARED_ADVICE) {
+    assert.ok(edge.includes(line),
+      `the edge function would tell an athlete something different here.\n` +
+      `  lib/readiness.ts: "${line}"`);
+  }
+});
+
+test("the soreness line is gated the same way in both", () => {
+  // It yields to a Red verdict, a named painful joint and systemic fatigue —
+  // three conditions, and dropping any one of them in one copy would change
+  // which athletes hear it.
+  for (const [file, src] of [["lib/readiness.ts", browser], ["the edge function", edge]] as const) {
+    assert.match(src, /soreness >= SORENESS_SPEAK_UP/, `${file} does not gate the soreness line`);
+    assert.match(src, /status !== "Red" && fatigue < 7 && !\(focus && pain\.value > 0\)/,
+      `${file} gates the soreness line differently, so different athletes hear it`);
+  }
+  const limit = /const SORENESS_SPEAK_UP = (\d+)/;
+  assert.equal(limit.exec(edge)?.[1], limit.exec(browser)?.[1],
+    "the two copies speak up about soreness at different thresholds");
+});
