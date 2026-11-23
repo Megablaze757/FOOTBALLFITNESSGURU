@@ -182,6 +182,10 @@ function toInput(c: DailyCheckIn): CheckInInput {
     fatigue_score: c.fatigue_score,
     sleep_quality: c.sleep_quality,
     nutrition_quality: c.nutrition_quality,
+    // 0115, so the week's average is the average of the scores they saw.
+    sleep_hours: c.sleep_hours,
+    stress_score: c.stress_score,
+    soreness_score: c.soreness_score,
     weight_kg: c.weight_kg,
     is_match_day: c.is_match_day,
     match_minutes_played: c.match_minutes_played,

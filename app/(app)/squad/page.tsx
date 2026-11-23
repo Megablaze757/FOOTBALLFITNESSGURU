@@ -156,9 +156,20 @@ export default function SquadPage() {
       return {
         id: p.id,
         name: p.full_name ?? "Athlete",
+        /**
+         * 0115's SCORED answers, and NOT the cycle phase.
+         *
+         * The three below move the number, so leaving them out would show a
+         * coach a readiness their athlete never saw. The phase moves no
+         * number, so including it would buy nothing — and it is
+         * special-category data about somebody else, on a screen built for
+         * reading other people's health. lib/readiness-callers.test.ts fails
+         * if it is ever added here.
+         */
         readiness: c ? (({ score, status }) => ({ score, status }))(assessReadiness({
           pain_map: c.pain_map ?? {}, fatigue_score: c.fatigue_score, sleep_quality: c.sleep_quality,
           nutrition_quality: c.nutrition_quality, weight_kg: c.weight_kg, is_match_day: c.is_match_day, match_minutes_played: c.match_minutes_played,
+          sleep_hours: c.sleep_hours, stress_score: c.stress_score, soreness_score: c.soreness_score,
         }, { acwr: acwrByUser.get(p.id) ?? null })) : null,
         lastCheckIn: c?.check_in_date ?? null,
         goal: prog?.goal_type ?? null,

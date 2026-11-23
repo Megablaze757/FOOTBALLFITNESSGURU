@@ -324,6 +324,15 @@ export default function HomePage() {
     weight_kg: data!.checkIn?.weight_kg ?? null,
     is_match_day: data!.checkIn?.is_match_day ?? false,
     match_minutes_played: data!.checkIn?.match_minutes_played ?? 0,
+    // 0115. The cycle phase is included HERE and on no shared screen: this is
+    // the athlete's own home, the note is for them, and it is computed in
+    // their browser. The squad pages deliberately leave it out — see the
+    // comment there, and lib/readiness-callers.test.ts, which fails if it
+    // ever appears on one.
+    sleep_hours: data!.checkIn?.sleep_hours ?? null,
+    stress_score: data!.checkIn?.stress_score ?? null,
+    soreness_score: data!.checkIn?.soreness_score ?? null,
+    cycle_phase: data!.checkIn?.cycle_phase ?? null,
   };
   // Home already knew whether you had trained today — it ticks a quest with it
   // — and the coach line underneath was still written as if you had not, telling

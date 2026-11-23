@@ -18,8 +18,8 @@ export interface CheckInInput {
    * cycle are in the full form. So most rows have these unset — not because
    * anything failed, but because nobody was asked. Nothing may read a null
    * here as a middling answer: lib/readiness.ts renormalises over the factors
-   * actually present, and lib/readiness.test.ts pins that a row with all four
-   * null scores exactly what it scored before this field existed.
+   * actually present, and lib/checkin-questions.test.ts pins that a row with
+   * all four null scores exactly what it scored before this field existed.
    */
   sleep_hours?: number | null;
   /** 1 calm to 10 overwhelmed. */
