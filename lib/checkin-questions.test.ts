@@ -253,3 +253,67 @@ test("the scores are bounded where the UI bounds them", () => {
   assert.match(migration, /soreness_score between 1 and 10/);
   assert.match(migration, /sleep_hours >= 0 and sleep_hours <= 24/);
 });
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * A VERDICT THE ATHLETE CANNOT TRACE BACK TO SOMETHING THEY TYPED IS A
+ * VERDICT THEY STOP BELIEVING.
+ *
+ * This is the same argument that keeps the cycle phase out of the score, and
+ * it applies to the hard limit above. The limit shipped first and the
+ * sentence did not: three hours' sleep, no pain, sleep quality 8, and the
+ * advice read "Load is high. Active recovery today" — which the athlete
+ * could not connect to anything, and which was not even true. Their load was
+ * whatever it was; their night was the problem.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("a short night is named in the advice, not just punished in the score", () => {
+  const r = assessReadiness(before({ sleep_quality: 9, fatigue_score: 2, sleep_hours: 3 }));
+  assert.equal(r.status, "Red");
+  assert.match(r.advice, /3 hours/, `the athlete is told: "${r.advice}"`);
+  assert.doesNotMatch(r.advice, /Load is high/,
+    "the fall-through advice blamed training load for a verdict caused by sleep");
+});
+
+test("a half hour is not printed as a long decimal", () => {
+  const r = assessReadiness(before({ sleep_quality: 9, fatigue_score: 2, sleep_hours: 3.5 }));
+  assert.match(r.advice, /3\.5 hours/, `reads badly: "${r.advice}"`);
+});
+
+test("the hours lead when both sleep answers are bad", () => {
+  // Somebody can rate four broken hours 8/10 honestly, which is why the hours
+  // limit exists. When both trip, the hours are the concrete fact.
+  const r = assessReadiness(before({ sleep_quality: 2, sleep_hours: 2 }));
+  assert.match(r.advice, /2 hours/, `the vaguer line won: "${r.advice}"`);
+});
+
+/**
+ * SORENESS AND FATIGUE WANT OPPOSITE DAYS, which is the whole argument for
+ * soreness being its own column rather than a rename of fatigue_score. If the
+ * advice gives both the same answer, the column bought a number and nothing
+ * else.
+ */
+test("sore but not wrecked is told to move; wrecked is told to rest", () => {
+  const sore = assessReadiness(before({ fatigue_score: 3, soreness_score: 9 })).advice;
+  const wrecked = assessReadiness(before({ fatigue_score: 9, soreness_score: 2 })).advice;
+
+  assert.match(sore, /sore/i, `soreness is not mentioned: "${sore}"`);
+  assert.match(sore, /mov|mobility|stretch|loosen|walk/i,
+    `sore legs were not told to move: "${sore}"`);
+  assert.notEqual(sore, wrecked,
+    "sore-but-fresh and wrecked-but-not-sore get identical advice, so the separate column bought nothing");
+  assert.doesNotMatch(wrecked, /sore/i, `a check-in that is not sore mentions soreness: "${wrecked}"`);
+});
+
+test("a named painful joint still outranks general soreness", () => {
+  // A knee at 8/10 is a different conversation from sore legs, and the pain
+  // branch has the specific thing to say.
+  const r = assessReadiness(before({ pain_map: { knee_left: 8 }, soreness_score: 9 }));
+  assert.match(r.advice, /knee/i, `the general line won over the specific one: "${r.advice}"`);
+});
+
+test("soreness nobody was asked about changes no wording", () => {
+  const bare = assessReadiness(before({ fatigue_score: 8 }));
+  assert.doesNotMatch(bare.advice, /sore/i,
+    "a check-in with no soreness answer is being told about its soreness");
+});

@@ -29,6 +29,7 @@ type ReadinessStatus = "Green" | "Yellow" | "Red";
 const PAIN_HARD_LIMIT = 7;
 const SLEEP_HARD_LIMIT = 3;
 const SLEEP_HOURS_HARD_LIMIT = 4;
+const SORENESS_SPEAK_UP = 7;
 
 /**
  * THE WEIGHTS, WHICH RENORMALISE. Mirrors WEIGHTS in lib/readiness.ts, and
@@ -172,17 +173,48 @@ function assessReadiness(input: CheckInInput) {
   else if (score >= 45) status = "Yellow";
   else status = "Red";
 
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * THE SAME SENTENCES AS lib/readiness.ts, WORD FOR WORD.
+   *
+   * They were not. This file said "Skip sprints today — focus on gentle
+   * mobility and static stretching around the area" where the browser says
+   * "No sprints today — gentle mobility and stretching around it", and three
+   * other lines differed the same way. Nobody wrote two versions on purpose:
+   * one was edited and the other was not, under a header asking whoever did
+   * it to remember. The numbers were checked after 0115; the words were the
+   * half nothing was looking at.
+   *
+   * WHAT THIS FILE CANNOT MIRROR, and it is better to name it than to leave
+   * somebody comparing the two and wondering. The browser's advice also knows
+   * about acute:chronic load, whether they have already trained today, and
+   * what the watch reported. None of that is in a request to this endpoint —
+   * it carries a check-in and nothing else — so those lines have no input
+   * here and are absent rather than approximated. lib/readiness-mirror.test.ts
+   * compares the branches that exist in both.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
   let advice: string;
-  if (status === "Red" && pain.value >= PAIN_HARD_LIMIT && focus) {
-    advice = `${cap(focus)} pain is high (${pain.value}/10). Skip sprints today — focus on gentle mobility and static stretching around the area.`;
+  if (
+    soreness != null && soreness >= SORENESS_SPEAK_UP &&
+    status !== "Red" && fatigue < 7 && !(focus && pain.value > 0)
+  ) {
+    advice = `Sore (${soreness}/10) but not wrecked. Train light and move — mobility and easy work beat sitting still.`;
+  } else if (status === "Red" && pain.value >= PAIN_HARD_LIMIT && focus) {
+    advice = `${cap(focus)} pain is high (${pain.value}/10). No sprints today — gentle mobility and stretching around it.`;
+  } else if (status === "Red" && sleepHours != null && sleepHours < SLEEP_HOURS_HARD_LIMIT) {
+    const hrs = Number.isInteger(sleepHours) ? `${sleepHours}` : sleepHours.toFixed(1);
+    advice = `${hrs} hours' sleep. Rest and light work only — training hard on that is where injuries come from.`;
   } else if (status === "Red" && sleep <= SLEEP_HARD_LIMIT) {
-    advice = `Sleep quality is very low (${sleep}/10). Prioritise rest and light recovery work; heavy training now raises injury risk.`;
+    advice = `Sleep is very low (${sleep}/10). Rest and light work only — heavy training now raises injury risk.`;
   } else if (status === "Red") {
-    advice = "Your overall load is high. Treat today as active recovery: stretching, mobility and hydration.";
+    advice = "Load is high. Active recovery today — stretching, mobility, hydration.";
   } else if (status === "Yellow") {
     advice = focus && pain.value > 0
-      ? `Mostly recovered, but watch your ${focus} (${pain.value}/10). Keep intensity moderate and warm up thoroughly.`
-      : "You're moderately ready. Train as planned but ease off if anything flares up.";
+      ? `Mostly recovered. Watch your ${focus} (${pain.value}/10) — moderate intensity, warm up properly.`
+      : fatigue >= 7
+        ? "Fatigue is up. A moderate session is fine — no maximal efforts."
+        : "Moderately ready. Train as planned, ease off if anything flares up.";
   } else {
     advice = "You're well recovered and ready to go. Good day for a higher-intensity session.";
   }
