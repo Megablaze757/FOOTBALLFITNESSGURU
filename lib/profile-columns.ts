@@ -90,3 +90,60 @@ export async function updateProfile(
   );
   return { error: null, missing: names };
 }
+
+/**
+ * Upsert a row without letting one unmigrated column reject the whole thing.
+ *
+ * THE SAME CONTRACT AGAIN, ON ANOTHER TABLE. The two functions above are about
+ * `profiles` because that is where it bit first; the hazard is not about
+ * profiles at all. A client deploy and a schema change roll out separately —
+ * the site goes out with a push, the SQL is applied by hand through
+ * .github/workflows/apply-sql.yml — and there is no ordering of the two that
+ * removes the window where the browser knows about a column the database does
+ * not.
+ *
+ * On `daily_check_ins` that window is as bad as it gets: migration 0115 adds
+ * hours of sleep, stress, soreness and cycle phase, and a check-in that
+ * mentions any of them would be rejected whole. The athlete would tap through
+ * the form, press save, and be told the entry could not be stored — losing the
+ * pain map, the sleep rating and the training log along with it, because of
+ * four columns that are nobody's reason for being there.
+ *
+ * So the new columns go in `optional`. If the database refuses them the row is
+ * written again without them, and the caller is told which ones did not land.
+ * The check-in saves; the new answers are simply not kept until the migration
+ * is applied, which is a visible, recoverable, one-day loss rather than a
+ * failed save.
+ */
+export async function upsertWithOptional(
+  supabase: SupabaseClient,
+  table: string,
+  /** Columns that have existed long enough to rely on. */
+  stable: Record<string, unknown>,
+  /** Columns from recent migrations, which production may not have yet. */
+  optional: Record<string, unknown>,
+  options: { onConflict: string }
+): Promise<{ error: { code?: string; message: string } | null; missing: string[] }> {
+  const names = Object.keys(optional);
+  const first = await supabase.from(table).upsert({ ...stable, ...optional }, options);
+  if (!first.error) return { error: null, missing: [] };
+
+  // 42703 is "undefined column"; PGRST204 is PostgREST's own schema cache
+  // saying the same thing, which is what actually comes back when the column
+  // was added but the API has not reloaded yet. Anything else — RLS, a
+  // constraint, no network — is a real error, and retrying with fewer columns
+  // would hide it behind a second identical failure.
+  const code = first.error.code;
+  if ((code !== "42703" && code !== "PGRST204") || names.length === 0) {
+    return { error: first.error, missing: [] };
+  }
+
+  const retry = await supabase.from(table).upsert(stable, options);
+  if (retry.error) return { error: retry.error, missing: names };
+
+  console.warn(
+    `[${table}] columns not in the database yet: ${names.join(", ")}. ` +
+    `The row saved without them; apply the outstanding migrations to keep those answers.`
+  );
+  return { error: null, missing: names };
+}

@@ -61,9 +61,24 @@ function Inner() {
   // reconcile the two — the same contradiction that was fixed on Home and the
   // plan page, still live on the one screen where someone else's health is the
   // decision being made.
+  /**
+   * 0115's SCORED answers, and NEVER the cycle phase.
+   *
+   * This page renders `readiness.advice` verbatim to a COACH, about somebody
+   * else. Passing the phase would print "You logged your luteal phase…" on a
+   * screen the athlete is not looking at — the one place in this app where
+   * that sentence would be a disclosure rather than a note to yourself. It
+   * would also look like a one-word improvement to whoever added it, which is
+   * why lib/readiness-callers.test.ts fails on it rather than trusting this
+   * comment.
+   *
+   * The three scored ones DO go in: without them a coach would be shown a
+   * readiness their athlete never saw, and act on it.
+   */
   const readiness = data.checkIn ? assessReadiness({
     pain_map: data.checkIn.pain_map ?? {}, fatigue_score: data.checkIn.fatigue_score, sleep_quality: data.checkIn.sleep_quality,
     nutrition_quality: data.checkIn.nutrition_quality, weight_kg: data.checkIn.weight_kg, is_match_day: data.checkIn.is_match_day, match_minutes_played: data.checkIn.match_minutes_played,
+    sleep_hours: data.checkIn.sleep_hours, stress_score: data.checkIn.stress_score, soreness_score: data.checkIn.soreness_score,
   }, { acwr: acwr.ratio }) : null;
   const prog = data.program;
   const total = prog ? prog.plan.weeks.reduce((n, w) => n + w.sessions.length, 0) : 0;

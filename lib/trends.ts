@@ -56,6 +56,12 @@ export function summarizeTrends(rows: DailyCheckIn[]): InsightSummary {
       weight_kg: r.weight_kg,
       is_match_day: r.is_match_day,
       match_minutes_played: r.match_minutes_played,
+      // 0115's scored answers. Left out, this chart would plot a readiness
+      // history that disagrees with the number the athlete was shown on the
+      // day — a line that moves for no reason they can point at.
+      sleep_hours: r.sleep_hours,
+      stress_score: r.stress_score,
+      soreness_score: r.soreness_score,
     });
     return {
       date: r.check_in_date,

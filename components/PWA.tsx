@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { recordChanged } from "@/lib/data-events";
 import { flushQueue, browserStore, queueCount, type QueuedCheckIn } from "@/lib/offline-queue";
+import { splitCheckIn } from "@/lib/checkin-columns";
+import { upsertWithOptional } from "@/lib/profile-columns";
 import { NATIVE_BUILD } from "@/lib/native";
 import { currentBrowser, installGuide, type BrowserEnv } from "@/lib/browser";
 
@@ -67,8 +69,27 @@ function useQueueDrain() {
         // Someone else's queued entry can't be written with this session, and
         // trying would just collect RLS errors until the cap drops it.
         if (item.userId !== user.id) return false;
-        const { error } = await supabase.from("daily_check_ins").upsert(
-          { user_id: item.userId, check_in_date: item.date, ...item.payload },
+        /**
+         * A COLUMN THE DATABASE HAS NOT GOT YET MUST NOT STRAND THIS ENTRY.
+         *
+         * This is the quieter half of the hazard in lib/checkin-columns.ts. A
+         * rejected save in the form is visible — the athlete is looking at it.
+         * This runs in the background, a rejection just leaves the item for
+         * next time, and lib/offline-queue.ts keeps only the last 14. So a
+         * check-in made in a basement while migration 0115 was outstanding
+         * would have been retried silently until enough days pushed it off
+         * the end, and then lost with nothing having said so.
+         *
+         * Split and retried without the new columns, the entry lands. The
+         * answers it could not keep are the four optional ones; the check-in
+         * itself — pain, sleep, the training log — is what the queue is for.
+         */
+        const { stable, optional } = splitCheckIn(item.payload);
+        const { error } = await upsertWithOptional(
+          supabase,
+          "daily_check_ins",
+          { user_id: item.userId, check_in_date: item.date, ...stable },
+          optional,
           { onConflict: "user_id,check_in_date" },
         );
         if (error) return false;

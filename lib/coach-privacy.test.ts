@@ -123,3 +123,56 @@ test("the briefing is what leaves the browser, in both backends", () => {
     assert.match(src, /briefing/, `${backend} no longer receives the briefing`);
   }
 });
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE CYCLE PHASE DOES NOT LEAVE THE DEVICE, AND THAT IS THE SAME KIND OF
+ * PROPERTY — A FACT ABOUT THE CODE UNTIL SOMETHING MADE IT A RULE.
+ *
+ * Migration 0115 added `cycle_phase` to `daily_check_ins`. It is
+ * special-category data under UK and EU law, and lib/coach-context.ts reads
+ * the check-in with `select("*")`, so the value is already in hand there —
+ * leaving it out of the briefing is one line of restraint with nothing
+ * defending it.
+ *
+ * The briefing goes to a third-party inference provider on every question.
+ * Storing a phase in the athlete's own RLS-protected row and posting it to an
+ * API are different decisions, and only the first was asked for. The phase
+ * still shapes the advice the athlete reads in the app, computed in the
+ * browser by lib/readiness.ts.
+ *
+ * WHAT WOULD BREAK THIS WITHOUT ANYONE NOTICING: adding `cycle_phase` to the
+ * readiness call in coach-context, which would fold the phase note into
+ * `advice`, which is `readinessReason`, which is in the briefing. It would
+ * look like a one-word improvement to coaching quality.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("the cycle phase never reaches the model", () => {
+  for (const [name, src] of [["coach-context.ts", context], ["coach-briefing.ts", briefing], ["coach-chat.ts", chat]] as const) {
+    // Prose about it is fine and in fact wanted — the ban has to be explained
+    // where somebody would otherwise undo it. What must not appear is the
+    // field being read: an object key, a property access, or a column name in
+    // a select.
+    const uses = [
+      /cycle_phase\s*:/,                 // passed as a field
+      /\.cycle_phase\b(?!`)/,            // read off the row
+      /select\([^)]*cycle_phase/,        // asked for by name
+      /cyclePhase/,                      // or under a camelCase alias
+    ];
+    for (const use of uses) {
+      const line = src.split("\n").find((l) => use.test(l) && !l.trimStart().startsWith("*") && !l.trimStart().startsWith("//"));
+      assert.equal(line, undefined,
+        `${name} now sends the cycle phase to the model:\n  ${line?.trim()}`);
+    }
+  }
+});
+
+test("the three scored answers DO reach it, so the coach quotes the right number", () => {
+  // The other half of the same decision. A coach briefed without these would
+  // tell an athlete who slept three hours that they are Green, because the
+  // readiness it was handed was computed without the three hours.
+  for (const field of ["sleep_hours", "stress_score", "soreness_score"]) {
+    assert.match(context, new RegExp(`${field}: ci\\.${field}`),
+      `the coach's readiness is computed without ${field}, so it will disagree with the app`);
+  }
+});
