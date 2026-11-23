@@ -17,11 +17,44 @@ interface CheckInInput {
   fatigue_score: number | null;
   sleep_quality: number | null;
   nutrition_quality: number | null;
+  // Migration 0115. All four optional, and null for most check-ins — only
+  // hours is asked in the quick form. See the renormalising weights below.
+  sleep_hours?: number | string | null;
+  stress_score?: number | string | null;
+  soreness_score?: number | string | null;
+  cycle_phase?: string | null;
 }
 type ReadinessStatus = "Green" | "Yellow" | "Red";
 
 const PAIN_HARD_LIMIT = 7;
 const SLEEP_HARD_LIMIT = 3;
+const SLEEP_HOURS_HARD_LIMIT = 4;
+
+/**
+ * THE WEIGHTS, WHICH RENORMALISE. Mirrors WEIGHTS in lib/readiness.ts, and
+ * lib/readiness-mirror.test.ts fails if the two stop agreeing — this file
+ * scoring a check-in differently from the browser would mean an athlete's
+ * number changing according to which backend answered, with nothing to see.
+ */
+const WEIGHTS = {
+  pain: 0.35,
+  sleepQuality: 0.3,
+  fatigue: 0.25,
+  nutrition: 0.1,
+  sleepHours: 0.15,
+  soreness: 0.2,
+  stress: 0.1,
+};
+
+const CYCLE_PHASES = ["period", "follicular", "ovulation", "luteal"];
+
+/** Mirrors CYCLE_PHASE_LABELS in lib/cycle.ts. */
+const CYCLE_NOTES: Record<string, string> = {
+  period: "You logged your period phase. Many athletes train normally through it; some want a lighter day. Both are fine.",
+  follicular: "You logged your follicular phase. The days after a period. Often when harder sessions feel most doable.",
+  ovulation: "You logged your ovulation phase. Mid-cycle. Often a strong window, and worth noting if yours is not.",
+  luteal: "You logged your luteal phase. The run-up to a period. Often heavier legs and a higher effort for the same work.",
+};
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -43,6 +76,10 @@ Deno.serve(async (req: Request) => {
     fatigue_score: body.fatigue_score ?? null,
     sleep_quality: body.sleep_quality ?? null,
     nutrition_quality: body.nutrition_quality ?? null,
+    sleep_hours: body.sleep_hours ?? null,
+    stress_score: body.stress_score ?? null,
+    soreness_score: body.soreness_score ?? null,
+    cycle_phase: body.cycle_phase ?? null,
   });
 
   return json(result, 200);
@@ -93,12 +130,44 @@ function assessReadiness(input: CheckInInput) {
   const nutritionGood = (nutrition - 1) / 9;
   const painGood = 1 - Math.min(pain.value, 10) / 10;
 
+  /**
+   * RENORMALISED OVER THE ANSWERS PRESENT, so a question nobody was asked
+   * costs nothing. The alternative — a fixed divisor — would mean every
+   * check-in that skipped the optional questions scored lower than the same
+   * check-in did before migration 0115, which is the whole app's history
+   * silently re-scored.
+   */
+  const parts: { weight: number; good: number }[] = [
+    { weight: WEIGHTS.pain, good: painGood },
+    { weight: WEIGHTS.sleepQuality, good: sleepGood },
+    { weight: WEIGHTS.fatigue, good: fatigueGood },
+    { weight: WEIGHTS.nutrition, good: nutritionGood },
+  ];
+
+  const sleepHours = numberOrNull(input.sleep_hours);
+  if (sleepHours != null) {
+    parts.push({ weight: WEIGHTS.sleepHours, good: sleepHoursGood(sleepHours) });
+  }
+  const soreness = numberOrNull(input.soreness_score);
+  if (soreness != null) {
+    parts.push({ weight: WEIGHTS.soreness, good: (10 - clamp1to10(soreness)) / 9 });
+  }
+  const stress = numberOrNull(input.stress_score);
+  if (stress != null) {
+    parts.push({ weight: WEIGHTS.stress, good: (10 - clamp1to10(stress)) / 9 });
+  }
+
+  const totalWeight = parts.reduce((t, f) => t + f.weight, 0);
   const score = Math.round(
-    (0.35 * painGood + 0.3 * sleepGood + 0.25 * fatigueGood + 0.1 * nutritionGood) * 100
+    (parts.reduce((t, f) => t + f.weight * f.good, 0) / totalWeight) * 100
   );
 
   let status: ReadinessStatus;
-  if (pain.value >= PAIN_HARD_LIMIT || sleep <= SLEEP_HARD_LIMIT) status = "Red";
+  if (
+    pain.value >= PAIN_HARD_LIMIT ||
+    sleep <= SLEEP_HARD_LIMIT ||
+    (sleepHours != null && sleepHours < SLEEP_HOURS_HARD_LIMIT)
+  ) status = "Red";
   else if (score >= 70) status = "Green";
   else if (score >= 45) status = "Yellow";
   else status = "Red";
@@ -118,7 +187,29 @@ function assessReadiness(input: CheckInInput) {
     advice = "You're well recovered and ready to go. Good day for a higher-intensity session.";
   }
 
-  return { status, score, advice, focus_body_part: focus };
+  /**
+   * The cycle phase informs the advice and never the score — see lib/cycle.ts.
+   * It is appended AFTER the score and the status are decided, and outside
+   * `parts` above, so it cannot reach either.
+   */
+  const cycle = input.cycle_phase && CYCLE_PHASES.includes(input.cycle_phase)
+    ? CYCLE_NOTES[input.cycle_phase]
+    : null;
+
+  return { status, score, advice: cycle ? `${advice} ${cycle}` : advice, focus_body_part: focus };
+}
+
+/** Mirrors numberOrNull in lib/readiness.ts: "" and junk are not answers. */
+function numberOrNull(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Mirrors sleepHoursGood in lib/readiness.ts: eight hours is full marks. */
+function sleepHoursGood(hours: number): number {
+  const h = Math.max(0, Math.min(24, hours));
+  return Math.max(0, Math.min(1, h / 8));
 }
 
 function cap(s: string): string {

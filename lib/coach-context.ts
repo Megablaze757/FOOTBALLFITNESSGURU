@@ -159,11 +159,31 @@ export async function loadCoachContext(userId: string): Promise<CoachContext> {
           }
         : null;
 
+    /**
+     * THE COACH HAS TO SCORE THE CHECK-IN THE WAY THE APP DID.
+     *
+     * `readinessReason` below is this `advice` string, handed to the coach as
+     * fact. Leave 0115's answers out and the coach is briefed on a different
+     * number from the one the athlete is looking at — someone who logged three
+     * hours' sleep would be told they are Green by a coach that never saw the
+     * three hours. So hours, stress and soreness are passed through.
+     *
+     * CYCLE PHASE IS DELIBERATELY NOT PASSED, and it is available here —
+     * the query above is `select("*")`, so `ci.cycle_phase` is sitting right
+     * there. Including it would put special-category health data into the
+     * briefing, and the briefing is sent to a third-party inference provider.
+     * Storing it in the athlete's own RLS-protected row is one thing; posting
+     * it to an API is a different decision, and not one this feature was asked
+     * to make. The phase still informs the advice the athlete sees in the app,
+     * where it never leaves their device. lib/coach-privacy.test.ts pins this.
+     */
     const readiness = ci ? assessReadiness({
       pain_map: pain,
       fatigue_score: ci.fatigue_score, sleep_quality: ci.sleep_quality,
       nutrition_quality: ci.nutrition_quality, weight_kg: ci.weight_kg,
       is_match_day: ci.is_match_day, match_minutes_played: ci.match_minutes_played,
+      sleep_hours: ci.sleep_hours, stress_score: ci.stress_score,
+      soreness_score: ci.soreness_score,
     } as CheckInInput, { acwr: computeACWR(logs).ratio }) : null;
 
     const plan = prog?.plan ?? null;

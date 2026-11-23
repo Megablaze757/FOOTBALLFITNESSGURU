@@ -126,6 +126,15 @@ export interface CheckInDraftState {
   isMatchDay?: boolean | null;
   /** Answered "anything hurting?" — null means not asked yet. */
   sore?: boolean | null;
+  /**
+   * The answers migration 0115 added. All four are "" or null when not asked,
+   * and the common case is not asked — only hours is in quick mode. There is
+   * no default to compare against, so answering any of them is work to keep.
+   */
+  sleepHours?: string | null;
+  stress?: number | null;
+  soreness?: number | null;
+  cyclePhase?: string | null;
   training?: {
     drills?: unknown[] | null;
     total_minutes?: number | null;
@@ -143,6 +152,11 @@ export interface CheckInDraftBaseline {
   nutrition_quality?: number | null;
   weight_kg?: number | null;
   is_match_day?: boolean | null;
+  // 0115's answers, so re-opening a saved entry is not mistaken for editing it.
+  sleep_hours?: number | null;
+  stress_score?: number | null;
+  soreness_score?: number | null;
+  cycle_phase?: string | null;
 }
 
 export const CHECKIN_DEFAULTS = { fatigue: 5, sleep: 7, nutrition: 6 } as const;
@@ -182,7 +196,18 @@ export function checkInIsDirty(s: CheckInDraftState, baseline?: CheckInDraftBase
     t?.duration_seconds != null ||
     t?.session_type === "active_rest" ||
     t?.session_type === "rest_day" ||
-    s.sore != null
+    s.sore != null ||
+    /**
+     * 0115's answers. NOT compared against a default, because they have none:
+     * null means nobody was asked, and `(s.x ?? null) !== (baseline ?? null)`
+     * is therefore the whole test. An athlete who only answered "stress 8" has
+     * done work, and before this it was the one kind of work the autosave threw
+     * away.
+     */
+    (s.sleepHours ?? "") !== (baseline?.sleep_hours?.toString() ?? "") ||
+    (s.stress ?? null) !== (baseline?.stress_score ?? null) ||
+    (s.soreness ?? null) !== (baseline?.soreness_score ?? null) ||
+    (s.cyclePhase ?? null) !== (baseline?.cycle_phase ?? null)
   );
 }
 

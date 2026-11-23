@@ -58,6 +58,7 @@ export const PARTS = [
   "0112_reels_images",
   "0113_retention",
   "0114_win_back",
+  "0115_checkin_sleep_stress_soreness_cycle",
 ];
 
 /**

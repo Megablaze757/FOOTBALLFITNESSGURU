@@ -24,9 +24,26 @@ import { todayLocal } from "@/lib/day";
  * the installed PWA, so this costs the web build one function call — the plugin
  * behind it is never even resolved.
  */
-export function AppleHealthPill({ onSleep }: {
-  /** Sleep hours mapped onto the 1-10 quality scale the check-in uses. */
+export function AppleHealthPill({ onSleep, onSleepHours }: {
+  /**
+   * Sleep hours mapped onto the 1-10 quality scale, as a STARTING POINT.
+   *
+   * A watch cannot answer "how did you sleep?" — it answers how long. The
+   * estimate below is still better informed than the fixed 7 the tap scale
+   * would otherwise open on, and the athlete can override it with one tap, so
+   * it is seeded rather than dropped.
+   */
   onSleep: (quality: number) => void;
+  /**
+   * The hours themselves, which the watch does know exactly.
+   *
+   * Added with migration 0115. Before it there was nowhere on the check-in to
+   * put a duration, so the only thing done with HealthKit's figure was the
+   * quality estimate above — eight broken hours and four good ones arrived at
+   * the readiness engine as the same number. Now the measurement goes in as a
+   * measurement and the estimate stays an estimate.
+   */
+  onSleepHours?: (hours: number) => void;
 }) {
   const [show, setShow] = useState(false);
   const [state, setState] = useState<"idle" | "reading" | "done" | "none">("idle");
@@ -52,8 +69,15 @@ export function AppleHealthPill({ onSleep }: {
     }
 
     if (row.sleepHours != null) {
+      // The exact figure first, because it is the one HealthKit actually
+      // measured. One decimal: the check-in's own field is step 0.5 and nobody
+      // reads their sleep to the second.
+      onSleepHours?.(Math.round(row.sleepHours * 10) / 10);
+
       // 8h+ is a 10, 4h is a 3, linear between — the same shape as the tap
-      // scale's own labels, so importing and tapping agree.
+      // scale's own labels, so importing and tapping agree. A SEED, not a
+      // measurement: it is how long they slept, dressed up as how well, and
+      // the only defence of it is that the alternative default is a flat 7.
       const q = Math.max(1, Math.min(10, Math.round((row.sleepHours / 8) * 10)));
       onSleep(q);
     }

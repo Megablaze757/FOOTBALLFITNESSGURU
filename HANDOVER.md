@@ -602,7 +602,7 @@ deploy it yet.
    defaults to `dark-beat` on both entry points; `music: none` turns it off.
 
 Migrations 0113 and 0114 are written and **not applied**. Both are in
-`supabase/apply-0088-0114.sql`, which is safe to run twice — Actions -> "Apply
+`supabase/apply-0088-0115.sql`, which is safe to run twice — Actions -> "Apply
 SQL to Supabase" -> Run workflow, or paste it into the SQL editor. That file was
 also carrying 0111 as its last migration while three had landed past it, so
 anybody who ran it since 0112 got a paste that stopped short; it is generated

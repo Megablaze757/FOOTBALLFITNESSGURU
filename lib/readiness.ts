@@ -9,9 +9,85 @@
 // =============================================================================
 
 import type { CheckInInput, PainMap, ReadinessResult, ReadinessStatus } from "./types";
+import { cycleNote, isCyclePhase } from "./cycle";
 
 const PAIN_HARD_LIMIT = 7; // any joint at/above this forces Red
-const SLEEP_HARD_LIMIT = 3; // sleep at/below this forces Red
+const SLEEP_HARD_LIMIT = 3; // sleep QUALITY at/below this forces Red
+
+/**
+ * Hours slept below which nothing else matters, when hours were asked.
+ *
+ * The comment on the biometric adjustment below already names this case — "no
+ * amount of good HRV outranks a knee at 8/10 or three hours' sleep" — and
+ * until migration 0115 the app had no way to know about the three hours. Sleep
+ * QUALITY was the only sleep signal, and somebody can rate four hours of
+ * uninterrupted sleep as 8/10 quite reasonably.
+ *
+ * Four rather than three, because this is hours and SLEEP_HARD_LIMIT is a
+ * ten-point rating; they are different scales and the old number is not
+ * transferable. Under four hours is where the research on next-day injury risk
+ * and reaction time stops being ambiguous, and it is low enough that an
+ * athlete who answers it is telling you something went wrong.
+ */
+const SLEEP_HOURS_HARD_LIMIT = 4;
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE WEIGHTS, AND WHY THEY RENORMALISE RATHER THAN BEING FIXED.
+ *
+ * The first four have been these numbers since this file was written, and the
+ * score an athlete sees is tuned against them. Migration 0115 adds three more
+ * answers — hours of sleep, stress and soreness — and only hours is in the
+ * check-in's quick mode, so MOST ROWS WILL HAVE THE OTHER TWO NULL.
+ *
+ * A fixed set of weights would make a missing answer a bad answer, or force a
+ * default that makes "not asked" look like "answered 5". Either one silently
+ * re-scores every quick check-in in the app's history.
+ *
+ * So the weights divide by the weight actually present. A row with none of the
+ * new answers scores EXACTLY what it scored before this change — there is a
+ * test that pins it against hand-computed numbers — and each answer given
+ * takes its share and shrinks the others proportionally.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+const WEIGHTS = {
+  pain: 0.35,
+  sleepQuality: 0.3,
+  fatigue: 0.25,
+  nutrition: 0.1,
+  /** Only counted when answered. */
+  sleepHours: 0.15,
+  soreness: 0.2,
+  stress: 0.1,
+} as const;
+
+/**
+ * Hours slept, as a 0-1 "good" scale.
+ *
+ * NOT LINEAR, because sleep is not: the gap between five and seven hours
+ * matters far more than the gap between eight and ten, and treating twelve
+ * hours as better than nine would reward oversleeping. Eight is full marks,
+ * and everything above it is also full marks.
+ */
+/**
+ * A number, or null for anything that is not one.
+ *
+ * PostgREST hands numerics back as numbers, but a null column, an empty form
+ * field and a string from a hand-rolled fetch all reach here, and NaN would
+ * propagate: `NaN < 4` is false, so a corrupt hours value would silently skip
+ * the hard limit rather than trip it. Null means not answered, and not
+ * answered means the factor is left out entirely.
+ */
+function numberOrNull(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function sleepHoursGood(hours: number): number {
+  const h = Math.max(0, Math.min(24, hours));
+  return Math.max(0, Math.min(1, h / 8));
+}
 
 // Acute:chronic workload thresholds, matching lib/load.ts. Kept here rather
 // than imported so this module stays dependency-free and portable to the Edge
@@ -115,12 +191,35 @@ export function assessReadiness(input: CheckInInput, load?: LoadContext): Readin
   const nutritionGood = (nutrition - 1) / 9;
   const painGood = 1 - Math.min(pain.value, 10) / 10;
 
-  // Weights — pain and sleep dominate recovery readiness.
-  const score01 =
-    0.35 * painGood +
-    0.3 * sleepGood +
-    0.25 * fatigueGood +
-    0.1 * nutritionGood;
+  /**
+   * Weights — pain and sleep dominate recovery readiness — divided by the
+   * weight actually present, so an unanswered question costs nothing. See the
+   * note on WEIGHTS: most check-ins come from quick mode and will have the
+   * 0115 answers null.
+   */
+  const parts: { weight: number; good: number }[] = [
+    { weight: WEIGHTS.pain, good: painGood },
+    { weight: WEIGHTS.sleepQuality, good: sleepGood },
+    { weight: WEIGHTS.fatigue, good: fatigueGood },
+    { weight: WEIGHTS.nutrition, good: nutritionGood },
+  ];
+
+  const sleepHours = numberOrNull(input.sleep_hours);
+  if (sleepHours != null) {
+    parts.push({ weight: WEIGHTS.sleepHours, good: sleepHoursGood(sleepHours) });
+  }
+  const soreness = numberOrNull(input.soreness_score);
+  if (soreness != null) {
+    // Higher is worse, like fatigue and pain.
+    parts.push({ weight: WEIGHTS.soreness, good: (10 - clamp1to10(soreness)) / 9 });
+  }
+  const stress = numberOrNull(input.stress_score);
+  if (stress != null) {
+    parts.push({ weight: WEIGHTS.stress, good: (10 - clamp1to10(stress)) / 9 });
+  }
+
+  const totalWeight = parts.reduce((t, f) => t + f.weight, 0);
+  const score01 = parts.reduce((t, f) => t + f.weight * f.good, 0) / totalWeight;
   /**
    * The wearable moves the NUMBER, and the number decides the band.
    *
@@ -133,7 +232,12 @@ export function assessReadiness(input: CheckInInput, load?: LoadContext): Readin
   const score = Math.max(0, Math.min(100, Math.round(score01 * 100) + adjustment));
 
   let status: ReadinessStatus;
-  if (pain.value >= PAIN_HARD_LIMIT || sleep <= SLEEP_HARD_LIMIT) {
+  if (
+    pain.value >= PAIN_HARD_LIMIT
+    || sleep <= SLEEP_HARD_LIMIT
+    // Only when hours were actually answered. A null is not a short night.
+    || (sleepHours != null && sleepHours < SLEEP_HOURS_HARD_LIMIT)
+  ) {
     status = "Red";
   } else if (score >= 70) {
     status = "Green";
@@ -152,16 +256,40 @@ export function assessReadiness(input: CheckInInput, load?: LoadContext): Readin
   const spiking = acwr != null && acwr > ACWR_SPIKE;
   if (spiking && status === "Green") status = "Yellow";
 
+  const advice = buildAdvice(status, {
+    sleep, fatigue, pain, focus, acwr,
+    trainedToday: load?.trainedToday === true,
+    // Only when it COST them something. "HRV is 14% above your norm" as the
+    // opening line of a Red day reads as the app not having read the room.
+    biometricNote: adjustment < 0 ? load?.biometric?.note ?? null : null,
+  });
+
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * THE CYCLE PHASE GOES HERE AND NOWHERE ELSE.
+   *
+   * Appended to the advice, after the verdict has been reached. It is not in
+   * `parts` above, it does not touch `status`, and there is a test that the
+   * score is byte-identical with and without it.
+   *
+   * See lib/cycle.ts for why: individual response across a cycle varies
+   * enough that a blanket penalty would be this project inventing a
+   * physiological law and taking points off somebody with it. Context next
+   * to the advice lets a heavier day read as a heavier day; a silent
+   * subtraction just makes the number untrustworthy.
+   *
+   * LAST, not first. The biometric note leads because it disputes the
+   * verdict. This does not dispute anything — it is a frame for what the
+   * athlete is already feeling, and it reads as an afterthought because that
+   * is honestly what it is.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  const cycle = isCyclePhase(input.cycle_phase) ? cycleNote(input.cycle_phase) : null;
+
   return {
     status,
     score,
-    advice: buildAdvice(status, {
-      sleep, fatigue, pain, focus, acwr,
-      trainedToday: load?.trainedToday === true,
-      // Only when it COST them something. "HRV is 14% above your norm" as the
-      // opening line of a Red day reads as the app not having read the room.
-      biometricNote: adjustment < 0 ? load?.biometric?.note ?? null : null,
-    }),
+    advice: cycle ? `${advice} ${cycle}` : advice,
     focus_body_part: focus,
   };
 }

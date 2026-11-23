@@ -343,7 +343,7 @@ export default function JournalPage() {
               🩹 {data.rehabNote}
             </p>
           )}
-          <JournalForm initial={initial} initialTraining={initialTraining} sport={data?.sport} distanceUnit={data?.distanceUnit ?? "km"} planned={data?.planned ?? []} history={data?.drillHistory ?? []} />
+          <JournalForm initial={initial} initialTraining={initialTraining} sport={data?.sport} sex={data?.sex ?? null} distanceUnit={data?.distanceUnit ?? "km"} planned={data?.planned ?? []} history={data?.drillHistory ?? []} />
         </div>
       )}
 

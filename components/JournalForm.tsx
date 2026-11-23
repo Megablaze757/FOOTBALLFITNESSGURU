@@ -8,6 +8,8 @@ import { createClient } from "@/lib/supabase/client";
 import { sportTerms } from "@/lib/sport-terms";
 import { SPORTS, type SportId } from "@/lib/exercises";
 import { assessReadiness } from "@/lib/readiness";
+import { CYCLE_PHASES, CYCLE_PHASE_LABELS, shouldOfferCycle, type CyclePhase } from "@/lib/cycle";
+import { upsertWithOptional } from "@/lib/profile-columns";
 import { computeACWR, hasTrainingContent } from "@/lib/load";
 import { BodyMap } from "@/components/BodyMap";
 import { AppleHealthPill } from "@/components/AppleHealthPill";
@@ -56,6 +58,14 @@ interface DraftShape {
   logTraining?: boolean;
   /** Weight field opened, even if nothing was typed into it yet. */
   weighing?: boolean;
+  // --- 0115's answers ------------------------------------------------------
+  /** Hours slept, as typed or tapped. "" is not answered, which is normal. */
+  sleepHours?: string;
+  stress?: number | null;
+  soreness?: number | null;
+  cyclePhase?: string | null;
+  /** "Not today" on the cycle question. Per-day, because the draft is. */
+  cycleHidden?: boolean;
 }
 import type { CheckInInput, PainMap, ReadinessResult, TrainingDrill, TrainingLog } from "@/lib/types";
 import { daysAgoLocal, todayLocal } from "@/lib/day";
@@ -75,10 +85,16 @@ function isOffline(err: { message?: string; code?: string } | null): boolean {
          m.includes("network request failed") || m.includes("load failed");
 }
 
-export function JournalForm({ initial, initialTraining, sport, distanceUnit = "km", planned = [], history = [] }: {
+export function JournalForm({ initial, initialTraining, sport, sex = null, distanceUnit = "km", planned = [], history = [] }: {
   initial?: Partial<CheckInInput>;
   initialTraining?: TrainingState;
   sport?: string;
+  /**
+   * From the profile, and the only thing that decides whether the cycle
+   * question is offered. Null means not recorded, which is a no — see
+   * lib/cycle.ts on why this is never inferred from anything else.
+   */
+  sex?: "male" | "female" | null;
   distanceUnit?: "km" | "mi";
   planned?: TrainingDrill[];
   /** Recent sessions, so a drill can be pre-filled with what it really was. */
@@ -97,12 +113,49 @@ export function JournalForm({ initial, initialTraining, sport, distanceUnit = "k
   const [weight, setWeight] = useState<string>(initial?.weight_kg?.toString() ?? "");
   const [isMatchDay, setIsMatchDay] = useState(initial?.is_match_day ?? false);
   const [minutes, setMinutes] = useState<string>(initial?.match_minutes_played?.toString() ?? "0");
+  /**
+   * 0115'S ANSWERS, AND WHY NONE OF THEM HAS A DEFAULT.
+   *
+   * The three sliders above open at 5, 7 and 6 because they are always shown
+   * and always submitted. These four are not: hours is one tap in quick mode
+   * and the other three are in the full form, so most check-ins leave them
+   * alone. An opening value would be indistinguishable from an answer, and
+   * lib/readiness.ts renormalises its weights over the answers actually
+   * present — a fabricated middling one would drag every score to the middle.
+   *
+   * So hours is a string ("" is unanswered, which also keeps a half-typed "1"
+   * from reading as one hour's sleep) and the rest are null.
+   */
+  const [sleepHours, setSleepHours] = useState<string>(initial?.sleep_hours?.toString() ?? "");
+  const [stress, setStress] = useState<number | null>(initial?.stress_score ?? null);
+  const [soreness, setSoreness] = useState<number | null>(initial?.soreness_score ?? null);
+  const [cyclePhase, setCyclePhase] = useState<string | null>(initial?.cycle_phase ?? null);
+  /**
+   * "Not today" on the cycle section, remembered for the rest of the day.
+   *
+   * In the draft rather than in a preference, deliberately: the draft is keyed
+   * by date, so dismissing it is a statement about today and nothing more. A
+   * remembered preference would be the full-mode mistake again — a per-day
+   * action quietly turned into a permanent setting, which the long note above
+   * on `detailed` is about.
+   */
+  const [cycleHidden, setCycleHidden] = useState(false);
+
   const [training, setTraining] = useState<TrainingState>(initialTraining ?? { drills: [], total_minutes: null, intensity: null, session_type: "workout", distance_unit: distanceUnit });
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ReadinessResult | null>(null);
   const [queued, setQueued] = useState(false);
+  /**
+   * Answers the database refused because its migration has not been applied.
+   *
+   * Said out loud rather than swallowed. The alternative is an athlete typing
+   * their sleep in every morning and finding none of it on Progress, with
+   * nothing anywhere explaining why — which is how the unmigrated profile
+   * columns in lib/profile-columns.ts went unnoticed for weeks.
+   */
+  const [dropped, setDropped] = useState<string[]>([]);
   const [restored, setRestored] = useState<string | null>(null);
 
   /**
@@ -314,6 +367,11 @@ export function JournalForm({ initial, initialTraining, sport, distanceUnit = "k
     setDetailed(draft.detailed ?? false);
     setSore(draft.sore ?? (Object.keys(draft.painMap ?? {}).length > 0 ? true : null));
     setWeighing(draft.weighing ?? false);
+    setSleepHours(draft.sleepHours ?? "");
+    setStress(draft.stress ?? null);
+    setSoreness(draft.soreness ?? null);
+    setCyclePhase(draft.cyclePhase ?? null);
+    setCycleHidden(draft.cycleHidden ?? false);
     setLogTraining(
       draft.logTraining ??
         (draft.training?.session_type !== "rest_day" && ((draft.training?.drills?.length ?? 0) > 0 || draft.training?.total_minutes != null)),
@@ -361,6 +419,7 @@ export function JournalForm({ initial, initialTraining, sport, distanceUnit = "k
   draftRef.current = {
     painMap, fatigue, sleep, nutrition, weight, isMatchDay, minutes, training,
     detailed, sore, logTraining, weighing,
+    sleepHours, stress, soreness, cyclePhase, cycleHidden,
   };
 
   /**
@@ -369,7 +428,8 @@ export function JournalForm({ initial, initialTraining, sport, distanceUnit = "k
    * silently not kept, which is the exact failure this whole thing is for.
    */
   const dirty = checkInIsDirty(
-    { painMap, fatigue, sleep, nutrition, weight, isMatchDay, sore, training },
+    { painMap, fatigue, sleep, nutrition, weight, isMatchDay, sore, training,
+      sleepHours, stress, soreness, cyclePhase },
     initial,
   );
 
@@ -407,7 +467,8 @@ export function JournalForm({ initial, initialTraining, sport, distanceUnit = "k
     const t = setTimeout(flushDraft, 400);
     return () => clearTimeout(t);
   }, [painMap, fatigue, sleep, nutrition, weight, isMatchDay, minutes, training,
-      detailed, sore, logTraining, weighing, result, flushDraft]);
+      detailed, sore, logTraining, weighing, result, flushDraft,
+      sleepHours, stress, soreness, cyclePhase, cycleHidden]);
 
   /**
    * WRITE IT DOWN BEFORE THE APP GOES AWAY.
@@ -459,7 +520,23 @@ export function JournalForm({ initial, initialTraining, sport, distanceUnit = "k
       return;
     }
 
-    const input: CheckInInput = {
+    /**
+     * 0115's answers, kept apart from the settled ones all the way to the
+     * write. Not for tidiness: a column the database has not got yet rejects
+     * the whole row, and these four are the ones it might not have. See
+     * upsertWithOptional — the check-in has to save either way.
+     *
+     * An unanswered question is null, never 0 and never a middling guess.
+     */
+    const fresh = {
+      sleep_hours: sleepHours === "" ? null : Number(sleepHours),
+      stress_score: stress,
+      soreness_score: soreness,
+      cycle_phase: cyclePhase,
+    };
+
+    /** The columns that have been there since 0001. */
+    const stable = {
       pain_map: painMap,
       fatigue_score: fatigue,
       sleep_quality: sleep,
@@ -468,6 +545,8 @@ export function JournalForm({ initial, initialTraining, sport, distanceUnit = "k
       is_match_day: isMatchDay,
       match_minutes_played: isMatchDay ? Number(minutes) || 0 : 0,
     };
+
+    const input: CheckInInput = { ...stable, ...fresh };
 
     const cleanDrills = training.drills.filter((d) => d.name.trim());
     // The run_type case came from origin: someone who picks "Recovery run" and
@@ -515,12 +594,31 @@ export function JournalForm({ initial, initialTraining, sport, distanceUnit = "k
         }
       : null;
 
-    const { error: dbError } = await supabase
-      .from("daily_check_ins")
-      .upsert(
-        { user_id: user.id, check_in_date: today, ...input },
-        { onConflict: "user_id,check_in_date" }
-      );
+    /**
+     * THE NEW COLUMNS CANNOT BE ALLOWED TO LOSE THE CHECK-IN.
+     *
+     * `{ ...input }` names every column, and PostgREST rejects the statement
+     * whole if the database has not got one of them — so a site deployed
+     * before supabase/apply-0088-0115.sql is run would tell every athlete
+     * their entry could not be saved, binning the pain map and the sleep
+     * rating over four answers that are nobody's reason for being here.
+     *
+     * The site deploys on a push and the SQL is applied by hand, so that
+     * window is real rather than theoretical. The readiness score below is
+     * computed from `input` either way, so even in the window the athlete sees
+     * the answer their answers earned — it is only the keeping that waits.
+     */
+    const { error: dbError, missing } = await upsertWithOptional(
+      supabase,
+      "daily_check_ins",
+      { user_id: user.id, check_in_date: today, ...stable },
+      fresh,
+      { onConflict: "user_id,check_in_date" }
+    );
+
+    // Only worth mentioning if they actually answered one of them: a quick
+    // check-in that skipped all four has lost nothing.
+    setDropped(missing.filter((c) => (fresh as Record<string, unknown>)[c] != null));
 
     if (dbError) {
       // A gym in a basement has no signal, and losing the entry is the worst
@@ -605,6 +703,13 @@ export function JournalForm({ initial, initialTraining, sport, distanceUnit = "k
           <p className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-left text-xs text-slate-400">
             📡 You&apos;re offline — today&apos;s log is saved on your phone and will upload
             automatically when you&apos;re back on signal. Your streak is safe.
+          </p>
+        )}
+        {dropped.length > 0 && (
+          <p className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-left text-xs text-slate-400">
+            Today&apos;s entry saved, but {dropped.length === 1 ? "one answer" : `${dropped.length} answers`} could
+            not be kept: this app is ahead of its database. Your score above used them. Apply the
+            outstanding migration and they will store from then on.
           </p>
         )}
         <p className="rounded-2xl bg-white/[0.04] p-4 text-left text-sm text-slate-200">{result.advice}</p>
@@ -700,7 +805,7 @@ export function JournalForm({ initial, initialTraining, sport, distanceUnit = "k
             {/* iOS only — renders nothing on the web. It sits above the sleep
                 question because it answers it, and a watch remembers last night
                 better than anyone does at 6am. */}
-            <AppleHealthPill onSleep={setSleep} />
+            <AppleHealthPill onSleep={setSleep} onSleepHours={(h) => setSleepHours(String(h))} />
             <TapScale
               label="How did you sleep?"
               value={sleep}
@@ -713,6 +818,13 @@ export function JournalForm({ initial, initialTraining, sport, distanceUnit = "k
                 { emoji: "🤩", label: "Great", value: 10 },
               ]}
             />
+            {/* Under "How did you sleep?" because it is the same question
+                asked the other way, and the pair is what makes either useful:
+                eight broken hours and four good ones are different nights and
+                sleep_quality alone cannot tell them apart. The only one of
+                0115's four answers in quick mode — see lib/cycle.ts and the
+                state block above on why the rest are not. */}
+            <SleepHoursScale value={sleepHours} onChange={setSleepHours} />
             <TapScale
               label="How does the body feel?"
               value={fatigue}
@@ -905,6 +1017,48 @@ export function JournalForm({ initial, initialTraining, sport, distanceUnit = "k
         <MetricSlider label="Sleep quality" hint="1 poor · 10 great" value={sleep} onChange={setSleep} />
         <MetricSlider label="Nutrition" hint="1 poor · 10 great" value={nutrition} onChange={setNutrition} />
 
+        {/* ─── 0115's answers ────────────────────────────────────────────────
+            Hours sits with the sliders because it belongs next to sleep
+            quality. Stress and soreness are optional controls rather than two
+            more sliders: a slider shown is a slider answered, and these are
+            questions most people will skip. See OptionalMetric. */}
+        <label className="block">
+          <span className="field-label">Hours slept</span>
+          <input
+            type="number" min={0} max={24} step={0.5} inputMode="decimal"
+            value={sleepHours}
+            onChange={(e) => setSleepHours(e.target.value)}
+            placeholder="optional, e.g. 7.5"
+            className="field"
+          />
+        </label>
+
+        <OptionalMetric
+          label="Soreness"
+          hint="1 not sore · 10 very sore"
+          add="Add soreness"
+          value={soreness}
+          onChange={setSoreness}
+        />
+        <OptionalMetric
+          label="Stress"
+          hint="1 calm · 10 overwhelmed"
+          add="Add stress"
+          value={stress}
+          onChange={setStress}
+        />
+
+        {/* Shown on a profile that records sex as female, and on no other —
+            lib/cycle.ts explains why this is never inferred from anything
+            else, and why a dismissal has to be possible. */}
+        {shouldOfferCycle(sex) && !cycleHidden && (
+          <CycleSection
+            value={cyclePhase}
+            onChange={setCyclePhase}
+            onDismiss={() => { setCyclePhase(null); setCycleHidden(true); }}
+          />
+        )}
+
         <label className="block">
           <span className="field-label">Weight (kg)</span>
           <input type="number" step="0.1" inputMode="decimal" value={weight} onChange={(e) => setWeight(e.target.value)} placeholder="optional" className="field" />
@@ -1055,5 +1209,199 @@ function MetricSlider({ label, hint, value, onChange }: { label: string; hint: s
         <span className="w-7 rounded-lg bg-white/[0.06] py-1 text-center text-sm font-bold tabular-nums text-accent-400">{value}</span>
       </div>
     </label>
+  );
+}
+
+/**
+ * HOURS SLEPT, AS ONE TAP, WITH AN EXACT FIELD FOR THE NIGHTS THAT NEED IT.
+ *
+ * Quick mode exists to be a ten-second habit, so this is a row of buttons and
+ * not a number pad. But a bucket has to store a number, and a bucket labelled
+ * "4 or less" storing 4 would quietly erase the difference between a short
+ * night and no sleep at all — which is the one case lib/readiness.ts has a hard
+ * limit for. Under-reporting the worst night is the opposite of what the
+ * question is for.
+ *
+ * So the bottom cell does not guess: it opens the exact field. One extra tap on
+ * a bad night, and bad nights are the ones worth being exact about. "9+" stores
+ * 9, which is a fair representative — sleepHoursGood() is already at full marks
+ * by 8, so the difference between 9 and 10 moves nothing.
+ *
+ * TAPPING THE SELECTED CELL AGAIN CLEARS IT. A question with no default must be
+ * clearable, or a mis-tap becomes an answer the athlete cannot take back.
+ */
+function SleepHoursScale({ value, onChange }: {
+  /** "" is unanswered, which is a normal and common state. */
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const buckets = [5, 6, 7, 8, 9];
+  // Open if they asked for it, or if what is stored cannot be shown as a cell.
+  const stored = value === "" ? null : Number(value);
+  const [exact, setExact] = useState(stored != null && !buckets.includes(stored));
+
+  return (
+    <div>
+      <span className="field-label">How many hours did you sleep?</span>
+      <div className="grid grid-cols-6 gap-1.5">
+        <button
+          type="button"
+          aria-pressed={exact}
+          onClick={() => setExact((open) => !open)}
+          className={`min-h-[44px] flex flex-col items-center justify-center gap-0.5 rounded-2xl border px-1 py-2.5 transition ${
+            exact ? "border-pitch-400/50 bg-pitch-400/10" : "border-white/10 bg-white/[0.03] hover:border-white/20"
+          }`}
+        >
+          <span className="text-base font-bold leading-none text-slate-200">&lt;5</span>
+          <span className={`text-[10px] font-medium leading-tight ${exact ? "text-accent-400" : "text-slate-400"}`}>exact</span>
+        </button>
+        {buckets.map((h) => {
+          const active = !exact && stored === h;
+          return (
+            <button
+              key={h}
+              type="button"
+              aria-pressed={active}
+              onClick={() => { setExact(false); onChange(active ? "" : String(h)); }}
+              className={`min-h-[44px] flex flex-col items-center justify-center gap-0.5 rounded-2xl border px-1 py-2.5 transition ${
+                active ? "border-pitch-400/50 bg-pitch-400/10" : "border-white/10 bg-white/[0.03] hover:border-white/20"
+              }`}
+            >
+              <span className="text-base font-bold leading-none text-slate-200">{h === 9 ? "9+" : h}</span>
+              <span className={`text-[10px] font-medium leading-tight ${active ? "text-accent-400" : "text-slate-400"}`}>
+                {h === 9 ? "hrs" : "hrs"}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      {exact && (
+        <input
+          type="number" min={0} max={24} step={0.5} inputMode="decimal"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="hours, e.g. 3.5"
+          aria-label="Hours slept"
+          className="field mt-2"
+          autoFocus
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * A 1-10 slider that can honestly be unanswered.
+ *
+ * MetricSlider cannot do this job: a range input always has a thumb somewhere,
+ * so showing one is itself an answer. Stress and soreness are optional — most
+ * check-ins will not touch them, and lib/readiness.ts renormalises its weights
+ * precisely so that costs nothing — which means the control has to have a state
+ * that reads as "not asked" and a way back to it.
+ */
+function OptionalMetric({ label, hint, value, onChange, add }: {
+  label: string;
+  hint: string;
+  value: number | null;
+  onChange: (v: number | null) => void;
+  /** What the button says before there is an answer. */
+  add: string;
+}) {
+  if (value == null) {
+    return (
+      <button
+        type="button"
+        onClick={() => onChange(5)}
+        className="tap-target flex w-full items-center justify-between rounded-2xl border border-dashed border-white/10 px-4 py-3 text-left transition hover:border-white/25"
+      >
+        <span className="text-sm font-medium text-slate-300">{label}</span>
+        <span className="text-xs font-semibold text-accent-400">+ {add}</span>
+      </button>
+    );
+  }
+  return (
+    <div className="block">
+      <div className="mb-2 flex items-baseline justify-between gap-2">
+        <span className="text-sm font-medium text-slate-200">{label}</span>
+        <span className="text-xs text-slate-500">{hint}</span>
+        <button
+          type="button"
+          onClick={() => onChange(null)}
+          className="tap-target text-xs font-semibold text-slate-500 hover:text-accent-400"
+        >
+          Clear
+        </button>
+      </div>
+      <div className="flex items-center gap-3">
+        <input
+          type="range" min={1} max={10} value={value}
+          aria-label={label}
+          onChange={(e) => onChange(Number(e.target.value))}
+          className="w-full"
+        />
+        <span className="w-7 rounded-lg bg-white/[0.06] py-1 text-center text-sm font-bold tabular-nums text-accent-400">{value}</span>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * THE CYCLE QUESTION. OFFERED, NEVER REQUIRED.
+ *
+ * lib/cycle.ts holds the reasoning — who is asked, why the phase informs the
+ * advice and never the score, and why "prefer not to say" is a real answer
+ * rather than an empty one. This renders it and adds nothing of its own.
+ *
+ * Three things here are the product of that reasoning rather than of layout:
+ * nothing is pre-selected, the selected phase can be unselected by tapping it
+ * again, and "Not today" removes the section for the rest of the day. An
+ * optional question that cannot be dismissed is not optional.
+ */
+function CycleSection({ value, onChange, onDismiss }: {
+  value: string | null;
+  onChange: (v: string | null) => void;
+  onDismiss: () => void;
+}) {
+  const note = CYCLE_PHASES.includes(value as CyclePhase)
+    ? CYCLE_PHASE_LABELS[value as CyclePhase].note
+    : null;
+
+  return (
+    <div className="rounded-2xl bg-white/[0.03] p-4">
+      <div className="mb-2 flex items-baseline justify-between gap-2">
+        <span className="field-label !mb-0">Cycle phase</span>
+        <button
+          type="button"
+          onClick={onDismiss}
+          className="tap-target text-xs font-semibold text-slate-500 hover:text-accent-400"
+        >
+          Not today
+        </button>
+      </div>
+      <p className="mb-3 text-xs text-slate-400">
+        Optional, and it never changes your score — it just lets the advice take it into account.
+      </p>
+      <div className="grid grid-cols-4 gap-1.5">
+        {CYCLE_PHASES.map((phase) => {
+          const active = value === phase;
+          return (
+            <button
+              key={phase}
+              type="button"
+              aria-pressed={active}
+              onClick={() => onChange(active ? null : phase)}
+              className={`min-h-[44px] rounded-2xl border px-1 py-2.5 text-[11px] font-semibold leading-tight transition ${
+                active
+                  ? "border-pitch-400/50 bg-pitch-400/10 text-accent-400"
+                  : "border-white/10 bg-white/[0.03] text-slate-300 hover:border-white/20"
+              }`}
+            >
+              {CYCLE_PHASE_LABELS[phase].label}
+            </button>
+          );
+        })}
+      </div>
+      {note && <p className="mt-3 text-xs text-slate-400">{note}</p>}
+    </div>
   );
 }
