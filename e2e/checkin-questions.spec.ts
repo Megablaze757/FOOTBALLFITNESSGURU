@@ -1,4 +1,5 @@
-import { test, expect, type Page, type Route } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
+import { SUPABASE, USER_ID, CONSENTED, signIn, stubSupabase, dismissInstallPrompt } from "./harness";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -39,76 +40,16 @@ import { test, expect, type Page, type Route } from "@playwright/test";
  * ═══════════════════════════════════════════════════════════════════════════
  */
 
-const SUPABASE = "https://example.supabase.co";
-const USER_ID = "00000000-0000-4000-8000-000000000001";
-
-/** An athlete who has consented, with sex recorded. See the note above. */
-const PROFILE = {
-  id: USER_ID,
-  health_data_consent_at: "2026-01-01T00:00:00Z",
-  sex: "female",
-  sport: "football",
-  distance_unit: "km",
-  created_at: "2026-01-01T00:00:00Z",
-};
-
-async function signIn(page: Page) {
-  const session = {
-    access_token: "stub.access.token",
-    refresh_token: "stub-refresh",
-    token_type: "bearer",
-    expires_at: Math.floor(Date.now() / 1000) + 60 * 60 * 24,
-    expires_in: 60 * 60 * 24,
-    user: {
-      id: USER_ID, aud: "authenticated", role: "authenticated",
-      email: "e2e@example.com", created_at: "2026-08-01T00:00:00Z",
-      app_metadata: {}, user_metadata: {},
-    },
-  };
-  await page.addInitScript(
-    ([k, v]) => window.localStorage.setItem(k as string, v as string),
-    ["sb-example-auth-token", JSON.stringify(session)] as const,
-  );
-}
-
 /** Every write to daily_check_ins, in order, as the browser sent it. */
 type Sent = Record<string, unknown>[];
 
 async function stub(page: Page): Promise<Sent> {
   const sent: Sent = [];
-  await page.route(`${SUPABASE}/**`, async (route: Route) => {
-    const url = new URL(route.request().url());
-    const method = route.request().method();
-
-    if (url.pathname.startsWith("/auth/v1/user")) {
-      return route.fulfill({
-        status: 200, contentType: "application/json",
-        body: JSON.stringify({ id: USER_ID, email: "e2e@example.com", aud: "authenticated" }),
-      });
-    }
-    if (url.pathname.startsWith("/auth/v1/")) {
-      return route.fulfill({ status: 200, contentType: "application/json", body: "{}" });
-    }
-
-    const table = url.pathname.replace(/^\/rest\/v1\//, "").split("?")[0];
-
-    if (table === "daily_check_ins" && method === "POST") {
-      try {
-        const body = JSON.parse(route.request().postData() ?? "{}");
-        sent.push(...(Array.isArray(body) ? body : [body]));
-      } catch { /* recorded as nothing, which the assertions will show */ }
-      return route.fulfill({ status: 201, contentType: "application/json", body: "[]" });
-    }
-
-    const rows = table === "profiles" ? [PROFILE] : [];
-    const wantsOne = (route.request().headers()["accept"] ?? "").includes("object");
-    if (wantsOne) {
-      const one = rows[0];
-      return one === undefined
-        ? route.fulfill({ status: 406, contentType: "application/json", body: JSON.stringify({ message: "no rows" }) })
-        : route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(one) });
-    }
-    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(rows) });
+  await stubSupabase(page, {
+    rows: { profiles: [CONSENTED] },
+    // The point of this file: assert on the JSON the browser sends, because
+    // that is the only thing deciding whether an answer was recorded.
+    capture: { daily_check_ins: sent },
   });
   return sent;
 }
@@ -122,22 +63,6 @@ async function openCheckIn(page: Page) {
   await expect(page.getByText("How many hours did you sleep?")).toBeVisible({ timeout: 15_000 });
   await dismissInstallPrompt(page);
   return sent;
-}
-
-/**
- * The "Add PocketAthlete to your home screen" card sits over the bottom of the
- * form and swallows clicks meant for it.
- *
- * Dismissing it is what an athlete does, so the test does it too rather than
- * clicking through it with force: a forced click proves a button can be
- * dispatched at, not that somebody could press it. If this card ever covered a
- * control that could not be dismissed, that would be a real bug and forcing
- * the click is exactly what would hide it.
- */
-async function dismissInstallPrompt(page: Page) {
-  const notNow = page.getByRole("button", { name: "Not now" });
-  if (await notNow.count()) await notNow.first().click();
-  await expect(notNow).toHaveCount(0);
 }
 
 async function save(page: Page) {
@@ -225,28 +150,7 @@ test("the cycle question is offered here, and can be dismissed for the day", asy
 
 test("a male profile is never shown the cycle question", async ({ page }) => {
   await signIn(page);
-  await page.route(`${SUPABASE}/**`, async (route: Route) => {
-    const url = new URL(route.request().url());
-    if (url.pathname.startsWith("/auth/v1/user")) {
-      return route.fulfill({
-        status: 200, contentType: "application/json",
-        body: JSON.stringify({ id: USER_ID, email: "e2e@example.com", aud: "authenticated" }),
-      });
-    }
-    if (url.pathname.startsWith("/auth/v1/")) {
-      return route.fulfill({ status: 200, contentType: "application/json", body: "{}" });
-    }
-    const table = url.pathname.replace(/^\/rest\/v1\//, "").split("?")[0];
-    const rows = table === "profiles" ? [{ ...PROFILE, sex: "male" }] : [];
-    const wantsOne = (route.request().headers()["accept"] ?? "").includes("object");
-    if (wantsOne) {
-      const one = rows[0];
-      return one === undefined
-        ? route.fulfill({ status: 406, contentType: "application/json", body: JSON.stringify({ message: "no rows" }) })
-        : route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(one) });
-    }
-    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(rows) });
-  });
+  await stubSupabase(page, { rows: { profiles: [{ ...CONSENTED, sex: "male" }] } });
 
   await page.goto("/journal/", { waitUntil: "networkidle" });
   await expect(page.getByText("How many hours did you sleep?")).toBeVisible({ timeout: 15_000 });

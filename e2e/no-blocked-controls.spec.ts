@@ -1,4 +1,5 @@
-import { test, expect, type Page, type Route } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
+import { CONSENTED, signIn, stubSupabase } from "./harness";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -43,19 +44,6 @@ import { test, expect, type Page, type Route } from "@playwright/test";
  * ═══════════════════════════════════════════════════════════════════════════
  */
 
-const SUPABASE = "https://example.supabase.co";
-const USER_ID = "00000000-0000-4000-8000-000000000001";
-
-/** Consented so the pages render, and nothing else. See checkin-questions.spec.ts. */
-const PROFILE = {
-  id: USER_ID,
-  health_data_consent_at: "2026-01-01T00:00:00Z",
-  sex: "female",
-  sport: "football",
-  distance_unit: "km",
-  created_at: "2026-01-01T00:00:00Z",
-};
-
 /**
  * Every signed-in page an athlete can reach, not a sample.
  *
@@ -72,48 +60,10 @@ const PAGES = [
   "/recipes/", "/collections/", "/benchmarks/", "/drills/", "/standards/",
 ];
 
+/** Signed in and consented, so the pages behind the gate actually render. */
 async function signedIn(page: Page) {
-  const session = {
-    access_token: "stub.access.token",
-    refresh_token: "stub-refresh",
-    token_type: "bearer",
-    expires_at: Math.floor(Date.now() / 1000) + 60 * 60 * 24,
-    expires_in: 60 * 60 * 24,
-    user: {
-      id: USER_ID, aud: "authenticated", role: "authenticated",
-      email: "e2e@example.com", created_at: "2026-08-01T00:00:00Z",
-      app_metadata: {}, user_metadata: {},
-    },
-  };
-  await page.addInitScript(
-    ([k, v]) => window.localStorage.setItem(k as string, v as string),
-    ["sb-example-auth-token", JSON.stringify(session)] as const,
-  );
-  await page.route(`${SUPABASE}/**`, async (route: Route) => {
-    const url = new URL(route.request().url());
-    if (url.pathname.startsWith("/auth/v1/user")) {
-      return route.fulfill({
-        status: 200, contentType: "application/json",
-        body: JSON.stringify({ id: USER_ID, email: "e2e@example.com", aud: "authenticated" }),
-      });
-    }
-    if (url.pathname.startsWith("/auth/v1/")) {
-      return route.fulfill({ status: 200, contentType: "application/json", body: "{}" });
-    }
-    if (route.request().method() !== "GET") {
-      return route.fulfill({ status: 201, contentType: "application/json", body: "[]" });
-    }
-    const table = url.pathname.replace(/^\/rest\/v1\//, "").split("?")[0];
-    const rows = table === "profiles" ? [PROFILE] : [];
-    const wantsOne = (route.request().headers()["accept"] ?? "").includes("object");
-    if (wantsOne) {
-      const one = rows[0];
-      return one === undefined
-        ? route.fulfill({ status: 406, contentType: "application/json", body: JSON.stringify({ message: "no rows" }) })
-        : route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(one) });
-    }
-    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(rows) });
-  });
+  await signIn(page);
+  await stubSupabase(page, { rows: { profiles: [CONSENTED] } });
 }
 
 /**
