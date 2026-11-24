@@ -1,4 +1,5 @@
-import { test, expect, type Page, type Route } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
+import { SUPABASE, USER_ID, signIn, stubSupabase as stub, watchConsole } from "./harness";
 
 /**
  * Does the app work once somebody is signed in?
@@ -26,8 +27,6 @@ import { test, expect, type Page, type Route } from "@playwright/test";
  * ═══════════════════════════════════════════════════════════════════════════
  */
 
-const SUPABASE = "https://example.supabase.co";
-const USER_ID = "00000000-0000-4000-8000-000000000001";
 
 /** Routes an athlete spends their time on. Everything here was changed recently. */
 const SIGNED_IN_ROUTES = [
@@ -41,99 +40,16 @@ const SIGNED_IN_ROUTES = [
   { path: "/rewards/", name: "rewards" },
 ];
 
-const IGNORED_CONSOLE = [
-  /Failed to load resource.*favicon/i,
-  // The fixture user is not a real Supabase user, so anything that insists on
-  // re-validating the token server-side will say so. That is the stub's
-  // boundary, not a defect in the page.
-  /AuthSessionMissingError/i,
-  /Refused to connect/i,
-  /\[push\]/i,
-];
-
-function watchConsole(page: Page): string[] {
-  const errors: string[] = [];
-  page.on("console", (m) => {
-    if (m.type() !== "error") return;
-    const text = m.text();
-    if (IGNORED_CONSOLE.some((re) => re.test(text))) return;
-    errors.push(text);
-  });
-  page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`));
-  return errors;
-}
-
 /**
- * A session the client will accept, in the place it looks for one.
+ * The rows-first call shape this file was written with, over the shared stub.
  *
- * localStorage rather than a cookie: this app deliberately uses the implicit
- * flow with localStorage persistence — see lib/supabase/client.ts, which
- * explains at length why it is not using @supabase/ssr. A cookie would test
- * nothing.
- */
-async function signIn(page: Page) {
-  const key = `sb-example-auth-token`;
-  const session = {
-    access_token: "stub.access.token",
-    refresh_token: "stub-refresh",
-    token_type: "bearer",
-    // Far enough out that SessionKeepalive does not try to renew it mid-test.
-    expires_at: Math.floor(Date.now() / 1000) + 60 * 60 * 24,
-    expires_in: 60 * 60 * 24,
-    user: {
-      id: USER_ID,
-      aud: "authenticated",
-      role: "authenticated",
-      email: "e2e@example.com",
-      created_at: "2026-08-01T00:00:00Z",
-      app_metadata: {},
-      user_metadata: { full_name: "E2E Athlete" },
-    },
-  };
-  await page.addInitScript(
-    ([k, v]) => window.localStorage.setItem(k as string, v as string),
-    [key, JSON.stringify(session)] as const,
-  );
-}
-
-/**
- * Answer Supabase over the wire.
- *
- * EVERY TABLE RETURNS AN EMPTY LIST BY DEFAULT, and that is the point rather
- * than laziness: a brand new account IS empty, it is the state every athlete
- * passes through exactly once, and "absent is not zero" is the bug family this
- * codebase keeps meeting. A page that renders a number from an empty table, or
- * throws reading a field off a row that is not there, fails here.
+ * e2e/harness.ts owns the handler now — three files were each carrying their
+ * own copy of it, and the day one learnt something the others would quietly
+ * have been testing a different app. The signature here stays as it was so
+ * the tests below read unchanged.
  */
 async function stubSupabase(page: Page, rows: Record<string, unknown[]> = {}) {
-  await page.route(`${SUPABASE}/**`, async (route: Route) => {
-    const url = new URL(route.request().url());
-
-    if (url.pathname.startsWith("/auth/v1/user")) {
-      return route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ id: USER_ID, email: "e2e@example.com", aud: "authenticated" }),
-      });
-    }
-    if (url.pathname.startsWith("/auth/v1/")) {
-      return route.fulfill({ status: 200, contentType: "application/json", body: "{}" });
-    }
-
-    // PostgREST: /rest/v1/<table>. An RPC is /rest/v1/rpc/<name>.
-    const table = url.pathname.replace(/^\/rest\/v1\//, "").split("?")[0];
-    const body = rows[table] ?? [];
-    // maybeSingle() sends Accept: application/vnd.pgrst.object+json and treats
-    // an array as a shape error, so single-row requests get an object or 406.
-    const wantsOne = (route.request().headers()["accept"] ?? "").includes("object");
-    if (wantsOne) {
-      const one = (body as unknown[])[0];
-      return one === undefined
-        ? route.fulfill({ status: 406, contentType: "application/json", body: JSON.stringify({ message: "no rows" }) })
-        : route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(one) });
-    }
-    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
-  });
+  await stub(page, { rows });
 }
 
 for (const route of SIGNED_IN_ROUTES) {
