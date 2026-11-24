@@ -96,6 +96,16 @@ jobs:
           echo "--- what the database returned ---"
           jq . /tmp/out.json 2>/dev/null || cat /tmp/out.json
 
+          # A 401 is not the database refusing the SQL — it never saw it. The
+          # step above only checks the token is SET, so an expired one passes
+          # that and fails here, where the message used to say "the database
+          # refused it" and send somebody looking at their migration. It cost
+          # exactly that on 2026-11-24.
+          if [ "$code" = "401" ] || [ "$code" = "403" ]; then
+            echo "::error::SUPABASE_ACCESS_TOKEN is set but not valid (HTTP $code). The SQL was NOT run and nothing in the database changed. Generate a new one at https://supabase.com/dashboard/account/tokens and replace the secret under Settings → Secrets and variables → Actions. It is a personal access token, not the database password and not the service_role key."
+            exit 1
+          fi
+
           if [ "$code" -lt 200 ] || [ "$code" -ge 300 ]; then
             echo "::error::the database refused it (HTTP $code) — see the output above"
             exit 1

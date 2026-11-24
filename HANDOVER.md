@@ -601,9 +601,27 @@ deploy it yet.
    the one being admired, before and after the bed. `record-reels.yml` now
    defaults to `dark-beat` on both entry points; `music: none` turns it off.
 
-Migrations 0113 and 0114 are written and **not applied**. Both are in
-`supabase/apply-0088-0115.sql`, which is safe to run twice — Actions -> "Apply
-SQL to Supabase" -> Run workflow, or paste it into the SQL editor. That file was
+Migrations 0113, 0114 and **0115** are written and **not applied**, and the
+workflow that applies them cannot run until you replace one secret.
+
+**`SUPABASE_ACCESS_TOKEN` is set but no longer valid.** A run on 2026-11-24
+came back `HTTP 401 Invalid access token`; the SQL was never sent and nothing
+in the database changed. Generate a new personal access token at
+<https://supabase.com/dashboard/account/tokens> and replace the secret under
+Settings -> Secrets and variables -> Actions. It is a personal access token,
+not the database password and not the `service_role` key. The workflow now
+says all of that when it meets a 401, rather than reporting that "the database
+refused it" — it never saw it.
+
+All three are in `supabase/apply-0088-0115.sql`, which is safe to run twice —
+Actions -> "Apply SQL to Supabase" -> Run workflow, or paste it into the SQL
+editor.
+
+**What 0115 being unapplied costs right now:** the check-in's new questions —
+hours of sleep, stress, soreness, cycle phase — are asked, scored and shown,
+and then dropped on the way to the database. The entry itself saves and the
+athlete is told which answers could not be kept. Nothing is lost permanently
+and nothing needs re-entering once the migration runs. That file was
 also carrying 0111 as its last migration while three had landed past it, so
 anybody who ran it since 0112 got a paste that stopped short; it is generated
 from `supabase/migrations` now, header and contents list included.
