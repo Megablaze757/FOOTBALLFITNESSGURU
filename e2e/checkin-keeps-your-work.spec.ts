@@ -260,3 +260,176 @@ test("a check-in with no signal is kept, and says so", async ({ page }) => {
   expect(queued, "nothing resembling a queued check-in is in localStorage").not.toBeNull();
   expect(queued, "the queued entry does not carry the hours that were tapped").toContain("sleep_hours");
 });
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * AND IT HAS TO COME BACK OUT AGAIN.
+ *
+ * The test above proves the entry is kept. Kept is only half the promise —
+ * the screen says it "will upload automatically when you're back on signal",
+ * and an entry that sits in localStorage for ever is lost with extra steps.
+ *
+ * components/PWA.tsx drains the queue on mount and on the browser's `online`
+ * event. That path is the one migration 0115 changed: it writes through
+ * upsertWithOptional now, splitting the four new columns out so a database
+ * that has not had the migration applied cannot reject the row and strand it
+ * until lib/offline-queue.ts's fourteen-entry cap drops it.
+ *
+ * Nothing had ever run it in a browser.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("a queued check-in uploads when the signal comes back", async ({ page }) => {
+  await signIn(page);
+  const written: Record<string, unknown>[] = [];
+  await stubSupabase(page, {
+    rows: { profiles: [CONSENTED] },
+    capture: { daily_check_ins: written },
+  });
+  await openJournal(page);
+  await fillQuickCheckIn(page);
+
+  // The basement. Writes only — the page is already loaded.
+  let offline = true;
+  await page.route(`${SUPABASE}/rest/v1/daily_check_ins**`, async (route) => {
+    if (offline && route.request().method() !== "GET") return route.abort("internetdisconnected");
+    return route.fallback();
+  });
+
+  await page.getByRole("button", { name: "Save today's log" }).click();
+  await expect(page.getByText(/offline|saved on your phone|will upload/i).first()).toBeVisible();
+  expect(written, "the write reached the database while it was supposed to be offline").toEqual([]);
+
+  // Back on signal. The drain listens for the browser's own event, so that is
+  // what gets fired — not an exported function reached into from the test,
+  // which would prove the function works and not that anything calls it.
+  offline = false;
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
+
+  await expect
+    .poll(() => written.length, { timeout: 15_000, message: "the queued entry never uploaded" })
+    .toBeGreaterThan(0);
+
+  const row = written[written.length - 1];
+  expect(row.sleep_quality, "the uploaded row is not the check-in that was queued").not.toBeUndefined();
+  expect(row.sleep_hours, "the hours tapped before going offline did not survive the queue").toBe(7);
+});
+
+/**
+ * THE DATABASE REFUSING THE NEW COLUMNS MUST NOT STRAND THE ENTRY.
+ *
+ * The window is real: the site deploys on a push and the SQL is applied by
+ * hand afterwards, so for a while the browser knows about columns the
+ * database has not got. PostgREST rejects the whole row, not the columns it
+ * does not recognise — and in the queue that rejection is silent, retried
+ * for ever, until the fourteen-entry cap pushes the entry off the end.
+ *
+ * `42703` is what Postgres says. The row should land the second time without
+ * the four optional answers, which is a visible one-day loss rather than a
+ * check-in that quietly never existed.
+ */
+test("an unmigrated database costs the new answers, not the check-in", async ({ page }) => {
+  await signIn(page);
+  const written: Record<string, unknown>[] = [];
+  await stubSupabase(page, {
+    rows: { profiles: [CONSENTED] },
+    capture: { daily_check_ins: written },
+  });
+  await openJournal(page);
+  await fillQuickCheckIn(page);
+
+  // A database from before migration 0115: anything naming sleep_hours is
+  // refused, exactly as PostgREST refuses an unknown column.
+  await page.route(`${SUPABASE}/rest/v1/daily_check_ins**`, async (route) => {
+    const req = route.request();
+    if (req.method() === "GET") return route.fallback();
+    if ((req.postData() ?? "").includes("sleep_hours")) {
+      return route.fulfill({
+        status: 400,
+        contentType: "application/json",
+        body: JSON.stringify({ code: "42703", message: 'column daily_check_ins.sleep_hours does not exist' }),
+      });
+    }
+    return route.fallback();
+  });
+
+  await page.getByRole("button", { name: "Save today's log" }).click();
+
+  // The check-in still saved, and the athlete sees their score.
+  await expect(page.getByText(/readiness/i).first()).toBeVisible({ timeout: 15_000 });
+  await expect(
+    page.getByText(/could not be kept|ahead of its database/i),
+    "the athlete was not told which answers did not save",
+  ).toBeVisible();
+
+  // Two attempts: the full row refused, then the settled columns on their own.
+  const landed = written.filter((r) => !("sleep_hours" in r));
+  expect(landed.length, `nothing was written without the new columns: ${JSON.stringify(written)}`)
+    .toBeGreaterThan(0);
+  expect(landed[0].sleep_quality, "the retry dropped more than the new columns").not.toBeUndefined();
+  expect(landed[0].pain_map, "the retry dropped the pain map").not.toBeUndefined();
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE TWO FAILURES AT ONCE, WHICH IS THE ONE THAT LOSES THE ENTRY.
+ *
+ * Offline AND a database without migration 0115. Each alone is handled and
+ * each alone is tested above — but they overlap exactly when it matters, in
+ * the window between a deploy going out and the SQL being applied by hand,
+ * which is also when somebody is in a gym with no signal.
+ *
+ * The queued payload carries the four new columns. If the replay sends them
+ * whole, PostgREST refuses the row, components/PWA.tsx leaves the item for
+ * next time, and lib/offline-queue.ts keeps only the last fourteen entries —
+ * so it is retried silently, day after day, until it is pushed off the end
+ * and gone. That is the failure the queue exists to prevent, caused by the
+ * feature it was carrying.
+ *
+ * A mutation run is what put this test here: making the replay stop splitting
+ * the payload broke nothing, because every other test gives it a database
+ * that accepts everything.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+test("a queued entry still lands when the database is behind the app", async ({ page }) => {
+  await signIn(page);
+  const written: Record<string, unknown>[] = [];
+  await stubSupabase(page, {
+    rows: { profiles: [CONSENTED] },
+    capture: { daily_check_ins: written },
+  });
+  await openJournal(page);
+  await fillQuickCheckIn(page);
+
+  let offline = true;
+  await page.route(`${SUPABASE}/rest/v1/daily_check_ins**`, async (route) => {
+    const req = route.request();
+    if (req.method() === "GET") return route.fallback();
+    if (offline) return route.abort("internetdisconnected");
+    // Back on signal, onto a database from before 0115.
+    if ((req.postData() ?? "").includes("sleep_hours")) {
+      return route.fulfill({
+        status: 400,
+        contentType: "application/json",
+        body: JSON.stringify({ code: "42703", message: "column daily_check_ins.sleep_hours does not exist" }),
+      });
+    }
+    return route.fallback();
+  });
+
+  await page.getByRole("button", { name: "Save today's log" }).click();
+  await expect(page.getByText(/offline|saved on your phone|will upload/i).first()).toBeVisible();
+
+  offline = false;
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
+
+  // The entry lands without the four answers the database cannot take, rather
+  // than being retried for ever and dropped.
+  await expect
+    .poll(() => written.filter((r) => !("sleep_hours" in r)).length,
+          { timeout: 15_000, message: "the queued entry never landed: the replay sent the new columns and gave up" })
+    .toBeGreaterThan(0);
+
+  const landed = written.filter((r) => !("sleep_hours" in r))[0];
+  expect(landed.sleep_quality, "the retry dropped more than the unmigrated columns").not.toBeUndefined();
+  expect(landed.pain_map, "the retry dropped the pain map").not.toBeUndefined();
+});
