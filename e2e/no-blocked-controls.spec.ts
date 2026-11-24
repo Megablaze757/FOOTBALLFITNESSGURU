@@ -56,8 +56,21 @@ const PROFILE = {
   created_at: "2026-01-01T00:00:00Z",
 };
 
-/** Where an athlete spends their time, and where a blocked tap would cost most. */
-const PAGES = ["/journal/", "/home/", "/nutrition/", "/body/", "/dashboard/"];
+/**
+ * Every signed-in page an athlete can reach, not a sample.
+ *
+ * It started as five — the ones a blocked tap would cost most — and that was
+ * enough to find the bug. But the thing being tested is a card that floats
+ * over EVERY page, so testing five of them and inferring the rest is the same
+ * reasoning that let this ship: it was obviously fine until somebody measured.
+ * The whole list costs seconds.
+ */
+const PAGES = [
+  "/journal/", "/home/", "/nutrition/", "/body/", "/dashboard/",
+  "/library/", "/history/", "/rewards/", "/profile/", "/coach/",
+  "/squad/", "/plans/", "/train/", "/report/", "/exercises/",
+  "/recipes/", "/collections/", "/benchmarks/", "/drills/", "/standards/",
+];
 
 async function signedIn(page: Page) {
   const session = {
@@ -134,10 +147,30 @@ async function unclickable(page: Page) {
   const out: string[] = [];
   const controls = page.locator('button:visible, a[href]:visible, [role="button"]:visible');
   const n = await controls.count();
-  for (let i = 0; i < n; i++) {
-    const el = controls.nth(i);
+
+  /**
+   * THE ENDS OF A LONG PAGE, NOT A RANDOM SLICE OF IT.
+   *
+   * /exercises has 438 controls — a catalogue of near-identical rows — and a
+   * trial click costs about 65ms, so a full sweep took 29.5s against a 30s
+   * timeout. Under parallel load it tipped over and reported a failure that
+   * was nothing but the clock. A guard that cries wolf once gets read as
+   * noise forever, which matters more here than the few rows skipped.
+   *
+   * So long pages are checked at both ENDS rather than sampled evenly. That
+   * is where the risk actually is: the thing this file is about is fixed
+   * furniture pinned to the top and bottom of the viewport, and in DOM order
+   * the first and last controls are the ones that sit against it. The middle
+   * of a catalogue is 300 copies of a row already checked.
+   */
+  const MANY = 120, ENDS = 60;
+  const pick = (i: number) => (n <= MANY ? i : i < ENDS ? i : n - (MANY - i));
+  const checks = Math.min(n, MANY);
+
+  for (let k = 0; k < checks; k++) {
+    const el = controls.nth(pick(k));
     const label = ((await el.textContent()) ?? "").trim().replace(/\s+/g, " ").slice(0, 40)
-      || (await el.getAttribute("aria-label")) || `control ${i}`;
+      || (await el.getAttribute("aria-label")) || `control ${pick(k)}`;
     try {
       // Short, because a control that is reachable is reachable at once. The
       // only thing a long timeout buys here is a slow suite.
