@@ -128,6 +128,7 @@ function InstallPrompt() {
   const [env, setEnv] = useState<BrowserEnv | null>(null);
   const [open, setOpen] = useState(false);
 
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     // Inside the App Store build there is nothing to install, and telling a
@@ -169,11 +170,39 @@ function InstallPrompt() {
   const guide = installGuide(env);
 
   return (
-    // The bottom tab bar is fixed at bottom-4 with z-[60], so this sat
-    // underneath it and "Not now" was physically unpressable on a phone —
-    // an install prompt you cannot dismiss is worse than no prompt.
-    // Sit above the bar (it hides at lg) and above it in the stack.
-    <div className="fixed inset-x-3 bottom-28 z-[70] rounded-2xl border border-white/10 bg-surface-raised/95 p-4 shadow-lg backdrop-blur lg:inset-x-auto lg:bottom-4 lg:right-4 lg:w-80">
+    /**
+     * ═══════════════════════════════════════════════════════════════════
+     * THE THIRD POSITION THIS CARD HAS HAD, AND THE REASON FOR EACH.
+     *
+     * 1. Under the tab bar (fixed, bottom-4, z-[60]), where its own "Not
+     *    now" was physically unpressable. An install prompt you cannot
+     *    dismiss is worse than no prompt.
+     * 2. bottom-28, above the bar — which fixed that and created a worse
+     *    one. The floating Home button is fixed at bottom-24 and is 48px
+     *    tall, so it occupies 96-144px up the screen; this card's lower
+     *    edge sat at 112px, inside that band and thirty z-levels above
+     *    it. HOME COULD NOT BE TAPPED ON ANY PAGE, and because both are
+     *    fixed, no amount of scrolling helped.
+     * 3. bottom-40. The edge is at 160px, clear of the Home button and of
+     *    the coach button beside it.
+     *
+     * AND MOVING IT IS NOT WHAT MAKES THE TAPS WORK. The wrapper takes
+     * NO POINTER EVENTS and the panel's own controls take them back, so
+     * a tap on the card's surface reaches whatever is beneath it while
+     * its buttons still work. That alone fixes every blocked control
+     * measured — including, on /journal, two that overflow main's box by
+     * about 50px and that NO scroll position can clear.
+     *
+     * So why move it at all, if taps already fall through? Because a
+     * button you cannot see is not a button you can press. Tapping
+     * through an opaque card requires knowing something is under there.
+     * The position keeps Home visible; the pointer events keep the rest
+     * of the page working. They answer different questions and both are
+     * pinned by e2e/no-blocked-controls.spec.ts — one by geometry, one
+     * by asking Playwright to trial-click every control on five pages.
+     * ═══════════════════════════════════════════════════════════════════
+     */
+    <div className="pointer-events-none fixed inset-x-3 bottom-40 z-[70] rounded-2xl border border-white/10 bg-surface-raised/95 p-4 shadow-lg backdrop-blur lg:inset-x-auto lg:bottom-4 lg:right-4 lg:w-80 [&_a]:pointer-events-auto [&_button]:pointer-events-auto">
       <div className="text-sm font-semibold text-slate-100">
         {guide.possible ? "Add PocketAthlete to your home screen" : guide.title}
       </div>
