@@ -786,6 +786,15 @@ export function JournalForm({ initial, initialTraining, sport, sex = null, dista
               setPainMap({}); setFatigue(5); setSleep(7); setNutrition(6);
               setWeight(""); setIsMatchDay(false); setMinutes("0");
               setTraining({ drills: [], total_minutes: null, intensity: null, session_type: "workout", distance_unit: distanceUnit });
+              // 0115's answers. Missed when they were added, which is the
+              // failure this handler's own comment describes: they stayed on
+              // screen after "start fresh" and were written straight back
+              // into the new draft by the next autosave — so the one action
+              // offered for getting rid of a restored entry left four of its
+              // answers behind. No defaults to restore, because they have
+              // none: unanswered is the state they start in.
+              setSleepHours(""); setStress(null); setSoreness(null);
+              setCyclePhase(null); setCycleHidden(false);
               // The form's position resets with the values, or "start fresh"
               // leaves the body map open over a pain map it just emptied.
               setSore(null); setWeighing(false); setLogTraining(false); setDetailed(false);
